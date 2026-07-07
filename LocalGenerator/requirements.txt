@@ -1,0 +1,4 @@
+# Required only for procedural sprite fallback/postprocess.
+Pillow>=10.0.0
+
+# No requests dependency: server uses Python stdlib urllib.

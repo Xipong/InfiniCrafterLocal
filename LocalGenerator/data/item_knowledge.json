@@ -1,0 +1,400 @@
+{
+  "schemaVersion": "2.23-runtime-knowledge",
+  "notes": "Runtime classification hints only. No per-item power oracle, no hand-authored recipe graphs, no training dataset. Gameplay power is estimated from live Item/Projectile fields and LLM-authored genome constraints.",
+  "primitiveAnchors": {
+    "wood": {
+      "stage": "wood",
+      "category": "material",
+      "tags": [
+        "wood",
+        "material"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "dirt block": {
+      "stage": "trash",
+      "category": "material",
+      "tags": [
+        "dirt",
+        "earth",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "stone block": {
+      "stage": "early",
+      "category": "material",
+      "tags": [
+        "stone",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "sand block": {
+      "stage": "early",
+      "category": "material",
+      "tags": [
+        "sand",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "wire": {
+      "stage": "early",
+      "category": "material",
+      "tags": [
+        "wire",
+        "electric",
+        "mechanism",
+        "material"
+      ],
+      "sourceHint": "generic mechanism anchor"
+    },
+    "fallen star": {
+      "stage": "pre_boss",
+      "category": "material",
+      "tags": [
+        "star",
+        "mana",
+        "light",
+        "material"
+      ],
+      "sourceHint": "generic vanilla anchor"
+    }
+  },
+  "namePatterns": [
+    {
+      "contains": [
+        "bar"
+      ],
+      "stage": "unknown_material",
+      "category": "material",
+      "tags": [
+        "bar",
+        "metal",
+        "material"
+      ],
+      "sourceHint": "generic bar pattern; stats/rarity/value refine it"
+    },
+    {
+      "contains": [
+        "fragment"
+      ],
+      "stage": "unknown_fragment",
+      "category": "material",
+      "tags": [
+        "fragment",
+        "material"
+      ],
+      "sourceHint": "generic fragment pattern; stats/rarity/value refine it"
+    },
+    {
+      "contains": [
+        "cluster"
+      ],
+      "stage": "unknown_cluster",
+      "category": "material",
+      "tags": [
+        "cluster",
+        "material"
+      ],
+      "sourceHint": "generic cluster pattern; stats/rarity/value refine it"
+    },
+    {
+      "contains": [
+        "core"
+      ],
+      "stage": "unknown_core",
+      "category": "material",
+      "tags": [
+        "core",
+        "material"
+      ],
+      "sourceHint": "generic core pattern; stats/rarity/value refine it"
+    }
+  ],
+  "rarityLadders": {
+    "vanilla": [
+      {
+        "ordinal": -1,
+        "displayName": "Gray",
+        "colorHex": "#828282",
+        "tierEstimate": "trash",
+        "stage": "trash",
+        "rank": -1
+      },
+      {
+        "ordinal": 0,
+        "displayName": "White",
+        "colorHex": "#FFFFFF",
+        "tierEstimate": "wood",
+        "stage": "wood",
+        "rank": 0
+      },
+      {
+        "ordinal": 1,
+        "displayName": "Blue",
+        "colorHex": "#9696FF",
+        "tierEstimate": "early",
+        "stage": "early",
+        "rank": 1
+      },
+      {
+        "ordinal": 2,
+        "displayName": "Green",
+        "colorHex": "#96FF96",
+        "tierEstimate": "pre_boss",
+        "stage": "pre_boss",
+        "rank": 2
+      },
+      {
+        "ordinal": 3,
+        "displayName": "Orange",
+        "colorHex": "#FFC896",
+        "tierEstimate": "evil_boss",
+        "stage": "evil_boss",
+        "rank": 3
+      },
+      {
+        "ordinal": 4,
+        "displayName": "Light Red",
+        "colorHex": "#FF9696",
+        "tierEstimate": "pre_hardmode_late",
+        "stage": "pre_hardmode_late",
+        "rank": 4
+      },
+      {
+        "ordinal": 5,
+        "displayName": "Pink",
+        "colorHex": "#FF96FF",
+        "tierEstimate": "hardmode_early",
+        "stage": "hardmode_early",
+        "rank": 5
+      },
+      {
+        "ordinal": 6,
+        "displayName": "Light Purple",
+        "colorHex": "#D2A0FF",
+        "tierEstimate": "mech",
+        "stage": "mech",
+        "rank": 6
+      },
+      {
+        "ordinal": 7,
+        "displayName": "Lime",
+        "colorHex": "#96FF0A",
+        "tierEstimate": "plantera",
+        "stage": "plantera",
+        "rank": 7
+      },
+      {
+        "ordinal": 8,
+        "displayName": "Yellow",
+        "colorHex": "#FFFF0A",
+        "tierEstimate": "post_plantera",
+        "stage": "post_plantera",
+        "rank": 8
+      },
+      {
+        "ordinal": 9,
+        "displayName": "Cyan",
+        "colorHex": "#05C8FF",
+        "tierEstimate": "post_golem",
+        "stage": "post_golem",
+        "rank": 9
+      },
+      {
+        "ordinal": 10,
+        "displayName": "Red",
+        "colorHex": "#FF2864",
+        "tierEstimate": "lunar",
+        "stage": "lunar",
+        "rank": 10
+      },
+      {
+        "ordinal": 11,
+        "displayName": "Purple",
+        "colorHex": "#B428FF",
+        "tierEstimate": "endgame",
+        "stage": "endgame",
+        "rank": 11
+      }
+    ],
+    "calamity": [
+      {
+        "ordinal": 12,
+        "colorHex": "#00FFC8",
+        "tierEstimate": "post_moonlord",
+        "stage": "post_moonlord",
+        "rank": 12
+      },
+      {
+        "ordinal": 13,
+        "displayName": "Pure Green",
+        "colorHex": "#00FF00",
+        "tierEstimate": "post_moonlord_plus",
+        "stage": "post_moonlord_plus",
+        "rank": 13
+      },
+      {
+        "ordinal": 14,
+        "displayName": "Cosmic Purple",
+        "tierEstimate": "devourer",
+        "stage": "devourer",
+        "rank": 14
+      },
+      {
+        "ordinal": 15,
+        "displayName": "Burnished Auric",
+        "tierEstimate": "auric",
+        "stage": "auric",
+        "rank": 15
+      },
+      {
+        "ordinal": 16,
+        "displayName": "Hot Pink",
+        "colorHex": "#FF00FF",
+        "tierEstimate": "shadowspec",
+        "stage": "shadowspec",
+        "rank": 16
+      },
+      {
+        "ordinal": 17,
+        "displayName": "Calamity Red",
+        "tierEstimate": "calamity_red_prefix",
+        "stage": "calamity_red_prefix",
+        "rank": 17
+      },
+      {
+        "displayName": "Draedon/Rust/Bronze",
+        "colorHex": "#CC4723",
+        "tierEstimate": "draedon_arsenal",
+        "stage": "draedon_arsenal"
+      }
+    ]
+  },
+  "items": {
+    "wood": {
+      "stage": "wood",
+      "category": "material",
+      "tags": [
+        "wood",
+        "material"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "dirt block": {
+      "stage": "trash",
+      "category": "material",
+      "tags": [
+        "dirt",
+        "earth",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "stone block": {
+      "stage": "early",
+      "category": "material",
+      "tags": [
+        "stone",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "sand block": {
+      "stage": "early",
+      "category": "material",
+      "tags": [
+        "sand",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "sourceHint": "generic primitive anchor"
+    },
+    "wire": {
+      "stage": "early",
+      "category": "material",
+      "tags": [
+        "wire",
+        "electric",
+        "mechanism",
+        "material"
+      ],
+      "sourceHint": "generic mechanism anchor"
+    },
+    "fallen star": {
+      "stage": "pre_boss",
+      "category": "material",
+      "tags": [
+        "star",
+        "mana",
+        "light",
+        "material"
+      ],
+      "sourceHint": "generic vanilla anchor"
+    }
+  },
+  "patterns": [
+    {
+      "contains": [
+        "bar"
+      ],
+      "stage": "unknown_material",
+      "category": "material",
+      "tags": [
+        "bar",
+        "metal",
+        "material"
+      ],
+      "sourceHint": "generic bar pattern; stats/rarity/value refine it"
+    },
+    {
+      "contains": [
+        "fragment"
+      ],
+      "stage": "unknown_fragment",
+      "category": "material",
+      "tags": [
+        "fragment",
+        "material"
+      ],
+      "sourceHint": "generic fragment pattern; stats/rarity/value refine it"
+    },
+    {
+      "contains": [
+        "cluster"
+      ],
+      "stage": "unknown_cluster",
+      "category": "material",
+      "tags": [
+        "cluster",
+        "material"
+      ],
+      "sourceHint": "generic cluster pattern; stats/rarity/value refine it"
+    },
+    {
+      "contains": [
+        "core"
+      ],
+      "stage": "unknown_core",
+      "category": "material",
+      "tags": [
+        "core",
+        "material"
+      ],
+      "sourceHint": "generic core pattern; stats/rarity/value refine it"
+    }
+  ]
+}

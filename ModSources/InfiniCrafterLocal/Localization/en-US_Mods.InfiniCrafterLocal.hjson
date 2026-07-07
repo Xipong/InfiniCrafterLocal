@@ -1,0 +1,91 @@
+Mods: {
+  InfiniCrafterLocal: {
+    Items: {
+      InfiniCore: {
+        DisplayName: "Infini Core"
+        Tooltip: "Right-click to open inventory, then use the InfiniCraft station panel with two explicit input slots\nRuns LocalGenerator at 127.0.0.1:5055; failed LLM generation refunds ingredients"
+      }
+      GeneratedItem: {
+        DisplayName: "Generated Item"
+        Tooltip: "A JSON-backed generated item"
+      }
+    }
+    Projectiles: {
+      GeneratedProjectile: {
+        DisplayName: "Generated Projectile"
+      }
+    }
+    Configs: {
+      InfiniVfxClientConfig: {
+        DisplayName: "VFX Client Options"
+        Headers: {
+          GeneratedVFX: "Generated VFX"
+        }
+        ParticleSpawnMultiplier: {
+          Label: "Particle spawn multiplier"
+        }
+        DrawBudgetMultiplier: {
+          Label: "Draw budget multiplier"
+        }
+        ParticleAlphaMultiplier: {
+          Label: "Particle alpha multiplier"
+        }
+        PresentationLightMultiplier: {
+          Label: "Presentation light multiplier"
+        }
+        EnableScreenCulling: {
+          Label: "Enable screen culling"
+        }
+        EnableGeneratedSpriteSilhouette: {
+          Label: "Enable generated sprite silhouette"
+        }
+        EnableParticleLibraryBackend: {
+          Label: "Enable ParticleLibrary backend"
+        }
+        EnableLuminanceSoundBackend: {
+          Label: "Enable Luminance live sound backend (optional)"
+        }
+        ForceVanillaDustFallback: {
+          Label: "Force vanilla Dust fallback"
+        }
+      }
+      InfiniGameplayQolConfig: {
+        DisplayName: "InfiniCraft gameplay QoL"
+        Headers: {
+          InfiniCraftStationQoL: "InfiniCraft station QoL"
+          GeneratedGameplayQoL: "Generated gameplay QoL"
+          GeneratedRuntimeAssetQoL: "Generated runtime assets"
+        }
+        EnableInventoryAssetPrefetch: {
+          Label: "Prefetch generated inventory sprites"
+          Tooltip: "When inventory is open, gently warms generated sprite files that are likely to be drawn soon."
+        }
+        InventoryAssetPrefetchIntervalTicks: {
+          Label: "Inventory sprite prefetch interval"
+          Tooltip: "Delay in ticks between generated sprite prefetch passes while inventory is open."
+        }
+        InventoryAssetPrefetchMaxItems: {
+          Label: "Inventory sprite prefetch max items"
+          Tooltip: "Maximum generated items scanned per inventory prefetch pass. Includes inventory, armor, and misc equipment; only warms existing authored sprite paths."
+        }
+        EnableGeneratedMeleeOnHitEffects: {
+          Label: "Generated melee on-hit effects"
+          Tooltip: "Allows generated swing weapons to execute explicit AttackSpec.OnHitCode debuffs, small lifesteal, and impact dust. No prompt text is parsed."
+        }
+        RuntimeSpriteCacheMaxTextures: {
+          Label: "Runtime sprite cache size"
+          Tooltip: "Maximum generated PNG textures kept resident on this client. Default 512 is vanilla-like for small generated sprites; this is not a world item limit."
+        }
+        RuntimeSpriteMaxDimensionPixels: {
+          Label: "Runtime sprite max side"
+          Tooltip: "Rejects generated runtime PNGs wider or taller than this many pixels. Default 192 keeps item/projectile sprites bounded without rejecting slightly larger generated art."
+        }
+        RuntimeSpriteMaxPngFileMegabytes: {
+          Label: "Runtime PNG file limit"
+          Tooltip: "Rejects a single generated runtime PNG file larger than this many megabytes before loading it as a Texture2D."
+        }
+      }
+
+    }
+  }
+}

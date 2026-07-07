@@ -1,0 +1,59 @@
+# OS / editor metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+*:Zone.Identifier
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# .NET / tModLoader build outputs
+.nuget/
+.tml-build-cache/
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.nupkg
+*.snupkg
+*.tmod
+TestResults/
+
+# Local generator/runtime outputs
+LocalGenerator/cache/
+LocalGenerator/output/
+LocalGenerator/outputs/
+LocalGenerator/generated_assets/
+LocalGenerator/debug_output/
+LocalGenerator/prompt_traces/
+LocalGenerator/.wiki_guided_playthrough_cache/
+LocalGenerator/sprites/
+LocalGenerator/*trace*.ndjson
+LocalGenerator/config.env
+LocalGenerator/data/Runtime_dumps/
+build_logs/
+agent_reports/
+*.log
+
+# Agent/editor backup files kept in this working tree but not source
+*.bak
+*.bak_*
+*.bak-*
+*.orig
+*.rej
+
+# Local config/secrets
+.env
+*.local
+settings.local.json

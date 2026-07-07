@@ -1,0 +1,7 @@
+[
+  {"id": 63, "name": "Sunflower", "tags": ["sunflower", "flower", "plant", "sun", "day", "placeable"], "wiki": true},
+  {"id": 313, "name": "Daybloom", "tags": ["daybloom", "flower", "plant", "day"], "wiki": true},
+  {"id": 25, "name": "Wooden Chair", "tags": ["chair", "wood", "furniture", "placeable"], "wiki": true},
+  {"id": 530, "name": "Wire", "tags": ["wire", "electric", "mechanism"], "wiki": true},
+  {"id": 75, "name": "Fallen Star", "tags": ["star", "mana", "light"], "wiki": true}
+]

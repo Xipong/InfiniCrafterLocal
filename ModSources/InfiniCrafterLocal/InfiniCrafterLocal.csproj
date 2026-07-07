@@ -1,0 +1,31 @@
+<Project Sdk="Tomat.Terraria.ModLoader.Sdk/2.1.1">
+  <PropertyGroup>
+    <AssemblyName>InfiniCrafterLocal</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <TmlVersion>stable</TmlVersion>
+
+    <!--
+      ParticleLibrary/Luminance are real compile-time mod references for the VFX/audio backend.
+      Keep paths configurable so release sources do not depend on one agent's tmp folder layout.
+      Override with:
+        dotnet build /p:InfiniExternalDepsRoot=C:\path\to\tml-deps-src
+      or with explicit DLL paths:
+        /p:InfiniParticleLibraryDll=C:\...\ParticleLibrary.dll
+        /p:InfiniLuminanceDll=C:\...\Luminance.dll
+      Environment fallback: INFINI_TML_DEPS_SRC.
+    -->
+    <InfiniExternalDepsRoot Condition="'$(InfiniExternalDepsRoot)' == '' and '$(INFINI_TML_DEPS_SRC)' != ''">$(INFINI_TML_DEPS_SRC)</InfiniExternalDepsRoot>
+    <InfiniParticleLibraryDll Condition="'$(InfiniParticleLibraryDll)' == '' and '$(InfiniExternalDepsRoot)' != ''">$(InfiniExternalDepsRoot)\ParticleLibrary\ParticleLibrary.dll</InfiniParticleLibraryDll>
+    <InfiniLuminanceDll Condition="'$(InfiniLuminanceDll)' == '' and '$(InfiniExternalDepsRoot)' != ''">$(InfiniExternalDepsRoot)\Luminance\bin\Debug\net8.0\Luminance.dll</InfiniLuminanceDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="ParticleLibrary" HintPath="$(InfiniParticleLibraryDll)" Condition="'$(InfiniParticleLibraryDll)' != '' and Exists('$(InfiniParticleLibraryDll)')" Private="false" />
+    <Reference Include="Luminance" HintPath="$(InfiniLuminanceDll)" Condition="'$(InfiniLuminanceDll)' != '' and Exists('$(InfiniLuminanceDll)')" Private="false" />
+  </ItemGroup>
+
+  <Target Name="InfiniValidateExternalModReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(InfiniParticleLibraryDll)' == '' or !Exists('$(InfiniParticleLibraryDll)')" Text="ParticleLibrary.dll was not found. Set /p:InfiniParticleLibraryDll=..., /p:InfiniExternalDepsRoot=..., or INFINI_TML_DEPS_SRC for the ParticleLibrary/Luminance backend." />
+    <Error Condition="'$(InfiniLuminanceDll)' == '' or !Exists('$(InfiniLuminanceDll)')" Text="Luminance.dll was not found. Set /p:InfiniLuminanceDll=..., /p:InfiniExternalDepsRoot=..., or INFINI_TML_DEPS_SRC for the ParticleLibrary/Luminance backend." />
+  </Target>
+</Project>

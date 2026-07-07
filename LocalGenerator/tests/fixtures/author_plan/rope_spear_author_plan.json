@@ -1,0 +1,86 @@
+{
+  "name": "Rope Spear",
+  "tooltip": "A spearhead tied to rope; throw it to pierce, then reel toward the mark.",
+  "concept": {
+    "fantasy": "A compact spearhead knotted to a coil of rope, used like a hooked lance that snaps back to hand.",
+    "mergeLogic": "The Spear parent contributes an 8-damage melee spear projectile with owner-checked hit behavior, while the Rope parent contributes consumable stack identity and tether logic.",
+    "weirdTwist": "On impact, the rope goes taut and yanks the wielder a short distance toward the target."
+  },
+  "runtimePlan": {
+    "resultKind": "weapon",
+    "sourceRolePreservation": {
+      "itemA": "melee spear projectile and close owner-checked hit identity",
+      "itemB": "rope material, stackable consumable texture, and tether pull behavior"
+    },
+    "engineCalls": [
+      {
+        "fn": "set_item_stats",
+        "params": {
+          "resultKind": "weapon",
+          "damageClass": "melee",
+          "damage": 17,
+          "useTimeTicks": 28,
+          "maxStack": 1,
+          "rarity": 1,
+          "value": 2400
+        }
+      },
+      {
+        "fn": "shoot_projectile",
+        "params": {
+          "delivery": "throw",
+          "movement": "returning_glaive",
+          "speed": 8,
+          "rangeTiles": 24,
+          "lifetimeTicks": 150,
+          "shotCount": 1,
+          "spreadRadians": 0,
+          "pierce": 2,
+          "extraUpdates": 0,
+          "reliability": 0.9,
+          "selfLockTicks": 10,
+          "missPunish": 0.15,
+          "projectileShape": "rope-tethered spearhead",
+          "projectileMotion": "snaps out, pierces, then reels back",
+          "projectileTrail": "thin rope tether",
+          "projectileImpact": "anchor hit and recoil"
+        }
+      },
+      {
+        "fn": "apply_on_hit_effect",
+        "params": {
+          "onHit": "none",
+          "aoeRadiusTiles": 0,
+          "pullStrength": 0.35,
+          "debuffHint": "rope tug"
+        }
+      },
+      {
+        "fn": "spawn_contact_particles",
+        "params": {
+          "effect": "dust",
+          "amount": 5,
+          "scale": 0.65,
+          "durationTicks": 10,
+          "material": "rope"
+        }
+      }
+    ],
+    "visualIntent": {
+      "item": "short spearhead with a coiled rope grip and dangling tether",
+      "projectile": "spearhead flying on a thin rope line",
+      "impact": "rope line snaps taut with a small dust puff",
+      "vfxIntent": "thin rope tether, quick dust on hit, no wide aura",
+      "vfxAvoid": "large explosions, magic beams, broad radial effects"
+    },
+    "sourceReading": "Raw fields show Spear as an 8-damage melee item with item.shoot=49, ownerHitCheck=true, tileCollide=false, and penetrate=-1, while Rope is a consumable stackable material with useTurn=true and createTile=213.",
+    "balanceIntent": "Moderate damage and use time with finite pierce; the pull reward trades safe spacing for commitment after a hit.",
+    "anomalyFlags": []
+  },
+  "visual": {
+    "itemPrompt": "Small iron spearhead haft wrapped with brown rope coil, short dangling cord loop.",
+    "projectilePrompt": "Flying spearhead trailing a thin taught rope line back to the player.",
+    "impactPrompt": "Tiny rope-fiber dust burst where the spearhead anchors, with the tether briefly glowing taut.",
+    "notes": "Keep the tether readable but thin; avoid large particle clouds."
+  }
+}

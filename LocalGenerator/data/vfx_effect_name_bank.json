@@ -1,0 +1,352 @@
+{
+  "schema": "infini.vfx.effect_name_bank.v1",
+  "note": "Names are vocabulary for the optional LLM VFX Director only. Runtime must not parse names; it uses rendererKind/event/channel/lane/particleSystemId.",
+  "sources": [
+    {
+      "id": "tmod_last_prism",
+      "label": "tModLoader ExampleLastPrismBeam",
+      "notes": "beam focus, outer/inner beam, endpoint dust, tile-line light, water ripple"
+    },
+    {
+      "id": "tmod_custom_swing",
+      "label": "tModLoader ExampleCustomSwingProjectile",
+      "notes": "prepare/execute/unwind swing, spin, held projectile, line collision"
+    },
+    {
+      "id": "particle_library",
+      "label": "ParticleLibrary examples/API",
+      "notes": "quad glow, shard quads, smoke quads, point sparks, emitter aura"
+    },
+    {
+      "id": "infernum_spirit_overhaul_refs",
+      "label": "Infernum/SpiritMod/CalamityOverhaul references",
+      "notes": "oldPos tendrils, actor echoes, primitive ribbons, cloud particles, effect stacks"
+    }
+  ],
+  "cards": [
+    {
+      "id": "beam_prism_focus",
+      "families": [
+        "beam",
+        "laser",
+        "channel"
+      ],
+      "names": [
+        "outer beam",
+        "inner beam",
+        "focused prism core",
+        "beam endpoint dust",
+        "tile-line light",
+        "water ripple distortion",
+        "contact flash"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "beamLine",
+          "lightCue",
+          "impactSprite"
+        ],
+        "channel": [
+          "motionTrail",
+          "light",
+          "impactShape"
+        ],
+        "particleSystemId": [
+          "pl:glow",
+          "pl:spark"
+        ]
+      }
+    },
+    {
+      "id": "held_swing_smear",
+      "families": [
+        "slash",
+        "held",
+        "melee"
+      ],
+      "names": [
+        "prepare windup",
+        "execute slash",
+        "unwind fade",
+        "tip trail",
+        "swing smear",
+        "ghost blade arc",
+        "spin reset spark",
+        "line-collision slash"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "tipTrail",
+          "historyRibbon",
+          "ghostArc",
+          "spriteStampTrail"
+        ],
+        "channel": [
+          "motionTrail",
+          "impactShape"
+        ],
+        "particleSystemId": [
+          "pl:glow",
+          "pl:shard"
+        ]
+      }
+    },
+    {
+      "id": "particlelibrary_core",
+      "families": [
+        "particle",
+        "glow",
+        "burst"
+      ],
+      "names": [
+        "soft glow quad",
+        "soul mote",
+        "shard quad burst",
+        "point spark scatter",
+        "smoke quad residue",
+        "rim emitter aura",
+        "charge aura"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "childMotes",
+          "impactSprite",
+          "orbitingMotes"
+        ],
+        "channel": [
+          "ambientParticles",
+          "impactParticles",
+          "coreGlow"
+        ],
+        "particleSystemId": [
+          "pl:glow",
+          "pl:shard",
+          "pl:smoke",
+          "pl:spark"
+        ]
+      }
+    },
+    {
+      "id": "oldpos_shadow_tendril",
+      "families": [
+        "trail",
+        "shadow",
+        "tendril"
+      ],
+      "names": [
+        "oldPos tendril",
+        "hidden projectile controller",
+        "shadow ribbon trail",
+        "long history trail",
+        "movement-driven tail"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "historyRibbon",
+          "spriteStampTrail",
+          "orbitingMotes"
+        ],
+        "channel": [
+          "motionTrail",
+          "coreGlow"
+        ],
+        "particleSystemId": [
+          "pl:smoke",
+          "pl:glow"
+        ]
+      }
+    },
+    {
+      "id": "actor_echo_afterimage",
+      "families": [
+        "echo",
+        "illusion",
+        "afterimage"
+      ],
+      "names": [
+        "actor echo",
+        "shadow illusion",
+        "phantom clone",
+        "player afterimage",
+        "weapon echo body"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "actorAfterimage",
+          "projectileAfterimage",
+          "ghostArc"
+        ],
+        "channel": [
+          "coreGlow",
+          "motionTrail"
+        ],
+        "particleSystemId": [
+          "pl:smoke",
+          "pl:glow"
+        ]
+      }
+    },
+    {
+      "id": "primitive_flow_ribbon",
+      "families": [
+        "ribbon",
+        "slash",
+        "shader"
+      ],
+      "names": [
+        "primitive trail",
+        "flow ribbon",
+        "gradient slash",
+        "dissolve trail",
+        "wide crescent smear",
+        "white inner slash"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "historyRibbon",
+          "tipTrail",
+          "beamLine"
+        ],
+        "channel": [
+          "motionTrail"
+        ],
+        "particleSystemId": [
+          "pl:glow"
+        ]
+      }
+    },
+    {
+      "id": "cursed_phantom_stack",
+      "families": [
+        "stack",
+        "phantom",
+        "cloud"
+      ],
+      "names": [
+        "green wide trail",
+        "white inner trail",
+        "skull primitive trail",
+        "tail afterimage",
+        "custom cloud particle",
+        "death smoke cloud"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "historyRibbon",
+          "childMotes",
+          "impactRing"
+        ],
+        "channel": [
+          "motionTrail",
+          "decaySmoke",
+          "impactParticles"
+        ],
+        "particleSystemId": [
+          "pl:smoke",
+          "pl:shard"
+        ]
+      }
+    },
+    {
+      "id": "impact_scripted_burst",
+      "families": [
+        "impact",
+        "burst",
+        "baked"
+      ],
+      "names": [
+        "impact flash",
+        "delayed ring snap",
+        "radial shard burst",
+        "cone spark burst",
+        "ring shatter",
+        "death cloud",
+        "baked impact tape"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "impactSprite",
+          "impactRing",
+          "childMotes"
+        ],
+        "channel": [
+          "impactShape",
+          "impactParticles",
+          "decaySmoke"
+        ],
+        "particleSystemId": [
+          "pl:shard",
+          "pl:spark",
+          "pl:smoke"
+        ]
+      }
+    },
+    {
+      "id": "field_orbit_pulse",
+      "families": [
+        "field",
+        "orbit",
+        "aura"
+      ],
+      "names": [
+        "field pulse",
+        "orbital motes",
+        "rim aura",
+        "looping charge ring",
+        "residue field",
+        "slow cloud pulse"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "fieldPulse",
+          "orbitingMotes",
+          "lightCue"
+        ],
+        "channel": [
+          "coreGlow",
+          "ambientParticles",
+          "light"
+        ],
+        "particleSystemId": [
+          "pl:glow",
+          "pl:smoke",
+          "pl:spark"
+        ]
+      }
+    },
+    {
+      "id": "material_particles",
+      "families": [
+        "materials",
+        "surface",
+        "small"
+      ],
+      "names": [
+        "ember drift",
+        "frost chip",
+        "glass glint",
+        "toxic bubble",
+        "ash residue",
+        "bone splinter",
+        "metal spark",
+        "star speck"
+      ],
+      "runtimeBias": {
+        "rendererKind": [
+          "childMotes",
+          "impactSprite",
+          "spriteStampTrail"
+        ],
+        "channel": [
+          "ambientParticles",
+          "impactParticles"
+        ],
+        "particleSystemId": [
+          "pl:spark",
+          "pl:shard",
+          "pl:smoke"
+        ]
+      }
+    }
+  ]
+}

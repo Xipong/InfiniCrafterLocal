@@ -1,0 +1,84 @@
+LLM draft below; parser must extract the first valid JSON object.
+```json
+{
+  "name": "Twin Grain Saber",
+  "tooltip": "Two wooden edges swing as one; the second edge throws a tiny splintering slash.",
+  "concept": {
+    "fantasy": "A pair of grain-aligned wooden blades fused into one fast, splintering saber.",
+    "mergeLogic": "The two WoodenSword parents have nearly identical melee stats, so they are fused edge-to-edge into a twin-grain blade that keeps sword use timing while adding a short wooden slash.",
+    "weirdTwist": "The off-hand grain edge releases a tiny wooden crescent that can pass through one enemy before fading."
+  },
+  "runtimePlan": {
+    "resultKind": "weapon",
+    "sourceRolePreservation": {
+      "itemA": "Supplies the 7-damage WoodenSword base, 20-tick use timing, and white-rarity wooden melee identity.",
+      "itemB": "Supplies the slightly stronger 8-damage edge, matching 20-tick timing, and blue rarity accent."
+    },
+    "engineCalls": [
+      {
+        "fn": "set_item_stats",
+        "params": {
+          "resultKind": "weapon",
+          "damageClass": "melee",
+          "damage": 10,
+          "useTimeTicks": 18,
+          "maxStack": 1,
+          "rarity": 1,
+          "value": 220,
+          "consumable": false,
+          "ammoFor": ""
+        }
+      },
+      {
+        "fn": "shoot_projectile",
+        "params": {
+          "delivery": "swing",
+          "movement": "straight",
+          "speed": 7,
+          "rangeTiles": 8,
+          "lifetimeTicks": 30,
+          "shotCount": 1,
+          "spreadRadians": 0.0,
+          "pierce": 0,
+          "extraUpdates": 0,
+          "reliability": 1.0,
+          "selfLockTicks": 4,
+          "missPunish": 0.05,
+          "damageMultiplier": 0.85,
+          "projectileShape": "short wooden crescent",
+          "projectileMotion": "brief forward slash",
+          "projectileTrail": "faint sawdust",
+          "projectileImpact": "splinter chip"
+        }
+      },
+      {
+        "fn": "spawn_contact_particles",
+        "params": {
+          "effect": "dust",
+          "amount": 6,
+          "scale": 0.7,
+          "durationTicks": 20,
+          "material": "wood"
+        }
+      }
+    ],
+    "visualIntent": {
+      "item": "A single wooden sword with two offset blade edges and a blue-tinted grain line.",
+      "projectile": "A short pale-wood crescent that follows the swing and leaves a little sawdust.",
+      "impact": "Tiny wood chips scatter at the hit point.",
+      "vfxIntent": "Small, readable wooden splinters that reinforce the twin-edge fantasy.",
+      "vfxAvoid": "Large explosions, black holes, auras, or excessive dust."
+    },
+    "sourceReading": "Both parents are melee WoodenSword items with 20-tick use time, 7/8 damage, and one blue rarity, so the merge treats them as two grain-aligned blades rather than unrelated effects.",
+    "balanceIntent": "Only a small damage and speed bump over the parents; extra reach is paid for with short range, one extra pierce, and quick recovery.",
+    "anomalyFlags": []
+  },
+  "visual": {
+    "itemPrompt": "A compact early-game wooden sword with two slightly offset blades, fused hilt, and a blue-tinted grain stripe.",
+    "projectilePrompt": "A small crescent-shaped wooden slash with a few pale sawdust flecks trailing behind it.",
+    "impactPrompt": "Tiny splinters and wood dust burst briefly where the crescent strikes.",
+    "notes": "Keep the sprite early-game, wooden, and readable as a twin-edged saber."
+  }
+}
+```
+trailing notes should be ignored.

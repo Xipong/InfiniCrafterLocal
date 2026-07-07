@@ -1,0 +1,122 @@
+name: InfiniCrafterLocal CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python-tests:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r LocalGenerator/requirements-dev.txt
+      - name: Run pytest
+        run: |
+          cd LocalGenerator
+          pytest -q
+      - name: Python compileall
+        run: python -m compileall LocalGenerator
+      - name: Env poisoning smoke
+        run: |
+          cd LocalGenerator
+          INFINI_LOCAL_PORT=abc INFINI_LLM_TIMEOUT_MS=xyz INFINI_SPRITE_CACHE_MAX=garbage \
+            python -c "import infini_local.core.env_utils as e; print('env_utils import OK'); print(e.env_int('INFINI_LOCAL_PORT', 9000)); print(e.env_int('INFINI_LLM_TIMEOUT_MS', 30000)); print(e.env_int('INFINI_SPRITE_CACHE_MAX', 512))"
+
+  strict-hygiene:
+    name: Strict hygiene and static contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r LocalGenerator/requirements-dev.txt
+      - name: Project hygiene
+        run: python tools/check_project_hygiene.py
+      - name: C# static contract surface
+        run: python tools/check_csharp_contracts.py
+      - name: Planner prompt usability
+        run: python tools/check_planner_prompt_usability.py
+      - name: Strict archive hygiene
+        run: |
+          find . -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -prune -exec rm -rf {} +
+          rm -rf LocalGenerator/cache
+          python tools/check_project_hygiene.py --strict-archive
+
+  tml-build:
+    name: Windows tModLoader/dotnet build smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Attempt tML project build
+        id: tml
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $log = "tml-build.log"
+          $summary = "tml-build-summary.txt"
+          $project = "./ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
+          "[ci] project=$project" | Out-File -FilePath $log -Encoding utf8
+          if (!(Test-Path $project)) {
+            "[ci] project file not found" | Tee-Object -FilePath $log -Append
+            exit 1
+          }
+          ./tools/build_tml_windows.ps1 -Project $project -Configuration Debug *>&1 | Tee-Object -FilePath $log -Append
+          $buildExit = $LASTEXITCODE
+          python tools/parse_tml_build_log.py $log --mod InfiniCrafterLocal | Tee-Object -FilePath $summary
+          $parserExit = $LASTEXITCODE
+          $text = Get-Content $log -Raw -ErrorAction SilentlyContinue
+          $skipPatterns = @(
+            "tModLoader install not found",
+            "Could not find tModLoader",
+            "Install tModLoader",
+            "TML_BUILD_SKIPPED",
+            "no local tModLoader",
+            "tModLoader.targets",
+            "external mod reference DLLs not found",
+            "INFINI_TML_DEPS_SRC",
+            "InfiniExternalDepsRoot"
+          )
+          $isSkip = $false
+          foreach ($pattern in $skipPatterns) {
+            if ($text -match [regex]::Escape($pattern)) { $isSkip = $true }
+          }
+          if ($buildExit -ne 0 -and $isSkip) {
+            "TML_BUILD_SKIPPED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "[ci] tML build skipped because this runner lacks local tModLoader targets or external mod reference DLLs" | Tee-Object -FilePath $summary -Append
+            exit 0
+          }
+          if ($buildExit -ne 0) {
+            "TML_BUILD_FAILED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            exit $buildExit
+          }
+          if ($parserExit -ne 0) {
+            "TML_BUILD_FAILED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            exit $parserExit
+          }
+      - name: Upload tML build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tml-build-logs
+          path: |
+            tml-build.log
+            tml-build-summary.txt
+          if-no-files-found: warn

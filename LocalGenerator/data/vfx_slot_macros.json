@@ -1,0 +1,998 @@
+{
+  "schema": "infini.vfx.slot_macros.v4_item_magnitude",
+  "notes": [
+    "Reusable slot fragments for Hybrid VFX Manifest. These are not semantic recipes: they are render/lifecycle morphs reused by many recipes.",
+    "Recipes may reference a macro with {\"macro\": \"name\", ...overrides}. Explicit fields override macro fields.",
+    "v0.3.24 introduced minQuality gates; v0.3.25 deprecates them as design gates because render quality is always Full.",
+    "v0.3.25: minQuality remains only as deprecated compat; item-driven effectMagnitude + importance/visualCost/signatureWeight decide richness and emergency caps throttle overload."
+  ],
+  "macros": {
+    "travel_afterimage_low": {
+      "event": "travel",
+      "stage": "loop",
+      "backend": "Sprite",
+      "renderer": "projectileAfterimage",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.65,
+        1.15
+      ],
+      "density": [
+        0.1,
+        0.32
+      ],
+      "duration": [
+        6,
+        13
+      ],
+      "alpha": [
+        0.16,
+        0.42
+      ],
+      "spread": [
+        0.25,
+        0.75
+      ],
+      "variants": [
+        0,
+        1
+      ],
+      "minQuality": "Low"
+    },
+    "travel_stamp_wake": {
+      "event": "travel",
+      "stage": "loop",
+      "backend": "Sprite",
+      "renderer": "spriteStampTrail",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.55,
+        1.45
+      ],
+      "density": [
+        0.2,
+        0.62
+      ],
+      "duration": [
+        8,
+        22
+      ],
+      "alpha": [
+        0.2,
+        0.62
+      ],
+      "spread": [
+        0.35,
+        1.1
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "minQuality": "Medium"
+    },
+    "travel_ambient_motes": {
+      "event": "travel",
+      "stage": "loop",
+      "backend": "Realtime",
+      "renderer": "ambientMotes",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.25,
+        0.95
+      ],
+      "density": [
+        0.08,
+        0.38
+      ],
+      "duration": [
+        12,
+        38
+      ],
+      "alpha": [
+        0.1,
+        0.42
+      ],
+      "spread": [
+        0.35,
+        1.35
+      ],
+      "repeatEvery": [
+        3,
+        9
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "minQuality": "Medium"
+    },
+    "active_tip_ribbon": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Primitive",
+      "renderer": "tipTrail",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "tipHistory",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.55,
+        1.75
+      ],
+      "density": [
+        0.24,
+        0.75
+      ],
+      "duration": [
+        8,
+        22
+      ],
+      "alpha": [
+        0.3,
+        0.78
+      ],
+      "spread": [
+        0.35,
+        1.25
+      ],
+      "jitter": [
+        0.05,
+        0.55
+      ],
+      "variants": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "minQuality": "Medium"
+    },
+    "active_history_ribbon": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Primitive",
+      "renderer": "historyRibbon",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "tipHistory",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.75,
+        2.25
+      ],
+      "density": [
+        0.28,
+        0.85
+      ],
+      "duration": [
+        10,
+        28
+      ],
+      "alpha": [
+        0.25,
+        0.72
+      ],
+      "spread": [
+        0.45,
+        1.45
+      ],
+      "jitter": [
+        0.0,
+        0.45
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "minQuality": "Medium"
+    },
+    "active_ghost_arc": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Sprite",
+      "renderer": "ghostArc",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.7,
+        1.7
+      ],
+      "density": [
+        0.25,
+        0.7
+      ],
+      "duration": [
+        8,
+        20
+      ],
+      "alpha": [
+        0.16,
+        0.46
+      ],
+      "spread": [
+        0.45,
+        1.35
+      ],
+      "variants": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "minQuality": "High"
+    },
+    "active_wavy_strip": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Sprite",
+      "renderer": "wavyStrip",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.65,
+        1.55
+      ],
+      "density": [
+        0.18,
+        0.58
+      ],
+      "duration": [
+        10,
+        36
+      ],
+      "alpha": [
+        0.25,
+        0.72
+      ],
+      "spread": [
+        0.2,
+        1.0
+      ],
+      "jitter": [
+        0.25,
+        1.25
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "minQuality": "High"
+    },
+    "beam_line_core": {
+      "event": "beam",
+      "stage": "active",
+      "backend": "Primitive",
+      "renderer": "beamLine",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "velocity",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.65,
+        2.4
+      ],
+      "density": [
+        0.18,
+        0.58
+      ],
+      "duration": [
+        10,
+        44
+      ],
+      "alpha": [
+        0.35,
+        0.92
+      ],
+      "spread": [
+        0.25,
+        0.95
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "minQuality": "Medium"
+    },
+    "hit_impact_flash": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Sprite",
+      "renderer": "impactSpriteFlash",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.85,
+        2.1
+      ],
+      "density": [
+        0.12,
+        0.34
+      ],
+      "duration": [
+        5,
+        12
+      ],
+      "alpha": [
+        0.45,
+        0.86
+      ],
+      "spread": [
+        0.25,
+        0.75
+      ],
+      "variants": [
+        0,
+        1
+      ],
+      "minQuality": "Low"
+    },
+    "hit_impact_burst": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Baked",
+      "renderer": "impactSpriteBurst",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        1.15,
+        3.6
+      ],
+      "density": [
+        0.28,
+        0.86
+      ],
+      "duration": [
+        8,
+        24
+      ],
+      "alpha": [
+        0.38,
+        0.9
+      ],
+      "spread": [
+        0.55,
+        1.85
+      ],
+      "jitter": [
+        0.1,
+        0.75
+      ],
+      "variants": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "bake": true,
+      "minQuality": "Medium"
+    },
+    "hit_ring_snap": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Baked",
+      "renderer": "impactRing",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.9,
+        2.8
+      ],
+      "density": [
+        0.18,
+        0.62
+      ],
+      "duration": [
+        7,
+        18
+      ],
+      "alpha": [
+        0.35,
+        0.82
+      ],
+      "spread": [
+        0.45,
+        1.45
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "bake": true,
+      "minQuality": "Low"
+    },
+    "hit_child_motes": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Baked",
+      "renderer": "childSpriteMotes",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.65,
+        2.2
+      ],
+      "density": [
+        0.18,
+        0.78
+      ],
+      "duration": [
+        12,
+        42
+      ],
+      "alpha": [
+        0.24,
+        0.75
+      ],
+      "spread": [
+        0.55,
+        2.0
+      ],
+      "variants": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "bake": true,
+      "minQuality": "Medium"
+    },
+    "kill_decay_smoke": {
+      "event": "kill",
+      "stage": "decay",
+      "backend": "Baked",
+      "renderer": "genericSmoke",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        0.65,
+        2.2
+      ],
+      "density": [
+        0.15,
+        0.55
+      ],
+      "duration": [
+        14,
+        52
+      ],
+      "alpha": [
+        0.12,
+        0.45
+      ],
+      "spread": [
+        0.45,
+        1.55
+      ],
+      "jitter": [
+        0.2,
+        1.2
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "bake": true,
+      "minQuality": "Medium"
+    },
+    "field_pulse_loop": {
+      "event": "travel",
+      "stage": "loop",
+      "backend": "Sprite",
+      "renderer": "fieldPulse",
+      "textureRole": "field",
+      "particleRole": "child",
+      "anchor": "field",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "scale": [
+        1.1,
+        3.4
+      ],
+      "density": [
+        0.1,
+        0.42
+      ],
+      "duration": [
+        18,
+        90
+      ],
+      "alpha": [
+        0.18,
+        0.65
+      ],
+      "spread": [
+        0.45,
+        1.6
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ],
+      "minQuality": "Medium"
+    },
+    "tick_light_glow": {
+      "event": "tick",
+      "stage": "loop",
+      "backend": "Realtime",
+      "renderer": "lightCue",
+      "textureRole": "projectile",
+      "anchor": "self",
+      "blend": "additive",
+      "layer": "Lighting",
+      "startTick": 0,
+      "repeatEvery": [
+        3,
+        8
+      ],
+      "scale": [
+        0.4,
+        1.4
+      ],
+      "density": [
+        0.08,
+        0.45
+      ],
+      "alpha": [
+        0.12,
+        0.55
+      ],
+      "duration": [
+        8,
+        18
+      ],
+      "budgetWeight": [
+        0.05,
+        0.2
+      ],
+      "minQuality": "Low"
+    },
+    "hit_light_flash": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Realtime",
+      "renderer": "lightCue",
+      "textureRole": "impact",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "Lighting",
+      "scale": [
+        0.8,
+        2.6
+      ],
+      "density": [
+        0.18,
+        0.72
+      ],
+      "alpha": [
+        0.22,
+        0.75
+      ],
+      "duration": [
+        4,
+        16
+      ],
+      "budgetWeight": [
+        0.05,
+        0.2
+      ],
+      "minQuality": "High"
+    },
+    "hit_sound_snap": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Realtime",
+      "renderer": "soundCue",
+      "textureRole": "impact",
+      "anchor": "hitPoint",
+      "layer": "Sound",
+      "scale": [
+        0.5,
+        1.4
+      ],
+      "density": [
+        0.2,
+        0.8
+      ],
+      "alpha": [
+        0.2,
+        0.75
+      ],
+      "duration": [
+        1,
+        4
+      ],
+      "budgetWeight": [
+        0.05,
+        0.1
+      ],
+      "minQuality": "Low"
+    },
+    "kill_sound_fade": {
+      "event": "kill",
+      "stage": "decay",
+      "backend": "Realtime",
+      "renderer": "soundCue",
+      "textureRole": "impact",
+      "anchor": "self",
+      "layer": "Sound",
+      "scale": [
+        0.4,
+        1.2
+      ],
+      "density": [
+        0.1,
+        0.45
+      ],
+      "alpha": [
+        0.1,
+        0.55
+      ],
+      "duration": [
+        1,
+        5
+      ],
+      "budgetWeight": [
+        0.05,
+        0.1
+      ],
+      "minQuality": "Low"
+    },
+    "actor_echo_placeholder": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Sprite",
+      "renderer": "actorAfterimage",
+      "textureRole": "projectile",
+      "anchor": "owner",
+      "blend": "alpha",
+      "layer": "BeforePlayers",
+      "scale": [
+        0.65,
+        1.35
+      ],
+      "density": [
+        0.1,
+        0.45
+      ],
+      "alpha": [
+        0.08,
+        0.32
+      ],
+      "duration": [
+        8,
+        20
+      ],
+      "repeatEvery": [
+        4,
+        10
+      ],
+      "jitter": [
+        0.05,
+        0.25
+      ],
+      "budgetWeight": [
+        0.1,
+        0.45
+      ],
+      "minQuality": "High"
+    },
+    "low_clean_hit_flash": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Sprite",
+      "renderer": "impactSpriteFlash",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "minQuality": "Low",
+      "scale": [
+        0.7,
+        1.35
+      ],
+      "density": [
+        0.05,
+        0.18
+      ],
+      "duration": [
+        4,
+        8
+      ],
+      "alpha": [
+        0.32,
+        0.72
+      ],
+      "variants": [
+        0,
+        1
+      ]
+    },
+    "medium_baked_spark_tape": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Baked",
+      "renderer": "genericParticles",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "minQuality": "Medium",
+      "scale": [
+        0.45,
+        1.2
+      ],
+      "density": [
+        0.2,
+        0.55
+      ],
+      "duration": [
+        8,
+        18
+      ],
+      "alpha": [
+        0.35,
+        0.78
+      ],
+      "spread": [
+        0.35,
+        1.2
+      ],
+      "budgetWeight": [
+        0.65,
+        1.25
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ]
+    },
+    "medium_travel_residue": {
+      "event": "travel",
+      "stage": "loop",
+      "backend": "Realtime",
+      "renderer": "ambientMotes",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "self",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "minQuality": "Medium",
+      "scale": [
+        0.18,
+        0.75
+      ],
+      "density": [
+        0.06,
+        0.3
+      ],
+      "duration": [
+        10,
+        30
+      ],
+      "repeatEvery": [
+        3,
+        9
+      ],
+      "alpha": [
+        0.16,
+        0.48
+      ],
+      "spread": [
+        0.2,
+        0.85
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ]
+    },
+    "high_layered_history_ribbon": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Primitive",
+      "renderer": "historyRibbon",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "tipHistory",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "minQuality": "High",
+      "scale": [
+        0.75,
+        1.8
+      ],
+      "density": [
+        0.35,
+        0.82
+      ],
+      "duration": [
+        14,
+        32
+      ],
+      "alpha": [
+        0.32,
+        0.72
+      ],
+      "spread": [
+        0.45,
+        1.4
+      ],
+      "variants": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "high_actor_echo_tail": {
+      "event": "active",
+      "stage": "active",
+      "backend": "Sprite",
+      "renderer": "actorAfterimage",
+      "textureRole": "projectile",
+      "particleRole": "child",
+      "anchor": "owner",
+      "blend": "alpha",
+      "layer": "BeforeProjectiles",
+      "minQuality": "High",
+      "scale": [
+        0.65,
+        1.25
+      ],
+      "density": [
+        0.18,
+        0.55
+      ],
+      "duration": [
+        10,
+        24
+      ],
+      "alpha": [
+        0.14,
+        0.4
+      ],
+      "spread": [
+        0.25,
+        0.95
+      ],
+      "variants": [
+        0,
+        1,
+        2
+      ]
+    },
+    "ultra_double_impact_flash": {
+      "event": "hit",
+      "stage": "impact",
+      "backend": "Hybrid",
+      "renderer": "impactSpriteBurst",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "minQuality": "Ultra",
+      "scale": [
+        1.6,
+        4.6
+      ],
+      "density": [
+        0.45,
+        0.9
+      ],
+      "duration": [
+        10,
+        26
+      ],
+      "alpha": [
+        0.45,
+        0.95
+      ],
+      "spread": [
+        0.55,
+        1.75
+      ],
+      "budgetWeight": [
+        1.1,
+        2.4
+      ],
+      "variants": [
+        2,
+        3,
+        4
+      ]
+    },
+    "ultra_orbital_decay": {
+      "event": "decay",
+      "stage": "decay",
+      "backend": "Realtime",
+      "renderer": "orbitalMotes",
+      "textureRole": "impact",
+      "particleRole": "child",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "BeforeProjectiles",
+      "minQuality": "Ultra",
+      "scale": [
+        0.35,
+        1.2
+      ],
+      "density": [
+        0.28,
+        0.75
+      ],
+      "duration": [
+        18,
+        54
+      ],
+      "alpha": [
+        0.2,
+        0.6
+      ],
+      "spread": [
+        0.45,
+        1.8
+      ],
+      "budgetWeight": [
+        0.8,
+        1.8
+      ],
+      "variants": [
+        0,
+        1,
+        2,
+        3
+      ]
+    }
+  }
+}

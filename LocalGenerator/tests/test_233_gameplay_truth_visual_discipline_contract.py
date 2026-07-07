@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import server
+from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
+from infini_local.services.visual_asset_pipeline import strip_conflicting_sprite_prompt_bits
+
+VISUAL = server.visual_generation_pipeline
+
+
+def test_incompatible_second_primary_cannot_override_first_executor() -> None:
+    data = {
+        "category": "weapon",
+        "runtimePlan": {
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 18, "useTimeTicks": 24}},
+                {"fn": "perform_melee_attack", "params": {"family": "broadsword", "speed": 12, "rangeTiles": 4}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 10, "rangeTiles": 12, "lifetimeTicks": 40}},
+            ]
+        },
+    }
+
+    patch = compile_runtime_plan_to_genome_patch(data)
+
+    assert patch["runtimeFamily"] == "swing"
+    assert patch["delivery"] == "swing"
+    assert patch["disableItemMeleeHitbox"] is False
+    assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
+
+
+def test_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routing() -> None:
+    data = {
+        "category": "weapon",
+        "itemKnowledge": {
+            "parents": [
+                {"name": "Подожженная стрела", "tags": ["ammo", "flaming", "ranged"]},
+                {"name": "Факел", "tags": ["torch", "material"]},
+            ]
+        },
+        "runtimePlan": {
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "consumable_weapon", "damageClass": "ranged", "damage": 12, "useTimeTicks": 20, "consumable": True}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "throw", "delivery": "throw", "movement": "gravity_arc", "speed": 8, "rangeTiles": 40, "lifetimeTicks": 300}},
+                {"fn": "emit_light", "params": {"strength": 0.8, "lightColorName": "orange"}},
+            ]
+        },
+    }
+
+    patch = compile_runtime_plan_to_genome_patch(data)
+
+    assert patch["onHit"] == "burn"
+    assert patch["parentMechanicPreserved"] == {"kind": "onHit", "value": "burn", "sourceTag": "flaming"}
+    assert patch["runtimeLightStrength"] == 0.8
+    assert patch["primaryColorName"] == "orange"
+
+
+def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) -> None:
+    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    data = {
+        "id": "bench_blade",
+        "category": "weapon",
+        "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {"resultKind": "weapon"}}]},
+        "attack": {"enabled": True, "runtimeFamily": "swing", "delivery": "swing", "disableItemMeleeHitbox": False},
+        "visual": {"imagePrompt": "heavy wooden bench blade", "projectileImagePrompt": "spinning table plank"},
+        "visualKit": {"bakedAssets": {"projectile": {"mode": "baked_sprite", "prompt": "spinning table plank"}}},
+    }
+
+    plan = server.build_visual_asset_plan(data)
+    projectile = next(x for x in plan if x["role"] == "projectile")
+
+    assert projectile["status"] == "skipped_not_authored_baked"
+    assert projectile["assetMode"] == "particle_vfx"
+    assert "melee_swing_uses_item_sprite_no_projectile_asset" in data["debug"]["visualAssetRuntimeGates"]
+
+
+def test_field_baked_asset_requires_compiled_field_runtime(monkeypatch) -> None:
+    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
+    data = {
+        "id": "lantern_dart",
+        "category": "weapon",
+        "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {"resultKind": "weapon"}}]},
+        "attack": {"enabled": True, "runtimeFamily": "throw", "delivery": "throw"},
+        "visual": {"imagePrompt": "small vial", "fieldImagePrompt": "anchored flame"},
+        "visualKit": {"bakedAssets": {"field": {"mode": "baked_sprite", "prompt": "anchored flame"}}},
+    }
+
+    plan = server.build_visual_asset_plan(data)
+    field = next(x for x in plan if x["role"] == "field")
+
+    assert field["status"] == "skipped_not_authored_baked"
+    assert field["assetMode"] == "none"
+    assert "no_compiled_field_runtime_or_vfx_slot" in data["debug"]["visualAssetRuntimeGates"]
+
+
+def test_zimage_prompt_sanitizer_strips_sprite_resolution_tokens() -> None:
+    cleaned = strip_conflicting_sprite_prompt_bits(
+        "glowing purple wooden splinter, sharp, dark trail, 16x16 pixel art, 24x24 resolution"
+    ).lower()
+
+    assert "16x16" not in cleaned
+    assert "24x24" not in cleaned
+    assert "resolution" not in cleaned
+    assert "pixel art" in cleaned

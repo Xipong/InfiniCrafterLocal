@@ -1,0 +1,799 @@
+{
+  "schemaVersion": 1,
+  "sourceNote": "Offline wiki-guided vanilla Terraria progression plan. Runtime script can optionally fetch wiki.gg pages when network is available; this bundle stores the gameplay path so the simulator stays deterministic/offline.",
+  "wikiBase": "https://terraria.wiki.gg/wiki/",
+  "items": {
+    "wood": {
+      "id": 9,
+      "name": "Wood",
+      "rare": 0,
+      "value": 5,
+      "maxStack": 999,
+      "tags": [
+        "wood",
+        "material",
+        "placeable"
+      ],
+      "wikiPage": "Wood"
+    },
+    "dirt": {
+      "id": 2,
+      "name": "Dirt Block",
+      "rare": 0,
+      "value": 1,
+      "maxStack": 999,
+      "tags": [
+        "dirt",
+        "earth",
+        "block",
+        "material",
+        "placeable"
+      ],
+      "wikiPage": "Dirt_Block"
+    },
+    "fallen_star": {
+      "id": 75,
+      "name": "Fallen Star",
+      "rare": 1,
+      "value": 1000,
+      "tags": [
+        "star",
+        "mana",
+        "light",
+        "material"
+      ],
+      "wikiPage": "Fallen_Star"
+    },
+    "gel": {
+      "id": 23,
+      "name": "Gel",
+      "rare": 0,
+      "value": 2,
+      "maxStack": 999,
+      "tags": [
+        "gel",
+        "slime",
+        "material"
+      ],
+      "wikiPage": "Gel"
+    },
+    "torch": {
+      "id": 8,
+      "name": "Torch",
+      "rare": 0,
+      "value": 10,
+      "tags": [
+        "torch",
+        "fire",
+        "light",
+        "placeable",
+        "material"
+      ],
+      "wikiPage": "Torch"
+    },
+    "copper_shortsword": {
+      "id": 3507,
+      "name": "Copper Shortsword",
+      "damage": 5,
+      "useTime": 13,
+      "useAnimation": 13,
+      "useStyle": 3,
+      "damageClass": "melee",
+      "rare": 0,
+      "value": 100,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "copper"
+      ],
+      "wikiPage": "Copper_Shortsword"
+    },
+    "wooden_bow": {
+      "id": 3504,
+      "name": "Wooden Bow",
+      "damage": 4,
+      "useTime": 29,
+      "useAnimation": 29,
+      "useStyle": 5,
+      "damageClass": "ranged",
+      "shoot": 1,
+      "shootSpeed": 6.1,
+      "projectileProfile": "ARROW",
+      "rare": 0,
+      "value": 100,
+      "tags": [
+        "weapon",
+        "ranged",
+        "bow"
+      ],
+      "wikiPage": "Wooden_Bow"
+    },
+    "enchanted_boomerang": {
+      "id": 55,
+      "name": "Enchanted Boomerang",
+      "damage": 17,
+      "useTime": 15,
+      "useAnimation": 15,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "shoot": 52,
+      "shootSpeed": 10,
+      "projectileProfile": "BOOMERANG",
+      "rare": 1,
+      "value": 3000,
+      "tags": [
+        "weapon",
+        "melee",
+        "boomerang",
+        "magic"
+      ],
+      "wikiPage": "Enchanted_Boomerang"
+    },
+    "musket": {
+      "id": 95,
+      "name": "Musket",
+      "damage": 31,
+      "useTime": 40,
+      "useAnimation": 40,
+      "useStyle": 5,
+      "damageClass": "ranged",
+      "shoot": 14,
+      "shootSpeed": 9,
+      "projectileProfile": "BULLET",
+      "rare": 2,
+      "value": 20000,
+      "tags": [
+        "weapon",
+        "ranged",
+        "gun"
+      ],
+      "wikiPage": "Musket"
+    },
+    "minishark": {
+      "id": 98,
+      "name": "Minishark",
+      "damage": 6,
+      "useTime": 8,
+      "useAnimation": 8,
+      "useStyle": 5,
+      "damageClass": "ranged",
+      "shoot": 14,
+      "shootSpeed": 7,
+      "projectileProfile": "BULLET",
+      "rare": 2,
+      "value": 35000,
+      "tags": [
+        "weapon",
+        "ranged",
+        "gun",
+        "fast"
+      ],
+      "wikiPage": "Minishark"
+    },
+    "demonite_bar": {
+      "id": 57,
+      "name": "Demonite Bar",
+      "rare": 1,
+      "value": 3000,
+      "tags": [
+        "demonite",
+        "bar",
+        "evil",
+        "material"
+      ],
+      "wikiPage": "Demonite_Bar"
+    },
+    "lights_bane": {
+      "id": 46,
+      "name": "Light's Bane",
+      "damage": 18,
+      "useTime": 20,
+      "useAnimation": 20,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "rare": 1,
+      "value": 2700,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "demonite",
+        "evil"
+      ],
+      "wikiPage": "Light%27s_Bane"
+    },
+    "blade_of_grass": {
+      "id": 190,
+      "name": "Blade of Grass",
+      "damage": 28,
+      "useTime": 30,
+      "useAnimation": 30,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "rare": 2,
+      "value": 5400,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "jungle",
+        "plant",
+        "poison"
+      ],
+      "wikiPage": "Blade_of_Grass"
+    },
+    "muramasa": {
+      "id": 155,
+      "name": "Muramasa",
+      "damage": 26,
+      "useTime": 18,
+      "useAnimation": 18,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "rare": 2,
+      "value": 5400,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "dungeon"
+      ],
+      "wikiPage": "Muramasa"
+    },
+    "volcano": {
+      "id": 121,
+      "name": "Volcano",
+      "damage": 40,
+      "useTime": 30,
+      "useAnimation": 30,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "rare": 3,
+      "value": 54000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "fire",
+        "hellstone"
+      ],
+      "wikiPage": "Volcano"
+    },
+    "nights_edge": {
+      "id": 273,
+      "name": "Night's Edge",
+      "damage": 42,
+      "useTime": 27,
+      "useAnimation": 27,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "rare": 3,
+      "value": 54000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "large",
+        "night",
+        "evil",
+        "jungle",
+        "fire"
+      ],
+      "wikiPage": "Night%27s_Edge"
+    },
+    "crystal_shard": {
+      "id": 502,
+      "name": "Crystal Shard",
+      "rare": 3,
+      "value": 1600,
+      "tags": [
+        "crystal",
+        "magic",
+        "material",
+        "hardmode"
+      ],
+      "wikiPage": "Crystal_Shard"
+    },
+    "clockwork_rifle": {
+      "id": 434,
+      "name": "Clockwork Assault Rifle",
+      "damage": 19,
+      "useTime": 12,
+      "useAnimation": 12,
+      "useStyle": 5,
+      "damageClass": "ranged",
+      "shoot": 14,
+      "shootSpeed": 11,
+      "projectileProfile": "BULLET",
+      "rare": 4,
+      "value": 100000,
+      "tags": [
+        "weapon",
+        "ranged",
+        "gun",
+        "burst",
+        "hardmode"
+      ],
+      "wikiPage": "Clockwork_Assault_Rifle"
+    },
+    "illegal_gun_parts": {
+      "id": 470,
+      "name": "Illegal Gun Parts",
+      "rare": 2,
+      "value": 150000,
+      "tags": [
+        "gun",
+        "material",
+        "ranged",
+        "mechanical"
+      ],
+      "wikiPage": "Illegal_Gun_Parts"
+    },
+    "shark_fin": {
+      "id": 319,
+      "name": "Shark Fin",
+      "rare": 1,
+      "value": 500,
+      "tags": [
+        "material",
+        "shark",
+        "ocean"
+      ],
+      "wikiPage": "Shark_Fin"
+    },
+    "soul_of_might": {
+      "id": 547,
+      "name": "Soul of Might",
+      "rare": 5,
+      "value": 20000,
+      "tags": [
+        "soul",
+        "material",
+        "mech",
+        "hardmode",
+        "power"
+      ],
+      "wikiPage": "Soul_of_Might"
+    },
+    "megashark": {
+      "id": 533,
+      "name": "Megashark",
+      "damage": 25,
+      "useTime": 7,
+      "useAnimation": 7,
+      "useStyle": 5,
+      "damageClass": "ranged",
+      "shoot": 14,
+      "shootSpeed": 10,
+      "projectileProfile": "BULLET",
+      "rare": 5,
+      "value": 120000,
+      "tags": [
+        "weapon",
+        "ranged",
+        "gun",
+        "fast",
+        "shark",
+        "hardmode"
+      ],
+      "wikiPage": "Megashark"
+    },
+    "excalibur": {
+      "id": 368,
+      "name": "Excalibur",
+      "damage": 72,
+      "useTime": 20,
+      "useAnimation": 20,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "rare": 5,
+      "value": 46000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "hallowed",
+        "hardmode"
+      ],
+      "wikiPage": "Excalibur"
+    },
+    "broken_hero_sword": {
+      "id": 1570,
+      "name": "Broken Hero Sword",
+      "rare": 5,
+      "value": 75000,
+      "tags": [
+        "sword",
+        "blade",
+        "hero",
+        "material",
+        "hardmode"
+      ],
+      "wikiPage": "Broken_Hero_Sword"
+    },
+    "terra_blade": {
+      "id": 757,
+      "name": "Terra Blade",
+      "damage": 85,
+      "useTime": 16,
+      "useAnimation": 16,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "shoot": 132,
+      "shootSpeed": 12,
+      "projectileProfile": "TERRA_BEAM",
+      "rare": 8,
+      "value": 200000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "blade",
+        "projectile",
+        "terra",
+        "hardmode"
+      ],
+      "wikiPage": "Terra_Blade"
+    },
+    "chlorophyte_bar": {
+      "id": 1006,
+      "name": "Chlorophyte Bar",
+      "rare": 7,
+      "value": 90000,
+      "tags": [
+        "chlorophyte",
+        "jungle",
+        "bar",
+        "material",
+        "hardmode"
+      ],
+      "wikiPage": "Chlorophyte_Bar"
+    },
+    "death_sickle": {
+      "id": 1327,
+      "name": "Death Sickle",
+      "damage": 57,
+      "useTime": 25,
+      "useAnimation": 25,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "shoot": 188,
+      "shootSpeed": 16,
+      "projectileProfile": "DEATH_SICKLE",
+      "rare": 8,
+      "value": 100000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sickle",
+        "projectile",
+        "shadow"
+      ],
+      "wikiPage": "Death_Sickle"
+    },
+    "razorblade_typhoon": {
+      "id": 2622,
+      "name": "Razorblade Typhoon",
+      "damage": 85,
+      "useTime": 17,
+      "useAnimation": 17,
+      "useStyle": 5,
+      "damageClass": "magic",
+      "shoot": 409,
+      "shootSpeed": 14,
+      "projectileProfile": "TYPHOON",
+      "rare": 8,
+      "value": 300000,
+      "manaCost": 16,
+      "tags": [
+        "weapon",
+        "magic",
+        "spell",
+        "homing",
+        "typhoon"
+      ],
+      "wikiPage": "Razorblade_Typhoon"
+    },
+    "vortex_fragment": {
+      "id": 3458,
+      "name": "Vortex Fragment",
+      "rare": 10,
+      "value": 20000,
+      "tags": [
+        "vortex",
+        "fragment",
+        "lunar",
+        "ranged",
+        "material"
+      ],
+      "wikiPage": "Vortex_Fragment"
+    },
+    "nebula_fragment": {
+      "id": 3457,
+      "name": "Nebula Fragment",
+      "rare": 10,
+      "value": 20000,
+      "tags": [
+        "nebula",
+        "fragment",
+        "lunar",
+        "magic",
+        "material"
+      ],
+      "wikiPage": "Nebula_Fragment"
+    },
+    "phantasm": {
+      "id": 3540,
+      "name": "Phantasm",
+      "damage": 50,
+      "useTime": 12,
+      "useAnimation": 12,
+      "useStyle": 5,
+      "damageClass": "ranged",
+      "shoot": 1,
+      "shootSpeed": 20,
+      "projectileProfile": "ARROW",
+      "rare": 10,
+      "value": 500000,
+      "tags": [
+        "weapon",
+        "ranged",
+        "bow",
+        "lunar",
+        "vortex"
+      ],
+      "wikiPage": "Phantasm"
+    },
+    "last_prism": {
+      "id": 3541,
+      "name": "Last Prism",
+      "damage": 100,
+      "useTime": 10,
+      "useAnimation": 10,
+      "useStyle": 5,
+      "damageClass": "magic",
+      "shoot": 633,
+      "shootSpeed": 30,
+      "projectileProfile": "PRISM_BEAM",
+      "rare": 10,
+      "value": 1000000,
+      "manaCost": 12,
+      "tags": [
+        "weapon",
+        "magic",
+        "beam",
+        "lunar",
+        "moon_lord"
+      ],
+      "wikiPage": "Last_Prism"
+    },
+    "luminite_bar": {
+      "id": 3467,
+      "name": "Luminite Bar",
+      "rare": 10,
+      "value": 120000,
+      "tags": [
+        "bar",
+        "material",
+        "luminite",
+        "lunar",
+        "moon_lord"
+      ],
+      "wikiPage": "Luminite_Bar"
+    },
+    "meowmere": {
+      "id": 3063,
+      "name": "Meowmere",
+      "damage": 200,
+      "useTime": 16,
+      "useAnimation": 16,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "shoot": 503,
+      "shootSpeed": 12,
+      "projectileProfile": "MEOWMERE",
+      "rare": 10,
+      "value": 1000000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "cat",
+        "projectile",
+        "moon_lord"
+      ],
+      "wikiPage": "Meowmere"
+    },
+    "star_wrath": {
+      "id": 3065,
+      "name": "Star Wrath",
+      "damage": 170,
+      "useTime": 16,
+      "useAnimation": 16,
+      "useStyle": 1,
+      "damageClass": "melee",
+      "shoot": 504,
+      "shootSpeed": 12,
+      "projectileProfile": "STAR_WRATH",
+      "rare": 10,
+      "value": 1000000,
+      "tags": [
+        "weapon",
+        "melee",
+        "sword",
+        "star",
+        "projectile",
+        "moon_lord"
+      ],
+      "wikiPage": "Star_Wrath"
+    }
+  },
+  "routes": [
+    {
+      "id": "starter",
+      "title": "Starter weapon survives early upgrades",
+      "steps": [
+        [
+          "wood",
+          "copper_shortsword"
+        ],
+        [
+          "$prev",
+          "fallen_star"
+        ],
+        [
+          "$prev",
+          "gel"
+        ],
+        [
+          "$prev",
+          "enchanted_boomerang"
+        ]
+      ]
+    },
+    {
+      "id": "nights_edge_style",
+      "title": "Night's Edge style sword chain",
+      "steps": [
+        [
+          "lights_bane",
+          "blade_of_grass"
+        ],
+        [
+          "$prev",
+          "muramasa"
+        ],
+        [
+          "$prev",
+          "volcano"
+        ],
+        [
+          "$prev",
+          "broken_hero_sword"
+        ]
+      ]
+    },
+    {
+      "id": "megashark_style",
+      "title": "Megashark style gun chain",
+      "steps": [
+        [
+          "minishark",
+          "illegal_gun_parts"
+        ],
+        [
+          "$prev",
+          "shark_fin"
+        ],
+        [
+          "$prev",
+          "soul_of_might"
+        ],
+        [
+          "$prev",
+          "clockwork_rifle"
+        ],
+        [
+          "$prev",
+          "crystal_shard"
+        ]
+      ]
+    },
+    {
+      "id": "terra_to_lunar",
+      "title": "Terra Blade to lunar melee chain",
+      "steps": [
+        [
+          "nights_edge",
+          "excalibur"
+        ],
+        [
+          "$prev",
+          "broken_hero_sword"
+        ],
+        [
+          "$prev",
+          "terra_blade"
+        ],
+        [
+          "$prev",
+          "death_sickle"
+        ],
+        [
+          "$prev",
+          "chlorophyte_bar"
+        ],
+        [
+          "$prev",
+          "meowmere"
+        ],
+        [
+          "$prev",
+          "star_wrath"
+        ]
+      ]
+    },
+    {
+      "id": "magic_lunar",
+      "title": "Magic route into Moon Lord drops",
+      "steps": [
+        [
+          "razorblade_typhoon",
+          "nebula_fragment"
+        ],
+        [
+          "$prev",
+          "last_prism"
+        ],
+        [
+          "$prev",
+          "luminite_bar"
+        ]
+      ]
+    },
+    {
+      "id": "ranged_lunar",
+      "title": "Ranged route into Moon Lord drops",
+      "steps": [
+        [
+          "megashark",
+          "vortex_fragment"
+        ],
+        [
+          "$prev",
+          "phantasm"
+        ],
+        [
+          "$prev",
+          "luminite_bar"
+        ]
+      ]
+    },
+    {
+      "id": "abuse",
+      "title": "Weak material + endgame abuse checks",
+      "steps": [
+        [
+          "dirt",
+          "last_prism"
+        ],
+        [
+          "wood",
+          "meowmere"
+        ],
+        [
+          "torch",
+          "star_wrath"
+        ]
+      ]
+    }
+  ]
+}
