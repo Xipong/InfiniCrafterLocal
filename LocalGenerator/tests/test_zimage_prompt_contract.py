@@ -392,8 +392,10 @@ def _check_split_blade_guard_uses_semantic_helper_not_keyword_soup() -> None:
     assert _blade_shape_needs_fused_contour_guard("two-toned gold and black sword")
     assert not _blade_shape_needs_fused_contour_guard("plain black blade with intact silhouette")
 
-    source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_prompt_contracts.py").read_text(encoding="utf-8")
+    facade = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
     guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def _authored_tether_context", 1)[0]
+    assert "from infini_local.pipelines.visual_prompt_contracts import" in facade
     assert "_blade_shape_needs_fused_contour_guard(blade_blob)" in guard_body
     assert "for w in [" not in guard_body
 
@@ -503,7 +505,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
     assert "asymmetric crescent-hook blade" in kit_prompt
     assert "no detached lower spur" in kit_prompt
 
-    source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_prompt_contracts.py").read_text(encoding="utf-8")
     guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def _authored_tether_context", 1)[0]
     assert "_authored_item_silhouette_contract(data)" in guard_body
     assert "_item_shape_contract_clauses" not in source

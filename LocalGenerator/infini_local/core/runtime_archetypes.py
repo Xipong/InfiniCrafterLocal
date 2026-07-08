@@ -160,6 +160,26 @@ def _append_unique_list(data: dict[str, Any], key: str, values: list[str]) -> No
     data[key] = merged[:32]
 
 
+
+def _has_utility_engine_calls(data: dict[str, Any]) -> bool:
+    """True when the plan already authors a finite non-attack utility executor."""
+    rp = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
+    calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
+    utility = {
+        "accessory_effect",
+        "armor_effect",
+        "tool_capability",
+        "mobility_effect",
+        "emit_light",
+        "hold_item_effect",
+        "extractinator_output",
+        "apply_player_effect_on_use",
+    }
+    for call in calls:
+        if isinstance(call, dict) and str(call.get("fn") or "") in utility:
+            return True
+    return False
+
 def _has_finite_executable_attack_patch(patch: dict[str, Any]) -> bool:
     """True when runtimePlan.engineCalls already compiled to a finite runtime primitive.
 
@@ -198,13 +218,21 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
 
     raw_spec = data.get("runtimeArchetype") if isinstance(data.get("runtimeArchetype"), dict) else {}
     raw_family = _norm(raw_spec.get("family")) if isinstance(raw_spec, dict) else ""
-    if raw_family and raw_family not in KNOWN_FAMILIES and _has_finite_executable_attack_patch(patch):
+    if raw_family and raw_family not in KNOWN_FAMILIES and (_has_finite_executable_attack_patch(patch) or _has_utility_engine_calls(data)):
         raw_spec = dict(raw_spec)
         raw_spec["family"] = "custom_executor"
         raw_notes = raw_spec.get("supportNotes") if isinstance(raw_spec.get("supportNotes"), list) else []
         raw_spec["supportNotes"] = list(raw_notes) + [
             f"unknown_family:{raw_family}",
             "fell_back_to_custom_executor_from_engine_calls",
+        ]
+    elif raw_family == "unsupported" and (_has_finite_executable_attack_patch(patch) or _has_utility_engine_calls(data)):
+        # LLM sometimes marks family=unsupported while still authoring finite utility/attack calls.
+        raw_spec = dict(raw_spec)
+        raw_spec["family"] = "custom_executor"
+        raw_notes = raw_spec.get("supportNotes") if isinstance(raw_spec.get("supportNotes"), list) else []
+        raw_spec["supportNotes"] = list(raw_notes) + [
+            "unsupported_family_overridden_by_executable_engine_calls",
         ]
     spec = normalize_runtime_archetype(raw_spec)
     data["runtimeArchetype"] = spec

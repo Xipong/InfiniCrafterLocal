@@ -23,7 +23,7 @@ def test_repo_docs_are_compact_and_old_gui_prompt_noise_removed():
         "LocalGenerator/QUICK_START_RU.md",
     ]:
         text = read(ROOT / rel)
-        assert "0.4.237" in "\n".join(text.splitlines()[:16])
+        assert "0.4.239" in "\n".join(text.splitlines()[:16])
         limit = 30000 if "ARCHITECTURE" in rel else 12000
         assert len(text) < limit
 

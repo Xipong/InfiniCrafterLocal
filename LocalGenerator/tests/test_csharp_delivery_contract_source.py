@@ -106,7 +106,7 @@ def _check_server_source_has_family_movement_codes_for_runtime_validation() -> N
     assert '"flail_tether": 16' in source
     assert '"yoyo_hover": 17' in source
     assert '"whip_lash": 18' in source
-    assert '"legacyFields"' not in (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring.py").read_text(encoding="utf-8")
+    assert '"legacyFields"' not in (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "__init__.py").read_text(encoding="utf-8")
 
 
 def _check_projectile_network_carries_family_state_not_prose_scripts() -> None:
@@ -267,7 +267,7 @@ def _check_swing_secondary_projectiles_are_explicit_and_capped() -> None:
 def _check_csharp_projectile_executes_blink_to_projectile_impact_from_authored_fields() -> None:
     data_source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     projectile_source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
-    server_source = (ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_pipeline.py").read_text(encoding="utf-8")
+    server_source = (ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_gameplay.py").read_text(encoding="utf-8")
     assert "public string MobilityMode" in data_source
     assert "public int MobilityRangeTiles" in data_source
     assert "public int MobilityCooldownTicks" in data_source
@@ -399,10 +399,12 @@ def _check_generated_buff_sync_rejects_client_spoof_and_clamps_network_state() -
     assert "_generatedBuffTicks = Math.Clamp(_generatedBuffTicks, 0, 21600)" in player
     assert "_generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000)" in player
     model = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
-    runtime_authoring = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring.py").read_text(encoding="utf-8")
+    runtime_authoring = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "__init__.py").read_text(encoding="utf-8")
+    runtime_schema = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "schema.py").read_text(encoding="utf-8")
     assert "OreSenseEnabled => OreSenseRadiusTiles > 0" in model
     assert "bool-backed" in model and "findTreasure" in player
-    assert "radius debug-only" in runtime_authoring
+    assert "radius debug-only" in runtime_schema
+    assert "from infini_local.core.runtime_authoring.schema import" in runtime_authoring
 
 
 def _check_blink_safe_destination_rejects_world_edges_and_lava() -> None:

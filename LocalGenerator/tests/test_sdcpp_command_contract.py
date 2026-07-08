@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import os
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server
+
+
+def _expected_host_path(path: str) -> str:
+    if os.name == "nt":
+        return path
+    return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
+
 IMAGE_BACKEND_PIPELINE = server.image_backend_pipeline
 
 
@@ -31,6 +40,27 @@ def _check_sdcpp_safe_args_ignores_corrupt_command_template(monkeypatch) -> None
     assert "--vae" in cmd and r"C:\Games\sdcpp\models\ae.safetensors" in cmd
     assert "--llm" in cmd and r"C:\Games\sdcpp\models\qwen.gguf" in cmd
     assert "--lora-model-dir" in cmd and r"C:\Games\sdcpp\loras" in cmd
+
+
+def _check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess(monkeypatch) -> None:
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_MODE", "safe_args")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXE", r"C:\Games\sdcpp\sd-server.exe")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_MODEL", r"C:\Games\sdcpp\models\z-image.gguf")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_VAE", r"C:\Games\sdcpp\models\ae.safetensors")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LLM", r"C:\Games\sdcpp\models\qwen.gguf")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_DIR", r"C:\Games\sdcpp\loras")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "<lora:terraria:0.5>")
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "")
+
+    cmd, shell = server.build_sdcpp_server_command()
+
+    assert shell is False
+    assert isinstance(cmd, list)
+    assert cmd[0] == _expected_host_path(r"C:\Games\sdcpp\sd-server.exe")
+    assert r"C:\Games\sdcpp\models\z-image.gguf" in cmd
+    assert r"C:\Games\sdcpp\models\ae.safetensors" in cmd
+    assert r"C:\Games\sdcpp\models\qwen.gguf" in cmd
+    assert r"C:\Games\sdcpp\loras" in cmd
 
 
 def _check_sdcpp_template_mode_repairs_known_sampling_method_corruption(monkeypatch) -> None:
@@ -162,6 +192,7 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_sdcpp_safe_args_ignores_corrupt_command_template',
+    '_check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess',
     '_check_sdcpp_template_mode_repairs_known_sampling_method_corruption',
     '_check_sdcpp_lora_file_tag_helper_and_prompt_suffix',
     '_check_sdcpp_debug_snapshot_exposes_lora_file_fields',

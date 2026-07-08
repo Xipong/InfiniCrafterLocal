@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import ENGINE_FN_CATALOG_V2
-from infini_local.web import server
+from infini_local.web import api as server
 
 
 PARENT_A = {"name": "Wooden Sword", "type": 24, "damage": 7, "useTime": 25, "useAnimation": 25, "value": 100}
@@ -187,6 +187,7 @@ def _check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair(mon
     assert "backing=enginecall" in text
     assert "enginecalls/numbers/contracts" in text
     assert "do not infer mechanics from names" in text
+    assert "custom_executor for normal/utility enginecalls" in text or "never family=unsupported" in text
     assert "image prompts: item=inventory/held" in text
     assert "same sword/blade/boomerang ok" in text
 

@@ -29,7 +29,7 @@ try:
     from infini_local.core.runtime_authoring import ENGINE_RUNTIME_API_VERSION
 except Exception:
     # Last-resort tool fallback only.  Keep this value in sync with
-    # LocalGenerator/infini_local/core/runtime_authoring.py; the normal path imports it.
+    # LocalGenerator/infini_local/core/runtime_authoring/common.py; the normal path imports it.
     ENGINE_RUNTIME_API_VERSION = "v0.4.47"
 
 PROMPT_VISUAL_KEYS = [

@@ -48,7 +48,7 @@ def test_balance_report_helper_has_powerband_and_clamp_taxonomy():
 
 
 def test_generated_items_attach_single_balance_report_debug_block():
-    combine = read(ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_pipeline.py")
+    combine = read(ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_gameplay.py")
     assert "attach_balance_report(data, stage)" in combine
     assert 'debug"]["statProfile"' in combine or 'debug\", {})[\"statProfile\"' in combine
     assert "sourceEnvelope" not in read(ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "llm_authoring_pipeline.py")

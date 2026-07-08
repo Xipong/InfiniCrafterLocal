@@ -12,13 +12,15 @@ CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("return_to_thrower", re.compile(r"\b(return|returns|returning|boomerang|comes back)\b", re.I)),
     ("channel_beam", re.compile(r"\b(channel|channeled|channelled|beam|laser|ray)\b", re.I)),
     ("charge_release", re.compile(r"\b(charge|charged|release)\b", re.I)),
-    ("starfall", re.compile(r"\b(starfall|rain[s]? stars|falling stars|stars from the sky|meteor)\b", re.I)),
+    ("starfall", re.compile(r"\b(starfall|rain(?:s|ing)?\s+stars|falling\s+stars|stars?\s+from\s+the\s+sky|meteor)\b", re.I)),
     ("sticky_puddle", re.compile(r"\b(sticky|puddle|slowing field|slow field)\b", re.I)),
     ("heat_jam", re.compile(r"\b(heat|overheat|jam|cooldown)\b", re.I)),
     ("lifesteal", re.compile(r"\b(lifesteal|life steal|drain life|heals? on hit)\b", re.I)),
-    ("feline_bounce", re.compile(r"\b(feline|cat|bounce|bouncing cat)\b", re.I)),
+    ("feline_bounce", re.compile(r"\b(feline|cats?|bouncing cats?|meowmere)\b", re.I)),
+    ("projectile_bounce", re.compile(r"\b(bounc(?:e|es|ing|y)|rebound(?:s|ing)?)\b", re.I)),
     ("paired_dual", re.compile(r"\b(paired|dual|twin|offhand|two swords|second sword)\b", re.I)),
     ("burst", re.compile(r"\b(bursts?|explode|explosion|nova)\b", re.I)),
+    ("burn_on_hit", re.compile(r"\b(burn|ignite|on-hit burn|sets? on fire)\b", re.I)),
     ("alternating_phase", re.compile(r"\b(alternate|alternates|cycle|light.dark|dark.light|phase)\b", re.I)),
 ]
 
@@ -105,13 +107,31 @@ def _claim_status(kind: str, source: str, text: str, data: dict[str, Any], patch
             return "visual_only", "beam wording is visual-only"
         return "unsupported", "no channel beam executor"
     if kind == "starfall":
-        return ("visual_only", "starfall image/VFX wording only") if visual_source else ("unsupported", "no full starfall executor")
-    if kind in {"sticky_puddle", "heat_jam", "feline_bounce", "paired_dual", "alternating_phase"}:
-        # state_meter/triggered_action may preserve state, but does not execute these mechanics by itself.
+        if on_hit == "starfall":
+            return "executable", "apply_on_hit_effect.starfall"
+        if family == "delayed_starfall":
+            return "unsupported", "delayed_starfall archetype preserved; finite path is onHit=starfall"
+        return ("visual_only", "starfall image/VFX wording only") if visual_source else ("unsupported", "no starfall onHit executor")
+    if kind == "projectile_bounce":
+        if movement == "bounce":
+            return "executable", "movement=bounce"
+        return ("visual_only", "bounce wording without bounce movement") if visual_source else ("unsupported", "no bounce movement executor")
+    if kind == "feline_bounce":
+        # Do not confuse ordinary projectile bounce with Meowmere-like feline bounce.
         has_state = any(str(c.get("fn") or "") in {"state_meter", "triggered_action"} for c in calls)
         if visual_source:
             return "visual_only", "visual wording only"
+        return ("partial", "state intent preserved, no feline bounce executor") if has_state else ("unsupported", "no feline bounce executor")
+    if kind in {"sticky_puddle", "heat_jam", "paired_dual", "alternating_phase"}:
+        # state_meter/triggered_action may preserve state, but does not execute these mechanics by itself.
+        has_state = any(str(c.get("fn") or "") in {"state_meter", "triggered_action"} for c in calls)
+        if kind == "sticky_puddle" and str(patch.get("effect") or "") == "slime":
+            return "partial", "slime effect present; sticky field/puddle still not a full executor"
+        if visual_source:
+            return "visual_only", "visual wording only"
         return ("partial", "state intent preserved, no gameplay executor") if has_state else ("unsupported", "no finite executor")
+    if kind == "burn_on_hit":
+        return ("executable", "apply_on_hit_effect.burn") if on_hit == "burn" else (("visual_only", "burn wording only") if visual_source else ("unsupported", "no burn onHit executor"))
     if kind == "charge_release":
         has_state = any(str(c.get("fn") or "") in {"state_meter", "triggered_action"} for c in calls)
         if bool(patch.get("channelUse")):

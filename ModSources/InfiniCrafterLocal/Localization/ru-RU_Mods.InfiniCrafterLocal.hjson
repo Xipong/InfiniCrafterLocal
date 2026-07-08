@@ -1,91 +1,216 @@
 Mods: {
-  InfiniCrafterLocal: {
-    Items: {
-      InfiniCore: {
-        DisplayName: "Ядро Инфиникрафта"
-        Tooltip: "ПКМ: открыть инвентарь и панель InfiniCraft station\nПоложи два предмета в слоты A/B вручную; LocalGenerator работает на 127.0.0.1:5055"
-      }
-      GeneratedItem: {
-        DisplayName: "Сгенерированный предмет"
-        Tooltip: "Предмет на основе JSON-спеки"
-      }
-    }
-    Projectiles: {
-      GeneratedProjectile: {
-        DisplayName: "Сгенерированный снаряд"
-      }
-    }
-    Configs: {
-      InfiniVfxClientConfig: {
-        DisplayName: "VFX Client Options"
-        Headers: {
-          GeneratedVFX: "Сгенерированные VFX"
-        }
-        ParticleSpawnMultiplier: {
-          Label: "Множитель частиц"
-        }
-        DrawBudgetMultiplier: {
-          Label: "Множитель бюджета отрисовки"
-        }
-        ParticleAlphaMultiplier: {
-          Label: "Множитель прозрачности частиц"
-        }
-        PresentationLightMultiplier: {
-          Label: "Множитель света эффектов"
-        }
-        EnableScreenCulling: {
-          Label: "Отсекать эффекты вне экрана"
-        }
-        EnableGeneratedSpriteSilhouette: {
-          Label: "Подложка силуэта снаряда"
-        }
-        EnableParticleLibraryBackend: {
-          Label: "Включить ParticleLibrary backend"
-        }
-        EnableLuminanceSoundBackend: {
-          Label: "Включить Luminance live sound backend (опционально)"
-        }
-        ForceVanillaDustFallback: {
-          Label: "Принудительный vanilla Dust fallback"
-        }
-      }
-      InfiniGameplayQolConfig: {
-        DisplayName: "InfiniCraft gameplay QoL / Игровой QoL"
-        Headers: {
-          InfiniCraftStationQoL: "InfiniCraft station QoL / QoL станции"
-          GeneratedGameplayQoL: "Generated gameplay QoL / Игровой QoL"
-          GeneratedRuntimeAssetQoL: "Generated runtime assets / Runtime-ассеты"
-        }
-        EnableInventoryAssetPrefetch: {
-          Label: "Sprite prefetch / Предзагрузка спрайтов"
-          Tooltip: "Когда открыт инвентарь, мягко прогревает generated-спрайты, которые скоро могут отрисоваться."
-        }
-        InventoryAssetPrefetchIntervalTicks: {
-          Label: "Prefetch interval / Интервал предзагрузки"
-          Tooltip: "Задержка в тиках между проходами предзагрузки generated-спрайтов при открытом инвентаре."
-        }
-        InventoryAssetPrefetchMaxItems: {
-          Label: "Prefetch max items / Лимит предметов предзагрузки"
-          Tooltip: "Сколько generated-предметов сканировать за один проход предзагрузки. Учитывает инвентарь, броню и misc equipment; прогревает только уже-authored sprite paths."
-        }
-        EnableGeneratedMeleeOnHitEffects: {
-          Label: "Generated melee on-hit / On-hit эффекты ближнего боя"
-          Tooltip: "Разрешает generated swing-оружию исполнять явные AttackSpec.OnHitCode: дебаффы, малый lifesteal и impact-пыль. Текст prompt не парсится."
-        }
-        RuntimeSpriteCacheMaxTextures: {
-          Label: "Runtime sprite cache size / Размер кэша спрайтов"
-          Tooltip: "Сколько generated PNG-текстур клиент держит загруженными. Дефолт 512 похож на ванильное поведение для маленьких спрайтов; это не лимит предметов в мире."
-        }
-        RuntimeSpriteMaxDimensionPixels: {
-          Label: "Runtime sprite max side / Максимальная сторона спрайта"
-          Tooltip: "Generated runtime PNG шире или выше этого значения не грузится. Дефолт 192 держит item/projectile-спрайты в разумных рамках и не режет чуть более крупный generated-арт."
-        }
-        RuntimeSpriteMaxPngFileMegabytes: {
-          Label: "Runtime PNG file limit / Лимит PNG-файла"
-          Tooltip: "Один generated runtime PNG больше этого размера в мегабайтах не будет загружен как Texture2D."
-        }
-      }
+	InfiniCrafterLocal: {
+		Items: {
+			InfiniCore: {
+				DisplayName: Ядро Инфиникрафта
+				Tooltip:
+					'''
+					ПКМ: открыть инвентарь и панель InfiniCraft station
+					Положи два предмета в слоты A/B вручную; LocalGenerator работает на 127.0.0.1:5055
+					'''
+			}
 
-    }
-  }
+			GeneratedItem: {
+				DisplayName: Сгенерированный предмет
+				Tooltip: Предмет на основе JSON-спеки
+			}
+		}
+
+		Projectiles.GeneratedProjectile.DisplayName: Сгенерированный снаряд
+
+		Configs: {
+			InfiniVfxClientConfig: {
+				DisplayName: VFX Client Options
+				Headers.GeneratedVFX: Сгенерированные VFX
+				ParticleSpawnMultiplier.Label: Множитель частиц
+				DrawBudgetMultiplier.Label: Множитель бюджета отрисовки
+				ParticleAlphaMultiplier.Label: Множитель прозрачности частиц
+				PresentationLightMultiplier.Label: Множитель света эффектов
+				EnableScreenCulling.Label: Отсекать эффекты вне экрана
+				EnableGeneratedSpriteSilhouette.Label: Подложка силуэта снаряда
+				EnableParticleLibraryBackend.Label: Включить ParticleLibrary backend
+				EnableLuminanceSoundBackend.Label: Включить Luminance live sound backend (опционально)
+				ForceVanillaDustFallback.Label: Принудительный vanilla Dust fallback
+			}
+
+			InfiniGameplayQolConfig: {
+				DisplayName: InfiniCraft gameplay QoL / Игровой QoL
+
+				Headers: {
+					InfiniCraftStationQoL: InfiniCraft station QoL / QoL станции
+					GeneratedGameplayQoL: Generated gameplay QoL / Игровой QoL
+					GeneratedRuntimeAssetQoL: Generated runtime assets / Runtime-ассеты
+				}
+
+				EnableInventoryAssetPrefetch: {
+					Label: Sprite prefetch / Предзагрузка спрайтов
+					Tooltip: Когда открыт инвентарь, мягко прогревает generated-спрайты, которые скоро могут отрисоваться.
+				}
+
+				InventoryAssetPrefetchIntervalTicks: {
+					Label: Prefetch interval / Интервал предзагрузки
+					Tooltip: Задержка в тиках между проходами предзагрузки generated-спрайтов при открытом инвентаре.
+				}
+
+				InventoryAssetPrefetchMaxItems: {
+					Label: Prefetch max items / Лимит предметов предзагрузки
+					Tooltip: Сколько generated-предметов сканировать за один проход предзагрузки. Учитывает инвентарь, броню и misc equipment; прогревает только уже-authored sprite paths.
+				}
+
+				EnableGeneratedMeleeOnHitEffects: {
+					Label: Generated melee on-hit / On-hit эффекты ближнего боя
+					Tooltip: Разрешает generated swing-оружию исполнять явные AttackSpec.OnHitCode: дебаффы, малый lifesteal и impact-пыль. Текст prompt не парсится.
+				}
+
+				RuntimeSpriteCacheMaxTextures: {
+					Label: Runtime sprite cache size / Размер кэша спрайтов
+					Tooltip: Сколько generated PNG-текстур клиент держит загруженными. Дефолт 512 похож на ванильное поведение для маленьких спрайтов; это не лимит предметов в мире.
+				}
+
+				RuntimeSpriteMaxDimensionPixels: {
+					Label: Runtime sprite max side / Максимальная сторона спрайта
+					Tooltip: Generated runtime PNG шире или выше этого значения не грузится. Дефолт 192 держит item/projectile-спрайты в разумных рамках и не режет чуть более крупный generated-арт.
+				}
+
+				RuntimeSpriteMaxPngFileMegabytes: {
+					Label: Runtime PNG file limit / Лимит PNG-файла
+					Tooltip: Один generated runtime PNG больше этого размера в мегабайтах не будет загружен как Texture2D.
+				}
+			}
+		}
+	}
+}
+
+Items: {
+	GeneratedBodyArmor: {
+		// DisplayName: Generated Body Armor
+		// Tooltip: ""
+	}
+
+	GeneratedExtractinatorMaterial: {
+		// DisplayName: Generated Extractinator Material
+		// Tooltip: ""
+	}
+
+	GeneratedHeadArmor: {
+		// DisplayName: Generated Head Armor
+		// Tooltip: ""
+	}
+
+	GeneratedItem: {
+		// DisplayName: Generated Item
+		// Tooltip: ""
+	}
+
+	GeneratedLegsArmor: {
+		// DisplayName: Generated Legs Armor
+		// Tooltip: ""
+	}
+
+	InfiniCore: {
+		// DisplayName: Infini Core
+		// Tooltip: ""
+	}
+}
+
+Projectiles: {
+	// GeneratedProjectile.DisplayName: Generated Projectile
+	// GeneratedVfxOverlayProjectile.DisplayName: Generated Vfx Overlay Projectile
+}
+
+Configs: {
+	InfiniGameplayQolConfig: {
+		// DisplayName: Infini Gameplay Qol Config
+
+		Headers: {
+			// InfiniCraftStationQoL: Infini Craft Station Qo L Header
+			// GeneratedGameplayQoL: Generated Gameplay Qo L Header
+			// GeneratedRuntimeAssetQoL: Generated Runtime Asset Qo L Header
+		}
+
+		EnableInventoryAssetPrefetch: {
+			// Label: Enable Inventory Asset Prefetch
+			// Tooltip: ""
+		}
+
+		InventoryAssetPrefetchIntervalTicks: {
+			// Label: Inventory Asset Prefetch Interval Ticks
+			// Tooltip: ""
+		}
+
+		InventoryAssetPrefetchMaxItems: {
+			// Label: Inventory Asset Prefetch Max Items
+			// Tooltip: ""
+		}
+
+		EnableGeneratedMeleeOnHitEffects: {
+			// Label: Enable Generated Melee On Hit Effects
+			// Tooltip: ""
+		}
+
+		RuntimeSpriteCacheMaxTextures: {
+			// Label: Runtime Sprite Cache Max Textures
+			// Tooltip: ""
+		}
+
+		RuntimeSpriteMaxDimensionPixels: {
+			// Label: Runtime Sprite Max Dimension Pixels
+			// Tooltip: ""
+		}
+
+		RuntimeSpriteMaxPngFileMegabytes: {
+			// Label: Runtime Sprite Max Png File Megabytes
+			// Tooltip: ""
+		}
+	}
+
+	InfiniVfxClientConfig: {
+		// DisplayName: Infini Vfx Client Config
+		// Headers.GeneratedVFX: Generated V F X Header
+
+		ParticleSpawnMultiplier: {
+			// Label: Particle Spawn Multiplier
+			// Tooltip: ""
+		}
+
+		ParticleAlphaMultiplier: {
+			// Label: Particle Alpha Multiplier
+			// Tooltip: ""
+		}
+
+		DrawBudgetMultiplier: {
+			// Label: Draw Budget Multiplier
+			// Tooltip: ""
+		}
+
+		PresentationLightMultiplier: {
+			// Label: Presentation Light Multiplier
+			// Tooltip: ""
+		}
+
+		EnableScreenCulling: {
+			// Label: Enable Screen Culling
+			// Tooltip: ""
+		}
+
+		EnableGeneratedSpriteSilhouette: {
+			// Label: Enable Generated Sprite Silhouette
+			// Tooltip: ""
+		}
+
+		EnableParticleLibraryBackend: {
+			// Label: Enable Particle Library Backend
+			// Tooltip: ""
+		}
+
+		EnableLuminanceSoundBackend: {
+			// Label: Enable Luminance Sound Backend
+			// Tooltip: ""
+		}
+
+		ForceVanillaDustFallback: {
+			// Label: Force Vanilla Dust Fallback
+			// Tooltip: ""
+		}
+	}
 }

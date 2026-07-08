@@ -1,5 +1,5 @@
 displayName = InfiniCrafter Local
-version = 0.4.237
+version = 0.4.239
 author = Hipong + ChatGPT
 side = Both
 modReferences = ParticleLibrary, Luminance

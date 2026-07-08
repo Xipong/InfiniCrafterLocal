@@ -1,5 +1,5 @@
 from infini_local.core import runtime_authoring as ra
-from infini_local.web import server
+from infini_local.web import api as server
 
 
 def _compile(engine_calls):

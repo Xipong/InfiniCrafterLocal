@@ -61,18 +61,22 @@ def _check_attack_enabled_is_documented_as_generated_executor_not_can_damage() -
 
 
 def _check_visual_manifest_distinguishes_runtime_executor_from_vanilla_hitbox() -> None:
-    visual = (ROOT / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
+    visual = (ROOT / "infini_local" / "pipelines" / "visual_asset_manifest.py").read_text(encoding="utf-8")
+    visual_facade = (ROOT / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
     support = (ROOT / "infini_local" / "pipelines" / "pipeline_support.py").read_text(encoding="utf-8")
+    generated_summary = (ROOT / "infini_local" / "pipelines" / "generated_parent_summary.py").read_text(encoding="utf-8")
+    assert "from infini_local.pipelines.visual_asset_manifest import" in visual_facade
     assert "runtimeExecutorEnabled" in visual
     assert "customAttackEnabled" in visual
     assert "vanillaItemHitboxDamage" in visual
     assert "damagePath" in visual
-    assert "vanilla_item_hitbox" in support
+    assert "generated_parent_summary" in support
+    assert "vanilla_item_hitbox" in generated_summary
 
 
 def _check_runtime_projectiles_use_single_hit_defaults_and_ignore_spawn_target_for_children() -> None:
     projectile = read_text_with_partial_bundles(CS_ROOT / "Content" / "Projectiles" / "GeneratedProjectile.cs")
-    combine = (ROOT / "infini_local" / "pipelines" / "combine_pipeline.py").read_text(encoding="utf-8")
+    combine = (ROOT / "infini_local" / "pipelines" / "combine_gameplay.py").read_text(encoding="utf-8")
     assert "_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce)" in projectile
     assert "_spec.Pierce <= 0 ? -1" not in projectile
     assert "localNPCHitCooldown = _spec.ImmunityCooldown <= 0 ? 12" in projectile

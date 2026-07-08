@@ -1,4 +1,4 @@
-# LocalGenerator v0.4.237 — project map
+# LocalGenerator v0.4.239 — project map
 
 Python generator side for InfiniCrafterLocal. Read this together with `../AGENTS.md`, `../PROJECT_MAP_RU.md`, and `PROJECT_ARCHITECTURE_RU.md`.
 
@@ -22,7 +22,7 @@ Do not use old folder docs or agent reports as proof. The active source files ar
 Boundary summary:
 - Python authors/validates/repairs explicit data.
 - `runtimePlan.engineCalls` remains the executable source.
-- `runtimeArchetype` and `runtimeContract` are optional v0.4.237 data contracts for family/feel/promise truth; unsupported mechanics are preserved inertly.
+- `runtimeArchetype` and `runtimeContract` are optional v0.4.239 data contracts for family/feel/promise truth; unsupported mechanics are preserved inertly.
 - C# applies/executes supported fields only.
 - Asset sync exposes final filenames for HTTP `/get_asset`.
 - Contract stamps are provenance, not proof of implemented future behavior.

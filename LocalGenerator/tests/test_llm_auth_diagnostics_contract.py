@@ -3,12 +3,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "infini_local" / "web" / "server.py"
 LLM_PIPELINE = ROOT / "infini_local" / "pipelines" / "llm_authoring_pipeline.py"
+LLM_TRANSPORT = ROOT / "infini_local" / "pipelines" / "llm_transport.py"
 UTILITY_ROUTES = ROOT / "infini_local" / "web" / "server_utility_routes.py"
 
 
 def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast():
     server_text = SERVER.read_text(encoding="utf-8")
-    text = LLM_PIPELINE.read_text(encoding="utf-8")
+    text = LLM_PIPELINE.read_text(encoding="utf-8") + LLM_TRANSPORT.read_text(encoding="utf-8")
     assert "def llm_auth_snapshot" in text
     assert "llm_auth_snapshot" in server_text
     assert "missing_api_key" in text

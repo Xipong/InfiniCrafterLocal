@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.237 — архитектура Terraria/tModLoader части
+# InfiniCrafterLocal v0.4.239 — архитектура Terraria/tModLoader части
 
 Этот документ описывает именно `ModSources/InfiniCrafterLocal`: C#-мод tModLoader, runtime предметов, projectile/VFX/audio, UI станции, multiplayer и asset sync. Build cache, `.tml-build-cache`, `.nuget`, `build_logs`, `agent_reports` и Python-реализация генератора здесь не считаются архитектурой мода.
 
@@ -48,7 +48,7 @@ C# runtime должен:
 ### `InfiniCrafterLocal.cs`
 
 `InfiniCrafterLocalMod` — корневой `Mod`:
-- `ModVersion = "0.4.237"`.
+- `ModVersion = "0.4.239"`.
 - `Load()` создаёт singleton-сервисы:
   - `GeneratorClient` — HTTP boundary к LocalGenerator;
   - `RuntimeSpriteCache` — lazy PNG loader;
@@ -375,12 +375,12 @@ Commands are diagnostic/dev convenience, not the gameplay authority path.
 | Если меняешь | Сначала читай | Обязательно проверить |
 |---|---|---|
 | Item stats / equipment / tools | `GeneratedItemData.Model.cs`, `GeneratedItemData.Apply.cs`, `GeneratedItem.cs` | Python `set_item_stats` compile path, save/net JSON profiles, tooltips/debug trace |
-| Runtime attack family / movement / effect / onHit | `runtime_authoring.py`, `GeneratedProjectile*.cs`, `InfiniRuntimeLimits.cs` | Python contract enums, C# normalize/apply/runtime, projectile net sync, contract tests |
+| Runtime attack family / movement / effect / onHit | `LocalGenerator/infini_local/core/runtime_authoring/`, `GeneratedProjectile*.cs`, `InfiniRuntimeLimits.cs` | Python contract enums, C# normalize/apply/runtime, projectile net sync, contract tests |
 | Multiplayer craft | `InfiniCraftPlayer.Multiplayer.cs`, `InfiniNetPacketIds.cs`, `InfiniCrafterLocal.HandlePacket()` | client sends only intent, server consumes slots, ACK/FAIL, cancel/timeout, registry catch-up |
 | Generated registry | `GeneratedItemRegistryService.cs`, `world_storage.py` | world id/scope, transport clones, no cross-world parent leakage |
 | Asset/sprite sync | `GeneratedAssetSyncService.cs`, `RuntimeSpriteCache.cs`, `asset_sync_service.py` | final-only filenames, `/get_asset`, PNG validation, max sizes, no raw intermediates in packets |
 | VFX/audio | `VfxManifestSpec.cs`, `InfiniVfxRuntime.cs`, `InfiniSoundLibrary.cs`, Python `vfx_manifest.py` | slot/channel/renderer normalization, sound ids, no effect-name gameplay routing |
-| Repair/balance/provenance | `runtime_authoring.py`, `result_models.py`, `balance_policy.py`, `balance_report.py` | typed result models, clamp reasons, debug.applied trace, no hidden second author |
+| Repair/balance/provenance | `LocalGenerator/infini_local/core/runtime_authoring/`, `result_models.py`, `balance_policy.py`, `balance_report.py` | typed result models, clamp reasons, debug.applied trace, no hidden second author |
 | Documentation | source files above | no stale version markers, no claims that are only in `agent_reports`, no invented model-judge |
 
 ## Boundary matrix

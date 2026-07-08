@@ -1,0 +1,456 @@
+from __future__ import annotations
+
+import json
+import sys
+import traceback
+from pathlib import Path
+from typing import Any
+
+from infini_local.pipelines.pipeline_support import (
+    Image,
+    ImageDraw,
+    GENERATE_VARIANTS,
+    IMAGE_BACKEND,
+    SPRITE_DIR,
+    SPRITE_RETRIES,
+    VISUAL_ALLOW_PROCEDURAL_FALLBACK,
+    VISUAL_ASSET_MODE,
+    VISUAL_STRICT_AI_AUTHORSHIP,
+    log_event,
+    sprite_status_from_raw_path,
+    trace_event,
+    visual_asset_pipeline,
+)
+from infini_local.pipelines.image_backend_pipeline import (
+    generate_a1111,
+    generate_comfyui,
+    generate_image_api,
+    generate_sdcpp,
+)
+from infini_local.pipelines.sprite_postprocess import (
+    build_retry_prompt_from_validation,
+    pick_best_sprite,
+    postprocess_sprite,
+    sprite_validation_fatal,
+    validate_processed_sprite,
+)
+from infini_local.pipelines.visual_asset_manifest import write_visual_manifest
+from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
+from infini_local.pipelines.visual_soul import attach_visual_soul_from_sprite
+
+
+# AGENT MAP: image backend calls/retry/refit for item and role-separated visual assets.
+# This module mutates only visual/attack asset paths/status/debug fields after prompts
+# and plans are already authored.
+
+
+def _cfg(name: str, default: Any) -> Any:
+    facade = sys.modules.get("infini_local.pipelines.visual_generation_pipeline")
+    if facade is not None and hasattr(facade, name):
+        return getattr(facade, name)
+    return default
+
+
+def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
+    visual = data.setdefault("visual", {})
+    visual.setdefault("authoringPolicy", "ai_primary_non_procedural")
+    base_prompt = normalize_asset_prompt(data, "item", str(visual.get("imagePrompt") or ""), int(visual.get("preferredCanvasSize") or 32))
+    visual["imagePrompt"] = base_prompt
+    visual["finalItemPrompt"] = base_prompt[:1800]
+    if _cfg('IMAGE_BACKEND', IMAGE_BACKEND) == "off":
+        visual["spriteStatus"] = "prompt_only"
+        return data
+    canvas = int(visual.get("preferredCanvasSize") or 32)
+    negative = str(visual.get("negativePrompt") or asset_negative_prompt("item"))
+    asset_id = str(data.get("id") or "sprite")
+    attempts: list[dict[str, Any]] = []
+    max_attempts = max(1, int(_cfg('SPRITE_RETRIES', SPRITE_RETRIES)) + 1)
+    last_path = ""
+    last_raw_path = ""
+    last_score = 0.0
+    last_validation: dict[str, Any] | None = None
+    for attempt in range(max_attempts):
+        attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
+        attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, "item", attempt, canvas)
+        trace_event("prompt", "IMAGE:item", f"{_cfg('IMAGE_BACKEND', IMAGE_BACKEND)} item prompt attempt {attempt}", {
+            "assetId": asset_id, "attemptId": attempt_id, "attempt": attempt, "role": "item",
+            "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND), "canvas": canvas, "spriteRetries": _cfg('SPRITE_RETRIES', SPRITE_RETRIES),
+        }, prompt=attempt_prompt, negative=negative)
+        try:
+            if _cfg('IMAGE_BACKEND', IMAGE_BACKEND) == "a1111":
+                variants = generate_a1111(attempt_prompt, negative, attempt_id, canvas)
+            elif _cfg('IMAGE_BACKEND', IMAGE_BACKEND) == "comfyui":
+                variants = generate_comfyui(attempt_prompt, negative, attempt_id)
+            elif _cfg('IMAGE_BACKEND', IMAGE_BACKEND) in {"sdcpp", "stablediffusioncpp", "stable-diffusion.cpp", "stable_diffusion_cpp"}:
+                variants = generate_sdcpp(attempt_prompt, negative, attempt_id, canvas)
+            elif _cfg('IMAGE_BACKEND', IMAGE_BACKEND) in {"image_api", "api_image", "openai_image", "openai_images", "openai_compat_image"}:
+                variants = generate_image_api(attempt_prompt, negative, attempt_id, canvas)
+            else:
+                variants = [] if _cfg('VISUAL_STRICT_AI_AUTHORSHIP', VISUAL_STRICT_AI_AUTHORSHIP) else [visual_asset_pipeline.generate_procedural_sprite(data, variant=i, sprite_dir=_cfg('SPRITE_DIR', SPRITE_DIR), image_cls=Image, image_draw_cls=ImageDraw) for i in range(max(1, _cfg('GENERATE_VARIANTS', GENERATE_VARIANTS)))]
+            variants = [p for p in variants if p and Path(p).exists()]
+            if not variants:
+                attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
+                trace_event("step", "IMAGE:item", "no raw image returned", {"assetId": asset_id, "attempt": attempt, "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND)})
+                continue
+            best, score = pick_best_sprite(variants, "item", canvas)
+            raw_best = best
+            final_path = postprocess_sprite(best, attempt_id, canvas, "item")
+            validation = validate_processed_sprite(final_path, "item")
+            refit_path = ""
+            refit_validation: dict[str, Any] | None = None
+            if not validation.get("ok") and not sprite_validation_fatal(validation):
+                refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, "item", validation)
+                if refit_path:
+                    refit_validation = validate_processed_sprite(refit_path, "item")
+                    if refit_validation.get("ok"):
+                        data.setdefault("debug", {})["itemSpriteRefit"] = json.dumps({
+                            "from": str(Path(final_path).resolve()),
+                            "to": str(Path(refit_path).resolve()),
+                            "before": validation,
+                            "after": refit_validation,
+                        }, ensure_ascii=False)
+                        final_path = refit_path
+                        validation = refit_validation
+            attempt_row = {"attempt": attempt, "raw": raw_best, "final": final_path, "score": score, "validation": validation}
+            if refit_path:
+                attempt_row["refit"] = {"path": refit_path, "validation": refit_validation}
+            attempts.append(attempt_row)
+            last_path = final_path
+            last_raw_path = raw_best
+            last_score = float(score)
+            last_validation = validation if isinstance(validation, dict) else None
+            if validation.get("ok") or not sprite_validation_fatal(validation):
+                if attempt != 0:
+                    canonical = _cfg('SPRITE_DIR', SPRITE_DIR) / f"{data.get('id', 'sprite')}.png"
+                    try:
+                        import shutil
+                        shutil.copyfile(final_path, canonical)
+                        final_path = str(canonical)
+                    except Exception:
+                        pass
+                visual["spritePath"] = str(Path(final_path).resolve())
+                visual["spriteRawPath"] = str(Path(raw_best).resolve())
+                visual["spriteStatus"] = sprite_status_from_raw_path(raw_best, _cfg('IMAGE_BACKEND', IMAGE_BACKEND), invalid=not bool(validation.get("ok")))
+                visual["visualJudgeScore"] = round(last_score, 3)
+                visual["spriteUrl"] = f"/sprite/{Path(final_path).name}"
+                attach_visual_soul_from_sprite(data, final_path, validation=validation, score=last_score)
+                if not validation.get("ok"):
+                    data.setdefault("debug", {})["itemSpriteAcceptedWithWarnings"] = json.dumps(validation, ensure_ascii=False)
+                data.setdefault("debug", {})["itemSpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
+                trace_event("step", "IMAGE:item", "sprite accepted", {
+                    "assetId": asset_id, "attempt": attempt, "raw": str(Path(raw_best).resolve()), "final": str(Path(final_path).resolve()),
+                    "score": last_score, "status": visual.get("spriteStatus", ""), "validation": validation,
+                })
+                return data
+        except Exception as e:
+            attempts.append({"attempt": attempt, "ok": False, "error": repr(e)})
+            data.setdefault("debug", {})["spriteError"] = repr(e)
+            trace_event("error", "IMAGE:item", "sprite generation attempt failed", {"assetId": asset_id, "attempt": attempt, "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND)}, error=repr(e))
+            log_event("warn", "sprite generation failed", {"attempt": attempt, "error": repr(e), "trace": traceback.format_exc()})
+    data.setdefault("debug", {})["itemSpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
+    if last_path:
+        data.setdefault("debug", {})["itemSpriteInvalidGeneratedDiscarded"] = str(Path(last_path).resolve())
+    if _cfg('VISUAL_ALLOW_PROCEDURAL_FALLBACK', VISUAL_ALLOW_PROCEDURAL_FALLBACK) and not _cfg('VISUAL_STRICT_AI_AUTHORSHIP', VISUAL_STRICT_AI_AUTHORSHIP):
+        try:
+            fallback = visual_asset_pipeline.generate_procedural_asset(data, "item", variant=0, canvas_size=canvas, sprite_dir=_cfg('SPRITE_DIR', SPRITE_DIR), image_cls=Image, image_draw_cls=ImageDraw)
+            final = postprocess_sprite(fallback, str(data.get("id", "sprite")), canvas, "item")
+            visual["spritePath"] = str(Path(final).resolve())
+            visual["spriteRawPath"] = str(Path(fallback).resolve())
+            visual["spriteStatus"] = "fallback_after_failed_generation"
+            visual["visualJudgeScore"] = 0.0
+            visual["spriteUrl"] = f"/sprite/{Path(final).name}"
+            attach_visual_soul_from_sprite(data, final, validation={"ok": True, "source": "procedural_fallback"}, score=0.0)
+            return data
+        except Exception as e:
+            data.setdefault("debug", {})["spriteFallbackError"] = repr(e)
+    visual["spriteStatus"] = "failed"
+    visual["spritePath"] = ""
+    visual["spriteRawPath"] = ""
+    visual["spriteUrl"] = ""
+    visual["visualJudgeScore"] = round(last_score, 3)
+    return data
+
+def _validation_reasons(validation: dict[str, Any] | None) -> list[str]:
+    if not isinstance(validation, dict):
+        return []
+    return [str(x) for x in (validation.get("reasons") or [])]
+
+def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, role: str, validation: dict[str, Any] | None) -> str:
+    """Local no-regeneration salvage for fit-only sprite failures.
+
+    If Z-Image produced a good subject but postprocess made the core silhouette a
+    few pixels too small, crop the transparent bbox, scale it up with nearest-neighbor
+    pixels, and center it back on the target canvas. Fatal alpha/key failures are not
+    repaired here.
+    """
+    reasons = _validation_reasons(validation)
+    if not any("silhouette_too_small" in r or "core_silhouette_too_small" in r or "effect_silhouette_too_small" in r for r in reasons):
+        return ""
+    if Image is None or not path or not Path(path).exists():
+        return ""
+    try:
+        img = Image.open(path).convert("RGBA")
+        stats = validation.get("stats") if isinstance(validation, dict) and isinstance(validation.get("stats"), dict) else {}
+        bbox_stats = validation.get("bboxStats") if isinstance(validation, dict) and isinstance(validation.get("bboxStats"), dict) else {}
+        bbox = bbox_stats.get("core_bbox") or bbox_stats.get("effect_bbox") or stats.get("bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            bbox = img.getbbox()
+        if not bbox:
+            return ""
+        left, top, right, bottom = [int(round(float(x))) for x in bbox]
+        left = max(0, min(img.width - 1, left)); top = max(0, min(img.height - 1, top))
+        right = max(left + 1, min(img.width, right)); bottom = max(top + 1, min(img.height, bottom))
+        crop = img.crop((left, top, right, bottom))
+        spec = bbox_stats.get("spec") if isinstance(bbox_stats.get("spec"), dict) else {}
+        margin = int(spec.get("marginPx") or (2 if canvas >= 48 else 1))
+        target = int(spec.get("targetLongAxisPx") or round(canvas * (0.84 if role == "projectile" else 0.88)))
+        target = max(1, min(canvas - margin * 2, target))
+        long_axis = max(crop.width, crop.height)
+        if long_axis <= 0:
+            return ""
+        scale = target / float(long_axis)
+        max_scale = min((canvas - 2 * margin) / max(1, crop.width), (canvas - 2 * margin) / max(1, crop.height))
+        scale = max(1.0, min(scale, max_scale))
+        if scale <= 1.01:
+            return ""
+        new_w = max(1, min(canvas - 2 * margin, int(round(crop.width * scale))))
+        new_h = max(1, min(canvas - 2 * margin, int(round(crop.height * scale))))
+        resampling = getattr(getattr(Image, "Resampling", Image), "NEAREST", 0)
+        resized = crop.resize((new_w, new_h), resampling)
+        out = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+        out.alpha_composite(resized, ((canvas - new_w) // 2, (canvas - new_h) // 2))
+        out_path = _cfg('SPRITE_DIR', SPRITE_DIR) / f"{asset_id}_refit.png"
+        out.save(out_path)
+        return str(out_path)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return ""
+
+def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative: str, asset_id: str, canvas: int) -> tuple[str, str, float, str]:
+    """Generate one role-separated visual asset with retry-on-technical-fail.
+
+    v0.3.9: no fake best-of-N judging by default. We generate one image, run local
+    alpha/crop/fit validation, and retry only when the PNG is technically broken.
+    """
+    base_prompt = normalize_asset_prompt(data, role, prompt, canvas)
+    negative = negative or asset_negative_prompt(role)
+    data.setdefault("debug", {})[f"{role}FinalPrompt"] = base_prompt[:1800]
+    data.setdefault("debug", {})[f"{role}AuthoringPolicy"] = "ai_primary_non_procedural"
+    if _cfg('IMAGE_BACKEND', IMAGE_BACKEND) == "off":
+        return "", "", 0.0, "prompt_only"
+    attempts: list[dict[str, Any]] = []
+    max_attempts = max(1, int(_cfg('SPRITE_RETRIES', SPRITE_RETRIES)) + 1)
+    last_path = ""
+    last_raw_path = ""
+    last_score = 0.0
+    last_validation: dict[str, Any] | None = None
+    for attempt in range(max_attempts):
+        attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
+        attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, role, attempt, canvas)
+        trace_event("prompt", f"IMAGE:{role}", f"{_cfg('IMAGE_BACKEND', IMAGE_BACKEND)} {role} prompt attempt {attempt}", {
+            "assetId": asset_id, "attemptId": attempt_id, "attempt": attempt, "role": role,
+            "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND), "canvas": canvas, "spriteRetries": _cfg('SPRITE_RETRIES', SPRITE_RETRIES),
+        }, prompt=attempt_prompt, negative=negative)
+        try:
+            if _cfg('IMAGE_BACKEND', IMAGE_BACKEND) == "a1111":
+                variants = generate_a1111(attempt_prompt, negative, attempt_id, canvas)
+            elif _cfg('IMAGE_BACKEND', IMAGE_BACKEND) == "comfyui":
+                variants = generate_comfyui(attempt_prompt, negative, attempt_id)
+            elif _cfg('IMAGE_BACKEND', IMAGE_BACKEND) in {"sdcpp", "stablediffusioncpp", "stable-diffusion.cpp", "stable_diffusion_cpp"}:
+                variants = generate_sdcpp(attempt_prompt, negative, attempt_id, canvas)
+            elif _cfg('IMAGE_BACKEND', IMAGE_BACKEND) in {"image_api", "api_image", "openai_image", "openai_images", "openai_compat_image"}:
+                variants = generate_image_api(attempt_prompt, negative, attempt_id, canvas)
+            else:
+                variants = [] if _cfg('VISUAL_STRICT_AI_AUTHORSHIP', VISUAL_STRICT_AI_AUTHORSHIP) else [visual_asset_pipeline.generate_procedural_asset(data, role, variant=0, canvas_size=canvas, sprite_dir=_cfg('SPRITE_DIR', SPRITE_DIR), image_cls=Image, image_draw_cls=ImageDraw)]
+            variants = [p for p in variants if p and Path(p).exists()]
+            if not variants:
+                attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
+                continue
+            best, score = pick_best_sprite(variants, role, canvas)
+            final_path = postprocess_sprite(best, attempt_id, canvas, role)
+            validation = validate_processed_sprite(final_path, role)
+            refit_path = ""
+            refit_validation: dict[str, Any] | None = None
+            if not validation.get("ok") and not sprite_validation_fatal(validation):
+                refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, role, validation)
+                if refit_path:
+                    refit_validation = validate_processed_sprite(refit_path, role)
+                    if refit_validation.get("ok"):
+                        data.setdefault("debug", {})[f"{role}SpriteRefit"] = json.dumps({
+                            "from": str(Path(final_path).resolve()),
+                            "to": str(Path(refit_path).resolve()),
+                            "before": validation,
+                            "after": refit_validation,
+                        }, ensure_ascii=False)
+                        final_path = refit_path
+                        validation = refit_validation
+            attempt_row = {"attempt": attempt, "raw": best, "final": final_path, "score": score, "validation": validation}
+            if refit_path:
+                attempt_row["refit"] = {"path": refit_path, "validation": refit_validation}
+            attempts.append(attempt_row)
+            last_path = final_path
+            last_raw_path = best
+            last_score = float(score)
+            last_validation = validation if isinstance(validation, dict) else None
+            if validation.get("ok") or not sprite_validation_fatal(validation):
+                if attempt != 0:
+                    canonical = _cfg('SPRITE_DIR', SPRITE_DIR) / f"{asset_id}.png"
+                    try:
+                        import shutil
+                        shutil.copyfile(final_path, canonical)
+                        final_path = str(canonical)
+                    except Exception:
+                        pass
+                data.setdefault("debug", {})[f"{role}SpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
+                if not validation.get("ok"):
+                    data.setdefault("debug", {})[f"{role}SpriteAcceptedWithWarnings"] = json.dumps(validation, ensure_ascii=False)
+                status = sprite_status_from_raw_path(best, _cfg('IMAGE_BACKEND', IMAGE_BACKEND), invalid=not bool(validation.get("ok")))
+                trace_event("step", f"IMAGE:{role}", "sprite accepted", {
+                    "assetId": asset_id, "attempt": attempt, "raw": best, "final": str(Path(final_path).resolve()),
+                    "score": last_score, "status": status, "validation": validation,
+                })
+                return str(Path(final_path).resolve()), f"/sprite/{Path(final_path).name}", last_score, status
+        except Exception as e:
+            attempts.append({"attempt": attempt, "ok": False, "error": repr(e)})
+            data.setdefault("debug", {})[f"{role}SpriteError"] = repr(e)
+            trace_event("error", f"IMAGE:{role}", "sprite generation attempt failed", {"assetId": asset_id, "attempt": attempt, "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND)}, error=repr(e))
+            log_event("warn", f"{role} sprite generation attempt failed", {"attempt": attempt, "error": repr(e), "trace": traceback.format_exc()})
+    data.setdefault("debug", {})[f"{role}SpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
+    if last_path:
+        data.setdefault("debug", {})[f"{role}InvalidGeneratedDiscarded"] = str(Path(last_path).resolve())
+        # v0.4.49: strict AI authorship should prefer an imperfect AI-authored sprite
+        # over an engine placeholder when the failure is only fit/crop strictness.
+        # Fatal technical failures (magenta still present, no alpha, empty sprite) stay failed.
+        reasons = []
+        try:
+            reasons = list((last_validation or {}).get("reasons") or [])
+        except Exception:
+            reasons = []
+        fatal_tokens = (
+            "empty_alpha_bbox",
+            "magenta_key_background_left",
+            "almost_no_transparency_after_bg_removal",
+            "too_few_opaque_pixels",
+            "very_dense_opaque_area",
+            "pillow_unavailable_required",
+        )
+        fatal = any(any(tok in str(reason) for tok in fatal_tokens) for reason in reasons)
+        if not fatal and Path(last_path).exists():
+            data.setdefault("debug", {})[f"{role}InvalidGeneratedUsedAsWarn"] = json.dumps({
+                "path": str(Path(last_path).resolve()),
+                "reasons": reasons,
+                "policy": "strict_ai_authorship_keep_imperfect_ai_sprite_not_placeholder",
+            }, ensure_ascii=False)
+            canonical = _cfg('SPRITE_DIR', SPRITE_DIR) / f"{asset_id}.png"
+            try:
+                import shutil
+                if Path(last_path).resolve() != canonical.resolve():
+                    shutil.copyfile(last_path, canonical)
+                last_path = str(canonical)
+            except Exception:
+                pass
+            return str(Path(last_path).resolve()), f"/sprite/{Path(last_path).name}", round(last_score, 3), "generated_warn_invalid"
+    if _cfg('VISUAL_ALLOW_PROCEDURAL_FALLBACK', VISUAL_ALLOW_PROCEDURAL_FALLBACK) and not _cfg('VISUAL_STRICT_AI_AUTHORSHIP', VISUAL_STRICT_AI_AUTHORSHIP):
+        try:
+            fallback = visual_asset_pipeline.generate_procedural_asset(data, role, variant=0, canvas_size=canvas, sprite_dir=_cfg('SPRITE_DIR', SPRITE_DIR), image_cls=Image, image_draw_cls=ImageDraw)
+            final = postprocess_sprite(fallback, asset_id, canvas, role)
+            return str(Path(final).resolve()), f"/sprite/{Path(final).name}", 0.0, "fallback_after_failed_generation"
+        except Exception as e:
+            log_event("warn", f"{role} sprite procedural fallback failed", {"error": repr(e)})
+    trace_event("error", f"IMAGE:{role}", "sprite generation failed completely", {"assetId": asset_id, "role": role, "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND), "attempts": attempts})
+    log_event("warn", f"{role} sprite generation failed completely", {"role": role, "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND), "strictAiAuthorship": _cfg('VISUAL_STRICT_AI_AUTHORSHIP', VISUAL_STRICT_AI_AUTHORSHIP)})
+    return "", "", round(last_score, 3), "failed"
+
+def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
+    """Generate a coherent visual asset pack.
+
+    v0.3.9: one explicit plan drives all assets. The manifest is saved next to sprites,
+    so debugging can answer: what did the author want, what did the visual director ask,
+    what was generated, and what fell back.
+    """
+    data = maybe_generate_sprite(data)
+    plan = build_visual_asset_plan(data)
+    data.setdefault("debug", {})["visualAssetPlan"] = json.dumps(plan, ensure_ascii=False)
+    if _cfg('VISUAL_ASSET_MODE', VISUAL_ASSET_MODE) not in {"full", "projectile", "all", "visualpack", "assetpack"}:
+        write_visual_manifest(data, plan)
+        return data
+    attack = data.setdefault("attack", {})
+    if not isinstance(attack, dict) or not attack.get("enabled"):
+        write_visual_manifest(data, plan)
+        return data
+    visual = data.setdefault("visual", {})
+
+    for slot in plan:
+        role = slot.get("role")
+        if role == "item":
+            slot["status"] = visual.get("spriteStatus", "")
+            slot["path"] = visual.get("spritePath", "")
+            slot["score"] = visual.get("visualJudgeScore", 0)
+            continue
+        if role not in {"projectile", "impact", "child", "field"}:
+            continue
+        if str(slot.get("status") or "").startswith("skipped_"):
+            slot["path"] = ""
+            slot["url"] = ""
+            slot["score"] = 0.0
+            continue
+        prompt = str(slot.get("prompt") or "")
+        canvas = int(slot.get("canvas") or 32)
+        path, url, score, status = generate_visual_asset(data, role, prompt, asset_negative_prompt(role), str(slot.get("assetId") or (str(data.get("id")) + "_" + role)), canvas)
+        # Store the actual backend prompt in the manifest/debug plan. The raw
+        # visual-director prompt remains in visual/attack fields, but manifests
+        # should show what was really sent after Z-Image PE cleanup.
+        final_prompt = str(data.get("debug", {}).get(f"{role}FinalPrompt") or "")
+        if final_prompt:
+            slot["prompt"] = final_prompt
+        slot["status"] = status
+        slot["path"] = path
+        slot["url"] = url
+        slot["score"] = score
+        key = role.capitalize()
+        usable_path = bool(path) and status not in {"failed", "prompt_only", "placeholder", "generated_warn_invalid"}
+        if role == "projectile":
+            attack["projectileSpritePrompt"] = prompt
+            attack["projectileSpriteStatus"] = status
+            if usable_path:
+                attack["projectileSpritePath"] = path; attack["projectileSpriteUrl"] = url; attack["projectileSpriteScore"] = score
+            else:
+                attack["projectileSpritePath"] = ""; attack["projectileSpriteUrl"] = ""; attack["projectileSpriteScore"] = 0.0
+            visual["projectileImagePrompt"] = prompt
+        elif role == "impact":
+            attack["impactSpritePrompt"] = prompt
+            attack["impactSpriteStatus"] = status
+            if usable_path:
+                attack["impactSpritePath"] = path; attack["impactSpriteUrl"] = url; attack["impactSpriteScore"] = score
+            else:
+                attack["impactSpritePath"] = ""; attack["impactSpriteUrl"] = ""; attack["impactSpriteScore"] = 0.0
+            visual["impactImagePrompt"] = prompt
+        elif role == "child":
+            attack["childSpritePrompt"] = prompt
+            attack["childSpriteStatus"] = status
+            if usable_path:
+                attack["childSpritePath"] = path; attack["childSpriteUrl"] = url; attack["childSpriteScore"] = score
+            else:
+                attack["childSpritePath"] = ""; attack["childSpriteUrl"] = ""; attack["childSpriteScore"] = 0.0
+            visual["childImagePrompt"] = prompt
+        elif role == "field":
+            attack["fieldSpritePrompt"] = prompt
+            attack["fieldSpriteStatus"] = status
+            if usable_path:
+                attack["fieldSpritePath"] = path; attack["fieldSpriteUrl"] = url; attack["fieldSpriteScore"] = score
+            else:
+                attack["fieldSpritePath"] = ""; attack["fieldSpriteUrl"] = ""; attack["fieldSpriteScore"] = 0.0
+            visual["fieldImagePrompt"] = prompt
+    data["attack"] = attack
+    data["visual"] = visual
+    write_visual_manifest(data, plan)
+    return data
+
+
+__all__ = [
+    "maybe_generate_sprite",
+    "_validation_reasons",
+    "refit_processed_sprite_to_contract",
+    "generate_visual_asset",
+    "maybe_generate_visual_assets",
+]

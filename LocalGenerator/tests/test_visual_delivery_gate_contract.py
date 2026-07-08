@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.web import server
+from infini_local.web import api as server
 
 VISUAL = server.visual_generation_pipeline
 

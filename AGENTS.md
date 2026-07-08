@@ -43,7 +43,7 @@ Current source scan for this snapshot: C# mod source has 55 `.cs` files; `LocalG
 
 - Endpoint/boundary: `LocalGenerator/infini_local/services/combine_endpoint.py`, `web/server.py`.
 - Main pipeline: `pipelines/combine_pipeline.py`, `combine_orchestrator.py`, `llm_authoring_pipeline.py`, `repair_orchestrator.py`, `final_normalize.py`, `generation_debug.py`.
-- Runtime compiler/contracts: `core/runtime_authoring.py`, `core/result_models.py`, `core/contract_versions.py`, `core/balance_policy.py`, `core/balance_report.py`, `core/vfx_manifest.py`, `core/effect_catalog.py`.
+- Runtime compiler/contracts: `core/runtime_authoring/`, `core/result_models.py`, `core/contract_versions.py`, `core/balance_policy.py`, `core/balance_report.py`, `core/vfx_manifest.py`, `core/effect_catalog.py`.
 - Assets/storage: `services/asset_sync_service.py`, `services/visual_asset_pipeline.py`, `storage/world_storage.py`, `storage/trace_tools.py`.
 - Contract tests: `LocalGenerator/tests/test_*contract*.py`, MP tests, replay tests, typed-result tests.
 
@@ -51,12 +51,12 @@ Current source scan for this snapshot: C# mod source has 55 `.cs` files; `LocalG
 
 | Change area | Must inspect/update |
 |---|---|
-| New runtime family / movement / effect / onHit | `runtime_authoring.py`, `GeneratedItemData.Model/Normalize/Apply.cs`, `InfiniRuntimeLimits.cs`, `GeneratedProjectile*.cs`, tests, docs |
+| New runtime family / movement / effect / onHit | `core/runtime_authoring/`, `GeneratedItemData.Model/Normalize/Apply.cs`, `InfiniRuntimeLimits.cs`, `GeneratedProjectile*.cs`, tests, docs |
 | Generated item stats/equipment/tool behavior | Python `set_item_stats` compile path, `GeneratedItemData.Apply.cs`, `GeneratedItem.cs`, save/net JSON profiles |
 | Multiplayer craft | `InfiniNetPacketIds.cs`, `InfiniCrafterLocal.HandlePacket`, `InfiniCraftPlayer.Multiplayer.cs`, registry sync tests |
 | Asset delivery/sprites | Python `asset_sync_service.py`, C# `GeneratedAssetSyncService.cs`, `RuntimeSpriteCache.cs`, `/get_asset`, `RecipeMeta.AssetFiles` |
 | VFX/audio | Python `vfx_manifest.py`/sound profile path, C# `VfxManifestSpec.cs`, `InfiniVfxRuntime.cs`, `InfiniSoundLibrary.cs` |
-| Balance/repair/provenance | `balance_policy.py`, `balance_report.py`, `result_models.py`, `runtime_authoring.py`, debug/applied trace docs |
+| Balance/repair/provenance | `balance_policy.py`, `balance_report.py`, `result_models.py`, `core/runtime_authoring/`, debug/applied trace docs |
 | Folder docs | Read source first, then update docs. Never copy stale `FOLDER_DOCS_RU.md` wording forward. |
 
 ## What not to treat as architecture

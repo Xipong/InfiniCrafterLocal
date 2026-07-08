@@ -167,6 +167,22 @@ def test_mechanic_claims_backed_by_archetype_are_executable_and_unbacked_claims_
     assert any(claim["kind"] == "starfall" and claim["status"] == "unsupported" for claim in report2["claims"])
     assert "unsupported:starfall" in unbacked.get("unsupportedPromises", [])
 
+    backed_starfall = {
+        "tooltip": "On hit, raining stars fall from the sky.",
+        "runtimeContract": {"mechanicClaims": [{"claim": "raining stars fall on hit", "backing": "engineCall.apply_on_hit_effect"}]},
+        "runtimePlan": {"engineCalls": [
+            _stats_call(),
+            _shoot(runtimeFamily="swing", delivery="swing", movement="straight"),
+            {"fn": "apply_on_hit_effect", "params": {"onHit": "starfall", "count": 3}},
+        ]},
+    }
+    result = compile_runtime_plan_to_genome_result(backed_starfall)
+    assert result["patch"].get("onHit") == "starfall"
+    report3 = validate_runtime_promises(backed_starfall, result["patch"])
+    assert any(claim["kind"] == "starfall" and claim["status"] == "executable" for claim in report3["claims"])
+    assert "unsupported:starfall" not in (backed_starfall.get("unsupportedPromises") or [])
+    assert backed_starfall["runtimeContract"]["executionStatus"] == "executable"
+
 
 def test_burst_claim_with_zero_burst_dust_cap_is_visible_as_partial_warning() -> None:
     data = {
@@ -248,3 +264,55 @@ def test_contract_stamp_includes_runtime_archetype_contract_versions() -> None:
     assert "RUNTIME_ARCHETYPE_SCHEMA_VERSION = \"infini.runtime-archetype.v1\"" in contract_versions
     assert "RUNTIME_CONTRACT_SCHEMA_VERSION = \"infini.runtime-contract.v1\"" in contract_versions
     assert "RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION" in contract_versions
+
+
+def test_projectile_bounce_is_not_false_feline_unsupported() -> None:
+    data = {
+        "tooltip": "Casts bouncy sparks that rebound from walls.",
+        "runtimeContract": {"mechanicClaims": [{"claim": "Projectiles bounce on walls", "backing": "shoot_projectile:movement=bounce"}]},
+        "runtimePlan": {"engineCalls": [
+            _stats_call(),
+            _shoot(runtimeFamily="cast", delivery="cast", movement="bounce"),
+            {"fn": "apply_on_hit_effect", "params": {"onHit": "burn"}},
+        ]},
+    }
+    result = compile_runtime_plan_to_genome_result(data)
+    assert result["patch"].get("movement") == "bounce"
+    report = validate_runtime_promises(data, result["patch"])
+    kinds = {(c.get("kind"), c.get("status")) for c in report.get("claims") or []}
+    assert ("projectile_bounce", "executable") in kinds
+    assert not any(k == "feline_bounce" and st == "unsupported" for k, st in kinds)
+    assert "unsupported:feline_bounce" not in (data.get("unsupportedPromises") or [])
+
+
+def test_utility_engine_calls_override_unsupported_runtime_archetype_family() -> None:
+    data = {
+        "name": "Swift Boots",
+        "category": "accessory",
+        "runtimeArchetype": {"family": "unsupported"},
+        "runtimePlan": {"engineCalls": [
+            {"fn": "set_item_stats", "params": {"resultKind": "accessory", "rarity": 2}},
+            {"fn": "accessory_effect", "params": {"archetype": "mobility", "movementSpeed": 0.15}},
+        ]},
+    }
+    result = compile_runtime_plan_to_genome_result(data)
+    assert data["runtimeArchetype"]["family"] == "custom_executor"
+    assert data["runtimeArchetype"]["supportStatus"] == "executable"
+    assert "unsupported:unsupported" not in (data.get("unsupportedPromises") or [])
+    assert result["patch"].get("archetypeCompiler", {}).get("supportStatus") == "executable"
+
+
+def test_set_item_stats_alone_does_not_override_unsupported_runtime_archetype_family() -> None:
+    data = {
+        "name": "Plain Trinket",
+        "category": "accessory",
+        "runtimeArchetype": {"family": "unsupported"},
+        "runtimePlan": {"engineCalls": [
+            {"fn": "set_item_stats", "params": {"resultKind": "accessory", "rarity": 1}},
+        ]},
+    }
+    result = compile_runtime_plan_to_genome_result(data)
+    assert data["runtimeArchetype"]["family"] == "unsupported"
+    assert data["runtimeArchetype"]["supportStatus"] == "unsupported"
+    assert "unsupported:unsupported" in (data.get("unsupportedPromises") or [])
+    assert result["patch"].get("archetypeCompiler", {}).get("supportStatus") == "unsupported"

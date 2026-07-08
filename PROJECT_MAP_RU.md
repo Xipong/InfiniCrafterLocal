@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.237 — repo map for agents
+# InfiniCrafterLocal v0.4.239 — repo map for agents
 
 Цель файла: быстро направить агента к source-of-truth и не дать перепутать C# runtime, Python authoring и исторический мусор.
 
@@ -58,7 +58,7 @@ C# is not a generator, not a prompt interpreter, and not a fallback author.
 | `services/combine_endpoint.py`, `web/server.py` | HTTP/API boundary including `/combine` and utility routes |
 | `pipelines/combine_pipeline.py` | main combine orchestration, gameplay/runtime/visual assembly seams |
 | `pipelines/llm_authoring_pipeline.py` | LLM authoring and targeted repair entrypoints |
-| `core/runtime_authoring.py` | compiles `runtimePlan.engineCalls` into game-facing patches; validates runtime plan |
+| `core/runtime_authoring/` | validates, repairs and compiles `runtimePlan.engineCalls` into game-facing patches |
 | `core/result_models.py` | typed helper result models (`RuntimeCompileResult`, `ClampRecord`, `RepairResult`, balance report) |
 | `core/contract_versions.py` | contract stamp constants; observability, not automatic feature support |
 | `core/balance_policy.py`, `core/balance_report.py` | soft-balance authority and debug report shape |

@@ -164,7 +164,7 @@ def check_version_sync() -> None:
 
 def check_runtime_api_sync() -> None:
     py_runtime_api = _version_literal(
-        "LocalGenerator/infini_local/core/runtime_authoring.py",
+        "LocalGenerator/infini_local/core/runtime_authoring/common.py",
         r'ENGINE_RUNTIME_API_VERSION = "([^"]+)"',
         "Python engine runtime API",
     )

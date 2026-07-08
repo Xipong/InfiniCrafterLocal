@@ -1,0 +1,31 @@
+# Mirrors .aiignore for Cursor indexing. Do not delete these artifacts; they are
+# useful local build/test/debug caches and generated investigation outputs.
+.git/
+.nuget/
+.tml-build-cache/
+agent_reports/
+build_logs/
+
+**/bin/
+**/obj/
+**/__pycache__/
+**/.pytest_cache/
+
+*.dll
+*.pdb
+*.xnb
+*.tmod
+*.png
+*.log
+*.bak
+*.bak_*
+*:Zone.Identifier
+
+LocalGenerator/cache/
+LocalGenerator/output/
+LocalGenerator/outputs/
+LocalGenerator/generated_assets/
+LocalGenerator/debug_output/
+LocalGenerator/prompt_traces/
+LocalGenerator/.wiki_guided_playthrough_cache/
+LocalGenerator/data/Runtime_dumps/

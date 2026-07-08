@@ -82,9 +82,27 @@ def command_mode_is_template(command_mode: str) -> bool:
     return str(command_mode or "").strip().lower() in {"template", "raw_template", "custom_template"}
 
 
+def executable_path_for_subprocess(value: str) -> str:
+    """Convert Windows executable drive path for POSIX/WSL subprocess argv mode.
+
+    Only the executable path is normalized.  When WSL launches a Windows .exe,
+    that Windows process still expects model/LoRA arguments as Windows paths
+    (``C:/...``), not WSL ``/mnt/c/...`` paths.
+    Template/shell mode keeps its raw text and is not normalized here.
+    """
+    raw = str(value or "").strip()
+    if not raw or os.name == "nt":
+        return raw
+    if len(raw) >= 3 and raw[1] == ":" and raw[0].isalpha() and raw[2] in {"\\", "/"}:
+        drive = raw[0].lower()
+        rest = raw[2:].replace("\\", "/").lstrip("/")
+        return f"/mnt/{drive}/{rest}"
+    return raw
+
+
 def base_arg_list(cfg: SdcppBackendConfig) -> list[str]:
     return [
-        cfg.server_exe,
+        executable_path_for_subprocess(cfg.server_exe),
         "--diffusion-model", cfg.model,
         "-l", cfg.host,
         "--listen-port", str(cfg.port),

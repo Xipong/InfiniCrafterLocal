@@ -28,7 +28,7 @@ def test_python_exception_hygiene_baseline_is_visible_and_not_growing():
 def test_runtime_api_sync_guard_reads_python_and_csharp_contracts():
     tool = load_hygiene_tool()
     py_runtime_api = tool._version_literal(
-        "LocalGenerator/infini_local/core/runtime_authoring.py",
+        "LocalGenerator/infini_local/core/runtime_authoring/common.py",
         r'ENGINE_RUNTIME_API_VERSION = "([^"]+)"',
         "Python engine runtime API",
     )

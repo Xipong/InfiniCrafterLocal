@@ -2,14 +2,14 @@ from __future__ import annotations
 
 """Parent stats, source damage, generated depth, weak anchor signals.
 
-The heavy stat_profile_for/stage_profile_for implementations still live in
-combine_pipeline for compatibility, while this module owns small pure summaries
-used by tests/debug code and provides the canonical import path for new callers.
+The heavy stat_profile_for/stage_profile_for implementations live in
+combine_balance. This module owns small pure summaries used by tests/debug code
+and provides the canonical import path for new callers.
 """
 
 from typing import Any
 
-from infini_local.pipelines.combine_pipeline import stat_profile_for, stage_profile_for
+from infini_local.pipelines.combine_balance import stat_profile_for, stage_profile_for
 
 
 def _num(value: Any, default: float = 0.0) -> float:

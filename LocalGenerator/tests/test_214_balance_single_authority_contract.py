@@ -45,16 +45,18 @@ def test_balance_envelope_is_single_code_owned_layer_with_correct_cost_math():
         vanilla_like_weapon_envelope,
     )
 
-    combine = read(LOCAL / "infini_local" / "pipelines" / "combine_pipeline.py")
+    combine = read(LOCAL / "infini_local" / "pipelines" / "combine_balance.py")
     balance_policy = read(LOCAL / "infini_local" / "core" / "balance_policy.py")
     authoring = read(LOCAL / "infini_local" / "pipelines" / "llm_authoring_pipeline.py")
+    prompt_owner = read(LOCAL / "infini_local" / "pipelines" / "llm_authoring_prompt.py")
+    authoring_surface = authoring + prompt_owner
     balance_doc = read(ROOT / "docs" / "BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md")
 
     assert "Single code-owned numeric balance layer" in balance_policy
     assert "Older code divided by cost here" in combine
     assert "pressure_cost = max" in combine
-    assert "raise_floor=False" in authoring
-    assert "authoredDamageEnvelopeClamp" in authoring
+    assert "raise_floor=False" in authoring_surface
+    assert "authoredDamageEnvelopeClamp" in authoring_surface
     assert "не должен превращаться" in balance_doc
 
     assert vanilla_like_weapon_envelope("wood")["max"] >= 24
@@ -77,3 +79,18 @@ def test_balance_envelope_is_single_code_owned_layer_with_correct_cost_math():
     # Low authored utility damage stays low when raise_floor=False.
     low = clamp_vanilla_like_weapon_damage(2, 10, stage, use_time=40, shot_count=1, cost_multiplier=1.0, raise_floor=False)
     assert low == 2
+
+
+def test_non_weapon_parents_do_not_crash_balance_report() -> None:
+    from infini_local.pipelines.combine_balance import stat_profile_for
+    from infini_local.core.balance_report import build_balance_report
+
+    a = {"name": "Hermes Boots", "damage": 0, "useTime": 0, "value": 1000, "accessory": True}
+    b = {"name": "Aglet", "damage": 0, "useTime": 0, "value": 500, "accessory": True}
+    stage = stat_profile_for(a, b, set())
+    # Finite stage field is required so accessory/tool crafts do not crash later.
+    assert stage.get("sourceFastestUseTime") not in (None, float("inf"))
+    import math
+    assert math.isfinite(float(stage.get("sourceFastestUseTime")))
+    report = build_balance_report({"gameplay": {"kind": "accessory", "damage": 0}, "debug": {}}, stage)
+    assert int(report["parents"]["fastestUseTime"]) >= 0

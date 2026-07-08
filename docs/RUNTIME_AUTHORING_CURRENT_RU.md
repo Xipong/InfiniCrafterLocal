@@ -1,6 +1,6 @@
 # Runtime authoring notes — historical/current contract notes
 
-## v0.4.237 RuntimeArchetypeSpec + runtimeContract
+## v0.4.239 RuntimeArchetypeSpec + runtimeContract
 
 - Добавлены `runtimeArchetype` и `runtimeContract` как data-authored runtime language вокруг текущего `runtimePlan.engineCalls`.
 - `boomerang` теперь явно представлен как archetype/phase intent (`outbound_return`) и компилируется в существующий returning runtime; return pierce учитывается в scorer как phase potential, не бесконечный baseline DPS.
@@ -18,7 +18,7 @@
 - `../AGENTS.md`
 - `../PROJECT_ARCHITECTURE_RU.md`
 - `../LocalGenerator/PROJECT_ARCHITECTURE_RU.md`
-- source of truth: `../LocalGenerator/infini_local/core/runtime_authoring.py`, `../LocalGenerator/infini_local/core/result_models.py`, `../ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs`, `../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile*.cs`.
+- source of truth: `../LocalGenerator/infini_local/core/runtime_authoring/`, `../LocalGenerator/infini_local/core/result_models.py`, `../ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs`, `../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile*.cs`.
 
 Правило: заметки ниже не доказывают, что capability реализован. Проверяй source и tests. No prose gameplay; explicit runtime contract only.
 

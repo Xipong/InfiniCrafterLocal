@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.web import server
+from infini_local.web import api as server
 
 
 from csharp_partial_reader import read_text_with_partial_bundles

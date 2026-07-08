@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.237 — Terraria/tModLoader мод
+# InfiniCrafterLocal v0.4.239 — Terraria/tModLoader мод
 
 InfiniCrafterLocal добавляет InfiniCraft: ручную станцию, где два предмета превращаются в локально сгенерированный предмет. Модовая часть находится в `ModSources/InfiniCrafterLocal` и отвечает за UI, транзакцию крафта, применение generated runtime contract, multiplayer authority, asset sync, runtime sprites, projectiles, VFX/audio.
 
@@ -17,7 +17,7 @@ C# не должен угадывать gameplay из имени/tooltip/prompt/
 - `PROJECT_ARCHITECTURE_RU.md` — полная текущая архитектура Terraria/tModLoader части и boundary matrix.
 - `PROJECT_MAP_RU.md` — карта папок, source-of-truth файлов и ловушек.
 - `LocalGenerator/PROJECT_ARCHITECTURE_RU.md` — Python generator/authoring/runtime contract boundary.
-- `docs/runtime_archetype_contract.md` — v0.4.237 typed runtime archetype/contract schema, promise-truth validator, migration notes.
+- `docs/runtime_archetype_contract.md` — v0.4.239 typed runtime archetype/contract schema, promise-truth validator, migration notes.
 - `BUILD_QOL_RU.md` — сборка/QoL/MP asset notes.
 - `QUICK_START_RU.md` — минимальный запуск.
 - `ModSources/InfiniCrafterLocal/FOLDER_DOCS_RU.md` — карта активного мода.

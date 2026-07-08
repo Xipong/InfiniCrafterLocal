@@ -15,17 +15,19 @@ def read(path: Path) -> str:
 
 def test_llm_prompt_no_longer_receives_parent_relative_soft_balance_caps():
     authoring = read(LOCAL / "infini_local" / "pipelines" / "llm_authoring_pipeline.py")
+    prompt_owner = read(LOCAL / "infini_local" / "pipelines" / "llm_authoring_prompt.py")
+    prompt_surface = authoring + prompt_owner
     parent_context = read(LOCAL / "infini_local" / "pipelines" / "parent_context_pipeline.py")
     contracts = read(LOCAL / "infini_local" / "core" / "contract_versions.py")
 
     assert "source_power_envelope_for_prompt" not in authoring
     assert "source_power_envelope_for_prompt" not in parent_context
-    assert "sourceEnvelope" not in authoring
-    assert "softDamageCapPerHit" not in authoring
-    assert "softAoeTilesCap" not in authoring
-    assert "softActiveProjectileCap" not in authoring
-    assert "balancePolicy" in authoring
-    assert "python_post_authoring_soft_envelope" in authoring
+    assert "sourceEnvelope" not in prompt_surface
+    assert "softDamageCapPerHit" not in prompt_surface
+    assert "softAoeTilesCap" not in prompt_surface
+    assert "softActiveProjectileCap" not in prompt_surface
+    assert "balancePolicy" in prompt_surface
+    assert "python_post_authoring_soft_envelope" in prompt_surface
     assert "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216" in contracts
     assert "balanceArchitectureAuditContract" in contracts
 

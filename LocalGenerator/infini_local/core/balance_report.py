@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import json
 from typing import Any
 
@@ -11,6 +13,17 @@ from infini_local.core.result_models import BalanceReportModel
 # Reports compare authored vs final values and clamp/repair provenance. They are
 # evidence for audits, not gameplay authority and not a place to add mechanics.
 BALANCE_REPORT_SCHEMA_VERSION = "infini.balance-report.v1"
+
+
+def _finite_int(value: Any, default: int = 0) -> int:
+    try:
+        f = float(value)
+    except Exception:
+        return int(default)
+    if not math.isfinite(f):
+        return int(default)
+    return int(f)
+
 
 
 def json_obj(value: Any) -> dict[str, Any]:
@@ -169,8 +182,8 @@ def build_balance_report(data: dict[str, Any], stage: dict[str, Any] | None = No
                 "runtimeSafety": "compiler/C# hard clamps for Terraria safety",
             },
             "parents": {
-                "maxDamage": int(stage_obj.get("sourceMaxDamage") or 0) if stage_obj else 0,
-                "fastestUseTime": int(stage_obj.get("sourceFastestUseTime") or 0) if stage_obj else 0,
+                "maxDamage": _finite_int(stage_obj.get("sourceMaxDamage"), 0) if stage_obj else 0,
+                "fastestUseTime": _finite_int(stage_obj.get("sourceFastestUseTime"), 0) if stage_obj else 0,
                 "generatedDepths": stage_obj.get("parentGeneratedDepths", []) if stage_obj else [],
                 "weakAnchor": bool((stage_obj.get("powerTransfer") if isinstance(stage_obj.get("powerTransfer"), dict) else {}).get("weakAnchor")) if stage_obj else False,
             },

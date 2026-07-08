@@ -1,6 +1,6 @@
-# v0.4.237 — RuntimeArchetypeSpec + runtimeContract refactor
+# v0.4.239 — RuntimeArchetypeSpec + runtimeContract refactor
 
-v0.4.237 adds a typed data-authored runtime language around the existing `runtimePlan.engineCalls` path:
+v0.4.239 adds a typed data-authored runtime language around the existing `runtimePlan.engineCalls` path:
 
 - `runtimeArchetype` describes the supported behavior family (`custom_executor`, `boomerang`, `yoyo`, `flail`, `whip`, `held_swing`, `held_thrust`, or preserved unsupported intent such as `channel_beam`, `delayed_starfall`, `secondary_attack`).
 - `runtimeContract` describes control feel, phase/state/sync intent, and `mechanicClaims` truth backing.

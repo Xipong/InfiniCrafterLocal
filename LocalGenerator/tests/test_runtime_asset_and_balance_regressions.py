@@ -8,13 +8,23 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 SERVER = ROOT / "LocalGenerator" / "infini_local" / "web" / "server.py"
 COMBINE_PIPELINE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_pipeline.py"
+COMBINE_BALANCE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_balance.py"
+COMBINE_GENOME = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_genome.py"
 LLM_PIPELINE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "llm_authoring_pipeline.py"
+LLM_AUTHORING_PROMPT = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "llm_authoring_prompt.py"
 VISUAL_PIPELINE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "visual_generation_pipeline.py"
+VISUAL_PROMPT_CONTRACTS = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "visual_prompt_contracts.py"
+VISUAL_SPRITE_GENERATION = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "visual_sprite_generation.py"
+PROJECTILE_AFFORDANCE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "projectile_affordance.py"
+RESULT_KNOWLEDGE_CARD = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "result_knowledge_card.py"
+ITEM_POWER_KNOWLEDGE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "item_power_knowledge.py"
 MODEL = ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs"
 
 
 def _check_warn_invalid_generated_assets_do_not_attach_runtime_paths() -> None:
-    src = VISUAL_PIPELINE.read_text(encoding="utf-8")
+    src = VISUAL_SPRITE_GENERATION.read_text(encoding="utf-8")
+    facade = VISUAL_PIPELINE.read_text(encoding="utf-8")
+    assert "from infini_local.pipelines.visual_sprite_generation import" in facade
     assert "generated_warn_invalid" in src
     assert "usable_path = bool(path) and status not in {\"failed\", \"prompt_only\", \"placeholder\", \"generated_warn_invalid\"}" in src
     assert "strict_ai_authorship_keep_imperfect_ai_sprite_not_placeholder" in src
@@ -30,14 +40,14 @@ def _check_csharp_hydrates_conventional_role_asset_names_for_old_cached_recipes(
 
 
 def _check_low_tier_consumable_projectile_power_is_capped() -> None:
-    src = SERVER.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8")
+    src = SERVER.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8") + ITEM_POWER_KNOWLEDGE.read_text(encoding="utf-8")
     assert "is_low_tier_consumable_projectile_item" in src
     assert "+consumable_projectile_cap" in src
     assert "Stackable starter projectiles are consumables, not reusable hardmode weapons" in src
 
 
 def _check_projectile_prompt_for_linear_family_is_horizontal_side_view() -> None:
-    src = VISUAL_PIPELINE.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8")
+    src = VISUAL_PIPELINE.read_text(encoding="utf-8") + VISUAL_PROMPT_CONTRACTS.read_text(encoding="utf-8") + PROJECTILE_AFFORDANCE.read_text(encoding="utf-8")
     assert "long axis horizontal left-to-right" in src
     assert "tip/nose points right" in src
     assert "not a vertical inventory icon" in src
@@ -45,7 +55,7 @@ def _check_projectile_prompt_for_linear_family_is_horizontal_side_view() -> None
 
 
 def _check_recursive_generation_has_soft_power_and_variety_nudges() -> None:
-    src = LLM_PIPELINE.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8")
+    src = LLM_PIPELINE.read_text(encoding="utf-8") + LLM_AUTHORING_PROMPT.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8") + RESULT_KNOWLEDGE_CARD.read_text(encoding="utf-8")
     assert "creativeVariance" in src
     assert "Avoid cloning the strongest generated parent's name/runtimeFamily/onHit" in src
     assert "recursiveDamageSoftCap" in src
@@ -59,7 +69,7 @@ def _check_server_uses_safe_env_float_for_llm_temperatures() -> None:
 
 
 def _check_potion_merge_preserves_independent_channels_and_buff_pairs() -> None:
-    src = COMBINE_PIPELINE.read_text(encoding="utf-8")
+    src = COMBINE_GENOME.read_text(encoding="utf-8")
     assert "def _bounded_parent_potion_stats" in src
     assert "healLife/healMana are independent" in src
     assert "buffType/buffTime stay paired" in src
@@ -69,7 +79,7 @@ def _check_potion_merge_preserves_independent_channels_and_buff_pairs() -> None:
 
 
 def _check_planner_contract_uses_engine_calls_for_utility_instead_of_hard_bans() -> None:
-    src = LLM_PIPELINE.read_text(encoding="utf-8")
+    src = LLM_PIPELINE.read_text(encoding="utf-8") + LLM_AUTHORING_PROMPT.read_text(encoding="utf-8")
     assert "use a mobility engineCall" in src
     assert "tool_capability" in src
     assert "apply_player_effect_on_use" in src

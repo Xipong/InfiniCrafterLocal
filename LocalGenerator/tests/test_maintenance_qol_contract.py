@@ -112,11 +112,21 @@ def test_env_loader_is_shared_not_duplicated():
     bootstrap = read(LOCAL / "infini_local" / "core" / "config_bootstrap.py")
     assert "from infini_local.core.env_utils import env_path, env_str, load_env_file" in bootstrap
     assert "load_env_file(CONFIG_PATH)" in bootstrap
-    assert "from infini_local.core.env_utils import load_env_file" in read(LOCAL / "infini_local" / "core" / "vfx_manifest.py")
+    vfx_config = read(LOCAL / "infini_local" / "core" / "vfx_manifest_config.py")
+    assert "from infini_local.core.env_utils import load_env_file" in vfx_config
+    assert "load_env_file(ROOT / \"config.env\")" in vfx_config
+    vfx = read(LOCAL / "infini_local" / "core" / "vfx_manifest.py")
+    assert "from infini_local.core.vfx_manifest_config import (" in vfx
+    assert "from infini_local.core.env_utils import load_env_file" not in vfx
     web = read(LOCAL / "infini_local" / "web" / "server.py")
     pipeline = read(LOCAL / "infini_local" / "pipelines" / "pipeline_support.py")
     assert "from infini_local.core.config_bootstrap import (" in web
     assert "from infini_local.core.config_bootstrap import (" in pipeline
+    services = read(LOCAL / "infini_local" / "web" / "server_services.py")
+    assert "infini_local.pipelines.item_power_knowledge" in services
+    assert "from infini_local.pipelines.item_power_knowledge import (" in pipeline
+    assert "def fingerprint_tags" not in web
+    assert "def fingerprint_tags" not in pipeline
 
 
 def test_maintenance_contract_stamp_exists():
@@ -132,6 +142,7 @@ def test_maintenance_hardening_contracts_for_review_findings():
     vfx = read(LOCAL / "infini_local" / "core" / "vfx_manifest.py")
     identity = read(LOCAL / "infini_local" / "core" / "item_identity_tools.py")
     gui = read(LOCAL / "infini_local" / "desktop" / "settings_gui.py")
+    gui_theme = read(LOCAL / "infini_local" / "desktop" / "settings_gui_theme.py")
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
     extract = read(MOD / "Content" / "Items" / "GeneratedExtractinatorMaterial.cs")
     player = read(MOD / "Common" / "Players" / "InfiniCraftPlayer.cs")
@@ -146,7 +157,8 @@ def test_maintenance_hardening_contracts_for_review_findings():
     assert "from infini_local.core.item_identity_tools import (" in vfx
     assert "def stable_hash" not in vfx
     assert "def tags_of" in identity
-    assert "Settings GUI v0.4.237" in gui
+    assert "Settings GUI v0.4.239" in gui_theme
+    assert "from infini_local.desktop.settings_gui_theme import" in gui
     assert "LogLowNoiseWarning" in item
     assert "[GeneratedItem]" in item
     assert "[GeneratedExtractinatorMaterial]" in extract

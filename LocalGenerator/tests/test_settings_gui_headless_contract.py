@@ -21,9 +21,12 @@ def test_settings_gui_imports_without_tkinter_installed() -> None:
     module = importlib.util.module_from_spec(spec)
 
     saved_tk_modules = {k: v for k, v in sys.modules.items() if k == "tkinter" or k.startswith("tkinter.")}
+    saved_compat = {k: v for k, v in sys.modules.items() if k.endswith("desktop.tk_compat")}
     blocker = _BlockTkinter()
     try:
         for key in list(saved_tk_modules):
+            sys.modules.pop(key, None)
+        for key in list(saved_compat):
             sys.modules.pop(key, None)
         sys.meta_path.insert(0, blocker)
         spec.loader.exec_module(module)
@@ -33,9 +36,10 @@ def test_settings_gui_imports_without_tkinter_installed() -> None:
         except ValueError:
             pass
         for key in list(sys.modules):
-            if key == "tkinter" or key.startswith("tkinter."):
+            if key == "tkinter" or key.startswith("tkinter.") or key.endswith("desktop.tk_compat"):
                 sys.modules.pop(key, None)
         sys.modules.update(saved_tk_modules)
+        sys.modules.update(saved_compat)
 
     assert module.TKINTER_AVAILABLE is False
     assert "INFINI_LLM_FALLBACK_MODEL" in module.FIELD_ORDER

@@ -109,9 +109,47 @@ def test_refit_helper_can_salvage_too_small_projectile_sprite(tmp_path, monkeypa
     assert VISUAL.validate_processed_sprite(refit, "projectile")["ok"]
 
 
-def test_single_variant_sprite_score_is_not_hardcoded_half() -> None:
-    source = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py"
+def test_refit_helper_can_salvage_too_small_item_sprite(tmp_path, monkeypatch) -> None:
+    if VISUAL.Image is None:
+        return
+    monkeypatch.setattr(VISUAL, "SPRITE_DIR", tmp_path)
+    path = tmp_path / "tiny_item.png"
+    img = VISUAL.Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+    for x in range(21, 27):
+        for y in range(12, 36):
+            img.putpixel((x, y), (210, 210, 80, 255))
+    img.save(path)
+    validation = {
+        "ok": False,
+        "reasons": ["core_silhouette_too_small:24px<39px"],
+        "stats": {"bbox": [21, 12, 27, 36]},
+        "bboxStats": {
+            "core_bbox": [21, 12, 27, 36],
+            "spec": {"targetLongAxisPx": 44, "marginPx": 2},
+        },
+    }
+
+    refit = VISUAL.refit_processed_sprite_to_contract(str(path), "tiny_item", 48, "item", validation)
+
+    assert refit
+    assert Path(refit).exists()
+    assert VISUAL.validate_processed_sprite(refit, "item")["ok"]
+
+
+def test_item_sprite_generation_runs_refit_before_accepting_too_small_sprite() -> None:
+    source = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_sprite_generation.py"
     text = source.read_text(encoding="utf-8")
+    item_block = text[text.index("def maybe_generate_sprite"):text.index("def _validation_reasons")]
+    assert 'refit_processed_sprite_to_contract(final_path, attempt_id, canvas, "item", validation)' in item_block
+    assert 'debug", {})["itemSpriteRefit"]' in item_block
+
+
+def test_single_variant_sprite_score_is_not_hardcoded_half() -> None:
+    source = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_sprite_generation.py"
+    facade = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py"
+    text = source.read_text(encoding="utf-8")
+    facade_text = facade.read_text(encoding="utf-8")
+    assert "from infini_local.pipelines.visual_sprite_generation import" in facade_text
     assert "else (variants[0], 0.5)" not in text
     assert 'best, score = pick_best_sprite(variants, "item", canvas)' in text
     assert "best, score = pick_best_sprite(variants, role, canvas)" in text
@@ -156,9 +194,10 @@ def test_burst_onhit_zero_cap_gets_minimum_visual_feedback() -> None:
 
 def test_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers() -> None:
     root = Path(__file__).resolve().parents[1]
-    for rel in ["infini_local/web/server.py", "infini_local/pipelines/pipeline_support.py"]:
+    engine_metrics = (root / "infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
+    assert "onhit_uses_burst_dust_feedback(onhit_key, onhit_code)" in engine_metrics
+    for rel in ["infini_local/web/server.py", "infini_local/pipelines/pipeline_support.py", "infini_local/pipelines/engine_pressure_metrics.py"]:
         text = (root / rel).read_text(encoding="utf-8")
-        assert "onhit_uses_burst_dust_feedback(onhit_key, onhit_code)" in text
         assert 'onhit_key in {"burst", "aura_pulse"}' not in text
         assert "onhit_code in {1, 10}" not in text
 

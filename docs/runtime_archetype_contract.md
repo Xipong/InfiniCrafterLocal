@@ -1,6 +1,6 @@
-# RuntimeArchetypeSpec + runtimeContract refactor — v0.4.237
+# RuntimeArchetypeSpec + runtimeContract refactor — v0.4.239
 
-This document describes the typed runtime-authoring language added in v0.4.237.
+This document describes the typed runtime-authoring language added in v0.4.239.
 
 ## Boundary
 

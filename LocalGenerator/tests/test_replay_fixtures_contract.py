@@ -123,6 +123,31 @@ def _check_llm_chat_json_raw_replay_intercepts_planner_without_network(monkeypat
     assert plan["name"] == "Twin Grain Saber"
 
 
+def _check_llm_replay_stage_prefers_planner_over_loose_name_repair_match() -> None:
+    from infini_local.pipelines.llm_transport import _llm_replay_stage_from_payload
+
+    # Planner payloads often mention both "repair" and "name" (repairPolicy, display names).
+    # That must not route the author hop to name_repair fixtures.
+    req = {
+        "messages": [
+            {"role": "system", "content": "You are the AUTHOR of a Terraria-like generated item."},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "task": "author one item",
+                        "priorityHeader": "repair policy notes and names are context only",
+                        "requiredJsonShape": {"runtimePlan": {"engineCalls": []}},
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+        "response_format": {"type": "json_schema", "json_schema": {"name": "infini_runtime_plan"}},
+    }
+    assert _llm_replay_stage_from_payload(req) == "planner"
+
+
 def _check_llm_chat_json_raw_replay_directory_routes_multiple_llm_hops(monkeypatch, tmp_path) -> None:
     # One replay seam lives in llm_chat_json, so it can cover planner, VFX-director,
     # and repair calls instead of only try_llm_plan. This stays out of production
@@ -261,6 +286,7 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_llm_chat_json_raw_replay_intercepts_planner_without_network',
+    '_check_llm_replay_stage_prefers_planner_over_loose_name_repair_match',
     '_check_llm_chat_json_raw_replay_directory_routes_multiple_llm_hops',
     '_check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter',
     '_check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line',

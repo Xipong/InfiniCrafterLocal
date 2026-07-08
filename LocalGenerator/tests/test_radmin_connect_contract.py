@@ -4,13 +4,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER_SOURCE = (ROOT / "LocalGenerator" / "infini_local" / "web" / "server.py").read_text(encoding="utf-8")
+SERVICES_SOURCE = (ROOT / "LocalGenerator" / "infini_local" / "web" / "server_services.py").read_text(encoding="utf-8")
 NETWORK_INFO_SOURCE = (ROOT / "LocalGenerator" / "infini_local" / "services" / "network_info_service.py").read_text(encoding="utf-8")
 UTILITY_ROUTES_SOURCE = (ROOT / "LocalGenerator" / "infini_local" / "web" / "server_utility_routes.py").read_text(encoding="utf-8")
 CONFIG_EXAMPLE = (ROOT / "LocalGenerator" / "config.example.env").read_text(encoding="utf-8")
 
 
 def _check_network_info_service_owns_multiplayer_connect_card() -> None:
-    assert "from infini_local.services import network_info_service" in SERVER_SOURCE
+    assert "network_info_service" in SERVICES_SOURCE
     assert "def multiplayer_connect_info" not in SERVER_SOURCE
     assert "def multiplayer_connect_info" in NETWORK_INFO_SOURCE
     assert "def radmin_ipv4_candidates" in NETWORK_INFO_SOURCE

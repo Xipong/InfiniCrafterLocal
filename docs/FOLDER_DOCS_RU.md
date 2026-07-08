@@ -8,5 +8,5 @@ Useful docs here:
 - `BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md` — soft balance/reference constraints.
 - `RECIPE_HEALTH_AND_CONTRACTS_RU.md` — recipe health/contract notes.
 - `RUNTIME_AUTHORING_CURRENT_RU.md` — runtime authoring notes, may include historical sections.
-- `runtime_archetype_contract.md` — v0.4.237 runtimeArchetype/runtimeContract schema and promise-truth notes.
+- `runtime_archetype_contract.md` — v0.4.239 runtimeArchetype/runtimeContract schema and promise-truth notes.
 - `TODO_ROADMAP_VERY_LATER_RU.md` — unified future-work roadmap; old split TODO docs are not canonical.

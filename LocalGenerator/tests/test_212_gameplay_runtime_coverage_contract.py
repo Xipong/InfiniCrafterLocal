@@ -14,20 +14,22 @@ def read(path: Path) -> str:
 
 def test_generated_tool_mining_speed_and_alt_light_are_executable():
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
-    authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring.py")
+    authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "__init__.py")
+    authoring_schema = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "schema.py")
     assert "ApplyAuthoredToolMiningSpeed" in item
     assert "gp.MiningSpeedScale" in item
     assert "player.pickSpeed /= scale" in item
-    assert "tool_capability" in authoring
-    assert "miningSpeedScale" in authoring
-    assert "executable held-tool mining speed multiplier" in authoring
+    assert "from infini_local.core.runtime_authoring.schema import" in authoring
+    assert "tool_capability" in authoring_schema
+    assert "miningSpeedScale" in authoring_schema
+    assert "executable held-tool mining speed multiplier" in authoring_schema
     assert "AltLightStrength" in item
     assert "mode == \"light\"" in item
     assert "ApplyGeneratedUtilityBuff(new GeneratedBuffSpec" in item
 
 
 def test_accessory_authoring_now_covers_runtime_supported_fields():
-    authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring.py")
+    authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "compiler.py")
     model = read(MOD / "Common" / "Models" / "GeneratedItemData.cs")
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
     for field in ["sentrySlots", "manaCostReduction", "ammoSaveChance", "aggro", "endurance", "armorPenetration"]:
@@ -56,7 +58,7 @@ def test_station_manual_ux_and_prefetch_are_bounded_not_autofill():
 
 
 def test_vanilla_like_balance_envelope_and_todo_docs_exist():
-    pipeline = read(LOCAL / "infini_local" / "pipelines" / "combine_pipeline.py")
+    pipeline = read(LOCAL / "infini_local" / "pipelines" / "combine_balance.py")
     balance_policy = read(LOCAL / "infini_local" / "core" / "balance_policy.py")
     contracts = read(LOCAL / "infini_local" / "core" / "contract_versions.py")
     assert "VANILLA_LIKE_WEAPON_ENVELOPES" in balance_policy

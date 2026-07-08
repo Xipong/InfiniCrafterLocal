@@ -198,6 +198,7 @@ def test_author_preserving_validator_contract_coarse_contract(tmp_path):
 
 def test_parent_projectile_reference_is_size_only_not_family_router(monkeypatch):
     from infini_local.pipelines import combine_pipeline as cp
+    from infini_local.pipelines import projectile_affordance as pa
 
     profiles = {
         "small_arrow": {"internalName": "SmallArrow", "width": 8, "height": 28, "scale": 1.4, "arrow": True, "aiStyle": 1},
@@ -207,7 +208,7 @@ def test_parent_projectile_reference_is_size_only_not_family_router(monkeypatch)
     def fake_effective_projectile_profile_of(item):
         return profiles.get(item["id"], {})
 
-    monkeypatch.setattr(cp, "effective_projectile_profile_of", fake_effective_projectile_profile_of)
+    monkeypatch.setattr(pa, "effective_projectile_profile_of", fake_effective_projectile_profile_of)
     chosen = cp.choose_parent_projectile_size_reference({"id": "small_arrow"}, {"id": "large_held"})
     assert chosen["__parent"] == "max"
     assert chosen["width"] == 40
