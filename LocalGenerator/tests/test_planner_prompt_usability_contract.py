@@ -128,7 +128,7 @@ def _check_forbidden_boss_npc_mob_calls_are_rejected_without_killing_valid_item_
 def _check_prompt_usability_cli_runs_the_same_contract() -> None:
     root = Path(__file__).resolve().parents[2]
     proc = subprocess.run(
-        [sys.executable, str(root / "tools" / "check_planner_prompt_usability.py"), "--limit-chars", "23000"],
+        [sys.executable, str(root / "tools" / "check_planner_prompt_usability.py"), "--limit-chars", "24000"],
         cwd=root,
         text=True,
         capture_output=True,

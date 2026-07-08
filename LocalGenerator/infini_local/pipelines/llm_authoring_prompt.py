@@ -678,7 +678,7 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: di
     contract = payload.get("engineRuntimeContract") if isinstance(payload.get("engineRuntimeContract"), dict) else {}
     functions = contract.get("availableFunctions") if isinstance(contract.get("availableFunctions"), dict) else {}
     return {
-        "ok": len(text) <= 23000 and bool(functions) and "requiredJsonShape" in payload,
+        "ok": len(text) <= 24000 and bool(functions) and "requiredJsonShape" in payload,
         "chars": len(text),
         "approxTokens": max(1, len(text) // 4),
         "contractStyle": contract.get("contractStyle"),

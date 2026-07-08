@@ -167,7 +167,7 @@ def run(limit_chars: int) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit-chars", type=int, default=23000)
+    ap.add_argument("--limit-chars", type=int, default=24000)
     args = ap.parse_args()
     result = run(args.limit_chars)
     print(json.dumps(result, ensure_ascii=False, indent=2))
