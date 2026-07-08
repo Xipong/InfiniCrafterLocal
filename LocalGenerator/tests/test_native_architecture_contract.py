@@ -62,15 +62,16 @@ def test_runtime_authoring_public_api_is_package_owned() -> None:
 
 def test_web_public_api_is_canonical_and_server_is_entrypoint() -> None:
     assert not (LOCAL / "infini_local" / "web" / "_".join(["server", "legacy", "facade.py"])).exists()
+    assert not (LOCAL / "infini_local" / "web" / "server_services.py").exists()
     server = (LOCAL / "infini_local" / "web" / "server.py").read_text(encoding="utf-8")
     api = (LOCAL / "infini_local" / "web" / "api.py").read_text(encoding="utf-8")
-    services = (LOCAL / "infini_local" / "web" / "server_services.py").read_text(encoding="utf-8")
-    assert "from infini_local.web.server_services import (" in server
+    assert "server_services" not in server
+    assert "server_services" not in api
+    assert "from infini_local.services import (" in server
     assert "def main()" in server
     assert "ThreadingHTTPServer" in server
-    assert "from infini_local.web.server_services import (" in api
     assert "from infini_local.web.server import (" in api
-    assert "infini_local.pipelines.combine_pipeline" in services
+    assert "infini_local.pipelines.combine_pipeline" in server
 
 
 def test_canonical_public_apis_import() -> None:
@@ -83,3 +84,12 @@ def test_canonical_public_apis_import() -> None:
     assert callable(api.build_llm_author_payload)
     assert callable(api.validate_and_repair)
     assert callable(api.final_normalize)
+
+
+def test_repo_docs_do_not_pin_one_agent_absolute_workspace_path() -> None:
+    offenders: list[str] = []
+    for path in [ROOT / "docs" / "PROJECT_MAINTAINABILITY_RU.md"]:
+        text = path.read_text(encoding="utf-8")
+        if "/home/xipong" in text or "/tmp/icl_refactor" in text:
+            offenders.append(path.relative_to(ROOT).as_posix())
+    assert offenders == []

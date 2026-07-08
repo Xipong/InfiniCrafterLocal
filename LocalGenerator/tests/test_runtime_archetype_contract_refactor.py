@@ -302,6 +302,23 @@ def test_utility_engine_calls_override_unsupported_runtime_archetype_family() ->
     assert result["patch"].get("archetypeCompiler", {}).get("supportStatus") == "executable"
 
 
+def test_emit_light_alone_does_not_make_unsupported_archetype_fully_executable() -> None:
+    data = {
+        "name": "Glow Relic",
+        "category": "accessory",
+        "runtimeArchetype": {"family": "unsupported"},
+        "runtimePlan": {"engineCalls": [
+            {"fn": "set_item_stats", "params": {"resultKind": "accessory", "rarity": 2}},
+            {"fn": "emit_light", "params": {"strength": 0.55, "color": "blue"}},
+        ]},
+    }
+    result = compile_runtime_plan_to_genome_result(data)
+    assert data["runtimeArchetype"]["family"] == "unsupported"
+    assert data["runtimeArchetype"]["supportStatus"] == "unsupported"
+    assert "unsupported:unsupported" in (data.get("unsupportedPromises") or [])
+    assert result["patch"].get("archetypeCompiler", {}).get("supportStatus") == "unsupported"
+
+
 def test_set_item_stats_alone_does_not_override_unsupported_runtime_archetype_family() -> None:
     data = {
         "name": "Plain Trinket",

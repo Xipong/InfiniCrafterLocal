@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL_GENERATOR = ROOT / "LocalGenerator"
 sys.path.insert(0, str(LOCAL_GENERATOR))
 
-from infini_local.web import server  # noqa: E402
+from infini_local.web import api  # noqa: E402
 from infini_local.core.runtime_authoring import (  # noqa: E402
     ENGINE_FN_CATALOG_V2,
     SAFE_SUMMON_FAMILIES,
@@ -64,7 +64,7 @@ def _sample_parent_cards() -> tuple[dict, dict, dict, dict]:
 def _payload(style_env: str | None = None) -> dict:
     a, b, ca, cb = _sample_parent_cards()
     with _patched_env("INFINI_LLM_ENGINE_CONTRACT_STYLE", style_env):
-        return server.build_llm_author_payload(a, b, ca, cb, "planner_smoke")
+        return api.build_llm_author_payload(a, b, ca, cb, "planner_smoke")
 
 
 def _section_sizes(payload: dict) -> dict[str, int]:

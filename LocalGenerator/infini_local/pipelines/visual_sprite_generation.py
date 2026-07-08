@@ -127,8 +127,12 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
                         import shutil
                         shutil.copyfile(final_path, canonical)
                         final_path = str(canonical)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        data.setdefault("debug", {})["itemSpriteCanonicalCopyError"] = json.dumps({
+                            "from": str(final_path),
+                            "to": str(canonical),
+                            "error": repr(exc),
+                        }, ensure_ascii=False)
                 visual["spritePath"] = str(Path(final_path).resolve())
                 visual["spriteRawPath"] = str(Path(raw_best).resolve())
                 visual["spriteStatus"] = sprite_status_from_raw_path(raw_best, _cfg('IMAGE_BACKEND', IMAGE_BACKEND), invalid=not bool(validation.get("ok")))
@@ -299,8 +303,12 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
                         import shutil
                         shutil.copyfile(final_path, canonical)
                         final_path = str(canonical)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        data.setdefault("debug", {})[f"{role}SpriteCanonicalCopyError"] = json.dumps({
+                            "from": str(final_path),
+                            "to": str(canonical),
+                            "error": repr(exc),
+                        }, ensure_ascii=False)
                 data.setdefault("debug", {})[f"{role}SpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
                 if not validation.get("ok"):
                     data.setdefault("debug", {})[f"{role}SpriteAcceptedWithWarnings"] = json.dumps(validation, ensure_ascii=False)

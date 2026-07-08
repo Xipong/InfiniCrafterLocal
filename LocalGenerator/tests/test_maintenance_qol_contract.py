@@ -119,11 +119,11 @@ def test_env_loader_is_shared_not_duplicated():
     assert "from infini_local.core.vfx_manifest_config import (" in vfx
     assert "from infini_local.core.env_utils import load_env_file" not in vfx
     web = read(LOCAL / "infini_local" / "web" / "server.py")
+    api = read(LOCAL / "infini_local" / "web" / "api.py")
     pipeline = read(LOCAL / "infini_local" / "pipelines" / "pipeline_support.py")
     assert "from infini_local.core.config_bootstrap import (" in web
     assert "from infini_local.core.config_bootstrap import (" in pipeline
-    services = read(LOCAL / "infini_local" / "web" / "server_services.py")
-    assert "infini_local.pipelines.item_power_knowledge" in services
+    assert "from infini_local.pipelines.item_power_knowledge import (" in api
     assert "from infini_local.pipelines.item_power_knowledge import (" in pipeline
     assert "def fingerprint_tags" not in web
     assert "def fingerprint_tags" not in pipeline

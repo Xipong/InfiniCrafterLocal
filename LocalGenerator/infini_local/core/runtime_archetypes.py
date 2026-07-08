@@ -170,7 +170,6 @@ def _has_utility_engine_calls(data: dict[str, Any]) -> bool:
         "armor_effect",
         "tool_capability",
         "mobility_effect",
-        "emit_light",
         "hold_item_effect",
         "extractinator_output",
         "apply_player_effect_on_use",

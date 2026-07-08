@@ -122,3 +122,19 @@ def test_generate_golden_runtime_proof_cli_writes_summary(tmp_path) -> None:
     assert summary.get("gameplayCaseCount") == len(GOLDEN_RUNTIME_CASES)
     assert summary.get("gameplayFailedCount") == 0
     assert len(summary["artifactPaths"]) >= len(GOLDEN_RUNTIME_CASES)
+
+
+def test_live_semantic_gate_fails_on_partial_or_unsupported_heavy_rows() -> None:
+    from tools.live_semantic_sample_run import summarize_rows
+
+    rows = [
+        {"caseId": "ok", "ok": True, "runtimeFamily": "shoot", "movement": "straight", "onHit": "burn", "executionStatus": "executable", "unsupportedPromises": []},
+        {"caseId": "weak", "ok": True, "runtimeFamily": "", "movement": "", "onHit": "none", "executionStatus": "partial", "unsupportedPromises": ["unsupported:charge_release"]},
+    ]
+
+    summary = summarize_rows(rows)
+
+    assert summary["ok"] is False
+    assert summary["failedCount"] == 0
+    assert summary["semanticGate"]["ok"] is False
+    assert any("partial" in reason or "unsupported" in reason for reason in summary["semanticGate"]["reasons"])

@@ -58,8 +58,7 @@ AI-агент не должен читать весь проект перед к
 ## Проверочный минимум после каждого пакета
 
 ```bash
-PROJECT='/home/xipong/agent-work(Main)/projects/InfiniCrafterLocal/InfiniCrafterLocal_v0_4_234_secondary_refit_noise_cleanup'
-cd "$PROJECT"
+cd "$(git rev-parse --show-toplevel)"
 PYTHONPATH=LocalGenerator python -m compileall -q LocalGenerator/infini_local tools
 cd LocalGenerator && PYTHONPATH=. python -m pytest -q
 cd .. && PYTHONPATH=LocalGenerator python tools/check_project_hygiene.py

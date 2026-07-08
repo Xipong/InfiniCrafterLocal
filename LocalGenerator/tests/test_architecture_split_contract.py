@@ -47,8 +47,7 @@ def _check_local_generator_python_code_is_sorted_into_texture_layers() -> None:
 def _check_network_info_is_outside_http_server() -> None:
     server_impl = read("infini_local/web/server.py")
     network = read("infini_local/services/network_info_service.py")
-    services = read("infini_local/web/server_services.py")
-    assert "network_info_service" in services
+    assert "network_info_service" in server_impl
     assert "def multiplayer_connect_info" not in server_impl
     assert "def multiplayer_connect_info" in network
     assert "def radmin_ipv4_candidates" in network
@@ -68,8 +67,8 @@ def _check_dev_fallback_builders_are_outside_http_server() -> None:
 def _check_llm_json_extraction_is_in_core_and_imported_by_server() -> None:
     server_impl = read("infini_local/web/server.py")
     json_tools = read("infini_local/core/llm_json_tools.py")
-    services = read("infini_local/web/server_services.py")
-    assert "infini_local.core.llm_json_tools" in services
+    api = read("infini_local/web/api.py")
+    assert "infini_local.core.llm_json_tools" in api
     assert "def json_object_candidates" not in server_impl
     assert "def parse_first_valid_llm_json" in json_tools
 
@@ -78,9 +77,8 @@ def _check_sdcpp_backend_and_lifecycle_are_in_services() -> None:
     server_impl = read("infini_local/web/server.py")
     backend = read("infini_local/services/sdcpp_backend.py")
     service = read("infini_local/services/sdcpp_service.py")
-    services = read("infini_local/web/server_services.py")
-    assert "sdcpp_backend" in services
-    assert "sdcpp_service" in services
+    assert "sdcpp_backend" in server_impl
+    assert "sdcpp_service" in server_impl
     assert "def repair_command_template" in backend
     assert "def build_server_command" in backend
     assert "def server_payload" in backend
@@ -96,9 +94,7 @@ def _check_sdcpp_backend_and_lifecycle_are_in_services() -> None:
 def _check_visual_asset_pipeline_helpers_are_outside_server_monolith() -> None:
     server_impl = read("infini_local/web/server.py")
     visual_assets = read("infini_local/services/visual_asset_pipeline.py")
-    services = read("infini_local/web/server_services.py")
-    assert "infini_local.services.visual_asset_pipeline" in services
-    assert "visual_asset_pipeline" in services
+    assert "infini_local.services.visual_asset_pipeline" not in server_impl
     assert "def sanitize_image_prompt_background" not in server_impl
     assert "def zimage_pe_clean_text" not in server_impl
     assert "def compact_zimage_asset_prompt" not in server_impl
@@ -118,9 +114,8 @@ def _check_recipe_identity_helpers_are_in_core() -> None:
     server_impl = read("infini_local/web/server.py")
     identity = read("infini_local/core/item_identity_tools.py")
     world_runtime = read("infini_local/storage/world_recipe_runtime.py")
-    services = read("infini_local/web/server_services.py")
-    assert "infini_local.core.item_identity_tools" in services
-    assert "infini_local.storage.world_recipe_runtime" in services
+    assert "infini_local.core.item_identity_tools" in server_impl
+    assert "infini_local.storage.world_recipe_runtime" in server_impl
     assert "def recipe_key" not in server_impl
     assert "def recipe_key" in identity
     assert "def recipe_key" in world_runtime
@@ -134,9 +129,8 @@ def _check_asset_sync_and_combine_endpoint_are_in_services() -> None:
     server_impl = read("infini_local/web/server.py")
     asset_sync = read("infini_local/services/asset_sync_service.py")
     endpoint = read("infini_local/services/combine_endpoint.py")
-    services = read("infini_local/web/server_services.py")
-    assert "asset_sync_service" in services
-    assert "combine_endpoint" in services
+    assert "asset_sync_service" in server_impl
+    assert "combine_endpoint" in server_impl
     assert "def runtime_asset_files" not in server_impl
     assert "def runtime_asset_files" in asset_sync
     assert "def safe_asset_file_from_query" in asset_sync
@@ -154,15 +148,13 @@ def _check_asset_sync_and_combine_endpoint_are_in_services() -> None:
 def _check_combine_endpoint_uses_distinct_http_statuses_for_cache_busy_and_failures() -> None:
     endpoint = read("infini_local/services/combine_endpoint.py")
     server_impl = read("infini_local/web/server.py")
-    services = read("infini_local/web/server_services.py")
     response_helpers = read("infini_local/web/http_response_helpers.py")
     assert '"status": "cache_miss"' in endpoint
     assert 'json_status(404' in endpoint
     assert '"cacheRecoveryAllowed": True' in endpoint
     assert '"status": "generator_busy"' in endpoint
     assert 'json_status(409' in endpoint
-    assert "from infini_local.web.server_services import (" in server_impl
-    assert "infini_local.web.http_response_helpers" in services
+    assert "from infini_local.web.http_response_helpers import (" in server_impl
     assert "def _combine_failure_http_response" in response_helpers
     assert 'return 422, "llm_output_invalid"' in response_helpers
     assert 'return 424, "visual_dependency_failed"' in response_helpers
@@ -175,11 +167,9 @@ def _check_runtime_dump_trace_dashboard_and_sprite_fallback_are_outside_server()
     dashboard = read("infini_local/web/trace_dashboard.py")
     trace_snapshot_payload = read("infini_local/web/server_trace_snapshot.py")
     visual_assets = read("infini_local/services/visual_asset_pipeline.py")
-    services = read("infini_local/web/server_services.py")
-    assert "runtime_dump_service" in services
-    assert "trace_dashboard" in services
-    assert "infini_local.web.server_trace_snapshot" in services
-    assert "visual_asset_pipeline" in services
+    assert "runtime_dump_service" in server_impl
+    assert "trace_dashboard" in server_impl
+    assert "infini_local.web.server_trace_snapshot" in server_impl
     assert "def runtime_item_lookup" in server_impl
     assert "def runtime_dump_candidates" not in server_impl
     assert "def runtime_dump_candidates" in runtime_dump
@@ -203,9 +193,8 @@ def _check_http_utility_routes_are_a_coarse_route_block() -> None:
     server_impl = read("infini_local/web/server.py")
     routes = read("infini_local/web/server_utility_routes.py")
     handler = read("infini_local/web/server_handler.py")
-    services = read("infini_local/web/server_services.py")
     assert "from infini_local.web.server_handler import build_handler" in server_impl
-    assert "infini_local.web.server_utility_routes" in services
+    assert "infini_local.web.server_utility_routes" in server_impl
     assert "class ServerUtilityRoutes" in routes
     assert "def handle_get" in routes
     assert "def generate_test_sprite" in routes
@@ -222,8 +211,7 @@ def _check_http_utility_routes_are_a_coarse_route_block() -> None:
 def _check_vfx_debug_routes_are_one_coarse_endpoint_block() -> None:
     server_impl = read("infini_local/web/server.py")
     routes = read("infini_local/web/vfx_debug_routes.py")
-    services = read("infini_local/web/server_services.py")
-    assert "infini_local.web.vfx_debug_routes" in services
+    assert "infini_local.web.vfx_debug_routes" in server_impl
     assert "def debug_select_vfx_manifest" not in server_impl
     assert "def debug_vfx_lint" not in server_impl
     assert "class VfxDebugRoutes" in routes
@@ -244,9 +232,7 @@ def _check_large_generation_pipelines_are_outside_server_shell() -> None:
     image_backend = read("infini_local/pipelines/image_backend_pipeline.py")
     sprite = read("infini_local/pipelines/sprite_processing_pipeline.py")
     sprite_postprocess = read("infini_local/pipelines/sprite_postprocess.py")
-    services = read("infini_local/web/server_services.py")
-    assert "from infini_local.web.server_services import (" in server_impl
-    assert "infini_local.pipelines.combine_pipeline" in services
+    assert "from infini_local.pipelines.combine_pipeline import (" in server_impl
     assert "def combine(" not in server_impl
     assert "def try_llm_plan" not in server_impl
     assert "def raw_parent_card_for_llm" not in server_impl

@@ -481,13 +481,13 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         if mining_speed not in (None, ""):
             try:
                 gp["miningSpeedScale"] = max(0.25, min(3.0, float(mining_speed)))
-            except Exception:
-                pass
+            except Exception as exc:
+                data.setdefault("debug", {})["ignoredInvalidMiningSpeedScale"] = json.dumps({"value": mining_speed, "error": repr(exc)}, ensure_ascii=False)
         if light_strength not in (None, ""):
             try:
                 gp["runtimeLightStrength"] = max(0.0, min(1.5, float(light_strength)))
-            except Exception:
-                pass
+            except Exception as exc:
+                data.setdefault("debug", {})["ignoredInvalidRuntimeLightStrength"] = json.dumps({"value": light_strength, "error": repr(exc)}, ensure_ascii=False)
         if light_color not in (None, ""):
             gp["runtimeLightColorName"] = str(light_color)
         attack.update({"enabled": False})

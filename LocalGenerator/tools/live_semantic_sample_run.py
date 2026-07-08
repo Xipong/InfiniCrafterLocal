@@ -157,6 +157,60 @@ def compact(case_id: str, item: dict[str, Any], error: str | None, ms: int) -> d
     }
 
 
+def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    from collections import Counter
+
+    families = Counter(str(r.get("runtimeFamily") or "") for r in rows if r.get("ok"))
+    movements = Counter(str(r.get("movement") or "") for r in rows if r.get("ok"))
+    onhits = Counter(str(r.get("onHit") or "") for r in rows if r.get("ok"))
+    unsupported = Counter()
+    partial_cases: list[str] = []
+    for r in rows:
+        status = str(r.get("executionStatus") or "").strip().lower()
+        if status in {"partial", "unsupported"}:
+            partial_cases.append(str(r.get("caseId") or "case"))
+        for u in r.get("unsupportedPromises") or []:
+            unsupported[str(u)] += 1
+
+    failed_count = sum(1 for r in rows if not r.get("ok"))
+    reasons: list[str] = []
+    if failed_count:
+        reasons.append(f"combine_failed:{failed_count}")
+    if partial_cases:
+        reasons.append("partial_or_unsupported_execution:" + ",".join(partial_cases[:8]))
+    unsupported_total = sum(unsupported.values())
+    if unsupported_total:
+        reasons.append(f"unsupported_promises:{unsupported_total}")
+    if len(rows) >= 4:
+        non_empty_families = {k for k in families if k}
+        non_empty_movements = {k for k in movements if k}
+        if len(non_empty_families) < 2:
+            reasons.append("low_runtime_family_diversity")
+        if len(non_empty_movements) < 2:
+            reasons.append("low_movement_diversity")
+
+    semantic_gate = {
+        "ok": not reasons,
+        "reasons": reasons,
+        "partialCases": partial_cases,
+        "unsupportedTotal": unsupported_total,
+    }
+    return {
+        "ok": failed_count == 0 and semantic_gate["ok"],
+        "caseCount": len(rows),
+        "failedCount": failed_count,
+        "cases": rows,
+        "semanticGate": semantic_gate,
+        "diversity": {
+            "runtimeFamily": dict(families),
+            "movement": dict(movements),
+            "onHit": dict(onhits),
+            "unsupportedPromises": dict(unsupported),
+        },
+        "note": "Live LLM semantic sample with image backend off. Not Terraria gameplay proof; semanticGate enforces contract-honesty thresholds.",
+    }
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     if out.exists():
@@ -208,31 +262,9 @@ def main() -> int:
         rows.append(row)
         print(json.dumps(row, ensure_ascii=False))
 
-    from collections import Counter
-
-    families = Counter(str(r.get("runtimeFamily") or "") for r in rows if r.get("ok"))
-    movements = Counter(str(r.get("movement") or "") for r in rows if r.get("ok"))
-    onhits = Counter(str(r.get("onHit") or "") for r in rows if r.get("ok"))
-    unsupported = Counter()
-    for r in rows:
-        for u in r.get("unsupportedPromises") or []:
-            unsupported[str(u)] += 1
-
-    summary = {
-        "ok": all(r.get("ok") for r in rows),
-        "caseCount": len(rows),
-        "failedCount": sum(1 for r in rows if not r.get("ok")),
-        "cases": rows,
-        "diversity": {
-            "runtimeFamily": dict(families),
-            "movement": dict(movements),
-            "onHit": dict(onhits),
-            "unsupportedPromises": dict(unsupported),
-        },
-        "note": "Live LLM semantic sample with image backend off. Not Terraria gameplay proof.",
-    }
+    summary = summarize_rows(rows)
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"ok": summary["ok"], "failedCount": summary["failedCount"], "diversity": summary["diversity"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({"ok": summary["ok"], "failedCount": summary["failedCount"], "semanticGate": summary["semanticGate"], "diversity": summary["diversity"]}, ensure_ascii=False, indent=2))
     return 0 if summary["ok"] else 1
 
 

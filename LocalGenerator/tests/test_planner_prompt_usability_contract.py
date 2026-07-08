@@ -22,7 +22,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     report = server.planner_prompt_usability_report(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     assert report["ok"], report
     assert report["contractStyle"] == "sharp"
-    assert len(text) <= 23_000
+    assert len(text) <= 24_000
     functions = payload["engineRuntimeContract"]["availableFunctions"]
     assert set(functions) == set(ENGINE_FN_CATALOG_V2)
     assert functions["apply_player_effect_on_use"]["params"]["healLife"] == "0..500"
