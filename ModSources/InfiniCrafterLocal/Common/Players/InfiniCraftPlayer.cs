@@ -31,8 +31,11 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public const byte PacketSyncGeneratedUtilityBuff = InfiniNetPacketIds.SyncGeneratedUtilityBuff;
     public const int RemoteServerCraftTimeoutTicks = CraftRecoveryTimeoutTicks;
 
+    private const int MaxServerCraftRequestCacheEntries = 2048;
     private static readonly Dictionary<string, string> ServerCommittedCraftRequests = new(StringComparer.Ordinal);
     private static readonly HashSet<string> ServerCancelledCraftRequests = new(StringComparer.Ordinal);
+    private static readonly Queue<string> ServerCommittedCraftRequestOrder = new();
+    private static readonly Queue<string> ServerCancelledCraftRequestOrder = new();
     private static readonly object ServerCommittedCraftRequestsLock = new();
     private static bool _inventoryPrefetchConfigWarningLogged;
 

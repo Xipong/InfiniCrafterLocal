@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -100,10 +102,14 @@ def summarize_case(case_dir: Path) -> dict[str, Any]:
         files[name] = {"exists": exists, "status": status, "path": str(case_dir / name)}
         if status == "ok":
             loaded[name] = payload
-    final_item = loaded.get("final_item.json") if isinstance(loaded.get("final_item.json"), dict) else {}
-    compiled = loaded.get("compiled_runtime.json") if isinstance(loaded.get("compiled_runtime.json"), dict) else {}
-    provenance = compiled.get("provenance") if isinstance(compiled.get("provenance"), dict) else {}
-    balance = loaded.get("balance_report.json") if isinstance(loaded.get("balance_report.json"), dict) else {}
+    raw_final_item = loaded.get("final_item.json")
+    final_item: dict[str, Any] = raw_final_item if isinstance(raw_final_item, dict) else {}
+    raw_compiled = loaded.get("compiled_runtime.json")
+    compiled: dict[str, Any] = raw_compiled if isinstance(raw_compiled, dict) else {}
+    raw_provenance = compiled.get("provenance")
+    provenance: dict[str, Any] = raw_provenance if isinstance(raw_provenance, dict) else {}
+    raw_balance = loaded.get("balance_report.json")
+    balance: dict[str, Any] = raw_balance if isinstance(raw_balance, dict) else {}
     return {
         "schema": "infini.replay-case-summary.v1",
         "caseDir": str(case_dir),
@@ -189,38 +195,38 @@ def save_case(args: argparse.Namespace) -> int:
         _save_json(cdir / "combine_error.json", {"error": repr(exc), "type": type(exc).__name__})
         return 1
 
-    if isinstance(result, dict):
-        _save_json(cdir / "final_item.json", result)
-        print(f"[saved] {cdir / 'final_item.json'}")
-        debug = result.get("debug", {}) if isinstance(result.get("debug"), dict) else {}
-        artifact_keys = {
+    _save_json(cdir / "final_item.json", result)
+    print(f"[saved] {cdir / 'final_item.json'}")
+    raw_debug = result.get("debug")
+    debug: dict[str, Any] = raw_debug if isinstance(raw_debug, dict) else {}
+    artifact_keys = {
             "llmRaw": "llm_raw.json",
             "structuralRepair": "structural_repair.json",
             "targetedRetry": "targeted_retry.json",
         }
-        for key, filename in artifact_keys.items():
-            if key in debug:
-                _save_json(cdir / filename, debug[key])
-                print(f"[saved] {cdir / filename}")
-        try:
-            from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
+    for key, filename in artifact_keys.items():
+        if key in debug:
+            _save_json(cdir / filename, debug[key])
+            print(f"[saved] {cdir / filename}")
+    try:
+        from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
 
-            compiled = compile_runtime_plan_to_genome_result(result)
-            _save_json(cdir / "compiled_runtime.json", compiled)
-            print(f"[saved] {cdir / 'compiled_runtime.json'}")
-        except Exception as exc:
-            print(f"WARN: compile_runtime_plan_to_genome_result failed: {exc}")
-        try:
-            from infini_local.core.balance_report import build_balance_report
+        compiled = compile_runtime_plan_to_genome_result(result)
+        _save_json(cdir / "compiled_runtime.json", compiled)
+        print(f"[saved] {cdir / 'compiled_runtime.json'}")
+    except Exception as exc:
+        print(f"WARN: compile_runtime_plan_to_genome_result failed: {exc}")
+    try:
+        from infini_local.core.balance_report import build_balance_report
 
-            report = build_balance_report(result)
-            _save_json(cdir / "balance_report.json", report)
-            print(f"[saved] {cdir / 'balance_report.json'}")
-        except Exception as exc:
-            print(f"WARN: build_balance_report failed: {exc}")
+        report = build_balance_report(result)
+        _save_json(cdir / "balance_report.json", report)
+        print(f"[saved] {cdir / 'balance_report.json'}")
+    except Exception as exc:
+        print(f"WARN: build_balance_report failed: {exc}")
 
     if MULTIPASS_DEBUG:
-        _write_multipass_debug_report(case_id, parents, result if isinstance(result, dict) else None)
+        _write_multipass_debug_report(case_id, parents, result)
 
     print(f"\nCase '{case_id}' saved with {len(list(cdir.glob('*.json')))} artifacts.")
     return 0
@@ -252,20 +258,224 @@ def _write_multipass_debug_report(case_id: str, parents: dict[str, Any], single_
     _save_json(cdir / "multipass_comparison.json", comparison)
     print(f"[saved] {cdir / 'multipass_comparison.json'} (debug-only report)")
 
+def _semantic_diff(path: str, expected: Any, actual: Any, out: list[dict[str, Any]]) -> None:
+    """Collect a deterministic structural diff suitable for machine gates."""
+    if type(expected) is not type(actual):
+        out.append({"path": path or "$", "expected": expected, "actual": actual})
+        return
+    if isinstance(expected, dict):
+        for key in sorted(set(expected) | set(actual)):
+            child = f"{path}.{key}" if path else key
+            if key not in expected:
+                out.append({"path": child, "expected": "<missing>", "actual": actual[key]})
+            elif key not in actual:
+                out.append({"path": child, "expected": expected[key], "actual": "<missing>"})
+            else:
+                _semantic_diff(child, expected[key], actual[key], out)
+        return
+    if isinstance(expected, list):
+        if len(expected) != len(actual):
+            out.append({"path": f"{path}.length", "expected": len(expected), "actual": len(actual)})
+        for index, (left, right) in enumerate(zip(expected, actual)):
+            _semantic_diff(f"{path}[{index}]", left, right, out)
+        return
+    if expected != actual:
+        out.append({"path": path or "$", "expected": expected, "actual": actual})
+
+
+def _canonical_compiled_runtime(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep deterministic semantic compiler output and drop diagnostic decoration."""
+    raw_compiled = payload.get("compiled")
+    compiled: dict[str, Any] = raw_compiled if isinstance(raw_compiled, dict) else {}
+    raw_provenance = payload.get("provenance")
+    provenance: dict[str, Any] = raw_provenance if isinstance(raw_provenance, dict) else {}
+    raw_validation = payload.get("validation")
+    validation: dict[str, Any] = raw_validation if isinstance(raw_validation, dict) else {}
+    return {
+        "patch": payload.get("patch") if isinstance(payload.get("patch"), dict) else {},
+        "clamps": payload.get("clamps") if isinstance(payload.get("clamps"), list) else [],
+        "errors": payload.get("errors") if isinstance(payload.get("errors"), list) else [],
+        "compiled": {
+            "api": compiled.get("api"),
+            "compiler": compiled.get("compiler"),
+            "executableFields": compiled.get("executableFields") if isinstance(compiled.get("executableFields"), dict) else {},
+            "functionCounts": compiled.get("functionCounts") if isinstance(compiled.get("functionCounts"), dict) else {},
+            "runtimePromiseTruth": compiled.get("runtimePromiseTruth") if isinstance(compiled.get("runtimePromiseTruth"), dict) else {},
+        },
+        "provenance": {
+            "api": provenance.get("api"),
+            "engineFunctions": provenance.get("engineFunctions") if isinstance(provenance.get("engineFunctions"), list) else [],
+            "authoredFields": provenance.get("authoredFields") if isinstance(provenance.get("authoredFields"), dict) else {},
+            "authoredByFunction": provenance.get("authoredByFunction") if isinstance(provenance.get("authoredByFunction"), dict) else {},
+            "gameplayChildren": provenance.get("gameplayChildren") if isinstance(provenance.get("gameplayChildren"), dict) else {},
+            "pureVfx": provenance.get("pureVfx") if isinstance(provenance.get("pureVfx"), dict) else {},
+            "unsupported": provenance.get("unsupported") if isinstance(provenance.get("unsupported"), list) else [],
+            "futureDisabled": provenance.get("futureDisabled") if isinstance(provenance.get("futureDisabled"), list) else [],
+            "fieldSources": provenance.get("fieldSources") if isinstance(provenance.get("fieldSources"), dict) else {},
+            "normalization": provenance.get("normalization") if isinstance(provenance.get("normalization"), dict) else {},
+        },
+        "validation": {
+            "api": validation.get("api"),
+            "ok": validation.get("ok"),
+            "errors": validation.get("errors") if isinstance(validation.get("errors"), list) else [],
+            "warnings": validation.get("warnings") if isinstance(validation.get("warnings"), list) else [],
+            "quality": validation.get("quality") if isinstance(validation.get("quality"), dict) else {},
+            "normalization": validation.get("normalization") if isinstance(validation.get("normalization"), dict) else {},
+        },
+    }
+
+
+def _canonical_final_runtime(payload: dict[str, Any]) -> dict[str, Any]:
+    """Select the executable result, excluding assets, cache paths and traces."""
+    keys = ("category", "gameplay", "attack", "accessory", "armor", "visualKit", "vfxManifest")
+    return {key: payload.get(key) for key in keys if key in payload}
+
+
+def _strict_recompile(cdir: Path) -> dict[str, Any]:
+    """Revalidate and recompile a persisted final item without external services."""
+    from infini_local.core.boundary_models import validate_executable_item_boundary
+    from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
+
+    item = _load_json_required(cdir / "final_item.json")
+    if not isinstance(item, dict):
+        raise TypeError("final_item.json must contain an object")
+    boundary = validate_executable_item_boundary(item)
+    compiled = compile_runtime_plan_to_genome_result(item)
+    return {"item": item, "boundary": boundary, "compiled": compiled}
+
+
+def _rerun_case(cdir: Path, replay_raw: str | None) -> dict[str, Any]:
+    """Run the real combine pipeline in isolated cache directories.
+
+    A saved raw LLM response is used when available.  The replay path is explicit:
+    it never silently contacts a configured remote model when no replay fixture was
+    supplied.
+    """
+    parents = _load_json_required(cdir / "parents.json")
+    if not isinstance(parents, dict):
+        raise TypeError("parents.json must contain an object accepted by combine()")
+    raw_path = Path(replay_raw) if replay_raw else cdir / "llm_raw.json"
+    if not raw_path.exists():
+        raise FileNotFoundError("strict rerun requires --replay-raw or llm_raw.json")
+
+    old_env = dict(os.environ)
+    try:
+        with tempfile.TemporaryDirectory(prefix="infini-replay-") as temp_root:
+            os.environ["INFINI_LLM_REPLAY_RAW"] = str(raw_path.resolve())
+            os.environ["INFINI_CACHE_DIR"] = str(Path(temp_root) / "cache")
+            os.environ["INFINI_WORLD_RECIPES_DIR"] = str(Path(temp_root) / "world_recipes")
+            os.environ["INFINI_TRACE_PROMPTS"] = "0"
+            from infini_local.pipelines.combine_pipeline import combine
+
+            result = combine(parents)
+    finally:
+        os.environ.clear()
+        os.environ.update(old_env)
+    return result
+
+
+def build_replay_report(
+    cdir: Path,
+    *,
+    compare: bool,
+    rerun: bool,
+    replay_raw: str | None,
+) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    differences: list[dict[str, Any]] = []
+    try:
+        strict = _strict_recompile(cdir)
+        checks.append({"name": "strict_boundary", "status": "passed"})
+        checks.append({"name": "runtime_recompile", "status": "passed"})
+    except Exception as exc:
+        return {
+            "schema": "infini.replay-result.v2",
+            "caseDir": str(cdir),
+            "ok": False,
+            "checks": [{"name": "strict_recompile", "status": "failed", "error": repr(exc)}],
+            "differences": [],
+        }
+
+    if compare:
+        expected_path = cdir / "compiled_runtime.json"
+        if not expected_path.exists():
+            checks.append({"name": "compiled_runtime_compare", "status": "failed", "error": "compiled_runtime.json missing"})
+        else:
+            expected = _load_json_required(expected_path)
+            if not isinstance(expected, dict):
+                checks.append({"name": "compiled_runtime_compare", "status": "failed", "error": "compiled_runtime.json must contain an object"})
+            else:
+                _semantic_diff(
+                    "compiledRuntime",
+                    _canonical_compiled_runtime(expected),
+                    _canonical_compiled_runtime(strict["compiled"]),
+                    differences,
+                )
+                checks.append({
+                    "name": "compiled_runtime_compare",
+                    "status": "passed" if not differences else "failed",
+                    "differenceCount": len(differences),
+                })
+
+    if rerun:
+        try:
+            rerun_item = _rerun_case(cdir, replay_raw)
+            rerun_differences: list[dict[str, Any]] = []
+            _semantic_diff(
+                "finalRuntime",
+                _canonical_final_runtime(strict["item"]),
+                _canonical_final_runtime(rerun_item),
+                rerun_differences,
+            )
+            differences.extend(rerun_differences)
+            checks.append({
+                "name": "full_pipeline_rerun",
+                "status": "passed" if not rerun_differences else "failed",
+                "differenceCount": len(rerun_differences),
+            })
+        except Exception as exc:
+            checks.append({"name": "full_pipeline_rerun", "status": "failed", "error": repr(exc)})
+
+    ok = all(row.get("status") == "passed" for row in checks)
+    return {
+        "schema": "infini.replay-result.v2",
+        "caseDir": str(cdir),
+        "ok": ok,
+        "checks": checks,
+        "differences": differences[:200],
+        "strict": True,
+        "compare": compare,
+        "rerun": rerun,
+    }
+
+
 def replay_case(args: argparse.Namespace) -> int:
-    """Replay a saved case: load artifacts, recompile runtime state and print a summary."""
+    """Replay a saved case; strict mode is a real non-zero verification gate."""
     case_id = _slugify(args.case_id)
     cdir = _case_dir(case_id)
     if not cdir.exists():
         print(f"ERROR: case '{case_id}' not found at {cdir}")
         return 1
 
+    if args.strict or args.compare or args.rerun:
+        report = build_replay_report(
+            cdir,
+            compare=bool(args.compare or args.strict),
+            rerun=bool(args.rerun),
+            replay_raw=args.replay_raw,
+        )
+        text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+        if args.out:
+            Path(args.out).write_text(text + "\n", encoding="utf-8")
+        print(text)
+        return 0 if report["ok"] else 1
+
     print(f"=== Replay case: {case_id} ===")
     print(f"  path: {cdir}")
     for artifact in CASE_FILES:
         p = cdir / artifact
         if p.exists():
-            exists, data, status = _load_json(p)
+            _, data, status = _load_json(p)
             if status == "ok" and isinstance(data, dict):
                 keys = list(data.keys())[:8]
                 print(f"  {artifact}: OK ({len(data)} keys: {', '.join(keys)}...)")
@@ -276,18 +486,14 @@ def replay_case(args: argparse.Namespace) -> int:
         else:
             print(f"  {artifact}: MISSING")
 
-    final_path = cdir / "final_item.json"
-    if final_path.exists():
-        try:
-            from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
-
-            item = _load_json_required(final_path)
-            compiled = compile_runtime_plan_to_genome_result(item)
-            provenance = compiled.get("provenance", {}) if isinstance(compiled, dict) else {}
-            print(f"\n  [replay] compile OK; provenance keys: {list(provenance.keys())}")
-        except Exception as exc:
-            print(f"\n  [replay] compile FAILED: {exc}")
-    return 0
+    try:
+        strict = _strict_recompile(cdir)
+        provenance = strict["compiled"].get("provenance", {})
+        print(f"\n  [replay] compile OK; provenance keys: {list(provenance.keys())}")
+        return 0
+    except Exception as exc:
+        print(f"\n  [replay] compile FAILED: {exc}")
+        return 0
 
 
 def list_cases(_: argparse.Namespace) -> int:
@@ -335,8 +541,13 @@ def command_main(argv: list[str] | None = None) -> int:
     sp_save.add_argument("--world-id", default="")
     sp_save.set_defaults(func=save_case)
 
-    sp_replay = sub.add_parser("replay", help="Replay a saved case audit")
+    sp_replay = sub.add_parser("replay", help="Replay or strictly verify a saved case")
     sp_replay.add_argument("case_id")
+    sp_replay.add_argument("--strict", action="store_true", help="Fail on strict boundary, compile, or saved-runtime drift")
+    sp_replay.add_argument("--compare", action="store_true", help="Compare recompiled runtime with compiled_runtime.json")
+    sp_replay.add_argument("--rerun", action="store_true", help="Run the full combine pipeline with a saved raw LLM response")
+    sp_replay.add_argument("--replay-raw", help="Raw/stage-keyed LLM replay fixture used by --rerun")
+    sp_replay.add_argument("--out", help="Write machine-readable replay report")
     sp_replay.set_defaults(func=replay_case)
 
     sp_list = sub.add_parser("list", help="List all saved cases")

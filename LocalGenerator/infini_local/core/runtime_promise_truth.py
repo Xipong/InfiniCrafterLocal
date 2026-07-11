@@ -12,13 +12,16 @@ CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("return_to_thrower", re.compile(r"\b(return|returns|returning|boomerang|comes back)\b", re.I)),
     ("channel_beam", re.compile(r"\b(channel|channeled|channelled|beam|laser|ray)\b", re.I)),
     ("charge_release", re.compile(r"\b(charge|charged|release)\b", re.I)),
-    ("starfall", re.compile(r"\b(starfall|rain(?:s|ing)?\s+stars|falling\s+stars|stars?\s+from\s+the\s+sky|meteor)\b", re.I)),
+    ("sentry", re.compile(r"\b(sentry|turret|stationary helper|deployed helper)\b", re.I)),
+    ("overhead_barrage", re.compile(r"\b(overhead\s+barrage|projectile\s+rain|rain(?:s|ing)?\s+(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)|(?:falling|descending)\s+(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)|(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)\s+(?:rain|fall|descend)(?:s|ing)?\s+(?:down\s+)?(?:from\s+(?:the\s+)?(?:sky|above)|over)|(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)\s+from\s+(?:the\s+)?(?:sky|above)|starfall)\b", re.I)),
     ("sticky_puddle", re.compile(r"\b(sticky|puddle|slowing field|slow field)\b", re.I)),
     ("heat_jam", re.compile(r"\b(heat|overheat|jam|cooldown)\b", re.I)),
     ("lifesteal", re.compile(r"\b(lifesteal|life steal|drain life|heals? on hit)\b", re.I)),
     ("feline_bounce", re.compile(r"\b(feline|cats?|bouncing cats?|meowmere)\b", re.I)),
     ("projectile_bounce", re.compile(r"\b(bounc(?:e|es|ing|y)|rebound(?:s|ing)?)\b", re.I)),
     ("paired_dual", re.compile(r"\b(paired|dual|twin|offhand|two swords|second sword)\b", re.I)),
+    ("orbiting_companion", re.compile(r"\b(orbit(?:s|ing)?|circl(?:e|es|ing)\s+(?:around|the wielder|the player))\b", re.I)),
+    ("projectile_homing", re.compile(r"\b(homing|homes?\s+(?:in\s+)?(?:on|into|toward)|seek(?:s|ing)?\s+(?:enemies|targets)|track(?:s|ing)?\s+(?:enemies|targets))\b", re.I)),
     ("burst", re.compile(r"\b(bursts?|explode|explosion|nova)\b", re.I)),
     ("burn_on_hit", re.compile(r"\b(burn|ignite|on-hit burn|sets? on fire)\b", re.I)),
     ("alternating_phase", re.compile(r"\b(alternate|alternates|cycle|light.dark|dark.light|phase)\b", re.I)),
@@ -101,17 +104,25 @@ def _claim_status(kind: str, source: str, text: str, data: dict[str, Any], patch
             return ("partial", "burst onHit without burstDustCap feedback") if cap <= 0 else ("executable", "apply_on_hit_effect.burst")
         return ("visual_only", "visual burst wording") if visual_source else ("unsupported", "no burst onHit executor")
     if kind == "channel_beam":
-        if family == "channel_beam":
-            return "unsupported", "channel_beam archetype preserved; no finite beam executor in this patch"
+        if family == "channel_beam" and runtime_family == "beam" and bool(patch.get("channelUse")):
+            return "executable", "runtimeArchetype.channel_beam -> AttackSpec beam executor"
         if visual_source:
-            return "visual_only", "beam wording is visual-only"
-        return "unsupported", "no channel beam executor"
-    if kind == "starfall":
-        if on_hit == "starfall":
-            return "executable", "apply_on_hit_effect.starfall"
-        if family == "delayed_starfall":
-            return "unsupported", "delayed_starfall archetype preserved; finite path is onHit=starfall"
-        return ("visual_only", "starfall image/VFX wording only") if visual_source else ("unsupported", "no starfall onHit executor")
+            return "visual_only", "beam wording is visual-only without explicit beam runtime"
+        return "unsupported", "no explicit beam runtime executor"
+    if kind == "charge_release":
+        if runtime_family == "charge_release" and bool(patch.get("channelUse")):
+            return "executable", "AttackSpec.runtimeFamily=charge_release -> held charge/release executor"
+        return ("visual_only", "charge wording is visual-only") if visual_source else ("unsupported", "no charge-release executor")
+    if kind == "sentry":
+        if runtime_family == "sentry":
+            return "executable", "deploy_sentry -> bounded Terraria sentry executor"
+        return ("visual_only", "sentry wording is visual-only") if visual_source else ("unsupported", "no sentry executor")
+    if kind == "overhead_barrage":
+        if on_hit == "overhead_barrage":
+            return "executable", "apply_on_hit_effect.overhead_barrage"
+        if runtime_family == "overhead_barrage":
+            return "executable", "AttackSpec.runtimeFamily=overhead_barrage -> bounded marker/delay executor"
+        return ("visual_only", "overhead-descending wording is visual-only") if visual_source else ("unsupported", "no overhead-barrage executor")
     if kind == "projectile_bounce":
         if movement == "bounce":
             return "executable", "movement=bounce"
@@ -122,6 +133,12 @@ def _claim_status(kind: str, source: str, text: str, data: dict[str, Any], patch
         if visual_source:
             return "visual_only", "visual wording only"
         return ("partial", "state intent preserved, no feline bounce executor") if has_state else ("unsupported", "no feline bounce executor")
+    if kind == "orbiting_companion":
+        return ("visual_only", "orbit wording is visual-only") if visual_source else ("unsupported", "no orbiting companion executor")
+    if kind == "projectile_homing":
+        if movement in {"homing", "slow_homing"}:
+            return "executable", "movement=slow_homing"
+        return ("visual_only", "homing wording is visual-only") if visual_source else ("unsupported", "no homing movement executor")
     if kind in {"sticky_puddle", "heat_jam", "paired_dual", "alternating_phase"}:
         # state_meter/triggered_action may preserve state, but does not execute these mechanics by itself.
         has_state = any(str(c.get("fn") or "") in {"state_meter", "triggered_action"} for c in calls)

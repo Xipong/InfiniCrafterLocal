@@ -54,36 +54,66 @@ def test_runtime_authoring_public_api_is_package_owned() -> None:
     for name in ["__init__.py", "schema.py", "common.py", "semantics.py", "normalize.py", "structural.py", "compiler.py", "reports.py"]:
         assert (pkg / name).exists()
     init = (pkg / "__init__.py").read_text(encoding="utf-8")
-    assert "from infini_local.core.runtime_authoring.common import (" in init
+    assert "from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION" in init
+    assert "from infini_local.core.runtime_authoring.compiler import compile_runtime_plan_to_genome_patch" in init
+    assert "from infini_local.core.runtime_authoring.semantics import" not in init
     assert init.count("ENGINE_RUNTIME_API_VERSION") >= 2
     for sibling in ["schema.py", "semantics.py", "normalize.py", "structural.py", "compiler.py", "reports.py"]:
         assert "ENGINE_RUNTIME_API_VERSION =" not in (pkg / sibling).read_text(encoding="utf-8")
 
 
-def test_web_public_api_is_canonical_and_server_is_entrypoint() -> None:
+def test_web_server_is_native_entrypoint_without_cross_domain_api_barrel() -> None:
     assert not (LOCAL / "infini_local" / "web" / "_".join(["server", "legacy", "facade.py"])).exists()
     assert not (LOCAL / "infini_local" / "web" / "server_services.py").exists()
+    assert not (LOCAL / "infini_local" / "web" / "api.py").exists()
     server = (LOCAL / "infini_local" / "web" / "server.py").read_text(encoding="utf-8")
-    api = (LOCAL / "infini_local" / "web" / "api.py").read_text(encoding="utf-8")
+    launcher = (LOCAL / "server.py").read_text(encoding="utf-8")
     assert "server_services" not in server
-    assert "server_services" not in api
     assert "from infini_local.services import (" in server
     assert "def main()" in server
     assert "ThreadingHTTPServer" in server
-    assert "from infini_local.web.server import (" in api
     assert "infini_local.pipelines.combine_pipeline" in server
+    assert "sys.modules" not in launcher
+    assert "from infini_local.web import api" not in launcher
+    assert "from infini_local.web.server import main" in launcher
 
 
-def test_canonical_public_apis_import() -> None:
+def test_canonical_owner_apis_import() -> None:
     from infini_local.core import runtime_authoring
-    from infini_local.web import api
+    from infini_local.pipelines.combine_validation import validate_and_repair
+    from infini_local.pipelines.final_normalize import final_normalize
+    from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
     assert runtime_authoring.ENGINE_RUNTIME_API_VERSION.startswith("v")
     assert callable(runtime_authoring.compile_runtime_plan_to_genome_patch)
     assert callable(runtime_authoring.runtime_plan_validation_report)
-    assert callable(api.build_llm_author_payload)
-    assert callable(api.validate_and_repair)
-    assert callable(api.final_normalize)
+    assert callable(build_llm_author_payload)
+    assert callable(validate_and_repair)
+    assert callable(final_normalize)
+def _top_level_defined_names(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            names.update(target.id for target in targets if isinstance(target, ast.Name))
+    return names
+
+
+def test_web_server_does_not_redeclare_pipeline_owned_state_or_normalizers() -> None:
+    server_path = LOCAL / "infini_local" / "web" / "server.py"
+    visual_owner = LOCAL / "infini_local" / "pipelines" / "pipeline_visual_config.py"
+    runtime_owner = LOCAL / "infini_local" / "pipelines" / "pipeline_runtime_constants.py"
+    server_names = _top_level_defined_names(server_path)
+    duplicated = server_names & (
+        _top_level_defined_names(visual_owner) | _top_level_defined_names(runtime_owner)
+    )
+    assert duplicated == set()
+    assert "PlannerUnavailable" not in server_names
+    assert "final_normalize" not in server_names
+    assert "_sdcpp_config" not in server_names
 
 
 def test_repo_docs_do_not_pin_one_agent_absolute_workspace_path() -> None:

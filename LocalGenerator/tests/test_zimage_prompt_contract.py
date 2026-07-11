@@ -5,9 +5,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
-VISUAL = server.visual_generation_pipeline
-IMAGE_BACKEND_PIPELINE = server.image_backend_pipeline
+from infini_local.pipelines import image_backend_pipeline
+from infini_local.pipelines import pipeline_visual_config
+from infini_local.pipelines.image_backend_pipeline import sdcpp_server_payload
+from infini_local.pipelines.visual_prompt_contracts import (
+    asset_negative_prompt,
+    image_backend_is_zimage,
+    normalize_asset_prompt,
+)
+from infini_local.services.visual_asset_pipeline import strip_conflicting_sprite_prompt_bits
+from infini_local.services.visual_asset_pipeline import zimage_pe_clean_text
+VISUAL = pipeline_visual_config
+IMAGE_BACKEND_PIPELINE = image_backend_pipeline
 
 
 def _sample_data() -> dict:
@@ -37,8 +46,8 @@ def _check_zimage_prompt_uses_positive_contract_not_negative_channel(monkeypatch
     monkeypatch.setattr(VISUAL, "SDCPP_SERVER_EXTRA_ARGS", "")
 
     data = _sample_data()
-    prompt = server.normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 48).lower()
-    negative = server.asset_negative_prompt("projectile")
+    prompt = normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 48).lower()
+    negative = asset_negative_prompt("projectile")
 
     assert negative == ""
     assert "z-image prompt" not in prompt
@@ -71,7 +80,7 @@ def _check_zimage_tether_guard_does_not_rewrite_plain_item_icons(monkeypatch) ->
         "attack": {"runtimeFamily": "none", "weaponFamily": "accessory"},
         "visual": {"palette": ["tan", "brown", "brass"]},
     }
-    prompt = server.normalize_asset_prompt(data, "item", "Long ornate braided rope charm with a small brass bead.", 32).lower()
+    prompt = normalize_asset_prompt(data, "item", "Long ornate braided rope charm with a small brass bead.", 32).lower()
 
     assert "long ornate braided rope charm" in prompt
     assert "short local" not in prompt
@@ -85,7 +94,7 @@ def _check_sdcpp_zimage_payload_clears_negative_prompt(monkeypatch) -> None:
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_FILE", "")
 
-    payload = server.sdcpp_server_payload("subject", "scene, bad", 512, 512, 123, "a1111")
+    payload = sdcpp_server_payload("subject", "scene, bad", 512, 512, 123, "a1111")
 
     assert payload["prompt"] == "subject"
     assert payload["negative_prompt"] == ""
@@ -100,7 +109,7 @@ def _check_zimage_prompt_matches_pe_final_description_style(monkeypatch) -> None
     monkeypatch.setattr(VISUAL, "SDCPP_SERVER_EXTRA_ARGS", "")
 
     data = _sample_data()
-    prompt = server.normalize_asset_prompt(data, "projectile", "Z-Image prompt: masterpiece 8K flying spearhead", 48).lower()
+    prompt = normalize_asset_prompt(data, "projectile", "Z-Image prompt: masterpiece 8K flying spearhead", 48).lower()
 
     assert "z-image prompt" not in prompt
     assert "masterpiece" not in prompt
@@ -117,13 +126,13 @@ def _check_zimage_prompt_contract_can_be_disabled_or_forced(monkeypatch) -> None
     monkeypatch.setattr(VISUAL, "SDCPP_SERVER_EXTRA_ARGS", "")
 
     monkeypatch.setattr(VISUAL, "ZIMAGE_PROMPT_CONTRACT", "0")
-    assert server.image_backend_is_zimage() is False
+    assert image_backend_is_zimage() is False
 
     monkeypatch.setattr(VISUAL, "ZIMAGE_PROMPT_CONTRACT", "1")
-    assert server.image_backend_is_zimage() is True
+    assert image_backend_is_zimage() is True
 
     monkeypatch.setattr(VISUAL, "ZIMAGE_POSITIVE_ONLY", False)
-    payload = server.sdcpp_server_payload("subject", "scene, bad", 512, 512, 123, "a1111")
+    payload = sdcpp_server_payload("subject", "scene, bad", 512, 512, 123, "a1111")
     assert payload["negative_prompt"] == "scene, bad"
     assert payload["zimage_positive_only_prompt"] is False
 
@@ -134,7 +143,7 @@ def _check_visual_director_background_wrapper_keeps_post_colon_subject() -> None
         "two silver shurikens crossed slightly offset as a compact twin-star pair, "
         "bright white edge glints, gray metal bevels, text-free"
     )
-    cleaned = server.strip_conflicting_sprite_prompt_bits(raw).lower()
+    cleaned = strip_conflicting_sprite_prompt_bits(raw).lower()
 
     assert "two silver shurikens crossed slightly offset" in cleaned
     assert "bright white edge glints" in cleaned
@@ -153,12 +162,12 @@ def _check_zimage_final_prompt_preserves_visual_director_subject_after_wrapper(m
         "concept": {"fantasy": "A matched pair of throwing stars spins as one compact constellation."},
         "visual": {"palette": ["silver", "gray", "white"]},
     }
-    cleaned = server.strip_conflicting_sprite_prompt_bits(
+    cleaned = strip_conflicting_sprite_prompt_bits(
         "single pixel-art inventory icon on solid magenta key background (#ff00ff): "
         "two silver shurikens crossed slightly offset as a compact twin-star pair, "
         "bright white edge glints, gray metal bevels, text-free"
     )
-    prompt = server.normalize_asset_prompt(data, "item", cleaned, 48).lower()
+    prompt = normalize_asset_prompt(data, "item", cleaned, 48).lower()
 
     assert "two silver shurikens crossed slightly offset" in prompt
     assert "bright white edge glints" in prompt
@@ -176,7 +185,7 @@ def _check_zimage_palette_filters_chroma_key_but_keeps_background_clause(monkeyp
         "concept": {"fantasy": "A cactus blade with a yellow star crystal."},
         "visual": {"palette": ["sage green", "magenta", "#ff00ff", "solid magenta background", "pale gold", "magenta crystal"]},
     }
-    prompt = server.normalize_asset_prompt(data, "item", "green cactus sword with a pale gold star", 48)
+    prompt = normalize_asset_prompt(data, "item", "green cactus sword with a pale gold star", 48)
     lower = prompt.lower()
 
     assert "flat #ff00ff magenta chroma-key background" in lower
@@ -197,7 +206,7 @@ def _check_zimage_tether_guard_is_not_duplicated(monkeypatch) -> None:
         "visible rope, cord, or chain may appear as a short local attachment, loop, nub, or compact coil attached to the main projectile body, "
         "keep the main projectile silhouette readable and keep all tether detail inside the canvas"
     )
-    prompt = server.normalize_asset_prompt(data, "projectile", already_guarded, 48).lower()
+    prompt = normalize_asset_prompt(data, "projectile", already_guarded, 48).lower()
 
     assert prompt.count("visible rope, cord, or chain may appear") == 1
     assert prompt.count("keep the main projectile silhouette readable") == 1
@@ -219,7 +228,7 @@ def _check_zimage_prompt_strips_inline_negative_blocks_and_sd_boilerplate(monkey
         "small green crystal star with a brass socket, text-free. "
         "negative prompt: watermark, text, logo, blurry, lowres, worst quality"
     )
-    prompt = server.normalize_asset_prompt(data, "item", raw, 48).lower()
+    prompt = normalize_asset_prompt(data, "item", raw, 48).lower()
 
     assert "negative prompt" not in prompt
     assert "masterpiece" not in prompt
@@ -234,7 +243,7 @@ def _check_zimage_prompt_strips_inline_negative_blocks_and_sd_boilerplate(monkey
 
 
 def _check_zimage_no_text_policy_does_not_duplicate_phrase() -> None:
-    cleaned = server.zimage_pe_clean_text("No text, letters, logos, or UI marks.").lower()
+    cleaned = zimage_pe_clean_text("No text, letters, logos, or UI marks.").lower()
 
     assert cleaned == "without letters, logos, or ui marks"
     assert "ui marks letters" not in cleaned
@@ -251,7 +260,7 @@ def _check_zimage_prompt_uses_simpler_canvas_language(monkeypatch) -> None:
         "concept": {"fantasy": "A small green crystal star with a brass socket."},
         "visual": {"palette": ["sage green", "brass", "white"]},
     }
-    prompt = server.normalize_asset_prompt(data, "item", "small green crystal star with a brass socket, text-free", 48).lower()
+    prompt = normalize_asset_prompt(data, "item", "small green crystal star with a brass socket, text-free", 48).lower()
 
     assert "16x16 to 32x32" not in prompt
     assert "32x32 to 64x64" not in prompt
@@ -274,7 +283,7 @@ def _check_role_hygiene_keeps_impact_effect_only(monkeypatch) -> None:
         "concept": {"fantasy": "A jagged wooden blade carved from a chair leg and backrest slat."},
         "visual": {"palette": ["oak brown", "dark chocolate"]},
     }
-    prompt = server.normalize_asset_prompt(
+    prompt = normalize_asset_prompt(
         data,
         "impact",
         "A dense puff of brown sawdust and jagged wooden fragments expanding outward.",
@@ -303,7 +312,7 @@ def _check_role_hygiene_keeps_weapon_icon_from_placeable_scene(monkeypatch) -> N
         "concept": {"fantasy": "A crude weapon made from a broken wooden chair."},
         "visual": {"palette": ["oak brown"], "requiredAnchors": ["chair", "seat", "legs"]},
     }
-    prompt = server.normalize_asset_prompt(
+    prompt = normalize_asset_prompt(
         data,
         "item",
         "A wooden chair silhouette with broken legs turned into a weapon.",
@@ -330,7 +339,7 @@ def _check_thrust_projectile_prompt_does_not_force_spear_category(monkeypatch) -
         "attack": {"runtimeFamily": "thrust", "pattern": "spear_thrust"},
         "visual": {"palette": ["oak brown"], "projectileImagePrompt": "A tight bundle of jagged wooden splinters."},
     }
-    prompt = server.normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 64).lower()
+    prompt = normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 64).lower()
 
     assert "tight bundle of jagged wooden splinters" in prompt
     assert "close-range thrust projection texture" in prompt
@@ -354,7 +363,7 @@ def _check_item_prompt_carries_generated_name_without_text_rendering(monkeypatch
         "concept": {"fantasy": "A single split-blade broadsword balancing gold light and black shadow."},
         "visual": {"palette": ["gold", "black", "white"]},
     }
-    prompt = server.normalize_asset_prompt(data, "item", "single split-blade broadsword, gold front edge and black back edge", 48).lower()
+    prompt = normalize_asset_prompt(data, "item", "single split-blade broadsword, gold front edge and black back edge", 48).lower()
 
     assert "twilight's radiance" in prompt
     assert "identity context" in prompt
@@ -376,7 +385,7 @@ def _check_split_blade_guard_blocks_black_appendage_artifact(monkeypatch) -> Non
         "concept": {"fantasy": "A light-dark split blade made as one fused sword."},
         "visual": {"palette": ["gold", "black", "white"]},
     }
-    prompt = server.normalize_asset_prompt(data, "item", "single split-blade broadsword with a black rear blade portion", 48).lower()
+    prompt = normalize_asset_prompt(data, "item", "single split-blade broadsword with a black rear blade portion", 48).lower()
 
     assert "one fused weapon silhouette" in prompt
     assert "dark/black portion flush to the blade contour" in prompt
@@ -385,7 +394,7 @@ def _check_split_blade_guard_blocks_black_appendage_artifact(monkeypatch) -> Non
 
 
 def _check_split_blade_guard_uses_semantic_helper_not_keyword_soup() -> None:
-    from infini_local.pipelines.visual_generation_pipeline import _blade_shape_needs_fused_contour_guard
+    from infini_local.pipelines.visual_prompt_contracts import _blade_shape_needs_fused_contour_guard
 
     assert _blade_shape_needs_fused_contour_guard("single split-blade broadsword with a black rear blade portion")
     assert _blade_shape_needs_fused_contour_guard("forked shadow blade made as one weapon")
@@ -393,9 +402,7 @@ def _check_split_blade_guard_uses_semantic_helper_not_keyword_soup() -> None:
     assert not _blade_shape_needs_fused_contour_guard("plain black blade with intact silhouette")
 
     source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_prompt_contracts.py").read_text(encoding="utf-8")
-    facade = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
     guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def _authored_tether_context", 1)[0]
-    assert "from infini_local.pipelines.visual_prompt_contracts import" in facade
     assert "_blade_shape_needs_fused_contour_guard(blade_blob)" in guard_body
     assert "for w in [" not in guard_body
 
@@ -418,7 +425,7 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
         "A wooden chair leg cudgel, depict one handheld or carriable usable item object, "
         "not a placed tile, room scene, furniture placement preview, pedestal, or environment."
     )
-    prompt = server.normalize_asset_prompt(data, "item", authored, 48).lower()
+    prompt = normalize_asset_prompt(data, "item", authored, 48).lower()
 
     assert prompt.count("handheld or carriable usable item") == 1
     assert prompt.count("furniture placement preview") == 1
@@ -431,7 +438,7 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
         "depict one handheld or carriable usable item object, not a placed tile, room scene, furniture placement preview, pedestal, or environment; "
         "if furniture or placeable material is part of the design, show usable parts, fragments, straps, handle, head, blade, tool body, or silhouette cues integrated into the item"
     )
-    prompt = server.normalize_asset_prompt(data, "item", duplicated, 48).lower()
+    prompt = normalize_asset_prompt(data, "item", duplicated, 48).lower()
 
     assert prompt.count("handheld or carriable usable item") == 1
     assert prompt.count("furniture placement preview") == 1
@@ -456,7 +463,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
             "itemSilhouetteContract": "Long slender slightly curved blade, blade length about three times the handle, visible tsuka grip and small guard; not a short knife, tantō, dagger, or utility blade.",
         },
     }
-    prompt = server.normalize_asset_prompt(
+    prompt = normalize_asset_prompt(
         data,
         "item",
         "A katana with a dark serrated steel blade resembling a jagged leaf and a pale cloth hilt.",
@@ -477,7 +484,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
         "parents": ["Verdant Shadowblade", "Muramasa"],
         "visual": {"palette": ["charcoal black", "bone white"]},
     }
-    plain_prompt = server.normalize_asset_prompt(
+    plain_prompt = normalize_asset_prompt(
         no_contract,
         "item",
         "A katana with a dark serrated steel blade resembling a jagged leaf and a pale cloth hilt.",
@@ -496,7 +503,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
         },
         "visual": {"palette": ["violet"]},
     }
-    kit_prompt = server.normalize_asset_prompt(
+    kit_prompt = normalize_asset_prompt(
         kit_contract,
         "item",
         "A cursed modded melee weapon made of violet hook-metal.",
@@ -531,16 +538,17 @@ def _check_starfall_projectile_and_child_prompts_are_semantic_role_contracts(mon
         "category": "weapon",
         "runtimePlan": {"resultKind": "weapon"},
         "gameplay": {"kind": "weapon", "damageClass": "melee"},
-        "attack": {"runtimeFamily": "swing", "onHit": "starfall", "attackPatternTags": ["falling_star"]},
+        "attack": {"runtimeFamily": "swing", "onHit": "overhead_barrage", "effect": "star"},
         "visual": {"palette": ["white", "gold"], "projectileImagePrompt": "a falling five-point star slash", "childImagePrompt": "small falling gold star projectile"},
     }
-    projectile_prompt = server.normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 48).lower()
-    child_prompt = server.normalize_asset_prompt(data, "child", data["visual"]["childImagePrompt"], 24).lower()
+    projectile_prompt = normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 48).lower()
+    child_prompt = normalize_asset_prompt(data, "child", data["visual"]["childImagePrompt"], 24).lower()
 
     assert "moving hit object texture only" in projectile_prompt
     assert "inventory-view framing" in projectile_prompt
     assert "not the inventory weapon icon" not in projectile_prompt
-    assert "falling star" in projectile_prompt
+    assert "five-point star" in projectile_prompt
+    assert "overhead-descending hit body" in projectile_prompt
     assert "role contract" in projectile_prompt
     assert "small falling gold star projectile" in child_prompt
     assert "child damaging projectile" in child_prompt
@@ -562,12 +570,40 @@ def _check_sword_projectile_prompt_allows_same_blade_silhouette_with_attack_fram
         "visual": {"projectileImagePrompt": "the same long split broadsword blade silhouette, angled as the active slash body"},
     }
 
-    prompt = server.normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 64).lower()
+    prompt = normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 64).lower()
 
     assert "same long split broadsword blade silhouette" in prompt
     assert "same weapon shape may be reused" in prompt
     assert "attack-frame/projectile-body framing" in prompt
     assert "not the inventory weapon icon" not in prompt
+
+
+def _check_projectile_fantasy_context_is_runtime_family_aware(monkeypatch) -> None:
+    monkeypatch.setattr(VISUAL, "IMAGE_BACKEND", "sdcpp")
+    monkeypatch.setattr(VISUAL, "SDCPP_MODEL", "z-image-turbo-Q6_K.gguf")
+    monkeypatch.setattr(VISUAL, "SDCPP_SERVER_COMMAND_TEMPLATE", "")
+    monkeypatch.setattr(VISUAL, "SDCPP_SERVER_EXTRA_ARGS", "")
+
+    gun = {
+        "name": "Clockwork Bloom Rifle",
+        "concept": {"fantasy": "A large brass flower rifle with a walnut stock and winding key."},
+        "attack": {"runtimeFamily": "shoot", "weaponFamily": "gun", "projectileShape": "small copper bullet"},
+        "visual": {"projectileImagePrompt": "one small copper bullet with a blue spark tail"},
+    }
+    boomerang = {
+        "name": "Jade Crescent",
+        "concept": {"fantasy": "A jade crescent boomerang bound with gold wire."},
+        "attack": {"runtimeFamily": "returning", "weaponFamily": "boomerang", "projectileShape": "jade crescent"},
+        "visual": {"projectileImagePrompt": "the same jade crescent weapon body in flight"},
+    }
+
+    gun_prompt = normalize_asset_prompt(gun, "projectile", gun["visual"]["projectileImagePrompt"], 32).lower()
+    boomerang_prompt = normalize_asset_prompt(boomerang, "projectile", boomerang["visual"]["projectileImagePrompt"], 48).lower()
+
+    assert "one small copper bullet" in gun_prompt
+    assert "large brass flower rifle" not in gun_prompt
+    assert "walnut stock" not in gun_prompt
+    assert "jade crescent boomerang bound with gold wire" in boomerang_prompt
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -599,7 +635,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_item_shape_contract_is_data_authored_not_code_taxonomy',
     '_check_visual_director_requests_shape_contract_without_weapon_taxonomy',
     '_check_starfall_projectile_and_child_prompts_are_semantic_role_contracts',
-    '_check_sword_projectile_prompt_allows_same_blade_silhouette_with_attack_framing'
+    '_check_sword_projectile_prompt_allows_same_blade_silhouette_with_attack_framing',
+    '_check_projectile_fantasy_context_is_runtime_family_aware'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

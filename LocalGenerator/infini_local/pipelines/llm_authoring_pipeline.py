@@ -1,146 +1,43 @@
 from __future__ import annotations
 
-import base64
 import copy
-import hashlib
 import json
-import math
-import os
-import queue
-import random
+
 import re
-import shlex
-import subprocess
-import time
-import traceback
-from pathlib import Path
+
 from typing import Any
 
-from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first, env_path
-from urllib import request as urlrequest
-from urllib import error as urlerror
-from urllib.parse import urlencode
+from infini_local.core.env_utils import env_float, env_int
+from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.item_identity_tools import name_of, stable_hash
+from infini_local.core.llm_config import USE_LLM
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 
-from infini_local.pipelines.pipeline_support import (
-    ALLOWED_CATEGORIES,
-    ENGINE_FN_CATALOG_V2,
-    ENGINE_RUNTIME_API_VERSION,
-    LLM_LOCAL_REASONING_PROMPT,
-    LLM_MAX_TOKENS,
-    LLM_FALLBACK_API_KEY,
-    LLM_FALLBACK_BASE_URL,
-    LLM_FALLBACK_MODEL,
-    LLM_FALLBACK_NETWORK_FAILS,
-    LLM_FALLBACK_PROVIDER,
-    LLM_PROVIDER,
-    LLM_RAW_TOKEN_MODE,
-    LLM_REASONING_EXCLUDE,
-    LLM_REASONING_MAX_TOKENS,
-    LLM_REASONING_MODE,
-    LLM_RESPONSE_FORMAT_MODE,
-    LLM_RUNTIME_AUTHORING,
-    LLM_RUNTIME_PLAN_REQUIRED,
-    LLM_RUNTIME_STRICT_VALIDATION,
-    LMSTUDIO_MODEL,
-    LMSTUDIO_URL,
-    OPENAI_COMPAT_API_KEY,
-    OPENAI_COMPAT_BASE_URL,
-    OPENAI_COMPAT_MODEL,
-    OPENROUTER_API_KEY,
-    OPENROUTER_APP_TITLE,
-    OPENROUTER_BASE_URL,
-    OPENROUTER_HTTP_REFERER,
-    OPENROUTER_MODEL,
-    PlannerUnavailable,
-    USE_LLM,
-    _env_float,
-    _trace_message_summary,
-    behavior_cost_multiplier,
-    compile_runtime_plan_to_genome_result,
-    compiled_runtime_contract,
-    find_call,
-    item_num,
-    log_event,
-    name_of,
-    normalize_runtime_plan_inplace,
-    structural_repair_runtime_plan_inplace,
-    parse_first_valid_llm_json,
-    runtime_plan,
-    runtime_plan_quality_report,
-    runtime_plan_validation_report,
-    stable_hash,
-    trace_event,
-)
+from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.core.runtime_authoring.reports import runtime_plan_validation_report
+from infini_local.core.boundary_models import runtime_plan_boundary_report
 
-from infini_local.pipelines.result_identity_policy import (
-    choose_from,
-    normalize_category,
-)
-from infini_local.pipelines.combine_balance import (
-    clamp_vanilla_like_weapon_damage,
-)
-from infini_local.pipelines.combine_genome_contract import (
-    combat_genome_required_for,
-)
-
-from infini_local.pipelines.parent_context_pipeline import (
-    raw_parent_card_for_llm,
+from infini_local.core.runtime_authoring.structural import structural_repair_runtime_plan_inplace
+from infini_local.core.runtime_promise_truth import validate_runtime_promises
+from infini_local.pipelines.combine_genome_contract import combat_genome_required_for
+from infini_local.pipelines.llm_authoring_prompt import (
+    build_llm_author_payload,
+    normalize_behavior_toy_fields,
+    normalize_llm_attack_shape,
+    runtime_plan_to_attack_genome_patch,
 )
 from infini_local.pipelines.llm_transport import (
-    _normalized_llm_provider,
     active_llm_provider,
-    _llm_context_key,
-    _primary_llm_context,
-    _fallback_llm_context,
-    _join_openai_compat_url,
-    llm_base_url,
-    llm_chat_completions_url,
-    llm_models_url,
-    llm_auth_snapshot,
-    ensure_llm_auth_configured,
-    llm_headers,
-    llm_json_response_format,
-    llm_answer_max_tokens,
-    visual_director_max_tokens,
-    llm_reasoning_payload,
-    llm_reasoning_system_suffix,
     apply_llm_common_options,
-    http_get_json,
-    resolve_llm_model,
-    _clean_llm_payload,
-    http_json,
-    _llm_replay_stage_from_payload,
-    _replay_content_from_json_object,
-    _load_llm_replay_raw,
-    _llm_replay_json_response,
-    _llm_error_text,
-    _is_transport_error,
-    _is_budget_or_auth_failure,
-    _payload_for_context,
-    _llm_chat_json_single_context,
+    llm_answer_max_tokens,
     llm_chat_json,
+    llm_json_response_format,
+    llm_reasoning_system_suffix,
+    resolve_llm_model,
 )
-from infini_local.pipelines.llm_authoring_prompt import (
-    normalize_llm_attack_shape,
-    normalize_behavior_toy_fields,
-    runtime_value,
-    runtime_plan_to_attack_genome_patch,
-    normalize_runtime_authoring_fields,
-    terraria_tick_guide_for_llm,
-    _catalog_text,
-    sharp_engine_fn_catalog_for_llm,
-    concise_terraria_tick_guide_for_llm,
-    planner_priority_header_for_llm,
-    engine_runtime_capability_contract_for_llm,
-    authored_num,
-    authored_int,
-    authored_weapon_damage,
-    authored_str,
-    llm_category_without_router,
-    llm_runtime_result_kind_policy,
-    build_llm_author_payload,
-    planner_prompt_usability_report,
-)
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
+from infini_local.storage.trace_runtime import _trace_message_summary, log_event, trace_event
 
 
 
@@ -149,6 +46,29 @@ from infini_local.pipelines.llm_authoring_prompt import (
 # The model proposes structured item/runtime data; code then validates/compiles it.
 # Repair prompts should be narrow and provenance-visible, not a hidden second author
 # that rewrites identity or routes mechanics from prose.
+
+
+def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
+    """Reject public gameplay promises that have no executable runtime backing.
+
+    Visual-only wording remains legal inside visual fields.  The probe is copied because
+    promise validation deliberately annotates its input for later runtime diagnostics.
+    """
+    probe = copy.deepcopy(plan)
+    patch = runtime_plan_to_attack_genome_patch(probe)
+    report = validate_runtime_promises(probe, patch)
+    blocking = [
+        dict(claim)
+        for claim in report.get("claims") or []
+        if claim.get("status") in {"unsupported", "partial"}
+        and not str(claim.get("source") or "").startswith(("visual.", "runtimePlan.visualIntent"))
+    ]
+    return {
+        "schema": "infini.planner-promise-gate.v1",
+        "ok": not blocking,
+        "blockingClaims": blocking[:24],
+        "unsupportedPromises": list(report.get("unsupportedPromises") or [])[:24],
+    }
 
 
 
@@ -181,7 +101,7 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
                 {"role": "system", "content": system},
                 {"role": "user", "content": planner_user_content},
             ],
-            "temperature": _env_float("INFINI_LLM_TEMPERATURE", 0.38, 0.0, 1.2),
+            "temperature": env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
             "response_format": llm_json_response_format("infini_runtime_plan"),
         }
         req = apply_llm_common_options(req, model_name=model_name)
@@ -195,6 +115,41 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         trace_event("response", "LLM:author_plan", "Planner response", {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content))}, response=content)
         parsed_child_json = parse_first_valid_llm_json(content)
         obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
+        promise_gate = planner_runtime_promise_gate(obj)
+        if not promise_gate["ok"]:
+            retry_instruction = json.dumps({
+                "task": "Re-author the complete item once. Keep both parent roles, but remove unsupported gameplay promises from name/tooltip/concept/runtimeStateIntent.",
+                "blockingClaims": promise_gate["blockingClaims"],
+                "requirements": [
+                    "Every gameplay promise in public prose must be backed by a concrete engineCall/runtime executor.",
+                    "A purely visual motif may stay only in visual/visualIntent and must not claim gameplay behavior.",
+                    "Return one complete replacement item JSON, not a patch.",
+                ],
+            }, ensure_ascii=False, separators=(",", ":"))
+            retry_req = dict(req)
+            retry_req["messages"] = list(req["messages"]) + [
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": retry_instruction},
+            ]
+            trace_event("prompt", "LLM:author_plan_promise_retry", "Planner promise-truth retry", {
+                "provider": active_llm_provider(), "model": model_name,
+                "blockingClaims": [str(x.get("kind") or "") for x in promise_gate["blockingClaims"]],
+            }, prompt=retry_instruction)
+            retry_raw = llm_chat_json(retry_req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+            retry_content = retry_raw["choices"][0]["message"]["content"]
+            trace_event("response", "LLM:author_plan_promise_retry", "Planner promise-truth retry response", {
+                "provider": active_llm_provider(), "model": model_name, "chars": len(str(retry_content)),
+            }, response=retry_content)
+            retry_parsed_child_json = parse_first_valid_llm_json(retry_content)
+            retry_obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(retry_parsed_child_json))
+            retry_gate = planner_runtime_promise_gate(retry_obj)
+            if not retry_gate["ok"]:
+                kinds = sorted({str(x.get("kind") or "unsupported") for x in retry_gate["blockingClaims"]})
+                raise PlannerUnavailable("planner repeated unsupported gameplay promises after one re-author: " + ", ".join(kinds))
+            content = retry_content
+            parsed_child_json = retry_parsed_child_json
+            obj = retry_obj
+            promise_gate = retry_gate
         obj.setdefault("id", "g_" + stable_hash(key, content, length=16))
         obj.setdefault("recipeKey", key)
         obj.setdefault("schemaVersion", 1)
@@ -203,6 +158,7 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         obj.setdefault("sourceMode", "generated")
         obj.setdefault("debug", {})
         obj["debug"]["planner"] = "llm_author_first"
+        obj["debug"]["plannerPromiseGate"] = promise_gate
         obj["debug"]["model"] = model_name
         obj["debug"]["promptMode"] = "runtime_authoring_family_contract_v0.4.30_priority_header_placeable_semantics_v0.4.172"
         obj["debug"]["balanceAuthority"] = "llm_authors_numbers_python_clamps_after_authoring"
@@ -412,7 +368,7 @@ def try_llm_runtime_plan_repair(data: dict[str, Any], a: dict[str, Any], b: dict
             "validationReport": validation,
             "mustFix": [
                 "If resultKind/category is weapon, ammo, consumable_weapon, tool, accessory or potion, include set_item_stats with safe base item stats.",
-                "If it is combat-capable, keep or add one concrete primary executable action such as perform_melee_attack, shoot_projectile, fire_ranged_weapon, cast_magic_weapon, summon_combat_entity, or a valid utility/tool/accessory call.",
+                "If it is combat-capable, keep or add one concrete primary executable action such as perform_melee_attack, shoot_projectile, fire_ranged_weapon, cast_magic_weapon, spawn_temporary_helper_projectile, or a valid utility/tool/accessory call.",
                 "You may replace the whole runtimePlan if that is cleaner, but return it inside repairPatch whenever possible.",
                 "Do not use legacy attackPattern or attack.genome. Do not add boss/NPC/mob/enemy spawning.",
                 "Do not change name, tooltip, concept, visual identity, parents, id, recipeKey, category, or tags. Runtime repair is not a second item author.",
@@ -498,6 +454,53 @@ def _runtime_repair_attempt_budget(repair_kind: str) -> int:
     return 2
 
 
+def _raw_runtime_plan_candidate(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the author-supplied plan before structural migration/normalization."""
+    for name in ("runtimePlan", "enginePlan", "runtimeAuthoring", "engineRuntimePlan", "runtime_plan", "runtime"):
+        value = data.get(name)
+        if isinstance(value, dict) and value:
+            return copy.deepcopy(value)
+    return None
+
+
+def _merge_raw_boundary_errors(
+    validation: dict[str, Any],
+    raw_boundary: dict[str, Any] | None,
+    structural_fixes: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Keep raw contract failures visible after deterministic scalar repair.
+
+    Only fields that the structural repair actually changed may stop being blocking.
+    This prevents an author-supplied ``_normalization`` marker from bypassing strict
+    type/enum validation while preserving the established ``"24 ticks" -> 24`` path.
+    """
+    if not raw_boundary or raw_boundary.get("ok"):
+        return validation
+    repaired = {
+        (int(row.get("index", -1)), str(row.get("field") or ""))
+        for row in (structural_fixes or [])
+        if isinstance(row, dict) and row.get("kind") in {"scalar_parse", "scalar_list_parse"}
+    }
+    validation_errors = [str(error) for error in (validation.get("errors") or [])]
+    blocking: list[str] = []
+    for error in (str(row) for row in (raw_boundary.get("errors") or [])):
+        match = re.match(r"engineCalls\.(\d+)\.params\.([^.:]+)(?:\.[^:]+)?:", error)
+        repaired_here = bool(match and (int(match.group(1)), match.group(2)) in repaired)
+        still_invalid = bool(match and any(
+            (candidate.startswith(f"engineCalls.{match.group(1)}.params.{match.group(2)}:")
+            or candidate.startswith(f"engineCalls.{match.group(1)}.params.{match.group(2)}."))
+            for candidate in validation_errors
+        ))
+        if not repaired_here or still_invalid:
+            blocking.append(error)
+    merged = dict(validation)
+    merged["rawStrictBoundary"] = raw_boundary
+    if blocking:
+        merged["ok"] = False
+        merged["errors"] = list(dict.fromkeys([*blocking, *validation_errors]))
+    return merged
+
+
 def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
     """Repair boundary for LLM runtime authoring before C# sees the item.
 
@@ -510,13 +513,20 @@ def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: di
     if not LLM_RUNTIME_AUTHORING:
         return data
     debug = data.setdefault("debug", {})
-    had_runtime_input = any(isinstance(data.get(k), dict) and bool(data.get(k)) for k in ("runtimePlan", "enginePlan", "runtimeAuthoring", "engineRuntimePlan", "runtime_plan", "runtime"))
+    raw_plan = _raw_runtime_plan_candidate(data)
+    raw_boundary = runtime_plan_boundary_report(raw_plan) if raw_plan is not None else None
+    if raw_boundary is not None:
+        debug["runtimePlanRawStrictBoundary"] = json.dumps(raw_boundary, ensure_ascii=False)[:6000]
+    had_runtime_input = raw_plan is not None
 
     structural = structural_repair_runtime_plan_inplace(data)
     if structural.get("applied"):
         debug["runtimeStructuralRepair"] = json.dumps(structural, ensure_ascii=False)[:6000]
-    normalize_runtime_plan_inplace(data)
-    validation = runtime_plan_validation_report(data)
+    # runtime_plan_validation_report owns the single normalization pass.  Running
+    # normalize first would make semantic expansions (deploy_sentry -> canonical
+    # shoot_projectile) look like raw authoring and reject their compiler-owned
+    # fields against the public function schema.
+    validation = _merge_raw_boundary_errors(runtime_plan_validation_report(data), raw_boundary, structural.get("fixes"))
     debug["runtimePlanValidationBeforeRepair"] = json.dumps(validation, ensure_ascii=False)[:6000]
     if structural.get("applied") and validation.get("ok"):
         debug["runtimeRepairPath"] = "code_structural_repair_only"
@@ -549,11 +559,12 @@ def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: di
             repair_log.append(row)
             continue
         candidate = _adopt_runtime_plan_repair(working, patch, key=key, content_preview=str((patch.get("debug") or {}).get("runtimePlanRepairRawPreview") or ""))
+        candidate_raw = _raw_runtime_plan_candidate(candidate)
+        candidate_raw_boundary = runtime_plan_boundary_report(candidate_raw) if candidate_raw is not None else None
         structural_after = structural_repair_runtime_plan_inplace(candidate)
         if structural_after.get("applied"):
             row["structuralAfterPatch"] = structural_after.get("fixes", [])[:12]
-        normalize_runtime_plan_inplace(candidate)
-        after = runtime_plan_validation_report(candidate)
+        after = _merge_raw_boundary_errors(runtime_plan_validation_report(candidate), candidate_raw_boundary, structural_after.get("fixes"))
         row["okAfter"] = bool(after.get("ok"))
         row["errorsAfter"] = after.get("errors") or []
         repair_log.append(row)
@@ -623,6 +634,5 @@ def call_llm_vfx_director(system: str, user: dict[str, Any], max_tokens: int, te
         log_event("warn", "LLM VFX director failed", {"error": repr(e)})
         return None
 
-_RESOLVED_LLM_MODELS: dict[str, str] = {}
 
 # legacy contract marker for tests/documentation: ensure_llm_auth_configured()

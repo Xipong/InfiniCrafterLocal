@@ -1,29 +1,24 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import AbstractSet, Any
 
-from infini_local.core.runtime_authoring.schema import (
+from infini_local.core.runtime_authoring.schema import INT_FIELDS, NUMERIC_LIMITS
+from infini_local.core.runtime_authoring.vocabulary import (
     DELIVERIES,
-    DELIVERY_ALIASES,
-    EFFECTS,
-    EFFECT_ALIASES,
-    INT_FIELDS,
-    MOVEMENTS,
-    MOVEMENT_ALIASES,
-    NUMERIC_LIMITS,
-    ONHITS,
-    ONHIT_ALIASES,
+    normalize_authoring_enum,
+    normalize_authoring_token,
 )
+from infini_local.core.runtime_executor_vocabulary import EFFECTS, MOVEMENTS, ONHITS
 
-ENGINE_RUNTIME_API_VERSION = "v0.4.47"
+ENGINE_RUNTIME_API_VERSION = "v0.4.48"
 
 def _intish(field: str, value: float) -> int | float:
     return int(round(value)) if field in INT_FIELDS or field.endswith("Ticks") else round(value, 3)
 
 
 def _norm_name(x: Any) -> str:
-    return str(x or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return normalize_authoring_token(x)
 
 
 def _num(value: Any, default: float | None = None) -> float | None:
@@ -42,16 +37,15 @@ def _clamp(value: Any, field: str, default: float | None = None) -> float | None
     return max(lo, min(hi, x))
 
 
-def _enum(value: Any, allowed: set[str], fallback: str | None = None) -> str | None:
-    v = _norm_name(value)
-    if allowed is MOVEMENTS:
-        v = MOVEMENT_ALIASES.get(v, v)
-    elif allowed is DELIVERIES:
-        v = DELIVERY_ALIASES.get(v, v)
-    elif allowed is EFFECTS:
-        v = EFFECT_ALIASES.get(v, v)
-    elif allowed is ONHITS:
-        v = ONHIT_ALIASES.get(v, v)
+def _enum(value: Any, allowed: AbstractSet[str], fallback: str | None = None) -> str | None:
+    field = (
+        "movement" if allowed is MOVEMENTS
+        else "delivery" if allowed is DELIVERIES
+        else "effect" if allowed is EFFECTS
+        else "onHit" if allowed is ONHITS
+        else "runtimeFamily"
+    )
+    v = normalize_authoring_enum(value, field)
     if v in allowed:
         return v
     return fallback

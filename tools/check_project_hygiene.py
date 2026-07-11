@@ -7,13 +7,14 @@ easy to regress while refactoring architecture, without executing tModLoader.
 """
 
 from pathlib import Path
+import ast
 import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-IGNORED_DOC_DIRS = {".git", "agent_reports", ".tml-build-cache", ".nuget", "build_logs", ".wiki_guided_playthrough_cache", "Runtime_dumps", "obj", "bin"}
-RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache"}
-PACKAGED_METADATA_DIRS = {".git"}
+IGNORED_DOC_DIRS = {".git", ".hermes", "agent_reports", ".tml-build-cache", ".nuget", "build_logs", ".wiki_guided_playthrough_cache", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
+RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", "artifacts"}
+PACKAGED_METADATA_DIRS = {".git", ".hermes"}
 FORBIDDEN_RELEASE_FILE_NAMES = {"Zone.Identifier", ".DS_Store", "Thumbs.db"}
 FORBIDDEN_RELEASE_SUFFIXES = (":Zone.Identifier",)
 PYTHON_BROAD_EXCEPTION_BASELINE = 227
@@ -142,17 +143,16 @@ def _version_literal(path: str, pattern: str, label: str) -> str:
 
 def check_version_sync() -> None:
     versions = {
-        "LocalGenerator/server.py APP_VERSION": _version_literal("LocalGenerator/server.py", r'APP_VERSION = "([^"]+)"', "launcher APP_VERSION"),
         "config_bootstrap.py APP_VERSION": _version_literal("LocalGenerator/infini_local/core/config_bootstrap.py", r'APP_VERSION = "([^"]+)"', "bootstrap APP_VERSION"),
         "InfiniCrafterLocal.cs Version": _version_literal("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'Version = "([^"]+)"', "C# mod Version"),
         "build.txt version": _version_literal("ModSources/InfiniCrafterLocal/build.txt", r'version = ([^\s]+)', "tModLoader build.txt"),
     }
+    launcher = read("LocalGenerator/server.py")
+    if "from infini_local.web.server import main" not in launcher or "APP_VERSION =" in launcher or "sys.modules" in launcher:
+        fail("LocalGenerator/server.py must remain a launcher-only import of web.server.main")
     web = read("LocalGenerator/infini_local/web/server.py")
-    pipeline = read("LocalGenerator/infini_local/pipelines/pipeline_support.py")
     if "from infini_local.core.config_bootstrap import (" not in web:
         fail("web server does not import canonical config_bootstrap APP_VERSION")
-    if "from infini_local.core.config_bootstrap import (" not in pipeline:
-        fail("pipeline_support does not import canonical config_bootstrap APP_VERSION")
     if len(set(versions.values())) != 1:
         detail = "; ".join(f"{label}={value}" for label, value in versions.items())
         fail("version mismatch: " + detail)
@@ -184,10 +184,53 @@ def check_no_flat_helper_shims() -> None:
         fail("flat LocalGenerator helper shims still present: " + ", ".join(flat_py))
 
 
+def check_internal_import_boundaries() -> None:
+    local = ROOT / "LocalGenerator"
+    production = local / "infini_local"
+    runtime_package = production / "core" / "runtime_authoring"
+    legacy_support = production / "pipelines" / "pipeline_support.py"
+    if legacy_support.exists():
+        fail("retired pipeline_support.py barrel was restored")
+
+    for path in local.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as exc:
+            fail(f"cannot parse Python source {path.relative_to(ROOT)}: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module == "infini_local.pipelines.pipeline_support":
+                    fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
+                if (
+                    production in path.parents
+                    and path != runtime_package / "__init__.py"
+                    and runtime_package not in path.parents
+                    and node.module == "infini_local.core.runtime_authoring"
+                ):
+                    fail(f"production runtime_authoring barrel import in {path.relative_to(ROOT)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                if any(alias.name == "infini_local.pipelines.pipeline_support" for alias in node.names):
+                    fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
+
+    init_tree = ast.parse((runtime_package / "__init__.py").read_text(encoding="utf-8"))
+    exported: set[str] = set()
+    for node in init_tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
+            if isinstance(node.value, (ast.List, ast.Tuple)):
+                exported = {
+                    item.value
+                    for item in node.value.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                }
+    if not exported or any(name.startswith("_") for name in exported):
+        fail("runtime_authoring public API is missing or exports private internals")
+
+
 def check_release_docs_version() -> None:
-    version = re.search(r'APP_VERSION = "([^"]+)"', read("LocalGenerator/server.py"))
+    version = re.search(r'APP_VERSION = "([^"]+)"', read("LocalGenerator/infini_local/core/config_bootstrap.py"))
     if not version:
-        fail("could not read APP_VERSION for docs check")
+        fail("could not read canonical APP_VERSION for docs check")
     current = version.group(1)
     docs = [
         "README_RU.md",
@@ -264,6 +307,7 @@ def main() -> int:
     check_runtime_api_sync()
     check_python_exception_hygiene()
     check_no_flat_helper_shims()
+    check_internal_import_boundaries()
     check_release_docs_version()
     check_architecture_split_markers()
     print("[OK] project hygiene checks passed")

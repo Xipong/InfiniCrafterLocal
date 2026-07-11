@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
 
@@ -17,6 +16,7 @@ FIELD_ORDER = [
     "INFINI_LLM_RUNTIME_AUTHORING",
     "INFINI_LLM_RUNTIME_PLAN_REQUIRED",
     "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
+    "INFINI_BALANCE_MODE",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
     "INFINI_GUI_PIPELINE_PRESET",
     "INFINI_LLM_PROVIDER",
@@ -44,6 +44,7 @@ FIELD_ORDER = [
     "INFINI_LLM_LOCAL_REASONING_PROMPT",
     "INFINI_IMAGE_BACKEND",
     "INFINI_SDCPP_SERVER_EXE",
+    "INFINI_SDCPP_ROCM_COMPAT_ROOT",
     "INFINI_SDCPP_MODEL",
     "INFINI_SDCPP_VAE",
     "INFINI_SDCPP_LLM",
@@ -115,28 +116,30 @@ SDCPP_DEFAULT_COMMAND_TEMPLATE = "{exe} --diffusion-model {model} -l {host} --li
 SDCPP_EXTRA_PROFILES = {
     # Official sd.cpp backend syntax allows per-module runtime placement such as
     # diffusion=vulkan0,vae=cpu,te=vulkan0. If --params-backend is omitted,
-    # sd.cpp stores parameters on the same backend as that module runtime, so do
-    # not duplicate identical backend assignments in normal presets. Keep model,
+    # sd.cpp stores parameters on the same backend as that module runtime unless
+    # a measured split intentionally keeps selected weights elsewhere. Keep model,
     # VAE, Qwen/LLM and LoRA paths in dedicated GUI rows; these profiles are only
     # runtime/performance flags.
-    "zimage_amd_safe": "-v --backend diffusion=vulkan0,vae=cpu,te=vulkan0 --rng cuda --flow-shift 3",
+    "flux2_klein4b_rx6800xt_hybrid": "-v --backend diffusion=rocm0,vae=vulkan0,te=rocm0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
+    "zimage_amd_safe": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
     "zimage_amd_low_vram": "-v --backend diffusion=vulkan0,vae=cpu,te=cpu --rng cuda --flow-shift 3",
-    "zimage_amd_full_gpu": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --rng cuda --flow-shift 3",
-    "zimage_amd_disk_params": "-v --backend diffusion=vulkan0,vae=cpu,te=vulkan0 --params-backend te=disk --rng cuda --flow-shift 3",
+    "zimage_amd_full_gpu": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
+    "zimage_amd_disk_params": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=disk --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
     "zimage_cpu_compat": "-v --backend cpu --rng cpu --flow-shift 3",
     "compat_offload": "-v --offload-to-cpu --flow-shift 3",
     "basic_verbose": "-v --flow-shift 3",
-    "vulkan_te_vae_cpu_dbcache": "-v --backend diffusion=vulkan0,vae=cpu,te=vulkan0 --rng cuda --flow-shift 3 --cache-mode dbcache --cache-option \"threshold=0.08,warmup=2\"",
+    "vulkan_te_vae_cpu_dbcache": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct --cache-mode dbcache --cache-option \"threshold=0.08,warmup=2\"",
 }
 
 SDCPP_EXTRA_PROFILE_HELP = {
-    "zimage_amd_safe": "AMD safe — текущий рекомендуемый профиль под твою связку: Z-Image/diffusion и Qwen/TE на Vulkan GPU, VAE на CPU. Обычно быстрее/стабильнее на RX 6800 XT, если VAE Vulkan тормозит.",
+    "flux2_klein4b_rx6800xt_hybrid": "FLUX.2 Klein 4B winner для RX 6800 XT: TE compute и diffusion на ROCm, VAE на Vulkan, параметры TE в CPU RAM. Soak20: mean 3.408s, p95 3.441s; game-load не проверялся.",
+    "zimage_amd_safe": "AMD safe — измеренный профиль RX 6800 XT: runtime diffusion/VAE/TE на Vulkan, параметры Qwen/TE в RAM, direct convolution включён. Почти full-GPU скорость при заметно меньшей постоянной VRAM.",
     "zimage_amd_low_vram": "AMD low VRAM — diffusion на Vulkan, VAE и Qwen/TE на CPU. Меньше VRAM-пиков, но condition/Qwen может быть медленнее.",
-    "zimage_amd_full_gpu": "AMD full GPU — diffusion, VAE и Qwen/TE на Vulkan. Пробовать, если хватает VRAM и VAE на GPU реально быстрее; при тормозах откатиться на AMD safe.",
-    "zimage_amd_disk_params": "Disk params — runtime как AMD safe, но параметры Qwen/TE перечитываются с диска по необходимости. Экономит RAM/VRAM, но может сильно тормозить.",
+    "zimage_amd_full_gpu": "AMD full GPU — runtime и параметры diffusion/VAE/Qwen на Vulkan, оба direct convolution включены. Самый быстрый измеренный Z-Image профиль, но держит больше VRAM.",
+    "zimage_amd_disk_params": "Disk params — runtime как AMD safe, но параметры Qwen/TE перечитываются с диска по необходимости. Экономит RAM/VRAM, но добавляет загрузку на каждый запрос.",
     "zimage_cpu_compat": "CPU compat — всё на CPU. Очень медленно, зато полезно проверить, что пути/модели/команда живые без Vulkan.",
     "compat_offload": "Compat offload — старый совместимый --offload-to-cpu. Оставлен для сборок/форков, где новые --backend/--params-backend работают странно.",
-    "vulkan_te_vae_cpu_dbcache": "DBCache split — AMD safe + dbcache. Эксперимент на ускорение DiT/Z-Image; если артефакты/мыло, отключить cache.",
+    "vulkan_te_vae_cpu_dbcache": "DBCache split — измеренный AMD safe + dbcache. Эксперимент; на FLUX.2 Klein 4-step был медленнее, при артефактах/мыле отключить cache.",
     "basic_verbose": "Basic — только verbose + flow-shift. Для ручных экспериментов, когда backend-флаги прописываешь сам.",
 }
 
@@ -180,8 +183,9 @@ DEFAULTS = {
     "INFINI_LLM_RUNTIME_AUTHORING": "1",
     "INFINI_LLM_RUNTIME_PLAN_REQUIRED": "1",
     "INFINI_LLM_RUNTIME_STRICT_VALIDATION": "1",
+    "INFINI_BALANCE_MODE": "safety",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK": "0",
-    "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + local Z-Image/sd.cpp",
+    "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + FLUX.2 Klein 4B hybrid",
     "INFINI_LLM_PROVIDER": "local",
     "INFINI_LMSTUDIO_URL": "http://127.0.0.1:1234",
     "INFINI_LMSTUDIO_MODEL": "auto",
@@ -206,10 +210,11 @@ DEFAULTS = {
     "INFINI_LLM_REASONING_EXCLUDE": "1",
     "INFINI_LLM_LOCAL_REASONING_PROMPT": "1",
     "INFINI_IMAGE_BACKEND": "sdcpp",
-    "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp\sd-server.exe",
-    "INFINI_SDCPP_MODEL": r"C:\Games\sdcpp\models\z-image-turbo-Q6_K.gguf",
-    "INFINI_SDCPP_VAE": r"C:\Games\sdcpp\models\ae.safetensors",
-    "INFINI_SDCPP_LLM": r"C:\Games\sdcpp\models\Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+    "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe",
+    "INFINI_SDCPP_ROCM_COMPAT_ROOT": r"C:\Games\sdcpp-hybrid-gfx1030",
+    "INFINI_SDCPP_MODEL": r"C:\Games\sdcpp\models\Flux 2 4B\flux-2-klein-4b-Q8_0.gguf",
+    "INFINI_SDCPP_VAE": r"C:\Games\sdcpp\models\Flux 2 4B\ae.safetensors",
+    "INFINI_SDCPP_LLM": r"C:\Games\sdcpp\models\Flux 2 4B\Qwen3-4B-UD-Q5_K_XL.gguf",
     "INFINI_SDCPP_LORA_DIR": "",
     "INFINI_SDCPP_LORA_FILE": "",
     "INFINI_SDCPP_LORA_WEIGHT": "0.65",
@@ -218,16 +223,16 @@ DEFAULTS = {
     "INFINI_SDCPP_SERVER_AUTOSTART": "1",
     "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
     "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": SDCPP_DEFAULT_COMMAND_TEMPLATE,
-    "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
+    "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
     "INFINI_SDCPP_SERVER_SHOW_CONSOLE": "1" if os.name == "nt" else "0",
     "INFINI_SDCPP_SERVER_LOG_FILE": str(ROOT / "cache" / "sdcpp_server.log"),
     "INFINI_SDCPP_WIDTH": "512",
     "INFINI_SDCPP_HEIGHT": "512",
-    "INFINI_SDCPP_STEPS": "8",
+    "INFINI_SDCPP_STEPS": "4",
     "INFINI_SDCPP_CFG": "1.0",
     "INFINI_SDCPP_SAMPLER": "euler",
     "INFINI_SDCPP_SEED": "-1",
-    "INFINI_ZIMAGE_PROMPT_CONTRACT": "auto",
+    "INFINI_ZIMAGE_PROMPT_CONTRACT": "0",
     "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
     "INFINI_IMAGE_API_BASE_URL": "https://api.openai.com/v1",
     "INFINI_IMAGE_API_KEY": "",
@@ -274,6 +279,26 @@ DEFAULTS = {
 }
 
 PRESETS = {
+    "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": {
+        "INFINI_LLM_PROVIDER": "local",
+        "INFINI_IMAGE_BACKEND": "sdcpp",
+        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe",
+        "INFINI_SDCPP_ROCM_COMPAT_ROOT": r"C:\Games\sdcpp-hybrid-gfx1030",
+        "INFINI_SDCPP_MODEL": r"C:\Games\sdcpp\models\Flux 2 4B\flux-2-klein-4b-Q8_0.gguf",
+        "INFINI_SDCPP_VAE": r"C:\Games\sdcpp\models\Flux 2 4B\ae.safetensors",
+        "INFINI_SDCPP_LLM": r"C:\Games\sdcpp\models\Flux 2 4B\Qwen3-4B-UD-Q5_K_XL.gguf",
+        "INFINI_SDCPP_LORA_DIR": "",
+        "INFINI_SDCPP_LORA_FILE": "",
+        "INFINI_SDCPP_LORA_PROMPT_TAGS": "",
+        "INFINI_SDCPP_SERVER_AUTOSTART": "1",
+        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
+        "INFINI_SDCPP_STEPS": "4",
+        "INFINI_SDCPP_CFG": "1.0",
+        "INFINI_SDCPP_SAMPLER": "euler",
+        "INFINI_ZIMAGE_PROMPT_CONTRACT": "0",
+        "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
+    },
     "Локалка: LM Studio + local Z-Image/sd.cpp": {
         "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
@@ -311,6 +336,7 @@ PRESETS = {
 
 
 PRESET_HELP = {
+    "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": "Основной RX 6800 XT image preset: FLUX.2 Klein 4B, ROCm TE+diffusion, Vulkan VAE, TE weights в CPU RAM; 512x512/4 steps/CFG 1/Euler. Не использует Z-Image LoRA.",
     "Локалка: LM Studio + local Z-Image/sd.cpp": "LLM-контракт пишет локальная модель через LM Studio/OpenAI-compatible API. PNG рисует локальный Z-Image через stable-diffusion.cpp. Это основной офлайн-пайплайн.",
     "OpenRouter + local Z-Image/sd.cpp": "Контракт предмета пишет модель с OpenRouter, а картинки всё равно рисуются локально через Z-Image/sd.cpp. Хороший режим, когда локальная LLM тупит, но VRAM хочется оставить под image gen.",
     "OpenRouter + Image API": "И контракт, и изображения уходят во внешние API. Локальный sd.cpp не нужен и его поля в GUI будут неактивны.",
@@ -351,6 +377,7 @@ FIELD_HELP = {
     "INFINI_LLM_TEMPERATURE": "Температура основного LLM planner: выше = больше вариативности/риска, ниже = стабильнее/однообразнее. Это не Z-Image; картинки регулируются seed/CFG/steps/flow-shift.",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "Температура LLM Visual Director, который пишет visual kit/prompt-ы для Z-Image. Выше = больше художественной вариативности, но больше риск ухода от предмета.",
     "INFINI_LLM_MAX_TOKENS": "Лимит ответа LLM. Для reasoning-моделей нужен запас, иначе модель может не успеть вернуть JSON.",
+    "INFINI_BALANCE_MODE": "Режим пост-авторского баланса: safety сохраняет authored значения и применяет только технические guards; normalize включает старую мягкую нормализацию; report оставляет рекомендации и C# hard clamps.",
     "INFINI_LLM_REASONING_MODE": "Управляет reasoning/thinking API у OpenRouter или prompt-only приватной проверкой для локалок.",
     "INFINI_LLM_REASONING_MAX_TOKENS": "Бюджет thinking-токенов. Работает только когда reasoning mode = tokens и провайдер поддерживает reasoning object.",
     "INFINI_LLM_REASONING_EXCLUDE": "Просит провайдера не возвращать reasoning в content. Нужен только для API reasoning, чтобы не ломать JSON-парсер.",
@@ -358,9 +385,10 @@ FIELD_HELP = {
 
     "INFINI_IMAGE_BACKEND": "Кто рисует PNG: локальный sd.cpp/Z-Image, внешний Image API, A1111, ComfyUI или выключено.",
     "INFINI_SDCPP_SERVER_EXE": "Путь до sd-server.exe из stable-diffusion.cpp. Активен только при image backend = sdcpp.",
-    "INFINI_SDCPP_MODEL": "Главная diffusion-модель Z-Image *.gguf.",
-    "INFINI_SDCPP_VAE": "AE/VAE файл для Z-Image, обычно ae.safetensors. GUI сам добавит --vae.",
-    "INFINI_SDCPP_LLM": "Qwen/LLM файл для Z-Image prompt processing. GUI сам добавит --llm.",
+    "INFINI_SDCPP_ROCM_COMPAT_ROOT": "Изолированная папка hybrid sd.cpp с HIP6-compatible DLL и rocblas/library. Переменные ROCm передаются только дочернему sd-server.exe.",
+    "INFINI_SDCPP_MODEL": "Главная diffusion-модель sd.cpp: FLUX.2 Klein или Z-Image *.gguf.",
+    "INFINI_SDCPP_VAE": "AE/VAE файл для выбранной модели, обычно ae.safetensors. GUI сам добавит --vae.",
+    "INFINI_SDCPP_LLM": "Qwen/LLM text encoder для выбранной модели. GUI сам добавит --llm.",
     "INFINI_SDCPP_LORA_DIR": "Скрытое служебное поле. В GUI больше не редактируется: папка для --lora-model-dir автоматически выводится из выбранного LoRA file.",
     "INFINI_SDCPP_LORA_FILE": "Конкретный файл LoRA (*.safetensors/*.ckpt/*.pt/*.pth). GUI сам возьмёт родительскую папку для --lora-model-dir и имя файла для <lora:name:weight>.",
     "INFINI_SDCPP_LORA_WEIGHT": "Вес LoRA для кнопки Use selected LoRA. Обычно 0.35-0.8; для sprite style лучше начинать с 0.45-0.65.",
@@ -417,6 +445,11 @@ OPTION_HELP = {
         "local": "Локальная LLM через LM Studio/Ollama/OpenAI-compatible endpoint. Активны LM Studio URL/model, OpenRouter/Compat поля блокируются.",
         "openrouter": "LLM-контракт пишет модель с OpenRouter. Активны OpenRouter key/model/referer/title, локальные/compat поля блокируются.",
         "openai_compat": "Любой другой OpenAI-compatible API. Активны compat base URL/key/model.",
+    },
+    "INFINI_BALANCE_MODE": {
+        "safety": "Дефолт: authored damage/stats сохраняются; Python ограничивает только технически опасные projectile-параметры, C# hard clamps остаются активны.",
+        "normalize": "Старое поведение: дополнительно применять stage/DPS и equipment soft budgets.",
+        "report": "Диагностика: Python soft balance и runtime safety corridor не мутируют значения; рекомендации пишутся в balanceReport, C# hard clamps остаются.",
     },
     "INFINI_LLM_RESPONSE_FORMAT": {
         "auto": "Дефолт: сервер сам выбирает безопасный формат под провайдера/модель.",

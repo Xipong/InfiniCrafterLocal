@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.VFX;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -83,7 +84,7 @@ public sealed partial class GeneratedItemData
     private static string NormalizeRuntimeApiVersion(string? value)
     {
         string s = SafeText(value, 32).Trim();
-        return string.IsNullOrWhiteSpace(s) ? RuntimeApiCurrent : s;
+        return s;
     }
 
     private static string SafeText(string? value, int maxLen)
@@ -128,13 +129,10 @@ public sealed partial class GeneratedItemData
     }
 
     private static bool IsRuntimeFamily(string? value)
-    {
-        string r = (value ?? "").Trim().ToLowerInvariant();
-        return r is "swing" or "thrust" or "returning" or "flail" or "yoyo" or "whip" or "shoot" or "cast" or "throw" or "summon";
-    }
+        => GeneratedRuntimeFamilyPolicy.IsCanonical(value);
 
     private static string NormalizeRuntimeFamily(string? value)
-        => IsRuntimeFamily(value) ? value!.Trim().ToLowerInvariant() : "none";
+        => GeneratedRuntimeFamilyPolicy.Normalize(value);
 
     private static string NormalizeArmorSlot(string? value)
     {
@@ -152,8 +150,7 @@ public sealed partial class GeneratedItemData
     {
         if (attack is null || !attack.Enabled) return true;
         if (!attack.RuntimePlanAuthored) return false;
-        bool strictFamily = string.Equals(NormalizeRuntimeApiVersion(runtimeApiVersion), RuntimeApiCurrent, StringComparison.OrdinalIgnoreCase);
-        if (strictFamily && !IsRuntimeFamily(attack.RuntimeFamily)) return false;
+        if (!IsRuntimeFamily(attack.RuntimeFamily)) return false;
         return attack.MovementCode >= 0 && attack.MovementCode <= MaxSupportedMovementCode
             && attack.EffectCode >= 0 && attack.EffectCode <= MaxSupportedEffectCode
             && attack.OnHitCode >= 0 && attack.OnHitCode <= MaxSupportedOnHitCode
@@ -165,7 +162,7 @@ public sealed partial class GeneratedItemData
         data.SourceMode = "failed";
         data.Tooltip = data.Attack is null || data.Attack.RuntimePlanAuthored
             ? $"Unsupported generated runtime opcode; update the mod/generator pair."
-            : "Legacy generated attack runtime is no longer supported; regenerate this item.";
+            : "Generated attack runtime is missing the current authored contract; regenerate this item.";
         if (data.Attack is not null)
             data.Attack.Enabled = false;
         if (data.Gameplay is not null)
@@ -203,7 +200,6 @@ public sealed partial class GeneratedItemData
         PresentationGenome ??= new PresentationGenomeSpec();
         VfxManifest ??= new VfxManifestSpec();
         VfxManifest.Normalize();
-        SoundProfile ??= new SoundProfileSpec();
         RuntimeArchetype ??= new RuntimeArchetypeSpec();
         RuntimeArchetype.Normalize();
         RuntimeContract ??= new RuntimeContractSpec();
@@ -264,7 +260,7 @@ public sealed partial class GeneratedItemData
         Gameplay.AltMobilityCooldownTicks = ClampInt(Gameplay.AltMobilityCooldownTicks, 0, 36000);
         // Held light is passive; alternate use remains explicit AltUseMode only.
         Gameplay.HoldLightStrength = ClampFloat(Gameplay.HoldLightStrength, 0f, 1.5f);
-        Gameplay.HoldLightColorName = SafeText(Gameplay.HoldLightColorName, 32);
+        Gameplay.HoldLightColorName = RuntimeColorPolicy.Normalize(Gameplay.HoldLightColorName);
         Gameplay.AltGeneratedBuff ??= new GeneratedBuffSpec();
         Gameplay.AltGeneratedBuff.Normalize();
         Gameplay.HoldGeneratedBuff ??= new GeneratedBuffSpec();
@@ -351,7 +347,7 @@ public sealed partial class GeneratedItemData
         Accessory.Endurance = ClampFloat(Accessory.Endurance, 0f, 0.35f);
         Accessory.ArmorPenetration = ClampFloat(Accessory.ArmorPenetration, 0f, 80f);
         Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
-        Accessory.LightColorName = SafeText(Accessory.LightColorName, 32);
+        Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName);
         Accessory.Archetype = SafeText(Accessory.Archetype, 32);
         if (!Accessory.Enabled && Accessory.HasAnyEffect && (Category == "accessory" || Gameplay.Kind == "accessory"))
             Accessory.Enabled = true;
@@ -386,7 +382,7 @@ public sealed partial class GeneratedItemData
         Armor.WhipRange = ClampFloat(Armor.WhipRange, 0f, 1.5f);
         Armor.SummonTagDamage = ClampFloat(Armor.SummonTagDamage, 0f, 0.75f);
         Armor.LightStrength = ClampFloat(Armor.LightStrength, 0f, 1.5f);
-        Armor.LightColorName = SafeText(Armor.LightColorName, 32);
+        Armor.LightColorName = RuntimeColorPolicy.Normalize(Armor.LightColorName);
         Armor.SetBonusText = SafeText(Armor.SetBonusText, 120);
         Armor.SetBonusGenericDamage = ClampFloat(Armor.SetBonusGenericDamage, 0f, 1f);
         Armor.SetBonusMeleeDamage = ClampFloat(Armor.SetBonusMeleeDamage, 0f, 1f);
@@ -406,6 +402,13 @@ public sealed partial class GeneratedItemData
         Armor.SetBonusArmorPenetration = ClampFloat(Armor.SetBonusArmorPenetration, 0f, 80f);
 
         Attack.Speed = ClampFloat(Attack.Speed, 0f, 250f);
+        Attack.RangeTiles = ClampFloat(Attack.RangeTiles, 4f, 120f);
+        Attack.HomingStrength = ClampFloat(Attack.HomingStrength, 0f, 1f);
+        Attack.BeamWidthPx = ClampFloat(Attack.BeamWidthPx, 2f, 96f);
+        Attack.BeamChargeTicks = ClampInt(Attack.BeamChargeTicks, 0, 300);
+        Attack.ChargeTicks = ClampInt(Attack.ChargeTicks, 1, 300);
+        Attack.ChargePowerMultiplier = ClampFloat(Attack.ChargePowerMultiplier, 1f, 3f);
+        Attack.DelayTicks = ClampInt(Attack.DelayTicks, 0, 300);
         Attack.Lifetime = ClampInt(Attack.Lifetime, 1, 36000);
         Attack.Pierce = ClampInt(Attack.Pierce, -1, 9999);
         Attack.Scale = ClampFloat(Attack.Scale, 0.25f, 2.5f);
@@ -427,26 +430,41 @@ public sealed partial class GeneratedItemData
         Attack.TrailLength = ClampInt(Attack.TrailLength, 0, 600);
         Attack.ShotCount = ClampInt(Attack.ShotCount, 1, 128);
         Attack.SpreadRadians = ClampFloat(Attack.SpreadRadians, 0f, 6.4f);
+        Attack.SecondaryTrigger = GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily(Attack.SecondaryTrigger, Attack.RuntimeFamily);
         Attack.SecondarySpreadRadians = ClampFloat(Attack.SecondarySpreadRadians, 0f, 6.4f);
         Attack.SecondaryDamageMultiplier = ClampFloat(Attack.SecondaryDamageMultiplier, 0f, 10f);
         Attack.SecondaryLifetimeTicks = ClampInt(Attack.SecondaryLifetimeTicks, 1, 36000);
+        Attack.SentryPlacement = SafeText(Attack.SentryPlacement, 16);
+        Attack.SentryAttackIntervalTicks = ClampInt(Attack.SentryAttackIntervalTicks, 12, 180);
+        Attack.SentryTargetRangeTiles = ClampFloat(Attack.SentryTargetRangeTiles, 8f, 60f);
+        Attack.SentryLifetimeTicks = ClampInt(Attack.SentryLifetimeTicks, 120, 36000);
         Attack.SameTargetBias = ClampFloat(Attack.SameTargetBias, 0f, 1f);
         Attack.MaxChildProjectiles = ClampInt(Attack.MaxChildProjectiles, 0, 512);
         Attack.MaxChildDepth = ClampInt(Attack.MaxChildDepth, 0, 16);
-        Attack.DustSpawnDenom = ClampInt(Attack.DustSpawnDenom, 1, 240);
+        Attack.DustSpawnDenom = Attack.DustSpawnDenom <= 0 ? 0 : ClampInt(Attack.DustSpawnDenom, 2, 240);
         Attack.BurstDustCap = ClampInt(Attack.BurstDustCap, 0, 2000);
         Attack.RuntimeLightStrength = ClampFloat(Attack.RuntimeLightStrength, 0f, 2f);
         Attack.MobilityMode = SafeText(Attack.MobilityMode, 32);
         Attack.MobilityRangeTiles = ClampInt(Attack.MobilityRangeTiles, 0, 80);
         Attack.MobilityCooldownTicks = ClampInt(Attack.MobilityCooldownTicks, 0, 36000);
-        Attack.SoundVolume = ClampFloat(Attack.SoundVolume, 0f, 3f);
-        Attack.SoundPitch = ClampFloat(Attack.SoundPitch, -2f, 2f);
+        Attack.SoundVolume = ClampFloat(Attack.SoundVolume, 0.05f, 1f);
+        Attack.SoundPitch = ClampFloat(Attack.SoundPitch, -0.9f, 0.9f);
+        Attack.SoundPitchVariance = ClampFloat(Attack.SoundPitchVariance, 0f, 0.6f);
+        Attack.DamageClass = SafeText(Attack.DamageClass, 96);
+        if (string.IsNullOrWhiteSpace(Attack.DamageClass)) Attack.DamageClass = "generic";
         Attack.UseStyleCode = ClampInt(Attack.UseStyleCode, ItemUseStyleID.None, InfiniTerrariaSentinels.MaxSupportedItemUseStyle);
         Attack.RuntimeFamily = NormalizeRuntimeFamily(Attack.RuntimeFamily);
-        Attack.WeaponSubfamily = SafeText(Attack.WeaponSubfamily, 48);
-        Attack.AttackPatternTags = SafeTextArray(Attack.AttackPatternTags, 12, 40);
-        Attack.SoundUseSearchQuery = SafeText(Attack.SoundUseSearchQuery, 160);
-        Attack.SoundImpactSearchQuery = SafeText(Attack.SoundImpactSearchQuery, 160);
+        if (!GeneratedRuntimeFamilyPolicy.HasValidExecutorContract(Attack))
+        {
+            Attack.RuntimeFamily = GeneratedRuntimeFamilyPolicy.None;
+            Attack.Enabled = false;
+        }
+        Attack.SoundCatalogSource = SafeText(Attack.SoundCatalogSource, 48);
+        Attack.SoundUseCatalogId = SafeText(Attack.SoundUseCatalogId, 64);
+        Attack.SoundImpactCatalogId = SafeText(Attack.SoundImpactCatalogId, 64);
+        Attack.SoundUseCatalogPath = SafeText(Attack.SoundUseCatalogPath, 240);
+        Attack.SoundImpactCatalogPath = SafeText(Attack.SoundImpactCatalogPath, 240);
+        Attack.PrimaryColorName = RuntimeColorPolicy.Normalize(Attack.PrimaryColorName, "white");
 
         Visual.PreferredCanvasSize = Visual.PreferredCanvasSize <= 20 ? 16 : Visual.PreferredCanvasSize <= 28 ? 24 : Visual.PreferredCanvasSize <= 40 ? 32 : Visual.PreferredCanvasSize <= 56 ? 48 : Visual.PreferredCanvasSize <= 80 ? 64 : Visual.PreferredCanvasSize <= 112 ? 96 : 128;
         Visual.InventoryScale = ClampFloat(Visual.InventoryScale, 0.55f, 1.55f);

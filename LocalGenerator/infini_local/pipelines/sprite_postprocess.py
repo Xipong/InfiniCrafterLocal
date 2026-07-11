@@ -45,7 +45,7 @@ from infini_local.pipelines.sprite_keyer import (
     chroma_like_rgb,
     estimate_sprite_key_profile,
     magenta_key_pixel_ratio,
-    remove_inner_poster_card_background,
+    remove_nested_poster_card_background,
     remove_key_colored_holes,
     scrub_transparent_rgb,
 )
@@ -549,6 +549,24 @@ def validate_processed_sprite(path: str, role: str = "item") -> dict[str, Any]:
             reasons.append(f"very_dense_opaque_area:{stats.get('opaquePct')}")
     return {"ok": not reasons, "reasons": reasons, "warnings": warnings, "stats": stats, "bboxStats": bb, "role": role}
 
+
+def technical_validation_score(validation: dict[str, Any] | None) -> float:
+    """Score only final alpha/background/geometry validation, never visual taste.
+
+    Candidate-selection scores describe a raw variant before postprocess and must not
+    be presented as the quality of the delivered PNG. Fatal technical failures score
+    zero; accepted geometry findings and warnings reduce the score modestly.
+    """
+    if not isinstance(validation, dict):
+        return 0.0
+    if sprite_validation_fatal(validation):
+        return 0.0
+    reasons = [str(x) for x in (validation.get("reasons") or []) if str(x).strip()]
+    warnings = [str(x) for x in (validation.get("warnings") or []) if str(x).strip()]
+    score = 1.0 - min(0.60, 0.12 * len(reasons)) - min(0.20, 0.03 * len(warnings))
+    return round(max(0.20, min(1.0, score)), 3)
+
+
 def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
     """Only fatal technical failures should force a retry/fallback.
 
@@ -647,7 +665,7 @@ def postprocess_sprite(path: str, sprite_id: str, target_size: int = 32, role: s
         bg_removed = cleanup_alpha(bg_removed)
         # Layer 3 removes AI-drawn white/pink poster cards inside the requested key.
         # This keeps retry pressure low and prevents opaque square sprites from reaching the game.
-        bg_removed = remove_inner_poster_card_background(bg_removed, role)
+        bg_removed = remove_nested_poster_card_background(bg_removed, role)
         bg_removed = cleanup_alpha(bg_removed)
         bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
@@ -696,6 +714,7 @@ __all__ = [
     "palette_cleanup",
     "edge_touch_ratio",
     "validate_processed_sprite",
+    "technical_validation_score",
     "sprite_validation_fatal",
     "validation_retry_notes",
     "build_retry_prompt_from_validation",

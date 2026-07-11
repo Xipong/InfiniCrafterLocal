@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
-from infini_local.core.runtime_authoring.common import _clamp, _enum, _norm_name, _num
+from infini_local.core.runtime_authoring.common import _enum, _norm_name
+from infini_local.core.runtime_executor_vocabulary import MOVEMENTS
+from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
 from infini_local.core.runtime_authoring.schema import (
-    DELIVERIES,
-    EFFECTS,
-    MOVEMENTS,
-    RUNTIME_FAMILIES,
     TERRARIA_WEAPON_FAMILY_GROUPS,
     _family_group,
-    _runtime_family_affordances,
 )
+from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 
 # Small effect ontology, not a per-item exception list.
 # Parent knowledge should eventually expose canonical effect capabilities directly
@@ -67,34 +64,6 @@ def _parent_grounded_onhit(data: dict[str, Any]) -> tuple[str, str]:
     return "", ""
 
 
-def _material_color_name(materials: list[str], fallback: str = "dull") -> str:
-    blob = " ".join(str(x or "").lower() for x in materials)
-    if any(w in blob for w in ["wood", "sawdust", "bark", "splinter", "дерев"]): return "wood brown"
-    if any(w in blob for w in ["copper", "bronze", "мед"]): return "copper orange"
-    if any(w in blob for w in ["iron", "steel", "metal", "silver", "wire", "металл"]): return "metal gray"
-    if any(w in blob for w in ["stone", "rock", "slate", "кам"]): return "stone gray"
-    if any(w in blob for w in ["sand", "sawdust", "dust"]): return "sand tan"
-    if any(w in blob for w in ["slime", "gel"]): return "slime green"
-    if any(w in blob for w in ["fire", "flame", "ember"]): return "flame orange"
-    if any(w in blob for w in ["electric", "lightning", "spark"]): return "cyan electric"
-    if any(w in blob for w in ["shadow", "corrupt", "void"]): return "shadow purple"
-    if any(w in blob for w in ["holy", "star", "lunar"]): return "gold star"
-    return fallback
-
-
-def _material_effect_hint(materials: list[str]) -> str | None:
-    blob = " ".join(str(x or "").lower() for x in materials)
-    if any(w in blob for w in ["wood", "sawdust", "bark", "stone", "rock", "metal", "copper", "iron", "sand", "dust", "гряз", "дерев", "кам"]):
-        return "dust"
-    if any(w in blob for w in ["slime", "gel"]): return "slime"
-    if any(w in blob for w in ["fire", "flame", "ember"]): return "flame"
-    if any(w in blob for w in ["electric", "lightning", "spark"]): return "electric"
-    if any(w in blob for w in ["shadow", "corrupt", "void"]): return "shadow"
-    if any(w in blob for w in ["poison", "toxic"]): return "poison"
-    if any(w in blob for w in ["holy", "star", "lunar"]): return "star"
-    return None
-
-
 def _truthy(value: Any) -> bool:
     if isinstance(value, bool): return value
     s = _norm_name(value)
@@ -108,105 +77,6 @@ def _semantic_param_copy(params: dict[str, Any], keys: list[str]) -> dict[str, A
             out[k] = params.get(k)
     return out
 
-
-_WEAPON_SUBFAMILY_ALIASES: dict[str, str] = {
-    "short_sword": "shortsword", "short sword": "shortsword", "broad_sword": "broadsword",
-    "sword": "broadsword", "greatsword": "broadsword", "rapier": "shortsword",
-    "jousting_lance": "lance", "rocket_launcher": "launcher", "spell_book": "magic_book",
-    "book": "magic_book", "spellbook": "magic_book", "wand": "magic_staff", "staff": "magic_staff",
-    "rod": "magic_staff", "beam_staff": "laser_staff", "channelled_beam": "laser_staff", "channeled_beam": "laser_staff",
-    "minion": "summon_staff", "pet_attack": "summon_staff", "turret": "sentry_staff", "sentry": "sentry_staff",
-}
-
-def _weapon_subfamily_from_fields(*, family: Any = "", projectile_family: Any = "", runtime_family: Any = "", delivery: Any = "", ammo: Any = "", explicit: Any = "") -> str:
-    explicit_norm = _norm_name(explicit)
-    if explicit_norm:
-        return _WEAPON_SUBFAMILY_ALIASES.get(explicit_norm, explicit_norm)[:48]
-    f = _norm_name(family)
-    pf = _norm_name(projectile_family)
-    rt = _norm_name(runtime_family)
-    dlv = _norm_name(delivery)
-    am = _norm_name(ammo)
-    text = " ".join(x for x in [f, pf, rt, dlv, am] if x)
-    if not text:
-        return ""
-    for key, value in _WEAPON_SUBFAMILY_ALIASES.items():
-        if key in {f, pf, dlv, am} or key in text:
-            return value
-    if any(x in text for x in ["shotgun", "boomstick", "onyx"]): return "shotgun"
-    if any(x in text for x in ["sniper", "sdmg"]): return "sniper"
-    if any(x in text for x in ["chain_gun", "chaingun", "gatligator"]): return "chain_gun"
-    if "dart" in text: return "dart_weapon"
-    if any(x in text for x in ["blowpipe", "blowgun"]): return "blowgun"
-    if "harpoon" in text: return "harpoon"
-    if "bow" in text or "arrow" in text: return "bow"
-    if "gun" in text or "bullet" in text or "pistol" in text or "rifle" in text: return "gun"
-    if "launcher" in text or "rocket" in text or "missile" in text: return "launcher"
-    if "whip" in text or "lash" in text: return "whip"
-    if "yoyo" in text: return "yoyo"
-    if "flail" in text or "mace" in text or "chain" in text: return "flail"
-    if any(x in text for x in ["spear", "lance", "trident", "pike", "glaive", "halberd"]): return "spear"
-    if any(x in text for x in ["boomerang", "chakram", "disc"]): return "boomerang"
-    if rt == "cast": return "magic_staff"
-    if rt == "summon": return "summon_staff"
-    if rt == "swing": return "broadsword"
-    return f[:48] if f else pf[:48]
-
-def _attack_pattern_tags_from_patch(patch: dict[str, Any], *sources: dict[str, Any]) -> list[str]:
-    raw: list[str] = []
-    for src in sources:
-        val = src.get("attackPatternTags") or src.get("patternTags")
-        if isinstance(val, list):
-            raw.extend(str(x) for x in val if x not in (None, ""))
-        elif isinstance(val, str) and val.strip():
-            raw.extend(x.strip() for x in val.replace(";", ",").split(","))
-    blob = " ".join(str(src.get(k, "")) for src in [patch, *sources] for k in [
-        "weaponFamily", "weaponSubfamily", "projectileFamily", "projectileShape", "projectileMotion",
-        "projectileTrail", "projectileImpact", "movement", "effect", "onHit", "delivery"
-    ]).lower()
-    token_blob = " " + re.sub(r"[^a-z0-9]+", " ", blob).strip() + " "
-
-    def has_semantic_needle(needle: str) -> bool:
-        phrase = re.sub(r"[^a-z0-9]+", " ", str(needle).lower()).strip()
-        return bool(phrase) and f" {phrase} " in token_blob
-    candidates: list[tuple[str, list[str]]] = [
-        ("falling_star", ["falling", "starfall", "star_wrath", "star wrath", "meteor"]),
-        ("beam", ["beam", "laser", "prism", "ray"]),
-        ("shotgun_spread", ["shotgun", "spread", "scatter"]),
-        ("multi_arrow", ["multi_arrow", "volley", "phantasm", "tsunami", "arrow rain"]),
-        ("homing_orb", ["homing", "orb", "arcanum", "spirit flame"]),
-        ("splinter_burst", ["splinter", "shard", "fragment"]),
-        ("bee_swarm", ["bee", "honey", "beenade"]),
-        ("chain_flail", ["flail", "chain", "mace", "anchor"]),
-        ("whip_lash", ["whip", "lash"]),
-        ("summon_sentry", ["sentry", "turret", "hydra", "portal"]),
-        ("growing_minion", ["dragon", "stardust dragon", "segment"]),
-        ("bounce", ["bounce", "ricochet"]),
-        ("boomerang_return", ["boomerang", "returning", "returning_glaive"]),
-        ("explosive", ["explosion", "explode", "rocket", "grenade", "blast"]),
-        ("elemental_debuff", ["burn", "frostburn", "poison", "shadowflame", "bleed"]),
-    ]
-    for tag, needles in candidates:
-        if any(has_semantic_needle(n) for n in needles):
-            raw.append(tag)
-    out: list[str] = []
-    for value in raw:
-        tag = _norm_name(value)
-        if tag and tag not in out:
-            out.append(tag[:40])
-        if len(out) >= 12:
-            break
-    return out
-
-def _sound_query_from_patch(patch: dict[str, Any], *, impact: bool) -> str:
-    bits = [
-        patch.get("weaponSubfamily"), patch.get("weaponFamily"), patch.get("projectileFamily"),
-        patch.get("movement"), patch.get("effect"), patch.get("onHit") if impact else patch.get("delivery"),
-    ]
-    bits.extend(patch.get("attackPatternTags") or [])
-    words = [str(x).replace("_", " ").strip() for x in bits if x not in (None, "", [])]
-    suffix = "impact hit" if impact else "use cast swing release"
-    return (" ".join(dict.fromkeys(words)) + " " + suffix).strip()[:160]
 
 def _apply_armor_slot_budget(armor: dict[str, Any]) -> None:
     slot = _norm_name(armor.get("slot")) or "body"
@@ -230,7 +100,7 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
     """Lower explicit Terraria-family engine calls into the compact runtime executor.
 
     This is not name aliasing: the planner authors a weapon family (spear/flail/yoyo/whip,
-    bow/gun/launcher, staff/book, minion/sentry), then this compiler emits the small set
+    bow/gun/launcher, staff/book, temporary helper), then this compiler emits the small set
     of executable runtime fields the current C# runtime actually supports.
     """
     fn = _norm_name(fn)
@@ -238,10 +108,10 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
     family = _norm_name(p.get("family") or p.get("weaponFamily") or p.get("projectileFamily") or p.get("archetype"))
     common = _semantic_param_copy(p, [
         "movement", "effect", "speed", "rangeTiles", "lifetimeTicks", "shotCount", "spreadRadians",
-        "pierce", "extraUpdates", "homingStrength", "useTimeTicks", "reliability",
+        "pierce", "extraUpdates", "homingStrength", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "immunityCooldown", "useTimeTicks", "useAnimationTicks", "reliability",
         "selfLockTicks", "missPunish", "projectileShape", "projectileMotion",
         "projectileTrail", "projectileImpact", "damageMultiplier", "runtimeFamily",
-        "weaponSubfamily", "attackPatternTags", "soundUseSearchQuery", "soundImpactSearchQuery",
+        "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance",
     ])
 
     if fn == "perform_melee_attack":
@@ -265,21 +135,51 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
         return [("shoot_projectile", common)]
 
     if fn == "fire_ranged_weapon":
-        group = _family_group(family)
-        if family in {"launcher", "rocket_launcher", "rocket", "missile_launcher"}:
-            common.setdefault("movement", "proximity_missile")
-        elif family in {"harpoon"}:
-            common.setdefault("movement", "returning_glaive")
-        else:
+        # Keep delivery mechanics separate from projectile theme.  The exact
+        # overhead_barrage family selects the finite spawn-above-target executor,
+        # while projectileFamily remains the authored arrow/shard/rocket/etc. form.
+        # No item name, tooltip or ammo word selects this mechanic.
+        raw_projectile_family = _norm_name(p.get("projectileFamily"))
+        overhead_barrage = family == "overhead_barrage"
+        charge_release = family == "charge_release"
+        if charge_release:
             common.setdefault("movement", "straight")
-        common.update({"runtimeFamily": "shoot", "delivery": "shoot", "weaponFamily": family or "ranged", "projectileFamily": family or "ranged"})
+            common.update({"runtimeFamily": "charge_release", "delivery": "shoot", "weaponFamily": _norm_name(p.get("weaponFamily")) or "ranged", "projectileFamily": raw_projectile_family or "projectile", "chargeTicks": p.get("chargeTicks", 45), "chargePowerMultiplier": p.get("chargePowerMultiplier", 1.6)})
+        elif overhead_barrage:
+            common.setdefault("movement", "phase")
+            common.update({
+                "runtimeFamily": "overhead_barrage",
+                "delivery": "shoot",
+                "weaponFamily": _norm_name(p.get("weaponFamily")) or "ranged",
+                "projectileFamily": raw_projectile_family or "projectile",
+                "delayTicks": p.get("delayTicks") if p.get("delayTicks") not in (None, "") else p.get("chargeTicks", 30),
+            })
+        elif not charge_release:
+            if family in {"launcher", "rocket_launcher", "rocket", "missile_launcher"}:
+                common.setdefault("movement", "proximity_missile")
+            elif family in {"harpoon"}:
+                common.setdefault("movement", "returning_glaive")
+            else:
+                common.setdefault("movement", "straight")
+            common.update({
+                "runtimeFamily": "shoot",
+                "delivery": "shoot",
+                "weaponFamily": family or "ranged",
+                "projectileFamily": raw_projectile_family or family or "ranged",
+            })
         if p.get("ammoFor") not in (None, ""):
             common["ammoFor"] = p.get("ammoFor")
         return [("shoot_projectile", common)]
 
     if fn == "cast_magic_weapon":
         raw_projectile_family = _norm_name(p.get("projectileFamily"))
-        if family in {"channelled_beam", "channeled_beam", "beam_staff", "laser_staff"}:
+        # Only an explicit channelled-beam family selects the persistent held-beam
+        # executor.  A beam_staff/laser_staff may still fire ordinary bolt/projectile
+        # casts, so those taxonomy words must not silently choose gameplay.
+        beam_family = family in {"channelled_beam", "channeled_beam"}
+        charge_release = family == "charge_release"
+        overhead_barrage = family == "overhead_barrage"
+        if beam_family or charge_release or overhead_barrage:
             common.setdefault("movement", "phase")
         else:
             common.setdefault("movement", "straight")
@@ -304,12 +204,38 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
             elif family.endswith("_glaive") or "glaive" in family:
                 projectile_form = "glaive"
 
-        common.update({"runtimeFamily": "cast", "delivery": "cast", "weaponFamily": weapon_family or "magic", "projectileFamily": projectile_form or "magic"})
+        common.update({
+            "runtimeFamily": "beam" if beam_family else ("charge_release" if charge_release else ("overhead_barrage" if overhead_barrage else "cast")),
+            "delivery": "cast",
+            "weaponFamily": weapon_family or "magic",
+            "projectileFamily": "beam" if beam_family else ((projectile_form or "projectile") if (charge_release or overhead_barrage) else (projectile_form or "magic")),
+        })
+        if beam_family:
+            common["channelUse"] = True
+            common.setdefault("beamWidthPx", 14)
+            if p.get("chargeTicks") not in (None, ""):
+                common["beamChargeTicks"] = p.get("chargeTicks")
+            if p.get("immunityCooldown") not in (None, ""):
+                common["immunityCooldown"] = p.get("immunityCooldown")
+        elif charge_release:
+            common["chargeTicks"] = p.get("chargeTicks", 45)
+            common["chargePowerMultiplier"] = p.get("chargePowerMultiplier", 1.6)
+            common["channelUse"] = True
+        elif overhead_barrage:
+            common["delayTicks"] = p.get("delayTicks") if p.get("delayTicks") not in (None, "") else p.get("chargeTicks", 30)
+            common.setdefault("shotCount", 3)
+            common.setdefault("secondaryDamageMultiplier", 0.55)
+            common.setdefault("secondaryLifetimeTicks", 75)
         return [("shoot_projectile", common)]
 
-    if fn == "summon_combat_entity":
-        common.setdefault("movement", "orbit" if family in {"minion", "pet_attack"} else "drift")
-        common.update({"runtimeFamily": "summon", "delivery": "summon", "weaponFamily": family or "minion", "projectileFamily": family or "summon"})
+    if fn == "deploy_sentry":
+        sentry = _semantic_param_copy(p, ["placement", "attackIntervalTicks", "targetRangeTiles", "helperLifetimeTicks", "shotCount", "speed", "spreadRadians", "movement", "effect", "onHit", "projectileShape", "secondaryProjectileShape", "secondaryLifetimeTicks", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance"])
+        sentry.update({"runtimeFamily": "sentry", "delivery": "summon", "weaponFamily": "sentry", "projectileFamily": "sentry", "sentryPlacement": p.get("placement", "grounded"), "sentryAttackIntervalTicks": p.get("attackIntervalTicks", 45), "sentryTargetRangeTiles": p.get("targetRangeTiles", 30), "sentryLifetimeTicks": p.get("helperLifetimeTicks", 3600)})
+        return [("shoot_projectile", sentry)]
+
+    if fn == "spawn_temporary_helper_projectile":
+        common.setdefault("movement", "orbit" if family in {"orbiter", "wisp", "pet_attack"} else "drift")
+        common.update({"runtimeFamily": "summon", "delivery": "summon", "weaponFamily": family or "orbiter", "projectileFamily": family or "temporary_helper"})
         return [("shoot_projectile", common)]
 
     return [(fn, p)]
@@ -383,4 +309,4 @@ def light_repair_runtime_family_from_fields(params: dict[str, Any]) -> tuple[str
     srcs = "+".join(src for fam, src in signals if fam == unique[0])
     return unique[0], f"light:{srcs}"
 
-__all__ = ['_iter_parent_tags', '_parent_grounded_onhit', '_material_color_name', '_material_effect_hint', '_truthy', '_semantic_param_copy', '_weapon_subfamily_from_fields', '_attack_pattern_tags_from_patch', '_sound_query_from_patch', '_apply_armor_slot_budget', '_expand_semantic_runtime_call', '_runtime_family_from_fields', '_runtime_family_group_to_executor', 'light_repair_runtime_family_from_fields']
+__all__ = ['_iter_parent_tags', '_parent_grounded_onhit', '_truthy', '_semantic_param_copy', '_apply_armor_slot_budget', '_expand_semantic_runtime_call', '_runtime_family_from_fields', '_runtime_family_group_to_executor', 'light_repair_runtime_family_from_fields']

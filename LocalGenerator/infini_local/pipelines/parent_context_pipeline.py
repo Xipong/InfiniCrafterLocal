@@ -1,23 +1,8 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
-import math
-import os
-import queue
-import random
 import re
-import shlex
-import subprocess
-import time
-import traceback
-from pathlib import Path
 from typing import Any
-
-from urllib import request as urlrequest
-from urllib import error as urlerror
-from urllib.parse import urlencode
 
 from infini_local.core.item_identity_tools import (
     dict_get_ci,
@@ -844,11 +829,6 @@ def _projectile_semantics_for_llm(profile: dict[str, Any]) -> dict[str, Any]:
         out["tileCollisionSemantics"] = "source projectile does not collide with tiles; may be held/visual/contact style"
     return out
 
-def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm as _raw_parent_card_for_llm
-
-    return _raw_parent_card_for_llm(item)
-
 def combined_tags(*items: dict[str, Any], data: dict[str, Any] | None = None) -> set[str]:
     tags: set[str] = set()
     for item in items:
@@ -876,5 +856,6 @@ def behavior_policy_for_prompt(a: dict[str, Any], b: dict[str, Any]) -> dict[str
     }
 
 # Parent-relative soft damage caps are deliberately not exposed to the LLM prompt.
-# Balance lives in combine_pipeline.authored_weapon_damage()/clamp_vanilla_like_weapon_damage();
+# Balance lives in llm_authoring_prompt.authored_weapon_damage() and
+# combine_balance.clamp_vanilla_like_weapon_damage();
 # this module only packages raw parent facts and hard executable context for authoring.

@@ -6,9 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image
-import server
-
-VISUAL = server.visual_generation_pipeline
+from infini_local.pipelines import visual_soul as VISUAL
 
 from csharp_partial_reader import read_text_with_partial_bundles
 ROOT = Path(__file__).resolve().parents[2]

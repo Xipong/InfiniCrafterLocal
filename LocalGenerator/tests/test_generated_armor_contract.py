@@ -5,7 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.web import api as server
+from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.final_normalize import final_normalize
 
 
 from csharp_partial_reader import read_text_with_partial_bundles
@@ -79,7 +80,7 @@ def test_generated_armor_runtime_plan_preserves_full_armor_property_surface() ->
         },
     }
 
-    child = server.final_normalize(server.validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "armor_smoke"))
+    child = final_normalize(validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "armor_smoke"))
 
     assert child["category"] == "armor"
     assert child["gameplay"]["kind"] == "armor"

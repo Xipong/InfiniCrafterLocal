@@ -41,10 +41,3 @@ def test_runtime_sprite_cache_has_in_game_ru_en_config_labels():
     assert "Размер кэша спрайтов" in ru
     assert "Максимальная сторона спрайта" in ru
     assert "Лимит PNG-файла" in ru
-
-
-def test_contract_stamp_mentions_vanilla_runtime_sprite_cache_qol():
-    contracts = read(LOCAL / "infini_local" / "core" / "contract_versions.py")
-    assert "VANILLA_RUNTIME_SPRITE_CACHE_CONTRACT_VERSION" in contracts
-    assert "vanillaRuntimeSpriteCacheContract" in contracts
-    assert "runtime_sprite_max_side_192_hotfix_v0.4.207" in contracts

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "infini.agent-task.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "goal",
+    "baseRevision",
+    "allowedBoundaries",
+    "acceptance"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allowedBoundaries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Repository path globs the writer may change; use ** for owned subtrees."
+    },
+    "forbiddenChanges": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Repository path globs that must remain untouched even when an allowed glob overlaps."
+    },
+    "acceptance": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "requiresBuild": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

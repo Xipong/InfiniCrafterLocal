@@ -6,6 +6,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+from infini_local.core.boundary_models import (
+    ATTACK_DEBUG_ONLY_FIELDS,
+    GAMEPLAY_DEBUG_ONLY_FIELDS,
+    REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS,
+)
+
 
 
 # AGENT MAP: world-scoped recipe storage.
@@ -405,6 +411,20 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
     if not isinstance(data, dict):
         return data
     out = strip_runtime_only_fields(data)
+    attack = out.get("attack") if isinstance(out.get("attack"), dict) else None
+    gameplay = out.get("gameplay") if isinstance(out.get("gameplay"), dict) else None
+    if attack is not None:
+        out["attack"] = {k: v for k, v in attack.items() if k not in ATTACK_DEBUG_ONLY_FIELDS}
+    if gameplay is not None:
+        clean_gameplay = {k: v for k, v in gameplay.items() if k not in GAMEPLAY_DEBUG_ONLY_FIELDS}
+        rejected = clean_gameplay.get("rejectedEngineCalls")
+        if isinstance(rejected, list):
+            clean_gameplay["rejectedEngineCalls"] = [
+                {k: v for k, v in row.items() if k not in REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS}
+                if isinstance(row, dict) else row
+                for row in rejected
+            ]
+        out["gameplay"] = clean_gameplay
     out["debug"] = delivery_safe_debug(out.get("debug"))
     return out
 

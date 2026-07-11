@@ -6,13 +6,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from infini_local.pipelines.pipeline_support import (
+from infini_local.core.config_bootstrap import (
     APP_VERSION,
     SPRITE_DIR,
-    VISUAL_PIPELINE_PROFILE,
     WORLD_RECIPES_DIR,
-    asset_sync_service,
 )
+from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFILE
+from infini_local.services import asset_sync_service
 from infini_local.pipelines.projectile_affordance import infer_projectile_visual_family
 from infini_local.pipelines.visual_prompt_contracts import (
     effective_projectile_canvas,

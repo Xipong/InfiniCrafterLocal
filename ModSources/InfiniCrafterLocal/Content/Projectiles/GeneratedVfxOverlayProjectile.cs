@@ -94,7 +94,7 @@ public sealed class GeneratedVfxOverlayProjectile : ModProjectile
         if (!_started)
         {
             _started = true;
-            if (_eventKind.Contains("kill") || _eventKind.Contains("expire") || _eventKind.Contains("decay"))
+            if (_eventKind == "kill")
                 InfiniVfxRuntime.OnKill(Projectile, _spec, _manifest, ref _state);
             else
                 InfiniVfxRuntime.OnHit(Projectile, _eventCenter, _spec, _manifest, ref _state);

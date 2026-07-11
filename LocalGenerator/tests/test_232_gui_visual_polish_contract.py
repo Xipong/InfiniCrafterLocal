@@ -35,13 +35,13 @@ def test_settings_gui_general_tab_uses_cards_for_key_sections() -> None:
 
 
 def test_settings_gui_headless_shim_covers_new_tk_widgets() -> None:
-    assert "from infini_local.desktop.tk_compat import (" in SOURCE
+    assert "from infini_local.desktop.tk_compat import tk, ttk" in SOURCE
     assert "Frame = _TkHeadlessBase" in TK_COMPAT_SOURCE
     assert "Button = _TkHeadlessBase" in TK_COMPAT_SOURCE
 
 
 def test_settings_gui_small_widgets_are_extracted_from_main_gui() -> None:
-    assert "from infini_local.desktop.settings_widgets import (" in SOURCE
+    assert "from infini_local.desktop.settings_widgets import" in SOURCE
     assert "class ToolTip" not in SOURCE
     assert "class ScrollFrame" not in SOURCE
     assert "class ToolTip" in SETTINGS_WIDGETS_SOURCE

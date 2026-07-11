@@ -73,64 +73,69 @@ class ServerUtilityRoutes:
         self.Image = image_module
 
     def handle_get(self, handler: Any, path: str) -> bool:
-        if path.startswith("/shutdown"):
+        request_path = urlparse(path).path
+
+        # path.startswith("/shutdown") intentionally avoided for exact route matching + query support.
+        if request_path == "/shutdown":
             self.shutdown(handler)
             return True
-        if path.startswith("/health"):
+        if request_path == "/health":
             handler.json(self.health_payload())
             return True
-        if path.startswith("/mp_connect.json"):
+        if request_path == "/mp_connect.json":
             handler.json({"ok": True, "version": self.app_version, "multiplayer": self.multiplayer_connect_info()})
             return True
-        if path.startswith("/mp_connect"):
+        if request_path == "/mp_connect":
             self.mp_connect_html(handler)
             return True
-        if path.startswith("/trace.json") or path.startswith("/debug/trace"):
+        if request_path == "/trace.json" or request_path == "/debug/trace":
             handler.json(self.trace_snapshot())
             return True
-        if path.startswith("/trace_clear"):
+        if request_path == "/trace_clear":
             self.trace_clear(handler)
             return True
-        if path.startswith("/trace"):
+        if request_path == "/trace":
             self.write_html(handler, self.trace_snapshot_html())
             return True
-        if path.startswith("/sdcpp_start"):
-            self.sdcpp_start_endpoint(handler)
-            return True
-        if path.startswith("/sdcpp_debug"):
-            handler.json(self.sdcpp_debug_snapshot(include_log_tail=True))
-            return True
-        if path.startswith("/visual_doctor.json") or path.startswith("/zimage_doctor.json"):
+        if request_path.startswith("/sdcpp"):
+            if request_path == "/sdcpp_start":
+                self.sdcpp_start_endpoint(handler)
+                return True
+            if request_path == "/sdcpp_debug":
+                handler.json(self.sdcpp_debug_snapshot(include_log_tail=True))
+                return True
+            return False
+        if request_path in {"/visual_doctor.json", "/zimage_doctor.json"}:
             handler.json(self.visual_doctor_payload(path))
             return True
-        if path.startswith("/visual_doctor") or path.startswith("/zimage_doctor"):
+        if request_path in {"/visual_doctor", "/zimage_doctor"}:
             self.visual_doctor_html(handler, path)
             return True
-        if path.startswith("/debug/generate_test_sprite"):
+        if request_path == "/debug/generate_test_sprite":
             self.generate_test_sprite(handler, path)
             return True
-        if path.startswith("/debug/last_combine_failure"):
+        if request_path == "/debug/last_combine_failure":
             handler.json(self.last_combine_failure_payload())
             return True
-        if path.startswith("/debug/recipe_health"):
+        if request_path == "/debug/recipe_health":
             handler.json({"recipeStorage": "world_recipes_files_only", "health": self.debug_recipe_health()[:100]})
             return True
-        if path.startswith("/debug/contracts"):
+        if request_path == "/debug/contracts":
             handler.json(self.debug_contracts())
             return True
-        if path.startswith("/debug/latest_recipe") or path.startswith("/debug/recipe_dump"):
+        if request_path in {"/debug/latest_recipe", "/debug/recipe_dump"}:
             handler.json(self.debug_latest_recipe_dump(path))
             return True
-        if path.startswith("/debug/recipes"):
+        if request_path == "/debug/recipes":
             handler.json({"recipeStorage": "world_recipes_files_only", "recipes": self.debug_recipes()[:50]})
             return True
-        if path.startswith("/debug/worlds"):
+        if request_path == "/debug/worlds":
             handler.json({"worldRecipesDir": str(self.world_recipes_dir), "worlds": self.debug_worlds()})
             return True
-        if path.startswith("/get_asset"):
+        if request_path == "/get_asset":
             self.get_asset(handler, path)
             return True
-        if path.startswith("/sprite/"):
+        if request_path.startswith("/sprite/"):
             self.sprite_file(handler, path)
             return True
         return False

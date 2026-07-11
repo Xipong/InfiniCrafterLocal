@@ -6,7 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
+from infini_local.pipelines.parent_context_pipeline import effective_projectile_profile_of
+from infini_local.pipelines.parent_context_pipeline import projectile_profile_of
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 
 def _check_raw_parent_card_keeps_runtime_facts_but_not_texture_metrics_for_llm() -> None:
@@ -62,7 +64,7 @@ def _check_raw_parent_card_keeps_runtime_facts_but_not_texture_metrics_for_llm()
         },
     }
 
-    card = server.raw_parent_card_for_llm(bow)
+    card = raw_parent_card_for_llm(bow)
     assert card["raw"]["item"]["shoot"] == 1
     assert card["raw"]["item"]["useAmmo"] == 1
     assert card["raw"]["directProjectile"]["source"] == "item.shoot"
@@ -89,13 +91,8 @@ def _check_raw_parent_card_keeps_runtime_facts_but_not_texture_metrics_for_llm()
     assert "materialeffects" not in blob
     assert "visualjustification" not in blob
 
-    assert server.projectile_profile_of(bow)["source"] == "item.shoot"
-    assert server.effective_projectile_profile_of(bow)["source"] == "weapon_item.shoot_field"
-
-
-if __name__ == "__main__":
-    test_raw_parent_card_keeps_runtime_facts_but_not_texture_metrics_for_llm()
-    print("OK parent card contract")
+    assert projectile_profile_of(bow)["source"] == "item.shoot"
+    assert effective_projectile_profile_of(bow)["source"] == "weapon_item.shoot_field"
 
 
 def _check_raw_parent_card_includes_generated_parent_summary() -> None:
@@ -117,7 +114,7 @@ def _check_raw_parent_card_includes_generated_parent_summary() -> None:
             "attack": {"enabled": True, "runtimePlanAuthored": True, "runtimeFamily": "flail", "movement": "flail_tether", "effect": "shadow", "onHit": "blackhole_pull"},
         },
     }
-    card = server.raw_parent_card_for_llm(item)
+    card = raw_parent_card_for_llm(item)
     summary = card["raw"]["generatedParent"]["summary"]
     assert summary["fantasy"] == "A heavy mana flail with a void anchor."
     assert summary["runtime"] == "flail"
@@ -135,7 +132,7 @@ def _check_raw_parent_card_includes_cross_mod_identity_facts() -> None:
         "createTile": -1,
         "createWall": -1,
     }
-    card = server.raw_parent_card_for_llm(item)
+    card = raw_parent_card_for_llm(item)
     x = card["raw"]["crossModIdentity"]
     assert x["sourceMod"] == "ExampleMod"
     assert x["fullName"] == "ExampleMod/ExampleWand"
@@ -157,7 +154,7 @@ def _check_raw_parent_card_includes_compact_vanilla_flags_v3() -> None:
         "createTile": -1,
         "createWall": -1,
     }
-    card = server.raw_parent_card_for_llm(item)
+    card = raw_parent_card_for_llm(item)
     flags = card["raw"]["vanillaFlags"]
     assert flags["material"] is True
     assert flags["accessory"] is True
@@ -179,7 +176,7 @@ def _check_raw_parent_card_marks_fishing_bait_as_future_disabled_context() -> No
         "createTile": -1,
         "createWall": -1,
     }
-    card = server.raw_parent_card_for_llm(item)
+    card = raw_parent_card_for_llm(item)
     assert card["raw"]["item"]["fishingPole"] == 27
     assert card["raw"]["vanillaFlags"]["fishingPole"] == 27
     fishing = card["semantics"]["fishingBaitSemantics"]
@@ -198,7 +195,7 @@ def _check_raw_parent_card_marks_fishing_bait_as_future_disabled_context() -> No
         "createTile": -1,
         "createWall": -1,
     }
-    bait_card = server.raw_parent_card_for_llm(bait)
+    bait_card = raw_parent_card_for_llm(bait)
     assert bait_card["raw"]["item"]["bait"] == 50
     assert bait_card["raw"]["vanillaFlags"]["bait"] == 50
     assert "bait_parent" in bait_card["semantics"]["fishingBaitSemantics"]["roles"]

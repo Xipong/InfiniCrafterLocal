@@ -234,10 +234,7 @@ public sealed partial class InfiniCraftPlayer
         if (!IsServerAuthoritativeCraft)
             return;
         if (success)
-        {
-            lock (ServerCommittedCraftRequestsLock)
-                ServerCommittedCraftRequests["servercraft:" + Player.whoAmI + ":" + _serverRequestId] = string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName;
-        }
+            RememberServerCraftCommit(ServerCraftKey(Player.whoAmI, _serverRequestId), string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName);
         SendCraftCommitResult(Player.whoAmI, _serverRequestId, success, itemName ?? "", message ?? "");
     }
 
@@ -440,12 +437,30 @@ public sealed partial class InfiniCraftPlayer
     private static string ServerCraftKey(int playerId, string requestId)
         => "servercraft:" + playerId + ":" + NormalizeCraftRequestId(requestId);
 
+    private static void RememberServerCraftCommit(string key, string itemName)
+    {
+        lock (ServerCommittedCraftRequestsLock)
+        {
+            if (!ServerCommittedCraftRequests.ContainsKey(key))
+                ServerCommittedCraftRequestOrder.Enqueue(key);
+            ServerCommittedCraftRequests[key] = itemName;
+            while (ServerCommittedCraftRequestOrder.Count > MaxServerCraftRequestCacheEntries)
+                ServerCommittedCraftRequests.Remove(ServerCommittedCraftRequestOrder.Dequeue());
+        }
+    }
+
     private static void MarkServerCraftCancelled(int playerId, string requestId)
     {
         if (!HasCraftRequestId(requestId))
             return;
         lock (ServerCommittedCraftRequestsLock)
-            ServerCancelledCraftRequests.Add(ServerCraftKey(playerId, requestId));
+        {
+            string key = ServerCraftKey(playerId, requestId);
+            if (ServerCancelledCraftRequests.Add(key))
+                ServerCancelledCraftRequestOrder.Enqueue(key);
+            while (ServerCancelledCraftRequestOrder.Count > MaxServerCraftRequestCacheEntries)
+                ServerCancelledCraftRequests.Remove(ServerCancelledCraftRequestOrder.Dequeue());
+        }
     }
 
     private static bool IsServerCraftCancelled(int playerId, string requestId)
@@ -646,6 +661,8 @@ public sealed partial class InfiniCraftPlayer
         {
             ServerCommittedCraftRequests.Clear();
             ServerCancelledCraftRequests.Clear();
+            ServerCommittedCraftRequestOrder.Clear();
+            ServerCancelledCraftRequestOrder.Clear();
         }
     }
 

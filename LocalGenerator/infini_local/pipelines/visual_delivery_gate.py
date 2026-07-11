@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-import sys
 import json
 from pathlib import Path
 from typing import Any
 
-from infini_local.pipelines.pipeline_support import (
-    IMAGE_BACKEND,
+from infini_local.core.config_bootstrap import (
     SPRITE_DIR,
+    WORLD_RECIPES_DIR,
+)
+from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.pipelines.pipeline_visual_config import (
+    IMAGE_BACKEND,
     VISUAL_ALLOW_PROCEDURAL_FALLBACK,
     VISUAL_REQUIRE_ITEM_SPRITE,
     VISUAL_REQUIRE_ZIMAGE_BACKEND,
     VISUAL_STRICT_AI_AUTHORSHIP,
-    WORLD_RECIPES_DIR,
     ZIMAGE_PROMPT_CONTRACT,
-    asset_sync_service,
-    runtime_plan,
 )
+from infini_local.services import asset_sync_service
 from infini_local.pipelines.visual_asset_plan import authored_asset_mode
 from infini_local.pipelines.visual_prompt_contracts import image_backend_is_zimage
 
@@ -27,11 +28,6 @@ from infini_local.pipelines.visual_prompt_contracts import image_backend_is_zima
 
 
 
-def _cfg(name: str, default: Any) -> Any:
-    facade = sys.modules.get("infini_local.pipelines.visual_generation_pipeline")
-    if facade is not None and hasattr(facade, name):
-        return getattr(facade, name)
-    return default
 class VisualDeliveryBlocked(RuntimeError):
     """Fresh craft cannot be delivered because the mandatory visual asset is not usable."""
 
@@ -56,7 +52,7 @@ def _asset_path_exists(path_value: Any) -> bool:
         name = asset_sync_service.asset_filename_from_path(text)
         if not name:
             return False
-        found = asset_sync_service.find_asset_file(name, sprite_dir=_cfg('SPRITE_DIR', SPRITE_DIR), world_recipes_dir=_cfg('WORLD_RECIPES_DIR', WORLD_RECIPES_DIR))
+        found = asset_sync_service.find_asset_file(name, sprite_dir=SPRITE_DIR, world_recipes_dir=WORLD_RECIPES_DIR)
         return bool(found and found.exists() and found.is_file())
     except Exception:
         return False
@@ -74,12 +70,12 @@ def visual_delivery_report(data: dict[str, Any]) -> dict[str, Any]:
     problems: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
 
-    if _cfg('VISUAL_REQUIRE_ZIMAGE_BACKEND', VISUAL_REQUIRE_ZIMAGE_BACKEND) and not image_backend_is_zimage():
+    if VISUAL_REQUIRE_ZIMAGE_BACKEND and not image_backend_is_zimage():
         problems.append({
             "code": "zimage_required_but_inactive",
             "message": "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND=1, but the active image backend is not Z-Image/sd.cpp.",
-            "imageBackend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND),
-            "zImagePromptContract": _cfg('ZIMAGE_PROMPT_CONTRACT', ZIMAGE_PROMPT_CONTRACT),
+            "imageBackend": IMAGE_BACKEND,
+            "zImagePromptContract": ZIMAGE_PROMPT_CONTRACT,
         })
 
     item_status = str(visual.get("spriteStatus") or "")
@@ -93,18 +89,18 @@ def visual_delivery_report(data: dict[str, Any]) -> dict[str, Any]:
             "path": item_path,
             "message": "Mandatory item sprite exists but failed an art-quality validation; deliver it with warning instead of treating it as missing.",
         })
-    if _cfg('VISUAL_REQUIRE_ITEM_SPRITE', VISUAL_REQUIRE_ITEM_SPRITE) and not item_ok:
+    if VISUAL_REQUIRE_ITEM_SPRITE and not item_ok:
         problems.append({
             "code": "required_item_sprite_missing",
             "message": "Generated item sprite is required, but no usable processed PNG is present.",
             "status": item_status,
             "path": item_path,
-            "backend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND),
+            "backend": IMAGE_BACKEND,
         })
 
     slots: list[dict[str, Any]] = [{
         "role": "item",
-        "required": bool(_cfg('VISUAL_REQUIRE_ITEM_SPRITE', VISUAL_REQUIRE_ITEM_SPRITE)),
+        "required": bool(VISUAL_REQUIRE_ITEM_SPRITE),
         "status": item_status,
         "path": item_path,
         "exists": _asset_path_exists(item_path),
@@ -144,12 +140,12 @@ def visual_delivery_report(data: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "ok": not problems,
-        "requiredItemSprite": bool(_cfg('VISUAL_REQUIRE_ITEM_SPRITE', VISUAL_REQUIRE_ITEM_SPRITE)),
-        "requireZImageBackend": bool(_cfg('VISUAL_REQUIRE_ZIMAGE_BACKEND', VISUAL_REQUIRE_ZIMAGE_BACKEND)),
-        "imageBackend": _cfg('IMAGE_BACKEND', IMAGE_BACKEND),
+        "requiredItemSprite": bool(VISUAL_REQUIRE_ITEM_SPRITE),
+        "requireZImageBackend": bool(VISUAL_REQUIRE_ZIMAGE_BACKEND),
+        "imageBackend": IMAGE_BACKEND,
         "zImageBackendActive": image_backend_is_zimage(),
-        "strictAiAuthorship": bool(_cfg('VISUAL_STRICT_AI_AUTHORSHIP', VISUAL_STRICT_AI_AUTHORSHIP)),
-        "proceduralFallbackAllowed": bool(_cfg('VISUAL_ALLOW_PROCEDURAL_FALLBACK', VISUAL_ALLOW_PROCEDURAL_FALLBACK)),
+        "strictAiAuthorship": bool(VISUAL_STRICT_AI_AUTHORSHIP),
+        "proceduralFallbackAllowed": bool(VISUAL_ALLOW_PROCEDURAL_FALLBACK),
         "problems": problems,
         "warnings": warnings,
         "slots": slots,

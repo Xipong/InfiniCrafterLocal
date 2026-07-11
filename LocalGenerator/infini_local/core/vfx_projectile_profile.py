@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from infini_local.core.effect_catalog import normalize_attack_pattern
 from infini_local.core.item_identity_tools import (
     dict_get_ci,
     fingerprint_of,

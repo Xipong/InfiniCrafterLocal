@@ -10,20 +10,16 @@ from infini_local.core.item_identity_tools import (
     item_field,
     name_of,
 )
-from infini_local.core.vfx_composition import (
+from infini_local.core.vfx_composition_primitives import (
     _vfx_available_roles,
     _vfx_words,
 )
-from infini_local.core.vfx_director_context import (
-    _vfx_director_tag_packet,
-    build_vfx_director_weak_hints,
-)
+from infini_local.core.vfx_director_context import _vfx_director_tag_packet
 from infini_local.core.vfx_director_contract import vfx_director_surface
 from infini_local.core.vfx_manifest_config import (
     VFX_EFFECT_NAME_BANK_MAX_CARDS,
     VFX_EFFECT_NAME_BANK_MAX_NAMES,
     VFX_EFFECT_NAME_BANK_PATH,
-    VFX_LLM_WEAK_HINTS_ENABLED,
     load_json_file,
 )
 from infini_local.core.vfx_projectile_profile import effective_projectile_profile_of
@@ -181,8 +177,28 @@ def _vfx_compact_child_for_director(data: dict[str, Any]) -> dict[str, Any]:
         },
         "attack": {
             "enabled": attack.get("enabled"),
-            "pattern": attack.get("pattern") or attack.get("attackPattern"),
+            "runtimeFamily": attack.get("runtimeFamily"),
             "delivery": attack.get("delivery"),
+            "movement": attack.get("movement"),
+            "effect": attack.get("effect"),
+            "onHit": attack.get("onHit"),
+            "pattern": attack.get("pattern") or attack.get("attackPattern"),
+            "weaponFamily": attack.get("weaponFamily"),
+            "projectileFamily": attack.get("projectileFamily"),
+            "shotCount": attack.get("shotCount"),
+            "spreadRadians": attack.get("spreadRadians"),
+            "splitCount": attack.get("splitCount"),
+            "secondaryTrigger": attack.get("secondaryTrigger"),
+            "channelUse": attack.get("channelUse"),
+            "beamWidthPx": attack.get("beamWidthPx"),
+            "beamChargeTicks": attack.get("beamChargeTicks"),
+            "chargeTicks": attack.get("chargeTicks"),
+            "chargePowerMultiplier": attack.get("chargePowerMultiplier"),
+            "sentryPlacement": attack.get("sentryPlacement"),
+            "sentryAttackIntervalTicks": attack.get("sentryAttackIntervalTicks"),
+            "sentryTargetRangeTiles": attack.get("sentryTargetRangeTiles"),
+            "sentryLifetimeTicks": attack.get("sentryLifetimeTicks"),
+            "immunityCooldown": attack.get("immunityCooldown"),
             "toyIdentity": attack.get("toyIdentity"),
             "specialRule": attack.get("specialRule"),
             "behaviorTimeline": attack.get("behaviorTimeline"),
@@ -215,7 +231,6 @@ def build_vfx_director_prompt(parent_a: dict[str, Any] | None, parent_b: dict[st
     parent_a_card = _vfx_compact_item_for_director(parent_a)
     parent_b_card = _vfx_compact_item_for_director(parent_b)
     child_card = _vfx_compact_child_for_director(child_item)
-    weak_hints = build_vfx_director_weak_hints(parent_a, parent_b, child_item)
     packet = {
         "parentA": parent_a_card,
         "parentB": parent_b_card,
@@ -228,13 +243,9 @@ def build_vfx_director_prompt(parent_a: dict[str, Any] | None, parent_b: dict[st
             "tagProvenance": "per-tag source + matched text/fact; vanilla parents are not treated as hand-authored tagged items",
         },
     }
-    if VFX_LLM_WEAK_HINTS_ENABLED:
-        packet["weakHints"] = weak_hints
-        packet["weakHintsPolicy"] = "optional_non_authoritative"
-        packet["weakHintsContract"] = "Weak hints come from the legacy codifier/tags_of layer. They are optional, may be wrong or generic, and are not theme tags or semantic tags."
     return {
         "vfxInputPacket": packet,
-        "weakHintsInstruction": "Weak hints are optional. Choose VFX from combined child concept, attack/visual fields, parent facts, VFX surface, and hints; avoid same-hint repetition.",
+        "runtimeTruthInstruction": "Use compiled runtimeFamily/delivery/movement/effect/onHit/secondaryTrigger/cadence to choose matching VFX events and exact rendererKind values. Do not infer gameplay from names or prose.",
         "parentA": parent_a_card,
         "parentB": parent_b_card,
         "childItem": child_card,

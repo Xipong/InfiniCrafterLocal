@@ -1,28 +1,28 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
-import math
-import os
-import queue
 import random
-import re
-import shlex
-import subprocess
 import time
-import traceback
 from pathlib import Path
 from typing import Any
 
-from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first, env_path
+from infini_local.core.env_utils import env_float, env_int, env_str
 from urllib import request as urlrequest
 from urllib import error as urlerror
 from urllib.parse import urlencode
 
-from infini_local.pipelines.pipeline_support import (
+from infini_local.core.config_bootstrap import (
+    APP_VERSION,
+    CACHE_DIR,
+    ROOT,
+    SPRITE_DIR,
+)
+from infini_local.core.image_dependencies import (
     Image,
     ImageDraw,
+)
+from infini_local.pipelines.pipeline_visual_config import (
     A1111_BATCH_SIZE,
     A1111_HEIGHT,
     A1111_LORA_NAME,
@@ -30,9 +30,7 @@ from infini_local.pipelines.pipeline_support import (
     A1111_TRIGGER,
     A1111_URL,
     A1111_WIDTH,
-    APP_VERSION,
     BG_REMOVE_MODE,
-    CACHE_DIR,
     COMFYUI_CFG,
     COMFYUI_CHECKPOINT,
     COMFYUI_CLIENT_ID,
@@ -62,7 +60,7 @@ from infini_local.pipelines.pipeline_support import (
     IMAGE_BACKEND,
     REMOVE_BG,
     REQUIRE_PILLOW,
-    ROOT,
+    SDCPP_CFG,
     SDCPP_DEFAULT_COMMAND_TEMPLATE,
     SDCPP_HEIGHT,
     SDCPP_LLM,
@@ -71,42 +69,45 @@ from infini_local.pipelines.pipeline_support import (
     SDCPP_LORA_PROMPT_TAGS,
     SDCPP_LORA_WEIGHT,
     SDCPP_MODEL,
+    SDCPP_SAMPLER,
     SDCPP_SEED,
     SDCPP_SERVER_AUTOSTART,
     SDCPP_SERVER_COMMAND_MODE,
     SDCPP_SERVER_COMMAND_TEMPLATE,
     SDCPP_SERVER_EXE,
     SDCPP_SERVER_EXTRA_ARGS,
-    SDCPP_SERVER_HOST,
-    SDCPP_SERVER_PORT,
-    SDCPP_STEPS,
-    SDCPP_CFG,
-    SDCPP_SAMPLER,
-    ZIMAGE_PROMPT_CONTRACT,
-    ZIMAGE_POSITIVE_ONLY,
     SDCPP_SERVER_HEALTH_PATHS,
+    SDCPP_SERVER_HOST,
     SDCPP_SERVER_LOG_FILE,
     SDCPP_SERVER_PAYLOAD_STYLE,
+    SDCPP_SERVER_PORT,
+    SDCPP_ROCM_COMPAT_ROOT,
     SDCPP_SERVER_REQUEST_TIMEOUT,
     SDCPP_SERVER_SHOW_CONSOLE,
     SDCPP_SERVER_STARTUP_TIMEOUT,
     SDCPP_SERVER_STATE,
     SDCPP_SERVER_TXT2IMG_PATHS,
     SDCPP_SERVER_URL,
+    SDCPP_STEPS,
     SDCPP_VAE,
     SDCPP_WIDTH,
-    SPRITE_DIR,
     VISUAL_GENERATION_TIMEOUT,
+    ZIMAGE_POSITIVE_ONLY,
+    ZIMAGE_PROMPT_CONTRACT,
     _sdcpp_config,
-    _tail_text_file,
     cleanup_sdcpp_server_process,
-    log_event,
-    safe_file_part,
+)
+from infini_local.services import (
     sdcpp_backend,
     sdcpp_service,
-    trace_event,
     visual_asset_pipeline,
 )
+from infini_local.storage.trace_runtime import (
+    _tail_text_file,
+    log_event,
+    trace_event,
+)
+from infini_local.storage.world_recipe_runtime import safe_file_part
 
 from infini_local.pipelines.llm_transport import (
     http_get_json,
@@ -322,6 +323,7 @@ def ensure_sdcpp_server() -> bool:
         cleanup_process=cleanup_sdcpp_server_process,
         log_event=log_event,
         tail_text_file=_tail_text_file,
+        process_env=sdcpp_backend.server_process_environment(_sdcpp_config()),
     )
     return ok
 
@@ -353,8 +355,8 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
         return []
     out: list[str] = []
     variants = max(1, int(GENERATE_VARIANTS))
-    width = env_int("INFINI_SDCPP_WIDTH", SDCPP_WIDTH, lo=64, hi=2048)
-    height = env_int("INFINI_SDCPP_HEIGHT", SDCPP_HEIGHT, lo=64, hi=2048)
+    width = SDCPP_WIDTH
+    height = SDCPP_HEIGHT
     prompt = str(prompt or "")
     paths = SDCPP_SERVER_TXT2IMG_PATHS or ["/sdapi/v1/txt2img"]
     styles = [SDCPP_SERVER_PAYLOAD_STYLE] if SDCPP_SERVER_PAYLOAD_STYLE != "auto" else ["a1111", "sdcpp", "openai"]
@@ -662,4 +664,5 @@ def _sdcpp_config() -> sdcpp_backend.SdcppBackendConfig:
         health_paths=SDCPP_SERVER_HEALTH_PATHS,
         zimage_prompt_contract=ZIMAGE_PROMPT_CONTRACT,
         zimage_positive_only=ZIMAGE_POSITIVE_ONLY,
+        rocm_compat_root=SDCPP_ROCM_COMPAT_ROOT,
     )

@@ -25,14 +25,15 @@ from infini_local.core.item_identity_tools import (
     stable_hash,
     tags_of,
 )
+from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_signals import HARD_TAGS, VISUAL_SYNONYMS
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 
 
 # AGENT MAP: result identity/category policy seam for combine_pipeline.
 # Owns generated item naming, category sampling/coercion, canonical result
-# representation helpers and palette/anchor derivation. Public callers use
-# infini_local.pipelines.combine_pipeline for the combined pipeline API.
+# representation helpers and palette/anchor derivation. Callers import this
+# owner directly; combine_pipeline is not a compatibility API.
 
 USE_LLM = env_bool("INFINI_USE_LLM", False)
 CATEGORY_CREATIVITY = env_float("INFINI_CATEGORY_CREATIVITY", 0.38)
@@ -217,7 +218,6 @@ def repair_name_if_needed(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
 
     if not new_name or bad_result_name(new_name, a, b):
         if planner == "llm" or planner.startswith("llm_"):
-            from infini_local.pipelines.pipeline_support import PlannerUnavailable
             raise PlannerUnavailable("LLM returned a service/invalid item name and name repair failed; craft failed and ingredients must be refunded")
         new_name = creative_result_name(a, b, ca, cb, category, tags, key)
         repair_source = "deterministic_dev_name_fallback"
@@ -231,7 +231,7 @@ def repair_name_if_needed(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
 
 def try_llm_name_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str, tags: set[str], category: str) -> str | None:
     try:
-        from infini_local.pipelines.llm_authoring_pipeline import (
+        from infini_local.pipelines.llm_transport import (
             llm_chat_json,
             llm_json_response_format,
             resolve_llm_model,
@@ -263,7 +263,7 @@ def try_llm_name_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
         n = str(obj.get("name") or "").strip()
         return n or None
     except Exception as e:
-        from infini_local.pipelines.pipeline_support import log_event
+        from infini_local.storage.trace_runtime import log_event
         log_event("warn", "LLM name repair failed", {"error": repr(e)})
         return None
 

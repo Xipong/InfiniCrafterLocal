@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-import sys
 import json
 from typing import Any
 
-from infini_local.pipelines.pipeline_support import (
+from infini_local.core.runtime_family_policy import (
+    canonical_runtime_family,
+    is_canonical_runtime_family,
+    is_item_bodied_projectile_family,
+)
+from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
+from infini_local.pipelines.pipeline_visual_config import (
     CHILD_SPRITE_CANVAS,
     FIELD_SPRITE_CANVAS,
     IMPACT_SPRITE_CANVAS,
-    LLM_RUNTIME_AUTHORING,
     VISUAL_GENERATE_CHILD_FIELD_IMAGES,
     VISUAL_GENERATE_IMPACT_IMAGES,
     VISUAL_GENERATE_PROJECTILE_IMAGES,
-    runtime_plan,
 )
 from infini_local.pipelines.visual_prompt_contracts import effective_projectile_canvas
 
@@ -22,13 +26,6 @@ from infini_local.pipelines.visual_prompt_contracts import effective_projectile_
 # gameplay from prompt prose.
 
 
-
-
-def _cfg(name: str, default: Any) -> Any:
-    facade = sys.modules.get("infini_local.pipelines.visual_generation_pipeline")
-    if facade is not None and hasattr(facade, name):
-        return getattr(facade, name)
-    return default
 def should_generate_child_asset(data: dict[str, Any]) -> bool:
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
     try:
@@ -37,7 +34,7 @@ def should_generate_child_asset(data: dict[str, Any]) -> bool:
     except Exception:
         pass
     onhit = str(attack.get("onHit") or "").lower()
-    if onhit in {"split", "starburst", "starfall", "spore_cloud", "mini_missiles", "vortex_spawn", "radial_beams"}:
+    if onhit in {"split", "starburst", "overhead_barrage", "spore_cloud", "mini_missiles", "vortex_spawn", "radial_beams"}:
         return True
     visual = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
     return bool(str(visual.get("childSpritePrompt") or visual.get("childVfx") or "").strip())
@@ -54,27 +51,11 @@ def _visual_kit(data: dict[str, Any]) -> dict[str, Any]:
     return kit if isinstance(kit, dict) else {}
 
 def _role_baked_asset_spec(data: dict[str, Any], role: str) -> dict[str, Any]:
-    """Model-authored per-role baked asset decision.
-
-    This supports the clearer nested shape:
-      visualKit.bakedAssets.projectile = {mode/enabled/prompt/reason}
-    while keeping assetModes/projectileAssetMode as compact aliases.  Runtime never
-    infers demand from prompt text alone; only these model-authored switches matter.
-    """
-    role = (role or "").strip().lower()
-    for owner in [data.get("visualKit"), data.get("visual"), data]:
-        if not isinstance(owner, dict):
-            continue
-        baked = owner.get("bakedAssets") or owner.get("assetsWanted") or owner.get("visualAssets")
-        if isinstance(baked, dict):
-            spec = baked.get(role)
-            if isinstance(spec, dict):
-                return spec
-            if isinstance(spec, bool):
-                return {"enabled": spec}
-            if isinstance(spec, str):
-                return {"mode": spec}
-    return {}
+    """Return the one canonical model-authored asset decision."""
+    kit = _visual_kit(data)
+    baked = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
+    spec = baked.get((role or "").strip().lower())
+    return spec if isinstance(spec, dict) else {}
 
 def _role_asset_prompt(data: dict[str, Any], role: str) -> str:
     spec = _role_baked_asset_spec(data, role)
@@ -90,14 +71,8 @@ def _role_asset_prompt(data: dict[str, Any], role: str) -> str:
     ).strip()
 
 def _asset_mode_from_value(value: Any) -> str:
-    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if raw in {"baked", "baked_sprite", "sprite", "png", "image", "separate_sprite", "generated_sprite"}:
-        return "baked_sprite"
-    if raw in {"particle", "particles", "particle_vfx", "vfx", "dust", "vanilla_vfx", "code_vfx", "runtime_vfx"}:
-        return "particle_vfx"
-    if raw in {"none", "off", "skip", "disabled", "false", "no"}:
-        return "none"
-    return ""
+    raw = str(value or "").strip()
+    return raw if raw in {"baked_sprite", "particle_vfx", "reuse_item_sprite", "none"} else ""
 
 def compiled_child_projectile_needs_sprite(data: dict[str, Any]) -> bool:
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
@@ -111,43 +86,12 @@ def compiled_child_projectile_needs_sprite(data: dict[str, Any]) -> bool:
     return bool(str(attack.get("secondaryProjectileShape") or attack.get("secondaryMaterial") or "").strip())
 
 def authored_asset_mode(data: dict[str, Any], role: str) -> str:
-    """Return the model-authored baked-asset mode for a role.
-
-    GUI flags are capability gates only.  They must not force impact/child/field PNGs.
-    Only the LLM/visual director can request a separate baked sprite through these
-    mode fields; plain prompts are candidate descriptions, not demand.
-    """
     role = (role or "").strip().lower()
     if role == "child" and compiled_child_projectile_needs_sprite(data):
         final, _reason = visual_asset_runtime_gate(data, role, "baked_sprite")
         return final or "baked_sprite"
-    kit = _visual_kit(data)
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    modes = kit.get("assetModes") if isinstance(kit.get("assetModes"), dict) else {}
-    role_spec = _role_baked_asset_spec(data, role)
-    candidates = [
-        role_spec.get("mode") if isinstance(role_spec, dict) else None,
-        role_spec.get("assetMode") if isinstance(role_spec, dict) else None,
-        role_spec.get("spriteMode") if isinstance(role_spec, dict) else None,
-        role_spec.get("enabled") if isinstance(role_spec, dict) else None,
-        modes.get(role),
-        kit.get(f"{role}AssetMode"),
-        kit.get(f"{role}SpriteMode"),
-        visual.get(f"{role}AssetMode"),
-        attack.get(f"{role}AssetMode"),
-    ]
-    # Back-compat with a few natural boolean fields.  These are still model-authored.
-    for key in [f"bake{role.capitalize()}Sprite", f"useBaked{role.capitalize()}Sprite", f"{role}BakedSprite"]:
-        candidates.extend([kit.get(key), visual.get(key), attack.get(key)])
-    for value in candidates:
-        if isinstance(value, bool):
-            mode = "baked_sprite" if value else "particle_vfx"
-            return visual_asset_runtime_gate(data, role, mode)[0]
-        mode = _asset_mode_from_value(value)
-        if mode:
-            return visual_asset_runtime_gate(data, role, mode)[0]
-    return ""
+    spec = _role_baked_asset_spec(data, role)
+    return visual_asset_runtime_gate(data, role, _asset_mode_from_value(spec.get("mode")))[0]
 
 def visual_asset_runtime_gate(data: dict[str, Any], role: str, authored_mode: str) -> tuple[str, str]:
     """Runtime-truth gate for optional baked assets.
@@ -160,13 +104,22 @@ def visual_asset_runtime_gate(data: dict[str, Any], role: str, authored_mode: st
     if not mode:
         return "", ""
     role = (role or "").lower()
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    runtime_family = str(attack.get("runtimeFamily") or "").lower()
+    attack_raw = data.get("attack")
+    attack: dict[str, Any] = attack_raw if isinstance(attack_raw, dict) else {}
+    raw_runtime_family = attack.get("runtimeFamily")
+    runtime_family = canonical_runtime_family(raw_runtime_family)
+    if str(raw_runtime_family or "").strip() and not is_canonical_runtime_family(raw_runtime_family):
+        return "none", "noncanonical_runtime_family"
     delivery = str(attack.get("delivery") or "").lower()
     hide_graphic = bool(attack.get("hideUseGraphic")) or bool(attack.get("disableItemMeleeHitbox"))
 
     if role == "projectile" and mode == "baked_sprite":
-        # Plain broadsword/swing keeps its item/held sprite.  A separate projectile
+        role_spec = _role_baked_asset_spec(data, "projectile")
+        distinct_from_item = bool(role_spec.get("distinctFromItem"))
+        if is_item_bodied_projectile_family(runtime_family) and not distinct_from_item:
+            return "reuse_item_sprite", "item_bodied_runtime_reuses_item_sprite"
+        # Plain broadsword/swing keeps its single generated item sprite for inventory
+        # and held drawing. A separate projectile PNG is only useful for a distinct body.
         # PNG is only useful for emitted/held projectile executors.
         if runtime_family == "swing" and delivery == "swing" and not hide_graphic:
             return "particle_vfx", "melee_swing_uses_item_sprite_no_projectile_asset"
@@ -191,37 +144,25 @@ def visual_asset_runtime_gate(data: dict[str, Any], role: str, authored_mode: st
 def apply_visual_asset_runtime_gates(data: dict[str, Any], kit: dict[str, Any]) -> None:
     if not isinstance(kit, dict):
         return
-    modes = kit.get("assetModes") if isinstance(kit.get("assetModes"), dict) else {}
-    gated: dict[str, str] = {}
-    reports: list[dict[str, str]] = []
     baked = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
+    canonical: dict[str, dict[str, Any]] = {}
+    reports: list[dict[str, str]] = []
     for role in ["projectile", "impact", "child", "field"]:
-        authored = _asset_mode_from_value(modes.get(role) if isinstance(modes, dict) else "") or _asset_mode_from_value(kit.get(f"{role}AssetMode"))
-        if not authored and isinstance(baked, dict):
-            spec = baked.get(role)
-            if isinstance(spec, dict):
-                authored = _asset_mode_from_value(spec.get("mode") or spec.get("assetMode") or spec.get("enabled"))
+        spec = baked.get(role) if isinstance(baked.get(role), dict) else {}
+        authored = _asset_mode_from_value(spec.get("mode"))
         final, reason = visual_asset_runtime_gate(data, role, authored)
         if final:
-            gated[role] = final
-            kit[f"{role}AssetMode"] = final
-            if isinstance(baked, dict) and isinstance(baked.get(role), dict):
-                baked[role]["mode"] = final
+            row = dict(spec)
+            row["mode"] = final
+            canonical[role] = row
         if reason:
             reports.append({"role": role, "authoredMode": authored, "finalMode": final, "reason": reason})
-    if gated:
-        kit["assetModes"] = {**(modes if isinstance(modes, dict) else {}), **gated}
+    if canonical:
+        kit["bakedAssets"] = canonical
+    else:
+        kit.pop("bakedAssets", None)
     if reports:
         data.setdefault("debug", {})["visualAssetRuntimeGates"] = json.dumps(reports, ensure_ascii=False)
-
-def legacy_projectile_baked_sprite_fallback(data: dict[str, Any]) -> bool:
-    """Legacy prompt-only projectile PNG demand is intentionally disabled.
-
-    New worlds do not need to support old visual-director outputs.  A projectile image
-    is generated only when the model explicitly authors projectileAssetMode=baked_sprite
-    or visualKit.bakedAssets.projectile.enabled=true.
-    """
-    return False
 
 def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
     kit = _visual_kit(data)
@@ -234,18 +175,20 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
     # Item icon is generated by maybe_generate_sprite(), but include it in the manifest.
     plan.append({"role": "item", "assetId": base, "canvas": int(visual.get("preferredCanvasSize") or 32), "prompt": str(visual.get("imagePrompt") or ""), "required": True, "handledBy": "maybe_generate_sprite", "authoringPolicy": "ai_primary_non_procedural", "assetMode": "baked_sprite"})
     if isinstance(attack, dict) and attack.get("enabled"):
-        runtime_authored = bool(_cfg('LLM_RUNTIME_AUTHORING', LLM_RUNTIME_AUTHORING) and runtime_plan(data))
+        runtime_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data))
         projectile_mode = authored_asset_mode(data, "projectile")
         projectile_prompt = _role_asset_prompt(data, "projectile")
-        if _cfg('VISUAL_GENERATE_PROJECTILE_IMAGES', VISUAL_GENERATE_PROJECTILE_IMAGES) and projectile_mode == "baked_sprite":
+        if projectile_mode == "reuse_item_sprite":
+            plan.append({"role": "projectile", "assetId": base + "_projectile", "canvas": effective_projectile_canvas(data), "prompt": projectile_prompt, "required": False, "status": "reuses_item_sprite", "skipReason": "item-bodied runtime uses the generated item sprite unless a distinct flight form is explicitly authored", "authoringPolicy": "ai_primary_non_procedural", "assetMode": "reuse_item_sprite", "assetDecisionBy": "runtime_asset_contract"})
+        elif VISUAL_GENERATE_PROJECTILE_IMAGES and projectile_mode == "baked_sprite":
             plan.append({"role": "projectile", "assetId": base + "_projectile", "canvas": effective_projectile_canvas(data), "prompt": projectile_prompt, "required": not runtime_authored, "authoringPolicy": "ai_primary_non_procedural", "assetMode": "baked_sprite", "assetDecisionBy": "model"})
         else:
-            plan.append({"role": "projectile", "assetId": base + "_projectile", "canvas": effective_projectile_canvas(data), "prompt": projectile_prompt, "required": False, "status": "skipped_not_authored_baked" if _cfg('VISUAL_GENERATE_PROJECTILE_IMAGES', VISUAL_GENERATE_PROJECTILE_IMAGES) else "skipped_disabled_by_settings", "skipReason": "projectile prompt is not demand; explicit baked_sprite mode required", "authoringPolicy": "ai_primary_non_procedural", "assetMode": projectile_mode or "particle_vfx", "assetDecisionBy": "model"})
+            plan.append({"role": "projectile", "assetId": base + "_projectile", "canvas": effective_projectile_canvas(data), "prompt": projectile_prompt, "required": False, "status": "skipped_not_authored_baked" if VISUAL_GENERATE_PROJECTILE_IMAGES else "skipped_disabled_by_settings", "skipReason": "projectile prompt is not demand; explicit baked_sprite mode required", "authoringPolicy": "ai_primary_non_procedural", "assetMode": projectile_mode or "particle_vfx", "assetDecisionBy": "model"})
 
         for role, allow, canvas in [
-            ("impact", _cfg('VISUAL_GENERATE_IMPACT_IMAGES', VISUAL_GENERATE_IMPACT_IMAGES), _cfg('IMPACT_SPRITE_CANVAS', IMPACT_SPRITE_CANVAS)),
-            ("child", _cfg('VISUAL_GENERATE_CHILD_FIELD_IMAGES', VISUAL_GENERATE_CHILD_FIELD_IMAGES), _cfg('CHILD_SPRITE_CANVAS', CHILD_SPRITE_CANVAS)),
-            ("field", _cfg('VISUAL_GENERATE_CHILD_FIELD_IMAGES', VISUAL_GENERATE_CHILD_FIELD_IMAGES), _cfg('FIELD_SPRITE_CANVAS', FIELD_SPRITE_CANVAS)),
+            ("impact", VISUAL_GENERATE_IMPACT_IMAGES, IMPACT_SPRITE_CANVAS),
+            ("child", VISUAL_GENERATE_CHILD_FIELD_IMAGES, CHILD_SPRITE_CANVAS),
+            ("field", VISUAL_GENERATE_CHILD_FIELD_IMAGES, FIELD_SPRITE_CANVAS),
         ]:
             prompt = _role_asset_prompt(data, role)
             mode = authored_asset_mode(data, role)
@@ -270,6 +213,5 @@ __all__ = [
     "authored_asset_mode",
     "visual_asset_runtime_gate",
     "apply_visual_asset_runtime_gates",
-    "legacy_projectile_baked_sprite_fallback",
     "build_visual_asset_plan",
 ]

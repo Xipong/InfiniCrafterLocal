@@ -32,6 +32,8 @@ def handle_combine_request(
     trace_event: TraceEvent,
     json: JsonSender,
     json_status: JsonStatusSender,
+    last_failure_summary: Callable[[], dict[str, Any]] | None = None,
+    clear_failure_state: Callable[[str], None] | None = None,
     cache_lookup_passthrough_errors: tuple[type[BaseException], ...] = (),
 ) -> None:
     """HTTP-facing /combine orchestration.
@@ -62,6 +64,11 @@ def handle_combine_request(
         cached = None
         cache_key = ""
     if cached:
+        if clear_failure_state is not None:
+            try:
+                clear_failure_state("endpoint_cache_hit_delivered")
+            except Exception as diagnostic_error:
+                trace_event("warn", "HTTP:/combine", "could not clear stale failure diagnostics after cache hit", {"error": repr(diagnostic_error), "recipeKey": cache_key})
         trace_event("step", "HTTP:/combine", "world recipe cache hit before generation lock", {"recipeKey": cache_key, "cacheOnly": cache_only})
         json(sanitize_recipe_for_delivery(cached))
         return
@@ -104,6 +111,23 @@ def handle_combine_request(
         return
     try:
         data = combine(payload)
+    except Exception as error:
+        snapshot: dict[str, Any] = {}
+        snapshot_error = ""
+        if last_failure_summary is not None:
+            try:
+                candidate = last_failure_summary()
+                if isinstance(candidate, dict):
+                    snapshot = dict(candidate)
+            except Exception as diagnostic_error:
+                snapshot_error = repr(diagnostic_error)
+        try:
+            setattr(error, "_infini_failure_snapshot", snapshot)
+            if snapshot_error:
+                setattr(error, "_infini_failure_snapshot_error", snapshot_error)
+        except Exception:
+            pass
+        raise
     finally:
         COMBINE_SEMAPHORE.release()
     try:

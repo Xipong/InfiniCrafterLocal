@@ -5,25 +5,42 @@ import math
 import re
 from typing import Any
 
-from infini_local.pipelines.pipeline_support import (
-    ALLOWED_CATEGORIES,
+from infini_local.core.errors import PlannerUnavailable
+
+from infini_local.core.balance_mode import current_balance_mode, should_apply_soft_normalization
+
+
+from infini_local.core.category_policy import ALLOWED_CATEGORIES
+from infini_local.core.item_identity_tools import (
+    item_num,
+    name_of,
+    stable_hash,
+)
+from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
+from infini_local.core.runtime_authoring.normalize import (
+    normalize_runtime_plan_inplace,
+    runtime_plan,
+)
+from infini_local.core.runtime_authoring.reports import (
+    compile_runtime_plan_to_genome_result,
+    compiled_runtime_contract,
+    runtime_plan_quality_report,
+    runtime_plan_validation_report,
+)
+
+from infini_local.core.runtime_authoring.schema import (
     ENGINE_FN_CATALOG_V2,
-    ENGINE_RUNTIME_API_VERSION,
+    PLANNER_HIDDEN_ENGINE_FUNCTIONS,
+)
+from infini_local.core.sound_catalog import sound_catalog_card_for_llm
+from infini_local.core.runtime_authoring.structural import find_call
+from infini_local.pipelines.engine_pressure_metrics import behavior_cost_multiplier, effective_hit_cadence_ticks
+
+from infini_local.pipelines.pipeline_runtime_constants import (
+    LLM_RAW_TOKEN_MODE,
     LLM_RUNTIME_AUTHORING,
     LLM_RUNTIME_PLAN_REQUIRED,
     LLM_RUNTIME_STRICT_VALIDATION,
-    LLM_RAW_TOKEN_MODE,
-    behavior_cost_multiplier,
-    compile_runtime_plan_to_genome_result,
-    compiled_runtime_contract,
-    find_call,
-    item_num,
-    name_of,
-    normalize_runtime_plan_inplace,
-    runtime_plan,
-    runtime_plan_quality_report,
-    runtime_plan_validation_report,
-    stable_hash,
 )
 from infini_local.pipelines.result_identity_policy import (
     choose_from,
@@ -35,7 +52,7 @@ from infini_local.pipelines.combine_balance import (
 from infini_local.pipelines.combine_genome_contract import (
     combat_genome_required_for,
 )
-from infini_local.pipelines.parent_context_pipeline import (
+from infini_local.pipelines.parent_context_cards import (
     raw_parent_card_for_llm,
 )
 
@@ -109,8 +126,6 @@ def normalize_behavior_toy_fields(obj: dict[str, Any]) -> dict[str, Any]:
     set_if("projectileTrail", pg.get("trail"), vd.get("trail"), limit=420)
     set_if("projectileImpact", pg.get("impact"), vd.get("impact"), limit=420)
     set_if("projectileChild", pg.get("childProjectile"), pg.get("children"), vd.get("child"), limit=500)
-    set_if("soundUse", pg.get("soundUse"), toy.get("soundUse"), vp.get("soundPalette"), limit=240)
-    set_if("soundImpact", pg.get("soundImpact"), toy.get("soundImpact"), pg.get("impact"), vd.get("impactSound"), limit=260)
     if isinstance(visual, dict):
         if visual.get("itemPrompt") and not visual.get("imagePrompt"):
             visual["imagePrompt"] = flat(visual.get("itemPrompt"), 1200)
@@ -169,14 +184,17 @@ def runtime_plan_to_attack_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
 def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     if not LLM_RUNTIME_AUTHORING:
         return data
-    normalize_runtime_plan_inplace(data)
     rp = runtime_plan(data)
     if not rp:
         if LLM_RUNTIME_PLAN_REQUIRED and combat_genome_required_for(data):
             raise PlannerUnavailable("LLM runtime authoring is enabled but runtimePlan/engineCalls is missing")
         return data
     data.setdefault("debug", {})["runtimeAuthoringMode"] = "llm_engine_calls_v0_4_25"
+    # Validation owns normalization.  Pre-normalizing here would feed semantic
+    # compiler expansions back into the public raw-authoring schema and reject
+    # legitimate deploy_sentry/overhead_barrage fields as unknown.
     validation = runtime_plan_validation_report(data)
+    rp = runtime_plan(data)
     data.setdefault("debug", {})["runtimePlanQuality"] = json.dumps(runtime_plan_quality_report(data), ensure_ascii=False)[:6000]
     data.setdefault("debug", {})["runtimePlanValidation"] = json.dumps(validation, ensure_ascii=False)[:6000]
     if LLM_RUNTIME_STRICT_VALIDATION and not validation.get("ok", False) and combat_genome_required_for(data):
@@ -197,7 +215,7 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     # Utility engineCalls compile into the same concrete gameplay fields as set_item_stats.
     # This is not a semantic router: it only copies explicit executable fields authored in
     # runtimePlan to the tML item contract.
-    for field in ["healLife", "healMana", "buffCode", "buffTime", "pickPower", "axePower", "hammerPower", "runtimeLightStrength", "runtimeLightColorName"]:
+    for field in ["healLife", "healMana", "buffCode", "buffTime", "pickPower", "axePower", "hammerPower"]:
         if field in patch and patch.get(field) not in (None, ""):
             gp[field] = patch.get(field)
     if isinstance(patch.get("extraBuffs"), list):
@@ -240,7 +258,7 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         data["category"] = "armor"
     if patch.get("kind") not in (None, ""):
         gp["kind"] = patch.get("kind")
-    for field in ["damageClass", "damage", "useTime", "useAnimation", "maxStack", "consumable", "rarity", "value", "healLife", "healMana", "buffTime", "pickPower", "axePower", "hammerPower", "manaCost"]:
+    for field in ["damageClass", "damage", "useTime", "useAnimation", "knockback", "autoReuse", "maxStack", "consumable", "rarity", "value", "healLife", "healMana", "buffTime", "pickPower", "axePower", "hammerPower", "manaCost"]:
         val = runtime_value(data, "set_item_stats", field, None)
         if val not in (None, ""):
             gp[field] = val
@@ -248,6 +266,9 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     if use_time_ticks not in (None, ""):
         gp["useTime"] = use_time_ticks
         gp.setdefault("useAnimation", use_time_ticks)
+    use_animation_ticks = runtime_value(data, "set_item_stats", "useAnimationTicks", None)
+    if use_animation_ticks not in (None, ""):
+        gp["useAnimation"] = use_animation_ticks
     buff_type = runtime_value(data, "set_item_stats", "buffType", None)
     if buff_type not in (None, ""):
         gp["buffCode"] = buff_type
@@ -342,15 +363,15 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
     """
     out: dict[str, Any] = {}
     for fn, spec in ENGINE_FN_CATALOG_V2.items():
+        if fn in PLANNER_HIDDEN_ENGINE_FUNCTIONS:
+            continue
         params = spec.get("params") if isinstance(spec.get("params"), dict) else {}
         card: dict[str, Any] = {
             "does": _catalog_text(spec.get("meaning")),
             "params": {str(k): _catalog_text(v) for k, v in params.items()},
         }
-        if fn in {"state_meter", "triggered_action"}:
-            card["runtimeStatus"] = "preserved intent; pair with concrete executable calls for immediate gameplay"
-        if fn == "summon_combat_entity":
-            card["safety"] = "minion/sentry/turret projectile only; boss/NPC/mob/enemy spawn calls are forbidden and rejected"
+        if fn == "spawn_temporary_helper_projectile":
+            card["safety"] = "temporary projectile helper only; boss/NPC/mob/enemy spawn calls are forbidden and rejected"
         out[fn] = card
     return out
 
@@ -392,24 +413,37 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
         "mode": ENGINE_RUNTIME_API_VERSION,
         "runtimeApiVersion": ENGINE_RUNTIME_API_VERSION,
         "contractStyle": "sharp",
-        "principle": "LLM authors identity, numbers and engineCalls; Python validates; C# executes finite primitives. Engine still executes only registered finite primitives.",
-        "runtimeLanguage": "runtimeArchetype=optional family/feel; runtimeContract=sync/truth/mechanicClaims; unsupported is preserved intent, not hidden gameplay.",
+        "principle": "LLM authors identity/numbers/engineCalls; Python validates. Engine still executes only registered finite primitives.",
+        "runtimeLanguage": "runtimeArchetype=feel; runtimeContract=sync/truth; unsupported stays explicit.",
         "plannerChecklist": [
-            "Pick resultKind; playable non-material/non-furniture should start with set_item_stats.",
-            "Then add one executable call: attack/effect/tool/accessory/armor/mobility/hold/alt/extractinator.",
-            "Boomerang/yoyo/flail/whip/held/channel concepts may add runtimeArchetype/runtimeContract.",
-            "Visual prompts/VFX never substitute gameplay; image prompts name exact role object.",
-            "state_meter/triggered_action are intent unless paired with executable calls.",
-            "Raw parent facts are evidence, not copy commands.",
+            "Pick resultKind; playable outputs start with set_item_stats.",
+            "Add one executable attack/effect/tool/equipment/mobility/alt/extractinator call.",
+            "Held/channel families may add runtimeArchetype/runtimeContract.",
+            "VFX never substitutes gameplay; image prompts name the exact role object.",
+            "Sound: exact ids from soundCatalog; never classify names/tooltips.",
+            "Parent facts are evidence, not copy commands.",
         ],
         "inputDataPolicy": [
-            "Parent cards are raw facts plus short notes; missing sections are unknown, not negative facts.",
-            "Ammo candidates do not override item-owned projectiles unless your concept says so.",
-            "Placeable consumable means spent when placed unless intentionally authored otherwise.",
-            "Server does not pre-author materials/glow/source readings/no-magic/no-explosion claims.",
+            "Parent cards are facts; missing sections are unknown.",
+            "Ammo does not override item-owned projectiles unless authored.",
+            "Placeable consumables are spent unless authored otherwise.",
+            "Server does not pre-author visuals or mechanics.",
         ],
         "availableFunctions": available_functions,
+        "soundCatalog": sound_catalog_card_for_llm(),
         "tickGuide": concise_terraria_tick_guide_for_llm(),
+        "criticalValueSemantics": {
+            "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets, not extra targets.",
+            "useTiming": "useTime interval; useAnimation=useTime one action/click; useAnimation>useTime may repeat.",
+            "shots": "shotCount simultaneous; extraUpdates are steps, not shots.",
+            "ammo": "empty custom; arrow/bullet vanilla; custom rocket=launcher+empty.",
+            "range": "rangeTiles targets/beam/homing/barrage; straight distance≈speed*lifetime.",
+            "families": "homing→homing; beam*→beam; charge*→charge_release; delay→barrage; sentry*→deploy_sentry.",
+            "zero": "explicit 0 authored: delay immediate; beam full immediately.",
+            "expire": "on_expire is any projectile kill, not timeout-only.",
+            "cadence": "immunityCooldown same-NPC re-hit ticks; lower=more DPS.",
+            "sentryBudget": "at most 48 shots for sentry lifetime; ends when spent.",
+        },
         "hardEngineLimits": {
             "maxShotCount": 8,
             "maxFinitePierce": 10,
@@ -423,24 +457,20 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "maxVisualScaleHint": "small/normal unless source explicitly justifies large",
         },
         "semanticRules": [
-            "Do not erase a complete weapon parent unless resultKind is ammo/material and mergeLogic explains it.",
-            "Ammo: ammoFor=arrow/bullet for vanilla ammo; empty + shoot_projectile for generated darts.",
-            "Dust/glow/slime/sparks need explicit engineCalls/visualIntent from raw facts.",
-            "Impact VFX uses spawn_contact_particles/visual_effect_cue; burst/AoE is gameplay.",
-            "Prefer family functions; shoot_projectile is low-level and needs runtimeFamily.",
-            "Tooltip utility needs matching engineCalls/item/tool/buff fields.",
-            "Promises (return/channel/charge/phase/starfall/sticky/heat/jam/lifesteal/paired/bounce) need mechanicClaims backing=engineCall/runtimeArchetype/visual_only/unsupported.",
-            "Unsupported mechanics need honest tooltip + unsupportedPromises; channel beam/paired dual stay preserved.",
-            "Generic oreSense radius is debug-only. Ore visual execution is not added in this patch; no fake spelunker visuals.",
-            "Boss/NPC/mob/enemy spawning is hard-rejected; only bounded minion/sentry/turret/light_pet projectiles are in scope.",
-            "state_meter/triggered_action preserve intent; they are not hidden gameplay routers.",
-            "For promised mechanics, add mechanicClaims with backing=engineCall/runtimeArchetype/visual_only/unsupported and a supported engineCall when possible.",
-            "Starfall promise: onHit=starfall count=N executable; delayed_starfall stays preserved; claim backing=engineCall.",
+
+            "Preserve a complete weapon parent unless ammo/material resultKind and mergeLogic justify replacement.",
+            "Generated ammo ammoFor=arrow/bullet has vanilla projectile identity only. For an authored dart/throwable attack use consumable_weapon or weapon, empty ammoFor, and shoot_projectile.",
+            "Gameplay/utility promises require an executable call and mechanicClaims backing=engineCall/runtimeArchetype; visual motifs stay visual_only. Never advertise unsupported mechanics in name, tooltip, concept or runtime intent.",
+            "VFX calls present effects; burst/AoE/sticky are gameplay. Player movement must use a mobility engineCall; low-level shoot_projectile needs explicit runtimeFamily.",
+            "Ore visual execution is not added in this patch; generic oreSense remains report/debug-only.",
+            "spawn_temporary_helper_projectile is short-lived projectile behavior, not a persistent minion/sentry lifecycle. summon_boss/spawn_npc/spawn_enemy are hard-rejected.",
+            "Overhead barrage is delivery geometry: on-hit uses apply_on_hit_effect; ranged/magic on-use uses the family call; Starfury-style melee-on-use uses shoot_projectile(runtimeFamily=overhead_barrage,delivery=swing,weaponFamily=broadsword). Authored projectile family/shape/effect keeps the star, arrow, meteor, ice or other theme.",
+
         ],
         "validatorLimits": {
             "validatorOnly": True,
-            "balanceAuthority": "python_post_authoring_soft_envelope",
-            "note": "Prompt exposes hard engine limits only; parent-relative damage/DPS balance is applied after LLM authoring.",
+            "balanceAuthority": f"python_balance_mode:{current_balance_mode()}",
+            "note": "Prompt exposes hard engine limits only. Soft parent-relative normalization is applied only in balanceMode=normalize.",
         },
     }
 
@@ -460,25 +490,40 @@ def authored_int(src: dict[str, Any], key: str, fallback: int, lo: int, hi: int)
     return int(round(authored_num(src, key, float(fallback), float(lo), float(hi))))
 
 def authored_weapon_damage(src: dict[str, Any], fallback: int, max_parent_damage: int, stage: dict[str, Any], genome: dict[str, Any], debug: dict[str, Any]) -> int:
-    """Preserve authored damage unless it is outside a broad safety envelope.
+    """Preserve authored damage by default; normalize only in explicit legacy mode.
 
-    This is deliberately not a DPS optimizer. `weapon_numbers_from_genome` is only the
-    fallback when the model omitted/garbled damage. If the LLM authored a plausible value,
-    keep it, even if the reference economy would have picked another number.
+    Hard safety remains active in every mode. The stage/DPS envelope is reported
+    as advice in report/safety and applied only in normalize. This function does
+    not design a new damage value from prose, names or item taxonomy.
     """
+    balance_mode = current_balance_mode()
+    debug["balanceMode"] = balance_mode
     stage_damage = int(stage.get("derivedDamage") or max_parent_damage or fallback or 4)
     power = max(0.5, float(stage.get("powerBudget") or 1.0))
     hard_cap = int(max(8, stage_damage * 2.60 + 10, max_parent_damage * 3.0 + 18, 14 + power * 35.0))
     parent_depths = stage.get("parentGeneratedDepths") if isinstance(stage, dict) else []
     try:
         recursive_depth = max(int(float(x or 0)) for x in (parent_depths or [0]))
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         recursive_depth = 0
     if recursive_depth > 0 and 0 < max_parent_damage <= 60:
         recursive_cap = max(12, max_parent_damage + 6, int(max_parent_damage * (1.30 + min(0.18, recursive_depth * 0.05)) + 8), stage_damage + 8)
-        hard_cap = min(hard_cap, recursive_cap)
-        debug["recursiveDamageSoftCap"] = {"parentDepth": recursive_depth, "cap": int(hard_cap), "reason": "generated-parent recursion should add behavior/tradeoff, not staircase raw damage"}
-    # This final absolute guard is only for broken JSON / absurd API output, not balance.
+        row = {
+            "parentDepth": recursive_depth,
+            "cap": int(recursive_cap),
+            "reason": "generated-parent recursion should add behavior/tradeoff, not staircase raw damage",
+            "mode": balance_mode,
+        }
+        if should_apply_soft_normalization(balance_mode):
+            hard_cap = min(hard_cap, recursive_cap)
+            row["cap"] = int(hard_cap)
+            row["applied"] = True
+            debug["recursiveDamageSoftCap"] = row
+        else:
+            row["applied"] = False
+            debug["recursiveDamageBalanceAdvice"] = row
+
+    # Absolute guard for broken JSON / absurd API output. It is not the soft balance layer.
     hard_cap = min(999, hard_cap)
     raw = src.get("damage") if isinstance(src, dict) else None
     if raw in (None, ""):
@@ -505,35 +550,45 @@ def authored_weapon_damage(src: dict[str, Any], fallback: int, max_parent_damage
             shot_count = int(float(genome.get("shotCount") or 1))
         except (TypeError, ValueError, OverflowError):
             shot_count = 1
+        hit_cadence = effective_hit_cadence_ticks(genome, use_time)
         try:
             cost = float(genome.get("costMultiplier") or behavior_cost_multiplier(genome))
         except (TypeError, ValueError, OverflowError):
             cost = 1.0
-        bounded = clamp_vanilla_like_weapon_damage(
+        suggested = clamp_vanilla_like_weapon_damage(
             authored,
             max_parent_damage,
             stage,
-            use_time=use_time,
+            use_time=int(round(hit_cadence)),
             shot_count=shot_count,
             cost_multiplier=cost,
             raise_floor=False,
         )
-        if bounded != authored:
-            debug["authoredDamageEnvelopeClamp"] = {
-                "from": authored,
-                "to": bounded,
-                "reason": "code_owned_stage_dps_envelope",
-                "useTime": use_time,
-                "shotCount": shot_count,
-                "costMultiplier": round(cost, 3),
-                "referenceNumbersDamage": int(fallback),
-            }
+        row = {
+            "from": authored,
+            "to": suggested,
+            "reason": "code_owned_stage_dps_envelope",
+            "useTime": use_time,
+            "effectiveHitCadenceTicks": round(hit_cadence, 3),
+            "shotCount": shot_count,
+            "costMultiplier": round(cost, 3),
+            "referenceNumbersDamage": int(fallback),
+            "mode": balance_mode,
+        }
+        result = authored
+        if suggested != authored and should_apply_soft_normalization(balance_mode):
+            row["applied"] = True
+            debug["authoredDamageEnvelopeClamp"] = row
+            result = suggested
         else:
             debug["damageSource"] = "llm_authored_preserved"
+            if suggested != authored:
+                row["applied"] = False
+                debug["authoredDamageBalanceAdvice"] = row
         debug["referenceNumbersDamage"] = int(fallback)
         debug["authoredDamageHardCap"] = hard_cap
-        return max(1, int(round(bounded)))
-    except Exception:
+        return max(1, int(round(result)))
+    except (TypeError, ValueError, OverflowError):
         debug["damageSource"] = "fallback_reference_numbers_invalid_authored"
         debug["invalidAuthoredDamage"] = str(raw)[:80]
         debug["authoredDamageHardCap"] = hard_cap
@@ -610,30 +665,17 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             ], "creative_lane", key, name_of(a), name_of(b)),
             "rule": "Avoid cloning the strongest generated parent's name/runtimeFamily/onHit; do not default every weapon to straight+split."
         },
-        "balancePolicy": "LLM authors numbers; prompt has hard engine ranges only; Python applies post-authoring soft clamps; C# is final safety.",
+        "balancePolicy": f"LLM authors numbers; balanceMode={current_balance_mode()}; report/safety preserve authored soft-balance values, normalize applies the legacy soft envelope; C# is final safety.",
         "engineRuntimeContract": engine_runtime_capability_contract_for_llm(a, b) if LLM_RUNTIME_AUTHORING else {},
         "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/directProjectile/effectiveProjectile/ammo/runtimeProbe/generatedParent + optional semantics notes", "rule": "raw fields are facts; semantics notes only clarify overloaded Terraria flags; absence is unknown, not a negative fact", "ammoRepresentativeLimit": 0},
         "authorRules": [
-            "Author concept, resultKind, numbers, runtimePlan.engineCalls, and concise visual prompts.",
-            "Use exact fn names from engineRuntimeContract.availableFunctions; prefer family calls over low-level shoot_projectile.",
-            "Playable non-material/non-furniture: set_item_stats first, then at least one executable gameplay call.",
-            "Secondary projectiles support trigger=on_hit only.",
-            "Output: projectile weapon => weapon; generated darts/throwables => ammo + ammoFor empty + shoot_projectile; true bow/gun ammo => arrow/bullet.",
-            "DamageClass: melee may emit projectiles; pure free-flight physical attacks are usually ranged/generic.",
-            "Raw cards are facts, not instructions; placeable consumable means spent when placed unless authored otherwise.",
-            "Do not claim no-magic/no-light/no-explosion/no-children unless raw fields say it; missing data is not a fact.",
-            "Server rejects unsupported calls and catastrophic runtime/network/FPS values only.",
-            "Secondary projectiles/trails/glow/sparks/motes must be central and explicit.",
-            "Generated parents: preserve one anchor, then add bounded tradeoff/timing/delivery/utility when it fits.",
-            "Tether/returning sprites: moving body + short local attachment, not full-canvas rope.",
-            "Utility: use a mobility engineCall/tool_capability/apply_player_effect_on_use/light/hold when promised; otherwise VFX only.",
-            "movement=phase is projectile travel, not player movement; use a mobility engineCall for player movement.",
-            "Never author summon_boss/summon_npc/summon_mob/spawn_npc/spawn_enemy; only bounded minion/sentry/turret/pet_attack/light_pet summons are in scope.",
-            "state_meter/triggered_action preserve charge/heat/mode intent; gameplay still needs executable calls.",
-            "runtimeArchetype: custom_executor for normal/utility engineCalls; never family=unsupported if you authored executable calls.",
-            "bounce=projectile movement; sticky needs slime/leave_trail; accessory_effect uses movementSpeed not freeform stats=.",
-            "Image prompts: item=inventory/held; projectile=moving hit-object (same sword/blade/boomerang OK if it is hit body); impact=momentary hit; child=damaging child/mote.",
-            "Return one JSON object. No markdown, analysis, legacy attackPattern, or attack.genome.",
+            "Return one JSON object with concept, resultKind, authored numbers, engineCalls and concise visual prompts.",
+            "Use exactly one secondary trigger: on_hit or on_expire. on_expire means any projectile kill, not timeout-only. shotCount is simultaneous multishot, never a timed burst.",
+            "Projectile weapon=weapon. Authored dart/throwable/rocket=consumable_weapon or weapon + empty ammoFor + projectile call. Plain arrow/bullet ammo cannot promise custom runtime effects.",
+            "Preserve a generated-parent anchor, then add one bounded tradeoff, timing, delivery or utility twist.",
+            "Tether/returning sprite is one moving body with only a short local attachment; never a full-canvas rope. Image prompts: item=inventory/held; projectile=moving hit body (same sword/blade/boomerang OK); impact=momentary hit; child=damaging child/mote.",
+            "Utility/player movement needs its exact executable call such as tool_capability, mobility_effect or apply_player_effect_on_use; otherwise keep it VFX-only. Use custom_executor for normal/utility engineCalls; never family=unsupported when executable calls exist.",
+            "No markdown, analysis, legacy attackPattern, or attack.genome.",
         ],
         "validatorRanges": {
             "damage": [0, 999],

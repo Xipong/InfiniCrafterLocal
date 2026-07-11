@@ -10,7 +10,7 @@ def _check_csharp_generated_item_data_keeps_runtime_api_and_debug_delivery_guard
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "public string RuntimeApiVersion" in source
     limits = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "InfiniRuntimeLimits.cs").read_text(encoding="utf-8")
-    assert "RuntimeApiCurrent = \"v0.4.47\"" in limits
+    assert "RuntimeApiCurrent = \"v0.4.48\"" in limits
     assert "RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in source
     assert "v0.4.23" not in source and "v0.4.30" not in source
     assert "RuntimeApiCurrent" in source
@@ -20,7 +20,7 @@ def _check_csharp_generated_item_data_keeps_runtime_api_and_debug_delivery_guard
     assert "Dictionary<string, JsonElement> Debug" in source
     assert "NormalizeTopLevelDebugForJson" in source
     assert "RuntimeAttackContractSupported" in source
-    assert "Legacy generated attack runtime is no longer supported" in source
+    assert "Generated attack runtime is missing the current authored contract; regenerate this item." in source
     assert "Unsupported generated runtime opcode" in source
 
 
@@ -102,7 +102,7 @@ def _check_csharp_has_spear_thrust_holdout_runtime_without_legacy_routing() -> N
 
 
 def _check_server_source_has_family_movement_codes_for_runtime_validation() -> None:
-    source = (ROOT / "LocalGenerator" / "infini_local" / "web" / "server.py").read_text(encoding="utf-8")
+    source = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_executor_vocabulary.py").read_text(encoding="utf-8")
     assert '"flail_tether": 16' in source
     assert '"yoyo_hover": 17' in source
     assert '"whip_lash": 18' in source
@@ -127,7 +127,7 @@ def _check_projectile_network_carries_family_state_not_prose_scripts() -> None:
 def _check_csharp_swing_is_melee_core_and_dummy_command_exists() -> None:
     item_source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedItem.cs").read_text(encoding="utf-8")
     dummy_source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Commands" / "InfiniDummyCommand.cs").read_text(encoding="utf-8")
-    assert 'if (runtimeFamily == "swing")' in item_source
+    assert "GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Swing)" in item_source
     assert 'return false;' in item_source
     assert 'OnHitNPC' in item_source
     assert 'SwingSecondarySpec' in item_source
@@ -182,8 +182,9 @@ def _check_csharp_vfx_defaults_are_stock_and_light_words_do_not_create_light_cue
 
     # A visual renderer named lightFlash/highlightFlash must not become a real Lighting.AddLight cue.
     assert 'r.Contains("light")) return InfiniVfxRendererKind.LightCue' not in registry_source
-    assert 'r.Contains("flash") || r.Contains("burst") || r.Contains("impact")' in registry_source
-    assert 'r == "light" || r == "lightcue"' in registry_source
+    assert '.Contains(' not in registry_source
+    assert '"impactRing" => InfiniVfxRendererKind.ImpactRing' in registry_source
+    assert '"lightCue" => InfiniVfxRendererKind.LightCue' in registry_source
     assert "InfiniVfxClientOptions.PresentationLightMultiplier" in runtime_source
 
     # Generated sprite draw should use Terraria's vanilla lightColor, not an always-white/self-lit merge tint.
@@ -198,9 +199,10 @@ def _check_csharp_vfx_keeps_steady_light_but_rejects_flicker_flash_routing() -> 
     runtime_source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "VFX" / "InfiniVfxRuntime.cs").read_text(encoding="utf-8")
     projectile_source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
 
-    assert "proseLightFlash" in registry_source
-    assert '"lightflash" or "highlightflash" or "lightpulse"' in registry_source
-    assert "return InfiniVfxRendererKind.None" in registry_source
+    assert "proseLightFlash" not in registry_source
+    assert "lightflash" not in registry_source.lower()
+    assert '"lightCue" => InfiniVfxRendererKind.LightCue' in registry_source
+    assert "_ => InfiniVfxRendererKind.None" in registry_source
     assert 'IsLiveEvent(slot.Event) && (slot.Channel == "light" || kind == InfiniVfxRendererKind.LightCue)' in runtime_source
     assert "do not emit hit/kill world-light pulses" in runtime_source
     assert "no sine pulse here" in runtime_source
@@ -382,7 +384,9 @@ def _check_runtime_state_cleanup_bounce_and_child_depth_policy_is_centralized() 
     assert "return depth < Math.Max(0, _spec.MaxChildDepth);" in projectile
     assert "if (depth > Math.Max(0, _spec.MaxChildDepth)) return;" in projectile
     assert "CountOwnedGeneratedProjectiles(rootId) >= Math.Max(0, _spec.MaxChildProjectiles)" in projectile
-    assert "return Math.Clamp(requested, 1, cap);" in projectile
+    assert "RemainingGameplayChildBudget()" in projectile
+    assert "return Math.Clamp(requested, 1, remaining);" in projectile
+    assert "_spawnedGameplayChildCount++" in projectile
     assert "rootOnly: true" in projectile
     assert "Projectile.localAI[1] > 1f" not in projectile
     assert "Projectile.localAI[1] > 0f" not in projectile

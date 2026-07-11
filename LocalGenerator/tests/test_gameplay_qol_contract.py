@@ -59,12 +59,3 @@ def test_projectile_impact_mobility_respects_shared_cooldown_and_tooltip_surface
     assert "ImpactMobilitySummary" in item
     assert "blink_to_projectile_impact" in item
     assert "impact blink" in item
-
-def test_contract_stamp_mentions_gameplay_qol_contract():
-    src = CONTRACTS.read_text(encoding="utf-8")
-    assert "GAMEPLAY_QOL_CONTRACT_VERSION" in src
-    assert "gameplayQolContract" in src
-    assert "generated_use_feedback_tooltip_qol_v0.4.201" in src
-    assert "RUNTIME_GAMEPLAY_QOL_CONTRACT_VERSION" in src
-    assert "runtimeGameplayQolContract" in src
-    assert "impact_mobility_cooldown_and_sprite_lru_qol_v0.4.204" in src

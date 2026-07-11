@@ -52,18 +52,16 @@ public static class InfiniLuminanceSoundBridge
 
             int owner = projectile.owner;
             int identity = projectile.identity;
-            string authoredProfile = (spec.UseSoundProfile + " " + spec.SoundUse + " " + slot.Renderer + " " + slot.EffectName).Trim();
             SoundStyle style = InfiniSoundLibrary.ForVfxCue(
-                authoredProfile,
                 spec.RuntimeFamily,
                 spec.Effect,
                 spec.SoundVolume,
                 spec.SoundPitch,
+                spec.SoundPitchVariance,
                 slot.SlotSeed,
                 impact: false,
                 spec.SoundUseCatalogId,
                 spec.SoundUseCatalogPath,
-                spec.SoundUseSearchQuery,
                 spec.SoundCatalogSource);
             float loopVolume = Math.Clamp(style.Volume * (0.18f + slot.Alpha * 0.42f), 0.02f, 0.55f);
             SoundStyle loopStyle = style with
@@ -92,8 +90,8 @@ public static class InfiniLuminanceSoundBridge
         if (group != "live")
             return false;
         string channel = (slot.Channel ?? "").Trim().ToLowerInvariant();
-        string renderer = (slot.RendererKind ?? slot.Renderer ?? "").Trim().ToLowerInvariant();
-        bool soundCue = channel == "sound" || renderer == "soundcue" || renderer.Contains("sound", StringComparison.OrdinalIgnoreCase);
+        string renderer = (slot.RendererKind ?? "").Trim();
+        bool soundCue = channel == "sound" || VfxRendererRegistry.ParseKind(slot.RendererKind) == InfiniVfxRendererKind.SoundCue;
         if (!soundCue)
             return false;
         return slot.Duration >= 12 || slot.RepeatEvery <= 0 || slot.Density >= 0.20f;
@@ -131,7 +129,7 @@ public static class InfiniLuminanceSoundBridge
 
     private static string LoopKey(Projectile projectile, VfxSlotSpec slot)
     {
-        string renderer = string.IsNullOrWhiteSpace(slot.RendererKind) ? slot.Renderer : slot.RendererKind;
+        string renderer = slot.RendererKind;
         return projectile.owner + ":" + projectile.identity + ":" + slot.SlotSeed + ":" + slot.EventGroup + ":" + slot.Channel + ":" + renderer;
     }
 }

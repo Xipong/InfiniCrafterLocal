@@ -2,8 +2,9 @@
 
 Source-of-truth DTOs for what C# can safely receive/apply/execute.
 
+- `GeneratedRuntimeFamilyPolicy.cs` — one strict owner for canonical family normalization and capability predicates used by DTO/item/projectile/presentation code.
 - `GeneratedItemData.Model.cs` — identity, recipe meta, gameplay, accessory, armor, attack, visual, presentation genome, sound profile, extension data.
-- `GeneratedItemData.Normalize.cs` — compatibility migrations, clamps, runtime API/path/status normalization.
+- `GeneratedItemData.Normalize.cs` — clamps, runtime API/path/status normalization; delegates runtime-family checks to the policy owner.
 - `GeneratedItemData.Apply.cs` — transfers explicit fields into Terraria `Item` stats/flags/proxy behavior.
 - `GeneratedItemData.cs` — JSON profiles: full/local-cache/network/player-save and stripping of bulk/prose.
 - `GeneratedItemData.Debug.cs` — applied trace/debug JSON for authored-vs-applied audits.

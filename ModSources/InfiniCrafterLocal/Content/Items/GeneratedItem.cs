@@ -4,6 +4,8 @@ using InfiniCrafterLocal.Common.Config;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.VFX;
+using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -24,7 +26,7 @@ namespace InfiniCrafterLocal.Content.Items;
 // save/net paths strip unsafe bulk; use/equipment/shoot hooks execute only
 // supported fields. Do not infer gameplay from display name, tooltip, prompt,
 // flavor text, or Debug/ExtensionData.
-public class GeneratedItem : ModItem
+public partial class GeneratedItem : ModItem
 {
     private const int GeneratedItemNetPayloadVersion = 3;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
@@ -492,20 +494,17 @@ public class GeneratedItem : ModItem
         }
 
         string runtime = string.IsNullOrWhiteSpace(data.Attack.RuntimeFamily) ? "generated" : data.Attack.RuntimeFamily.Trim();
-        string subfamily = string.IsNullOrWhiteSpace(data.Attack.WeaponSubfamily) ? data.Attack.WeaponFamily : data.Attack.WeaponSubfamily;
-        string label = string.IsNullOrWhiteSpace(subfamily) ? runtime : $"{runtime} / {subfamily.Trim()}";
-        string extras = data.Attack.AttackPatternTags is { Length: > 0 }
-            ? " · " + string.Join(", ", data.Attack.AttackPatternTags.Take(3))
-            : "";
+        string family = data.Attack.WeaponFamily?.Trim() ?? "";
+        string label = string.IsNullOrWhiteSpace(family) ? runtime : $"{runtime} / {family}";
         string impactMobility = ImpactMobilitySummary(data.Attack);
         string swingOnHit = SwingOnHitSummary(data.Attack);
-        return $"Generated combat: {label}{extras}{impactMobility}{swingOnHit}";
+        return $"Generated combat: {label}{impactMobility}{swingOnHit}";
     }
 
     private static string SwingOnHitSummary(AttackSpec? attack)
     {
         if (attack is null) return "";
-        if (!string.Equals((attack.RuntimeFamily ?? "").Trim(), "swing", StringComparison.OrdinalIgnoreCase)) return "";
+        if (!GeneratedRuntimeFamilyPolicy.Is(attack.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Swing)) return "";
         string label = attack.OnHitCode switch
         {
             1 => "impact dust",
@@ -516,7 +515,7 @@ public class GeneratedItem : ModItem
             9 => "bleed",
             10 => "impact pulse",
             17 => "small lifesteal",
-            18 => "falling starfall",
+            18 => "overhead barrage",
             _ => "",
         };
         return string.IsNullOrWhiteSpace(label) ? "" : $" · melee {label}";
@@ -573,6 +572,22 @@ public class GeneratedItem : ModItem
                     ShowLocalUseFeedback(player, $"Mobility cooldown: {modPlayer.GeneratedMobilityCooldownSeconds}s", ref _lastAltUseBlockedNoticeTick, Color.Orange);
                     return false;
                 }
+            }
+        }
+
+        string runtimeFamily = AttackRuntimeFamily(Data?.Attack);
+        if (GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Beam)
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease))
+        {
+            int generatedProjectileType = ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>();
+            for (int i = 0; i < Main.maxProjectiles; i++)
+            {
+                Projectile active = Main.projectile[i];
+                if (!active.active || active.owner != player.whoAmI || active.type != generatedProjectileType)
+                    continue;
+                if (active.ModProjectile is global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile generated
+                    && (generated.IsActiveBeamFor(Data?.Id) || generated.IsActiveChargeFor(Data?.Id)))
+                    return false;
             }
         }
 
@@ -672,14 +687,14 @@ public class GeneratedItem : ModItem
         }
         if (strength > 0f && Main.netMode != NetmodeID.Server)
         {
-            Color c = GeneratedHoldColor(colorName);
+            Color c = RuntimeColorPolicy.Resolve(colorName, Color.White);
             Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
         }
 
         float soulGlow = VisualSoulGlow(Data) * 0.72f;
         if (soulGlow > 0.04f && Main.netMode != NetmodeID.Server)
         {
-            Color c = VisualSoulColor(Data, GeneratedHoldColor(colorName));
+            Color c = VisualSoulColor(Data, RuntimeColorPolicy.Resolve(colorName, Color.White));
             Lighting.AddLight(player.Center, c.R / 255f * soulGlow, c.G / 255f * soulGlow, c.B / 255f * soulGlow);
             if (Main.rand.Next(100) < Math.Clamp((int)(soulGlow * 16f), 1, 14))
                 SpawnSoulDust(player.Center + new Vector2(Main.rand.Next(-10, 11), Main.rand.Next(-20, 9)), c, 0.45f + soulGlow * 0.55f);
@@ -716,22 +731,6 @@ public class GeneratedItem : ModItem
             SpawnSoulDust(Item.Center + new Vector2(Main.rand.Next(-8, 9), Main.rand.Next(-8, 9)), c, 0.35f + glow * 0.45f);
     }
 
-    private static Color GeneratedHoldColor(string? raw)
-    {
-        string name = (raw ?? "").Trim().ToLowerInvariant();
-        return name switch
-        {
-            "yellow" or "gold" or "amber" => new Color(255, 220, 110),
-            "orange" => new Color(255, 155, 70),
-            "red" or "crimson" or "scarlet" => new Color(255, 85, 85),
-            "pink" => new Color(255, 145, 215),
-            "purple" or "violet" => new Color(190, 110, 255),
-            "blue" or "azure" or "cyan" => new Color(110, 210, 255),
-            "green" or "lime" or "emerald" => new Color(110, 255, 145),
-            "teal" or "aqua" => new Color(90, 255, 215),
-            _ => new Color(235, 235, 235),
-        };
-    }
 
     public override void UpdateEquip(Player player)
     {
@@ -779,7 +778,7 @@ public class GeneratedItem : ModItem
         {
             Color c = string.IsNullOrWhiteSpace(a.LightColorName)
                 ? Color.White
-                : GeneratedHoldColor(a.LightColorName);
+                : RuntimeColorPolicy.Resolve(a.LightColorName, Color.White);
             float strength = Math.Clamp(a.LightStrength, 0.02f, 1.5f);
             Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
         }
@@ -874,7 +873,7 @@ public class GeneratedItem : ModItem
         {
             Color c = string.IsNullOrWhiteSpace(a.LightColorName)
                 ? VisualSoulColor(Data, Color.White)
-                : GeneratedHoldColor(a.LightColorName);
+                : RuntimeColorPolicy.Resolve(a.LightColorName, Color.White);
             float strength = Math.Clamp(a.LightStrength, 0.02f, 1.5f);
             Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
         }
@@ -890,7 +889,10 @@ public class GeneratedItem : ModItem
 
     public override void UseItemHitbox(Player player, ref Rectangle hitbox, ref bool noHitbox)
     {
-        if (!Data.Attack.Enabled || (AttackRuntimeFamily(Data.Attack) != "swing" && AttackRuntimeFamily(Data.Attack) != "thrust"))
+        string runtimeFamily = AttackRuntimeFamily(Data.Attack);
+        if (!Data.Attack.Enabled
+            || (!GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Swing)
+                && !GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Thrust)))
             return;
 
         float scale = Math.Clamp(Math.Max(1f, Data.Attack.HitboxScale), 1f, 1.85f);
@@ -916,7 +918,7 @@ public class GeneratedItem : ModItem
     {
         if (player.whoAmI != Main.myPlayer || Data?.Attack is null || !Data.Attack.Enabled)
             return;
-        if (AttackRuntimeFamily(Data.Attack) != "swing")
+        if (!GeneratedRuntimeFamilyPolicy.Is(AttackRuntimeFamily(Data.Attack), GeneratedRuntimeFamilyPolicy.Swing))
             return;
         if (!Data.Attack.RuntimePlanAuthored)
             return;
@@ -1022,7 +1024,7 @@ public class GeneratedItem : ModItem
                 EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 8, 1.0f);
                 break;
             case 18:
-                SpawnGeneratedSwingStarfall(player, target, attack, damageDone, generatedItemId);
+                SpawnGeneratedSwingOverheadBarrage(player, target, attack, damageDone, generatedItemId);
                 break;
         }
     }
@@ -1051,7 +1053,7 @@ public class GeneratedItem : ModItem
         player.HealEffect(heal);
     }
 
-    private static void SpawnGeneratedSwingStarfall(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
+    private static void SpawnGeneratedSwingOverheadBarrage(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
     {
         if (player is null || target is null || attack is null) return;
         if (player.whoAmI != Main.myPlayer) return;
@@ -1061,34 +1063,21 @@ public class GeneratedItem : ModItem
         if (count <= 0) return;
 
         AttackSpec childSpec = SwingSecondarySpec(attack);
-        childSpec.Movement = "gravity_arc";
-        childSpec.MovementCode = 2;
-        childSpec.Effect = "star";
-        childSpec.EffectCode = 3;
-        childSpec.OnHit = "none";
-        childSpec.OnHitCode = 0;
-        childSpec.TileCollide = false;
-        childSpec.Lifetime = attack.SecondaryLifetimeTicks > 0 ? attack.SecondaryLifetimeTicks : Math.Min(120, Math.Max(45, attack.Lifetime / 2));
-        childSpec.ProjectileFamily = "falling_star";
-        childSpec.ProjectileShape = string.IsNullOrWhiteSpace(attack.SecondaryProjectileShape) ? "falling star" : attack.SecondaryProjectileShape.Trim();
-        childSpec.ProjectileMotion = "falling star";
-        childSpec.ProjectileTrail = attack.ProjectileTrail;
-        childSpec.MaxChildProjectiles = 0;
-        childSpec.MaxChildDepth = 0;
-
+        GeneratedOverheadBarragePolicy.ConfigureChild(childSpec, attack);
         float damageMult = Math.Max(0.12f, attack.SecondaryDamageMultiplier <= 0f ? 0.42f : attack.SecondaryDamageMultiplier);
         int childDamage = Math.Max(1, (int)Math.Round(Math.Max(1, damageDone) * damageMult));
-        float spacing = count <= 1 ? 0f : MathHelper.Clamp(attack.SecondarySpreadRadians <= 0f ? 0.44f : attack.SecondarySpreadRadians, 0.12f, 1.2f);
         float rootId = Main.rand.Next(1, 1_000_000);
 
         for (int i = 0; i < count; i++)
         {
-            float t = count <= 1 ? 0f : (i / (float)(count - 1) - 0.5f);
-            Vector2 origin = target.Center + new Vector2(t * spacing * 96f + Main.rand.NextFloat(-18f, 18f), -220f - Main.rand.NextFloat(0f, 90f));
-            Vector2 aim = target.Center + new Vector2(Main.rand.NextFloat(-36f, 36f), Main.rand.NextFloat(-18f, 18f));
-            Vector2 velocity = (aim - origin).SafeNormalize(Vector2.UnitY) * Main.rand.NextFloat(9.5f, 14.5f);
+            (Vector2 origin, Vector2 velocity) = GeneratedOverheadBarragePolicy.Sample(
+                target.Center,
+                i,
+                count,
+                attack.SecondarySpreadRadians,
+                childSpec.Speed);
             int idx = Projectile.NewProjectile(
-                player.GetSource_Misc("InfiniCraftSwingStarfall"),
+                player.GetSource_Misc("InfiniCraftSwingOverheadBarrage"),
                 origin,
                 velocity,
                 ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>(),
@@ -1163,7 +1152,7 @@ public class GeneratedItem : ModItem
         {
             Enabled = true,
             RuntimePlanAuthored = true,
-            RuntimeFamily = "shoot",
+            RuntimeFamily = GeneratedRuntimeFamilyPolicy.Shoot,
             Delivery = "shoot",
             WeaponFamily = "secondary_projectile",
             ProjectileFamily = "secondary_projectile",
@@ -1196,10 +1185,12 @@ public class GeneratedItem : ModItem
             ProjectileTrail = parent.ProjectileTrail,
             ProjectileImpact = parent.ProjectileImpact,
             PrimaryColorName = parent.PrimaryColorName,
-            UseSoundProfile = parent.UseSoundProfile,
-            ImpactSoundProfile = parent.ImpactSoundProfile,
+            SoundUseCatalogId = parent.SoundUseCatalogId,
+            SoundImpactCatalogId = parent.SoundImpactCatalogId,
+            SoundCatalogSource = parent.SoundCatalogSource,
             SoundPitch = parent.SoundPitch,
             SoundVolume = parent.SoundVolume,
+            SoundPitchVariance = parent.SoundPitchVariance,
             ProjectileSpritePath = parent.ChildSpritePath,
             ProjectileSpriteUrl = parent.ChildSpriteUrl,
             ProjectileSpriteStatus = parent.ChildSpriteStatus,
@@ -1227,9 +1218,15 @@ public class GeneratedItem : ModItem
         // v0.4.109: a broadsword/axe/hammer swing is melee-core by default.
         // Optional acorn/seed/shard emissions come from explicit secondary calls
         // handled in OnHitNPC; do not materialize the held weapon as a flying sword.
-        if (runtimeFamily == "swing")
+        if (GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Swing))
             return false;
-        bool thrustLike = runtimeFamily == "thrust";
+        bool thrustLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Thrust);
+        bool chargeReleaseLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease);
+        bool sentryLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
+        bool beamLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Beam);
+        bool overheadBarrage = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.OverheadBarrage);
+        if (sentryLike)
+            return ShootGeneratedSentry(player, source, damage, knockback);
         bool singleRuntime = IsSingleRuntimeProjectileFamily(runtimeFamily);
         int shots = singleRuntime ? 1 : Math.Clamp(Data.Attack.ShotCount, 1, 9);
         float spread = singleRuntime ? 0f : Math.Clamp(Data.Attack.SpreadRadians, 0f, MathHelper.ToRadians(60f));
@@ -1238,11 +1235,14 @@ public class GeneratedItem : ModItem
         for (int i = 0; i < shots; i++)
         {
             float offset = shots == 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(shots - 1));
-            Vector2 shotVelocity = safeVelocity.RotatedBy(offset);
-            if (lob) shotVelocity.Y -= Math.Max(1.2f, Data.Attack.Speed * 0.18f);
+            Vector2 shotVelocity = overheadBarrage ? Vector2.Zero : safeVelocity.RotatedBy(offset);
+            if (lob && !overheadBarrage) shotVelocity.Y -= Math.Max(1.2f, Data.Attack.Speed * 0.18f);
+            Vector2 spawnPosition = overheadBarrage
+                ? OverheadBarrageTarget(player, position, safeVelocity, Data.Attack.RangeTiles)
+                : ((thrustLike || beamLike || chargeReleaseLike) ? player.MountedCenter : position);
             int projectileIndex = Projectile.NewProjectile(
                 source,
-                thrustLike ? player.MountedCenter : position,
+                spawnPosition,
                 shotVelocity,
                 ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>(),
                 damage,
@@ -1267,14 +1267,25 @@ public class GeneratedItem : ModItem
     }
 
     private static string AttackRuntimeFamily(AttackSpec? attack)
-    {
-        if (attack is null) return "none";
-        string r = (attack.RuntimeFamily ?? "").Trim().ToLowerInvariant();
-        return r is "swing" or "thrust" or "returning" or "flail" or "yoyo" or "whip" or "shoot" or "cast" or "throw" or "summon" ? r : "none";
-    }
+        => GeneratedRuntimeFamilyPolicy.Normalize(attack?.RuntimeFamily);
 
     private static bool IsSingleRuntimeProjectileFamily(string runtimeFamily)
-        => runtimeFamily is "thrust" or "flail" or "yoyo" or "whip";
+        => GeneratedRuntimeFamilyPolicy.UsesHeldProjectile(runtimeFamily)
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.OverheadBarrage)
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
+
+    private static Vector2 OverheadBarrageTarget(Player player, Vector2 fallbackOrigin, Vector2 fallbackVelocity, float rangeTiles)
+    {
+        Vector2 origin = player.MountedCenter;
+        Vector2 requested = player.whoAmI == Main.myPlayer
+            ? Main.MouseWorld
+            : fallbackOrigin + fallbackVelocity.SafeNormalize(Vector2.UnitX * player.direction) * Math.Clamp(rangeTiles * 16f, 64f, 1920f);
+        Vector2 delta = requested - origin;
+        float maxRange = Math.Clamp(rangeTiles > 0f ? rangeTiles * 16f : 560f, 64f, 1920f);
+        if (delta.LengthSquared() > maxRange * maxRange)
+            requested = origin + delta.SafeNormalize(Vector2.UnitX * player.direction) * maxRange;
+        return requested;
+    }
 
     // Experimental runtime inventory drawing. If it causes compile/API issues on your tML build,
     // comment this method out; generated items will still function with the placeholder texture.

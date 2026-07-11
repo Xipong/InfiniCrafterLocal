@@ -49,7 +49,9 @@ def _check_targeted_generated_item_resync_by_id_exists() -> None:
     assert "RequestOneFromServer" in registry
     assert "ShouldStartSingleHydrationRequest(id)" in registry
     assert "ShouldStartFullHydrationRequest()" in registry
-    assert "_inFlightGeneratedItemHydration.Contains(id)" in registry
+    assert "_inFlightGeneratedItemHydration.TryGetValue(id" in registry
+    assert "MaxHydrationRequestStateEntries" in registry
+    assert "PruneHydrationRequestStateLocked(now)" in registry
     assert "_lastGeneratedItemHydrationRequestTick[id] = now" in registry
     assert "_inFlightGeneratedItemHydration.Remove(data.Id)" in registry
     assert "_inFlightGeneratedItemHydration.Clear();" in registry
@@ -136,7 +138,9 @@ def _check_projectile_remote_visual_sync_is_explicit_and_tolerates_asset_orderin
     assert "ReadProjectileVisualSyncPayload" in projectile
     assert "ApplyPendingProjectileVisualSyncIfAny();" in projectile
     assert "ApplyProjectileVisualSyncPayload" in projectile
-    assert "payload.Owner = Math.Clamp(whoAmI" in projectile
+    assert "TryResolveServerOwnedGeneratedProjectile(whoAmI, payload.Identity" in projectile
+    assert "payload.GeneratedItemId = ShortNet(generated._generatedItemId, 96)" in projectile
+    assert "payload.Center = generated.Projectile.Center" in projectile
     assert "ClearPresentationSyncCaches" in projectile
     assert "DrawRuntimePlanFallback(px, center, dir, perp, c, len, width);" in projectile
     assert "remote peers can receive the projectile/VFX manifest before" in projectile
@@ -194,9 +198,9 @@ def _check_projectile_visual_sync_packet_is_id_only_registry_catchup() -> None:
         assert forbidden not in transport_block
 
 
-def _check_held_item_presentation_sync_packet_is_id_pose_only_registry_catchup() -> None:
+def _check_held_item_presentation_sync_packet_is_id_pose_animation_phase_registry_catchup() -> None:
     held = _read(MOD / "Common" / "Players" / "GeneratedHeldItemDrawLayer.cs")
-    assert "private const int HeldItemPresentationSyncVersion = 3" in held
+    assert "private const int HeldItemPresentationSyncVersion = 4" in held
     assert "registry.TryGet(payload.GeneratedItemId, out var registryData)" in held
     assert "RequestHeldItemCatchup(payload.GeneratedItemId, null)" in held
     start = held.index("private sealed class HeldItemPresentationPayload")
@@ -208,7 +212,7 @@ def _check_held_item_presentation_sync_packet_is_id_pose_only_registry_catchup()
     write_start = held.index("private static void WriteHeldItemPresentationPayload")
     read_end = held.index("private static void SendHeldItemPresentationPayload", write_start)
     transport_block = held[write_start:read_end]
-    for required in ["GeneratedItemId", "ItemLocationX", "ItemLocationY", "ItemRotation", "Direction", "GravDir"]:
+    for required in ["GeneratedItemId", "ItemLocationX", "ItemLocationY", "ItemRotation", "Direction", "GravDir", "ActiveUse", "AnimationRemaining"]:
         assert required in payload_block
         assert required in build_block
         assert required in transport_block
@@ -258,7 +262,10 @@ def _check_asset_download_hydration_is_deduped_cached_and_counted() -> None:
     assert "RetryCount" in asset_sync
     assert "DuplicateSuppressedCount" in asset_sync
     assert "DownloadStartedCount" in asset_sync
-    assert "_inFlight.Contains(key)" in asset_sync
+    assert "_inFlight.ContainsKey(key)" in asset_sync
+    assert "MaxInFlightDownloads" in asset_sync
+    assert "HttpCompletionOption.ResponseHeadersRead" in asset_sync
+    assert "total > MaxAssetBytes" in asset_sync
     assert "_duplicateSuppressedCount++" in asset_sync
     assert "_cacheHitCount++" in asset_sync
     assert "_cacheMissCount++" in asset_sync
@@ -356,7 +363,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_projectile_remote_visual_sync_is_explicit_and_tolerates_asset_ordering',
     '_check_projectile_packets_stay_light_but_restore_presentation_from_registry',
     '_check_projectile_visual_sync_packet_is_id_only_registry_catchup',
-    '_check_held_item_presentation_sync_packet_is_id_pose_only_registry_catchup',
+    '_check_held_item_presentation_sync_packet_is_id_pose_animation_phase_registry_catchup',
     '_check_generated_item_hooks_drive_registry_hydration_not_projectile_only',
     '_check_asset_download_hydration_is_deduped_cached_and_counted',
     '_check_projectile_runtime_state_reset_is_single_helper_not_three_near_duplicate_blocks',

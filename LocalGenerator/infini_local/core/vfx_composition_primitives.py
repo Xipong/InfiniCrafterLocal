@@ -24,35 +24,30 @@ _VFX_PARTICLE_ADDRESS_CATALOG: dict[str, dict[str, Any]] = {
         "kind": "quad",
         "blend": "additive",
         "layer": "BeforeProjectiles",
-        "aliases": ["glow", "softGlow", "additiveGlow", "soulGlow", "magicGlow", "beamGlow"],
         "notes": "Soft additive quads for beams, magic ribbons, core glow and luminous baked tape.",
     },
     "pl:shard": {
         "kind": "quad",
         "blend": "alpha",
         "layer": "BeforeProjectiles",
-        "aliases": ["shard", "debris", "fragment", "burst", "hitBurst"],
         "notes": "Material-looking quad particles for impact chunks, fragment bursts and heavier hit debris.",
     },
     "pl:smoke": {
         "kind": "quad",
         "blend": "alpha",
         "layer": "BeforeProjectiles",
-        "aliases": ["smoke", "ash", "cloud", "decay", "residue"],
         "notes": "Longer-lived alpha quads for decay, smoke, residue and field haze.",
     },
     "pl:spark": {
         "kind": "point",
         "blend": "additive",
         "layer": "BeforeProjectiles",
-        "aliases": ["spark", "point", "glint", "star", "twinkle"],
         "notes": "Cheap additive point particles for sparks, glints, star specks and high-count accents.",
     },
     "dust": {
         "kind": "fallback",
         "blend": "alpha",
         "layer": "BeforeProjectiles",
-        "aliases": ["vanillaDust", "fallback"],
         "notes": "Explicit vanilla Dust fallback. Use only when ParticleLibrary routing is not desired.",
     },
 }
@@ -132,8 +127,8 @@ def _vfx_trim_mundane_slots(slots: list[dict[str, Any]], profile: dict[str, Any]
     preferred = []
     for slot in sorted([x for x in slots if isinstance(x, dict)], key=_vfx_slot_score, reverse=True):
         group = _vfx_event_group(slot.get("event"))
-        channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("renderer"), slot.get("event")))
-        renderer = str(slot.get("renderer") or "")
+        channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("rendererKind"), slot.get("event")))
+        renderer = _vfx_renderer_kind(slot.get("rendererKind"))
         if channel in {"ambientParticles", "decaySmoke"}:
             continue
         if group == "live" and channel != "motionTrail" and channel not in {"light", "sound"}:
@@ -142,7 +137,7 @@ def _vfx_trim_mundane_slots(slots: list[dict[str, Any]], profile: dict[str, Any]
             continue
         if group == "kill" and channel not in {"impactShape", "light", "sound"}:
             continue
-        if any(((_vfx_event_group(s.get("event")), str(s.get("channel") or _vfx_infer_channel(s.get("renderer"), s.get("event")))) == (group, channel)) for s in preferred):
+        if any(((_vfx_event_group(s.get("event")), str(s.get("channel") or _vfx_infer_channel(s.get("rendererKind"), s.get("event")))) == (group, channel)) for s in preferred):
             continue
         # Downshift density/alpha/scale a bit but do not make it invisible.
         slot = dict(slot)
@@ -155,7 +150,7 @@ def _vfx_trim_mundane_slots(slots: list[dict[str, Any]], profile: dict[str, Any]
         except Exception: slot["alpha"] = 0.38
         try: slot["scale"] = max(0.55, min(1.55, float(slot.get("scale") or 1.0)))
         except Exception: slot["scale"] = 1.0
-        if renderer.lower() in {"impactring", "ghostarc", "orbitalmotes"}:
+        if renderer in {"impactRing", "ghostArc", "orbitingMotes"}:
             continue
         preferred.append(slot)
         if len(preferred) >= max_slots:
@@ -189,198 +184,140 @@ def _vfx_lerp_range(seed: int, salt: str, value: Any, fallback: float) -> float:
     except Exception:
         return fallback
 
+CANONICAL_VFX_RENDERERS = frozenset({
+    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip",
+    "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite",
+    "childMotes", "lightCue", "soundCue",
+})
+
+_MOTION_RENDERERS = frozenset({"projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "beamLine"})
+_PRIMITIVE_RENDERERS = frozenset({"historyRibbon", "tipTrail", "wavyStrip", "beamLine"})
+_SPRITE_RENDERERS = frozenset({"projectileAfterimage", "spriteStampTrail", "ghostArc", "fieldPulse", "actorAfterimage", "impactRing", "impactSprite"})
+_ACCENT_RENDERERS = frozenset({"childMotes", "orbitingMotes"})
+_IMPACT_RENDERERS = frozenset({"impactRing", "impactSprite"})
+
+
+def _vfx_renderer_kind(renderer: Any) -> str:
+    """Accept one exact current renderer id; never classify free text."""
+    raw = str(renderer or "").strip()
+    return raw if raw in CANONICAL_VFX_RENDERERS else "none"
+
+
 def _vfx_default_importance(event: Any, renderer: Any = "") -> str:
-    e = str(event or "").lower()
-    r = str(renderer or "").lower()
-    if e in {"hit", "impact", "onhit"} or "impact" in r or "flash" in r:
+    e = str(event or "").strip()
+    r = _vfx_renderer_kind(renderer)
+    if e == "hit" or r in _IMPACT_RENDERERS:
         return "core"
-    if "afterimage" in r or "trail" in r or "ribbon" in r or "beam" in r or "field" in r:
+    if r in _MOTION_RENDERERS or r == "fieldPulse":
         return "secondary"
-    if "ambient" in r or "mote" in r or "smoke" in r or "sound" in r or "light" in r:
+    if r in _ACCENT_RENDERERS or r in {"soundCue", "lightCue"}:
         return "accent"
-    if "actor" in r or "orbital" in r:
+    if r == "actorAfterimage":
         return "luxury"
     return "secondary"
 
+
 def _vfx_default_visual_cost(renderer: Any, density: float = 0.35) -> float:
-    r = str(renderer or "").lower()
-    base = 0.18
-    if "impact" in r or "burst" in r or "ring" in r:
-        base = 0.42
-    if "ribbon" in r or "history" in r or "trail" in r:
-        base = 0.34
-    if "ambient" in r or "mote" in r or "smoke" in r:
-        base = 0.28
-    if "actor" in r or "orbital" in r or "field" in r:
-        base = 0.58
-    if "beam" in r:
-        base = 0.46
+    r = _vfx_renderer_kind(renderer)
+    base = {
+        "impactRing": 0.42, "impactSprite": 0.42,
+        "historyRibbon": 0.34, "tipTrail": 0.34, "wavyStrip": 0.34,
+        "projectileAfterimage": 0.30, "spriteStampTrail": 0.30, "ghostArc": 0.30,
+        "childMotes": 0.28, "orbitingMotes": 0.34,
+        "actorAfterimage": 0.58, "fieldPulse": 0.58, "beamLine": 0.46,
+        "lightCue": 0.12, "soundCue": 0.08,
+    }.get(r, 0.18)
     try:
         return max(0.0, min(1.0, base + float(density or 0) * 0.28))
     except Exception:
         return base
 
+
 def _vfx_default_signature_weight(event: Any, renderer: Any = "") -> float:
-    e = str(event or "").lower()
-    r = str(renderer or "").lower()
-    if e in {"hit", "impact", "onhit"} or "impact" in r or "ring" in r:
+    e = str(event or "").strip()
+    r = _vfx_renderer_kind(renderer)
+    if e == "hit" or r in _IMPACT_RENDERERS:
         return 0.72
-    if "ribbon" in r or "beam" in r or "field" in r:
+    if r in {"historyRibbon", "tipTrail", "wavyStrip", "beamLine", "fieldPulse"}:
         return 0.58
-    if "actor" in r or "orbital" in r:
+    if r in {"actorAfterimage", "orbitingMotes"}:
         return 0.52
-    if "ambient" in r or "mote" in r or "smoke" in r:
+    if r == "childMotes":
         return 0.30
     return 0.45
 
+
 def _vfx_event_stage(event: Any, renderer: Any = "") -> str:
-    e = str(event or "").lower()
-    r = str(renderer or "").lower()
-    if e in {"hit", "impact", "onhit"}:
-        return "impact"
-    if e in {"kill", "expire", "decay"}:
-        return "decay"
-    if e in {"active", "slash", "beam"} or "tip" in r or "ribbon" in r or "ghost" in r:
-        return "active"
-    if e in {"spawn", "windup"}:
-        return "windup"
+    e = str(event or "").strip()
+    if e == "hit": return "impact"
+    if e in {"kill", "expire"}: return "decay"
+    if e == "active": return "active"
     return "loop"
 
+
 def _vfx_default_backend(event: Any, renderer: Any = "") -> str:
-    e = str(event or "").lower()
-    r = str(renderer or "").lower()
-    if "beam" in r or "ribbon" in r or "tip" in r:
-        return "Primitive"
-    if "afterimage" in r or "stamp" in r or "ghost" in r or "field" in r or "flash" in r or "ring" in r:
-        return "Sprite"
-    if e in {"hit", "impact", "onhit", "kill", "expire", "decay"}:
-        return "Baked"
-    if "mote" in r or "spark" in r or "smoke" in r or "ambient" in r:
-        return "Realtime"
+    r = _vfx_renderer_kind(renderer)
+    if r in _PRIMITIVE_RENDERERS: return "Primitive"
+    if r in _SPRITE_RENDERERS: return "Sprite"
+    if r in _ACCENT_RENDERERS: return "Realtime"
     return "Auto"
 
+
 def _vfx_default_anchor(event: Any, renderer: Any = "") -> str:
-    e = str(event or "").lower()
-    r = str(renderer or "").lower()
-    if e in {"hit", "impact", "onhit"}:
-        return "hitPoint"
-    if "tip" in r or "ribbon" in r or "slash" in r:
-        return "tipHistory"
-    if "beam" in r:
-        return "velocity"
-    if "field" in r:
-        return "field"
+    e = str(event or "").strip()
+    r = _vfx_renderer_kind(renderer)
+    if e == "hit": return "hitPoint"
+    if r in {"tipTrail", "historyRibbon", "ghostArc", "wavyStrip"}: return "tipHistory"
+    if r == "beamLine": return "velocity"
+    if r == "fieldPulse": return "field"
     return "self"
 
+
 def _vfx_infer_channel(renderer: Any, event: Any = "") -> str:
-    r = str(renderer or "").lower()
-    e = str(event or "").lower()
-    if "sound" in r:
-        return "sound"
-    if "light" in r:
-        return "light"
-    if e in {"hit", "impact", "onhit"}:
-        if any(w in r for w in ("mote", "spark", "shard", "smoke", "particle")):
-            return "impactParticles"
-        return "impactShape"
-    if e in {"kill", "expire", "decay"}:
-        return "impactShape" if any(w in r for w in ("ring", "flash", "impact", "burst")) else "decaySmoke"
-    if any(w in r for w in ("afterimage", "tiptrail", "ribbon", "stamp", "ghost", "trail", "history", "primitive")):
-        return "motionTrail"
-    if any(w in r for w in ("field", "orbital", "aura", "glow")):
-        return "coreGlow"
-    if any(w in r for w in ("ambient", "mote", "smoke", "spark")):
-        return "ambientParticles"
+    r = _vfx_renderer_kind(renderer)
+    e = str(event or "").strip()
+    if r == "soundCue": return "sound"
+    if r == "lightCue": return "light"
+    if r in _MOTION_RENDERERS: return "motionTrail"
+    if r in {"fieldPulse", "orbitingMotes", "actorAfterimage"}: return "coreGlow"
+    if r == "childMotes": return "impactParticles" if e in {"hit", "kill", "expire"} else "ambientParticles"
+    if r in _IMPACT_RENDERERS: return "impactShape"
     return "motionTrail"
 
+
 def _vfx_infer_emission_mode(renderer: Any, event: Any = "") -> str:
-    r = str(renderer or "").lower()
-    e = str(event or "").lower()
-    if "orbit" in r or "orbital" in r:
-        return "orbit"
-    if e in {"hit", "impact", "onhit"}:
-        return "ring" if "ring" in r else "burst"
-    if e in {"kill", "expire", "decay"}:
-        return "residue"
-    if "beam" in r or "trail" in r or "wake" in r:
-        return "wake"
+    r = _vfx_renderer_kind(renderer)
+    e = str(event or "").strip()
+    if r == "orbitingMotes": return "orbit"
+    if e == "hit": return "ring" if r == "impactRing" else "burst"
+    if e in {"kill", "expire"}: return "residue"
     return "wake"
 
+
 def _vfx_infer_lane(slot: dict[str, Any]) -> str:
-    lane = str(slot.get("lane") or "auto").strip().lower()
-    if lane in {"primary", "support", "accent", "ornament", "cue"}:
-        return lane
-    imp = str(slot.get("importance") or "").strip().lower()
-    channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("renderer"), slot.get("event")))
-    renderer = str(slot.get("renderer") or "").lower()
-    if channel in {"light", "sound"} or "light" in renderer or "sound" in renderer:
-        return "cue"
-    if imp == "core":
-        return "primary"
-    if imp == "secondary":
-        return "support"
-    if imp == "luxury":
-        return "ornament"
-    if imp == "accent":
-        return "accent"
-    if "ring" in renderer or "flash" in renderer:
-        return "support"
-    if "mote" in renderer or "spark" in renderer or "smoke" in renderer:
-        return "accent"
+    lane = str(slot.get("lane") or "").strip()
+    if lane in {"primary", "support", "accent", "ornament", "cue"}: return lane
+    imp = str(slot.get("importance") or "").strip()
+    renderer = _vfx_renderer_kind(slot.get("rendererKind"))
+    channel = str(slot.get("channel") or _vfx_infer_channel(renderer, slot.get("event")))
+    if channel in {"light", "sound"} or renderer in {"lightCue", "soundCue"}: return "cue"
+    if imp == "core": return "primary"
+    if imp == "secondary": return "support"
+    if imp == "luxury": return "ornament"
+    if imp == "accent": return "accent"
+    if renderer in _IMPACT_RENDERERS: return "support"
+    if renderer in _ACCENT_RENDERERS: return "accent"
     return "primary"
 
-def _vfx_renderer_family(renderer: Any) -> str:
-    r = str(renderer or "").lower()
-    for key in ("afterimage", "tiptrail", "history", "ribbon", "stamp", "ghost", "wavy", "cloth", "beam", "field", "orbit", "ring", "flash", "burst", "mote", "light", "sound", "smoke"):
-        if key in r:
-            return key
-    return r[:24] or "generic"
 
-def _vfx_renderer_kind(renderer: Any) -> str:
-    """Canonical renderer id for runtime dispatch. Fuzzy matching stays in Python/generator;
-    generated manifests should not force C# to classify renderer strings again.
-    """
-    r = str(renderer or "").strip().lower().replace("_", "").replace("-", "")
-    if not r:
-        return "none"
-    if "sound" in r:
-        return "soundCue"
-    if "light" in r:
-        return "lightCue"
-    if "afterimage" in r:
-        return "projectileAfterimage"
-    if "stamp" in r:
-        return "spriteStampTrail"
-    if "tiptrail" in r:
-        return "tipTrail"
-    if "history" in r or "primitive" in r or "ribbon" in r:
-        return "historyRibbon"
-    if "ghost" in r:
-        return "ghostArc"
-    if "wavy" in r or "cloth" in r:
-        return "wavyStrip"
-    if "beam" in r:
-        return "beamLine"
-    if "field" in r:
-        return "fieldPulse"
-    if "orbital" in r or "orbit" in r:
-        return "orbitingMotes"
-    if "actor" in r or "playerghost" in r:
-        return "actorAfterimage"
-    if "ring" in r:
-        return "impactRing"
-    if "child" in r or "mote" in r:
-        return "childMotes"
-    if "flash" in r or "burst" in r or "impact" in r:
-        return "impactSprite"
-    return "none"
+def _vfx_renderer_family(renderer: Any) -> str:
+    return _vfx_renderer_kind(renderer)
+
 
 def _vfx_event_group(event: Any) -> str:
-    e = str(event or "").lower()
-    if e in {"hit", "impact", "onhit"}:
-        return "hit"
-    if e in {"kill", "expire", "decay"}:
-        return "kill"
+    e = str(event or "").strip()
+    if e == "hit": return "hit"
+    if e in {"kill", "expire"}: return "kill"
     return "live"
 
 def _vfx_score_number(value: Any, fallback: float = 0.0) -> float:
@@ -393,7 +330,7 @@ def _vfx_score_number(value: Any, fallback: float = 0.0) -> float:
         return fallback
 
 def _vfx_slot_score(slot: dict[str, Any]) -> float:
-    imp = str(slot.get("importance") or "secondary").lower()
+    imp = str(slot.get("importance") or "secondary")
     score = {"core": 100.0, "secondary": 50.0, "accent": 20.0, "luxury": 5.0}.get(imp, 25.0)
     score += _vfx_score_number(slot.get("signatureWeight"), 0.0) * 20.0
     score -= _vfx_score_number(slot.get("visualCost"), 0.0) * 10.0
@@ -440,9 +377,9 @@ def _vfx_arbitrate_slots(slots: list[dict[str, Any]], magnitude_class: str) -> l
 
     for slot in sorted([x for x in slots if isinstance(x, dict)], key=_vfx_slot_score, reverse=True):
         group = _vfx_event_group(slot.get("event"))
-        channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("renderer"), slot.get("event")))
+        channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("rendererKind"), slot.get("event")))
         lane = _vfx_infer_lane(slot)
-        family = _vfx_renderer_family(slot.get("renderer"))
+        family = _vfx_renderer_family(slot.get("rendererKind"))
         lane_key = (group, channel, lane)
         channel_key = (group, channel)
         fam_key = (group, channel, family)
@@ -587,7 +524,7 @@ def _vfx_playback_mode_for_recipe(recipe: dict[str, Any]) -> str:
     if explicit:
         return explicit
     slots = recipe.get("slots") if isinstance(recipe.get("slots"), list) else []
-    backends = {str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("renderer"))).lower() for x in slots if isinstance(x, dict)}
+    backends = {str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("rendererKind"))).lower() for x in slots if isinstance(x, dict)}
     if "baked" in backends and ("realtime" in backends or "primitive" in backends or "sprite" in backends):
         return "Hybrid"
     if "baked" in backends:
@@ -616,59 +553,36 @@ def _vfx_particle_address_catalog() -> dict[str, Any]:
     }
 
 def _vfx_canonical_particle_address(value: Any) -> str:
-    raw = str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
-    if not raw or raw in {"auto", "default"}:
-        return "auto"
-    aliases: dict[str, str] = {}
-    for canonical, meta in _VFX_PARTICLE_ADDRESS_CATALOG.items():
-        aliases[canonical.lower()] = canonical
-        for alias in meta.get("aliases") or []:
-            aliases[str(alias).strip().lower().replace("_", "-").replace(" ", "-")] = canonical
-    aliases.update({
-        "particlelibrary:glow": "pl:glow",
-        "particlelibrary:shard": "pl:shard",
-        "particlelibrary:smoke": "pl:smoke",
-        "particlelibrary:spark": "pl:spark",
-        "vanilla:dust": "dust",
-    })
-    return aliases.get(raw, raw if raw.startswith("pl:") else "auto")
+    raw = str(value or "").strip()
+    return raw if raw in {"auto", "pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust"} else "auto"
 
 def _vfx_resolve_particle_system_id(raw: dict[str, Any] | None, renderer: str, event: str, channel: str = "", blend: str = "", emission_mode: str = "") -> str:
     raw = raw or {}
-    explicit = _vfx_canonical_particle_address(raw.get("particleSystemId") or raw.get("particleSystem") or raw.get("particleAddress"))
-    if explicit not in {"", "auto"}:
+    explicit = _vfx_canonical_particle_address(raw.get("particleSystemId"))
+    if explicit != "auto":
         return explicit
-    r = str(renderer or "").lower()
-    e = str(event or "").lower()
-    c = str(channel or "").lower()
-    b = str(blend or "").lower()
-    m = str(emission_mode or "").lower()
-    if "light" in r or c == "light":
-        return "pl:glow"
-    if "sound" in r or c == "sound":
+    r = _vfx_renderer_kind(renderer)
+    e = str(event or "").strip()
+    c = str(channel or "").strip()
+    m = str(emission_mode or "").strip()
+    if r == "soundCue" or c == "sound":
         return "dust"
-    if any(x in m for x in ("residue", "smoke")) or any(x in r for x in ("smoke", "decay", "cloud", "residue")) or c == "decaysmoke":
-        return "pl:smoke"
-    if any(x in r for x in ("spark", "glint", "star")) or "spark" in m:
-        return "pl:spark"
-    if ("mote" in r or "particle" in r) and c == "ambientparticles":
-        return "pl:spark"
-    if ("mote" in r or "particle" in r) and c == "decaysmoke":
-        return "pl:smoke"
-    if any(x in r for x in ("flash", "pulse", "field")):
+    if r in {"lightCue", "beamLine", "fieldPulse", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "projectileAfterimage", "spriteStampTrail"} or c in {"coreGlow", "light"}:
         return "pl:glow"
-    if "ring" in r and ("add" in b or c == "coreglow" or e in {"hit", "impact", "onhit"}):
-        return "pl:glow"
-    if any(x in r for x in ("shard", "debris", "burst")) or c == "impactparticles":
+    if r == "childMotes":
+        if c == "decaySmoke" or m == "residue" or e in {"kill", "expire"}:
+            return "pl:smoke"
+        if c == "impactParticles" or e == "hit":
+            return "pl:shard"
+        return "pl:spark"
+    if r in {"impactRing", "impactSprite"}:
+        return "pl:shard" if c == "impactParticles" else "pl:glow"
+    if r == "orbitingMotes" or c == "ambientParticles":
+        return "pl:spark"
+    if e in {"kill", "expire"}:
+        return "pl:smoke"
+    if e == "hit":
         return "pl:shard"
-    if "add" in b or any(x in r for x in ("glow", "beam", "ribbon", "trail")) or c == "coreglow":
-        return "pl:glow"
-    if e in {"hit", "impact", "onhit"}:
-        return "pl:shard"
-    if e in {"kill", "expire", "decay"}:
-        return "pl:smoke"
-    if c == "ambientparticles":
-        return "pl:spark"
     return "pl:glow"
 
 __all__ = [

@@ -6,7 +6,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
+from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.item_power_knowledge import apply_item_knowledge
+from infini_local.pipelines.item_power_knowledge import canonicalize
+from infini_local.pipelines.item_power_knowledge import infer_item_card
+from infini_local.pipelines.llm_transport import llm_chat_json
+from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+from infini_local.storage.world_recipe_runtime import sanitize_recipe_for_delivery
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -90,18 +98,18 @@ def _rope_parent() -> dict:
 
 
 def _validate_and_attach(plan: dict, a: dict, b: dict, key: str) -> dict:
-    ca = server.canonicalize(a)
-    cb = server.canonicalize(b)
-    data = server.validate_and_repair(plan, a, b, ca, cb, key)
-    data = server.apply_item_knowledge(data, a, b, ca, cb)
-    data = server.attach_gameplay_and_attack(data, a, b, ca, cb)
+    ca = canonicalize(a)
+    cb = canonicalize(b)
+    data = validate_and_repair(plan, a, b, ca, cb, key)
+    data = apply_item_knowledge(data, a, b, ca, cb)
+    data = attach_gameplay_and_attack(data, a, b, ca, cb)
     return data
 
 
 
 
 def _llm_replay_content(req: dict) -> str:
-    return server.llm_chat_json(req)["choices"][0]["message"]["content"]
+    return llm_chat_json(req)["choices"][0]["message"]["content"]
 
 
 def _check_llm_chat_json_raw_replay_intercepts_planner_without_network(monkeypatch, tmp_path) -> None:
@@ -119,7 +127,7 @@ def _check_llm_chat_json_raw_replay_intercepts_planner_without_network(monkeypat
         "response_format": {"type": "json_object"},
     }
     content = _llm_replay_content(req)
-    plan = server.parse_first_valid_llm_json(content)
+    plan = parse_first_valid_llm_json(content)
     assert plan["name"] == "Twin Grain Saber"
 
 
@@ -169,15 +177,15 @@ def _check_llm_chat_json_raw_replay_directory_routes_multiple_llm_hops(monkeypat
         ]
     }
 
-    assert server.parse_first_valid_llm_json(_llm_replay_content(planner_req))["name"] == "Planner Replay"
-    assert server.parse_first_valid_llm_json(_llm_replay_content(vfx_req))["visualKit"]["projectileSpritePrompt"] == "compact harpoon head"
+    assert parse_first_valid_llm_json(_llm_replay_content(planner_req))["name"] == "Planner Replay"
+    assert parse_first_valid_llm_json(_llm_replay_content(vfx_req))["visualKit"]["projectileSpritePrompt"] == "compact harpoon head"
 
 
 def _check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter() -> None:
     # This fixture is intentionally raw wrapped model output, not a pre-parsed dict.
     # It catches the JSON extraction/repair seam that deterministic_plan cannot test.
     raw_text = (FIXTURES / "llm_raw" / "twin_grain_saber_wrapped.txt").read_text(encoding="utf-8")
-    plan = server.parse_first_valid_llm_json(raw_text)
+    plan = parse_first_valid_llm_json(raw_text)
     assert plan["name"] == "Twin Grain Saber"
     assert plan["runtimePlan"]["engineCalls"]
 
@@ -200,9 +208,10 @@ def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line
     os.environ.pop("INFINI_LLM_REPLAY_RAW", None)
     plan = json.loads((FIXTURES / "author_plan" / "rope_spear_author_plan.json").read_text(encoding="utf-8"))
     data = _validate_and_attach(plan, _spear_parent(), _rope_parent(), "test_replay_rope_spear")
+    assert data["attack"]["genome"]["runtimeFamily"] == "returning"
 
     projectile_prompt = data["visual"].get("projectileImagePrompt") or data["visual"].get("projectilePrompt", "")
-    prompt = server.normalize_asset_prompt(data, "projectile", projectile_prompt, 48).lower()
+    prompt = normalize_asset_prompt(data, "projectile", projectile_prompt, 48).lower()
     assert "thin taught rope line" not in prompt
     assert "thin taut rope line" not in prompt
     assert "extending left" not in prompt
@@ -211,14 +220,14 @@ def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line
     assert "short local" in prompt or "local attachment" in prompt or "short rope" in prompt
 
     item_source_prompt = data["visual"].get("imagePrompt") or data["visual"].get("itemPrompt", "")
-    item_prompt = server.normalize_asset_prompt(data, "item", item_source_prompt, 32).lower()
+    item_prompt = normalize_asset_prompt(data, "item", item_source_prompt, 32).lower()
     assert "not a long spear pole" not in item_prompt
     assert "rope coil" in item_prompt or "coiled rope" in item_prompt or "rope grip" in item_prompt
 
 
 def _check_delivery_payload_replay_normalizes_object_debug_without_changing_gameplay() -> None:
     payload = json.loads((FIXTURES / "combine_payload" / "object_debug_payload.json").read_text(encoding="utf-8"))
-    delivered = server.sanitize_recipe_for_delivery(payload)
+    delivered = sanitize_recipe_for_delivery(payload)
 
     assert delivered["runtimeApiVersion"] == "v0.4.23"
     assert delivered["gameplay"]["damage"] == payload["gameplay"]["damage"]
@@ -268,11 +277,11 @@ def _silver_coin_parent() -> dict:
 
 
 def _check_parent_stage_hints_do_not_turn_starter_melee_or_coins_into_boss_tiers() -> None:
-    wooden = server.infer_item_card(_wooden_sword())
+    wooden = infer_item_card(_wooden_sword())
     assert wooden["tier"] in {"early", "pre_boss", "wood"}
     assert float(wooden["powerScore"]) < 55
 
-    coin = server.infer_item_card(_silver_coin_parent())
+    coin = infer_item_card(_silver_coin_parent())
     assert coin["tier"] not in {"lunar", "endgame", "post_moonlord"}
     assert float(coin["powerScore"]) <= 72.0
     assert "+currency_ammo_cap" in coin["signals"]["mechanicPower"]["basis"]

@@ -1,0 +1,571 @@
+{
+  "$id": "https://infinicrafter.local/contracts/attack_spec.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "ammoKind": {
+      "default": "",
+      "title": "Ammokind",
+      "type": "string"
+    },
+    "aoeDamageRadiusPx": {
+      "default": 0,
+      "title": "Aoedamageradiuspx",
+      "type": "integer"
+    },
+    "beamChargeTicks": {
+      "default": 0,
+      "title": "Beamchargeticks",
+      "type": "integer"
+    },
+    "beamWidthPx": {
+      "default": 14.0,
+      "title": "Beamwidthpx",
+      "type": "number"
+    },
+    "bounceCount": {
+      "default": 0,
+      "title": "Bouncecount",
+      "type": "integer"
+    },
+    "burstDustCap": {
+      "default": 20,
+      "title": "Burstdustcap",
+      "type": "integer"
+    },
+    "chainCount": {
+      "default": 0,
+      "title": "Chaincount",
+      "type": "integer"
+    },
+    "channelUse": {
+      "default": false,
+      "title": "Channeluse",
+      "type": "boolean"
+    },
+    "chargePowerMultiplier": {
+      "default": 1.6,
+      "title": "Chargepowermultiplier",
+      "type": "number"
+    },
+    "chargeTicks": {
+      "default": 45,
+      "title": "Chargeticks",
+      "type": "integer"
+    },
+    "childSpritePath": {
+      "default": "",
+      "title": "Childspritepath",
+      "type": "string"
+    },
+    "childSpritePrompt": {
+      "default": "",
+      "title": "Childspriteprompt",
+      "type": "string"
+    },
+    "childSpriteScore": {
+      "default": 0,
+      "title": "Childspritescore",
+      "type": "number"
+    },
+    "childSpriteStatus": {
+      "default": "",
+      "title": "Childspritestatus",
+      "type": "string"
+    },
+    "childSpriteUrl": {
+      "default": "",
+      "title": "Childspriteurl",
+      "type": "string"
+    },
+    "contactForgivenessPx": {
+      "default": 0,
+      "title": "Contactforgivenesspx",
+      "type": "integer"
+    },
+    "damageClass": {
+      "default": "generic",
+      "title": "Damageclass",
+      "type": "string"
+    },
+    "debuffHint": {
+      "default": "",
+      "title": "Debuffhint",
+      "type": "string"
+    },
+    "debuffTime": {
+      "default": 0,
+      "title": "Debufftime",
+      "type": "integer"
+    },
+    "delayTicks": {
+      "default": 0,
+      "title": "Delayticks",
+      "type": "integer"
+    },
+    "delivery": {
+      "default": "none",
+      "title": "Delivery",
+      "type": "string"
+    },
+    "disableItemMeleeHitbox": {
+      "default": false,
+      "title": "Disableitemmeleehitbox",
+      "type": "boolean"
+    },
+    "dustSpawnDenom": {
+      "default": 3,
+      "title": "Dustspawndenom",
+      "type": "integer"
+    },
+    "effect": {
+      "default": "dust",
+      "title": "Effect",
+      "type": "string"
+    },
+    "effectCode": {
+      "default": 0,
+      "title": "Effectcode",
+      "type": "integer"
+    },
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "explosionRadius": {
+      "default": 0,
+      "title": "Explosionradius",
+      "type": "integer"
+    },
+    "extraUpdates": {
+      "default": 0,
+      "title": "Extraupdates",
+      "type": "integer"
+    },
+    "fieldSpritePath": {
+      "default": "",
+      "title": "Fieldspritepath",
+      "type": "string"
+    },
+    "fieldSpritePrompt": {
+      "default": "",
+      "title": "Fieldspriteprompt",
+      "type": "string"
+    },
+    "fieldSpriteScore": {
+      "default": 0,
+      "title": "Fieldspritescore",
+      "type": "number"
+    },
+    "fieldSpriteStatus": {
+      "default": "",
+      "title": "Fieldspritestatus",
+      "type": "string"
+    },
+    "fieldSpriteUrl": {
+      "default": "",
+      "title": "Fieldspriteurl",
+      "type": "string"
+    },
+    "hideUseGraphic": {
+      "default": false,
+      "title": "Hideusegraphic",
+      "type": "boolean"
+    },
+    "hitboxScale": {
+      "default": 1.0,
+      "title": "Hitboxscale",
+      "type": "number"
+    },
+    "homingStrength": {
+      "default": 0,
+      "title": "Homingstrength",
+      "type": "number"
+    },
+    "immunityCooldown": {
+      "default": 10,
+      "title": "Immunitycooldown",
+      "type": "integer"
+    },
+    "impactSpritePath": {
+      "default": "",
+      "title": "Impactspritepath",
+      "type": "string"
+    },
+    "impactSpritePrompt": {
+      "default": "",
+      "title": "Impactspriteprompt",
+      "type": "string"
+    },
+    "impactSpriteScore": {
+      "default": 0,
+      "title": "Impactspritescore",
+      "type": "number"
+    },
+    "impactSpriteStatus": {
+      "default": "",
+      "title": "Impactspritestatus",
+      "type": "string"
+    },
+    "impactSpriteUrl": {
+      "default": "",
+      "title": "Impactspriteurl",
+      "type": "string"
+    },
+    "impactStyle": {
+      "default": "small_flash",
+      "title": "Impactstyle",
+      "type": "string"
+    },
+    "impactVfxRadiusPx": {
+      "default": 0,
+      "title": "Impactvfxradiuspx",
+      "type": "integer"
+    },
+    "lifetime": {
+      "default": 90,
+      "title": "Lifetime",
+      "type": "integer"
+    },
+    "maxChildDepth": {
+      "default": 1,
+      "title": "Maxchilddepth",
+      "type": "integer"
+    },
+    "maxChildProjectiles": {
+      "default": 16,
+      "title": "Maxchildprojectiles",
+      "type": "integer"
+    },
+    "mobilityCooldownTicks": {
+      "default": 0,
+      "title": "Mobilitycooldownticks",
+      "type": "integer"
+    },
+    "mobilityMode": {
+      "default": "",
+      "title": "Mobilitymode",
+      "type": "string"
+    },
+    "mobilityRangeTiles": {
+      "default": 0,
+      "title": "Mobilityrangetiles",
+      "type": "integer"
+    },
+    "mobilitySafeTileOnly": {
+      "default": true,
+      "title": "Mobilitysafetileonly",
+      "type": "boolean"
+    },
+    "movement": {
+      "default": "straight",
+      "title": "Movement",
+      "type": "string"
+    },
+    "movementCode": {
+      "default": 0,
+      "title": "Movementcode",
+      "type": "integer"
+    },
+    "onHit": {
+      "default": "none",
+      "title": "Onhit",
+      "type": "string"
+    },
+    "onHitCode": {
+      "default": 0,
+      "title": "Onhitcode",
+      "type": "integer"
+    },
+    "ownerHitCheck": {
+      "default": false,
+      "title": "Ownerhitcheck",
+      "type": "boolean"
+    },
+    "pattern": {
+      "default": "basic",
+      "title": "Pattern",
+      "type": "string"
+    },
+    "pierce": {
+      "default": 1,
+      "title": "Pierce",
+      "type": "integer"
+    },
+    "powerBudget": {
+      "default": 1.0,
+      "title": "Powerbudget",
+      "type": "number"
+    },
+    "primaryColorName": {
+      "default": "white",
+      "title": "Primarycolorname",
+      "type": "string"
+    },
+    "procMode": {
+      "default": 0,
+      "title": "Procmode",
+      "type": "integer"
+    },
+    "projectileFamily": {
+      "default": "",
+      "title": "Projectilefamily",
+      "type": "string"
+    },
+    "projectileHeight": {
+      "default": 14,
+      "title": "Projectileheight",
+      "type": "integer"
+    },
+    "projectileImpact": {
+      "default": "",
+      "title": "Projectileimpact",
+      "type": "string"
+    },
+    "projectileMotion": {
+      "default": "",
+      "title": "Projectilemotion",
+      "type": "string"
+    },
+    "projectileRotation": {
+      "default": "",
+      "title": "Projectilerotation",
+      "type": "string"
+    },
+    "projectileScale": {
+      "default": 1.0,
+      "title": "Projectilescale",
+      "type": "number"
+    },
+    "projectileShape": {
+      "default": "",
+      "title": "Projectileshape",
+      "type": "string"
+    },
+    "projectileSpritePath": {
+      "default": "",
+      "title": "Projectilespritepath",
+      "type": "string"
+    },
+    "projectileSpritePrompt": {
+      "default": "",
+      "title": "Projectilespriteprompt",
+      "type": "string"
+    },
+    "projectileSpriteScore": {
+      "default": 0,
+      "title": "Projectilespritescore",
+      "type": "number"
+    },
+    "projectileSpriteStatus": {
+      "default": "",
+      "title": "Projectilespritestatus",
+      "type": "string"
+    },
+    "projectileSpriteUrl": {
+      "default": "",
+      "title": "Projectilespriteurl",
+      "type": "string"
+    },
+    "projectileTrail": {
+      "default": "",
+      "title": "Projectiletrail",
+      "type": "string"
+    },
+    "projectileWidth": {
+      "default": 14,
+      "title": "Projectilewidth",
+      "type": "integer"
+    },
+    "rangeTiles": {
+      "default": 35.0,
+      "title": "Rangetiles",
+      "type": "number"
+    },
+    "runtimeFamily": {
+      "default": "none",
+      "title": "Runtimefamily",
+      "type": "string"
+    },
+    "runtimeLightStrength": {
+      "default": 0,
+      "title": "Runtimelightstrength",
+      "type": "number"
+    },
+    "runtimePlanAuthored": {
+      "default": false,
+      "title": "Runtimeplanauthored",
+      "type": "boolean"
+    },
+    "sameTargetBias": {
+      "default": 0.0,
+      "title": "Sametargetbias",
+      "type": "number"
+    },
+    "scale": {
+      "default": 1.0,
+      "title": "Scale",
+      "type": "number"
+    },
+    "secondaryDamageMultiplier": {
+      "default": 0.35,
+      "title": "Secondarydamagemultiplier",
+      "type": "number"
+    },
+    "secondaryLifetimeTicks": {
+      "default": 24,
+      "title": "Secondarylifetimeticks",
+      "type": "integer"
+    },
+    "secondaryMaterial": {
+      "default": "",
+      "title": "Secondarymaterial",
+      "type": "string"
+    },
+    "secondaryProjectileShape": {
+      "default": "",
+      "title": "Secondaryprojectileshape",
+      "type": "string"
+    },
+    "secondarySpreadRadians": {
+      "default": 0.45,
+      "title": "Secondaryspreadradians",
+      "type": "number"
+    },
+    "secondaryTrigger": {
+      "default": "on_hit",
+      "title": "Secondarytrigger",
+      "type": "string"
+    },
+    "sentryAttackIntervalTicks": {
+      "default": 45,
+      "title": "Sentryattackintervalticks",
+      "type": "integer"
+    },
+    "sentryLifetimeTicks": {
+      "default": 3600,
+      "title": "Sentrylifetimeticks",
+      "type": "integer"
+    },
+    "sentryPlacement": {
+      "default": "grounded",
+      "title": "Sentryplacement",
+      "type": "string"
+    },
+    "sentryTargetRangeTiles": {
+      "default": 30.0,
+      "title": "Sentrytargetrangetiles",
+      "type": "number"
+    },
+    "shotCount": {
+      "default": 1,
+      "title": "Shotcount",
+      "type": "integer"
+    },
+    "soundCatalogSource": {
+      "default": "",
+      "title": "Soundcatalogsource",
+      "type": "string"
+    },
+    "soundImpactCatalogId": {
+      "default": "",
+      "title": "Soundimpactcatalogid",
+      "type": "string"
+    },
+    "soundImpactCatalogPath": {
+      "default": "",
+      "title": "Soundimpactcatalogpath",
+      "type": "string"
+    },
+    "soundPitch": {
+      "default": 0,
+      "title": "Soundpitch",
+      "type": "number"
+    },
+    "soundPitchVariance": {
+      "default": 0.18,
+      "title": "Soundpitchvariance",
+      "type": "number"
+    },
+    "soundUseCatalogId": {
+      "default": "",
+      "title": "Soundusecatalogid",
+      "type": "string"
+    },
+    "soundUseCatalogPath": {
+      "default": "",
+      "title": "Soundusecatalogpath",
+      "type": "string"
+    },
+    "soundVolume": {
+      "default": 0.85,
+      "title": "Soundvolume",
+      "type": "number"
+    },
+    "speed": {
+      "default": 8.0,
+      "title": "Speed",
+      "type": "number"
+    },
+    "splitCount": {
+      "default": 0,
+      "title": "Splitcount",
+      "type": "integer"
+    },
+    "spreadRadians": {
+      "default": 0,
+      "title": "Spreadradians",
+      "type": "number"
+    },
+    "stage": {
+      "default": "early",
+      "title": "Stage",
+      "type": "string"
+    },
+    "tileCollide": {
+      "default": true,
+      "title": "Tilecollide",
+      "type": "boolean"
+    },
+    "trailLength": {
+      "default": 4,
+      "title": "Traillength",
+      "type": "integer"
+    },
+    "trailStyle": {
+      "default": "dust",
+      "title": "Trailstyle",
+      "type": "string"
+    },
+    "useStyleCode": {
+      "default": 0,
+      "title": "Usestylecode",
+      "type": "integer"
+    },
+    "vfxManifestJson": {
+      "default": "",
+      "title": "Vfxmanifestjson",
+      "type": "string"
+    },
+    "visualAnimationPlan": {
+      "default": "",
+      "title": "Visualanimationplan",
+      "type": "string"
+    },
+    "visualMode": {
+      "default": "projectile",
+      "title": "Visualmode",
+      "type": "string"
+    },
+    "weaponFamily": {
+      "default": "",
+      "title": "Weaponfamily",
+      "type": "string"
+    }
+  },
+  "title": "AttackSpecBoundary",
+  "type": "object",
+  "x-infini-generated": true,
+  "x-infini-owner": "infini_local.core.boundary_models.AttackSpecBoundary"
+}

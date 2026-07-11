@@ -27,7 +27,7 @@ namespace InfiniCrafterLocal.Common.Players;
 public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 {
     public const byte PacketSyncGeneratedHeldItemPresentation = InfiniNetPacketIds.SyncGeneratedHeldItemPresentation;
-    private const int HeldItemPresentationSyncVersion = 3;
+    private const int HeldItemPresentationSyncVersion = 4;
     private const int HeldSyncExpireTicks = 54;
     private const int HeldAssetRetryTicks = 90;
 
@@ -41,6 +41,8 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         public float ItemRotation;
         public int Direction;
         public float GravDir = 1f;
+        public bool ActiveUse;
+        public byte AnimationRemaining;
         public int ReceivedTick;
         public int ExpireTick;
     }
@@ -56,21 +58,47 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         if (player.dead || player.frozen)
             return false;
 
-        // Remote player.itemAnimation / selected item can arrive a few ticks after our
-        // compact held-presentation packet.  Let a fresh payload draw even while vanilla
-        // player state catches up, otherwise generated weapons flicker or disappear on
-        // peers during the exact first-use window people notice most.
-        if (TryGetFreshRemotePayload(player, out _))
-            return true;
+        bool hasRemotePayload = TryGetFreshRemotePayload(player, out var remotePayload);
+        if (hasRemotePayload && remotePayload?.ActiveUse != true)
+            return false;
 
-        if (player.itemAnimation <= 0)
-            return false;
         Item held = player.HeldItem;
-        if (held is null || held.IsAir)
+        GeneratedItemData? data = null;
+        if (held is not null && !held.IsAir && TryGetGeneratedHeldData(held, out var gi) && gi?.Data is not null)
+            data = gi.Data;
+        if (data is null && remotePayload is not null && !string.IsNullOrWhiteSpace(remotePayload.GeneratedItemId)
+            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems is { } registry
+            && registry.TryGet(remotePayload.GeneratedItemId, out var registryData))
+            data = registryData;
+
+        if (data is not null && !ShouldDrawHeldSprite(data, player, remotePayload))
             return false;
-        if (TryGetGeneratedHeldData(held, out var gi) && gi?.Data is not null)
-            return !string.IsNullOrWhiteSpace(gi.Data.Visual?.SpritePath) && (held.noUseGraphic || held.useStyle > ItemUseStyleID.None);
+        if (hasRemotePayload)
+            return remotePayload?.ActiveUse == true;
+        if (player.itemAnimation <= 0 || held is null || held.IsAir || data is null)
+            return false;
+        if (!string.IsNullOrWhiteSpace(data.Visual?.SpritePath))
+            return held.noUseGraphic || held.useStyle > ItemUseStyleID.None;
         return false;
+    }
+
+    private static bool ShouldDrawHeldSprite(GeneratedItemData data, Player player, HeldItemPresentationPayload? payload)
+    {
+        string heldVisibility = (data.Gameplay?.HeldVisibility ?? "").Trim().ToLowerInvariant();
+        if (heldVisibility is "hide_item" or "show_projectile")
+            return false;
+
+        string releaseTiming = (data.Gameplay?.ReleaseTiming ?? "").Trim().ToLowerInvariant();
+        if (releaseTiming == "instant")
+            return false;
+        if (releaseTiming == "early")
+        {
+            float remaining = payload is not null
+                ? payload.AnimationRemaining / 255f
+                : Math.Clamp(player.itemAnimation / (float)Math.Max(1, player.itemAnimationMax), 0f, 1f);
+            return remaining >= 0.65f;
+        }
+        return true;
     }
 
     protected override void Draw(ref PlayerDrawSet drawInfo)
@@ -113,7 +141,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         if (drawGravDir == -1f)
             effects |= SpriteEffects.FlipVertically;
 
-        string role = BuildHeldRoleText(data, hasHeld ? held : null);
+        GeneratedHeldRenderRole role = ResolveHeldRenderRole(data, hasHeld ? held : null);
         // Do not multiply by Gameplay.ItemScale again for real GeneratedItem instances;
         // GetAdjustedItemScale already runs ModItem.ModifyItemScale for real held
         // GeneratedItem instances. Registry fallback gets the same ItemScale from the
@@ -155,18 +183,23 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             return;
 
         bool activeUse = player.itemAnimation > 0 || player.controlUseItem || player.controlUseTile;
-        if (!activeUse)
+        string activeKeyPrefix = id + "|active|";
+        bool wasActive = lastSyncKey.StartsWith(activeKeyPrefix, StringComparison.Ordinal)
+            || lastSyncKey.Contains("|active|", StringComparison.Ordinal);
+        if (!activeUse && !wasActive)
             return;
 
         int now = (int)Main.GameUpdateCount;
-        string key = id + "|" + player.selectedItem + "|r" + QuantizedRotationBucket(player.itemRotation) + "|d" + player.direction;
+        string key = activeUse
+            ? activeKeyPrefix + player.selectedItem + "|r" + QuantizedRotationBucket(player.itemRotation) + "|d" + player.direction
+            : id + "|inactive|" + player.selectedItem;
         int repeatTicks = string.Equals(lastSyncKey, key, StringComparison.Ordinal) ? 18 : 6;
         if (now - lastSyncTick < repeatTicks)
             return;
         lastSyncKey = key;
         lastSyncTick = now;
 
-        var payload = BuildLocalPayload(player, held, data);
+        var payload = BuildLocalPayload(player, held, data, activeUse);
         SendHeldItemPresentationPayload(payload, toClient: -1, ignoreClient: -1);
     }
 
@@ -212,7 +245,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         RequestHeldItemCatchup(payload.GeneratedItemId, null);
     }
 
-    private static HeldItemPresentationPayload BuildLocalPayload(Player player, Item held, GeneratedItemData data)
+    private static HeldItemPresentationPayload BuildLocalPayload(Player player, Item held, GeneratedItemData data, bool activeUse)
     {
         return new HeldItemPresentationPayload
         {
@@ -224,6 +257,9 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             ItemRotation = player.itemRotation,
             Direction = player.direction < 0 ? -1 : 1,
             GravDir = player.gravDir == -1f ? -1f : 1f,
+            ActiveUse = activeUse,
+            AnimationRemaining = (byte)Math.Clamp((int)MathF.Round(
+                Math.Clamp(player.itemAnimation / (float)Math.Max(1, player.itemAnimationMax), 0f, 1f) * 255f), 0, 255),
         };
     }
 
@@ -238,6 +274,8 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         writer.Write(Math.Clamp(payload.ItemRotation, -MathHelper.TwoPi * 4f, MathHelper.TwoPi * 4f));
         writer.Write(Math.Clamp(payload.Direction, -1, 1));
         writer.Write(payload.GravDir < 0f ? -1f : 1f);
+        writer.Write(payload.ActiveUse);
+        writer.Write(payload.AnimationRemaining);
     }
 
     private static HeldItemPresentationPayload ReadHeldItemPresentationPayload(BinaryReader reader)
@@ -255,6 +293,8 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             ItemRotation = reader.ReadSingle(),
             Direction = reader.ReadInt32(),
             GravDir = reader.ReadSingle(),
+            ActiveUse = reader.ReadBoolean(),
+            AnimationRemaining = reader.ReadByte(),
         };
     }
 
@@ -304,15 +344,25 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         return gi is not null;
     }
 
-    private static string BuildHeldRoleText(GeneratedItemData? data, Item? held)
+    private static GeneratedHeldRenderRole ResolveHeldRenderRole(GeneratedItemData? data, Item? held)
     {
-        var a = data?.Attack;
-        var gp = data?.Gameplay;
-        return string.Join(" ", new[]
-        {
-            a?.RuntimeFamily, a?.Delivery, a?.WeaponFamily, a?.WeaponSubfamily, a?.ProjectileFamily, gp?.HandPose, gp?.RotationMode,
-            held?.useStyle == ItemUseStyleID.Shoot ? "shoot" : held?.useStyle == ItemUseStyleID.Swing ? "swing" : ""
-        }).ToLowerInvariant();
+        string family = GeneratedRuntimeFamilyPolicy.Normalize(data?.Attack?.RuntimeFamily);
+        GeneratedHeldRenderRole role = GeneratedRuntimeFamilyPolicy.HeldRenderRole(family, data?.Attack?.Delivery);
+        if (family != GeneratedRuntimeFamilyPolicy.None)
+            return role;
+
+        // Inert/non-combat items have no runtime family. Their fallback is limited
+        // to explicit presentation fields and Terraria's finite use-style enum.
+        string handPose = (data?.Gameplay?.HandPose ?? "").Trim().ToLowerInvariant();
+        if (handPose == "held_out" || held?.useStyle == ItemUseStyleID.Shoot)
+            return GeneratedHeldRenderRole.Ranged;
+        if (handPose == "staff")
+            return GeneratedHeldRenderRole.Magic;
+        if (held?.useStyle == ItemUseStyleID.Rapier)
+            return GeneratedHeldRenderRole.Thrust;
+        if (held?.useStyle == ItemUseStyleID.Swing)
+            return GeneratedHeldRenderRole.Swing;
+        return role;
     }
 
     private static Vector2 PayloadItemLocation(HeldItemPresentationPayload? payload)
@@ -335,30 +385,17 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         lock (HeldAssetRequestTicks) HeldAssetRequestTicks.Clear();
     }
 
-    private static Vector2 HeldSpriteOrigin(Texture2D texture, string role, bool flip, float gravDir)
+    private static Vector2 HeldSpriteOrigin(Texture2D texture, GeneratedHeldRenderRole role, bool flip, float gravDir)
     {
-        float x = 0.20f;
-        float y = 0.62f;
-        if (ContainsAny(role, "gun", "shotgun", "pistol", "musket", "rifle", "launcher", "rocket", "bow", "crossbow", "repeater"))
+        (float x, float y) = role switch
         {
-            x = 0.16f; y = 0.52f;
-        }
-        else if (ContainsAny(role, "staff", "wand", "book", "magic", "cast", "beam", "laser"))
-        {
-            x = 0.18f; y = 0.58f;
-        }
-        else if (ContainsAny(role, "spear", "thrust", "lance", "pike", "trident", "shortsword", "stab"))
-        {
-            x = 0.10f; y = 0.52f;
-        }
-        else if (ContainsAny(role, "flail", "yoyo", "whip", "boomerang", "chakram"))
-        {
-            x = 0.14f; y = 0.56f;
-        }
-        else if (ContainsAny(role, "swing", "sword", "broadsword", "axe", "hammer", "pickaxe", "tool", "mace"))
-        {
-            x = 0.20f; y = 0.78f;
-        }
+            GeneratedHeldRenderRole.Ranged => (0.16f, 0.52f),
+            GeneratedHeldRenderRole.Magic => (0.18f, 0.58f),
+            GeneratedHeldRenderRole.Thrust => (0.10f, 0.52f),
+            GeneratedHeldRenderRole.Tethered => (0.14f, 0.56f),
+            GeneratedHeldRenderRole.Swing => (0.20f, 0.78f),
+            _ => (0.20f, 0.62f),
+        };
         if (flip)
             x = 1f - x;
         if (gravDir == -1f)
@@ -373,25 +410,19 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         return new Vector2(x, y * gravDir);
     }
 
-    private static Vector2 RoleForwardOffset(string role, int direction, float gravDir, int authoredInitialOffset)
+    private static Vector2 RoleForwardOffset(GeneratedHeldRenderRole role, int direction, float gravDir, int authoredInitialOffset)
     {
-        float forward = 0f;
-        float vertical = 0f;
-        if (ContainsAny(role, "spear", "thrust", "lance", "pike", "trident", "shortsword", "stab")) forward = 8f;
-        else if (ContainsAny(role, "gun", "shotgun", "launcher", "bow", "crossbow", "repeater")) forward = 5f;
-        else if (ContainsAny(role, "staff", "wand", "magic", "book", "laser", "beam")) forward = 4f;
-        else if (ContainsAny(role, "swing", "sword", "axe", "hammer", "tool")) { forward = 2f; vertical = -1f; }
+        float forward = role switch
+        {
+            GeneratedHeldRenderRole.Thrust => 8f,
+            GeneratedHeldRenderRole.Ranged => 5f,
+            GeneratedHeldRenderRole.Magic => 4f,
+            GeneratedHeldRenderRole.Swing => 2f,
+            _ => 0f,
+        };
+        float vertical = role == GeneratedHeldRenderRole.Swing ? -1f : 0f;
         forward += Math.Clamp(authoredInitialOffset, -16, 24) * 0.35f;
         return new Vector2(direction * forward, vertical * gravDir);
-    }
-
-    private static bool ContainsAny(string text, params string[] needles)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        foreach (string n in needles)
-            if (!string.IsNullOrWhiteSpace(n) && text.Contains(n, StringComparison.OrdinalIgnoreCase))
-                return true;
-        return false;
     }
 
     private static void RequestHeldItemCatchup(string? generatedItemId, string? spritePath)

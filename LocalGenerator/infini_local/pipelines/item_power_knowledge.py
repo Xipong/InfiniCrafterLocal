@@ -25,23 +25,11 @@ from infini_local.core.item_identity_tools import (
     slug,
 )
 from infini_local.core.item_signals import HARD_TAGS, VISUAL_SYNONYMS, knowledge_key, wire_identity_names
-from infini_local.core.runtime_authoring import runtime_plan
+from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines.result_identity_policy import normalize_category, parent_primary_category
 from infini_local.pipelines.item_rarity_baseline import (
-    RARITY_BASELINE_ENABLED,
-    RARITY_BASELINE_STRENGTH,
-    MATERIAL_RARITY_MULT,
     TIER_DEFAULT_POWER,
-    TIER_RANK,
-    MODDED_HIGH_TIERS,
-    VANILLA_ENDGAME_POWER,
-    RARITY_BASELINE_TABLE,
-    MODDED_RARITY_LADDER,
-    MODDED_RARITY_COLOR_HINTS,
     rarity_details_of,
-    modded_rarity_entry,
-    rarity_tier_estimate,
-    rarity_role_weight,
     rarity_baseline_signal,
 )
 
@@ -49,6 +37,7 @@ from infini_local.pipelines.parent_context_pipeline import (
     projectile_behavior_tags,
     source_weapon_profile,
 )
+from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
 
 
 # AGENT MAP: parent item signal, rarity baseline and generated item-knowledge cards.
@@ -58,9 +47,6 @@ from infini_local.pipelines.parent_context_pipeline import (
 
 def _env_float(name: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return env_float(name, default, lo=lo, hi=hi)
-
-
-LLM_RUNTIME_AUTHORING = env_bool("INFINI_LLM_RUNTIME_AUTHORING", True)
 
 
 
@@ -815,9 +801,6 @@ __all__ = [
     "KNOWLEDGE_ENABLED",
     "ITEM_KNOWLEDGE_PATH",
     "LLM_RUNTIME_AUTHORING",
-    "RARITY_BASELINE_ENABLED",
-    "RARITY_BASELINE_STRENGTH",
-    "MATERIAL_RARITY_MULT",
     "load_item_knowledge",
     "ITEM_KNOWLEDGE",
     "fingerprint_tags",
@@ -835,18 +818,6 @@ __all__ = [
     "tags_of",
     "guess_head",
     "canonicalize",
-    "TIER_DEFAULT_POWER",
-    "TIER_RANK",
-    "MODDED_HIGH_TIERS",
-    "VANILLA_ENDGAME_POWER",
-    "RARITY_BASELINE_TABLE",
-    "MODDED_RARITY_LADDER",
-    "MODDED_RARITY_COLOR_HINTS",
-    "rarity_details_of",
-    "modded_rarity_entry",
-    "rarity_tier_estimate",
-    "rarity_role_weight",
-    "rarity_baseline_signal",
     "generic_modded_progression_signal",
     "known_item_entry",
     "runtime_recipe_frame_for_entry",

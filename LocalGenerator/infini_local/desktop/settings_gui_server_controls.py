@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import signal
-import socket
 import subprocess
 import sys
 import threading
@@ -13,56 +11,10 @@ import urllib.request
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
-from infini_local.desktop.tk_compat import filedialog, messagebox, tk, ttk
-from infini_local.desktop.settings_schema import (
-    DEFAULTS,
-    FIELD_HELP,
-    FIELD_ORDER,
-    OPTION_HELP,
-    PRESETS,
-    PRESET_HELP,
-    SDCPP_DEFAULT_COMMAND_TEMPLATE,
-    SDCPP_EXTRA_FLAG_SPECS,
-    SDCPP_EXTRA_PROFILES,
-    SDCPP_EXTRA_PROFILE_HELP,
-    repair_sdcpp_command_template,
-)
-from infini_local.desktop.settings_env import parse_env, quote_env_value, write_env
-from infini_local.desktop.settings_widgets import ScrollFrame, ToolTip
-from infini_local.desktop.settings_sdcpp_args import (
-    extra_option_names,
-    join_extra_for_gui,
-    remove_extra_options,
-    split_extra_for_gui,
-)
+from infini_local.desktop.tk_compat import filedialog, messagebox
 from infini_local.desktop.settings_gui_theme import (
     ROOT,
     CONFIG_PATH,
-    EXAMPLE_PATH,
-    APP_TITLE,
-    APP_BG,
-    APP_PANEL_BG,
-    CARD_BG,
-    CARD_MUTED_BG,
-    HEADER_BG,
-    HEADER_BG_2,
-    TEXT_FG,
-    MUTED_FG,
-    SOFT_FG,
-    ACCENT_BG,
-    ACCENT_HOVER_BG,
-    ACCENT_SOFT_BG,
-    ACCENT_FG,
-    SUCCESS_BG,
-    SUCCESS_SOFT_BG,
-    SUCCESS_FG,
-    DANGER_BG,
-    DANGER_SOFT_BG,
-    DANGER_FG,
-    WARNING_SOFT_BG,
-    WARNING_FG,
-    BORDER_FG,
-    BORDER_DARK_FG,
 )
 
 
@@ -373,6 +325,7 @@ class SettingsGuiServerControlsMixin:
         backend = data.get("INFINI_IMAGE_BACKEND", "")
         if backend == "sdcpp" and data.get("INFINI_SDCPP_SERVER_AUTOSTART") == "1":
             exe = data.get("INFINI_SDCPP_SERVER_EXE", "")
+            rocm_root = data.get("INFINI_SDCPP_ROCM_COMPAT_ROOT", "")
             model = data.get("INFINI_SDCPP_MODEL", "")
             vae = data.get("INFINI_SDCPP_VAE", "")
             llm = data.get("INFINI_SDCPP_LLM", "")
@@ -380,12 +333,14 @@ class SettingsGuiServerControlsMixin:
             lora_dir = self._lora_dir_from_file(lora_file)
             if exe and not Path(exe).exists():
                 warnings.append(f"sd-server.exe не найден: {exe}")
+            if rocm_root and not Path(rocm_root).is_dir():
+                warnings.append(f"ROCm hybrid runtime не найден: {rocm_root}")
             if model and not Path(model).exists():
-                warnings.append(f"Z-Image model не найден: {model}")
+                warnings.append(f"Diffusion model не найден: {model}")
             if vae and not Path(vae).exists():
-                warnings.append(f"Z-Image VAE/AE не найден: {vae}")
+                warnings.append(f"VAE/AE не найден: {vae}")
             if llm and not Path(llm).exists():
-                warnings.append(f"Z-Image Qwen/LLM не найден: {llm}")
+                warnings.append(f"Qwen/LLM не найден: {llm}")
             if lora_file and not Path(lora_file).exists():
                 warnings.append(f"LoRA file не найден: {lora_file}")
             if lora_file and lora_dir and not Path(lora_dir).exists():
@@ -393,9 +348,9 @@ class SettingsGuiServerControlsMixin:
             if data.get("INFINI_SDCPP_LORA_PROMPT_TAGS", "").strip() and not lora_dir:
                 warnings.append("LoRA prompt tags заполнены, но LoRA file не выбран — GUI не может вывести --lora-model-dir.")
             if not vae:
-                warnings.append("Z-Image VAE/AE пустой: для Z-Image Turbo обычно нужен ae.safetensors.")
+                warnings.append("VAE/AE пустой: для FLUX.2 Klein и Z-Image обычно нужен ae.safetensors.")
             if not llm:
-                warnings.append("Z-Image Qwen/LLM пустой: для Z-Image Turbo обычно нужен Qwen3 *.gguf.")
+                warnings.append("Qwen/LLM пустой: для FLUX.2 Klein и Z-Image обычно нужен Qwen3 *.gguf.")
         if data.get("INFINI_LLM_PROVIDER") == "openrouter" and not data.get("INFINI_OPENROUTER_API_KEY"):
             warnings.append("OpenRouter выбран, но API key пустой.")
         if backend == "image_api" and not data.get("INFINI_IMAGE_API_KEY"):

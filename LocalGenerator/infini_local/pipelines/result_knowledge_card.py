@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from infini_local.pipelines.pipeline_support import (
+from infini_local.pipelines.item_rarity_baseline import (
     MODDED_HIGH_TIERS,
     TIER_DEFAULT_POWER,
 )
@@ -12,7 +12,7 @@ from infini_local.pipelines.result_identity_policy import normalize_category
 
 # AGENT MAP: generated result knowledge-card seam for combine_pipeline.
 # Owns the compact resultCard attached after runtime stats are known.
-# Public callers use infini_local.pipelines.combine_pipeline.
+# Callers import this owner directly; combine_pipeline only invokes the attach step.
 
 def build_result_item_card(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     gp = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}

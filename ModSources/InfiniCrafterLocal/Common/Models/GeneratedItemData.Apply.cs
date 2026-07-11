@@ -2,7 +2,6 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Audio;
 using System;
-using System.Linq;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
@@ -20,58 +19,8 @@ public sealed partial class GeneratedItemData
 // NAV: GENERATED_ITEM_APPLY_TO_ITEM
 // =============================================================================
 
-    private static DamageClass ResolveDamageClass(string? raw)
-    {
-        string value = (raw ?? "").Trim();
-        string norm = value.ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
-        return norm switch
-        {
-            "melee" => DamageClass.Melee,
-            "melee_no_speed" => DamageClass.MeleeNoSpeed,
-            "ranged" => DamageClass.Ranged,
-            "magic" => DamageClass.Magic,
-            "summon" => DamageClass.Summon,
-            "summon_melee_speed" => DamageClass.SummonMeleeSpeed,
-            // Throwing/Rogue-like classes are modded in many 1.4 packs; resolve dynamically instead of hardcoding.
-            "throwing" or "rogue" => ResolveModDamageClass(value) ?? DamageClass.Ranged,
-            "generic" or "" => DamageClass.Generic,
-            _ => ResolveModDamageClass(value) ?? DamageClass.Generic
-        };
-    }
-
-    private static DamageClass? ResolveModDamageClass(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        string value = raw.Trim();
-        try
-        {
-            if (ModContent.TryFind<DamageClass>(value, out var direct))
-                return direct;
-        }
-        catch { }
-        string[] splitters = { "/", ":", "." };
-        foreach (string sep in splitters)
-        {
-            int idx = value.IndexOf(sep, StringComparison.Ordinal);
-            if (idx <= 0 || idx >= value.Length - sep.Length) continue;
-            string modName = value[..idx];
-            string className = value[(idx + sep.Length)..];
-            try
-            {
-                if (ModLoader.TryGetMod(modName, out Mod mod) && mod.TryFind<DamageClass>(className, out var cls))
-                    return cls;
-            }
-            catch { }
-        }
-        return null;
-    }
-
     private static string AttackRuntimeFamily(AttackSpec? attack)
-    {
-        if (attack is null) return "none";
-        string r = NormalizeRuntimeFamily(attack.RuntimeFamily);
-        return r == "none" ? "none" : r;
-    }
+        => GeneratedRuntimeFamilyPolicy.Normalize(attack?.RuntimeFamily);
 
     public void ApplyToItem(Item item)
     {
@@ -134,7 +83,7 @@ public sealed partial class GeneratedItemData
             item.maxStack = 1;
         }
 
-        item.DamageType = ResolveDamageClass(Gameplay.DamageClass);
+        item.DamageType = GeneratedDamageClassPolicy.Resolve(Gameplay.DamageClass);
 
         if (!isAccessory && !isArmor && Gameplay.Consumable)
         {
@@ -168,14 +117,19 @@ public sealed partial class GeneratedItemData
         if (!isAccessory && !isArmor && Attack.Enabled && !actualAmmo)
         {
             string runtimeFamily = AttackRuntimeFamily(Attack);
-            bool thrustLike = runtimeFamily == "thrust";
-            bool flailLike = runtimeFamily == "flail";
-            bool yoyoLike = runtimeFamily == "yoyo";
-            bool whipLike = runtimeFamily == "whip";
+            bool thrustLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Thrust);
+            bool flailLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Flail);
+            bool yoyoLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Yoyo);
+            bool whipLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Whip);
+            bool chargeReleaseLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease);
+            bool sentryLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
+            bool projectileOwnedUse = GeneratedRuntimeFamilyPolicy.IsProjectileOwned(runtimeFamily);
+            projectileOwnedUse = projectileOwnedUse
+                && GeneratedRuntimeFamilyPolicy.UsesProjectileOnlyItemAffordance(runtimeFamily, Attack.Delivery);
             if (Attack.UseStyleCode > ItemUseStyleID.None)
                 item.useStyle = Attack.UseStyleCode;
-            item.noMelee = Attack.DisableItemMeleeHitbox;
-            item.noUseGraphic = Attack.HideUseGraphic;
+            item.noMelee = Attack.DisableItemMeleeHitbox || projectileOwnedUse;
+            item.noUseGraphic = Attack.HideUseGraphic || projectileOwnedUse;
             item.channel = Attack.ChannelUse;
             item.shoot = ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>();
             item.shootSpeed = Math.Max(1f, Attack.Speed);
@@ -198,14 +152,14 @@ public sealed partial class GeneratedItemData
                 item.useStyle = ItemUseStyleID.Shoot;
                 item.noUseGraphic = true;
                 item.noMelee = true;
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " thrust").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
             }
             else if (flailLike)
             {
                 item.useStyle = ItemUseStyleID.Shoot;
                 item.noUseGraphic = true;
                 item.noMelee = true;
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " flail chain").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
             }
             else if (yoyoLike)
             {
@@ -213,38 +167,56 @@ public sealed partial class GeneratedItemData
                 item.noUseGraphic = true;
                 item.noMelee = true;
                 item.channel = true;
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " yoyo").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
             }
             else if (whipLike)
             {
                 item.useStyle = ItemUseStyleID.Shoot;
                 item.noUseGraphic = true;
                 item.noMelee = true;
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " whip lash").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
+            }
+            else if (chargeReleaseLike)
+            {
+                item.useStyle = ItemUseStyleID.Shoot;
+                item.noUseGraphic = true;
+                item.noMelee = true;
+                item.channel = true;
+                // Charge-release owns its use sound at the actual release frame.
+                item.UseSound = null;
+            }
+            else if (sentryLike)
+            {
+                item.sentry = true;
+                item.useStyle = ItemUseStyleID.Swing;
+                item.noUseGraphic = false;
+                item.noMelee = true;
+                item.channel = false;
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
             }
             else if (bowLike)
             {
                 // Preserve vanilla bow affordance: consume arrows and use bow sound, while still
                 // spawning the generated projectile in Shoot().
                 item.useAmmo = AmmoID.Arrow;
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " bow arrow").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
                 item.noUseGraphic = true;
             }
             else if (gunLike)
             {
                 item.useAmmo = AmmoID.Bullet;
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " gun bullet").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
                 item.noUseGraphic = true;
             }
             else if (launcherLike)
             {
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile + " launcher rocket").Trim(), runtimeFamily, Attack.Effect);
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
                 item.noUseGraphic = true;
             }
             else
             {
-                item.UseSound = UseSoundForProfile((Attack.SoundUse + " " + Attack.UseSoundProfile).Trim(), runtimeFamily, Attack.Effect);
-                if (hasRuntimeItemSprite || IsFreeProjectileFamily(runtimeFamily))
+                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
+                if (hasRuntimeItemSprite || projectileOwnedUse)
                     item.noUseGraphic = true;
             }
         }
@@ -260,61 +232,17 @@ public sealed partial class GeneratedItemData
 
         RecordAppliedItemTrace(item, isArmor, isAccessory, actualAmmo);
     }
-    private static bool IsThrustDelivery(string? delivery)
+    private Terraria.Audio.SoundStyle UseSoundForCatalog(string runtimeFamily, string effect)
     {
-        string d = (delivery ?? "").Trim().ToLowerInvariant();
-        return d is "thrust" or "spear" or "spear_thrust" or "held_thrust" or "polearm" or "lance" or "pike" or "trident" or "halberd" or "naginata" or "stab" or "rapier" or "shortsword" or "short_sword";
-    }
-
-
-    private static bool IsFlailDelivery(string? delivery, string? family = null)
-    {
-        string d = (delivery ?? "").Trim().ToLowerInvariant();
-        string f = (family ?? "").Trim().ToLowerInvariant();
-        return d is "flail" or "chain_flail" || f is "flail" or "chain_flail" or "mace" or "anchor" or "ball_and_chain";
-    }
-
-    private static bool IsYoyoDelivery(string? delivery, string? family = null)
-    {
-        string d = (delivery ?? "").Trim().ToLowerInvariant();
-        string f = (family ?? "").Trim().ToLowerInvariant();
-        return d is "yoyo" or "yo_yo" || f is "yoyo" or "yo_yo";
-    }
-
-    private static bool IsWhipDelivery(string? delivery, string? family = null)
-    {
-        string d = (delivery ?? "").Trim().ToLowerInvariant();
-        string f = (family ?? "").Trim().ToLowerInvariant();
-        return d is "whip" or "lash" || f is "whip" or "lash";
-    }
-
-
-    private static bool IsFreeProjectileFamily(string? runtimeFamily)
-    {
-        string f = (runtimeFamily ?? "").Trim().ToLowerInvariant();
-        return f is "shoot" or "cast" or "throw" or "returning" or "summon" or "flail" or "yoyo" or "whip";
-    }
-
-    private Terraria.Audio.SoundStyle UseSoundForProfile(string profile, string runtimeFamily, string effect)
-    {
-        string taxonomy = string.Join(" ", new[]
-        {
-            profile,
-            Attack.WeaponSubfamily ?? "",
-            Attack.ProjectileFamily ?? "",
-            string.Join(" ", Attack.AttackPatternTags ?? Array.Empty<string>()),
-            Attack.SoundUseSearchQuery ?? ""
-        }.Where(x => !string.IsNullOrWhiteSpace(x)));
         return InfiniSoundLibrary.ForUse(
-            taxonomy,
             runtimeFamily,
+            Attack.Delivery,
             effect,
             Attack.SoundVolume,
             Attack.SoundPitch,
+            Attack.SoundPitchVariance,
             Attack.SoundUseCatalogId,
             Attack.SoundUseCatalogPath,
-            Attack.SoundUseSearchQuery ?? "",
             Attack.SoundCatalogSource ?? "");
     }
-
 }

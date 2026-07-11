@@ -19,10 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL_GENERATOR = ROOT / "LocalGenerator"
 sys.path.insert(0, str(LOCAL_GENERATOR))
 
-from infini_local.web import api  # noqa: E402
-from infini_local.core.runtime_authoring import (  # noqa: E402
+from infini_local.pipelines.llm_authoring_pipeline import build_llm_author_payload  # noqa: E402
+from infini_local.core.runtime_authoring.schema import (  # noqa: E402
     ENGINE_FN_CATALOG_V2,
-    SAFE_SUMMON_FAMILIES,
+    PLANNER_HIDDEN_ENGINE_FUNCTIONS,
+    TEMPORARY_HELPER_FAMILIES,
 )
 
 
@@ -64,7 +65,7 @@ def _sample_parent_cards() -> tuple[dict, dict, dict, dict]:
 def _payload(style_env: str | None = None) -> dict:
     a, b, ca, cb = _sample_parent_cards()
     with _patched_env("INFINI_LLM_ENGINE_CONTRACT_STYLE", style_env):
-        return api.build_llm_author_payload(a, b, ca, cb, "planner_smoke")
+        return build_llm_author_payload(a, b, ca, cb, "planner_smoke")
 
 
 def _section_sizes(payload: dict) -> dict[str, int]:
@@ -77,7 +78,7 @@ def _contract_section_sizes(contract: dict) -> dict[str, int]:
 
 def _check_catalog_losslessness(functions: dict) -> list[str]:
     problems: list[str] = []
-    expected = set(ENGINE_FN_CATALOG_V2)
+    expected = set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
     actual = set(functions)
     missing = sorted(expected - actual)
     extra = sorted(actual - expected)
@@ -86,6 +87,8 @@ def _check_catalog_losslessness(functions: dict) -> list[str]:
     if extra:
         problems.append("planner exposes unknown functions: " + ", ".join(extra))
     for fn, spec in ENGINE_FN_CATALOG_V2.items():
+        if fn in PLANNER_HIDDEN_ENGINE_FUNCTIONS:
+            continue
         card = functions.get(fn)
         if not isinstance(card, dict):
             continue
@@ -104,16 +107,15 @@ def _check_catalog_losslessness(functions: dict) -> list[str]:
 
 def _check_catalog_metadata(functions: dict) -> list[str]:
     problems: list[str] = []
-    summon_family = str(functions.get("summon_combat_entity", {}).get("params", {}).get("family", ""))
-    for family in sorted(SAFE_SUMMON_FAMILIES):
-        if family not in summon_family:
-            problems.append(f"safe summon family hidden from planner: {family}")
-    if "boss/NPC/mob" not in str(functions.get("summon_combat_entity", {}).get("safety", "")):
-        problems.append("summon safety note missing from function card")
-    for fn in ("state_meter", "triggered_action"):
-        status = str(functions.get(fn, {}).get("runtimeStatus", ""))
-        if "preserved intent" not in status:
-            problems.append(f"{fn} is not marked as intent-only")
+    helper_family = str(functions.get("spawn_temporary_helper_projectile", {}).get("params", {}).get("family", ""))
+    for family in sorted(TEMPORARY_HELPER_FAMILIES):
+        if family not in helper_family:
+            problems.append(f"temporary helper family hidden from planner: {family}")
+    if "boss/NPC/mob" not in str(functions.get("spawn_temporary_helper_projectile", {}).get("safety", "")):
+        problems.append("temporary helper safety note missing from function card")
+    for fn in sorted(PLANNER_HIDDEN_ENGINE_FUNCTIONS):
+        if fn in functions:
+            problems.append(f"preserved-only function leaked into planner: {fn}")
     return problems
 
 
@@ -140,7 +142,7 @@ def run(limit_chars: int) -> dict:
         if alt_contract.get("contractStyle") != "sharp":
             problems.append(f"env style {style!r} changed planner style to {alt_contract.get('contractStyle')!r}")
         alt_functions = alt_contract.get("availableFunctions") if isinstance(alt_contract.get("availableFunctions"), dict) else {}
-        if set(alt_functions) != set(ENGINE_FN_CATALOG_V2):
+        if set(alt_functions) != (set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)):
             problems.append(f"env style {style!r} changed function set")
     return {
         "ok": not problems,
@@ -159,8 +161,9 @@ def run(limit_chars: int) -> dict:
         "sectionSizes": _section_sizes(payload),
         "contractSectionSizes": _contract_section_sizes(contract),
         "functionCardSizes": {fn: len(json.dumps({fn: card}, ensure_ascii=False, separators=(",", ":"))) for fn, card in functions.items()},
-        "missingFunctions": sorted(set(ENGINE_FN_CATALOG_V2) - set(functions)),
-        "extraFunctions": sorted(set(functions) - set(ENGINE_FN_CATALOG_V2)),
+        "hiddenFunctions": sorted(PLANNER_HIDDEN_ENGINE_FUNCTIONS),
+        "missingFunctions": sorted((set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)) - set(functions)),
+        "extraFunctions": sorted(set(functions) - (set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))),
         "problems": problems,
     }
 

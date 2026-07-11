@@ -41,6 +41,36 @@ class SdcppBackendConfig:
     health_paths: list[str]
     zimage_prompt_contract: str
     zimage_positive_only: bool
+    rocm_compat_root: str = ""
+
+
+def server_process_environment(
+    cfg: SdcppBackendConfig,
+    *,
+    base_env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Build the isolated environment used only by the hybrid sd.cpp child."""
+    env = dict(os.environ if base_env is None else base_env)
+    raw_root = str(cfg.rocm_compat_root or "").strip().rstrip("\\/")
+    if not raw_root:
+        return env
+    is_windows_path = len(raw_root) >= 2 and raw_root[1] == ":"
+    root = str(PureWindowsPath(raw_root)) if is_windows_path else raw_root
+    rocblas = (
+        str(PureWindowsPath(root) / "rocblas" / "library")
+        if is_windows_path
+        else str(Path(root) / "rocblas" / "library")
+    )
+    env.update({
+        "ROCM_COMPAT_ROOT": root,
+        "ROCM_PATH": root,
+        "HIP_PATH": root,
+        "ROCBLAS_TENSILE_LIBPATH": rocblas,
+    })
+    old_path = str(env.get("PATH") or "")
+    separator = ";" if is_windows_path else os.pathsep
+    env["PATH"] = root + (separator + old_path if old_path else "")
+    return env
 
 
 def quote_cmd_arg(value: str) -> str:
@@ -199,10 +229,10 @@ def server_is_alive(server_url: str, health_paths: list[str], timeout: int = 2) 
             url = server_url.rstrip("/") + (path if path.startswith("/") else "/" + path)
             req = urlrequest.Request(url, headers={"Accept": "application/json,*/*"}, method="GET")
             with urlrequest.urlopen(req, timeout=timeout) as resp:
-                return 200 <= int(getattr(resp, "status", 200)) < 500
+                return 200 <= int(getattr(resp, "status", 200)) < 300
         except urlerror.HTTPError as e:
             try:
-                if 200 <= int(getattr(e, "code", 0)) < 500:
+                if 200 <= int(getattr(e, "code", 0)) < 300:
                     return True
             except Exception:
                 pass

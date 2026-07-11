@@ -75,7 +75,7 @@ def compact_vfx_macro_card(macro_id: str, macro: dict[str, Any]) -> dict[str, An
         "event": macro.get("event", ""),
         "stage": macro.get("stage", ""),
         "backend": macro.get("backend", ""),
-        "renderer": macro.get("renderer", ""),
+        "rendererKind": macro.get("renderer", ""),
         "textureRole": macro.get("textureRole", ""),
         "particleRole": macro.get("particleRole", ""),
         "scale": macro.get("scale"),

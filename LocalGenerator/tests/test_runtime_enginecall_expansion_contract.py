@@ -32,7 +32,7 @@ def _check_tool_light_and_mobility_calls_are_accepted_without_presets() -> None:
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "tool"}},
                 {"fn": "tool_capability", "params": {"pickPower": 45}},
-                {"fn": "emit_light", "params": {"strength": 0.4, "color": "amber"}},
+                {"fn": "emit_light", "params": {"strength": 0.4, "color": "gold"}},
                 {"fn": "mobility_effect", "params": {"mode": "blink_to_cursor", "rangeTiles": 24, "cooldownTicks": 180, "safeTileOnly": True}},
             ]
         }
@@ -40,7 +40,7 @@ def _check_tool_light_and_mobility_calls_are_accepted_without_presets() -> None:
     patch = compile_runtime_plan_to_genome_patch(data)
     assert patch["pickPower"] == 45
     assert patch["runtimeLightStrength"] == 0.4
-    assert patch["primaryColorName"] == "amber"
+    assert patch["primaryColorName"] == "gold"
     assert patch["mobilityMode"] == "blink_to_cursor"
     assert "rejectedMobilityExecution" not in patch
 
@@ -50,7 +50,7 @@ def _check_generated_utility_buff_call_compiles_to_patch() -> None:
         "runtimePlan": {
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "potion"}},
-                {"fn": "apply_player_effect_on_use", "params": {"generatedBuff": {"durationTicks": 1200, "miningSpeedMultiplier": 1.25, "emitLightStrength": 0.4, "lightColorName": "amber", "oreSenseRadiusTiles": 14}}},
+                {"fn": "apply_player_effect_on_use", "params": {"generatedBuff": {"durationTicks": 1200, "miningSpeedMultiplier": 1.25, "emitLightStrength": 0.4, "lightColorName": "gold", "oreSenseRadiusTiles": 14}}},
             ]
         }
     }
@@ -58,7 +58,7 @@ def _check_generated_utility_buff_call_compiles_to_patch() -> None:
     assert patch["generatedBuff"]["durationTicks"] == 1200
     assert patch["generatedBuff"]["miningSpeedMultiplier"] == 1.25
     assert patch["generatedBuff"]["emitLightStrength"] == 0.4
-    assert patch["generatedBuff"]["lightColorName"] == "amber"
+    assert patch["generatedBuff"]["lightColorName"] == "gold"
     assert patch["generatedBuff"]["oreSenseRadiusTiles"] == 14
 
 

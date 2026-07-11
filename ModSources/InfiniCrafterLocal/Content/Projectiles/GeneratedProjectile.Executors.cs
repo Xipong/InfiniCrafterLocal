@@ -21,27 +21,30 @@ public sealed partial class GeneratedProjectile
     private interface IGeneratedProjectileRuntimeExecutor
     {
         bool CanRun(ProjectileRuntimeContext context);
+        bool OwnsRotation(ProjectileRuntimeContext context);
         void Tick(GeneratedProjectile projectile, ProjectileRuntimeContext context);
     }
 
     private sealed class StraightShotExecutor : IGeneratedProjectileRuntimeExecutor
     {
         public bool CanRun(ProjectileRuntimeContext context) => context.MovementCode == 0;
+        public bool OwnsRotation(ProjectileRuntimeContext context) => false;
         public void Tick(GeneratedProjectile projectile, ProjectileRuntimeContext context) { }
     }
 
     private sealed class BasicMovementExecutor : IGeneratedProjectileRuntimeExecutor
     {
         public bool CanRun(ProjectileRuntimeContext context) => context.MovementCode is >= 1 and <= 15;
+        public bool OwnsRotation(ProjectileRuntimeContext context) => context.MovementCode is 5 or 14;
         public void Tick(GeneratedProjectile p, ProjectileRuntimeContext context)
         {
             switch (context.MovementCode)
             {
-                case 1: p.SlowHoming(0.035f, 420f); break;
+                case 1: p.SlowHoming(p.ConfiguredHomingStrength(0.035f), p.ConfiguredRangePixels(420f)); break;
                 case 2: p.Projectile.velocity.Y += 0.12f; break;
                 case 3: p.Projectile.velocity *= 0.985f; break;
                 case 4: p.Orbitish(); break;
-                case 5: p.BoomerangReturn(); break;
+                case 5: p.Projectile.rotation += 0.26f * Math.Sign(p.Projectile.direction == 0 ? 1 : p.Projectile.direction); p.BoomerangReturn(); break;
                 case 6: p.Projectile.velocity.Y += 0.07f; break;
                 case 7: p.SineHoming(); break;
                 case 8: p.PhaseDrift(); break;
@@ -59,18 +62,21 @@ public sealed partial class GeneratedProjectile
     private sealed class FlailExecutor : IGeneratedProjectileRuntimeExecutor
     {
         public bool CanRun(ProjectileRuntimeContext context) => context.MovementCode == 16;
+        public bool OwnsRotation(ProjectileRuntimeContext context) => true;
         public void Tick(GeneratedProjectile projectile, ProjectileRuntimeContext context) => projectile.ApplyFlailTetherAI();
     }
 
     private sealed class YoyoExecutor : IGeneratedProjectileRuntimeExecutor
     {
         public bool CanRun(ProjectileRuntimeContext context) => context.MovementCode == 17;
+        public bool OwnsRotation(ProjectileRuntimeContext context) => true;
         public void Tick(GeneratedProjectile projectile, ProjectileRuntimeContext context) => projectile.ApplyYoyoHoverAI();
     }
 
     private sealed class WhipExecutor : IGeneratedProjectileRuntimeExecutor
     {
         public bool CanRun(ProjectileRuntimeContext context) => context.MovementCode == 18;
+        public bool OwnsRotation(ProjectileRuntimeContext context) => true;
         public void Tick(GeneratedProjectile projectile, ProjectileRuntimeContext context) => projectile.ApplyWhipLashAI();
     }
     private static readonly IGeneratedProjectileRuntimeExecutor[] MovementExecutors =
@@ -82,7 +88,7 @@ public sealed partial class GeneratedProjectile
         new WhipExecutor(),
     };
 
-    private void RunMovementExecutor(int movementCode)
+    private bool RunMovementExecutor(int movementCode)
     {
         var context = new ProjectileRuntimeContext(movementCode, _stuckToTile);
         for (int i = 0; i < MovementExecutors.Length; i++)
@@ -90,7 +96,8 @@ public sealed partial class GeneratedProjectile
             if (!MovementExecutors[i].CanRun(context))
                 continue;
             MovementExecutors[i].Tick(this, context);
-            return;
+            return MovementExecutors[i].OwnsRotation(context);
         }
+        return false;
     }
 }

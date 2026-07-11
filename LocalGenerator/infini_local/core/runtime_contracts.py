@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v1"
 CONTROL_STYLES = {"", "tap", "hold-to-channel", "right-click-alt", "combo", "passive", "on-hit-trigger"}
 EXECUTION_STATUSES = {"", "executable", "partial", "visual_only", "unsupported"}
+EXECUTABLE_STATUS_ALIASES = {"active", "supported", "stable", "applied", "implemented", "complete", "completed"}
+UNSUPPORTED_STATUS_ALIASES = {"future_disabled", "disabled", "not_supported"}
 
 
 def _text(value: Any, max_len: int = 160) -> str:
@@ -31,6 +34,10 @@ def _list_text(value: Any, *, max_items: int = 16, max_len: int = 80) -> list[st
 def normalize_mechanic_claim(raw: Any) -> dict[str, str]:
     obj = raw if isinstance(raw, dict) else {"claim": raw}
     status = _norm(obj.get("status")).replace("-", "_")
+    if status in EXECUTABLE_STATUS_ALIASES:
+        status = "executable"
+    elif status in UNSUPPORTED_STATUS_ALIASES:
+        status = "unsupported"
     if status not in {"", "executable", "partial", "visual_only", "unsupported", "ambiguous"}:
         status = ""
     return {
@@ -46,6 +53,12 @@ def normalize_runtime_contract(raw: Any) -> dict[str, Any]:
     if control not in CONTROL_STYLES:
         control = ""
     execution = _norm(obj.get("executionStatus")).replace("-", "_")
+    if execution in EXECUTABLE_STATUS_ALIASES:
+        execution = "executable"
+    elif execution in {"degraded", "mixed"}:
+        execution = "partial"
+    elif execution in UNSUPPORTED_STATUS_ALIASES:
+        execution = "unsupported"
     if execution not in EXECUTION_STATUSES:
         execution = ""
     claims_raw = obj.get("mechanicClaims") if isinstance(obj.get("mechanicClaims"), list) else []
@@ -88,44 +101,79 @@ def validate_runtime_contract(data: dict[str, Any], patch: dict[str, Any] | None
         family = str(arch.get("family") or "")
 
     if contract.get("controlStyle") == "hold-to-channel":
-        channel_ok = bool(patch.get("channelUse")) and runtime_family in {"yoyo"}
-        beam_ok = family == "channel_beam" and patch.get("runtimeFamily") == "cast" and bool(patch.get("channelUse"))
+        channel_ok = bool(patch.get("channelUse")) and runtime_family in {"yoyo", "charge_release"}
+        beam_ok = family == "channel_beam" and patch.get("runtimeFamily") == "beam" and bool(patch.get("channelUse"))
         if not (channel_ok or beam_ok):
             warnings.append("hold_to_channel_contract_preserved_without_channel_executor")
             unsupported.append("unsupported:hold_to_channel")
 
-    if contract.get("syncFields"):
-        warnings.append("sync_contract_preserved_not_active")
+    sync_fields = {str(x or "").strip() for x in contract.get("syncFields") or [] if str(x or "").strip()}
+    if sync_fields:
+        active_sync_fields: set[str] = set()
+        if family == "channel_beam" and runtime_family == "beam":
+            active_sync_fields = {"owner", "beamRotation", "beamDirection", "beamLength", "chargeTicks"}
+        elif family == "charge_release" and runtime_family == "charge_release":
+            active_sync_fields = {"owner", "chargeTicks", "chargePowerMultiplier", "releaseDirection", "shotCount"}
+        elif family == "sentry" and runtime_family == "sentry":
+            active_sync_fields = {"owner", "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks"}
+        elif family == "overhead_barrage" and runtime_family == "overhead_barrage":
+            active_sync_fields = {"owner", "targetPosition", "delayTicks", "shotCount"}
+        unsupported_sync = sorted(sync_fields - active_sync_fields)
+        if unsupported_sync:
+            warnings.append("sync_contract_fields_not_active:" + ",".join(unsupported_sync[:8]))
+            unsupported.extend("unsupported:sync:" + x for x in unsupported_sync[:8])
 
-    if family in {"channel_beam", "delayed_starfall", "secondary_attack", "unsupported"}:
+    if family in {"secondary_attack", "unsupported"}:
         unsupported.append(f"unsupported:{family}")
+
+    runtime_plan_raw = data.get("runtimePlan")
+    runtime_plan: dict[str, Any] = runtime_plan_raw if isinstance(runtime_plan_raw, dict) else {}
+    engine_calls_raw = runtime_plan.get("engineCalls")
+    engine_calls: list[Any] = engine_calls_raw if isinstance(engine_calls_raw, list) else []
+    authored_call_names = {
+        str(call.get("fn") or "").strip().lower()
+        for call in engine_calls
+        if isinstance(call, dict) and str(call.get("fn") or "").strip()
+    }
 
     # Mechanic claims are debug/truth contracts. They do not create gameplay.
     for claim in contract.get("mechanicClaims") or []:
         backing = str(claim.get("backing") or "").lower()
         status = str(claim.get("status") or "")
-        if "visual_only" in backing:
+        backing_identifiers = set(re.findall(r"[a-z][a-z0-9_]*", backing))
+        call_backed = bool(authored_call_names & backing_identifiers)
+        runtime_backed = "runtimearchetype" in backing or "attackspec" in backing
+        if status == "visual_only" or "visual_only" in backing:
             claim["status"] = "visual_only"
-        elif "unsupported" in backing:
+        elif status == "unsupported" or "unsupported" in backing:
             claim["status"] = "unsupported"
             unsupported.append("unsupported:" + (claim.get("claim") or "mechanic")[:48])
         elif "runtimearchetype.family=boomerang" in backing and family == "boomerang":
             claim["status"] = "executable"
-        elif "enginecall" in backing or "runtimearchetype" in backing:
+        elif call_backed:
+            claim["status"] = "executable"
+        elif "enginecall" in backing or runtime_backed:
             claim["status"] = status or "partial"
+        elif status == "executable":
+            claim["status"] = "partial" if backing.strip() else "ambiguous"
         elif not status:
             claim["status"] = "ambiguous"
 
     if raw_present:
         statuses = {str(c.get("status") or "") for c in contract.get("mechanicClaims") or []}
         if unsupported:
-            contract["executionStatus"] = "unsupported" if not any(s == "executable" for s in statuses) else "partial"
+            runtime_executable = runtime_family not in {"", "none", "unsupported"}
+            contract["executionStatus"] = "partial" if runtime_executable or any(s == "executable" for s in statuses) else "unsupported"
         elif statuses and statuses <= {"executable"}:
             contract["executionStatus"] = "executable"
         elif statuses and "visual_only" in statuses:
             contract["executionStatus"] = "visual_only"
         elif statuses:
             contract["executionStatus"] = "partial"
+        elif warnings:
+            contract["executionStatus"] = "partial"
+        elif runtime_family not in {"", "none", "unsupported"}:
+            contract["executionStatus"] = "executable"
         data["runtimeContract"] = contract
 
     if unsupported:

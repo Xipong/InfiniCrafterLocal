@@ -73,7 +73,9 @@ def test_golden_gameplay_seam_reports_match_expected_generated_item_fields() -> 
     tool = by_id["tool_mining_light"]["item"]["gameplay"]
     assert tool["pickPower"] == 65
     assert tool["axePower"] == 12
-    assert tool["runtimeLightStrength"] == 0.85
+    assert tool["holdLightStrength"] == 0.85
+    assert "runtimeLightStrength" not in tool
+    assert "runtimeLightColorName" not in tool
     armor = by_id["armor_runtime"]["item"]
     assert armor["category"] == "armor"
     assert armor["armor"]["slot"] == "body"

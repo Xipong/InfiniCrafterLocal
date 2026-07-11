@@ -8,7 +8,6 @@ pages for the listed items, then repeatedly feeds generated items forward like a
 player upgrading the same weapon across progression.
 """
 
-import importlib.util
 import json
 import os
 import shutil
@@ -22,7 +21,7 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "wiki_guided_vanilla_playthrough.json"
 REPORT = ROOT / "wiki_guided_playthrough_report.json"
-CACHE = ROOT / ".wiki_guided_playthrough_cache"
+CACHE = Path(os.environ.get("INFINI_CACHE_DIR") or (ROOT / ".wiki_guided_playthrough_cache"))
 
 os.environ.setdefault("INFINI_USE_LLM", "0")
 os.environ.setdefault("INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", "1")
@@ -32,12 +31,13 @@ if os.environ.get("INFINI_PLAYTHROUGH_KEEP_CACHE", "0") != "1":
     if CACHE.exists():
         shutil.rmtree(CACHE)
 CACHE.mkdir(parents=True, exist_ok=True)
+(CACHE / "sprites").mkdir(parents=True, exist_ok=True)
 
-spec = importlib.util.spec_from_file_location("infini_server_playthrough", ROOT / "server.py")
-server = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = server
-assert spec.loader is not None
-spec.loader.exec_module(server)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from infini_local.pipelines.parent_context_pipeline import projectile_profile_of
+from infini_local.pipelines.result_identity_policy import is_weapon_like_parent
+from infini_local.web import server
 
 BULLET = {
     "type": 14, "sourceMod": "Terraria", "internalName": "Bullet", "fullName": "Terraria/Bullet",
@@ -90,7 +90,7 @@ def generated_as_input(obj: dict[str, Any], id_base: int) -> dict[str, Any]:
         "value": gp.get("value", 100),
         "shoot": 1 if at.get("enabled") else 0,
         "shootSpeed": at.get("speed", 0),
-        "projectileProfile": server.projectile_profile_of({"generatedData": obj, "shoot": 1}),
+        "projectileProfile": projectile_profile_of({"generatedData": obj, "shoot": 1}),
         "tags": obj.get("tags", []),
         "generatedData": obj,
     }
@@ -117,8 +117,8 @@ def audit_result(route_id: str, step_idx: int, left: dict[str, Any], right: dict
     gp = result.get("gameplay") if isinstance(result.get("gameplay"), dict) else {}
     at = result.get("attack") if isinstance(result.get("attack"), dict) else {}
     metrics = at.get("engineMetrics") if isinstance(at.get("engineMetrics"), dict) else {}
-    left_weapon = server.is_weapon_like_parent(left)
-    right_weapon = server.is_weapon_like_parent(right)
+    left_weapon = is_weapon_like_parent(left)
+    right_weapon = is_weapon_like_parent(right)
     parent_max_damage = max(float(left.get("damage") or 0), float(right.get("damage") or 0))
     weak_anchor = (left.get("damage", 0) or 0) <= 0 or (right.get("damage", 0) or 0) <= 0
     if (left_weapon or right_weapon) and result.get("category") != "weapon":

@@ -5,33 +5,41 @@ from dataclasses import dataclass
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
+from infini_local.core.vfx_composition_parent import _vfx_parent_effect_profile
+from infini_local.core.vfx_composition_primitives import (
+    _vfx_event_group,
+    _vfx_infer_channel,
+    _vfx_infer_lane,
+    _vfx_particle_address_catalog,
+    _vfx_resolve_particle_system_id,
+    _vfx_slot_score,
+)
+from infini_local.core.vfx_director_prompt import vfx_director_name_bank
+from infini_local.core.vfx_lint_timeline import (
+    VFX_MAGNITUDE_CLASSES,
+    _vfx_lint_recipe,
+    _vfx_timeline_from_manifest,
+    vfx_manifest_effect_stack,
+)
 from infini_local.core.vfx_manifest import (
+    _vfx_find_recipe,
+    _vfx_manifest_from_recipe,
+    attach_hybrid_vfx_manifest,
+    compact_vfx_recipe_card,
+)
+from infini_local.core.vfx_manifest_config import (
     VFX_EMERGENCY_MAX_DRAW_CALLS,
     VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
     VFX_EMERGENCY_MAX_PARTICLES_TOTAL,
-    VFX_MAGNITUDE_CLASSES,
     VFX_MORPH_RECIPES_RAW,
     VFX_RENDER_QUALITY,
     VFX_SLOT_MACROS,
     VFX_SLOT_MACRO_LIBRARY,
-    _vfx_event_group,
+)
+from infini_local.core.vfx_recipe_library import (
     _vfx_expand_recipe_macros,
-    _vfx_find_recipe,
-    _vfx_infer_channel,
-    _vfx_infer_lane,
-    _vfx_lint_recipe,
-    _vfx_manifest_from_recipe,
-    _vfx_parent_effect_profile,
-    _vfx_particle_address_catalog,
-    _vfx_resolve_particle_system_id,
-    _vfx_slot_score,
-    _vfx_timeline_from_manifest,
-    attach_hybrid_vfx_manifest,
     compact_vfx_macro_card,
-    compact_vfx_recipe_card,
     get_vfx_recipes,
-    vfx_director_name_bank,
-    vfx_manifest_effect_stack,
 )
 
 
@@ -51,63 +59,64 @@ class VfxDebugRoutes:
     final_normalize: Callable[[dict[str, Any]], dict[str, Any]]
 
     def handle_get(self, handler: Any, path: str) -> bool:
-        if not path.startswith("/debug/vfx"):
+        request_path = urlparse(path).path
+        if not request_path.startswith("/debug/vfx"):
             return False
-        if path.startswith("/debug/vfx_matrix"):
+        if request_path == "/debug/vfx_matrix":
             handler.json(self.recipe_matrix())
             return True
-        if path.startswith("/debug/vfx_macros"):
+        if request_path == "/debug/vfx_macros":
             handler.json(self.macro_matrix())
             return True
-        if path.startswith("/debug/vfx_recipe_expanded"):
+        if request_path == "/debug/vfx_recipe_expanded":
             q = parse_qs(urlparse(path).query)
             handler.json(self.recipe_expanded(q.get("recipeId", [""])[0] or q.get("id", [""])[0] or ""))
             return True
-        if path.startswith("/debug/vfx_lint"):
+        if request_path == "/debug/vfx_lint":
             q = parse_qs(urlparse(path).query)
             handler.json(self.lint({"recipeId": (q.get("recipeId", [""])[0] or ""), "verbose": (q.get("verbose", ["0"])[0] in {"1", "true", "yes"})}))
             return True
-        if path.startswith("/debug/vfx_stack"):
+        if request_path == "/debug/vfx_stack":
             q = parse_qs(urlparse(path).query)
             handler.json(self.effect_stack({"pattern": q.get("pattern", ["slash_holdout"])[0], "forceRecipeId": q.get("recipeId", [""])[0], "returnManifest": q.get("returnManifest", ["0"])[0] in {"1", "true", "yes"}}))
             return True
-        if path.startswith("/debug/vfx_composer"):
+        if request_path == "/debug/vfx_composer":
             q = parse_qs(urlparse(path).query)
             handler.json(self.composer({"pattern": q.get("pattern", ["slash_holdout"])[0], "forceRecipeId": q.get("recipeId", [""])[0], "returnManifest": q.get("returnManifest", ["0"])[0] in {"1", "true", "yes"}}))
             return True
-        if path.startswith("/debug/vfx_procedural"):
+        if request_path == "/debug/vfx_procedural":
             q = parse_qs(urlparse(path).query)
             handler.json(self.procedural({"pattern": q.get("pattern", ["slash_holdout"])[0], "forceRecipeId": q.get("recipeId", [""])[0], "returnManifest": q.get("returnManifest", ["0"])[0] in {"1", "true", "yes"}}))
             return True
-        if path.startswith("/debug/vfx_timeline"):
+        if request_path == "/debug/vfx_timeline":
             q = parse_qs(urlparse(path).query)
             handler.json(self.timeline({"pattern": q.get("pattern", ["slash_holdout"])[0], "forceRecipeId": q.get("recipeId", [""])[0], "maxTicks": int(q.get("maxTicks", ["180"])[0] or "180"), "returnManifest": q.get("returnManifest", ["0"])[0] in {"1", "true", "yes"}}))
             return True
-        if path.startswith("/debug/vfx_budget_audit"):
+        if request_path == "/debug/vfx_budget_audit":
             q = parse_qs(urlparse(path).query)
             handler.json(self.budget_audit({"pattern": q.get("pattern", [""])[0], "verbose": q.get("verbose", ["0"])[0] in {"1", "true", "yes"}}))
             return True
-        if path.startswith("/debug/vfx_quality") or path.startswith("/debug/vfx_magnitude"):
+        if request_path in {"/debug/vfx_quality", "/debug/vfx_magnitude"}:
             handler.json(self.quality_presets())
             return True
-        if path.startswith("/debug/vfx_parent_effects"):
+        if request_path == "/debug/vfx_parent_effects":
             handler.json(self.parent_effects({}))
             return True
-        if path.startswith("/debug/vfx_particle_addresses"):
+        if request_path == "/debug/vfx_particle_addresses":
             q = parse_qs(urlparse(path).query)
             handler.json(self.particle_addresses({
                 "particleSystemId": q.get("particleSystemId", [""])[0],
-                "renderer": q.get("renderer", [""])[0],
+                "rendererKind": q.get("renderer", [""])[0],
                 "event": q.get("event", [""])[0],
                 "channel": q.get("channel", [""])[0],
                 "blend": q.get("blend", [""])[0],
                 "emissionMode": q.get("emissionMode", [""])[0],
             }))
             return True
-        if path.startswith("/debug/vfx_name_bank"):
+        if request_path == "/debug/vfx_name_bank":
             handler.json({"ok": True, "version": self.app_version, "bank": vfx_director_name_bank()})
             return True
-        if path.startswith("/debug/vfx_recipes"):
+        if request_path == "/debug/vfx_recipes":
             q = parse_qs(urlparse(path).query)
             pattern = (q.get("pattern", [""])[0] or "").strip()
             cards = [compact_vfx_recipe_card(r) for r in get_vfx_recipes()]
@@ -118,42 +127,43 @@ class VfxDebugRoutes:
         return False
 
     def handle_post(self, handler: Any, path: str, payload: dict[str, Any]) -> bool:
-        if not path.startswith("/debug/vfx"):
+        request_path = urlparse(path).path
+        if not request_path.startswith("/debug/vfx"):
             return False
-        if path.startswith("/debug/vfx_select"):
+        if request_path == "/debug/vfx_select":
             handler.json(self.select_manifest(payload))
             return True
-        if path.startswith("/debug/vfx_reroll"):
+        if request_path == "/debug/vfx_reroll":
             handler.json(self.reroll_cached_manifest(payload))
             return True
-        if path.startswith("/debug/vfx_probe_matrix"):
+        if request_path == "/debug/vfx_probe_matrix":
             handler.json(self.probe_matrix(payload))
             return True
-        if path.startswith("/debug/vfx_bake_preview"):
+        if request_path == "/debug/vfx_bake_preview":
             handler.json(self.bake_preview(payload))
             return True
-        if path.startswith("/debug/vfx_lint"):
+        if request_path == "/debug/vfx_lint":
             handler.json(self.lint(payload))
             return True
-        if path.startswith("/debug/vfx_stack"):
+        if request_path == "/debug/vfx_stack":
             handler.json(self.effect_stack(payload))
             return True
-        if path.startswith("/debug/vfx_composer"):
+        if request_path == "/debug/vfx_composer":
             handler.json(self.composer(payload))
             return True
-        if path.startswith("/debug/vfx_procedural"):
+        if request_path == "/debug/vfx_procedural":
             handler.json(self.procedural(payload))
             return True
-        if path.startswith("/debug/vfx_timeline"):
+        if request_path == "/debug/vfx_timeline":
             handler.json(self.timeline(payload))
             return True
-        if path.startswith("/debug/vfx_budget_audit"):
+        if request_path == "/debug/vfx_budget_audit":
             handler.json(self.budget_audit(payload))
             return True
-        if path.startswith("/debug/vfx_parent_effects"):
+        if request_path == "/debug/vfx_parent_effects":
             handler.json(self.parent_effects(payload))
             return True
-        if path.startswith("/debug/vfx_particle_addresses"):
+        if request_path == "/debug/vfx_particle_addresses":
             handler.json(self.particle_addresses(payload))
             return True
         return False
@@ -238,7 +248,7 @@ class VfxDebugRoutes:
                 bucket["recipes"].append(rid)
             for slot in recipe.get("slots") or []:
                 if isinstance(slot, dict):
-                    r = str(slot.get("renderer") or "")
+                    r = str(slot.get("rendererKind") or "")
                     if r:
                         renderers[r] = renderers.get(r, 0) + 1
         return {
@@ -326,14 +336,14 @@ class VfxDebugRoutes:
                     "intent": intent,
                     "recipeId": m.get("recipeId"),
                     "confidence": m.get("confidence"),
-                    "slotRenderers": [s.get("renderer") for s in (m.get("slots") or []) if isinstance(s, dict)],
+                    "slotRenderers": [s.get("rendererKind") for s in (m.get("slots") or []) if isinstance(s, dict)],
                     "top": ((m.get("debug") or {}).get("topCandidates") or [])[:3],
                 })
         return {"ok": True, "version": self.app_version, "count": len(out), "results": out}
 
     def particle_addresses(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
-        sample_renderer = str(payload.get("renderer") or "")
+        sample_renderer = str(payload.get("rendererKind") or "")
         sample_event = str(payload.get("event") or "")
         sample_channel = str(payload.get("channel") or "")
         sample_blend = str(payload.get("blend") or "")
@@ -345,7 +355,7 @@ class VfxDebugRoutes:
             "catalog": _vfx_particle_address_catalog(),
             "sample": {
                 "requested": requested,
-                "renderer": sample_renderer,
+                "rendererKind": sample_renderer,
                 "event": sample_event,
                 "channel": sample_channel,
                 "blend": sample_blend,
@@ -367,7 +377,7 @@ class VfxDebugRoutes:
                 "event": slot.get("event"),
                 "stage": slot.get("stage"),
                 "backend": slot.get("backend"),
-                "renderer": slot.get("renderer"),
+                "rendererKind": slot.get("rendererKind"),
                 "commandCount": len(cmds),
                 "ticks": sorted({int(c.get("tick", 0)) for c in cmds if isinstance(c, dict)})[:64],
                 "firstCommands": cmds[:5],
@@ -430,7 +440,7 @@ class VfxDebugRoutes:
                 "estimatedDrawCalls": stack.get("estimatedDrawCalls"),
                 "bakedCommands": baked,
                 "heavy": (stack.get("estimatedParticles", 0) or 0) > (budget.get("maxParticlesTotal", 0) or 0) * 0.75,
-                "renderers": [s.get("renderer") for s in (manifest.get("slots") or []) if isinstance(s, dict)],
+                "renderers": [s.get("rendererKind") for s in (manifest.get("slots") or []) if isinstance(s, dict)],
             })
         rows.sort(key=lambda x: (x.get("estimatedParticles") or 0, x.get("bakedCommands") or 0), reverse=True)
         return {
@@ -471,7 +481,7 @@ class VfxDebugRoutes:
             "composition": debug.get("composition") or {},
             "slots": [
                 {
-                    "event": s.get("event"), "renderer": s.get("renderer"), "channel": s.get("channel"), "lane": s.get("lane"),
+                    "event": s.get("event"), "rendererKind": s.get("rendererKind"), "channel": s.get("channel"), "lane": s.get("lane"),
                     "source": s.get("source"), "importance": s.get("importance"), "signatureWeight": s.get("signatureWeight"),
                     "visualCost": s.get("visualCost"), "score": round(_vfx_slot_score(s), 3),
                 }
@@ -491,11 +501,11 @@ class VfxDebugRoutes:
             if not isinstance(slot, dict):
                 continue
             group = _vfx_event_group(slot.get("event"))
-            channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("renderer"), slot.get("event")))
+            channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("rendererKind"), slot.get("event")))
             lane = str(slot.get("lane") or _vfx_infer_lane(slot))
             key = f"{group}:{channel}:{lane}"
             groups.setdefault(key, []).append({
-                "renderer": slot.get("renderer"),
+                "rendererKind": slot.get("rendererKind"),
                 "event": slot.get("event"),
                 "stage": slot.get("stage"),
                 "lane": lane,

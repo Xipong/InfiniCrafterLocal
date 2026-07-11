@@ -9,8 +9,8 @@ from infini_local.core.env_utils import env_bool, env_float, env_int
 
 
 # AGENT MAP: configuration/data ownership for VFX manifest authoring.
-# Keep env and JSON library loading here so vfx_manifest.py can stay a facade
-# over behavior modules instead of owning every concern.
+# Keep env and JSON library loading here so vfx_manifest.py owns assembly without
+# also owning configuration and data loading.
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data"
 
@@ -26,7 +26,7 @@ def load_json_file(path: Path, fallback: Any) -> Any:
 
 load_env_file(ROOT / "config.env")
 
-# v0.3.39: VFX manifest pipeline lives behind core.vfx_manifest's public facade.
+# VFX manifest assembly consumes the recipe/config data owned here.
 VFX_MORPH_LIBRARY = load_json_file(DATA_DIR / "vfx_morph_recipes.json", {"recipes": []})
 VFX_SLOT_MACRO_LIBRARY = load_json_file(DATA_DIR / "vfx_slot_macros.json", {"macros": {}})
 VFX_SLOT_MACROS = VFX_SLOT_MACRO_LIBRARY.get("macros", {}) if isinstance(VFX_SLOT_MACRO_LIBRARY, dict) and isinstance(VFX_SLOT_MACRO_LIBRARY.get("macros"), dict) else {}
@@ -55,9 +55,6 @@ VFX_LLM_DIRECTOR_MAX_TOKENS = env_int("INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS", 1800
 VFX_LLM_DIRECTOR_TEMPERATURE = env_float("INFINI_VFX_LLM_DIRECTOR_TEMPERATURE", 0.34)
 VFX_LLM_DIRECTOR_TIMEOUT = env_int("INFINI_VFX_LLM_DIRECTOR_TIMEOUT", 75)
 VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS = env_int("INFINI_VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS", 1)
-VFX_LLM_WEAK_HINTS_ENABLED = env_bool("INFINI_VFX_LLM_WEAK_HINTS", False)
-VFX_LLM_WEAK_HINTS_MAX = env_int("INFINI_VFX_LLM_WEAK_HINTS_MAX", 6)
-VFX_LLM_WEAK_HINTS_CONFIDENCE_CAP = env_float("INFINI_VFX_LLM_WEAK_HINTS_CONFIDENCE_CAP", 0.45)
 VFX_EFFECT_NAME_BANK_MAX_CARDS = env_int("INFINI_VFX_EFFECT_NAME_BANK_MAX_CARDS", 8)
 VFX_EFFECT_NAME_BANK_MAX_NAMES = env_int("INFINI_VFX_EFFECT_NAME_BANK_MAX_NAMES", 42)
 VFX_EFFECT_NAME_BANK_PATH = DATA_DIR / "vfx_effect_name_bank.json"
@@ -84,6 +81,44 @@ VFX_MAGNITUDE_JITTER = env_float("INFINI_VFX_MAGNITUDE_JITTER", 0.18)
 
 
 __all__ = [
-    name for name in globals()
-    if name.startswith("VFX_") or name in {"ROOT", "DATA_DIR", "load_json_file"}
+    "ROOT",
+    "DATA_DIR",
+    "load_json_file",
+    "VFX_MORPH_LIBRARY",
+    "VFX_SLOT_MACRO_LIBRARY",
+    "VFX_SLOT_MACROS",
+    "VFX_MORPH_RECIPES_RAW",
+    "VFX_MORPH_RECIPES",
+    "VFX_SELECTOR_ENABLED",
+    "VFX_RUNTIME_INTENT_FIRST",
+    "VFX_SELECTOR_DEBUG",
+    "VFX_SELECTOR_TOP",
+    "VFX_SELECTOR_HINT_WEIGHT",
+    "VFX_SELECTOR_JITTER",
+    "VFX_SELECTOR_NOVELTY_WEIGHT",
+    "VFX_LLM_DIRECTOR_ENABLED",
+    "VFX_LLM_DIRECTOR_MAX_SLOTS",
+    "VFX_LLM_DIRECTOR_MAX_TOKENS",
+    "VFX_LLM_DIRECTOR_TEMPERATURE",
+    "VFX_LLM_DIRECTOR_TIMEOUT",
+    "VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS",
+    "VFX_EFFECT_NAME_BANK_MAX_CARDS",
+    "VFX_EFFECT_NAME_BANK_MAX_NAMES",
+    "VFX_EFFECT_NAME_BANK_PATH",
+    "VFX_PROCEDURAL_COMPOSE",
+    "VFX_RECIPE_BLEND_ENABLED",
+    "VFX_PROCEDURAL_MAX_EXTRA_SLOTS",
+    "VFX_PROCEDURAL_BLEND_CANDIDATES",
+    "VFX_PROCEDURAL_CHANCE",
+    "VFX_MUNDANE_DUPLICATE_GUARD",
+    "VFX_MUNDANE_MAX_SLOTS",
+    "VFX_PARENT_EFFECT_INHERITANCE",
+    "VFX_PARENT_EFFECT_WEIGHT",
+    "VFX_PARENT_EFFECT_STRONG_THRESHOLD",
+    "VFX_PARENT_EFFECT_MAX_INHERITED_SLOTS",
+    "VFX_RENDER_QUALITY",
+    "VFX_EMERGENCY_MAX_PARTICLES_PER_TICK",
+    "VFX_EMERGENCY_MAX_PARTICLES_TOTAL",
+    "VFX_EMERGENCY_MAX_DRAW_CALLS",
+    "VFX_MAGNITUDE_JITTER",
 ]

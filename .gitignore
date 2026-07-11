@@ -57,3 +57,7 @@ agent_reports/
 .env
 *.local
 settings.local.json
+.hypothesis/
+artifacts/
+.hermes/
+.agent/current_state.json

@@ -1,0 +1,50 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 140
+exclude = [
+  ".git",
+  ".pytest_cache",
+  "**/__pycache__",
+  "LocalGenerator/cache",
+  "LocalGenerator/data",
+  "build_logs",
+  "artifacts",
+]
+
+[tool.ruff.lint]
+# Deliberately narrow: agent-safety errors, not style churn.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+include = [
+  "LocalGenerator/infini_local/core/boundary_models.py",
+  "LocalGenerator/infini_local/core/runtime_authoring/engine_call_contracts.py",
+  "tools/agentctl.py",
+  "tools/config_registry.py",
+  "tools/contract_parity.py",
+  "tools/replay_generation_case.py",
+  "tools/runtime_impact_report.py",
+  "tools/mutation_contract_gate.py",
+  "tools/semantic_runtime_diff.py",
+  "tools/export_contract_schemas.py",
+  "tools/validate_release.py",
+  "tools/render_validation_report.py",
+  "tools/run_pytest_shards.py",
+  "tools/check_tml_selftest_report.py",
+]
+exclude = [
+  "**/__pycache__",
+  "LocalGenerator/cache",
+]
+extraPaths = ["LocalGenerator"]
+reportMissingTypeStubs = "none"
+reportUnknownArgumentType = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownParameterType = "none"
+
+[tool.pytest.ini_options]
+testpaths = ["LocalGenerator/tests"]
+addopts = "-ra"

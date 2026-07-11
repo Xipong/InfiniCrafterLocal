@@ -24,7 +24,7 @@ from infini_local.pipelines.parent_context_pipeline import (
 
 # AGENT MAP: LLM raw parent card assembly. Kept separate from parent projectile
 # profile extraction so parent_context_pipeline.py can stay below the large-file cap
-# while preserving its legacy import surface.
+# while keeping the card itself in this single owner module.
 
 def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     """Compact parent card for the LLM.

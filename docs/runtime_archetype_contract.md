@@ -46,11 +46,17 @@ Example shape:
 Supported/exposed families in this patch:
 
 - `custom_executor`: default/omitted path; current `runtimePlan.engineCalls` remain authoritative.
-- `boomerang`: executable bridge to current returning/boomerang fields: `delivery=throw`, `movement=boomerang`, `runtimeFamily=returning`, `weaponFamily=boomerang`, `weaponSubfamily=boomerang`, plus phase metadata and scorer-safe return-pierce notes.
+- `boomerang`: executable bridge to current returning/boomerang fields: `delivery=throw`, `movement=boomerang`, `runtimeFamily=returning`, `weaponFamily=boomerang`, plus phase metadata and scorer-safe return-pierce notes.
 - `yoyo`, `flail`, `whip`: mapped only to existing finite runtime family fields. No giant vanilla item table.
 - `held_swing`, `held_thrust`: explicit held/swing/thrust family metadata over current finite fields.
-- `apply_on_hit_effect(onHit=starfall)`: executable on-hit falling-star child projectile primitive (`onHitCode=18`), bounded by child caps and budget pressure.
-- `channel_beam`, `delayed_starfall`, `secondary_attack`, `unsupported`: preserved intent/debug only unless another existing finite executor already supports the exact behavior. Full delayed/sky-targeted starfall family remains future work.
+- `apply_on_hit_effect(onHit=overhead_barrage)`: executable on-hit overhead-projectile primitive (`onHitCode=18`), bounded by child caps and budget pressure. Star/arrow/shard theme comes only from explicit projectile/effect fields; removed names are rejected.
+- `channel_beam`: executable bridge to canonical `runtimeFamily=beam`; held/channelled, wall-bounded line scan, explicit range/width/charge/immunity cadence, exact duplicate guard and periodic authored mana payment.
+- `overhead_barrage`: executable finite target marker → delay → bounded authored projectile spawn above the target area. Retired family names are rejected.
+- `secondary_attack`, `unsupported`: preserved intent/debug only unless another finite executor supports the exact behavior.
+
+These are `RuntimeArchetypeSpec.family` values, not canonical `attack.runtimeFamily` executor values. For example, archetype `boomerang` compiles to `runtimeFamily=returning`; downstream runtime consumers only see the latter.
+
+These are `RuntimeArchetypeSpec.family` values, not canonical `attack.runtimeFamily` executor values. For example, archetype `boomerang` compiles to `runtimeFamily=returning`; downstream runtime consumers only see the latter.
 
 Known numeric knobs are clamped in Python/C#:
 
@@ -107,9 +113,9 @@ Python now emits `debug.runtimePromiseTruth` and top-level `unsupportedPromises`
 Examples:
 
 - “returns to thrower” + `runtimeArchetype.family=boomerang` => `executable`.
-- “rains stars on hit” + `apply_on_hit_effect(onHit=starfall)` => `executable` bounded child projectiles.
-- “delayed/sky-targeted starfall” without a finite executor => `unsupported` unless clearly visual-only.
-- “channel beam” with no finite beam executor => preserved/unsupported; no fake straight projectile.
+- “projectiles descend from above on hit” + `apply_on_hit_effect(onHit=overhead_barrage)` => `executable` bounded child projectiles; explicit `effect=star` keeps a star theme.
+- “projectiles appear above the targeted area” without explicit `overhead_barrage` => `unsupported` unless clearly visual-only.
+- “channel beam” + explicit `runtimeArchetype.family=channel_beam` or `cast_magic_weapon(family=channelled_beam)` => executable held beam. Beam wording without that exact structured selection remains visual-only/unsupported and never selects gameplay.
 - “paired/dual sword” can be preserved as future `secondary_attack` intent. Broken dual-wield is not executed, but future finite support is allowed.
 - “burst” with `onHit=burst` but no burst visual cap/impact feedback => partial warning.
 
@@ -122,18 +128,22 @@ Visual generation may read `runtimeArchetype`/`runtimeContract` to avoid contrad
 - A real boomerang family can suggest a returning silhouette when item identity also supports it.
 - A shard/glaive with boomerang movement does not have to become a crescent just because movement returns.
 - Unsupported paired sword can be drawn as one fused/split blade rather than broken dual-wield.
-- Unsupported channel beam should not be prompted as a playable beam attack.
+- Explicit executable channel beam may drive a held-emitter/beam visual; beam-like prose without the exact runtime family must remain visual-only.
 
 ## Save/load/net compatibility
 
 C# `GeneratedItemData` now has data-only `RuntimeArchetypeSpec`, `RuntimeContractSpec`, and `MechanicClaimSpec` DTOs. `Normalize()` tolerates missing fields, clamps known knobs, and preserves unknown future knobs as JSON. Old generated recipes without these fields still load and execute through the existing runtime fields.
 
-If registry/network code serializes generated JSON wholesale, the new fields survive naturally. There is no protocol rewrite in this patch.
+Generated JSON preserves the archetype fields. Executable beam state also has an explicit projectile protocol (`ProjectileSyncVersion = 13`) for range, homing strength, beam width, charge duration and current scanned length; direction/position use normal projectile sync.
+
+## Secondary trigger lifecycle
+
+`spawn_secondary_projectiles` accepts one exact trigger: `on_hit` or `on_expire`. The compiler rejects mixed trigger calls and rejects implicit dual child lifecycles. `on_expire` is implemented by a dedicated policy/compiler owner and a bounded C# kill-path; it is not a generic event/action framework.
 
 ## Deferred TODOs
 
 - Full PacketRegistry consumer for `runtimeContract.syncFields`.
-- Full channel beam executor.
+- Optional richer multi-beam/charge-release variants built from finite knobs, without item-name aliases.
 - Full held projectile swing overlay.
-- Full delayed/sky-targeted starfall / feline bounce / sticky puddle / heat-jam executor support.
+- Feline bounce / sticky puddle / heat-jam executors as separate future finite slices. Overhead barrage is already executable under its exact canonical name.
 - True paired/offhand dual-wield as a finite supported executor, not broken visual/prose routing.

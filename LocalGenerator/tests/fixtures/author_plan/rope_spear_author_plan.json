@@ -28,6 +28,7 @@
       {
         "fn": "shoot_projectile",
         "params": {
+          "runtimeFamily": "returning",
           "delivery": "throw",
           "movement": "returning_glaive",
           "speed": 8,

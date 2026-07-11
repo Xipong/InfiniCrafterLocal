@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from infini_local.core.vfx_composition import (
+from infini_local.core.vfx_composition_primitives import (
     _vfx_default_backend,
     _vfx_event_stage,
     _vfx_infer_channel,
@@ -44,7 +44,7 @@ def _vfx_slot_cost_estimate(slot: dict[str, Any]) -> dict[str, Any]:
     density = float(slot.get("density") or 0.0)
     duration = int(float(slot.get("duration") or 1))
     weight = float(slot.get("budgetWeight") or 1.0)
-    renderer = str(slot.get("renderer") or "")
+    renderer = str(slot.get("rendererKind") or "")
     layer = _vfx_layer_kind_for_renderer(renderer)
     draw_calls = 0
     particles = 0
@@ -75,14 +75,14 @@ def vfx_manifest_effect_stack(manifest: dict[str, Any]) -> dict[str, Any]:
     total_particles = 0
     for idx, slot in enumerate(slots):
         cost = _vfx_slot_cost_estimate(slot)
-        stage = str(slot.get("stage") or _vfx_event_stage(slot.get("event"), slot.get("renderer")))
-        backend = str(slot.get("backend") or _vfx_default_backend(slot.get("event"), slot.get("renderer")))
+        stage = str(slot.get("stage") or _vfx_event_stage(slot.get("event"), slot.get("rendererKind")))
+        backend = str(slot.get("backend") or _vfx_default_backend(slot.get("event"), slot.get("rendererKind")))
         row = {
             "index": idx,
             "event": slot.get("event"),
             "stage": stage,
             "backend": backend,
-            "renderer": slot.get("renderer"),
+            "rendererKind": slot.get("rendererKind"),
             "layerKind": cost["layerKind"],
             "textureRole": slot.get("textureRole"),
             "particleRole": slot.get("particleRole"),
@@ -115,13 +115,12 @@ def vfx_manifest_effect_stack(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 VFX_KNOWN_RENDERERS = {
-    "projectileafterimage", "spritestamptrail", "tiptrail", "historyribbon", "primitiveribbon",
-    "ghostarc", "beamline", "fieldpulse", "impactspriteflash", "impactspriteburst", "impactring",
-    "childspritemotes", "ambientmotes", "orbitalmotes", "wavystrip", "cloth", "lightcue", "soundcue",
-    "genericparticles", "genericsmoke", "smokeparticles", "sparkparticles", "actorafterimage", "playerghost",
+    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip",
+    "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite",
+    "childMotes", "lightCue", "soundCue",
 }
 
-VFX_KNOWN_EVENTS = {"spawn", "windup", "tick", "travel", "active", "slash", "beam", "loop", "hit", "impact", "onhit", "kill", "expire", "decay"}
+VFX_KNOWN_EVENTS = {"travel", "active", "tick", "hit", "kill", "expire"}
 
 VFX_KNOWN_BACKENDS = {"auto", "baked", "realtime", "primitive", "sprite", "particle", "hybrid"}
 
@@ -153,16 +152,15 @@ def _vfx_slot_value_range_ok(value: Any, name: str, lo: float, hi: float) -> lis
 def _vfx_lint_slot(slot: dict[str, Any], idx: int, recipe_id: str = "") -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
-    renderer = str(slot.get("renderer") or "").strip()
+    renderer = str(slot.get("rendererKind") or "").strip()
     event = str(slot.get("event") or "").strip().lower()
     backend = str(slot.get("backend") or _vfx_default_backend(event, renderer)).strip().lower()
     texture_role = str(slot.get("textureRole") or "projectile").strip().lower()
     particle_role = str(slot.get("particleRole") or "").strip().lower()
-    renderer_key = renderer.lower()
     if not renderer:
         errors.append("missing renderer")
-    elif renderer_key not in VFX_KNOWN_RENDERERS and not any(k in renderer_key for k in VFX_KNOWN_RENDERERS):
-        warnings.append(f"unknown renderer '{renderer}' (runtime may ignore it)")
+    elif renderer not in VFX_KNOWN_RENDERERS:
+        errors.append(f"unknown renderer '{renderer}'")
     if event not in VFX_KNOWN_EVENTS:
         errors.append(f"unknown event '{event}'")
     if backend not in VFX_KNOWN_BACKENDS:
@@ -218,7 +216,7 @@ def _vfx_lint_slot(slot: dict[str, Any], idx: int, recipe_id: str = "") -> dict[
                     warnings.append(f"bakedCommands[{j}].{n}={f} outside {lo}..{hi}")
             except Exception:
                 warnings.append(f"bakedCommands[{j}].{n} non-numeric")
-    return {"index": idx, "renderer": renderer, "event": event, "backend": backend, "errors": errors, "warnings": warnings}
+    return {"index": idx, "rendererKind": renderer, "event": event, "backend": backend, "errors": errors, "warnings": warnings}
 
 def _vfx_lint_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     rid = str(recipe.get("id") or "")
@@ -259,8 +257,8 @@ def _vfx_timeline_from_manifest(manifest: dict[str, Any], max_ticks: int = 180) 
     max_seen = 0
     for idx, slot in enumerate(slots):
         event = str(slot.get("event") or "tick")
-        stage = str(slot.get("stage") or _vfx_event_stage(event, slot.get("renderer")))
-        renderer = str(slot.get("renderer") or "")
+        stage = str(slot.get("stage") or _vfx_event_stage(event, slot.get("rendererKind")))
+        renderer = str(slot.get("rendererKind") or "")
         start = max(0, int(float(slot.get("startTick") or 0)))
         duration = max(1, int(float(slot.get("duration") or 1)))
         repeat = max(0, int(float(slot.get("repeatEvery") or 0)))
@@ -280,7 +278,7 @@ def _vfx_timeline_from_manifest(manifest: dict[str, Any], max_ticks: int = 180) 
                     "kind": "sample",
                     "event": event,
                     "stage": stage,
-                    "renderer": renderer,
+                    "rendererKind": renderer,
                     "backend": backend,
                     "minQuality": min_quality,
                 })
@@ -298,7 +296,7 @@ def _vfx_timeline_from_manifest(manifest: dict[str, Any], max_ticks: int = 180) 
                 "kind": "baked",
                 "event": event,
                 "stage": stage,
-                "renderer": renderer,
+                "rendererKind": renderer,
                 "backend": backend,
                 "particleSystemId": cmd.get("particleSystemId", "dust"),
                 "alpha": cmd.get("alpha"),

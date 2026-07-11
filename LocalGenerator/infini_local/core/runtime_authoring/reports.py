@@ -7,9 +7,11 @@ from infini_local.core.result_models import RuntimeCompileResult
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION, _enum, _norm_name, _num
 from infini_local.core.runtime_authoring.compiler import compile_runtime_plan_to_genome_patch
 from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
-from infini_local.core.runtime_authoring.schema import RUNTIME_FAMILIES
+from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_secondary_policy import normalize_secondary_trigger
 from infini_local.core.runtime_authoring.structural import all_calls, find_call
 from infini_local.core.runtime_contracts import validate_runtime_contract
+from infini_local.core.boundary_models import runtime_plan_boundary_report
 from infini_local.core.runtime_promise_truth import validate_runtime_promises
 
 def runtime_plan_quality_report(data: dict[str, Any]) -> dict[str, Any]:
@@ -33,12 +35,25 @@ def runtime_plan_quality_report(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
-    """Validate authoring plan as an interface contract, not as a game-design judge."""
+    """Validate authoring plan as an interface contract, not as a game-design judge.
+
+    The strict per-function boundary applies to raw authoring calls.  Semantic
+    normalization deliberately lowers high-level calls such as deploy_sentry to
+    canonical shoot_projectile rows with compiler-owned fields; those rows must
+    not be reinterpreted as raw model output on a second validation pass.
+    """
+    before = runtime_plan(data)
+    already_canonical = isinstance(before.get("_normalization"), dict)
+    boundary = (
+        {"ok": True, "errors": [], "unknownParams": [], "typedCalls": [], "mode": "canonical_already_normalized"}
+        if already_canonical
+        else runtime_plan_boundary_report(data)
+    )
     normalize_runtime_plan_inplace(data)
     rp = runtime_plan(data)
     q = runtime_plan_quality_report(data)
     calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
-    errors: list[str] = []
+    errors: list[str] = list(boundary.get("errors") or [])
     warnings: list[str] = []
     fns = q.get("functions") or []
     counts = q.get("functionCounts") if isinstance(q.get("functionCounts"), dict) else {}
@@ -72,13 +87,13 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
                 errors.append("combat primary action lacks an executable runtimeFamily")
     for secondary in all_calls(rp, "spawn_secondary_projectiles"):
         count = _num(secondary.get("count"), 0) or 0
-        trigger = _norm_name(secondary.get("trigger"))
+        trigger = normalize_secondary_trigger(secondary.get("trigger"))
         if count <= 0:
             warnings.append("spawn_secondary_projectiles present with count<=0")
         if count > 8:
             warnings.append("secondary projectile count exceeds executable adapter range; runtime will clamp")
-        if trigger not in {"on_hit", "hit", ""}:
-            warnings.append("secondary projectile trigger is not executable in v0.4.13 adapter; use on_hit or it will be rejected")
+        if not trigger:
+            warnings.append("secondary projectile trigger is unsupported; use exact on_hit or on_expire")
     stats = find_call(rp, "set_item_stats")
     result_kind = _norm_name(stats.get("resultKind"))
     max_stack = _num(stats.get("maxStack"), 0) or 0
@@ -100,6 +115,7 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         "warnings": warnings,
         "quality": q,
         "normalization": norm,
+        "strictBoundary": boundary,
     }
 
 
@@ -114,6 +130,9 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "damageClass": "damageClass",
             "damage": "damage",
             "useTimeTicks": "useTimeTicks",
+            "useAnimationTicks": "useAnimationTicks",
+            "knockback": "knockback",
+            "autoReuse": "autoReuse",
             "maxStack": "maxStack",
             "consumable": "consumable",
             "rarity": "rarity",
@@ -141,9 +160,35 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "pierce": "pierce",
             "extraUpdates": "extraUpdates",
             "homingStrength": "homingStrength",
+            "beamWidthPx": "beamWidthPx",
+            "beamChargeTicks": "beamChargeTicks",
+            "chargeTicks": "chargeTicks",
+            "chargePowerMultiplier": "chargePowerMultiplier",
+            "sentryPlacement": ("sentryPlacement", "placement"),
+            "sentryAttackIntervalTicks": ("sentryAttackIntervalTicks", "attackIntervalTicks"),
+            "sentryTargetRangeTiles": ("sentryTargetRangeTiles", "targetRangeTiles"),
+            "sentryLifetimeTicks": ("sentryLifetimeTicks", "helperLifetimeTicks"),
+            "secondaryProjectileShape": "secondaryProjectileShape",
+            "onHit": "onHit",
+            "delayTicks": "delayTicks",
+            "immunityCooldown": "immunityCooldown",
+            "projectileFamily": "projectileFamily",
+            "weaponFamily": "weaponFamily",
+            "ammoFor": "ammoFor",
+            "effect": "effect",
+            "projectileShape": "projectileShape",
+            "projectileMotion": "projectileMotion",
+            "projectileTrail": "projectileTrail",
+            "projectileImpact": "projectileImpact",
+            "soundUseCatalogId": "soundUseCatalogId",
+            "soundImpactCatalogId": "soundImpactCatalogId",
+            "soundVolume": "soundVolume",
+            "soundPitch": "soundPitch",
+            "soundPitchVariance": "soundPitchVariance",
             "reliability": "reliability",
         },
         "spawn_secondary_projectiles": {
+            "secondaryTrigger": "trigger",
             "splitCount": ("splitCount", "count"),
             "maxChildProjectiles": "maxChildProjectiles",
             "secondarySpreadRadians": "secondarySpreadRadians",
@@ -202,6 +247,7 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
         if not isinstance(raw, dict):
             continue
         fn = _norm_name(raw.get("fn"))
+        authored_fn = _norm_name(raw.get("_rawFn") or raw.get("_semanticFn") or fn)
         param_obj = raw.get("params") if isinstance(raw.get("params"), dict) else raw
         if not isinstance(param_obj, dict):
             continue
@@ -209,8 +255,8 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
         for compiled_field, authored_param in maps.get(fn, {}).items():
             params = authored_param if isinstance(authored_param, tuple) else (authored_param,)
             if any(param in authored_keys for param in params):
-                authored[compiled_field] = fn
-                authored_by_fn.setdefault(fn, []).append(compiled_field)
+                authored[compiled_field] = authored_fn
+                authored_by_fn.setdefault(authored_fn, []).append(compiled_field)
     authored_by_fn = {fn: sorted(set(fields)) for fn, fields in authored_by_fn.items()}
     return authored, authored_by_fn
 
@@ -259,8 +305,10 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
         {"index": c.get("_index"), "fn": c.get("fn"), "paramKeys": sorted(list((c.get("params") or {}).keys())) if isinstance(c.get("params"), dict) else []}
         for c in calls if isinstance(c, dict)
     ]
-    child_onhits = {"chain", "lightning_arc", "mini_missiles", "vortex_spawn", "radial_beams", "starburst", "starfall", "spore_cloud"}
+    child_onhits = {"chain", "lightning_arc", "mini_missiles", "vortex_spawn", "radial_beams", "starburst", "overhead_barrage", "spore_cloud"}
     onhit = _norm_name((patch or {}).get("onHit"))
+    runtime_family = _norm_name((patch or {}).get("runtimeFamily"))
+    overhead_child_count = int(_num((patch or {}).get("shotCount"), 0) or 0) if runtime_family == "overhead_barrage" else 0
     effect_child_count = 0
     if onhit in {"chain", "lightning_arc"}:
         effect_child_count = int(_num((patch or {}).get("chainCount"), 0) or 0)
@@ -282,16 +330,17 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
         "authoredFields": authored_fields,
         "authoredByFunction": authored_by_fn,
         "gameplayChildren": {
-            "enabled": (split > 0 and max_child > 0) or effect_child_count > 0,
-            "source": "spawn_secondary_projectiles" if split > 0 else ("apply_on_hit_effect" if effect_child_count > 0 else "none"),
+            "enabled": (split > 0 and max_child > 0) or effect_child_count > 0 or overhead_child_count > 0,
+            "source": "overhead_barrage" if overhead_child_count > 0 else ("spawn_secondary_projectiles" if split > 0 else ("apply_on_hit_effect" if effect_child_count > 0 else "none")),
             "authoredCallCount": len(secondary_calls),
             "compiledFromCallIndices": (patch or {}).get("secondaryCallIndices", []),
             "splitCount": split,
             "onHit": onhit,
             "onHitChildEstimate": effect_child_count,
+            "overheadBarrageChildEstimate": overhead_child_count,
             "maxChildProjectiles": max_child,
             "rejectedSecondaryCalls": (patch or {}).get("rejectedSecondaryCalls", []),
-            "note": "Real gameplay child projectiles come from spawn_secondary_projectiles or child-producing apply_on_hit_effect values. VFX motes are separate renderer slots."
+            "note": "Real gameplay child projectiles come from spawn_secondary_projectiles, overhead_barrage, or child-producing apply_on_hit_effect values. VFX motes are separate renderer slots."
         },
         "pureVfx": {
             "enabled": "spawn_contact_particles" in fns or "leave_trail_or_field" in fns or burst_cap > 0,

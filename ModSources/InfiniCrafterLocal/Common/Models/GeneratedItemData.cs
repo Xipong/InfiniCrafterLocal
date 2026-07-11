@@ -42,7 +42,8 @@ public sealed partial class GeneratedItemData
     {
         WriteIndented = false,
         PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
     };
 
     public string ToJson() => JsonSerializer.Serialize(this, Options);
@@ -192,7 +193,7 @@ public sealed partial class GeneratedItemData
                 var data = Placeholder();
                 data.Id = ReadString("id", 64, data.Id);
                 data.RecipeKey = ReadString("recipeKey", 120);
-                data.RuntimeApiVersion = NormalizeRuntimeApiVersion(ReadString("runtimeApiVersion", 32, RuntimeApiCurrent));
+                data.RuntimeApiVersion = NormalizeRuntimeApiVersion(ReadString("runtimeApiVersion", 32, ""));
                 data.Name = ReadString("name", 80, data.Name);
                 data.Tooltip = ReadString("tooltip", 180, data.Tooltip);
                 data.Category = ReadString("category", 32, data.Category);
@@ -236,7 +237,6 @@ public sealed partial class GeneratedItemData
         clone.Inheritance = Array.Empty<InheritanceSpec>();
         clone.ItemKnowledge = new ItemKnowledgeSpec();
         clone.PresentationGenome = new PresentationGenomeSpec();
-        clone.SoundProfile = new SoundProfileSpec();
         if (clone.RecipeMeta is not null)
         {
             clone.RecipeMeta.ParentIdentities = Array.Empty<string>();
@@ -272,7 +272,6 @@ public sealed partial class GeneratedItemData
         clone.Inheritance = Array.Empty<InheritanceSpec>();
         clone.ItemKnowledge = new ItemKnowledgeSpec();
         clone.PresentationGenome = new PresentationGenomeSpec();
-        clone.SoundProfile = new SoundProfileSpec();
         clone.RecipeMeta.ParentIdentities = Array.Empty<string>();
         clone.RecipeMeta.ParentCategories = Array.Empty<string>();
         clone.RecipeMeta.AssetFiles = Array.Empty<string>();
@@ -323,6 +322,8 @@ public sealed partial class GeneratedItemData
 
     public static GeneratedItemData? FromJson(string? json)
     {
+        const string boundary = "GeneratedItemData.FromJson";
+        ContractJsonDiagnostics.Clear(boundary);
         if (string.IsNullOrWhiteSpace(json))
             return null;
 
@@ -361,8 +362,9 @@ public sealed partial class GeneratedItemData
                     return MarkUnsupportedRuntimeAttack(parsed);
                 return parsed;
             }
-            catch
+            catch (Exception finalException)
             {
+                ContractJsonDiagnostics.Record(boundary, finalException);
                 return null;
             }
         }

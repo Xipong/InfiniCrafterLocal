@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.pipelines.result_identity_policy import normalize_category
-from infini_local.pipelines.pipeline_support import COMBAT_CATEGORIES
+from infini_local.core.category_policy import COMBAT_CATEGORIES
 
 
 def is_llm_planner(data: dict[str, Any]) -> bool:

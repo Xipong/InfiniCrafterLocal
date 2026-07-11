@@ -60,7 +60,6 @@ def _base_spec(helpers: Mapping[str, Any], result_id: str, key: str, a: dict[str
         },
         "visual": {},
         "presentationGenome": {},
-        "soundProfile": {},
         "gameplay": {},
         "attack": {},
         "recipeMeta": recipe_meta(a, b, set(tags), category_policy(set(tags), a, b, key)),

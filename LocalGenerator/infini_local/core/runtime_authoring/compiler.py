@@ -3,19 +3,27 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.runtime_archetypes import compile_runtime_archetype_to_attack_patch
+from infini_local.core.runtime_overhead_barrage_policy import apply_overhead_barrage_contract
+from infini_local.core.runtime_charge_release_policy import apply_charge_release_contract
+from infini_local.core.runtime_sentry_policy import apply_sentry_contract, reject_recursive_sentry_onhit
 from infini_local.core.runtime_authoring.common import _clamp, _enum, _intish, _norm_name, _num
 from infini_local.core.runtime_authoring.normalize import _compile_state_meter_calls, _compile_triggered_action_calls, normalize_runtime_plan_inplace, runtime_plan
-from infini_local.core.runtime_authoring.schema import DELIVERIES, EFFECTS, MOVEMENTS, NUMERIC_LIMITS, ONHITS, RUNTIME_FAMILIES, _runtime_family_affordances
+from infini_local.core.runtime_executor_vocabulary import EFFECTS, MOVEMENTS, ONHITS
+from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_color_policy import normalize_runtime_color, runtime_color_for_effect
+from infini_local.core.sound_catalog import (
+    SOUND_CATALOG_SOURCE,
+    default_impact_sound_id,
+    default_use_sound_id,
+    normalize_sound_catalog_id,
+)
+from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
+from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
+from infini_local.core.runtime_authoring.secondary import apply_secondary_projectile_calls
 from infini_local.core.runtime_authoring.semantics import (
     _apply_armor_slot_budget,
-    _attack_pattern_tags_from_patch,
-    _material_color_name,
-    _material_effect_hint,
     _parent_grounded_onhit,
-    _runtime_family_from_fields,
-    _sound_query_from_patch,
     _truthy,
-    _weapon_subfamily_from_fields,
     light_repair_runtime_family_from_fields,
 )
 from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _recover_rejected_primary_as_swing_secondary, _select_primary_shoot_call, all_calls
@@ -51,6 +59,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     hit = _merged_params(hits) if hits else {}
     itemstats = _merged_params(itemstats_calls) if itemstats_calls else {}
     patch: dict[str, Any] = {}
+    authored_result_kind = _norm_name(itemstats.get("resultKind") or rp.get("resultKind"))
+    if authored_result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion", "material", "furniture", "generic"}:
+        patch["kind"] = authored_result_kind
     norm = rp.get("_normalization") if isinstance(rp.get("_normalization"), dict) else {}
     if isinstance(norm.get("rejectedEngineCalls"), list) and norm.get("rejectedEngineCalls"):
         patch["rejectedEngineCalls"] = norm.get("rejectedEngineCalls")[:16]
@@ -92,16 +103,6 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         patch["projectileFamily"] = _norm_name(shoot.get("projectileFamily"))[:40]
     if shoot.get("ammoFor") not in (None, ""):
         patch["ammoFor"] = _norm_name(shoot.get("ammoFor"))[:24]
-    subfamily = _weapon_subfamily_from_fields(
-        family=patch.get("weaponFamily") or shoot.get("weaponFamily"),
-        projectile_family=patch.get("projectileFamily") or shoot.get("projectileFamily"),
-        runtime_family=shoot.get("runtimeFamily"),
-        delivery=shoot.get("delivery"),
-        ammo=patch.get("ammoFor") or shoot.get("ammoFor"),
-        explicit=shoot.get("weaponSubfamily") or itemstats.get("weaponSubfamily"),
-    )
-    if subfamily:
-        patch["weaponSubfamily"] = subfamily
     explicit_runtime_family = _enum(shoot.get("runtimeFamily"), RUNTIME_FAMILIES, None)
     runtime_family = explicit_runtime_family or "none"
     repair_reason = ""
@@ -115,15 +116,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         patch["runtimeFamily"] = runtime_family
         if repair_reason and repair_reason != "authored_runtimeFamily":
             patch["runtimeFamilyRepair"] = repair_reason
-        patch.update(_runtime_family_affordances(runtime_family, patch.get("weaponFamily") or shoot.get("weaponFamily")))
-
-    tags = _attack_pattern_tags_from_patch(patch, shoot, hit, itemstats)
-    if tags:
-        patch["attackPatternTags"] = tags
-    if shoot.get("soundUseSearchQuery") not in (None, ""):
-        patch["soundUseSearchQuery"] = str(shoot.get("soundUseSearchQuery"))[:160]
-    if shoot.get("soundImpactSearchQuery") not in (None, ""):
-        patch["soundImpactSearchQuery"] = str(shoot.get("soundImpactSearchQuery"))[:160]
+        patch.update(_runtime_family_affordances(runtime_family, patch.get("weaponFamily") or shoot.get("weaponFamily"), patch.get("delivery") or shoot.get("delivery")))
 
     # Aggregate pure VFX calls. This is still not gameplay child logic.
     particle_effects: list[str] = []
@@ -138,8 +131,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         particle_scale = max(particle_scale, _num(pc.get("scale"), 0) or 0)
         if pc.get("material") not in (None, ""):
             particle_materials.append(str(pc.get("material"))[:40])
-    material_effect = _material_effect_hint(particle_materials)
-    effect = _enum(_first_non_empty(*particle_effects, material_effect, shoot.get("effect")), EFFECTS, None)
+    effect = _enum(_first_non_empty(*particle_effects, shoot.get("effect")), EFFECTS, None)
     if particle_calls and not particle_effects:
         effect = "none"
     if effect:
@@ -159,7 +151,6 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         if particle_materials:
             # Human/debug lineage only; C# can ignore this safely.
             patch["vfxMaterial"] = ", ".join(dict.fromkeys(particle_materials))[:80]
-            patch.setdefault("primaryColorName", _material_color_name(particle_materials))
 
     # Trails/fields are visual-only in this runtime. Do not let field prose become gameplay.
     rejected_trails: list[dict[str, Any]] = []
@@ -253,7 +244,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             generated_buff[out] = max(generated_buff.get(out, val), val) if isinstance(val, (int, float)) and out not in {"movementSpeed"} else val
         color = str(gb.get("lightColorName") or gb.get("color") or uc.get("lightColorName") or "").strip()
         if color:
-            generated_buff["lightColorName"] = color[:32]
+            normalized_color = normalize_runtime_color(color)
+            if normalized_color:
+                generated_buff["lightColorName"] = normalized_color
     if generated_buff:
         generated_buff.setdefault("durationTicks", int(patch.get("buffTime") or 60 * 30))
         patch["generatedBuff"] = generated_buff
@@ -279,8 +272,10 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             if str(c.get("lightColorName") or c.get("color") or "").strip()
         ]
         if colors:
-            patch.setdefault("primaryColorName", colors[0][:32])
-            patch.setdefault("runtimeLightColorName", colors[0][:32])
+            normalized_color = normalize_runtime_color(colors[0])
+            if normalized_color:
+                patch.setdefault("primaryColorName", normalized_color)
+                patch.setdefault("runtimeLightColorName", normalized_color)
         patch["lightCallCount"] = len(light_calls)
 
     if vfx_cue_calls:
@@ -295,7 +290,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         for call in vfx_cue_calls[:8]:
             p = call.get("params") if isinstance(call, dict) and isinstance(call.get("params"), dict) else call if isinstance(call, dict) else {}
             event = str(p.get("event") or "").strip()
-            renderer = str(p.get("rendererKind") or p.get("renderer") or "").strip()
+            renderer = str(p.get("rendererKind") or "").strip()
             channel = str(p.get("channel") or "").strip()
             lane = str(p.get("lane") or "").strip()
             texture_role = str(p.get("textureRole") or "projectile").strip()
@@ -554,9 +549,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
 
     # Primary numeric mapping.
     for src, mapping in [
-        (shoot, {"rangeTiles": "rangeTiles", "lifetimeTicks": "lifetimeTicks", "shotCount": "shotCount", "spreadRadians": "spreadRadians", "pierce": "pierce", "extraUpdates": "extraUpdates", "homingStrength": "homingStrength", "useTimeTicks": "useTimeTicks", "speed": "speed", "reliability": "reliability", "selfLockTicks": "selfLockTicks", "missPunish": "missPunish"}),
+        (shoot, {"rangeTiles": "rangeTiles", "lifetimeTicks": "lifetimeTicks", "shotCount": "shotCount", "spreadRadians": "spreadRadians", "pierce": "pierce", "extraUpdates": "extraUpdates", "homingStrength": "homingStrength", "beamWidthPx": "beamWidthPx", "beamChargeTicks": "beamChargeTicks", "chargeTicks": "chargeTicks", "chargePowerMultiplier": "chargePowerMultiplier", "sentryAttackIntervalTicks": "sentryAttackIntervalTicks", "sentryTargetRangeTiles": "sentryTargetRangeTiles", "sentryLifetimeTicks": "sentryLifetimeTicks", "secondaryLifetimeTicks": "secondaryLifetimeTicks", "immunityCooldown": "immunityCooldown", "useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "speed": "speed", "reliability": "reliability", "selfLockTicks": "selfLockTicks", "missPunish": "missPunish"}),
         (hit, {"aoeRadiusTiles": "aoeRadiusTiles", "chainCount": "chainCount", "count": "splitCount", "pullStrength": "pullStrength"}),
-        (itemstats, {"useTimeTicks": "useTimeTicks", "craftYield": "craftYield"}),
+        (itemstats, {"useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "knockback": "knockback", "manaCost": "manaCost", "craftYield": "craftYield"}),
     ]:
         for k, outk in mapping.items():
             if k in src and src.get(k) not in (None, "") and outk not in patch and outk in NUMERIC_LIMITS:
@@ -564,8 +559,18 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
                 if v is not None:
                     patch[outk] = _intish(outk, v)
 
-    # Hit behavior: the first authored hit effect is primary. Later hit calls remain provenance.
+    if patch.get("runtimeFamily") == "overhead_barrage" and shoot.get("delayTicks") not in (None, ""):
+        value = _clamp(shoot.get("delayTicks"), "delayTicks")
+        if value is not None:
+            patch["delayTicks"] = _intish("delayTicks", value)
+
+    # Hit behavior: the first authored hit effect is primary. A sentry call may
+    # author the non-recursive shot effect directly because deploy_sentry owns its shot contract.
+    if patch.get("runtimeFamily") == "sentry":
+        reject_recursive_sentry_onhit(shoot.get("onHit"))
     onhit = _enum(hit.get("onHit"), ONHITS, None)
+    if not onhit and patch.get("runtimeFamily") == "sentry":
+        onhit = _enum(shoot.get("onHit"), ONHITS, None)
     if onhit:
         patch["onHit"] = onhit
     debuff_hint = str(hit.get("debuffHint") or "").strip()
@@ -595,7 +600,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             patch["onHitDemotedReason"] = f"{onhit}_requires_count_gt_0"
             patch["onHit"] = "none"
             onhit = "none"
-    if onhit in {"mini_missiles", "vortex_spawn", "radial_beams", "starburst", "starfall", "spore_cloud"}:
+    if onhit in {"mini_missiles", "vortex_spawn", "radial_beams", "starburst", "overhead_barrage", "spore_cloud"}:
         effect_count = int(_num(patch.get("splitCount"), 0) or 0)
         if effect_count <= 0:
             patch["onHitDemotedReason"] = f"{onhit}_requires_count_gt_0"
@@ -605,123 +610,14 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             patch.setdefault("maxChildProjectiles", int(max(1, min(48, effect_count))))
             patch.setdefault("maxChildDepth", 1)
 
-    # Real secondary damaging projectiles. The bounded runtime currently executes on-hit
-    # secondaries. Other triggers are retained in validation/provenance as rejected until
-    # C# has real on_expire/on_tick/on_use support.
-    total_secondary = 0
-    spread_values: list[float] = []
-    dmg_values: list[float] = []
-    life_values: list[float] = []
-    bias_values: list[float] = []
-    secondary_materials: list[str] = []
-    secondary_shapes: list[str] = []
-    accepted_secondary_indices: list[Any] = []
-    rejected_secondary: list[dict[str, Any]] = []
-    for sc in secondary_calls:
-        trigger = _norm_name(sc.get("trigger")) or "on_hit"
-        count = _clamp(sc.get("count"), "splitCount", 0) or 0
-        if trigger in {"on_hit", "hit", ""} and count > 0:
-            total_secondary += int(round(count))
-            accepted_secondary_indices.append(sc.get("_index"))
-            for k, store, lim in [
-                ("spreadRadians", spread_values, "secondarySpreadRadians"),
-                ("damageMultiplier", dmg_values, "secondaryDamageMultiplier"),
-                ("lifetimeTicks", life_values, "secondaryLifetimeTicks"),
-                ("sameTargetBias", bias_values, "sameTargetBias"),
-            ]:
-                v = _clamp(sc.get(k), lim) if sc.get(k) not in (None, "") else None
-                if v is not None:
-                    store.append(v)
-            if sc.get("material") not in (None, ""):
-                secondary_materials.append(str(sc.get("material"))[:40])
-            if sc.get("projectileShape") not in (None, ""):
-                secondary_shapes.append(str(sc.get("projectileShape"))[:80])
-        elif count > 0:
-            rejected_secondary.append({"index": sc.get("_index"), "trigger": trigger, "count": int(round(count)), "reason": "unsupported_trigger_current_runtime"})
-    if total_secondary > 0:
-        split = int(max(1, min(NUMERIC_LIMITS["splitCount"][1], total_secondary)))
-        patch["splitCount"] = split
-        patch["maxChildProjectiles"] = int(max(1, min(48, split)))
-        patch["maxChildDepth"] = 1
-        # spawn_secondary_projectiles is executable through split-like onHit in the current C#
-        # runtime. Preserve simple authored debuffs by moving them into debuffHint; preserve
-        # lifesteal/blackhole/aura-like primary onHit by rejecting gameplay secondaries instead
-        # of silently replacing the core hit identity.
-        debuff_onhits = {"burn", "frostburn", "poison", "shadowflame", "bleed"}
-        child_onhits = {"split", "starburst", "starfall", "radial_beams", "mini_missiles", "vortex_spawn", "spore_cloud"}
-        if not onhit or onhit in {"none", "burst"}:
-            patch["onHit"] = "split"
-            patch["onHitForcedBySecondary"] = True
-        elif onhit in debuff_onhits:
-            patch.setdefault("debuffHint", onhit)
-            patch.setdefault("debuffTime", 180 if onhit != "burn" else 240)
-            patch["onHit"] = "split"
-            patch["onHitForcedBySecondary"] = True
-            patch["secondaryPreservedDebuffOnHit"] = onhit
-        elif onhit not in child_onhits:
-            if secondary_from_rejected_primary and _norm_name(patch.get("runtimeFamily") or patch.get("delivery")) in {"swing", "thrust"}:
-                # The recovered second primary is a small extra shard from the melee hit;
-                # keep the main onHit identity (e.g. lifesteal) instead of converting the
-                # whole weapon to split or deleting the recovered shard.
-                patch["secondaryPreservedAlongsidePrimaryOnHit"] = onhit
-            else:
-                patch["secondarySuppressedByPrimaryOnHit"] = onhit
-                patch["splitCount"] = 0
-                patch["maxChildProjectiles"] = 0
-                patch["maxChildDepth"] = 0
-        elif onhit != "split":
-            # Child-producing onHit values already execute their own child logic. Keep the authored
-            # onHit and only preserve child numeric knobs.
-            patch.setdefault("maxChildProjectiles", int(max(1, min(48, split))))
-            patch.setdefault("maxChildDepth", 1)
-        if spread_values: patch["secondarySpreadRadians"] = round(max(spread_values), 3)
-        if dmg_values: patch["secondaryDamageMultiplier"] = round(sum(dmg_values) / len(dmg_values), 3)
-        if life_values: patch["secondaryLifetimeTicks"] = int(round(max(life_values)))
-        if bias_values: patch["sameTargetBias"] = round(sum(bias_values) / len(bias_values), 3)
-        if secondary_materials:
-            patch["secondaryMaterial"] = ", ".join(dict.fromkeys(secondary_materials))[:80]
-            patch.setdefault("primaryColorName", _material_color_name(secondary_materials))
-        if secondary_shapes:
-            patch["secondaryProjectileShape"] = "; ".join(dict.fromkeys(secondary_shapes))[:120]
-            patch.setdefault("projectileShape", patch["secondaryProjectileShape"])
-        melee_core_secondary = (_norm_name(patch.get("runtimeFamily") or patch.get("delivery")) in {"swing", "thrust"})
-        explicit_secondary_body = bool(secondary_materials or secondary_shapes)
-        if melee_core_secondary and not explicit_secondary_body:
-            patch["secondarySuppressedByMeleeCore"] = "spawn_secondary_projectiles_requires_secondaryMaterial_or_projectileShape_for_swing_thrust"
-            patch["splitCount"] = 0
-            patch["maxChildProjectiles"] = 0
-            patch["maxChildDepth"] = 0
-            patch["secondaryDamageMultiplier"] = 0
-            if patch.get("onHitForcedBySecondary"):
-                patch["onHit"] = "none"
-                patch.pop("onHitForcedBySecondary", None)
-        patch["secondaryCallIndices"] = [x for x in accepted_secondary_indices if x is not None]
-    else:
-        existing_split = int(_num(patch.get("splitCount"), 0) or 0)
-        current_onhit = _norm_name(patch.get("onHit"))
-        child_onhit_values = {"starburst", "starfall", "radial_beams", "mini_missiles", "vortex_spawn", "spore_cloud"}
-        # Explicit child-producing apply_on_hit_effect(count=N) is executable even
-        # without a separate spawn_secondary_projectiles call. Preserve the count/provenance.
-        if current_onhit == "split" and existing_split > 0:
-            patch.setdefault("maxChildProjectiles", int(max(1, min(48, existing_split))))
-            patch.setdefault("maxChildDepth", 1)
-        elif current_onhit in child_onhit_values and existing_split > 0:
-            patch.setdefault("maxChildProjectiles", int(max(1, min(48, existing_split))))
-            patch.setdefault("maxChildDepth", 1)
-        else:
-            patch["splitCount"] = 0
-            patch.setdefault("maxChildProjectiles", 0)
-            if current_onhit == "split":
-                patch["onHitDemotedReason"] = "split_requires_secondary_count_gt_0"
-                patch["onHit"] = "none"
-    if rejected_secondary:
-        patch["rejectedSecondaryCalls"] = rejected_secondary[:8]
+    # Real secondary damaging projectiles live in one small owner module.
+    # This keeps trigger/lifecycle rules out of the already-large main compiler.
+    apply_secondary_projectile_calls(
+        patch,
+        secondary_calls,
+        secondary_from_rejected_primary=secondary_from_rejected_primary,
+    )
 
-    tags = _attack_pattern_tags_from_patch(patch, shoot, hit, itemstats)
-    if tags:
-        patch["attackPatternTags"] = tags
-    patch.setdefault("soundUseSearchQuery", _sound_query_from_patch(patch, impact=False))
-    patch.setdefault("soundImpactSearchQuery", _sound_query_from_patch(patch, impact=True))
 
     # Executable defaults: only fill execution slots after the LLM chose engine calls.
     if shoot:
@@ -740,6 +636,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     patch.setdefault("onHit", "none")
     patch.setdefault("aoeRadiusTiles", 0)
     patch.setdefault("useTimeTicks", int(_clamp(_first_non_empty(itemstats.get("useTimeTicks"), shoot.get("useTimeTicks")), "useTimeTicks", 24) or 24))
+    patch.setdefault("useAnimationTicks", int(_clamp(_first_non_empty(itemstats.get("useAnimationTicks"), shoot.get("useAnimationTicks"), patch.get("useTimeTicks")), "useAnimationTicks", patch.get("useTimeTicks", 24)) or patch.get("useTimeTicks", 24)))
     patch.setdefault("reliability", 1.0)
     patch.setdefault("selfLockTicks", 0)
     patch.setdefault("missPunish", 0)
@@ -750,12 +647,42 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     else:
         patch.setdefault("trailLength", 4 if particle_calls else 0)
 
-    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "weaponFamily", "projectileFamily", "ammoKind"]:
+    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "weaponFamily", "projectileFamily", "ammoKind", "sentryPlacement", "secondaryProjectileShape"]:
         val = shoot.get(field) or rp.get(field)
         if val not in (None, ""):
             patch[field] = str(val)
+
+    # Audio is authored as exact acoustic catalog ids, never inferred from item names,
+    # tooltip prose, weapon taxonomy, projectile shape or material words.  Invalid ids
+    # stay visible in provenance while the finite mechanic-based fallback remains safe.
+    if shoot:
+        raw_use_sound = shoot.get("soundUseCatalogId")
+        raw_impact_sound = shoot.get("soundImpactCatalogId")
+        use_sound = normalize_sound_catalog_id(raw_use_sound, impact=False)
+        impact_sound = normalize_sound_catalog_id(raw_impact_sound, impact=True)
+        rejected_sound_ids: list[dict[str, str]] = []
+        if raw_use_sound not in (None, "") and not use_sound:
+            rejected_sound_ids.append({"field": "soundUseCatalogId", "value": str(raw_use_sound)[:80], "reason": "unknown_exact_catalog_id"})
+        if raw_impact_sound not in (None, "") and not impact_sound:
+            rejected_sound_ids.append({"field": "soundImpactCatalogId", "value": str(raw_impact_sound)[:80], "reason": "unknown_exact_catalog_id"})
+        patch["soundUseCatalogId"] = use_sound or default_use_sound_id(patch.get("runtimeFamily"), patch.get("effect"), patch.get("delivery"))
+        patch["soundImpactCatalogId"] = impact_sound or default_impact_sound_id(patch.get("onHit"), patch.get("effect"))
+        patch["soundCatalogSource"] = SOUND_CATALOG_SOURCE
+        patch["primaryColorName"] = normalize_runtime_color(patch.get("primaryColorName"), runtime_color_for_effect(patch.get("effect")))
+        if rejected_sound_ids:
+            patch["rejectedSoundCatalogIds"] = rejected_sound_ids
+        if shoot.get("soundVolume") not in (None, ""):
+            patch["soundVolume"] = round(float(_clamp(shoot.get("soundVolume"), "soundVolume", 0.85) or 0.85), 3)
+        if shoot.get("soundPitch") not in (None, ""):
+            patch["soundPitch"] = round(float(_clamp(shoot.get("soundPitch"), "soundPitch", 0.0) or 0.0), 3)
+        if shoot.get("soundPitchVariance") not in (None, ""):
+            patch["soundPitchVariance"] = round(float(_clamp(shoot.get("soundPitchVariance"), "soundPitchVariance", 0.18) or 0.0), 3)
+
     patch["runtimePlanAuthored"] = True
     patch, _archetype_report = compile_runtime_archetype_to_attack_patch(data, patch)
+    apply_overhead_barrage_contract(patch)
+    apply_charge_release_contract(patch)
+    apply_sentry_contract(patch)
     return {k: v for k, v in patch.items() if v not in (None, "")}
 
 __all__ = ['compile_runtime_plan_to_genome_patch']

@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 from urllib import request as urlrequest
 from urllib import error as urlerror
 
 from infini_local.core.env_utils import env_str
-from infini_local.pipelines.pipeline_support import (
-    LLM_LOCAL_REASONING_PROMPT,
-    LLM_MAX_TOKENS,
+from infini_local.core.llm_config import (
     LLM_FALLBACK_API_KEY,
     LLM_FALLBACK_BASE_URL,
     LLM_FALLBACK_MODEL,
     LLM_FALLBACK_NETWORK_FAILS,
     LLM_FALLBACK_PROVIDER,
+    LLM_LOCAL_REASONING_PROMPT,
+    LLM_MAX_TOKENS,
     LLM_PROVIDER,
     LLM_REASONING_EXCLUDE,
     LLM_REASONING_MAX_TOKENS,
@@ -31,15 +30,13 @@ from infini_local.pipelines.pipeline_support import (
     OPENROUTER_BASE_URL,
     OPENROUTER_HTTP_REFERER,
     OPENROUTER_MODEL,
-    log_event,
 )
+from infini_local.storage.trace_runtime import log_event
 
 
-def _facade_override(name: str, default: Any) -> Any:
-    module = sys.modules.get("infini_local.pipelines.llm_authoring_pipeline")
-    if module is not None and hasattr(module, name):
-        return getattr(module, name)
-    return default
+_RESOLVED_LLM_MODELS: dict[str, str] = {}
+
+
 
 def _normalized_llm_provider(configured: str) -> str:
     configured = (configured or "").strip().lower().replace("-", "_")
@@ -48,7 +45,7 @@ def _normalized_llm_provider(configured: str) -> str:
     if configured in {"openai", "openai_compat", "api", "remote"}:
         return "openai_compat"
     if configured in {"local", "lmstudio", "lm_studio", "ollama", ""}:
-        if not configured and _facade_override("OPENROUTER_API_KEY", OPENROUTER_API_KEY) and _facade_override("OPENROUTER_MODEL", OPENROUTER_MODEL) and str(_facade_override("OPENROUTER_MODEL", OPENROUTER_MODEL)).lower() not in {"auto", "default"}:
+        if not configured and OPENROUTER_API_KEY and OPENROUTER_MODEL and str(OPENROUTER_MODEL).lower() not in {"auto", "default"}:
             return "openrouter"
         return "local"
     return configured
@@ -56,7 +53,7 @@ def _normalized_llm_provider(configured: str) -> str:
 def active_llm_provider(context: dict[str, Any] | None = None) -> str:
     if isinstance(context, dict) and context.get("provider"):
         return str(context.get("provider") or "local")
-    return _normalized_llm_provider(_facade_override("LLM_PROVIDER", LLM_PROVIDER) or "")
+    return _normalized_llm_provider(LLM_PROVIDER or "")
 
 def _llm_context_key(context: dict[str, Any] | None) -> str:
     ctx = context or {}
@@ -71,51 +68,51 @@ def _primary_llm_context() -> dict[str, Any]:
     if provider == "openrouter":
         return {
             "provider": provider,
-            "base_url": _facade_override("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL) or "https://openrouter.ai/api/v1",
-            "model": _facade_override("OPENROUTER_MODEL", OPENROUTER_MODEL) or "auto",
-            "api_key": _facade_override("OPENROUTER_API_KEY", OPENROUTER_API_KEY),
-            "http_referer": _facade_override("OPENROUTER_HTTP_REFERER", OPENROUTER_HTTP_REFERER),
-            "app_title": _facade_override("OPENROUTER_APP_TITLE", OPENROUTER_APP_TITLE),
+            "base_url": OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1",
+            "model": OPENROUTER_MODEL or "auto",
+            "api_key": OPENROUTER_API_KEY,
+            "http_referer": OPENROUTER_HTTP_REFERER,
+            "app_title": OPENROUTER_APP_TITLE,
             "label": "primary",
         }
     if provider == "openai_compat":
         return {
             "provider": provider,
-            "base_url": _facade_override("OPENAI_COMPAT_BASE_URL", OPENAI_COMPAT_BASE_URL) or env_str("OPENAI_BASE_URL", "").rstrip("/"),
-            "model": _facade_override("OPENAI_COMPAT_MODEL", OPENAI_COMPAT_MODEL) or "auto",
-            "api_key": _facade_override("OPENAI_COMPAT_API_KEY", OPENAI_COMPAT_API_KEY),
+            "base_url": OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/"),
+            "model": OPENAI_COMPAT_MODEL or "auto",
+            "api_key": OPENAI_COMPAT_API_KEY,
             "label": "primary",
         }
     return {
         "provider": "local",
-        "base_url": _facade_override("LMSTUDIO_URL", LMSTUDIO_URL),
-        "model": _facade_override("LMSTUDIO_MODEL", LMSTUDIO_MODEL) or "auto",
+        "base_url": LMSTUDIO_URL,
+        "model": LMSTUDIO_MODEL or "auto",
         "api_key": "",
         "label": "primary",
     }
 
 def _fallback_llm_context() -> dict[str, Any] | None:
-    model = str(_facade_override("LLM_FALLBACK_MODEL", LLM_FALLBACK_MODEL) or "").strip()
+    model = str(LLM_FALLBACK_MODEL or "").strip()
     if not model:
         return None
     primary = _primary_llm_context()
-    provider = _normalized_llm_provider(_facade_override("LLM_FALLBACK_PROVIDER", LLM_FALLBACK_PROVIDER) or str(primary.get("provider") or "local"))
+    provider = _normalized_llm_provider(LLM_FALLBACK_PROVIDER or str(primary.get("provider") or "local"))
     ctx: dict[str, Any] = {
         "provider": provider,
         "model": model,
         "label": "fallback",
     }
     if provider == "openrouter":
-        ctx["base_url"] = _facade_override("LLM_FALLBACK_BASE_URL", LLM_FALLBACK_BASE_URL) or _facade_override("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL) or "https://openrouter.ai/api/v1"
-        ctx["api_key"] = _facade_override("LLM_FALLBACK_API_KEY", LLM_FALLBACK_API_KEY) or _facade_override("OPENROUTER_API_KEY", OPENROUTER_API_KEY)
-        ctx["http_referer"] = _facade_override("OPENROUTER_HTTP_REFERER", OPENROUTER_HTTP_REFERER)
-        ctx["app_title"] = _facade_override("OPENROUTER_APP_TITLE", OPENROUTER_APP_TITLE)
+        ctx["base_url"] = LLM_FALLBACK_BASE_URL or OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1"
+        ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENROUTER_API_KEY
+        ctx["http_referer"] = OPENROUTER_HTTP_REFERER
+        ctx["app_title"] = OPENROUTER_APP_TITLE
     elif provider == "openai_compat":
-        ctx["base_url"] = _facade_override("LLM_FALLBACK_BASE_URL", LLM_FALLBACK_BASE_URL) or _facade_override("OPENAI_COMPAT_BASE_URL", OPENAI_COMPAT_BASE_URL) or env_str("OPENAI_BASE_URL", "").rstrip("/")
-        ctx["api_key"] = _facade_override("LLM_FALLBACK_API_KEY", LLM_FALLBACK_API_KEY) or _facade_override("OPENAI_COMPAT_API_KEY", OPENAI_COMPAT_API_KEY)
+        ctx["base_url"] = LLM_FALLBACK_BASE_URL or OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
+        ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENAI_COMPAT_API_KEY
     else:
         ctx["provider"] = "local"
-        ctx["base_url"] = _facade_override("LLM_FALLBACK_BASE_URL", LLM_FALLBACK_BASE_URL) or _facade_override("LMSTUDIO_URL", LMSTUDIO_URL)
+        ctx["base_url"] = LLM_FALLBACK_BASE_URL or LMSTUDIO_URL
         ctx["api_key"] = ""
     if _llm_context_key(ctx) == _llm_context_key(primary):
         return None
@@ -156,7 +153,7 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "baseUrl": fallback.get("base_url"),
             "model": fallback.get("model"),
             "apiKeyConfigured": bool(fallback.get("api_key")) if fallback.get("provider") in {"openrouter", "openai_compat"} else None,
-            "networkFailsBeforeSwitch": _facade_override("LLM_FALLBACK_NETWORK_FAILS", LLM_FALLBACK_NETWORK_FAILS),
+            "networkFailsBeforeSwitch": LLM_FALLBACK_NETWORK_FAILS,
         }
     if provider == "openrouter":
         configured = bool(primary.get("api_key"))
@@ -222,7 +219,7 @@ def llm_json_response_format(name: str = "infini_json") -> dict[str, Any] | None
     remote APIs use json_object and llm_chat_json retries without response_format if a
     provider rejects the field.
     """
-    mode = _facade_override("LLM_RESPONSE_FORMAT_MODE", LLM_RESPONSE_FORMAT_MODE)
+    mode = LLM_RESPONSE_FORMAT_MODE
     if mode == "auto":
         mode = "json_schema" if active_llm_provider() == "local" else "json_object"
     if mode in {"off", "none", "0", "false", "disabled"}:
@@ -239,7 +236,7 @@ def llm_json_response_format(name: str = "infini_json") -> dict[str, Any] | None
     }
 
 def llm_answer_max_tokens(default: int | None = None) -> int:
-    raw = _facade_override("LLM_MAX_TOKENS", LLM_MAX_TOKENS) if default is None else default
+    raw = LLM_MAX_TOKENS if default is None else default
     try:
         value = int(raw)
     except Exception:
@@ -269,13 +266,13 @@ def llm_reasoning_payload(model_name: str = "") -> dict[str, Any] | None:
     Local LM Studio/Ollama-compatible servers often reject this field, so local reasoning is
     handled by system-prompt hinting instead.
     """
-    mode = str(_facade_override("LLM_REASONING_MODE", LLM_REASONING_MODE) or "off").strip().lower().replace("-", "_")
+    mode = str(LLM_REASONING_MODE or "off").strip().lower().replace("-", "_")
     if mode in {"", "off", "false", "0", "disabled", "disable"}:
         return None
     provider = active_llm_provider()
     if provider == "local":
         return None
-    exclude = bool(_facade_override("LLM_REASONING_EXCLUDE", LLM_REASONING_EXCLUDE))
+    exclude = bool(LLM_REASONING_EXCLUDE)
     if mode in {"auto", "default", "enabled", "on"}:
         return {"enabled": True, "exclude": exclude}
     if mode in {"none", "no_reasoning"}:
@@ -283,7 +280,7 @@ def llm_reasoning_payload(model_name: str = "") -> dict[str, Any] | None:
     if mode in {"minimal", "low", "medium", "high", "xhigh"}:
         return {"effort": mode, "exclude": exclude}
     if mode in {"tokens", "token_budget", "max_tokens", "budget"}:
-        return {"max_tokens": max(0, min(64000, int(_facade_override("LLM_REASONING_MAX_TOKENS", LLM_REASONING_MAX_TOKENS) or 0))), "exclude": exclude}
+        return {"max_tokens": max(0, min(64000, int(LLM_REASONING_MAX_TOKENS or 0))), "exclude": exclude}
     # prompt_light / prompt_strong are local-only/prompt-only modes; do not send API field.
     if mode in {"prompt", "prompt_light", "prompt_strong", "local_prompt", "local_light", "local_strong"}:
         return None
@@ -296,13 +293,13 @@ def llm_reasoning_system_suffix(model_name: str = "") -> str:
     checklist before emitting the required JSON. Useful for Qwen/Gemma local runs where
     OpenRouter-style `reasoning` parameters are unavailable.
     """
-    mode = str(_facade_override("LLM_REASONING_MODE", LLM_REASONING_MODE) or "off").strip().lower().replace("-", "_")
+    mode = str(LLM_REASONING_MODE or "off").strip().lower().replace("-", "_")
     provider = active_llm_provider()
     if mode in {"", "off", "false", "0", "disabled", "disable", "none", "no_reasoning"}:
         return ""
     if provider != "local" and mode not in {"prompt", "prompt_light", "prompt_strong", "local_prompt", "local_light", "local_strong"}:
         return ""
-    if not _facade_override("LLM_LOCAL_REASONING_PROMPT", LLM_LOCAL_REASONING_PROMPT):
+    if not LLM_LOCAL_REASONING_PROMPT:
         return ""
     if mode in {"prompt_strong", "local_strong"}:
         return " Privately check parent facts, engine functions, schema, and balance. Output only the final JSON object."
@@ -341,7 +338,7 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
     if _RESOLVED_LLM_MODELS.get(cache_key):
         return _RESOLVED_LLM_MODELS[cache_key]
     try:
-        models = _facade_override("http_get_json", http_get_json)(llm_models_url(ctx), timeout=6, headers=llm_headers({"Accept": "application/json"}, context=ctx))
+        models = http_get_json(llm_models_url(ctx), timeout=6, headers=llm_headers({"Accept": "application/json"}, context=ctx))
         data = models.get("data") if isinstance(models, dict) else None
         if isinstance(data, list) and data:
             preferred = None
@@ -554,7 +551,7 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context
         try:
             if label != "original":
                 log_event("warn", "retrying LLM request with reduced compatibility fields", {"provider": active_llm_provider(context), "mode": label, "label": context.get("label")})
-            return _facade_override("http_json", http_json)(url, candidate, timeout=timeout, headers=llm_headers(context=context))
+            return http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
         except urlerror.HTTPError as e:
             body = ""
             try:
@@ -590,7 +587,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
             return _llm_chat_json_single_context(payload, timeout, fallback)
         if _is_transport_error(first_error):
             last_error = first_error
-            total_attempts = max(2, int(_facade_override("LLM_FALLBACK_NETWORK_FAILS", LLM_FALLBACK_NETWORK_FAILS) or 2))
+            total_attempts = max(2, int(LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
                 try:
                     log_event("warn", "retrying primary LLM transport before fallback", {"attempt": attempt, "maxAttempts": total_attempts, "provider": active_llm_provider(primary), "model": primary.get("model")})

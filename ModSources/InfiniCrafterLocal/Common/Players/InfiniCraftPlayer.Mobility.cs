@@ -3,6 +3,7 @@ using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Config;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 using System;
@@ -188,22 +189,6 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
-    private static Color GeneratedColorFromName(string? raw)
-    {
-        string name = (raw ?? "").Trim().ToLowerInvariant();
-        return name switch
-        {
-            "yellow" or "gold" or "amber" => new Color(255, 220, 110),
-            "orange" => new Color(255, 155, 70),
-            "red" or "crimson" or "scarlet" => new Color(255, 85, 85),
-            "pink" => new Color(255, 145, 215),
-            "purple" or "violet" => new Color(190, 110, 255),
-            "blue" or "azure" or "cyan" => new Color(110, 210, 255),
-            "green" or "lime" or "emerald" => new Color(110, 255, 145),
-            "teal" or "aqua" => new Color(90, 255, 215),
-            _ => new Color(235, 235, 235),
-        };
-    }
 
     private void TickGeneratedUtilityBuff()
     {
@@ -231,7 +216,7 @@ public sealed partial class InfiniCraftPlayer
         }
         if (_generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
         {
-            Color c = GeneratedColorFromName(_generatedLightColorName);
+            Color c = RuntimeColorPolicy.Resolve(_generatedLightColorName, Color.White);
             float strength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
             Lighting.AddLight(Player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
         }

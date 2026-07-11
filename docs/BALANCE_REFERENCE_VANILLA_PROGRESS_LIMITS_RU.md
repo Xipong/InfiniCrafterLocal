@@ -1,154 +1,83 @@
-# Balance architecture: one active soft authority + one debug report
+# Balance architecture — explicit modes, one policy owner
 
-v0.4.219 фиксирует анти-хаос правило: баланс не должен жить одновременно в prompt, JSON-helper'е, документации и C#. Активный soft balance остаётся в Python после LLM-authoring, а итоговая диагностика собирается в единый `debug.balanceReport`.
+Текущий баланс не является вторым автором предмета. LLM пишет числа и механику; Python всегда держит shape/hard numeric bounds, а soft normalization включается только явно.
 
-## Слои
+## Один владелец режима
+
+`LocalGenerator/infini_local/core/balance_mode.py` хранит только exact policy:
+
+```text
+INFINI_BALANCE_MODE=report | safety | normalize
+```
+
+В этом файле нет DPS-формул, progression tables или category routing. Числовые envelopes остаются в `balance_policy.py`; отчёт остаётся в `balance_report.py`; callers явно решают, применять ли soft clamps.
+
+## Режимы
+
+### `safety` — default
+
+- сохраняет authored weapon/equipment numbers против soft normalization;
+- применяет технический Python corridor для projectile count/depth/range/lifetime/network pressure;
+- вычисляет soft suggestions и записывает их как `applied=false`;
+- C# hard clamps остаются последней защитой.
+
+### `normalize` — opt-in legacy behavior
+
+- применяет существующие weapon DPS/equipment soft envelopes;
+- применяет технический safety corridor;
+- все реальные изменения попадают в provenance/balance report.
+
+### `report` — diagnostics
+
+- не применяет Python soft normalization;
+- не применяет Python runtime safety corridor;
+- сохраняет advice/report для анализа;
+- C# hard safety всё равно не отключается.
+
+## Граница ответственности
+
+Термины, которые используются в contract tests и debug taxonomy:
+
+- `Python post-authoring balance` — существующие soft envelopes и advice после LLM authoring; они применяются только в `normalize`.
+- `balanceClamp` — реально применённая soft normalization.
+- `safetyClamp` — техническая защита runtime/FPS/network.
+- `contractClamp` — shape/validation/unsupported repair.
+- `Runtime compiler clamps` — bounded projectile/runtime safety после authoring.
+
+Это **не category-routing**: режим и формулы не выбирают тип оружия по prompt/name/tooltip. Terraria progression guide — human reference, **не активный helper** и не prompt payload. Balance doc **не должен превращаться** в таблицу оружия, progression ontology или активный gameplay-helper.
 
 ```text
 LLM author
-  └─ пишет fantasy / resultKind / runtimePlan.engineCalls / numbers
-
-Code-only structural repair
-  └─ чинит кривую форму, если authored параметры уже понятны
-
-Targeted retry before C#
-  └─ включается только если предмет после code repair всё ещё не исполним
-
-Python post-authoring balance
-  └─ единственный мягкий балансный слой:
-     - stat_profile_for(...)
-     - VANILLA_LIKE_WEAPON_ENVELOPES
-     - clamp_vanilla_like_weapon_damage(...)
-     - authored_weapon_damage(...)
-
-Runtime compiler clamps
-  └─ режет только опасные runtime-числа:
-     shotCount / pierce / lifetime / range / homing / AoE / child projectiles
-
-C# hard safety
-  └─ последний предохранитель перед Terraria runtime:
-     JSON shape, max values, Texture/Projectile/FPS/network safety
+  → structured repair/compile
+  → exact balance mode policy
+  → existing numeric envelopes or advice
+  → runtime compiler safety (если mode=safety|normalize)
+  → C# hard safety always
 ```
 
-## Что не является активным балансом
+Режим не выбирается LLM и не добавляет ей полей. Sparse-output policy не меняется: явно authored zero/default не удаляется и сохраняет provenance.
 
-- `docs/TERRARIA_WEAPONS_AND_PROGRESSION_FULL_GUIDE_RU.md` — human/dev reference, не активный helper и не prompt payload.
-- Prompt не получает parent-relative soft caps: они больше не передаются в LLM payload.
-- C# не должен быть дизайнером баланса.
+## Что считается балансом, safety и contract repair
 
-Из LLM payload не возвращать:
+- `balance`: soft DPS/equipment advice или применённая normalization;
+- `safety`: технические caps, которые защищают FPS/network/runtime;
+- `contract`: shape repair, unsupported promise, validation failure.
 
-```text
-softDamageCapPerHit
-softAoeTilesCap
-softActiveProjectileCap
-sourceEnvelope
-terrariaProgressionReference
-```
+`debug.balanceReport` всегда содержит `balanceMode`. Advice помечается `applied=false`, фактические clamps — `applied=true`.
 
-## powerBand вместо hard gate
+## Почему не переписываем scorer в «идеальный балансер»
 
-Internal buckets вроде `pre_hardmode_late`, `mech`, `plantera` — это грубые power-like labels, а не запреты прогрессии.
+Текущие формулы полезны как диагностика, но не должны тихо становиться геймдизайнером. Поэтому v10 меняет policy применения, а не строит новую progression ontology, таблицу оружия или второй LLM judge.
 
-В `balanceReport` они отображаются как:
+## Инварианты
 
-```json
-{
-  "powerBand": "power_03",
-  "label": "late pre-Hardmode-like",
-  "sourceBucket": "pre_hardmode_late"
-}
-```
+Removed prompt-only dynamic cap fields **больше не передаются** в LLM payload and remain forbidden; they are mentioned here only as non-active history: `softDamageCapPerHit`, `softAoeTilesCap`, `softActiveProjectileCap`, `sourceEnvelope`, `terrariaProgressionReference`.
 
-Это нужно, чтобы не скатиться обратно в hard progression gates.
-
-## Clamp taxonomy
-
-`debug.balanceReport.clamps` разделяет причины:
-
-```text
-balanceClamp
-  Python soft envelope: DPS pressure, weak anchor, recursive generated damage.
-
-safetyClamp
-  Runtime/C# safety: FPS/network/range/lifetime/projectile caps.
-
-contractClamp
-  Shape/repair/validation: structural code repair, targeted retry, unsupported runtime.
-```
-
-В JSON-ключах это хранится компактно:
-
-```json
-"clamps": {
-  "balance": [...],
-  "safety": [...],
-  "contract": [...]
-}
-```
-
-## Как читать balanceReport
-
-Пример:
-
-```json
-{
-  "schema": "infini.balance-report.v1",
-  "powerBand": "power_03",
-  "label": "late pre-Hardmode-like",
-  "authored": {
-    "damage": 120,
-    "useTime": 20,
-    "shotCount": 3,
-    "costMultiplier": 2.1
-  },
-  "final": {
-    "damage": 28,
-    "useTime": 20,
-    "attack": {
-      "shotCount": 3,
-      "pierce": 4,
-      "homingStrength": 0.5
-    }
-  },
-  "clamps": {
-    "balance": ["authored_damage_soft_envelope"],
-    "contract": ["runtime_repair_path"]
-  }
-}
-```
-
-Смысл: LLM authored сильную механику, Python не запретил её, но снизил hit damage из-за multishot/homing/pierce pressure.
-
-## Почему caps выше ванильки
-
-Generated-предмет должен иметь право быть ярче ванили:
-
-- лучше получить сильный/странный предмет и потом нерфить;
-- хуже получить серую безликую кашу;
-- низкоуронный utility item не апается насильно (`raise_floor=False` для authored damage).
-
-## High-risk mechanics
-
-Homing, pierce, defense debuff, through-block hits, lifesteal, multishot, long range и big AoE не запрещены.
-
-Они оплачиваются через:
-
-```text
-useTime × shotCount × pressure_cost × DPS envelope
-```
-
-и через runtime safety clamps:
-
-```text
-shotCount / pierce / lifetime / range / homing / AoE / child projectiles
-```
-
-## Guard phrases / старые инварианты
-
-- Это не category-routing: код не решает семейство предмета по словам prompt/name.
-- Terraria guide не должен превращаться в active helper, prompt reference или второй валидатор.
-- Balance doc не должен превращаться в таблицу рецептов; он описывает responsibility boundaries.
+- Никакого category routing по prompt/name/tooltip.
+- Не копировать mode strings и формулы в новые модули.
+- `balance_mode.py` не должен разрастаться в scorer.
+- Equipment callers явно передают `apply_clamps`; скрытого global mutation нет.
+- C# не становится soft-balance designer.
 
 ## v0.4.220 — targeted repair patch contract
 

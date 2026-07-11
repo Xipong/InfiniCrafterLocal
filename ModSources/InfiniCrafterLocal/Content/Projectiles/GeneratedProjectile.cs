@@ -47,6 +47,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private bool _statsApplied;
     private int _remainingBounces;
     private bool _procced;
+    private bool _expireSecondariesSpawned;
+    private int _spawnedGameplayChildCount;
     private bool _stuckToTile;
     private bool _impactMobilityUsed;
     private string _generatedItemId = "";
@@ -54,10 +56,27 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _spawnIgnoreNpc = -1;
     private int _spawnIgnoreTicks = 0;
     private int _lastImpactSoundLocalTick = -9999;
+    private float _beamLengthPx;
+    private int _beamBaseDamage;
+    private bool _chargeReleaseFired;
+    private int _chargeTicksAccumulated;
+    private int _sentryFireTimer;
+    private readonly float[] _beamScanSamples = new float[3];
     private static readonly Dictionary<string, int> WarningLogTicks = new(StringComparer.Ordinal);
 
+    internal bool IsActiveBeamFor(string? generatedItemId)
+        => Projectile.active
+            && _configured
+            && IsBeamDelivery()
+            && !string.IsNullOrWhiteSpace(generatedItemId)
+            && string.Equals(_generatedItemId, generatedItemId.Trim(), StringComparison.Ordinal);
 
-
+    internal bool IsActiveChargeFor(string? generatedItemId)
+        => Projectile.active
+            && _configured
+            && IsChargeReleaseDelivery()
+            && !string.IsNullOrWhiteSpace(generatedItemId)
+            && string.Equals(_generatedItemId, generatedItemId.Trim(), StringComparison.Ordinal);
 
     private static void RequestProjectileAssetCatchupIfMissing(string? spritePath, string? generatedItemId = null)
     {
@@ -73,6 +92,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         {
             if (MissingProjectileAssetRequestTicks.TryGetValue(key, out int last) && now - last < MissingProjectileAssetRetryTicks)
                 return;
+            PruneTickMapLocked(MissingProjectileAssetRequestTicks, now, MaxMissingRequestStateEntries, MissingRequestStateAgeTicks, key);
             MissingProjectileAssetRequestTicks[key] = now;
         }
         if (!string.IsNullOrWhiteSpace(generatedItemId))

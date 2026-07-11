@@ -8,7 +8,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import ENGINE_FN_CATALOG_V2
-from infini_local.web import api as server
+from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
+from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 
 
 PARENT_A = {"name": "Wooden Sword", "type": 24, "damage": 7, "useTime": 25, "useAnimation": 25, "value": 100}
@@ -17,43 +21,62 @@ PARENT_B = {"name": "Torch", "type": 8, "createTile": 4, "value": 50}
 
 def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkeypatch) -> None:
     monkeypatch.delenv("INFINI_LLM_ENGINE_CONTRACT_STYLE", raising=False)
-    payload = server.build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
+    payload = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    report = server.planner_prompt_usability_report(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
+    report = planner_prompt_usability_report(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     assert report["ok"], report
     assert report["contractStyle"] == "sharp"
     assert len(text) <= 24_000
     functions = payload["engineRuntimeContract"]["availableFunctions"]
-    assert set(functions) == set(ENGINE_FN_CATALOG_V2)
+    assert set(functions) == set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+    assert not (set(functions) & set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
     assert functions["apply_player_effect_on_use"]["params"]["healLife"] == "0..500"
     assert functions["shoot_projectile"]["params"]["speed"] == "3..18"
     assert "Low-level primary projectile" in functions["shoot_projectile"]["does"]
-    assert "boss/NPC/mob/enemy" in functions["summon_combat_entity"].get("safety", "")
+    assert "boss/NPC/mob/enemy" in functions["spawn_temporary_helper_projectile"].get("safety", "")
     assert "plannerChecklist" in payload["engineRuntimeContract"]
     assert payload["priorityHeader"][0].startswith("Author one playable result")
     assert any("set_item_stats" in line and "first" in line for line in payload["priorityHeader"])
     assert "runtimePlan" in payload["requiredJsonShape"]
     assert "attack.genome" in payload["authorRules"][-1]
     assert "summon_boss" in text and "hard-rejected" in text
+    critical = payload["engineRuntimeContract"]["criticalValueSemantics"]
+    assert "-1=infinite hits" in critical["pierce"]
+    assert "0 or 1=one target total" in critical["pierce"]
+    assert "useAnimation>useTime may repeat" in critical["useTiming"]
+    assert "any projectile kill" in critical["expire"]
+    assert "at most 48 shots" in critical["sentryBudget"]
+    shoot = functions["shoot_projectile"]["params"]
+    assert "0 or 1=one target total" in shoot["pierce"]
+    assert "steps, not shots" in critical["shots"]
+    assert "sentry uses deploy_sentry" in shoot["runtimeFamily"]
+    assert "damageMultiplier" not in shoot
+    ranged = functions["fire_ranged_weapon"]["params"]
+    assert "rocket" not in ranged["ammoFor"]
+    assert "0=immediate" in ranged["delayTicks"]
+    stats = functions["set_item_stats"]["params"]
+    assert "one action/click" in stats["useAnimationTicks"]
+    assert "vanilla ammo identity" in stats["ammoFor"]
 
 
 def _check_legacy_catalog_style_env_cannot_starve_or_bloat_planner(monkeypatch) -> None:
     for style in ["compact", "tiny", "minimal", "full", "verbose", "debug"]:
         monkeypatch.setenv("INFINI_LLM_ENGINE_CONTRACT_STYLE", style)
-        payload = server.build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
+        payload = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
         contract = payload["engineRuntimeContract"]
         assert contract["contractStyle"] == "sharp"
         functions = contract["availableFunctions"]
-        assert set(functions) == set(ENGINE_FN_CATALOG_V2)
+        assert set(functions) == set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
         assert functions["apply_player_effect_on_use"]["params"]["healLife"] == "0..500"
         assert functions["shoot_projectile"]["params"]["movement"].startswith("straight|slow_homing")
-        assert functions["summon_combat_entity"]["params"]["family"].endswith("light_pet")
-        assert functions["state_meter"]["runtimeStatus"].startswith("preserved intent")
+        assert "temporary_turret" in functions["spawn_temporary_helper_projectile"]["params"]["family"]
+        assert "state_meter" not in functions
+        assert "triggered_action" not in functions
 
 
 def _validated_child(plan: dict) -> dict:
-    data = server.validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "planner_smoke")
-    return server.final_normalize(data)
+    data = validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "planner_smoke")
+    return final_normalize(data)
 
 
 def _check_minimal_llm_weapon_plan_can_become_generated_item_contract() -> None:
@@ -136,13 +159,13 @@ def _check_prompt_usability_cli_runs_the_same_contract() -> None:
     )
     payload = json.loads(proc.stdout)
     assert payload["ok"] is True
-    assert payload["report"]["functionCount"] == len(ENGINE_FN_CATALOG_V2)
+    assert payload["report"]["functionCount"] == len(ENGINE_FN_CATALOG_V2) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
 
 
 
 def _check_planner_catalog_exposes_safe_terraria_item_capabilities_without_loss(monkeypatch) -> None:
     monkeypatch.delenv("INFINI_LLM_ENGINE_CONTRACT_STYLE", raising=False)
-    payload = server.build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
+    payload = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     functions = payload["engineRuntimeContract"]["availableFunctions"]
     for fn in ["use_affordance", "visual_effect_cue", "consumption_behavior", "ammo_behavior"]:
         assert fn in functions
@@ -165,7 +188,7 @@ def _check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw
         "useTime": 10,
         "useAnimation": 14,
     }
-    payload = server.build_llm_author_payload(PARENT_A, chair, {}, {}, "planner_chair_semantics")
+    payload = build_llm_author_payload(PARENT_A, chair, {}, {}, "planner_chair_semantics")
     parent = payload["itemB"]
     assert parent["raw"]["item"]["consumable"] is True
     assert parent["raw"]["item"]["createTile"] == 15
@@ -178,12 +201,12 @@ def _check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw
 
 def _check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair(monkeypatch) -> None:
     monkeypatch.delenv("INFINI_LLM_ENGINE_CONTRACT_STYLE", raising=False)
-    payload = server.build_llm_author_payload(PARENT_A, {"name": "Fallen Star", "type": 75, "value": 500}, {}, {}, "planner_starfall")
+    payload = build_llm_author_payload(PARENT_A, {"name": "Fallen Star", "type": 75, "value": 500}, {}, {}, "planner_starfall")
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).lower()
     functions = payload["engineRuntimeContract"]["availableFunctions"]
 
-    assert "starfall" in functions["apply_on_hit_effect"]["params"]["onHit"]
-    assert "starfall" in text and "mechanicclaims" in text
+    assert "overhead_barrage" in functions["apply_on_hit_effect"]["params"]["onHit"]
+    assert "overhead barrage" in text and "mechanicclaims" in text
     assert "backing=enginecall" in text
     assert "enginecalls/numbers/contracts" in text
     assert "do not infer mechanics from names" in text

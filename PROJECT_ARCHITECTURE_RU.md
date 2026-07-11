@@ -11,15 +11,22 @@
 Жёсткие правила:
 
 1. **C# не prose parser.** Нельзя выводить gameplay из `name`, tooltip, prompt, flavor, `ToyIdentity`, debug/prose/script строк.
-2. **Runtime исполняет только явные поля:** `Gameplay`, `Attack`, `Accessory`, `Armor`, `VfxManifest`, `Visual`, `SoundProfile`, sprite paths, bounded enum/code fields.
+2. **Runtime исполняет только явные поля:** `Gameplay`, `Attack`, `Accessory`, `Armor`, `VfxManifest`, `Visual`, exact `Attack.Sound*`, sprite paths, bounded enum/code fields.
 3. **MP server-authoritative:** клиент отправляет craft intent; host/server берёт реальные inventory slots, генерирует, регистрирует, отправляет ACK/FAIL.
 4. **Assets не идут bulk-packet’ами:** Terraria packets несут id/baseUrl/filenames/compact visual state; `.png/.json` bytes скачиваются через HTTP `/get_asset`.
 5. **Registry world-scoped:** generated parents/items/assets нельзя смешивать между мирами.
 6. **Future/unknown fields inert:** можно сохранять в local cache/debug, но нельзя тихо превращать в gameplay.
 7. **Child projectile runtime bounded:** explicit count/depth only, без nested generated mini-item authoring и без prose fallback.
 8. **Новый runtime capability = синхронный контракт:** Python authoring + C# limits/Normalize/Apply/runtime + tests + docs.
-9. **RuntimeArchetype/runtimeContract are data contracts:** `runtimeArchetype` may enrich supported finite families (currently boomerang/yoyo/flail/whip/held), `runtimeContract` records feel/sync/promise truth, and unsupported families stay inert/preserved.
+9. **RuntimeArchetype/runtimeContract are data contracts:** `runtimeArchetype` may enrich supported finite families (currently boomerang/yoyo/flail/whip/held/channel_beam/overhead_barrage), `runtimeContract` records feel/sync/promise truth, and unsupported families stay inert/preserved.
 10. **Если docs спорят с code, code wins.** Обнови docs после проверки source.
+11. **Новая механика — отдельный вертикальный срез, не общий semantic/state engine.** Один exact authored enum/field, один Python owner, один C# executor owner, отдельный E2E test; см. `docs/RUNTIME_VERTICAL_SLICES_RU.md`.
+12. **Sparse-output policy не менять.** Явно authored zero/default остаётся authored intent и сохраняет provenance.
+13. **Author API не должен обещать несуществующий lifecycle.** Temporary helper — короткоживущий projectile; persistent summon требует отдельного vertical slice.
+14. **Visual Director имеет одну writable surface:** `visualKit.bakedAssets`. Старые aliases читаются только на boundary.
+15. **PNG описывает одно runtime-тело.** `shotCount/splitCount` остаются multiplicity runtime, а не количеством тел внутри текстуры.
+16. Предлайфтестовые негативные примеры и residual risks: `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md`.
+13. **Balance mode выбирается только через `core/balance_mode.py`.** `safety` по умолчанию, `normalize` opt-in, `report` diagnostics; формулы и mode-policy не смешивать.
 
 ## Коротко
 
@@ -119,7 +126,7 @@ Multiplayer client path:
 | `GeneratedItemData.Debug.cs` | applied trace/debug JSON для анализа applied-vs-authored |
 
 Ключевые поля:
-- `RuntimeApiVersion` должен соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.47`) или быть совместимым пустым legacy.
+- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.48`); пустые и старые версии не мигрируются внутри runtime.
 - `RecipeMeta.WorldScoped/WorldId` отделяет generated registry по миру.
 - `RecipeMeta.AssetBaseUrl/AssetFiles` — транспортные поля, не authorship.
 - `Gameplay` — concrete Terraria item stats/utility behavior: kind, damage, use times, use style, buffs, alt use, tools, mobility, extractinator, conditions.
@@ -132,7 +139,7 @@ Multiplayer client path:
 ### Runtime limits (`Common/InfiniRuntimeLimits.cs`)
 
 ```text
-RuntimeApiCurrent = v0.4.47
+RuntimeApiCurrent = v0.4.48
 MaxSupportedMovementCode = 18
 MaxSupportedEffectCode = 15
 MaxSupportedOnHitCode = 18
@@ -313,6 +320,8 @@ Movement families:
 
 OnHit families include bounded burst/split/chain/debuff/radial/aura/spore/mini-missile/vortex/blackhole/lifesteal effects. Child count/depth limits come from explicit `AttackSpec.MaxChildProjectiles` and `MaxChildDepth`.
 
+Held channel beam is a separate canonical `runtimeFamily=beam`, selected only by exact structured authoring. It uses one exact generated-item-owned projectile, wall-bounded `Collision.LaserScan`, line collision, authored range/width/charge/immunity cadence, periodic `HeldItem.mana` payment, and projectile sync v10. Names/tooltips/visual prompts do not select it.
+
 MP projectile sync:
 - Terraria vanilla projectile sync handles core projectile state;
 - `SyncGeneratedProjectileVisual` sends only owner/identity + generated id; presentation is restored from registry/cache;
@@ -347,9 +356,11 @@ Slots are lifecycle-oriented:
 
 | Файл | Роль |
 |---|---|
-| `InfiniSoundLibrary.cs` | maps explicit sound profiles/effects/codes to Terraria `SoundStyle` |
+| `InfiniSoundLibrary.cs` | exact 92-role Terraria SoundID catalog; applies explicit catalog id/volume/pitch/pitch variance, then mechanic-only fallback; never reads name/tooltip/taxonomy |
 | `InfiniLuminanceSoundBridge.cs` | optional live/loop cue bridge for Luminance-style audio when available |
 | `InfiniFutureSoundCatalog.cs` | future catalog seam; catalog query fields are inert unless explicit ids/paths are authored |
+
+Built-in audio contract: Python `core/sound_catalog.py` and C# `InfiniSoundLibrary.cs` must contain the same exact ids. The LLM chooses an acoustic role explicitly; C# does not recover it from prose. `soundPitchVariance` is synced with projectile state, and the sound catalog has a real-diversity guard so semantic ids cannot collapse into a tiny set of clips. Text sound-search fields are absent from the wire/runtime model; a future external backend may only return an already selected id/path/source.
 
 ## Configs and commands
 
@@ -477,3 +488,8 @@ Full definition / plan hydration requirements:
 - never repeated per projectile, per hit, or per VFX event;
 - debug counters expose `inFlight`, `cacheHit`, `cacheMiss`, `retry`, and `duplicateSuppressed` for definitions and assets.
 
+
+
+## Charge-release + sentry runtime v15
+
+Two independent finite vertical slices were added. Charge-release uses existing ranged/magic/low-level calls and two scalar knobs; sentry uses exact `deploy_sentry`. Python limits live in dedicated policy files, C# lifecycle lives in dedicated partial files, and final projection/net behavior is covered by `test_v15_charge_release_sentry_contract.py`. See `docs/CHARGE_RELEASE_SENTRY_RUNTIME_RU.md` for lifecycle and the shared-projectile static-set limitation.

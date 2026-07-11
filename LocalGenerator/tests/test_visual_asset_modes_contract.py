@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
-VISUAL = server.visual_generation_pipeline
+from infini_local.pipelines import visual_generation_pipeline
+from infini_local.pipelines import visual_asset_plan as ASSET_PLAN
+from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.visual_generation_pipeline import apply_visual_director
+import infini_local.pipelines.visual_sprite_generation as SPRITES
+VISUAL = visual_generation_pipeline
 
 
 def _base_item() -> dict:
@@ -26,19 +31,21 @@ def _base_item() -> dict:
         },
         "visual": {"imagePrompt": "small tin blade", "impactImagePrompt": "tiny metal spark"},
         "visualKit": {
-            "impactAssetMode": "particle_vfx",
-            "childAssetMode": "none",
-            "fieldAssetMode": "none",
+            "bakedAssets": {
+                "impact": {"mode": "particle_vfx"},
+                "child": {"mode": "none"},
+                "field": {"mode": "none"},
+            }
         },
     }
 
 
 def _check_impact_setting_is_allow_gate_not_force_generate(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_IMPACT_IMAGES", True)
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_IMPACT_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
 
-    plan = server.build_visual_asset_plan(_base_item())
+    plan = build_visual_asset_plan(_base_item())
     impact = next(x for x in plan if x["role"] == "impact")
     child = next(x for x in plan if x["role"] == "child")
     field = next(x for x in plan if x["role"] == "field")
@@ -50,11 +57,11 @@ def _check_impact_setting_is_allow_gate_not_force_generate(monkeypatch) -> None:
 
 
 def _check_model_can_explicitly_request_baked_extra_asset(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_IMPACT_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_IMPACT_IMAGES", True)
     data = _base_item()
-    data["visualKit"]["impactAssetMode"] = "baked_sprite"
+    data["visualKit"]["bakedAssets"]["impact"] = {"mode": "baked_sprite"}
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     impact = next(x for x in plan if x["role"] == "impact")
 
     assert impact.get("status") != "skipped_not_authored_baked"
@@ -63,11 +70,11 @@ def _check_model_can_explicitly_request_baked_extra_asset(monkeypatch) -> None:
 
 
 def _check_prompt_alone_does_not_request_baked_impact(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_IMPACT_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_IMPACT_IMAGES", True)
     data = _base_item()
-    data["visualKit"].pop("impactAssetMode", None)
+    data["visualKit"]["bakedAssets"].pop("impact", None)
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     impact = next(x for x in plan if x["role"] == "impact")
 
     assert impact["prompt"] == "tiny metal spark"
@@ -75,13 +82,13 @@ def _check_prompt_alone_does_not_request_baked_impact(monkeypatch) -> None:
 
 
 def _check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     data = _base_item()
     data["attack"]["runtimeFamily"] = "cast"
     data["attack"]["projectileSpritePrompt"] = "right-facing violet bolt"
     data["visual"]["projectileImagePrompt"] = "right-facing violet bolt"
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     projectile = next(x for x in plan if x["role"] == "projectile")
 
     assert projectile["status"] == "skipped_not_authored_baked"
@@ -90,16 +97,128 @@ def _check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback(monkeypa
 
 
 def _check_nested_baked_assets_can_request_projectile_sprite(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     data = _base_item()
     data["visualKit"]["bakedAssets"] = {"projectile": {"mode": "baked_sprite", "prompt": "right-facing amber dart"}}
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     projectile = next(x for x in plan if x["role"] == "projectile")
 
     assert projectile.get("status") != "skipped_not_authored_baked"
     assert projectile["assetMode"] == "baked_sprite"
     assert projectile["prompt"] == "right-facing amber dart"
+
+
+def _check_item_bodied_projectiles_reuse_item_sprite_unless_distinct(monkeypatch) -> None:
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+
+    boomerang = _base_item()
+    boomerang["attack"].update({"runtimeFamily": "returning", "delivery": "returning", "hideUseGraphic": True})
+    boomerang["visualKit"]["bakedAssets"] = {
+        "projectile": {"mode": "baked_sprite", "prompt": "same jade boomerang in flight"}
+    }
+    reused = next(x for x in build_visual_asset_plan(boomerang) if x["role"] == "projectile")
+
+    transformed = _base_item()
+    transformed["attack"].update({"runtimeFamily": "returning", "delivery": "returning", "hideUseGraphic": True})
+    transformed["visualKit"]["bakedAssets"] = {
+        "projectile": {
+            "mode": "baked_sprite",
+            "prompt": "boomerang unfolds into a distinct three-bladed flight form",
+            "distinctFromItem": True,
+        }
+    }
+    distinct = next(x for x in build_visual_asset_plan(transformed) if x["role"] == "projectile")
+
+    sword_shot = _base_item()
+    sword_shot["attack"].update({"runtimeFamily": "shoot", "delivery": "shoot", "weaponFamily": "sword"})
+    sword_shot["visualKit"]["bakedAssets"] = {
+        "projectile": {"mode": "baked_sprite", "prompt": "generated stalactite shaped like the blade"}
+    }
+    emitted = next(x for x in build_visual_asset_plan(sword_shot) if x["role"] == "projectile")
+
+    assert reused["status"] == "reuses_item_sprite"
+    assert reused["assetMode"] == "reuse_item_sprite"
+    assert distinct.get("status") != "reuses_item_sprite"
+    assert distinct["assetMode"] == "baked_sprite"
+    assert emitted["assetMode"] == "baked_sprite"
+
+    invalid = _base_item()
+    invalid["attack"].update({"runtimeFamily": "boomerang", "delivery": "throw"})
+    invalid["visualKit"]["bakedAssets"] = {
+        "projectile": {"mode": "baked_sprite", "prompt": "same handheld body in flight"}
+    }
+    invalid_slot = next(x for x in build_visual_asset_plan(invalid) if x["role"] == "projectile")
+    assert invalid_slot["assetMode"] != "reuse_item_sprite"
+    assert "noncanonical_runtime_family" in invalid.get("debug", {}).get("visualAssetRuntimeGates", "")
+
+
+def _check_visual_director_preserves_distinct_projectile_contract(monkeypatch) -> None:
+    monkeypatch.setattr(VISUAL, "USE_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(VISUAL, "is_llm_planner", lambda _data: True)
+    monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(
+        VISUAL,
+        "llm_chat_json",
+        lambda _req, timeout=None: {
+            "choices": [{
+                "message": {
+                    "content": json.dumps({
+                        "visualKit": {
+                            "bakedAssets": {
+                                "projectile": {
+                                    "mode": "baked_sprite",
+                                    "prompt": "distinct opened three-blade flight body",
+                                    "distinctFromItem": True,
+                                    "reason": "authored transformation",
+                                }
+                            }
+                        }
+                    })
+                }
+            }]
+        },
+    )
+
+    data = _base_item()
+    data["attack"].update({"runtimeFamily": "returning", "delivery": "returning"})
+    result = apply_visual_director(data, {}, {}, {}, {})
+    projectile = result["visualKit"]["bakedAssets"]["projectile"]
+
+    assert projectile["distinctFromItem"] is True
+    assert projectile["mode"] == "baked_sprite"
+
+
+def _check_reuse_item_sprite_slot_never_calls_image_backend(monkeypatch) -> None:
+    monkeypatch.setattr(SPRITES, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(SPRITES, "maybe_generate_sprite", lambda data: data)
+    monkeypatch.setattr(SPRITES, "write_visual_manifest", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        SPRITES,
+        "build_visual_asset_plan",
+        lambda _data: [
+            {"role": "item", "status": "generated", "assetMode": "baked_sprite"},
+            {
+                "role": "projectile",
+                "status": "reuses_item_sprite",
+                "assetMode": "reuse_item_sprite",
+                "prompt": "same boomerang body",
+                "assetId": "reuse_projectile",
+                "canvas": 32,
+            },
+        ],
+    )
+
+    def forbidden_backend(*_args, **_kwargs):
+        raise AssertionError("reuse_item_sprite must not invoke image generation")
+
+    monkeypatch.setattr(SPRITES, "generate_visual_asset", forbidden_backend)
+    data = {"id": "reuse_case", "visual": {"spriteStatus": "generated"}, "attack": {"enabled": True}}
+
+    SPRITES.maybe_generate_visual_assets(data)
+
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -113,7 +232,10 @@ def _run_coarse_contracts(tmp_path):
     '_check_model_can_explicitly_request_baked_extra_asset',
     '_check_prompt_alone_does_not_request_baked_impact',
     '_check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback',
-    '_check_nested_baked_assets_can_request_projectile_sprite'
+    '_check_nested_baked_assets_can_request_projectile_sprite',
+    '_check_item_bodied_projectiles_reuse_item_sprite_unless_distinct',
+    '_check_visual_director_preserves_distinct_projectile_contract',
+    '_check_reuse_item_sprite_slot_never_calls_image_backend'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

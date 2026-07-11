@@ -1,54 +1,23 @@
 from __future__ import annotations
 
-import json
-import os
-import re
-import signal
-import socket
-import subprocess
-import sys
-import threading
-import time
-import urllib.request
 import webbrowser
-from pathlib import Path, PureWindowsPath
 
-from infini_local.desktop.tk_compat import filedialog, messagebox, tk, ttk
+from infini_local.desktop.tk_compat import tk, ttk
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
     FIELD_HELP,
-    FIELD_ORDER,
     OPTION_HELP,
     PRESETS,
     PRESET_HELP,
-    SDCPP_DEFAULT_COMMAND_TEMPLATE,
-    SDCPP_EXTRA_FLAG_SPECS,
-    SDCPP_EXTRA_PROFILES,
-    SDCPP_EXTRA_PROFILE_HELP,
-    repair_sdcpp_command_template,
 )
-from infini_local.desktop.settings_env import parse_env, quote_env_value, write_env
 from infini_local.desktop.settings_widgets import ScrollFrame, ToolTip
-from infini_local.desktop.settings_sdcpp_args import (
-    extra_option_names,
-    join_extra_for_gui,
-    remove_extra_options,
-    split_extra_for_gui,
-)
 from infini_local.desktop.settings_gui_theme import (
-    ROOT,
-    CONFIG_PATH,
-    EXAMPLE_PATH,
-    APP_TITLE,
     APP_BG,
-    APP_PANEL_BG,
     CARD_BG,
     CARD_MUTED_BG,
     HEADER_BG,
-    HEADER_BG_2,
     TEXT_FG,
     MUTED_FG,
-    SOFT_FG,
     ACCENT_BG,
     ACCENT_HOVER_BG,
     ACCENT_SOFT_BG,
@@ -56,7 +25,6 @@ from infini_local.desktop.settings_gui_theme import (
     SUCCESS_BG,
     SUCCESS_SOFT_BG,
     SUCCESS_FG,
-    DANGER_BG,
     DANGER_SOFT_BG,
     DANGER_FG,
     WARNING_SOFT_BG,
@@ -631,7 +599,7 @@ class SettingsGuiUiMixin:
         guide = (
             "1) Пути: укажи sd-server.exe, z-image-turbo *.gguf, ae.safetensors и Qwen/LLM *.gguf. "
             "VAE/Qwen/LoRA не надо дублировать в extra args — GUI добавит --vae/--llm/--lora-model-dir сам.\n"
-            "2) AMD/Vulkan дефолт: нажми профиль AMD safe. Он держит diffusion+VAE на vulkan0, а text encoder/Qwen на CPU — обычно стабильнее для игры.\n"
+            "2) AMD/Vulkan дефолт: нажми AMD safe. У него runtime diffusion/VAE/TE на Vulkan, параметры Qwen/TE в RAM, поэтому скорость близка к full GPU при меньшей постоянной VRAM.\n"
             "3) Если VRAM душит/игра фризит: AMD low VRAM. Если нужен максимум скорости и хватает VRAM: AMD full GPU.\n"
             "4) LoRA: выбери LoRA file и нажми Browse + use / Use selected LoRA. Отдельного поля folder нет: папка берётся из файла, а в prompt добавляется <lora:name:weight>.\n"
             "5) steps/cfg/sampler для Z-Image Turbo обычно держи примерно 6-12 / 1.0 / euler. Дальше регулируй prompt/postprocess, а не гоняй 30 шагов.\n"
@@ -656,9 +624,10 @@ class SettingsGuiUiMixin:
         self._build_zimage_guide(parent)
         self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "image_api", "off", "comfyui", "a1111"], hint="sdcpp = локальный Z-Image; image_api = внешний API; off = без PNG.")
         self.row(parent, "sd-server.exe", "INFINI_SDCPP_SERVER_EXE", browse="file")
-        self.row(parent, "Z-Image model", "INFINI_SDCPP_MODEL", browse="model", hint="Основной z-image-turbo *.gguf, например Q6_K.")
-        self.row(parent, "Z-Image VAE / AE", "INFINI_SDCPP_VAE", browse="model", hint="Обычно ae.safetensors. GUI сам добавит --vae, руками в extra args не надо.")
-        self.row(parent, "Z-Image Qwen / LLM", "INFINI_SDCPP_LLM", browse="model", hint="Обычно Qwen3-4B-Instruct-...gguf. GUI сам добавит --llm, руками в extra args не надо.")
+        self.row(parent, "ROCm hybrid runtime", "INFINI_SDCPP_ROCM_COMPAT_ROOT", browse="dir", hint="Папка sdcpp-hybrid-gfx1030. ROCm/HIP/rocBLAS env применяется только к дочернему sd-server.exe.")
+        self.row(parent, "Diffusion model", "INFINI_SDCPP_MODEL", browse="model", hint="FLUX.2 Klein или Z-Image *.gguf.")
+        self.row(parent, "VAE / AE", "INFINI_SDCPP_VAE", browse="model", hint="Обычно ae.safetensors. GUI сам добавит --vae, руками в extra args не надо.")
+        self.row(parent, "Qwen / LLM", "INFINI_SDCPP_LLM", browse="model", hint="Text encoder/Qwen *.gguf. GUI сам добавит --llm, руками в extra args не надо.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         ttk.Label(parent, text="LoRA для Z-Image/sd.cpp", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         lora_note = ttk.Label(

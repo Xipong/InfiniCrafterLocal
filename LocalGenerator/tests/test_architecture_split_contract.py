@@ -14,10 +14,10 @@ def read(rel: str) -> str:
 def _check_root_entrypoints_are_the_only_flat_launchers() -> None:
     server = read("server.py")
     gui = read("settings_gui.py")
-    assert "infini_local/web/server.py" in server
+    assert "from infini_local.web.server import main" in server
     assert "infini_local.desktop.settings_gui" in gui
-    assert "sys.modules[__name__] = _impl" in server
-    assert 'APP_VERSION = "0.4.239"' in server
+    assert "sys.modules" not in server
+    assert "web import api" not in server
     flat_py = sorted(p.name for p in LG.glob("*.py"))
     assert flat_py == ["server.py", "settings_gui.py"]
 
@@ -36,7 +36,7 @@ def _check_local_generator_python_code_is_sorted_into_texture_layers() -> None:
     assert (PKG / "pipelines" / "parent_context_pipeline.py").exists()
     assert (PKG / "pipelines" / "visual_generation_pipeline.py").exists()
     assert (PKG / "pipelines" / "image_backend_pipeline.py").exists()
-    assert (PKG / "pipelines" / "sprite_processing_pipeline.py").exists()
+    assert not (PKG / "pipelines" / "sprite_processing_pipeline.py").exists()
     assert (PKG / "storage" / "world_storage.py").exists()
     assert (PKG / "web" / "server.py").exists()
     assert (PKG / "desktop" / "settings_gui.py").exists()
@@ -64,11 +64,9 @@ def _check_dev_fallback_builders_are_outside_http_server() -> None:
     assert "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK" in fallback
 
 
-def _check_llm_json_extraction_is_in_core_and_imported_by_server() -> None:
+def _check_llm_json_extraction_is_in_core() -> None:
     server_impl = read("infini_local/web/server.py")
     json_tools = read("infini_local/core/llm_json_tools.py")
-    api = read("infini_local/web/api.py")
-    assert "infini_local.core.llm_json_tools" in api
     assert "def json_object_candidates" not in server_impl
     assert "def parse_first_valid_llm_json" in json_tools
 
@@ -77,8 +75,10 @@ def _check_sdcpp_backend_and_lifecycle_are_in_services() -> None:
     server_impl = read("infini_local/web/server.py")
     backend = read("infini_local/services/sdcpp_backend.py")
     service = read("infini_local/services/sdcpp_service.py")
-    assert "sdcpp_backend" in server_impl
-    assert "sdcpp_service" in server_impl
+    assert "sdcpp_backend" not in server_impl
+    assert "pipeline_visual_config" in server_impl
+    assert "SdcppBackendConfig" in backend
+    assert "SdcppServerState" in service
     assert "def repair_command_template" in backend
     assert "def build_server_command" in backend
     assert "def server_payload" in backend
@@ -230,7 +230,6 @@ def _check_large_generation_pipelines_are_outside_server_shell() -> None:
     parent_cards = read("infini_local/pipelines/parent_context_cards.py")
     visual = read("infini_local/pipelines/visual_generation_pipeline.py")
     image_backend = read("infini_local/pipelines/image_backend_pipeline.py")
-    sprite = read("infini_local/pipelines/sprite_processing_pipeline.py")
     sprite_postprocess = read("infini_local/pipelines/sprite_postprocess.py")
     assert "from infini_local.pipelines.combine_pipeline import (" in server_impl
     assert "def combine(" not in server_impl
@@ -242,14 +241,14 @@ def _check_large_generation_pipelines_are_outside_server_shell() -> None:
     assert "def combine(" in combine
     assert "def try_llm_plan" in llm
     assert "def raw_parent_card_for_llm" in parent_cards
-    assert "parent_context_cards" in parent
+    assert "parent_context_cards" not in parent
     assert "def apply_visual_director" in visual
     assert "def generate_sdcpp_server" in image_backend
     assert "def postprocess_sprite" in sprite_postprocess
-    assert "sprite_postprocess" in sprite
     assert "bind_runtime" not in server_impl
     assert "_PipelineMirroringServerModule" not in server_impl
-    assert "from infini_local.pipelines.combine_balance import (" in combine
+    assert "from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack" in combine
+    assert "from infini_local.pipelines.combine_balance import" not in combine
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -263,7 +262,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_local_generator_python_code_is_sorted_into_texture_layers',
     '_check_network_info_is_outside_http_server',
     '_check_dev_fallback_builders_are_outside_http_server',
-    '_check_llm_json_extraction_is_in_core_and_imported_by_server',
+    '_check_llm_json_extraction_is_in_core',
     '_check_sdcpp_backend_and_lifecycle_are_in_services',
     '_check_visual_asset_pipeline_helpers_are_outside_server_monolith',
     '_check_recipe_identity_helpers_are_in_core',
@@ -296,11 +295,9 @@ def test_architecture_split_contract_coarse_contract(tmp_path):
 
 def test_postprocess_sprite_contract_returns_path_not_optional():
     sprite = (ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "sprite_postprocess.py").read_text(encoding="utf-8")
-    sprite_api = (ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "sprite_processing_pipeline.py").read_text(encoding="utf-8")
     visual = (ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
     assert "def postprocess_sprite(path: str, sprite_id: str, target_size: int = 32, role: str = \"unknown\") -> str:" in sprite
     assert "on postprocess failure, return the original path" in sprite
-    assert "postprocess_sprite" in sprite_api
     assert "-> str | None" not in sprite
     assert "postprocess_sprite(best, attempt_id, canvas, \"item\") or best" not in visual
     assert "postprocess_sprite(fallback, str(data.get(\"id\", \"sprite\")), canvas, \"item\") or fallback" not in visual

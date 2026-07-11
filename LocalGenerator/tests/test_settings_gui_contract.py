@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.desktop import settings_env, settings_gui
+from infini_local.desktop import settings_env, settings_gui, settings_schema
 import infini_local.desktop.settings_sdcpp_args as settings_sdcpp_args
 
 
@@ -27,13 +27,13 @@ SETTINGS_SDCPP_ARGS_SOURCE = Path(settings_sdcpp_args.__file__).read_text(encodi
 def _check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env() -> None:
     assert 'self.row(parent, "LoRA folder"' not in GUI_SOURCE
     assert "LoRA folder скрыт" in GUI_SOURCE
-    assert "INFINI_SDCPP_LORA_DIR" in settings_gui.FIELD_ORDER
-    assert settings_gui.DEFAULTS["INFINI_SDCPP_LORA_DIR"] == ""
+    assert "INFINI_SDCPP_LORA_DIR" in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS["INFINI_SDCPP_LORA_DIR"] == ""
 
 
 def _check_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
     assert "Что делают пресеты и флаги sd.cpp" in GUI_SOURCE
-    labels = [name for name, _fragment, _help in settings_gui.SDCPP_EXTRA_FLAG_SPECS]
+    labels = [name for name, _fragment, _help in settings_schema.SDCPP_EXTRA_FLAG_SPECS]
     assert "LoRA runtime" in labels
     assert "LoRA auto" in labels
     assert "Cache DBCache" in labels
@@ -56,21 +56,34 @@ def _check_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
     assert settings_gui.SettingsGui._split_extra_for_gui is settings_sdcpp_args.split_extra_for_gui
 
 
-def _check_sdcpp_presets_do_not_duplicate_identical_backend_and_params_backend() -> None:
+def _check_sdcpp_presets_use_measured_amd_placements_without_redundant_assignments() -> None:
+    safe = settings_schema.SDCPP_EXTRA_PROFILES["zimage_amd_safe"]
+    assert "--backend diffusion=vulkan0,vae=vulkan0,te=vulkan0" in safe
+    assert "--params-backend te=cpu" in safe
+    assert "--diffusion-conv-direct" in safe
+    assert "--vae-conv-direct" in safe
+    assert "--eager-load" in safe
+    assert "runtime diffusion/VAE/TE на Vulkan" in GUI_SOURCE
+    assert "параметры Qwen/TE в RAM" in GUI_SOURCE
+
+    full_gpu = settings_schema.SDCPP_EXTRA_PROFILES["zimage_amd_full_gpu"]
+    assert "--backend diffusion=vulkan0,vae=vulkan0,te=vulkan0" in full_gpu
+    assert "--params-backend" not in full_gpu
+    assert "--diffusion-conv-direct" in full_gpu
+    assert "--vae-conv-direct" in full_gpu
+    assert "--eager-load" in full_gpu
+
     normal_profiles = [
-        "zimage_amd_safe",
         "zimage_amd_low_vram",
-        "zimage_amd_full_gpu",
         "zimage_cpu_compat",
-        "vulkan_te_vae_cpu_dbcache",
     ]
     for name in normal_profiles:
-        value = settings_gui.SDCPP_EXTRA_PROFILES[name]
+        value = settings_schema.SDCPP_EXTRA_PROFILES[name]
         assert "--params-backend" not in value
 
 
 def _check_flow_shift_help_explains_meaning_not_only_quality() -> None:
-    flow_help = " ".join(desc for name, _fragment, desc in settings_gui.SDCPP_EXTRA_FLAG_SPECS if name.startswith("Flow"))
+    flow_help = " ".join(desc for name, _fragment, desc in settings_schema.SDCPP_EXTRA_FLAG_SPECS if name.startswith("Flow"))
     assert "timestep" in flow_help
     assert "Flow/DiT" in flow_help
     assert "мяг" in flow_help
@@ -94,8 +107,8 @@ def _check_gui_trace_fetch_uses_health_identity_and_longer_timeout() -> None:
 
 def _check_pipeline_preset_is_saved_and_restored_from_config() -> None:
     key = "INFINI_GUI_PIPELINE_PRESET"
-    assert key in settings_gui.FIELD_ORDER
-    assert key in settings_gui.DEFAULTS
+    assert key in settings_schema.FIELD_ORDER
+    assert key in settings_schema.DEFAULTS
     assert settings_gui.SettingsGui._pipeline_preset_from_config({
         key: "OpenRouter + local Z-Image/sd.cpp",
         "INFINI_LLM_PROVIDER": "local",
@@ -125,8 +138,8 @@ def _check_radmin_gui_has_auto_url_and_friend_guide_controls() -> None:
     assert "Auto Radmin URL" in GUI_SOURCE
     assert "Copy friend guide" in GUI_SOURCE
     assert "Open MP connect page" in GUI_SOURCE
-    assert "INFINI_TERRARIA_PORT" in settings_gui.FIELD_ORDER
-    assert settings_gui.DEFAULTS["INFINI_TERRARIA_PORT"] == "7777"
+    assert "INFINI_TERRARIA_PORT" in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS["INFINI_TERRARIA_PORT"] == "7777"
     assert "_detect_ipv4_candidates" in GUI_SOURCE
     assert "_friend_guide_text" in GUI_SOURCE
     assert "/mp_connect" in GUI_SOURCE
@@ -139,23 +152,23 @@ def _check_radmin_gui_friend_guide_says_clients_do_not_need_localgenerator_for_r
 
 
 def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
-    assert "INFINI_LLM_TEMPERATURE" in settings_gui.FIELD_ORDER
-    assert "INFINI_VISUAL_DIRECTOR_TEMPERATURE" in settings_gui.FIELD_ORDER
-    assert settings_gui.DEFAULTS["INFINI_LLM_TEMPERATURE"] == "0.38"
-    assert settings_gui.DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"] == "0.42"
+    assert "INFINI_LLM_TEMPERATURE" in settings_schema.FIELD_ORDER
+    assert "INFINI_VISUAL_DIRECTOR_TEMPERATURE" in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS["INFINI_LLM_TEMPERATURE"] == "0.38"
+    assert settings_schema.DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"] == "0.42"
     assert "Planner temperature" in GUI_SOURCE
     assert "Visual temp" in GUI_SOURCE
     assert "Это не sd.cpp temperature" in GUI_SOURCE
 
 
 def _check_gui_env_file_io_lives_in_settings_env() -> None:
-    assert "from infini_local.desktop.settings_env import (" in GUI_SOURCE
+    assert "from infini_local.desktop.settings_env import" in GUI_SOURCE
     assert "def parse_env" not in GUI_SOURCE
     assert "def write_env" not in GUI_SOURCE
     assert "def parse_env" in SETTINGS_ENV_SOURCE
     assert "def write_env" in SETTINGS_ENV_SOURCE
-    assert settings_gui.parse_env is settings_env.parse_env
-    assert settings_gui.write_env is settings_env.write_env
+    assert callable(settings_env.parse_env)
+    assert callable(settings_env.write_env)
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -168,7 +181,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env',
     '_check_sdcpp_option_help_is_visible_and_has_expanded_flags',
     '_check_gui_extra_arg_helpers_replace_conflicting_value_flags',
-    '_check_sdcpp_presets_do_not_duplicate_identical_backend_and_params_backend',
+    '_check_sdcpp_presets_use_measured_amd_placements_without_redundant_assignments',
     '_check_flow_shift_help_explains_meaning_not_only_quality',
     '_check_gui_health_identity_helpers_detect_other_copy_from_root',
     '_check_gui_trace_fetch_uses_health_identity_and_longer_timeout',

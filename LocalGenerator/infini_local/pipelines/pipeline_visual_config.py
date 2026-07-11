@@ -1,33 +1,20 @@
 from __future__ import annotations
 
+from typing import Any
+
 import os
 from pathlib import Path
 
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR, RECIPE_IDENTITY_VERSION
 from infini_local.core.contract_versions import build_contract_versions
 from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first
-from infini_local.core.runtime_authoring import ENGINE_RUNTIME_API_VERSION
+from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
+from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING as _LLM_RUNTIME_AUTHORING_DEFAULT
 from infini_local.services import sdcpp_backend, sdcpp_service
-from infini_local.storage.trace_runtime import (
-    PROMPT_TRACE_FILE,
-    TRACE_EVENTS_TAIL,
-    TRACE_FILE,
-    TRACE_MAX_PROMPT_CHARS,
-    TRACE_PROMPTS_ENABLED,
-    _json_slim,
-    _tail_ndjson,
-    _tail_text_file,
-    _trace_clip,
-    _trace_message_summary,
-    log_event,
-    trace_event,
-)
+from infini_local.storage.trace_runtime import log_event
 
-# AGENT MAP: visual/image backend env/config surface shared by the legacy
-# pipeline_support facade and image backend pipeline. No gameplay/runtime
-# authoring logic belongs here.
-
-_LLM_RUNTIME_AUTHORING_DEFAULT = env_bool("INFINI_LLM_RUNTIME_AUTHORING", True)
+# AGENT MAP: canonical visual/image backend env/config and lifecycle state.
+# Consumers import this owner directly. No gameplay/runtime authoring logic belongs here.
 
 IMAGE_BACKEND = env_str("INFINI_IMAGE_BACKEND", "procedural").lower()  # procedural, a1111, comfyui, sdcpp, off
 A1111_URL = env_str("INFINI_A1111_URL", "http://127.0.0.1:7860").rstrip("/")
@@ -52,19 +39,20 @@ if SDCPP_LORA_FILE:
         SDCPP_LORA_DIR = _file_lora_dir
     if not SDCPP_LORA_PROMPT_TAGS and _lora_path.stem:
         SDCPP_LORA_PROMPT_TAGS = sdcpp_backend.lora_tag_from_file(SDCPP_LORA_FILE, SDCPP_LORA_WEIGHT)
-SDCPP_WIDTH = env_int("INFINI_SDCPP_WIDTH", 512)
+SDCPP_WIDTH = env_int("INFINI_SDCPP_WIDTH", 512, lo=64, hi=2048)
 SDCPP_HEIGHT = env_int("INFINI_SDCPP_HEIGHT", SDCPP_WIDTH, lo=64, hi=2048)
-SDCPP_STEPS = env_int("INFINI_SDCPP_STEPS", 8)
-SDCPP_CFG = env_float("INFINI_SDCPP_CFG", 1.0)
+SDCPP_STEPS = env_int("INFINI_SDCPP_STEPS", 8, lo=1, hi=150)
+SDCPP_CFG = env_float("INFINI_SDCPP_CFG", 1.0, lo=0.0, hi=30.0)
 SDCPP_SAMPLER = env_str("INFINI_SDCPP_SAMPLER", "euler")
 SDCPP_SEED = env_int("INFINI_SDCPP_SEED", -1)
 ZIMAGE_PROMPT_CONTRACT = env_str("INFINI_ZIMAGE_PROMPT_CONTRACT", "auto").lower()  # auto, 1, 0
 ZIMAGE_POSITIVE_ONLY = env_bool("INFINI_ZIMAGE_POSITIVE_ONLY", True)
 SDCPP_SERVER_URL = env_str("INFINI_SDCPP_SERVER_URL", "http://127.0.0.1:7861").rstrip("/")
 SDCPP_SERVER_HOST = env_str("INFINI_SDCPP_SERVER_HOST", "127.0.0.1")
-SDCPP_SERVER_PORT = env_int("INFINI_SDCPP_SERVER_PORT", 7861)
+SDCPP_SERVER_PORT = env_int("INFINI_SDCPP_SERVER_PORT", 7861, lo=1, hi=65535)
 SDCPP_SERVER_AUTOSTART = env_bool("INFINI_SDCPP_SERVER_AUTOSTART", False)
 SDCPP_SERVER_EXE = env_str("INFINI_SDCPP_SERVER_EXE", "")
+SDCPP_ROCM_COMPAT_ROOT = env_str("INFINI_SDCPP_ROCM_COMPAT_ROOT", "")
 SDCPP_DEFAULT_COMMAND_TEMPLATE = "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-method {sampler} {extra}"
 SDCPP_SERVER_COMMAND_MODE = env_str("INFINI_SDCPP_SERVER_COMMAND_MODE", "safe_args").lower()  # safe_args, template
 SDCPP_SERVER_COMMAND_TEMPLATE = env_str("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "")
@@ -103,13 +91,8 @@ def _sdcpp_config() -> sdcpp_backend.SdcppBackendConfig:
         health_paths=SDCPP_SERVER_HEALTH_PATHS,
         zimage_prompt_contract=ZIMAGE_PROMPT_CONTRACT,
         zimage_positive_only=ZIMAGE_POSITIVE_ONLY,
+        rocm_compat_root=SDCPP_ROCM_COMPAT_ROOT,
     )
-
-
-LAST_COMBINE_FAILURE: dict[str, Any] = {}
-LAST_COMBINE_FAILURE_FILE = CACHE_DIR / "last_combine_failure.json"
-
-
 
 
 def cleanup_sdcpp_server_process(reason: str = "cleanup") -> None:
@@ -271,8 +254,6 @@ __all__ = [
     "SDCPP_SERVER_LOG_FILE",
     "SDCPP_SERVER_STATE",
     "_sdcpp_config",
-    "LAST_COMBINE_FAILURE",
-    "LAST_COMBINE_FAILURE_FILE",
     "cleanup_sdcpp_server_process",
     "_install_sdcpp_cleanup_handlers",
     "COMFYUI_WORKFLOW",

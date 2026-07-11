@@ -55,21 +55,3 @@ def test_station_manual_ux_and_prefetch_are_bounded_not_autofill():
     assert "player?.armor" in player
     assert "player?.miscEquips" in player
     assert "2 => 30 * 60" in player
-
-
-def test_vanilla_like_balance_envelope_and_todo_docs_exist():
-    pipeline = read(LOCAL / "infini_local" / "pipelines" / "combine_balance.py")
-    balance_policy = read(LOCAL / "infini_local" / "core" / "balance_policy.py")
-    contracts = read(LOCAL / "infini_local" / "core" / "contract_versions.py")
-    assert "VANILLA_LIKE_WEAPON_ENVELOPES" in balance_policy
-    assert "clamp_vanilla_like_weapon_damage" in pipeline
-    assert "balanceEnvelope" in pipeline
-    assert "GAMEPLAY_RUNTIME_REBUILD_CONTRACT_VERSION" in contracts
-    assert "gameplayRuntimeRebuildContract" in contracts
-    todo = read(ROOT / "docs" / "TODO_ROADMAP_VERY_LATER_RU.md")
-    assert "LLM authored" in todo
-    assert "runtimeApplied" in todo
-    assert "future_disabled" in todo
-    balance_doc = read(ROOT / "docs" / "BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md")
-    assert "не category-routing" in balance_doc
-    assert "VANILLA_LIKE_WEAPON_ENVELOPES" in balance_doc

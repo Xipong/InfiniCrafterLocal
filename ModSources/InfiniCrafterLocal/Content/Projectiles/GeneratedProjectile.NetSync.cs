@@ -56,6 +56,7 @@ public sealed partial class GeneratedProjectile
         public int Owner;
         public int Identity;
         public string GeneratedItemId = "";
+        public int ExpireTick;
     }
 
     private sealed class ProjectileVfxEventSyncPayload
@@ -72,6 +73,8 @@ public sealed partial class GeneratedProjectile
 
     private static readonly Dictionary<string, ProjectileVisualSyncPayload> PendingProjectileVisualSync = new(StringComparer.Ordinal);
     private static readonly List<ProjectileVfxEventSyncPayload> PendingProjectileVfxEvents = new();
+    private static readonly Dictionary<string, int> LastVisualSyncRelayTickByProjectile = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, int> LastVfxEventRelayTickByProjectile = new(StringComparer.Ordinal);
     // v0.4.199: per-id/per-asset retry gates. A single missing generated item or
     // slow PNG must not suppress catch-up requests for every other projectile on
     // the peer for several minutes.
@@ -89,9 +92,19 @@ public sealed partial class GeneratedProjectile
     private const int MaxSupportedMovementCode = InfiniRuntimeLimits.MaxSupportedMovementCode;
     private const int MaxSupportedEffectCode = InfiniRuntimeLimits.MaxSupportedEffectCode;
     private const int MaxSupportedOnHitCode = InfiniRuntimeLimits.MaxSupportedOnHitCode;
+    private const int PendingProjectileVisualSyncMaxEntries = 256;
+    private const int PendingProjectileVfxEventMaxEntries = 96;
+    private const int PendingVisualSyncExpiryTicks = 60 * 5;
+    private const int PendingVfxEventExpiryTicks = 5 * 60;
+    private const int ProjectileSyncRelayMinTicks = 2;
+    private const int VfxEventSyncRelayMinTicks = 1;
+    private const int MaxProjectileRelayEntries = 512;
+    private const int ProjectileRelayStateAgeTicks = 10 * 60;
+    private const int MaxMissingRequestStateEntries = 512;
+    private const int MissingRequestStateAgeTicks = 10 * 60;
     public const byte PacketSyncGeneratedProjectileVisual = InfiniNetPacketIds.SyncGeneratedProjectileVisual;
     public const byte PacketSyncGeneratedProjectileVfxEvent = InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent;
-    private const int ProjectileSyncVersion = 6;
+    private const int ProjectileSyncVersion = 14;
     private const int ProjectileVisualSyncVersion = 3;
     private const ushort SyncFlagMobility = 1 << 0;
     private const ushort SyncFlagRuntimeLight = 1 << 1;
@@ -128,6 +141,46 @@ public sealed partial class GeneratedProjectile
     }
 
     private static string VisualSyncKey(int owner, int identity) => owner.ToString() + ":" + identity.ToString();
+
+    private static bool TryResolveServerOwnedGeneratedProjectile(int whoAmI, int identity, out GeneratedProjectile generated)
+    {
+        generated = null!;
+        if (!IsValidVisualSyncOwner(whoAmI) || identity < 0)
+            return false;
+        int generatedType = ModContent.ProjectileType<GeneratedProjectile>();
+        for (int i = 0; i < Main.maxProjectiles; i++)
+        {
+            Projectile projectile = Main.projectile[i];
+            if (!projectile.active || projectile.owner != whoAmI || projectile.identity != identity || projectile.type != generatedType)
+                continue;
+            if (projectile.ModProjectile is GeneratedProjectile candidate)
+            {
+                generated = candidate;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool TryAcceptProjectileRelay(Dictionary<string, int> relayTicks, int owner, int identity, int minimumTicks)
+    {
+        string key = VisualSyncKey(owner, identity);
+        int now = (int)Main.GameUpdateCount;
+        lock (relayTicks)
+        {
+            foreach (string stale in relayTicks.Where(x => now - x.Value >= ProjectileRelayStateAgeTicks).Select(x => x.Key).ToList())
+                relayTicks.Remove(stale);
+            if (relayTicks.TryGetValue(key, out int last) && now - last < minimumTicks)
+                return false;
+            if (!relayTicks.ContainsKey(key) && relayTicks.Count >= MaxProjectileRelayEntries)
+            {
+                string oldest = relayTicks.OrderBy(x => x.Value).First().Key;
+                relayTicks.Remove(oldest);
+            }
+            relayTicks[key] = now;
+            return true;
+        }
+    }
 
     private static void WriteProjectileVisualSyncPayload(BinaryWriter writer, ProjectileVisualSyncPayload payload)
     {
@@ -177,19 +230,21 @@ public sealed partial class GeneratedProjectile
 
         if (Main.netMode == NetmodeID.Server)
         {
-            // Client-owned projectile visuals are not guaranteed to survive the vanilla
-            // client->server->clients projectile relay.  Rebroadcast this compact visual
-            // context to every other peer; stamp the owner from the sender instead of
-            // trusting client-supplied identity text.
-            payload.Owner = Math.Clamp(whoAmI, 0, Main.maxPlayers - 1);
+            if (!TryResolveServerOwnedGeneratedProjectile(whoAmI, payload.Identity, out GeneratedProjectile generated))
+                return;
+            if (!HasGeneratedVisualIdentity(generated._generatedItemId))
+                return;
+            if (!TryAcceptProjectileRelay(LastVisualSyncRelayTickByProjectile, whoAmI, payload.Identity, ProjectileSyncRelayMinTicks))
+                return;
+            payload.Owner = whoAmI;
+            payload.GeneratedItemId = ShortNet(generated._generatedItemId, 96);
             SendProjectileVisualSyncPayload(payload, toClient: -1, ignoreClient: whoAmI);
             return;
         }
 
         if (!TryApplyProjectileVisualSyncPayload(payload))
         {
-            lock (PendingProjectileVisualSync)
-                PendingProjectileVisualSync[VisualSyncKey(payload.Owner, payload.Identity)] = payload;
+            StorePendingProjectileVisualSync(payload);
             if (!string.IsNullOrWhiteSpace(payload.GeneratedItemId))
                 RequestOneGeneratedItemForMissingProjectile(payload.GeneratedItemId);
         }
@@ -270,10 +325,21 @@ public sealed partial class GeneratedProjectile
 
         if (Main.netMode == NetmodeID.Server)
         {
-            // Owner/local client sends one compact hit/kill visual event. Relay it to the
-            // other clients; stamp the owner from the sender so visual overlays cannot be
-            // spoofed onto another player's projectile stream.
-            payload.Owner = Math.Clamp(whoAmI, 0, Main.maxPlayers - 1);
+            if (!TryResolveServerOwnedGeneratedProjectile(whoAmI, payload.Identity, out GeneratedProjectile generated))
+                return;
+            if (!HasGeneratedVisualIdentity(generated._generatedItemId))
+                return;
+            if (!string.Equals(payload.EventKind, "hit", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(payload.EventKind, "kill", StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!TryAcceptProjectileRelay(LastVfxEventRelayTickByProjectile, whoAmI, payload.Identity, VfxEventSyncRelayMinTicks))
+                return;
+            payload.Owner = whoAmI;
+            payload.GeneratedItemId = ShortNet(generated._generatedItemId, 96);
+            payload.EventKind = payload.EventKind.ToLowerInvariant();
+            payload.Center = generated.Projectile.Center;
+            payload.Velocity = generated.Projectile.velocity;
+            payload.Lifetime = Math.Clamp(payload.Lifetime, 6, 180);
             SendProjectileVfxEventPayload(payload, toClient: -1, ignoreClient: whoAmI);
             return;
         }
@@ -286,8 +352,50 @@ public sealed partial class GeneratedProjectile
     {
         lock (PendingProjectileVisualSync) PendingProjectileVisualSync.Clear();
         lock (PendingProjectileVfxEvents) PendingProjectileVfxEvents.Clear();
+        lock (LastVisualSyncRelayTickByProjectile) LastVisualSyncRelayTickByProjectile.Clear();
+        lock (LastVfxEventRelayTickByProjectile) LastVfxEventRelayTickByProjectile.Clear();
         lock (MissingGeneratedItemRequestTicks) MissingGeneratedItemRequestTicks.Clear();
         lock (MissingProjectileAssetRequestTicks) MissingProjectileAssetRequestTicks.Clear();
+    }
+
+    private static void PrunePendingProjectileVisualSyncLocked(int now)
+    {
+        foreach (string stale in PendingProjectileVisualSync
+            .Where(x => x.Value.ExpireTick > 0 && x.Value.ExpireTick <= now)
+            .Select(x => x.Key)
+            .ToList())
+            PendingProjectileVisualSync.Remove(stale);
+    }
+
+    private static void StorePendingProjectileVisualSync(ProjectileVisualSyncPayload payload)
+    {
+        int now = (int)Main.GameUpdateCount;
+        payload.ExpireTick = now + PendingVisualSyncExpiryTicks;
+        lock (PendingProjectileVisualSync)
+        {
+            PrunePendingProjectileVisualSyncLocked(now);
+            string key = VisualSyncKey(payload.Owner, payload.Identity);
+            if (!PendingProjectileVisualSync.ContainsKey(key) && PendingProjectileVisualSync.Count >= PendingProjectileVisualSyncMaxEntries)
+            {
+                string oldest = PendingProjectileVisualSync.OrderBy(x => x.Value.ExpireTick).First().Key;
+                PendingProjectileVisualSync.Remove(oldest);
+            }
+            PendingProjectileVisualSync[key] = payload;
+        }
+    }
+
+    private static void PruneTickMapLocked(Dictionary<string, int> map, int now, int maxEntries, int maxAgeTicks, string incomingKey)
+    {
+        foreach (string stale in map.Where(x => now - x.Value >= maxAgeTicks).Select(x => x.Key).ToList())
+            map.Remove(stale);
+        if (!map.ContainsKey(incomingKey))
+        {
+            while (map.Count >= maxEntries)
+            {
+                string oldest = map.OrderBy(x => x.Value).First().Key;
+                map.Remove(oldest);
+            }
+        }
     }
 
     public static void FlushPendingProjectileVisualSyncForGeneratedItem(string? generatedItemId)
@@ -298,6 +406,7 @@ public sealed partial class GeneratedProjectile
         List<ProjectileVisualSyncPayload> ready = new();
         lock (PendingProjectileVisualSync)
         {
+            PrunePendingProjectileVisualSyncLocked((int)Main.GameUpdateCount);
             foreach (var kv in PendingProjectileVisualSync.ToArray())
             {
                 var payload = kv.Value;
@@ -311,10 +420,7 @@ public sealed partial class GeneratedProjectile
         foreach (var payload in ready)
         {
             if (!TryApplyProjectileVisualSyncPayload(payload))
-            {
-                lock (PendingProjectileVisualSync)
-                    PendingProjectileVisualSync[VisualSyncKey(payload.Owner, payload.Identity)] = payload;
-            }
+                StorePendingProjectileVisualSync(payload);
         }
     }
 
@@ -353,7 +459,7 @@ public sealed partial class GeneratedProjectile
         payload.ExpireTick = PendingVfxEventExpiryTick();
         lock (PendingProjectileVfxEvents)
         {
-            if (PendingProjectileVfxEvents.Count > 96)
+            if (PendingProjectileVfxEvents.Count >= PendingProjectileVfxEventMaxEntries)
                 PendingProjectileVfxEvents.RemoveAt(0);
             PendingProjectileVfxEvents.Add(payload);
         }
@@ -417,6 +523,7 @@ public sealed partial class GeneratedProjectile
         ProjectileVisualSyncPayload? payload = null;
         lock (PendingProjectileVisualSync)
         {
+            PrunePendingProjectileVisualSyncLocked((int)Main.GameUpdateCount);
             if (PendingProjectileVisualSync.TryGetValue(key, out payload))
                 PendingProjectileVisualSync.Remove(key);
         }
@@ -489,6 +596,7 @@ public sealed partial class GeneratedProjectile
         writer.Write(_spec.TileCollide);
         writer.Write(_spec.BounceCount);
         writer.Write(_spec.SplitCount);
+        writer.Write(ShortNet(_spec.SecondaryTrigger, 24));
         writer.Write(_spec.ChainCount);
         writer.Write(_spec.ImmunityCooldown);
         writer.Write(_spec.ProcMode);
@@ -506,12 +614,30 @@ public sealed partial class GeneratedProjectile
         writer.Write(_spec.MobilityRangeTiles);
         writer.Write(_spec.MobilityCooldownTicks);
         writer.Write(_spec.MobilitySafeTileOnly);
-        writer.Write(ShortNet(_spec.ImpactSoundProfile, 48));
+        writer.Write(ShortNet(_spec.SoundUseCatalogId, 64));
+        writer.Write(ShortNet(_spec.SoundImpactCatalogId, 64));
+        writer.Write(ShortNet(_spec.SoundCatalogSource, 48));
         writer.Write(_spec.SoundPitch);
         writer.Write(_spec.SoundVolume);
+        writer.Write(_spec.SoundPitchVariance);
+        writer.Write(_spec.RangeTiles);
+        writer.Write(_spec.HomingStrength);
+        writer.Write(_spec.BeamWidthPx);
+        writer.Write(_spec.BeamChargeTicks);
+        writer.Write(_spec.ChargeTicks);
+        writer.Write(_spec.ChargePowerMultiplier);
+        writer.Write(_spec.DelayTicks);
+        writer.Write(ShortNet(_spec.SentryPlacement, 16));
+        writer.Write(_spec.SentryAttackIntervalTicks);
+        writer.Write(_spec.SentryTargetRangeTiles);
+        writer.Write(_spec.SentryLifetimeTicks);
+        writer.Write(_chargeTicksAccumulated);
+        writer.Write(_sentryFireTimer);
+        writer.Write(_beamLengthPx);
         // v0.4.97: this packet slot used to carry prose/script compatibility strings.
         // Runtime now carries explicit family state instead; prose never participates in projectile AI.
         writer.Write(ShortNet(_spec.RuntimeFamily, 32));
+        writer.Write(ShortNet(_spec.DamageClass, 96));
         writer.Write(ShortNet(_spec.Delivery, 40));
         writer.Write(ShortNet(_spec.WeaponFamily, 48));
         writer.Write(ShortNet(_spec.ProjectileFamily, 48));
@@ -527,8 +653,6 @@ public sealed partial class GeneratedProjectile
         writer.Write(ShortNet(_spec.ProjectileRotation, 64));
         writer.Write(ShortNet(_spec.ProjectileTrail, 120));
         writer.Write(ShortNet(_spec.ProjectileImpact, 120));
-        writer.Write(ShortNet(_spec.SoundUse, 80));
-        writer.Write(ShortNet(_spec.SoundImpact, 80));
         writer.Write(SpritePathForNet(_spec.ProjectileSpritePath));
         writer.Write(ShortNet(_spec.ProjectileSpriteStatus, 40));
         writer.Write("");
@@ -593,6 +717,7 @@ public sealed partial class GeneratedProjectile
             _spec.TileCollide = reader.ReadBoolean();
             _spec.BounceCount = reader.ReadInt32();
             _spec.SplitCount = reader.ReadInt32();
+            _spec.SecondaryTrigger = reader.ReadString();
             _spec.ChainCount = reader.ReadInt32();
             _spec.ImmunityCooldown = reader.ReadInt32();
             _spec.ProcMode = reader.ReadInt32();
@@ -610,10 +735,28 @@ public sealed partial class GeneratedProjectile
             _spec.MobilityRangeTiles = reader.ReadInt32();
             _spec.MobilityCooldownTicks = reader.ReadInt32();
             _spec.MobilitySafeTileOnly = reader.ReadBoolean();
-            _spec.ImpactSoundProfile = reader.ReadString();
+            _spec.SoundUseCatalogId = reader.ReadString();
+            _spec.SoundImpactCatalogId = reader.ReadString();
+            _spec.SoundCatalogSource = reader.ReadString();
             _spec.SoundPitch = reader.ReadSingle();
             _spec.SoundVolume = reader.ReadSingle();
+            _spec.SoundPitchVariance = reader.ReadSingle();
+            _spec.RangeTiles = reader.ReadSingle();
+            _spec.HomingStrength = reader.ReadSingle();
+            _spec.BeamWidthPx = reader.ReadSingle();
+            _spec.BeamChargeTicks = reader.ReadInt32();
+            _spec.ChargeTicks = reader.ReadInt32();
+            _spec.ChargePowerMultiplier = reader.ReadSingle();
+            _spec.DelayTicks = reader.ReadInt32();
+            _spec.SentryPlacement = reader.ReadString();
+            _spec.SentryAttackIntervalTicks = reader.ReadInt32();
+            _spec.SentryTargetRangeTiles = reader.ReadSingle();
+            _spec.SentryLifetimeTicks = reader.ReadInt32();
+            _chargeTicksAccumulated = reader.ReadInt32();
+            _sentryFireTimer = reader.ReadInt32();
+            _beamLengthPx = reader.ReadSingle();
             _spec.RuntimeFamily = ReadStringKeepBase(reader, _spec.RuntimeFamily, childShard);
+            _spec.DamageClass = ReadStringKeepBase(reader, _spec.DamageClass, childShard);
             _spec.Delivery = ReadStringKeepBase(reader, _spec.Delivery, childShard);
             _spec.WeaponFamily = ReadStringKeepBase(reader, _spec.WeaponFamily, childShard);
             _spec.ProjectileFamily = ReadStringKeepBase(reader, _spec.ProjectileFamily, childShard);
@@ -629,8 +772,6 @@ public sealed partial class GeneratedProjectile
             _spec.ProjectileRotation = ReadStringKeepBase(reader, _spec.ProjectileRotation, childShard);
             _spec.ProjectileTrail = ReadStringKeepBase(reader, _spec.ProjectileTrail, childShard);
             _spec.ProjectileImpact = ReadStringKeepBase(reader, _spec.ProjectileImpact, childShard);
-            _spec.SoundUse = ReadStringKeepBase(reader, _spec.SoundUse, childShard);
-            _spec.SoundImpact = ReadStringKeepBase(reader, _spec.SoundImpact, childShard);
             _spec.ProjectileSpritePath = ReadStringKeepBase(reader, _spec.ProjectileSpritePath, childShard);
             _spec.ProjectileSpriteStatus = ReadStringKeepBase(reader, _spec.ProjectileSpriteStatus, childShard);
             _spec.ProjectileSpritePrompt = ReadStringKeepBase(reader, _spec.ProjectileSpritePrompt, childShard);
@@ -763,6 +904,7 @@ public sealed partial class GeneratedProjectile
         {
             if (MissingGeneratedItemRequestTicks.TryGetValue(key, out int last) && now - last < retryTicks)
                 return;
+            PruneTickMapLocked(MissingGeneratedItemRequestTicks, now, MaxMissingRequestStateEntries, MissingRequestStateAgeTicks, key);
             MissingGeneratedItemRequestTicks[key] = now;
         }
         if (!string.IsNullOrWhiteSpace(id))

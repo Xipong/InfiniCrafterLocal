@@ -1,93 +1,27 @@
 from __future__ import annotations
 
-import os
-import json
-import re
-import socket
+import importlib
 import subprocess
-import signal
-import sys
-import threading
-import time
-import urllib.request
-import webbrowser
-from pathlib import Path, PureWindowsPath
-from infini_local.desktop.tk_compat import (
-    TKINTER_AVAILABLE,
-    TKINTER_IMPORT_ERROR,
-    filedialog,
-    messagebox,
-    tk,
-    ttk,
-)
+
+tk_compat = importlib.import_module("infini_local.desktop.tk_compat")
+
+tk = tk_compat.tk
+ttk = tk_compat.ttk
 
 from infini_local.desktop.settings_gui_theme import (
-    ROOT,
     CONFIG_PATH,
     EXAMPLE_PATH,
     APP_TITLE,
-    APP_BG,
-    APP_PANEL_BG,
-    CARD_BG,
-    CARD_MUTED_BG,
-    HEADER_BG,
-    HEADER_BG_2,
-    TEXT_FG,
-    MUTED_FG,
-    SOFT_FG,
-    ACCENT_BG,
-    ACCENT_HOVER_BG,
-    ACCENT_SOFT_BG,
-    ACCENT_FG,
-    SUCCESS_BG,
-    SUCCESS_SOFT_BG,
-    SUCCESS_FG,
-    DANGER_BG,
-    DANGER_SOFT_BG,
-    DANGER_FG,
-    WARNING_SOFT_BG,
-    WARNING_FG,
-    BORDER_FG,
-    BORDER_DARK_FG,
 )
 
 
-# Static settings schema/defaults/help live in settings_schema.py; this GUI
-# module re-exports them for existing tests and callers.
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
-    FIELD_HELP,
-    FIELD_ORDER,
-    OPTION_HELP,
     PRESETS,
-    PRESET_HELP,
-    SDCPP_DEFAULT_COMMAND_TEMPLATE,
-    SDCPP_EXTRA_FLAG_SPECS,
-    SDCPP_EXTRA_PROFILES,
-    SDCPP_EXTRA_PROFILE_HELP,
-    repair_sdcpp_command_template,
 )
 
 
-from infini_local.desktop.settings_env import (
-    parse_env,
-    quote_env_value,
-    write_env,
-)
-
-
-
-
-from infini_local.desktop.settings_widgets import (
-    ScrollFrame,
-    ToolTip,
-)
-from infini_local.desktop.settings_sdcpp_args import (
-    extra_option_names,
-    join_extra_for_gui,
-    remove_extra_options,
-    split_extra_for_gui,
-)
+from infini_local.desktop.settings_env import parse_env
 
 from infini_local.desktop.settings_gui_ui import SettingsGuiUiMixin
 from infini_local.desktop.settings_gui_image_args import SettingsGuiImageArgsMixin

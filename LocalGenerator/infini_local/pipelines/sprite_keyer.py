@@ -13,7 +13,6 @@ from infini_local.pipelines.pipeline_visual_config import (
     BG_REMOVE_MODE,
     CHROMA_TOLERANCE,
     REMOVE_BG,
-    SPRITE_CHROMA_DEFRINGE,
     SPRITE_KEYER_RESIDUE_STEPS,
     SPRITE_KEYER_SPILL_RADIUS,
 )
@@ -362,6 +361,11 @@ def _poster_card_like_rgb(rgb: tuple[int, int, int]) -> bool:
         return True
     if r >= 215 and b >= 205 and g >= 120 and spread <= 135:
         return True
+    # Anti-aliased inner edge of a generated pink card. It is intentionally
+    # narrower than generic magenta detection; geometry/connectedness checks in
+    # remove_inner_poster_card_background decide whether it is background.
+    if r >= 195 and b >= 175 and 80 <= g <= 205 and r >= g + 22 and b >= g + 22 and spread <= 135:
+        return True
     return False
 
 def _quant_bucket(rgb: tuple[int, int, int], step: int = 12) -> tuple[int, int, int]:
@@ -413,7 +417,7 @@ def remove_inner_poster_card_background(img: Any, role: str = "item") -> Any:
         bkt = _quant_bucket(rgb, 12)
         buckets[bkt] = buckets.get(bkt, 0) + 1
     card_key, card_count = max(buckets.items(), key=lambda kv: kv[1])
-    if card_count / max(1, len(border_samples)) < 0.30:
+    if card_count / max(1, len(border_samples)) < 0.12:
         return img
     if not _poster_card_like_rgb(card_key):
         return img
@@ -445,8 +449,10 @@ def remove_inner_poster_card_background(img: Any, role: str = "item") -> Any:
     # the near-white shape is probably the asset itself, not a poster card.
     if non_card_count / alpha_count < 0.045:
         return img
-    if card_like_count / alpha_count < 0.28:
+    card_ratio = card_like_count / alpha_count
+    if card_ratio < 0.015:
         return img
+    thin_frame_candidate = card_ratio < 0.28
 
     seeds: list[tuple[int, int]] = []
     for x in range(x0, x1):
@@ -473,7 +479,35 @@ def remove_inner_poster_card_background(img: Any, role: str = "item") -> Any:
             if nx >= x0 and nx < x1 and ny >= y0 and ny < y1 and (nx, ny) not in card:
                 if is_card(nx, ny):
                     q.append((nx, ny))
-    if len(card) < max(24, int(alpha_count * 0.18)):
+    if thin_frame_candidate:
+        touched_sides = sum([
+            any(x == x0 for x, _y in card),
+            any(x == x1 - 1 for x, _y in card),
+            any(y == y0 for _x, y in card),
+            any(y == y1 - 1 for _x, y in card),
+        ])
+        if touched_sides < 3:
+            return img
+
+        # A true inset frame is an opaque component separate from the item body.
+        # Starting from the pale card mask, traverse all opaque neighbours. If that
+        # reaches a substantially larger colored body, this is likely a real shield,
+        # white weapon, or other foreground with a light rim rather than background.
+        component = set(card)
+        cq = list(card)
+        while cq:
+            x, y = cq.pop()
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if nx < x0 or nx >= x1 or ny < y0 or ny >= y1 or (nx, ny) in component:
+                    continue
+                if px[nx, ny][3] <= 0:
+                    continue
+                component.add((nx, ny))
+                cq.append((nx, ny))
+        if len(component) > max(int(len(card) * 1.6), int(alpha_count * 0.45)):
+            return img
+    min_card_pixels = max(24, int((bw + bh) * 0.45)) if thin_frame_candidate else max(24, int(alpha_count * 0.18))
+    if len(card) < min_card_pixels:
         return img
     if len(card) > int(alpha_count * 0.96):
         return img
@@ -484,6 +518,29 @@ def remove_inner_poster_card_background(img: Any, role: str = "item") -> Any:
     except Exception:
         pass
     return scrub_transparent_rgb(img)
+
+
+def remove_nested_poster_card_background(img: Any, role: str = "item", max_layers: int = 3) -> Any:
+    """Remove a bounded stack of AI-drawn card backgrounds.
+
+    Some outputs contain a white outer canvas, a pink requested-key card, and one
+    anti-aliased transition ring. One pass can expose the next layer, so process at
+    most three layers and stop as soon as alpha coverage no longer decreases.
+    """
+    if Image is None:
+        return img
+    current = img.convert("RGBA")
+    for _ in range(max(1, min(3, int(max_layers)))):
+        before_hist = current.getchannel("A").histogram()
+        before_visible = current.width * current.height - int(before_hist[0])
+        cleaned = remove_inner_poster_card_background(current, role)
+        after_hist = cleaned.getchannel("A").histogram()
+        after_visible = cleaned.width * cleaned.height - int(after_hist[0])
+        current = cleaned
+        if after_visible >= before_visible:
+            break
+    return scrub_transparent_rgb(current)
+
 
 def find_nearby_clean_foreground_color(px: Any, w: int, h: int, x: int, y: int, bg: set[tuple[int, int]], radius: int, key_profile: dict[str, Any] | None = None) -> tuple[int, int, int] | None:
     radius = max(1, min(10, int(radius)))
@@ -634,6 +691,7 @@ __all__ = [
     "_poster_card_like_rgb",
     "_quant_bucket",
     "remove_inner_poster_card_background",
+    "remove_nested_poster_card_background",
     "find_nearby_clean_foreground_color",
     "close_tiny_background_cracks",
     "remove_background_sprite_keyer",

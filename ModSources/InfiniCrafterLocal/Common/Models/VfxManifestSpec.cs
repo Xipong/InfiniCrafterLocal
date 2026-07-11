@@ -51,6 +51,7 @@ public sealed class VfxManifestSpec
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         WriteIndented = false
     };
 
@@ -60,6 +61,8 @@ public sealed class VfxManifestSpec
 
     public static VfxManifestSpec FromJson(string? json)
     {
+        const string boundary = "VfxManifestSpec.FromJson";
+        ContractJsonDiagnostics.Clear(boundary);
         if (string.IsNullOrWhiteSpace(json))
             return Empty();
         try
@@ -68,17 +71,24 @@ public sealed class VfxManifestSpec
             parsed.Normalize();
             return parsed;
         }
-        catch
+        catch (Exception exception)
         {
+            ContractJsonDiagnostics.Record(boundary, exception);
             return Empty();
         }
     }
 
     public string ToJson()
     {
+        const string boundary = "VfxManifestSpec.ToJson";
+        ContractJsonDiagnostics.Clear(boundary);
         Normalize();
         try { return JsonSerializer.Serialize(this, Options); }
-        catch { return ""; }
+        catch (Exception exception)
+        {
+            ContractJsonDiagnostics.Record(boundary, exception);
+            return "";
+        }
     }
 
     public void Normalize()
@@ -180,8 +190,7 @@ public sealed class VfxSlotSpec
     public string EventGroup { get; set; } = "auto"; // live/hit/kill; canonical lifecycle group precompiled by Python.
     public string Stage { get; set; } = "loop"; // windup, active, impact, decay, loop
     public string Backend { get; set; } = "Auto"; // Baked, Realtime, Primitive, Sprite, Particle, Auto
-    public string Renderer { get; set; } = "projectileAfterimage";
-    public string RendererKind { get; set; } = "auto"; // canonical renderer id; runtime should prefer this over fuzzy Renderer text.
+    public string RendererKind { get; set; } = "projectileAfterimage"; // exact canonical renderer id.
     public string TextureRole { get; set; } = "projectile";
     public string ParticleRole { get; set; } = "child";
     public string Anchor { get; set; } = "self"; // self, owner, tip, tipHistory, hitPoint, velocity, field
@@ -217,27 +226,33 @@ public sealed class VfxSlotSpec
 
     public void Normalize()
     {
-        Event = string.IsNullOrWhiteSpace(Event) ? "tick" : Event;
+        Event = VfxCanonicalVocabulary.Event(Event);
         EffectName ??= "";
-        EventGroup = VfxRendererRegistry.NormalizeEventGroup(EventGroup, Event);
-        Stage = string.IsNullOrWhiteSpace(Stage) ? StageForEvent(Event) : Stage;
-        Backend = string.IsNullOrWhiteSpace(Backend) ? "Auto" : Backend;
-        Renderer = string.IsNullOrWhiteSpace(Renderer) ? "projectileAfterimage" : Renderer;
-        RendererKind = VfxRendererRegistry.NormalizeKindName(RendererKind, Renderer, Event);
+        EventGroup = VfxCanonicalVocabulary.EventGroup(Event);
+        Stage = VfxCanonicalVocabulary.Stage(Event);
+        Backend = VfxCanonicalVocabulary.Backend(Backend);
+        RendererKind = VfxRendererRegistry.NormalizeKindName(RendererKind);
+        InfiniVfxRendererKind rendererKind = VfxRendererRegistry.ParseKind(RendererKind);
+        if (rendererKind == InfiniVfxRendererKind.None)
+        {
+            RendererKind = "projectileAfterimage";
+            rendererKind = InfiniVfxRendererKind.ProjectileAfterimage;
+        }
         TextureRole = string.IsNullOrWhiteSpace(TextureRole) ? "projectile" : TextureRole;
         ParticleRole = string.IsNullOrWhiteSpace(ParticleRole) ? TextureRole : ParticleRole;
-        Anchor = string.IsNullOrWhiteSpace(Anchor) ? AnchorForRenderer(Renderer, Event) : Anchor;
-        Blend = string.IsNullOrWhiteSpace(Blend) ? "alpha" : Blend;
-        Layer = string.IsNullOrWhiteSpace(Layer) ? "BeforeProjectiles" : Layer;
-        Channel = NormalizeChannel(Channel, Renderer, Event);
-        Lane = NormalizeLane(Lane, Channel, Importance, Renderer, Event);
+        Channel = VfxCanonicalVocabulary.Channel(Channel, rendererKind, Event);
+        Importance = VfxCanonicalVocabulary.Importance(Importance);
+        Lane = VfxCanonicalVocabulary.Lane(Lane, Channel, Importance, rendererKind);
+        Anchor = VfxCanonicalVocabulary.Anchor(Anchor, rendererKind, Channel, Event);
+        Blend = VfxCanonicalVocabulary.Blend(Blend, rendererKind, Channel);
+        Layer = Layer is "BeforeProjectiles" or "AfterProjectiles" ? Layer : "BeforeProjectiles";
         Source = string.IsNullOrWhiteSpace(Source) ? "recipe" : Source.Trim();
-        EmissionMode = NormalizeEmissionMode(EmissionMode, Renderer, Event);
-        ParticleSystemId = VfxParticleAddress.Resolve(ParticleSystemId, Renderer, Channel, Event, Blend, EmissionMode);
+        EmissionMode = VfxCanonicalVocabulary.EmissionMode(EmissionMode, rendererKind, Channel, Event);
+        ParticleSystemId = VfxParticleAddress.Resolve(ParticleSystemId, RendererKind, Channel, Event, Blend, EmissionMode);
         FadeIn = Math.Clamp(FadeIn <= 0f ? 0.15f : FadeIn, 0f, 0.95f);
         FadeOut = Math.Clamp(FadeOut <= 0f ? 0.35f : FadeOut, 0f, 0.95f);
-        Curve = string.IsNullOrWhiteSpace(Curve) ? "smooth" : Curve.Trim().ToLowerInvariant();
-        SlotSeed = SlotSeed == 0 ? StableSlotSeed(Renderer, Event, Channel, Lane, Variant) : SlotSeed;
+        Curve = VfxCanonicalVocabulary.Curve(Curve);
+        SlotSeed = SlotSeed == 0 ? StableSlotSeed(RendererKind, Event, Channel, Lane, Variant) : SlotSeed;
         StartTick = Math.Clamp(StartTick, 0, 600);
         RepeatEvery = Math.Clamp(RepeatEvery, 0, 600);
         Scale = Math.Clamp(Scale <= 0f ? 1f : Scale, 0.05f, 8f);
@@ -248,7 +263,6 @@ public sealed class VfxSlotSpec
         Jitter = Math.Clamp(Jitter, 0f, 2f);
         PhaseOffset = Math.Clamp(PhaseOffset, -2f, 2f);
         BudgetWeight = Math.Clamp(BudgetWeight <= 0f ? 1f : BudgetWeight, 0.05f, 8f);
-        Importance = NormalizeImportance(Importance);
         VisualCost = Math.Clamp(VisualCost, 0f, 1f);
         SignatureWeight = Math.Clamp(SignatureWeight, 0f, 1f);
         BakedClipId ??= "";
@@ -263,101 +277,6 @@ public sealed class VfxSlotSpec
 // =============================================================================
 // NAV: VFX_SLOT_NORMALIZATION
 // =============================================================================
-    private static string NormalizeChannel(string? channel, string? renderer, string? ev)
-    {
-        string c = string.IsNullOrWhiteSpace(channel) ? "auto" : channel.Trim().ToLowerInvariant();
-        return c switch
-        {
-            "motiontrail" or "trail" or "motion" => "motionTrail",
-            "coreglow" or "glow" or "core" => "coreGlow",
-            "ambientparticles" or "ambient" or "particles" => "ambientParticles",
-            "impactshape" or "impact" or "shape" => "impactShape",
-            "impactparticles" or "hitparticles" => "impactParticles",
-            "decaysmoke" or "decay" or "smoke" => "decaySmoke",
-            "light" => "light",
-            "sound" => "sound",
-            _ => InferChannel(renderer, ev)
-        };
-    }
-
-    private static string InferChannel(string? renderer, string? ev)
-    {
-        var kind = VfxRendererRegistry.Resolve(renderer, ev);
-        if (kind == InfiniVfxRendererKind.SoundCue) return "sound";
-        if (kind == InfiniVfxRendererKind.LightCue) return "light";
-        if (kind is InfiniVfxRendererKind.ProjectileAfterimage or InfiniVfxRendererKind.SpriteStampTrail or InfiniVfxRendererKind.HistoryRibbon or InfiniVfxRendererKind.TipTrail or InfiniVfxRendererKind.GhostArc or InfiniVfxRendererKind.WavyStrip or InfiniVfxRendererKind.BeamLine)
-            return "motionTrail";
-        if (kind is InfiniVfxRendererKind.FieldPulse or InfiniVfxRendererKind.OrbitingMotes or InfiniVfxRendererKind.ActorAfterimage)
-            return "coreGlow";
-        if (kind == InfiniVfxRendererKind.ChildMotes)
-            return IsHitLike(ev) ? "impactParticles" : "ambientParticles";
-        if (kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ImpactSprite)
-            return IsKillLike(ev) ? "impactShape" : "impactShape";
-        return IsHitLike(ev) ? "impactShape" : "motionTrail";
-    }
-
-    private static bool IsHitLike(string? ev)
-    {
-        string e = (ev ?? "").ToLowerInvariant();
-        return e is "hit" or "impact" or "onhit";
-    }
-
-    private static bool IsKillLike(string? ev)
-    {
-        string e = (ev ?? "").ToLowerInvariant();
-        return e is "kill" or "expire" or "decay";
-    }
-
-    private static string NormalizeLane(string? lane, string? channel, string? importance, string? renderer, string? ev)
-    {
-        string l = string.IsNullOrWhiteSpace(lane) ? "auto" : lane.Trim().ToLowerInvariant();
-        return l switch
-        {
-            "main" or "primary" or "core" => "primary",
-            "support" or "secondary" => "support",
-            "accent" => "accent",
-            "ornament" or "luxury" or "extra" => "ornament",
-            "cue" => "cue",
-            _ => InferLane(channel, importance, renderer, ev)
-        };
-    }
-
-    private static string InferLane(string? channel, string? importance, string? renderer, string? ev)
-    {
-        string c = (channel ?? "").Trim();
-        string i = (importance ?? "").Trim().ToLowerInvariant();
-        var kind = VfxRendererRegistry.Resolve(renderer, ev);
-        if (c == "light" || c == "sound" || kind is InfiniVfxRendererKind.LightCue or InfiniVfxRendererKind.SoundCue)
-            return "cue";
-        if (i == "core")
-            return "primary";
-        if (i == "secondary")
-            return "support";
-        if (i == "luxury")
-            return "ornament";
-        if (i == "accent")
-            return "accent";
-        if (kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ImpactSprite)
-            return "support";
-        if (kind is InfiniVfxRendererKind.ChildMotes or InfiniVfxRendererKind.OrbitingMotes)
-            return "accent";
-        return "primary";
-    }
-
-    private static string NormalizeEmissionMode(string? value, string? renderer, string? ev)
-    {
-        string v = string.IsNullOrWhiteSpace(value) ? "auto" : value.Trim().ToLowerInvariant();
-        if (v is "wake" or "orbit" or "residue" or "burst" or "cone" or "ring" or "spiral" or "point")
-            return v;
-        string r = (renderer ?? "").ToLowerInvariant();
-        string e = (ev ?? "").ToLowerInvariant();
-        if (r.Contains("orbital") || r.Contains("orbit")) return "orbit";
-        if (e is "hit" or "impact" or "onhit") return r.Contains("ring") ? "ring" : "burst";
-        if (e is "kill" or "expire" or "decay") return "residue";
-        if (r.Contains("beam")) return "wake";
-        return "wake";
-    }
-
     private static int StableSlotSeed(string? renderer, string? ev, string? channel, string? lane, int variant)
     {
         unchecked
@@ -373,39 +292,7 @@ public sealed class VfxSlotSpec
         }
     }
 
-    private static string StageForEvent(string? ev)
-    {
-        string e = (ev ?? "").ToLowerInvariant();
-        if (e is "hit" or "impact" or "onhit") return "impact";
-        if (e is "kill" or "expire" or "decay") return "decay";
-        if (e is "active" or "slash" or "beam") return "active";
-        if (e is "spawn" or "windup") return "windup";
-        return "loop";
-    }
 
-    private static string NormalizeImportance(string? value)
-    {
-        string q = string.IsNullOrWhiteSpace(value) ? "secondary" : value.Trim().ToLowerInvariant();
-        return q switch
-        {
-            "core" or "main" => "core",
-            "secondary" or "support" => "secondary",
-            "accent" or "decor" => "accent",
-            "luxury" or "extra" => "luxury",
-            _ => "secondary"
-        };
-    }
-
-    private static string AnchorForRenderer(string? renderer, string? ev)
-    {
-        string r = (renderer ?? "").ToLowerInvariant();
-        string e = (ev ?? "").ToLowerInvariant();
-        if (e is "hit" or "impact" or "onhit") return "hitPoint";
-        if (r.Contains("tip") || r.Contains("ribbon") || r.Contains("slash")) return "tipHistory";
-        if (r.Contains("beam")) return "velocity";
-        if (r.Contains("field")) return "field";
-        return "self";
-    }
 }
 
 

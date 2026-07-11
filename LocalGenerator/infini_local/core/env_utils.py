@@ -15,6 +15,8 @@ def load_env_file(path: Path) -> None:
     deliberately tiny because the local generator must keep working on Windows
     GUI/bat launches without adding another dependency.
     """
+    if os.environ.get("INFINI_SKIP_CONFIG_FILE", "").strip().lower() in _TRUE_VALUES:
+        return
     if not path.exists():
         return
     for raw in path.read_text(encoding="utf-8-sig").splitlines():

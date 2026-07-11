@@ -88,13 +88,6 @@ def _check_chain_requires_count_and_does_not_create_children_by_accident() -> No
     assert patch2.get("onHitDemotedReason") == "chain_requires_count_gt_0"
 
 
-if __name__ == "__main__":
-    test_runtime_plan_compiler_keeps_current_playable_core()
-    test_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay()
-    test_chain_requires_count_and_does_not_create_children_by_accident()
-    print("OK runtime authoring contract")
-
-
 def _check_spear_thrust_delivery_is_distinct_from_sword_swing() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 18, "useTimeTicks": 27}},
@@ -353,15 +346,17 @@ def _check_forbidden_world_entity_spawns_are_rejected_not_repaired() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "summon", "damage": 18, "useTimeTicks": 30}},
         {"fn": "summon_boss", "params": {"family": "eye_of_cthulhu"}},
-        {"fn": "summon_combat_entity", "params": {"family": "boss", "movement": "orbit", "shotCount": 1}},
-        {"fn": "summon_combat_entity", "params": {"family": "minion", "movement": "orbit", "shotCount": 1}},
+        {"fn": "spawn_temporary_helper_projectile", "params": {"family": "boss", "movement": "orbit", "shotCount": 1}},
+        {"fn": "spawn_temporary_helper_projectile", "params": {"family": "drone", "movement": "orbit", "shotCount": 1}},
     ]}}
+    normalize_runtime_plan_inplace(data)
     patch = compile_runtime_plan_to_genome_patch(data)
     assert patch["runtimeFamily"] == "summon"
     rejected = patch.get("rejectedEngineCalls") or []
     assert len(rejected) == 2
     assert all(x["reason"] == "forbidden_world_entity_spawn" for x in rejected)
-    assert patch.get("weaponFamily") == "minion"
+    assert patch.get("weaponFamily") == "drone"
+    assert {x["fn"] for x in rejected} == {"summon_boss", "spawn_temporary_helper_projectile"}
 
 
 def _check_state_meter_and_triggered_action_are_preserved_as_contract_only() -> None:
@@ -404,26 +399,24 @@ def _check_safe_item_capability_enginecalls_compile_to_gameplay_patch() -> None:
     assert patch["ammoFor"] == "bullet"
 
 
-def _check_starfall_onhit_is_executable_semantic_child_primitive() -> None:
+def _check_overhead_barrage_onhit_is_executable_semantic_child_primitive() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 28, "useTimeTicks": 32}},
         {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "gold star-edged slash", "effect": "star"}},
-        {"fn": "apply_on_hit_effect", "params": {"onHit": "starfall", "count": 4, "aoeRadiusTiles": 2}},
+        {"fn": "apply_on_hit_effect", "params": {"onHit": "overhead_barrage", "count": 4, "aoeRadiusTiles": 2}},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(data)
     assert patch["runtimeFamily"] == "swing"
-    assert patch["onHit"] == "starfall"
+    assert patch["onHit"] == "overhead_barrage"
     assert patch["splitCount"] == 4
     assert patch["maxChildProjectiles"] == 4
     assert patch["maxChildDepth"] == 1
-    assert "falling_star" in patch["attackPatternTags"]
+    assert "attackPatternTags" not in patch
 
     data["sourceMode"] = "llm"
-    from infini_local.pipelines.combine_pipeline import (
-        llm_authored_weapon_genome,
-        stat_profile_for,
-        tags_of,
-    )
+    from infini_local.pipelines.combine_genome import llm_authored_weapon_genome
+    from infini_local.pipelines.item_power_knowledge import tags_of
+    from infini_local.pipelines.combine_balance import stat_profile_for
     a = {"name": "wooden sword", "damage": 7}
     b = {"name": "fallen star"}
     tags = tags_of(a) | tags_of(b)
@@ -455,7 +448,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_forbidden_world_entity_spawns_are_rejected_not_repaired',
     '_check_state_meter_and_triggered_action_are_preserved_as_contract_only',
     '_check_safe_item_capability_enginecalls_compile_to_gameplay_patch',
-    '_check_starfall_onhit_is_executable_semantic_child_primitive'
+    '_check_overhead_barrage_onhit_is_executable_semantic_child_primitive'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

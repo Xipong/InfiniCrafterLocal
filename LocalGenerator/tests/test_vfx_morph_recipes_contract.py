@@ -25,7 +25,7 @@ def _check_vfx_morph_recipes_schema_is_parseable_and_slot_shaped():
             assert slots, rid
             for slot in slots:
                 assert isinstance(slot, dict), rid
-                for key in ("event", "renderer", "textureRole"):
+                for key in ("event", "rendererKind", "textureRole"):
                     assert isinstance(slot.get(key), str) and slot.get(key).strip(), (rid, slot)
         if isinstance(macros, list):
             assert macros, rid

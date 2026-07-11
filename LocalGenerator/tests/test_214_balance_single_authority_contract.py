@@ -40,7 +40,7 @@ def test_progression_guide_is_human_reference_not_active_prompt_or_helper():
 
 
 def test_balance_envelope_is_single_code_owned_layer_with_correct_cost_math():
-    from infini_local.pipelines.combine_pipeline import (
+    from infini_local.pipelines.combine_balance import (
         clamp_vanilla_like_weapon_damage,
         vanilla_like_weapon_envelope,
     )

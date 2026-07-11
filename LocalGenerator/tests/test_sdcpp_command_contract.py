@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 import os
-
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
+from infini_local.web import server
+from infini_local.pipelines import image_backend_pipeline as IMAGE_BACKEND_PIPELINE
+from infini_local.pipelines import pipeline_visual_config as visual_config
+from infini_local.services import sdcpp_backend
 
 
 def _expected_host_path(path: str) -> str:
     if os.name == "nt":
         return path
     return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
-
-IMAGE_BACKEND_PIPELINE = server.image_backend_pipeline
 
 
 def _check_sdcpp_safe_args_ignores_corrupt_command_template(monkeypatch) -> None:
@@ -30,7 +30,7 @@ def _check_sdcpp_safe_args_ignores_corrupt_command_template(monkeypatch) -> None
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SAMPLER", "euler")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_TEMPLATE", "{exe} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}")
 
-    cmd, shell = server.build_sdcpp_server_command()
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
 
     assert shell is False
     assert isinstance(cmd, list)
@@ -52,7 +52,7 @@ def _check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess(monkeypat
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "<lora:terraria:0.5>")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "")
 
-    cmd, shell = server.build_sdcpp_server_command()
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
 
     assert shell is False
     assert isinstance(cmd, list)
@@ -73,9 +73,13 @@ def _check_sdcpp_template_mode_repairs_known_sampling_method_corruption(monkeypa
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "-v")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SAMPLER", "euler")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_TEMPLATE", "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}")
+    monkeypatch.setattr(
+        IMAGE_BACKEND_PIPELINE,
+        "SDCPP_SERVER_COMMAND_TEMPLATE",
+        "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
+    )
 
-    cmd, shell = server.build_sdcpp_server_command()
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
 
     assert shell is True
     assert isinstance(cmd, str)
@@ -89,7 +93,7 @@ def _check_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
     assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "0.55") == "<lora:terraria_items:0.55>"
 
     cfg = sdcpp_backend.SdcppBackendConfig(
-        default_command_template=server.SDCPP_DEFAULT_COMMAND_TEMPLATE,
+        default_command_template=visual_config.SDCPP_DEFAULT_COMMAND_TEMPLATE,
         command_mode="safe_args",
         server_exe=r"C:\Games\sdcpp\sd-server.exe",
         model=r"C:\Games\sdcpp\models\z-image.gguf",
@@ -162,6 +166,46 @@ def _check_sdcpp_debug_snapshot_exposes_lora_file_fields() -> None:
     assert snap["loraPromptTags"] == "<lora:terraria_items:0.55>"
 
 
+def _check_sdcpp_canonical_state_cleanup_and_health_snapshot() -> None:
+    import infini_local.pipelines.pipeline_visual_config as pipeline_visual_config
+    import infini_local.pipelines.image_backend_pipeline as image_backend_pipeline
+
+    assert pipeline_visual_config.SDCPP_SERVER_STATE is image_backend_pipeline.SDCPP_SERVER_STATE
+    assert not hasattr(server, "SDCPP_SERVER_STATE")
+    assert server.cleanup_sdcpp_server_process is pipeline_visual_config.cleanup_sdcpp_server_process
+
+    utility_routes = server._utility_routes()
+    assert utility_routes.cleanup_for_shutdown is server.cleanup_sdcpp_server_process
+
+
+def _check_sdcpp_health_reads_canonical_state_fields() -> None:
+    import infini_local.pipelines.pipeline_visual_config as pipeline_visual_config
+
+    state = pipeline_visual_config.SDCPP_SERVER_STATE
+    old_last_command = state.last_command
+    old_last_start_error = state.last_start_error
+    old_last_exit = state.last_exit
+    old_last_log_file = state.last_log_file
+
+    try:
+        state.last_command = "test canonical command"
+        state.last_start_error = "test canonical start error"
+        state.last_exit = {"returncode": 23, "signal": None}
+        state.last_log_file = "/tmp/canonical-sdcpp.log"
+
+        health = server._health_payload()
+
+        assert health["sdcpp"]["lastCommand"] == "test canonical command"
+        assert health["sdcpp"]["lastStartError"] == "test canonical start error"
+        assert health["sdcpp"]["lastExit"] == {"returncode": 23, "signal": None}
+        assert health["sdcpp"]["logFile"] == "/tmp/canonical-sdcpp.log"
+    finally:
+        state.last_command = old_last_command
+        state.last_start_error = old_last_start_error
+        state.last_exit = old_last_exit
+        state.last_log_file = old_last_log_file
+
+
 def _check_sdcpp_lora_file_overrides_stale_lora_dir(monkeypatch) -> None:
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_MODE", "safe_args")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXE", r"C:\Games\sdcpp\sd-server.exe")
@@ -173,15 +217,20 @@ def _check_sdcpp_lora_file_overrides_stale_lora_dir(monkeypatch) -> None:
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "")
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SAMPLER", "euler")
     # Simulate server startup normalization after reading INFINI_SDCPP_LORA_FILE.
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_DIR", server.sdcpp_backend.lora_dir_from_file(r"D:\Art\loras\terraria_items.safetensors"))
+    monkeypatch.setattr(
+        IMAGE_BACKEND_PIPELINE,
+        "SDCPP_LORA_DIR",
+        sdcpp_backend.lora_dir_from_file(r"D:\Art\loras\terraria_items.safetensors"),
+    )
 
-    cmd, shell = server.build_sdcpp_server_command()
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
 
     assert shell is False
     assert isinstance(cmd, list)
     assert "--lora-model-dir" in cmd
     assert r"D:\Art\loras" in cmd
     assert r"C:\stale\wrong_loras" not in cmd
+
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -191,12 +240,14 @@ def _run_coarse_contracts(tmp_path):
     import pytest as _pytest
 
     for _name in [
-    '_check_sdcpp_safe_args_ignores_corrupt_command_template',
-    '_check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess',
-    '_check_sdcpp_template_mode_repairs_known_sampling_method_corruption',
-    '_check_sdcpp_lora_file_tag_helper_and_prompt_suffix',
-    '_check_sdcpp_debug_snapshot_exposes_lora_file_fields',
-    '_check_sdcpp_lora_file_overrides_stale_lora_dir'
+        '_check_sdcpp_safe_args_ignores_corrupt_command_template',
+        '_check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess',
+        '_check_sdcpp_template_mode_repairs_known_sampling_method_corruption',
+        '_check_sdcpp_lora_file_tag_helper_and_prompt_suffix',
+        '_check_sdcpp_debug_snapshot_exposes_lora_file_fields',
+        '_check_sdcpp_lora_file_overrides_stale_lora_dir',
+        '_check_sdcpp_canonical_state_cleanup_and_health_snapshot',
+        '_check_sdcpp_health_reads_canonical_state_fields',
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

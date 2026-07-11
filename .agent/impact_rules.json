@@ -1,0 +1,141 @@
+{
+  "schema": "infini.agent-impact-rules.v1",
+  "rules": [
+    {
+      "id": "python-runtime-contract",
+      "patterns": [
+        "LocalGenerator/infini_local/core/runtime_authoring/**",
+        "LocalGenerator/infini_local/core/boundary_models.py",
+        "LocalGenerator/infini_local/pipelines/combine_gameplay.py",
+        "LocalGenerator/infini_local/pipelines/llm_authoring_*.py"
+      ],
+      "checks": [
+        "pytest",
+        "schema_check",
+        "contract_parity",
+        "mutation_gate",
+        "semantic_runtime_diff",
+        "planner_prompt",
+        "pyright"
+      ],
+      "context": [
+        "AGENTS.md",
+        "docs/CONTRACT_SAFETY_STACK_RU.md",
+        "LocalGenerator/infini_local/core/runtime_authoring/schema.py",
+        "LocalGenerator/infini_local/core/boundary_models.py",
+        "contracts/field_lifecycle.json"
+      ]
+    },
+    {
+      "id": "csharp-runtime-contract",
+      "patterns": [
+        "ModSources/**/*.cs",
+        "ModSources/**/*.csproj",
+        "Directory.Build.props",
+        "global.json"
+      ],
+      "checks": [
+        "pytest",
+        "contract_parity",
+        "mutation_gate",
+        "semantic_runtime_diff",
+        "csharp_contracts"
+      ],
+      "requiresBuild": true,
+      "context": [
+        "AGENTS.md",
+        "docs/CONTRACT_SAFETY_STACK_RU.md",
+        "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs",
+        "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs",
+        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs"
+      ]
+    },
+    {
+      "id": "network-protocol",
+      "patterns": [
+        "**/*NetSync*.cs",
+        "**/*Packet*.cs",
+        "**/*Network*.cs"
+      ],
+      "checks": [
+        "contract_parity",
+        "mutation_gate",
+        "csharp_contracts"
+      ],
+      "requiresBuild": true,
+      "context": [
+        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
+        "contracts/field_lifecycle.json"
+      ]
+    },
+    {
+      "id": "vfx-boundary",
+      "patterns": [
+        "LocalGenerator/infini_local/**/vfx*.py",
+        "ModSources/**/Vfx*.cs",
+        "contracts/schemas/vfx_manifest.schema.json"
+      ],
+      "checks": [
+        "pytest",
+        "schema_check",
+        "contract_parity",
+        "semantic_runtime_diff"
+      ],
+      "context": [
+        "LocalGenerator/infini_local/core/boundary_models.py",
+        "ModSources/InfiniCrafterLocal/Common/Models/VfxManifestSpec.cs"
+      ]
+    },
+    {
+      "id": "agent-tooling",
+      "patterns": [
+        ".agent/**",
+        "tools/agentctl.py",
+        "tools/*validation*",
+        "tools/*contract*"
+      ],
+      "checks": [
+        "pytest",
+        "compileall",
+        "project_hygiene",
+        "ruff",
+        "pyright"
+      ],
+      "context": [
+        "AGENTS.md",
+        ".agent/manifest.json",
+        ".agent/impact_rules.json"
+      ]
+    },
+    {
+      "id": "configuration-surface",
+      "patterns": [
+        "LocalGenerator/config.example.env",
+        "LocalGenerator/infini_local/**/config*.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "**/*.py",
+        "**/*.cs"
+      ],
+      "checks": [
+        "config_registry"
+      ],
+      "context": [
+        "contracts/config_registry.json",
+        "LocalGenerator/config.example.env",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ]
+    },
+    {
+      "id": "tests-only",
+      "patterns": [
+        "LocalGenerator/tests/**"
+      ],
+      "checks": [
+        "pytest"
+      ],
+      "context": [
+        "AGENTS.md"
+      ]
+    }
+  ]
+}

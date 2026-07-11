@@ -205,12 +205,13 @@ def strip_conflicting_sprite_prompt_bits(text: str) -> str:
     cleaned = ", ".join(cleaned_parts)
     return cleaned[:1400]
 
-def sanitize_projectile_prompt_multiplicity(prompt: str) -> str:
-    """The projectile PNG is one projectile sprite.
+def sanitize_projectile_prompt_multiplicity(prompt: str, *, force_single: bool = False) -> str:
+    """Keep executable multiplicity out of a single projectile texture.
 
-    shotCount/splitCount are executable mechanics. If the image model draws "two arrows"
-    inside one sprite and the engine also spawns two projectiles, the player sees four-ish
-    arrows or magenta rectangles. Keep multiplicity in code, not in the sprite texture.
+    The generic cleanup handles common accidental duplicates. ``force_single`` is
+    enabled only from explicit runtime shot/split counts and is disabled for an
+    explicitly authored bundle/cluster/swarm projectile family.  No weapon names
+    or tooltip prose select this policy.
     """
     p = str(prompt or "")
     replacements = [
@@ -224,9 +225,17 @@ def sanitize_projectile_prompt_multiplicity(prompt: str) -> str:
         (r"\bspread\s+of\s+two\b", "single"),
         (r"\btwo\s+projectiles\b", "one projectile"),
     ]
+    if force_single:
+        count = r"(?:two|three|four|five|six|seven|eight|[2-8])"
+        body = r"(?:projectiles?|arrows?|bullets?|pellets?|rockets?|darts?|bolts?|shards?|stars?|needles?|orbs?|discs?|blades?)"
+        replacements.extend([
+            (rf"\b(?:a\s+)?(?:spread|fan|volley|cluster|group)\s+of\s+{count}\s+{body}\b", "one projectile body"),
+            (rf"\b{count}\s+{body}\b", "one projectile body"),
+            (rf"\bmultiple\s+{body}\b", "one projectile body"),
+        ])
     for pat, repl in replacements:
         p = re.sub(pat, repl, p, flags=re.IGNORECASE)
-    return p
+    return re.sub(r"\s+", " ", p).strip()
 
 def visual_palette_entry_is_chroma_key_noise(value: str) -> bool:
     """Remove background/key colors from foreground material palettes only.

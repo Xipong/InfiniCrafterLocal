@@ -1,195 +1,35 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import math
-import os
-import queue
-import random
-import re
-import shlex
-import subprocess
-import time
-import traceback
-from pathlib import Path
 from typing import Any
-from urllib import request as urlrequest
-from urllib import error as urlerror
-from urllib.parse import urlencode
-
-from infini_local.core.balance_report import attach_balance_report
 from infini_local.core.balance_policy import weapon_envelope_for_bucket
+
+from infini_local.core.balance_mode import current_balance_mode, should_apply_python_safety
+
+from infini_local.core.item_identity_tools import item_num
 from infini_local.pipelines.result_identity_policy import (
-    _policy_seed,
-    _weighted_choice,
-    bad_result_name,
-    canonical_for_result,
-    category_policy,
-    choose_from,
-    choose_result_category,
-    clean_name,
-    coerce_category_by_policy,
-    creative_result_name,
-    inh_for_parent,
-    is_weapon_like_parent,
-    name_noun_for,
-    name_prefixes_for,
     normalize_category,
-    palette_from,
     parent_primary_category,
-    repair_name_if_needed,
-    rep,
-    rep_for_parent,
-    required_anchors_from,
-    required_anchors_from_tags,
-    theme_word,
-    title_words,
-    try_llm_name_repair,
 )
-from infini_local.pipelines.equipment_stats import (
-    _ACCESSORY_BOOLEAN_COSTS,
-    _ACCESSORY_COST_WEIGHTS,
-    _ARMOR_BOOLEAN_COSTS,
-    _ARMOR_PIECE_COST_WEIGHTS,
-    _SET_BONUS_COST_WEIGHTS,
-    _equipment_budget_base,
-    _equipment_cost,
-    _equipment_float,
-    _equipment_int,
-    _scale_equipment_fields,
-    accessory_stats_for,
-    apply_accessory_soft_budget,
-    apply_armor_soft_budget,
-    armor_slot_from_authoring,
-    armor_stats_for,
-)
-from infini_local.pipelines.pipeline_support import (
-    ACCESSORY_HINT_TAGS,
-    ALLOWED_CATEGORIES,
-    ALLOW_DETERMINISTIC_DEV_FALLBACK,
-    AMMO_HINT_TAGS,
-    APP_VERSION,
-    ARMOR_HINT_TAGS,
-    ASSET_PUBLIC_BASE_URL,
-    BAD_NAME_PATTERNS,
-    CACHE_DIR,
-    CATEGORY_CREATIVITY,
-    CATEGORY_ENFORCE_SAMPLED,
-    CATEGORY_SALT,
-    COMBAT_CATEGORIES,
-    DELIVERY_ALIASES,
-    DELIVERY_VALUES,
-    EFFECT_ALIASES,
-    EFFECT_CODE,
-    EFFECT_PRESENTATION,
-    HARD_TAGS,
-    LAST_COMBINE_FAILURE,
-    LAST_COMBINE_FAILURE_FILE,
-    LLM_NUMERIC_GENOME_LIMITS,
-    LLM_OPTIONAL_GENOME_DEFAULTS,
-    LLM_REQUIRED_GENOME_FIELDS,
-    LLM_RUNTIME_AUTHORING,
-    MODDED_HIGH_TIERS,
-    MOVEMENT_ALIASES,
-    MOVEMENT_CODE,
-    NON_WEAPON_CATEGORIES,
-    ONHIT_ALIASES,
-    ONHIT_CODE,
-    PALETTES,
-    PLACEABLE_HINT_TAGS,
-    PlannerUnavailable,
-    RECIPE_IDENTITY_VERSION,
+from infini_local.pipelines.item_power_knowledge import (
     RECURSIVE_POWER_GROWTH,
-    RUNTIME_FAMILY_VALUES,
-    STRONG_ACCESSORY_TAGS,
-    TIER_DEFAULT_POWER,
-    TIER_RANK,
-    TOOL_HINT_TAGS,
-    USE_LLM,
-    VANILLA_ENDGAME_POWER,
-    VISUAL_PIPELINE_PROFILE,
-    VISUAL_SYNONYMS,
-    WEAPON_UPGRADE_TAGS,
-    _json_slim,
-    all_calls,
-    apply_item_knowledge,
-    asset_sync_service,
-    attach_generated_parent_summary,
-    attach_hybrid_vfx_manifest,
-    behavior_cost_multiplier,
-    build_item_knowledge,
-    cache_get,
-    cache_put,
-    canonicalize,
-    contract_versions_payload,
-    clamp_float,
-    estimate_engine_metrics,
-    failure_state,
-    final_normalize,
-    find_call,
-    generated_data_of,
     generation_depth,
-    guess_head,
-    infer_attack_pattern_from_runtime,
     infer_item_card,
-    is_deliverable_recipe_payload,
-    item_bool,
-    item_field,
-    item_identity,
-    item_num,
-    log_event,
     lower_name,
     mechanic_signal_power,
-    name_of,
-    normalize_world_id_from_payload,
     pair_catalyst_pressure,
-    parse_first_valid_llm_json,
-    rarity_baseline_signal,
     recipe_coherence,
-    recipe_key,
-    recipe_meta,
-    resolve_attack_pattern,
-    runtime_plan,
-    sanitize_genome_engine,
-    sanitize_recipe_for_delivery,
-    slug,
-    stable_hash,
     tags_of,
-    trace_event,
-    world_recipe_dir,
-    world_storage,
 )
-from infini_local.pipelines.projectile_affordance import (
-    _explicit_visual_family_value,
-    apply_parent_projectile_affordance,
-    choose_parent_projectile_size_reference,
-    infer_projectile_visual_family,
-    parent_combo_looks_like_bow,
-    parent_projectile_family,
-    projectile_family_text,
+from infini_local.pipelines.item_rarity_baseline import (
+    MODDED_HIGH_TIERS,
+    TIER_DEFAULT_POWER,
+    TIER_RANK,
+    VANILLA_ENDGAME_POWER,
+    rarity_baseline_signal,
 )
-from infini_local.pipelines.presentation_sound import (
-    attach_presentation_and_sound,
-    clamp,
-    effect_for,
-    movement_for,
-    onhit_for,
-    presentation_from_genome,
-    sound_profile_from_genome,
-)
-from infini_local.pipelines.result_knowledge_card import (
-    attach_result_knowledge_card,
-    build_result_item_card,
-)
-from infini_local.pipelines.parent_context_pipeline import (
-    _pbool,
-    _pnum,
-    effective_projectile_profile_of,
-    llm_parent_card,
-    parent_weapon_profiles,
-    proj_bool,
-)
+from infini_local.pipelines.presentation_sound import clamp
 
 
 def apply_family_locks_to_genome(g: dict[str, Any], a: dict[str, Any], b: dict[str, Any], data: dict[str, Any], stage: dict[str, Any]) -> dict[str, Any]:
@@ -200,6 +40,14 @@ def apply_family_locks_to_genome(g: dict[str, Any], a: dict[str, Any], b: dict[s
     Normal authored values inside the broad corridor are preserved.
     """
     before = dict(g)
+    balance_mode = current_balance_mode()
+    if not should_apply_python_safety(balance_mode):
+        data.setdefault("debug", {})["runtimeSafetyMode"] = {
+            "mode": balance_mode,
+            "applied": False,
+            "reason": "python_runtime_safety_corridor_disabled; C# hard clamps remain active",
+        }
+        return g
     power = max(0.5, float(stage.get("powerBudget") or 1.0))
 
     def _num(key: str, default: float) -> float:
@@ -235,6 +83,7 @@ def apply_family_locks_to_genome(g: dict[str, Any], a: dict[str, Any], b: dict[s
                 "before": {k: before.get(k) for k in ["shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks", "rangeTiles", "extraUpdates", "homingStrength"]},
                 "after": {k: g.get(k) for k in ["shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks", "rangeTiles", "extraUpdates", "homingStrength"]},
                 "basis": "universal numeric safety corridor; no item-family semantic routing",
+                "mode": balance_mode,
             }, ensure_ascii=False)
         except Exception:
             pass
@@ -599,10 +448,6 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any], tags: set[str]) -> di
         "mana": clamp(4 + int(power_budget * 1.25), 0, 18),
     }
 
-def stage_profile_for(a: dict[str, Any], b: dict[str, Any], tags: set[str]) -> dict[str, Any]:
-    # v1.3: kept as compatibility wrapper. The real driver is parent stat profile, not a hard stage table.
-    return stat_profile_for(a, b, tags)
-
 def canvas_tier_for(name: str, tags: set[str], kind: str, stage: dict[str, Any]) -> dict[str, Any]:
     name_l = name.lower()
     head_small = any(x in name_l for x in ["shortsword", "dagger", "knife", "needle", "coin", "seed", "potion", "gem", "shard"])
@@ -661,4 +506,18 @@ def balanced_damage(max_parent_damage: int, tags: set[str], stage: dict[str, Any
     raw = max(1, int(stage.get("derivedDamage") or max_parent_damage + 4))
     return clamp_vanilla_like_weapon_damage(raw, max_parent_damage, stage)
 
-__all__ = [name for name in globals() if callable(globals().get(name)) and not name.startswith("__")]
+__all__ = [
+    "apply_family_locks_to_genome",
+    "preservation_score",
+    "item_power_score",
+    "tier_rank",
+    "influenced_tier",
+    "universal_parent_relation",
+    "recipe_power_transfer",
+    "vanilla_like_weapon_envelope",
+    "clamp_vanilla_like_weapon_damage",
+    "stat_profile_for",
+    "canvas_tier_for",
+    "size_profile_for",
+    "balanced_damage",
+]

@@ -56,7 +56,9 @@ public sealed partial class GeneratedProjectile
             if (string.IsNullOrWhiteSpace(_spec.TrailStyle)) _spec.TrailStyle = parent.TrailStyle ?? "";
             if (string.IsNullOrWhiteSpace(_spec.ImpactStyle)) _spec.ImpactStyle = parent.ImpactStyle ?? "";
             if (string.IsNullOrWhiteSpace(_spec.PrimaryColorName)) _spec.PrimaryColorName = parent.PrimaryColorName ?? "";
-            if (string.IsNullOrWhiteSpace(_spec.ImpactSoundProfile)) _spec.ImpactSoundProfile = parent.ImpactSoundProfile ?? "";
+            if (string.IsNullOrWhiteSpace(_spec.SoundUseCatalogId)) _spec.SoundUseCatalogId = parent.SoundUseCatalogId ?? "";
+            if (string.IsNullOrWhiteSpace(_spec.SoundImpactCatalogId)) _spec.SoundImpactCatalogId = parent.SoundImpactCatalogId ?? "";
+            if (string.IsNullOrWhiteSpace(_spec.SoundCatalogSource)) _spec.SoundCatalogSource = parent.SoundCatalogSource ?? "";
         }
 
         if (_vfxManifest is null || !_vfxManifest.HasSlots)
@@ -212,46 +214,34 @@ public sealed partial class GeneratedProjectile
         d.noGravity = effect is 1 or 3 or 7 or 12 or 13 or 14;
     }
 
-    private string PresentationIdentityText()
+    private bool AllowsVanillaMotionPolish()
     {
-        string tags = string.Join(" ", _spec.AttackPatternTags ?? Array.Empty<string>());
-        return ($"{_spec.WeaponFamily} {_spec.WeaponSubfamily} {_spec.ProjectileFamily} {_spec.ProjectileShape} {_spec.Effect} {_spec.PrimaryColorName} {tags}").ToLowerInvariant();
+        if (_spec.DustSpawnDenom > 0 || _spec.EffectCode != 0 || AllowsPresentationLight())
+            return true;
+        return GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Beam)
+            || GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Thrust)
+            || GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Returning)
+            || GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Flail)
+            || GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Yoyo)
+            || GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Whip);
     }
 
-    private bool HasPresentationIdentity(params string[] needles)
-    {
-        string text = PresentationIdentityText();
-        foreach (string needle in needles)
-            if (text.Contains(needle, StringComparison.OrdinalIgnoreCase))
-                return true;
-        return false;
-    }
+    private int VanillaPolishDust() => DustForEffect(_spec.EffectCode);
 
-    private int PolishDustForIdentity()
+    private int VanillaMotionPolishDenominator()
     {
-        string text = PresentationIdentityText();
-        if (text.Contains("electric") || text.Contains("lightning") || text.Contains("spark")) return DustID.Electric;
-        if (text.Contains("star") || text.Contains("holy") || text.Contains("lunar") || text.Contains("bee")) return DustID.YellowStarDust;
-        if (text.Contains("fire") || text.Contains("flame") || text.Contains("molten")) return DustID.Torch;
-        if (text.Contains("ice") || text.Contains("frost") || text.Contains("snow")) return DustID.Ice;
-        if (text.Contains("shadow") || text.Contains("void") || text.Contains("poison") || text.Contains("toxic")) return DustID.Shadowflame;
-        if (text.Contains("slime") || text.Contains("honey")) return DustID.t_Slime;
-        if (text.Contains("leaf") || text.Contains("nature")) return DustID.Grass;
-        if (text.Contains("crystal") || text.Contains("glass") || text.Contains("gem")) return DustID.GemSapphire;
-        return DustForEffect(_spec.EffectCode);
+        if (GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Beam))
+            return 5;
+        return _spec.EffectCode is 1 or 3 ? 5 : 8;
     }
 
     private void EmitVanillaMotionPolish()
     {
         if (Main.netMode == NetmodeID.Server || Main.dedServ) return;
         if (Projectile.localAI[0] < 2f) return;
-        bool fastOrIconic = Projectile.velocity.LengthSquared() > 36f
-            || AllowsPresentationLight()
-            || HasPresentationIdentity("star", "beam", "laser", "bee", "crystal", "magic", "whip", "flail", "spear");
-        if (!fastOrIconic) return;
-        int denom = HasPresentationIdentity("beam", "laser", "star", "electric") ? 5 : 8;
-        if (!Main.rand.NextBool(denom)) return;
-        int dust = PolishDustForIdentity();
+        if (Projectile.velocity.LengthSquared() <= 36f && !AllowsVanillaMotionPolish()) return;
+        if (!Main.rand.NextBool(VanillaMotionPolishDenominator())) return;
+        int dust = VanillaPolishDust();
         if (dust < 0) return;
         Dust d = Dust.NewDustDirect(Projectile.position, Projectile.width, Projectile.height, dust, -Projectile.velocity.X * 0.10f, -Projectile.velocity.Y * 0.10f, 120);
         d.noGravity = true;
@@ -261,7 +251,7 @@ public sealed partial class GeneratedProjectile
     private void EmitVanillaImpactPolish(Vector2 center, bool kill)
     {
         if (Main.netMode == NetmodeID.Server || Main.dedServ) return;
-        int dust = PolishDustForIdentity();
+        int dust = VanillaPolishDust();
         if (dust < 0) return;
         bool hasManifest = _vfxManifest is not null && _vfxManifest.HasSlots;
         int count = Math.Clamp((kill ? 7 : 5) + (AllowsPresentationLight() ? 2 : 0) - (hasManifest ? 2 : 0), 2, 10);
@@ -351,23 +341,6 @@ public sealed partial class GeneratedProjectile
         return _spec.RuntimeLightStrength > 0.001f || _spec.EffectCode is 1 or 3 or 4 or 5 or 7 or 12 or 13 or 14;
     }
 
-    private static Color ColorFromName(string? raw, Color fallback)
-    {
-        string name = (raw ?? "").Trim().ToLowerInvariant();
-        return name switch
-        {
-            "white" or "silver" => new Color(235, 235, 235),
-            "yellow" or "gold" or "amber" => new Color(255, 220, 110),
-            "orange" => new Color(255, 155, 70),
-            "red" or "crimson" or "scarlet" => new Color(255, 85, 85),
-            "pink" => new Color(255, 145, 215),
-            "purple" or "violet" => new Color(190, 110, 255),
-            "blue" or "azure" or "cyan" => new Color(110, 210, 255),
-            "green" or "lime" or "emerald" => new Color(110, 255, 145),
-            "teal" or "aqua" => new Color(90, 255, 215),
-            _ => fallback,
-        };
-    }
 
     private void AddPresentationLight()
     {
@@ -375,7 +348,7 @@ public sealed partial class GeneratedProjectile
         if (!AllowsPresentationLight()) return;
         float lightMul = InfiniVfxClientOptions.PresentationLightMultiplier;
         if (lightMul <= 0f) return;
-        Color c = ColorFromName(_spec.PrimaryColorName, PresentationColor());
+        Color c = RuntimeColorPolicy.Resolve(_spec.PrimaryColorName, PresentationColor());
         float baseStrength = _spec.RuntimeLightStrength > 0.001f
             ? Math.Clamp(_spec.RuntimeLightStrength, 0.04f, 0.75f)
             : Math.Clamp(0.08f + _spec.ProjectileScale * 0.04f + _spec.PowerBudget * 0.015f, 0.04f, 0.32f);
@@ -397,6 +370,7 @@ public sealed partial class GeneratedProjectile
         Vector2 perp = dir.RotatedBy(MathHelper.PiOver2);
         float len = Math.Clamp(Projectile.velocity.Length() * 2.8f + Projectile.width * Projectile.scale, 14f, 96f);
         float width = Math.Clamp(Projectile.height * Projectile.scale * 0.35f, 2f, 14f);
+        bool beamLike = IsBeamDelivery();
         bool executableBeamVisual = _spec.MovementCode == 15;
         bool thrustLike = IsThrustDelivery();
         bool tetherLike = IsFlailDelivery() || IsYoyoDelivery();
@@ -412,9 +386,22 @@ public sealed partial class GeneratedProjectile
             WhipLine(out ws, out we, out wd);
             DrawLine(px, ws - Main.screenPosition, we - Main.screenPosition, c * 0.70f, Math.Max(2f, width * 0.55f));
         }
-        bool executableSlashVisual = RuntimeFamily() == "swing";
+        bool executableSlashVisual = GeneratedRuntimeFamilyPolicy.Is(RuntimeFamily(), GeneratedRuntimeFamilyPolicy.Swing);
 
         VfxManifestSpec? manifest = _vfxManifest;
+        if (beamLike)
+        {
+            BeamLine(out Vector2 beamStart, out Vector2 beamEnd, out _);
+            if (manifest is { HasSlots: true })
+                InfiniVfxRuntime.Draw(Projectile, _spec, manifest, ref _vfxState, lightColor, InfiniVfxDrawPass.UnderProjectile);
+            float beamCharge = BeamChargeRatio();
+            float beamWidth = EffectiveBeamWidthPx();
+            DrawLine(px, beamStart - Main.screenPosition, beamEnd - Main.screenPosition, c * MathHelper.Lerp(0.32f, 0.88f, beamCharge), beamWidth);
+            DrawLine(px, beamStart - Main.screenPosition, beamEnd - Main.screenPosition, Color.White * MathHelper.Lerp(0.18f, 0.82f, beamCharge), Math.Max(1f, beamWidth * 0.28f));
+            if (manifest is { HasSlots: true })
+                InfiniVfxRuntime.Draw(Projectile, _spec, manifest, ref _vfxState, lightColor, InfiniVfxDrawPass.OverProjectile);
+            return false;
+        }
         if (manifest is { HasSlots: true })
         {
             // Terraria-style composition: oldPos trails and big support glows first,
@@ -470,9 +457,14 @@ public sealed partial class GeneratedProjectile
     {
         if (Projectile.oldPos is null || Projectile.oldPos.Length < 3)
             return;
+        string runtimeFamily = RuntimeFamily();
         bool shouldTrail = Projectile.velocity.LengthSquared() > 25f
-            || RuntimeFamily() is "shoot" or "cast" or "throw"
-            || HasPresentationIdentity("beam", "laser", "star", "crystal", "magic", "electric", "sword_beam");
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Shoot)
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Cast)
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Beam)
+            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Throw)
+            || _spec.EffectCode != 0
+            || _spec.RuntimeLightStrength > 0.001f;
         if (!shouldTrail)
             return;
         int count = Math.Clamp(3 + (int)(_spec.ProjectileScale * 2f), 3, Math.Min(Projectile.oldPos.Length, 8));
@@ -496,7 +488,7 @@ public sealed partial class GeneratedProjectile
             DrawLine(px, center - dir * 4f, center + dir * len * 1.5f, Color.White * 0.65f, Math.Max(1f, width * 0.18f));
             return;
         }
-        if (RuntimeFamily() == "swing")
+        if (GeneratedRuntimeFamilyPolicy.Is(RuntimeFamily(), GeneratedRuntimeFamilyPolicy.Swing))
         {
             DrawSlashSmear(px, center, dir, perp, c, len, width);
             return;
@@ -517,9 +509,27 @@ public sealed partial class GeneratedProjectile
         DrawLine(px, center - dir * len * 0.35f, center + dir * 6f, Color.White * 0.85f, Math.Max(1f, width * 0.45f));
     }
 
+    private bool UsesItemSpriteAsProjectileByDefault()
+        => GeneratedRuntimeFamilyPolicy.UsesItemSpriteAsProjectile(_spec.RuntimeFamily);
+
+    private string ResolveProjectileSpritePath()
+    {
+        if (!string.IsNullOrWhiteSpace(_spec.ProjectileSpritePath))
+            return _spec.ProjectileSpritePath;
+        if (!UsesItemSpriteAsProjectileByDefault() || string.IsNullOrWhiteSpace(_generatedItemId))
+            return "";
+
+        if (global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems is not null
+            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems.TryGet(_generatedItemId, out GeneratedItemData registryData))
+        {
+            return registryData.Visual?.SpritePath ?? "";
+        }
+        return "";
+    }
+
     private bool TryDrawGeneratedProjectileSprite(Vector2 center, Color lightColor)
     {
-        string spritePath = _spec.ProjectileSpritePath;
+        string spritePath = ResolveProjectileSpritePath();
         Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(spritePath);
         if (texture is null)
         {

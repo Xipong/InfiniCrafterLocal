@@ -7,8 +7,8 @@ import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.pipelines import llm_authoring_pipeline as lp
-from infini_local.desktop import settings_gui
+from infini_local.pipelines import llm_transport as lp
+from infini_local.desktop import settings_schema
 
 
 def _http_error(url: str, code: int, body: str) -> urllib.error.HTTPError:
@@ -23,10 +23,10 @@ def _check_gui_exposes_fallback_model_fields() -> None:
         "INFINI_LLM_FALLBACK_API_KEY",
         "INFINI_LLM_FALLBACK_NETWORK_FAILS",
     ]:
-        assert key in settings_gui.FIELD_ORDER
-        assert key in settings_gui.DEFAULTS
-    assert settings_gui.DEFAULTS["INFINI_LLM_FALLBACK_MODEL"] == ""
-    assert settings_gui.DEFAULTS["INFINI_LLM_FALLBACK_NETWORK_FAILS"] == "2"
+        assert key in settings_schema.FIELD_ORDER
+        assert key in settings_schema.DEFAULTS
+    assert settings_schema.DEFAULTS["INFINI_LLM_FALLBACK_MODEL"] == ""
+    assert settings_schema.DEFAULTS["INFINI_LLM_FALLBACK_NETWORK_FAILS"] == "2"
 
 
 def _check_llm_chat_json_switches_to_fallback_on_budget_error(monkeypatch) -> None:

@@ -275,25 +275,11 @@ public static class InfiniVfxRuntime
         }
     }
 
-    private static string Lower(string? value) => (value ?? "").ToLowerInvariant();
+    private static bool IsLiveEvent(string? ev) => ev is "tick" or "travel" or "active";
 
-    private static bool IsLiveEvent(string? ev)
-    {
-        string e = Lower(ev);
-        return e is "tick" or "travel" or "active" or "spawn" or "windup" or "loop" or "slash" or "beam";
-    }
+    private static bool IsHitEvent(string? ev) => ev == "hit";
 
-    private static bool IsHitEvent(string? ev)
-    {
-        string e = Lower(ev);
-        return e == "hit" || e == "impact" || e == "onhit";
-    }
-
-    private static bool IsKillEvent(string? ev)
-    {
-        string e = Lower(ev);
-        return e == "kill" || e == "expire" || e == "decay";
-    }
+    private static bool IsKillEvent(string? ev) => ev is "kill" or "expire";
 
     private static bool IsLightSlot(VfxSlotSpec slot, InfiniVfxRendererKind kind)
         => IsLiveEvent(slot.Event) && (slot.Channel == "light" || kind == InfiniVfxRendererKind.LightCue);
@@ -342,10 +328,10 @@ public static class InfiniVfxRuntime
         // a supporting streak/ring and a small particle accent at the same time. The old
         // one-slot-per-channel rule was too sterile. We now arbitrate by channel+lane,
         // while still capping total visual mass per channel.
-        Dictionary<string, VfxSlotSpec> selected = new(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, int> channelCounts = new(StringComparer.OrdinalIgnoreCase);
-        HashSet<string> rendererFamilies = new(StringComparer.OrdinalIgnoreCase);
-        string magnitude = Lower(manifest.VisualBudgetClass);
+        Dictionary<string, VfxSlotSpec> selected = new(StringComparer.Ordinal);
+        Dictionary<string, int> channelCounts = new(StringComparer.Ordinal);
+        HashSet<string> rendererFamilies = new(StringComparer.Ordinal);
+        string magnitude = manifest.VisualBudgetClass;
 
         foreach (var slot in manifest.Slots)
         {
@@ -401,11 +387,11 @@ public static class InfiniVfxRuntime
         float bestScore = float.MaxValue;
         foreach (var pair in selected)
         {
-            if (!pair.Key.StartsWith(channelKey + ":", StringComparison.OrdinalIgnoreCase))
+            if (!pair.Key.StartsWith(channelKey + ":", StringComparison.Ordinal))
                 continue;
             float score = ScoreSlot(pair.Value);
             // Prefer keeping the primary lane; sacrifice support/accent first.
-            string lane = Lower(pair.Value.Lane);
+            string lane = pair.Value.Lane;
             if (lane == "primary")
                 score += 25f;
             if (score < bestScore)
@@ -419,7 +405,7 @@ public static class InfiniVfxRuntime
 
     private static string LaneForSlot(VfxSlotSpec slot)
     {
-        string lane = Lower(slot.Lane);
+        string lane = slot.Lane;
         if (lane is "primary" or "support" or "accent" or "ornament" or "cue")
             return lane;
         if (slot.Channel == "light" || slot.Channel == "sound")
@@ -436,10 +422,7 @@ public static class InfiniVfxRuntime
 
     private static bool SlotBelongsToGroup(VfxSlotSpec slot, string group)
     {
-        string g = string.IsNullOrWhiteSpace(slot.EventGroup)
-            ? VfxRendererRegistry.NormalizeEventGroup(null, slot.Event)
-            : Lower(slot.EventGroup);
-        return g == group;
+        return slot.EventGroup == group;
     }
 
     private static int MaxChannelCount(string group, string channel, string magnitude)
@@ -519,11 +502,11 @@ public static class InfiniVfxRuntime
 
     private static bool DrawsUnderProjectile(VfxSlotSpec slot, InfiniVfxRendererKind kind)
     {
-        string channel = Lower(slot.Channel);
-        string lane = Lower(slot.Lane);
-        if (channel == "motiontrail" || channel == "projectiletrail")
+        string channel = slot.Channel;
+        string lane = slot.Lane;
+        if (channel == "motionTrail")
             return true;
-        if (lane == "support" && channel is "coreglow" or "impactshape")
+        if (lane == "support" && channel is "coreGlow" or "impactShape")
             return true;
         return kind is InfiniVfxRendererKind.ProjectileAfterimage
             or InfiniVfxRendererKind.SpriteStampTrail
@@ -605,19 +588,16 @@ public static class InfiniVfxRuntime
 // =============================================================================
     private static Texture2D? TextureForRole(AttackSpec spec, string? role)
     {
-        string r = Lower(role);
-        string path;
-        if (r == "impact")
+        string path = role switch
+        {
+            "impact" => spec.ImpactSpritePath,
+            "child" => spec.ChildSpritePath,
+            "field" => spec.FieldSpritePath,
+            _ => spec.ProjectileSpritePath,
+        };
+        if (string.IsNullOrWhiteSpace(path) && role == "child")
             path = spec.ImpactSpritePath;
-        else if (r == "child" || r == "particle" || r == "mote")
-            path = spec.ChildSpritePath;
-        else if (r == "field")
-            path = spec.FieldSpritePath;
-        else
-            path = spec.ProjectileSpritePath;
-        if (string.IsNullOrWhiteSpace(path) && (r == "child" || r == "particle" || r == "mote"))
-            path = spec.ImpactSpritePath;
-        if (string.IsNullOrWhiteSpace(path) && r == "impact")
+        if (string.IsNullOrWhiteSpace(path) && role == "impact")
             path = spec.ProjectileSpritePath;
         if (string.IsNullOrWhiteSpace(path))
             return null;
@@ -626,19 +606,7 @@ public static class InfiniVfxRuntime
 
     private static Color PresentationColor(AttackSpec spec, int alpha = 255)
     {
-        string c = Lower(spec.PrimaryColorName ?? "white");
-        Color color = c switch
-        {
-            var x when x.Contains("cyan") => new Color(80, 235, 255),
-            var x when x.Contains("violet") || x.Contains("purple") || x.Contains("shadow") => new Color(190, 80, 255),
-            var x when x.Contains("green") || x.Contains("slime") || x.Contains("toxic") => new Color(95, 255, 120),
-            var x when x.Contains("red") || x.Contains("blood") => new Color(255, 70, 55),
-            var x when x.Contains("orange") || x.Contains("flame") || x.Contains("fire") => new Color(255, 150, 45),
-            var x when x.Contains("blue") || x.Contains("frost") || x.Contains("ice") => new Color(120, 210, 255),
-            var x when x.Contains("gold") || x.Contains("star") || x.Contains("yellow") => new Color(255, 235, 90),
-            var x when x.Contains("sand") => new Color(225, 190, 120),
-            _ => Color.White
-        };
+        Color color = RuntimeColorPolicy.Resolve(spec.PrimaryColorName, Color.White);
         color.A = (byte)Math.Clamp(alpha, 0, 255);
         return color;
     }
@@ -719,7 +687,7 @@ public static class InfiniVfxRuntime
     private static void DrawHistoryRibbon(Projectile projectile, AttackSpec spec, VfxSlotSpec slot, Texture2D px, InfiniVfxState state)
     {
         state.EnsureHistory();
-        Vector2[] points = Lower(slot.Anchor).Contains("center") ? state.CenterHistory : state.TipHistory;
+        Vector2[] points = slot.Anchor is "self" or "owner" or "hitPoint" or "field" ? state.CenterHistory : state.TipHistory;
         Color c = PresentationColor(spec, (int)(255 * slot.Alpha));
         int count = Math.Clamp((int)MathF.Round(4 + slot.Density * 18), 4, Math.Min(points.Length, 28));
         for (int i = 1; i < count; i++)
@@ -979,7 +947,7 @@ public static class InfiniVfxRuntime
             cmd.Lifespan,
             cmd.Alpha,
             cmd.SeedBucket == 0 ? state.LocalSeed : cmd.SeedBucket,
-            VfxParticleAddress.Resolve(cmd.ParticleSystemId, slot.Renderer, slot.Channel, slot.Event, slot.Blend, slot.EmissionMode)));
+            VfxParticleAddress.Resolve(cmd.ParticleSystemId, slot.RendererKind, slot.Channel, slot.Event, slot.Blend, slot.EmissionMode)));
     }
 
 
@@ -991,10 +959,9 @@ public static class InfiniVfxRuntime
         float a = fadeIn <= 0f ? 1f : Math.Clamp(t / Math.Max(0.001f, fadeIn), 0f, 1f);
         float b = fadeOut <= 0f ? 1f : Math.Clamp((1f - t) / Math.Max(0.001f, fadeOut), 0f, 1f);
         float v = MathF.Min(a, b);
-        string c = Lower(curve);
-        if (c.Contains("linear"))
+        if (curve == "linear")
             return v;
-        if (c.Contains("sharp"))
+        if (curve == "sharp")
             return v * v;
         return v * v * (3f - 2f * v);
     }
@@ -1043,7 +1010,7 @@ public static class InfiniVfxRuntime
     }
 
     private static string ParticleAddressForSlot(VfxSlotSpec slot)
-        => VfxParticleAddress.Resolve(slot.ParticleSystemId, slot.Renderer, slot.Channel, slot.Event, slot.Blend, slot.EmissionMode);
+        => VfxParticleAddress.Resolve(slot.ParticleSystemId, slot.RendererKind, slot.Channel, slot.Event, slot.Blend, slot.EmissionMode);
 
     private static bool IsOnScreen(Vector2 world, float padding = 160f)
     {
@@ -1072,13 +1039,14 @@ public static class InfiniVfxRuntime
 
     private static Vector2 SlotAnchorPoint(Projectile projectile, VfxSlotSpec slot, InfiniVfxState state)
     {
-        string anchor = Lower(slot.Anchor);
         state.EnsureHistory();
-        if ((anchor.Contains("tip") || slot.Channel == "motionTrail") && state.TipHistory.Length > 0 && state.TipHistory[0] != Vector2.Zero)
+        if (slot.Anchor == "owner" && projectile.owner >= 0 && projectile.owner < Main.maxPlayers)
+            return Main.player[projectile.owner].MountedCenter;
+        if (slot.Anchor == "tip" && state.TipHistory.Length > 0 && state.TipHistory[0] != Vector2.Zero)
             return state.TipHistory[0];
-        if (anchor.Contains("history") && state.CenterHistory.Length > 2 && state.CenterHistory[2] != Vector2.Zero)
-            return state.CenterHistory[2];
-        if (anchor.Contains("velocity"))
+        if (slot.Anchor == "tipHistory" && state.TipHistory.Length > 2 && state.TipHistory[2] != Vector2.Zero)
+            return state.TipHistory[2];
+        if (slot.Anchor == "velocity")
             return projectile.Center + MotionDirection(projectile).SafeNormalize(Vector2.UnitX) * Math.Max(projectile.width, projectile.height) * projectile.scale * 0.65f;
         return projectile.Center;
     }
@@ -1341,7 +1309,6 @@ public static class InfiniVfxRuntime
 
     private static int DustForEffect(AttackSpec spec)
     {
-        string effect = Lower(spec?.Effect);
         int code = spec?.EffectCode ?? -1;
         return code switch
         {
@@ -1359,17 +1326,6 @@ public static class InfiniVfxRuntime
             12 => DustID.PinkTorch,
             13 => DustID.GemSapphire,
             14 => DustID.PurpleTorch,
-            _ when effect.Contains("electric") => DustID.Electric,
-            _ when effect.Contains("slime") => DustID.t_Slime,
-            _ when effect.Contains("star") || effect.Contains("lunar") => DustID.YellowStarDust,
-            _ when effect.Contains("flame") || effect.Contains("fire") => DustID.Torch,
-            _ when effect.Contains("frost") || effect.Contains("ice") => DustID.Ice,
-            _ when effect.Contains("leaf") || effect.Contains("grass") => DustID.Grass,
-            _ when effect.Contains("shadow") => DustID.Shadowflame,
-            _ when effect.Contains("poison") => DustID.GreenTorch,
-            _ when effect.Contains("blood") => DustID.RedTorch,
-            _ when effect.Contains("honey") => DustID.YellowTorch,
-            _ when effect.Contains("sand") => DustID.Sand,
             _ => -1,
         };
     }
@@ -1399,21 +1355,16 @@ public static class InfiniVfxRuntime
     {
         if (slot.Density < 0.05f || Main.dedServ)
             return;
-        string authoredProfile = impact
-            ? (spec.ImpactSoundProfile + " " + spec.SoundImpact)
-            : (spec.UseSoundProfile + " " + spec.SoundUse);
-        string cueProfile = authoredProfile + " " + slot.Renderer + " " + slot.EffectName;
         var style = InfiniSoundLibrary.ForVfxCue(
-            cueProfile,
             spec.RuntimeFamily,
             spec.Effect,
             spec.SoundVolume,
             spec.SoundPitch,
+            spec.SoundPitchVariance,
             slot.SlotSeed,
             impact,
             impact ? spec.SoundImpactCatalogId : spec.SoundUseCatalogId,
             impact ? spec.SoundImpactCatalogPath : spec.SoundUseCatalogPath,
-            impact ? spec.SoundImpactSearchQuery : spec.SoundUseSearchQuery,
             spec.SoundCatalogSource);
         float cueVolume = Math.Clamp(style.Volume * (0.22f + slot.Alpha * 0.58f), 0.04f, 0.72f);
         SoundEngine.PlaySound(style with { Volume = cueVolume }, world);

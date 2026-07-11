@@ -7,18 +7,21 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from infini_local.core.runtime_authoring import (
-    all_calls,
-    compile_runtime_plan_to_genome_patch,
-    runtime_plan,
+from infini_local.core.runtime_authoring.compiler import compile_runtime_plan_to_genome_patch
+
+from infini_local.core.boundary_models import validate_executable_item_boundary
+
+from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.core.runtime_authoring.reports import (
     runtime_plan_provenance_report,
     runtime_plan_quality_report,
     runtime_plan_validation_report,
 )
+from infini_local.core.runtime_authoring.structural import all_calls
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.combine_validation import validate_and_repair
 from infini_local.pipelines.item_power_knowledge import apply_item_knowledge
-from infini_local.pipelines.pipeline_support import canonicalize
+from infini_local.pipelines.item_power_knowledge import canonicalize
 
 
 def _safe_case_id(value: object) -> str:
@@ -232,6 +235,8 @@ def build_gameplay_seam_report(case: dict[str, Any]) -> dict[str, Any]:
         data = validate_and_repair(plan, a, b, ca, cb, key)
         data = apply_item_knowledge(data, a, b, ca, cb)
         data = attach_gameplay_and_attack(data, a, b, ca, cb)
+        wire = validate_executable_item_boundary(data)
+        report["strictExecutableBoundary"] = {"ok": True, "attackFieldCount": len(wire["attack"]), "gameplayFieldCount": len(wire["gameplay"])}
         report["item"] = {
             "category": data.get("category"),
             "gameplay": data.get("gameplay") or {},

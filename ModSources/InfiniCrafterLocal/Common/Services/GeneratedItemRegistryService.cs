@@ -45,8 +45,10 @@ public sealed class GeneratedItemRegistryService : IDisposable
 
     private const int HydrationRequestRetryTicks = 90;
     private const int FullHydrationRequestRetryTicks = 5 * 60;
+    private const int MaxHydrationRequestStateEntries = 2048;
+    private const int HydrationRequestStateStaleTicks = 15 * 60;
     private readonly Dictionary<string, GeneratedItemData> _byId = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _inFlightGeneratedItemHydration = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _inFlightGeneratedItemHydration = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _lastGeneratedItemHydrationRequestTick = new(StringComparer.Ordinal);
     private bool _fullHydrationInFlight;
     private int _lastFullHydrationRequestTick = -FullHydrationRequestRetryTicks;
@@ -173,6 +175,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
         {
             _byId[data.Id] = data;
             _inFlightGeneratedItemHydration.Remove(data.Id);
+            _lastGeneratedItemHydrationRequestTick.Remove(data.Id);
             _fullHydrationInFlight = false;
         }
         if (persist) PersistOne(data);
@@ -233,7 +236,6 @@ public sealed class GeneratedItemRegistryService : IDisposable
             return;
         if (TryGet(id, out var cachedData))
         {
-            lock (_lock) _hydrationCacheHitCount++;
             InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(cachedData, forceRetry: forceAssetRetry);
             return;
         }
@@ -253,13 +255,16 @@ public sealed class GeneratedItemRegistryService : IDisposable
         int now = (int)Main.GameUpdateCount;
         lock (_lock)
         {
+            PruneHydrationRequestStateLocked(now);
             if (_byId.ContainsKey(id))
             {
                 _hydrationCacheHitCount++;
                 return false;
             }
             bool hadPreviousRequest = _lastGeneratedItemHydrationRequestTick.TryGetValue(id, out int last);
-            if (_inFlightGeneratedItemHydration.Contains(id) && hadPreviousRequest && now - last < HydrationRequestRetryTicks)
+            if (_inFlightGeneratedItemHydration.TryGetValue(id, out int inFlightTick)
+                && hadPreviousRequest
+                && now - Math.Max(last, inFlightTick) < HydrationRequestRetryTicks)
             {
                 _hydrationDuplicateSuppressedCount++;
                 return false;
@@ -267,11 +272,30 @@ public sealed class GeneratedItemRegistryService : IDisposable
             _hydrationCacheMissCount++;
             if (hadPreviousRequest)
                 _hydrationRetryCount++;
-            _inFlightGeneratedItemHydration.Add(id);
+            _inFlightGeneratedItemHydration[id] = now;
             _lastGeneratedItemHydrationRequestTick[id] = now;
+            PruneHydrationRequestStateLocked(now);
             _hydrationRequestSentCount++;
             return true;
         }
+    }
+
+    private void PruneHydrationRequestStateLocked(int now)
+    {
+        EnforceBoundedTickDictionary(_lastGeneratedItemHydrationRequestTick, now, MaxHydrationRequestStateEntries, HydrationRequestStateStaleTicks);
+        EnforceBoundedTickDictionary(_inFlightGeneratedItemHydration, now, MaxHydrationRequestStateEntries, HydrationRequestStateStaleTicks);
+    }
+
+    private static void EnforceBoundedTickDictionary(Dictionary<string, int> map, int now, int maxEntries, int maxAgeTicks)
+    {
+        foreach (string stale in map.Where(x => now - x.Value >= maxAgeTicks).Select(x => x.Key).ToList())
+            map.Remove(stale);
+
+        if (map.Count <= maxEntries)
+            return;
+
+        foreach (string key in map.OrderBy(x => x.Value).Take(map.Count - maxEntries).Select(x => x.Key).ToList())
+            map.Remove(key);
     }
 
     private bool ShouldStartFullHydrationRequest()

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "infini.agent-run-result.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ok",
+    "baseRevision",
+    "changedFiles",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "infini.agent-run-result.v1"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "releaseReady": {
+      "type": "boolean"
+    },
+    "baseRevision": {
+      "type": "string"
+    },
+    "changedFiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "impactedRules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "blocked": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requiresBuild": {
+      "type": "boolean"
+    },
+    "buildStatus": {
+      "enum": [
+        "not-required",
+        "passed",
+        "failed",
+        "blocked",
+        "unavailable"
+      ]
+    }
+  }
+}

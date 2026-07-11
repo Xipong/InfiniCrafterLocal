@@ -11,7 +11,6 @@
       "event": "travel",
       "stage": "loop",
       "backend": "Sprite",
-      "renderer": "projectileAfterimage",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "self",
@@ -41,13 +40,13 @@
         0,
         1
       ],
-      "minQuality": "Low"
+      "minQuality": "Low",
+      "rendererKind": "projectileAfterimage"
     },
     "travel_stamp_wake": {
       "event": "travel",
       "stage": "loop",
       "backend": "Sprite",
-      "renderer": "spriteStampTrail",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "self",
@@ -78,13 +77,13 @@
         1,
         2
       ],
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "spriteStampTrail"
     },
     "travel_ambient_motes": {
       "event": "travel",
       "stage": "loop",
       "backend": "Realtime",
-      "renderer": "ambientMotes",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "self",
@@ -119,13 +118,13 @@
         1,
         2
       ],
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "childMotes"
     },
     "active_tip_ribbon": {
       "event": "active",
       "stage": "active",
       "backend": "Primitive",
-      "renderer": "tipTrail",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "tipHistory",
@@ -161,13 +160,13 @@
         2,
         3
       ],
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "tipTrail"
     },
     "active_history_ribbon": {
       "event": "active",
       "stage": "active",
       "backend": "Primitive",
-      "renderer": "historyRibbon",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "tipHistory",
@@ -202,13 +201,13 @@
         1,
         2
       ],
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "historyRibbon"
     },
     "active_ghost_arc": {
       "event": "active",
       "stage": "active",
       "backend": "Sprite",
-      "renderer": "ghostArc",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "self",
@@ -240,13 +239,13 @@
         2,
         3
       ],
-      "minQuality": "High"
+      "minQuality": "High",
+      "rendererKind": "ghostArc"
     },
     "active_wavy_strip": {
       "event": "active",
       "stage": "active",
       "backend": "Sprite",
-      "renderer": "wavyStrip",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "self",
@@ -281,13 +280,13 @@
         1,
         2
       ],
-      "minQuality": "High"
+      "minQuality": "High",
+      "rendererKind": "wavyStrip"
     },
     "beam_line_core": {
-      "event": "beam",
+      "event": "active",
       "stage": "active",
       "backend": "Primitive",
-      "renderer": "beamLine",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "velocity",
@@ -318,13 +317,13 @@
         1,
         2
       ],
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "beamLine"
     },
     "hit_impact_flash": {
       "event": "hit",
       "stage": "impact",
       "backend": "Sprite",
-      "renderer": "impactSpriteFlash",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -354,13 +353,13 @@
         0,
         1
       ],
-      "minQuality": "Low"
+      "minQuality": "Low",
+      "rendererKind": "impactSprite"
     },
     "hit_impact_burst": {
       "event": "hit",
       "stage": "impact",
       "backend": "Baked",
-      "renderer": "impactSpriteBurst",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -398,13 +397,13 @@
         4
       ],
       "bake": true,
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "impactSprite"
     },
     "hit_ring_snap": {
       "event": "hit",
       "stage": "impact",
       "backend": "Baked",
-      "renderer": "impactRing",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -436,13 +435,13 @@
         2
       ],
       "bake": true,
-      "minQuality": "Low"
+      "minQuality": "Low",
+      "rendererKind": "impactRing"
     },
     "hit_child_motes": {
       "event": "hit",
       "stage": "impact",
       "backend": "Baked",
-      "renderer": "childSpriteMotes",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -475,13 +474,13 @@
         3
       ],
       "bake": true,
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "childMotes"
     },
     "kill_decay_smoke": {
       "event": "kill",
       "stage": "decay",
       "backend": "Baked",
-      "renderer": "genericSmoke",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "self",
@@ -517,13 +516,13 @@
         2
       ],
       "bake": true,
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "childMotes"
     },
     "field_pulse_loop": {
       "event": "travel",
       "stage": "loop",
       "backend": "Sprite",
-      "renderer": "fieldPulse",
       "textureRole": "field",
       "particleRole": "child",
       "anchor": "field",
@@ -554,13 +553,13 @@
         1,
         2
       ],
-      "minQuality": "Medium"
+      "minQuality": "Medium",
+      "rendererKind": "fieldPulse"
     },
     "tick_light_glow": {
       "event": "tick",
       "stage": "loop",
       "backend": "Realtime",
-      "renderer": "lightCue",
       "textureRole": "projectile",
       "anchor": "self",
       "blend": "additive",
@@ -590,13 +589,13 @@
         0.05,
         0.2
       ],
-      "minQuality": "Low"
+      "minQuality": "Low",
+      "rendererKind": "lightCue"
     },
     "hit_light_flash": {
       "event": "hit",
       "stage": "impact",
       "backend": "Realtime",
-      "renderer": "lightCue",
       "textureRole": "impact",
       "anchor": "hitPoint",
       "blend": "additive",
@@ -621,13 +620,13 @@
         0.05,
         0.2
       ],
-      "minQuality": "High"
+      "minQuality": "High",
+      "rendererKind": "lightCue"
     },
     "hit_sound_snap": {
       "event": "hit",
       "stage": "impact",
       "backend": "Realtime",
-      "renderer": "soundCue",
       "textureRole": "impact",
       "anchor": "hitPoint",
       "layer": "Sound",
@@ -651,13 +650,13 @@
         0.05,
         0.1
       ],
-      "minQuality": "Low"
+      "minQuality": "Low",
+      "rendererKind": "soundCue"
     },
     "kill_sound_fade": {
       "event": "kill",
       "stage": "decay",
       "backend": "Realtime",
-      "renderer": "soundCue",
       "textureRole": "impact",
       "anchor": "self",
       "layer": "Sound",
@@ -681,13 +680,13 @@
         0.05,
         0.1
       ],
-      "minQuality": "Low"
+      "minQuality": "Low",
+      "rendererKind": "soundCue"
     },
     "actor_echo_placeholder": {
       "event": "active",
       "stage": "active",
       "backend": "Sprite",
-      "renderer": "actorAfterimage",
       "textureRole": "projectile",
       "anchor": "owner",
       "blend": "alpha",
@@ -720,13 +719,13 @@
         0.1,
         0.45
       ],
-      "minQuality": "High"
+      "minQuality": "High",
+      "rendererKind": "actorAfterimage"
     },
     "low_clean_hit_flash": {
       "event": "hit",
       "stage": "impact",
       "backend": "Sprite",
-      "renderer": "impactSpriteFlash",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -752,13 +751,13 @@
       "variants": [
         0,
         1
-      ]
+      ],
+      "rendererKind": "impactSprite"
     },
     "medium_baked_spark_tape": {
       "event": "hit",
       "stage": "impact",
       "backend": "Baked",
-      "renderer": "genericParticles",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -793,13 +792,13 @@
         0,
         1,
         2
-      ]
+      ],
+      "rendererKind": "childMotes"
     },
     "medium_travel_residue": {
       "event": "travel",
       "stage": "loop",
       "backend": "Realtime",
-      "renderer": "ambientMotes",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "self",
@@ -834,13 +833,13 @@
         0,
         1,
         2
-      ]
+      ],
+      "rendererKind": "childMotes"
     },
     "high_layered_history_ribbon": {
       "event": "active",
       "stage": "active",
       "backend": "Primitive",
-      "renderer": "historyRibbon",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "tipHistory",
@@ -872,13 +871,13 @@
         1,
         2,
         3
-      ]
+      ],
+      "rendererKind": "historyRibbon"
     },
     "high_actor_echo_tail": {
       "event": "active",
       "stage": "active",
       "backend": "Sprite",
-      "renderer": "actorAfterimage",
       "textureRole": "projectile",
       "particleRole": "child",
       "anchor": "owner",
@@ -909,13 +908,13 @@
         0,
         1,
         2
-      ]
+      ],
+      "rendererKind": "actorAfterimage"
     },
     "ultra_double_impact_flash": {
       "event": "hit",
       "stage": "impact",
       "backend": "Hybrid",
-      "renderer": "impactSpriteBurst",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -950,13 +949,13 @@
         2,
         3,
         4
-      ]
+      ],
+      "rendererKind": "impactSprite"
     },
     "ultra_orbital_decay": {
-      "event": "decay",
+      "event": "kill",
       "stage": "decay",
       "backend": "Realtime",
-      "renderer": "orbitalMotes",
       "textureRole": "impact",
       "particleRole": "child",
       "anchor": "hitPoint",
@@ -992,7 +991,8 @@
         1,
         2,
         3
-      ]
+      ],
+      "rendererKind": "orbitingMotes"
     }
   }
 }

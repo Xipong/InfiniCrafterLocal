@@ -23,8 +23,6 @@ MODEL = ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "Gene
 
 def _check_warn_invalid_generated_assets_do_not_attach_runtime_paths() -> None:
     src = VISUAL_SPRITE_GENERATION.read_text(encoding="utf-8")
-    facade = VISUAL_PIPELINE.read_text(encoding="utf-8")
-    assert "from infini_local.pipelines.visual_sprite_generation import" in facade
     assert "generated_warn_invalid" in src
     assert "usable_path = bool(path) and status not in {\"failed\", \"prompt_only\", \"placeholder\", \"generated_warn_invalid\"}" in src
     assert "strict_ai_authorship_keep_imperfect_ai_sprite_not_placeholder" in src
@@ -64,8 +62,8 @@ def _check_recursive_generation_has_soft_power_and_variety_nudges() -> None:
 
 def _check_server_uses_safe_env_float_for_llm_temperatures() -> None:
     src = LLM_PIPELINE.read_text(encoding="utf-8") + VISUAL_PIPELINE.read_text(encoding="utf-8")
-    assert '_env_float("INFINI_LLM_TEMPERATURE", 0.38, 0.0, 1.2)' in src
-    assert '_env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.42, 0.0, 1.2)' in src
+    assert 'env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2)' in src
+    assert 'env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.42, lo=0.0, hi=1.2)' in src
 
 
 def _check_potion_merge_preserves_independent_channels_and_buff_pairs() -> None:
@@ -89,35 +87,40 @@ def _check_planner_contract_uses_engine_calls_for_utility_instead_of_hard_bans()
 
 
 def _check_child_and_starfall_pressure_are_priced_in_balance_cost() -> None:
-    from infini_local.pipelines.pipeline_support import behavior_cost_multiplier, estimate_engine_metrics
+    from infini_local.pipelines.engine_pressure_metrics import (
+    behavior_cost_multiplier,
+    estimate_engine_metrics,
+)
 
     base = {"shotCount": 1, "pierce": 0, "aoeRadiusTiles": 0, "lifetimeTicks": 60, "useTimeTicks": 24, "reliability": 1.0}
     no_child = behavior_cost_multiplier({**base, "onHit": "none"})
     starburst = behavior_cost_multiplier({**base, "onHit": "starburst", "splitCount": 4, "maxChildProjectiles": 4})
-    starfall = behavior_cost_multiplier({**base, "onHit": "starfall", "splitCount": 4, "maxChildProjectiles": 4})
+    overhead = behavior_cost_multiplier({**base, "onHit": "overhead_barrage", "splitCount": 4, "maxChildProjectiles": 4})
 
     assert starburst > no_child * 1.12
-    assert starfall > no_child * 1.18
-    assert estimate_engine_metrics({**base, "onHit": "starfall", "splitCount": 4}, {})["childProjectilesPerProc"] == 4
+    assert overhead > no_child * 1.18
+    assert estimate_engine_metrics({**base, "onHit": "overhead_barrage", "splitCount": 4}, {})["childProjectilesPerProc"] == 4
 
 
-def _check_csharp_runtime_surface_contains_starfall_onhit_opcode() -> None:
+def _check_csharp_runtime_surface_contains_overhead_barrage_onhit_opcode() -> None:
     src = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
     limits = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "InfiniRuntimeLimits.cs").read_text(encoding="utf-8")
     assert "MaxSupportedOnHitCode = 18" in limits
     assert "case 18:" in src
-    assert "Starfall" in src
-    assert "falling star" in src.lower()
+    assert "SpawnOverheadBarrage" in src
+    assert "GeneratedOverheadBarragePolicy" in src
+    assert "childSpec.EffectCode = 3" not in src
+    assert "falling star" not in src.lower()
 
 
-def _check_csharp_swing_runtime_executes_starfall_onhit_opcode() -> None:
+def _check_csharp_swing_runtime_executes_overhead_barrage_onhit_opcode() -> None:
     item = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedItem.cs").read_text(encoding="utf-8")
     start = item.index("private static void ApplyGeneratedSwingOnHitEffects")
     end = item.index("private static int SwingDebuffTime", start)
     swing_onhit = item[start:end]
     assert "case 18:" in swing_onhit
-    assert "SpawnGeneratedSwingStarfall" in swing_onhit
-    assert "18 => \"falling starfall\"" in item
+    assert "SpawnGeneratedSwingOverheadBarrage" in swing_onhit
+    assert "18 => \"overhead barrage\"" in item
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -136,8 +139,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_potion_merge_preserves_independent_channels_and_buff_pairs',
     '_check_planner_contract_uses_engine_calls_for_utility_instead_of_hard_bans',
     '_check_child_and_starfall_pressure_are_priced_in_balance_cost',
-    '_check_csharp_runtime_surface_contains_starfall_onhit_opcode',
-    '_check_csharp_swing_runtime_executes_starfall_onhit_opcode'
+    '_check_csharp_runtime_surface_contains_overhead_barrage_onhit_opcode',
+    '_check_csharp_swing_runtime_executes_overhead_barrage_onhit_opcode'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

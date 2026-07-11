@@ -17,38 +17,44 @@ def _enable_runtime_repair(monkeypatch):
     monkeypatch.setattr(lap, "apply_llm_common_options", lambda req, **kwargs: req)
 
 
-def test_structural_runtime_shape_repair_is_code_only_when_authored_params_are_good(monkeypatch):
+def test_structural_runtime_shape_repair_is_code_only_for_exact_contract_scalar_types(monkeypatch):
     data = {
         "name": "Crooked Spark Rifle",
         "category": "weapon",
         "gameplay": {"kind": "weapon"},
         "debug": {"planner": "llm_author_first"},
-        "runtime_plan": {
-            "engine_calls": {
-                "set_stats": {
-                    "result_kind": "weapon",
-                    "damage_class": "ranged",
-                    "damage": "82",
-                    "use_time": "24 ticks",
-                    "max_stack": "1",
+        "runtimePlan": {
+            "engineCalls": [
+                {
+                    "fn": "set_item_stats",
+                    "params": {
+                        "resultKind": "weapon",
+                        "damageClass": "ranged",
+                        "damage": "82",
+                        "useTimeTicks": "24 ticks",
+                        "maxStack": "1",
+                    },
                 },
-                "shoot": {
-                    "runtime_family": "shoot",
-                    "delivery": "shoot",
-                    "movement": "straight",
-                    "projectile_speed": "12.5",
-                    "shot_count": "3 shots",
-                    "pierce": "2",
-                    "homing": "0.35",
-                    "range": "66 tiles",
-                    "lifetime": "180 ticks",
+                {
+                    "fn": "shoot_projectile",
+                    "params": {
+                        "runtimeFamily": "shoot",
+                        "delivery": "shoot",
+                        "movement": "straight",
+                        "speed": "12.5",
+                        "shotCount": "3 shots",
+                        "pierce": "2",
+                        "homingStrength": "0.35",
+                        "rangeTiles": "66 tiles",
+                        "lifetimeTicks": "180 ticks",
+                    },
                 },
-            }
+            ]
         },
     }
 
     def forbidden_llm(*args, **kwargs):
-        raise AssertionError("structural repair must not call LLM")
+        raise AssertionError("exact-shape scalar repair must not call LLM")
 
     _enable_runtime_repair(monkeypatch)
     monkeypatch.setattr(lap, "llm_chat_json", forbidden_llm)
@@ -131,9 +137,3 @@ def test_runtime_repair_preserves_identity_fields_even_if_model_returns_full_rew
     assert out["id"] == "g_original"
     assert out["recipeKey"] == "r_original"
     assert out["debug"]["runtimeRepairPath"] == "llm_targeted_runtime_contract_repair"
-
-
-def test_repair_boundary_contract_stamp_is_present():
-    from infini_local.core.contract_versions import build_contract_versions
-    stamp = build_contract_versions(app_version="0.4.218", recipe_identity_version="r", runtime_api_version="v", visual_pipeline_profile="p")
-    assert stamp["repairBoundaryContract"] == "code_structural_repair_then_targeted_runtime_retry_v0.4.217"

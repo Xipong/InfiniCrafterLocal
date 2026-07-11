@@ -2,7 +2,7 @@
 
 Desktop/settings GUI code.
 
-- `settings_gui.py` is the small public `SettingsGui` shell/facade: Tk init, preset detection, `main()`.
+- `settings_gui.py` is the small public `SettingsGui` shell/entrypoint: Tk init, preset detection, `main()`.
 - `settings_gui_theme.py` owns GUI paths/title/theme constants shared by the shell and mixins.
 - `settings_gui_ui.py` owns theme/chrome/card builders, tabs and editable row widgets.
 - `settings_gui_image_args.py` owns LoRA, sd.cpp extra-args/debug buttons and visual tab assembly.

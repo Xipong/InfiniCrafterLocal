@@ -26,35 +26,39 @@ def test_vfx_sound_cues_are_rate_limited_and_use_authored_audio_fields():
     assert "InfiniLuminanceSoundBridge.TryUpdateLiveSoundCue" in src
     assert "SoundSlotTickAllowed(slot, state.Tick)" in src
     assert "slot.RepeatEvery > 0" in src
-    assert "spec.UseSoundProfile" in src
-    assert "spec.SoundUse" in src
+    assert "spec.SoundUseCatalogId" in src
+    assert "spec.SoundImpactCatalogId" in src
+    assert "spec.UseSoundProfile" not in src
+    assert "spec.SoundUse," not in src
     assert "spec.SoundVolume" in src
     assert "spec.SoundPitch" in src
     assert "InfiniSoundLibrary.ForVfxCue" in src
 
 
-def test_infini_sound_library_has_named_profiles_and_shared_resolvers():
+def test_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier():
     src = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Audio" / "InfiniSoundLibrary.cs").read_text(encoding="utf-8")
-    assert "public const string ContractVersion = \"infini.vanilla-sound-catalog.v6\";" in src
-    assert "public static readonly string[] KnownProfiles" in src
+    assert 'public const string ContractVersion = "infini.terraria-sound-catalog.v8";' in src
+    assert 'public const string BuiltInCatalogSource = "terraria_vanilla";' in src
+    assert "public static int BuiltInCatalogCount" in src
     assert "public static SoundStyle ForUse" in src
     assert "public static SoundStyle ForImpact" in src
     assert "public static SoundStyle ForVfxCue" in src
     assert "InfiniFutureSoundCatalog.TryResolveOneShot" in src
     assert "InfiniExternalSoundPack" not in src
-    for profile in ["electric", "explosion", "crystal", "slime", "heal", "shadow", "leaf", "shotgun", "sniper", "laser", "whip", "zenith", "sentry", "meteor"]:
-        assert f'"{profile}"' in src
-    for sound_id in ["SoundID.Item36", "SoundID.Item40", "SoundID.Item41", "SoundID.Item43", "SoundID.Item72", "SoundID.Item84", "SoundID.Item108", "SoundID.Item152", "SoundID.Item169"]:
+    assert src.count('["') >= 90
+    for exact_id in ["melee_thrust", "shotgun_heavy", "laser_space", "magic_wind_vortex", "summon_skittering", "impact_electric", "impact_crystal", "impact_void"]:
+        assert f'["{exact_id}"]' in src
+    for sound_id in ["SoundID.Item36", "SoundID.Item40", "SoundID.Item43", "SoundID.Item72", "SoundID.Item84", "SoundID.Item108", "SoundID.Item152", "SoundID.Item169"]:
         assert sound_id in src
-    for helper in ["StyleFromRangedText", "StyleFromMagicText", "StyleFromSummonText", "StyleFromMaterialOrEffectText"]:
-        assert helper in src
+    for forbidden in ["KnownProfiles", "StyleFromRangedText", "StyleFromMagicText", "StyleFromSummonText", "StyleFromMaterialOrEffectText", "HasAny", "terra blade", "last prism"]:
+        assert forbidden not in src.lower() if forbidden == forbidden.lower() else forbidden not in src
 
 
 def test_generated_item_use_sound_resolves_through_library():
     src = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "using InfiniCrafterLocal.Common.Audio;" in src
     assert "InfiniSoundLibrary.ForUse" in src
-    for field in ["SoundUseCatalogId", "SoundImpactCatalogId", "SoundUseSearchQuery", "SoundImpactSearchQuery", "SoundCatalogSource", "SoundUseCatalogPath", "SoundImpactCatalogPath"]:
+    for field in ["SoundUseCatalogId", "SoundImpactCatalogId", "SoundCatalogSource", "SoundUseCatalogPath", "SoundImpactCatalogPath", "SoundPitchVariance"]:
         assert field in src
 
 
@@ -87,36 +91,3 @@ def test_external_luminance_sound_bridge_is_wired_for_live_vfx_audio():
     assert "EnableLuminanceSoundBackend" in options
     assert "DefaultValue(false)" in config
     assert "Config?.EnableLuminanceSoundBackend ?? false" in options
-
-
-def test_external_kenney_sound_pack_bridge_removed_and_future_catalog_seam_exists():
-    root = ROOT / "ModSources" / "InfiniCrafterLocal"
-    audio_dir = root / "Common" / "Audio"
-    future = (audio_dir / "InfiniFutureSoundCatalog.cs").read_text(encoding="utf-8")
-    library = (audio_dir / "InfiniSoundLibrary.cs").read_text(encoding="utf-8")
-    config = (root / "Common" / "Config" / "InfiniVfxClientConfig.cs").read_text(encoding="utf-8")
-    options = (root / "Common" / "VFX" / "InfiniVfxClientOptions.cs").read_text(encoding="utf-8")
-
-    assert not (audio_dir / "InfiniExternalSoundPack.cs").exists()
-    assert not (ROOT / "tools" / "import_kenney_rpg_sounds.py").exists()
-    assert "EnableExternalSoundPack" not in config
-    assert "EnableExternalSoundPack" not in options
-    assert "InfiniExternalSoundPack" not in library
-
-    assert "infini.embedding-sound-catalog.future-seam.v1" in future
-    assert "TryResolveOneShot" in future
-    assert "return false;" in future
-    assert "embedding" in future.lower()
-    assert "concrete asset/id" in future
-    assert "InfiniFutureSoundCatalog.TryResolveOneShot" in library
-    assert "public bool IsImpact { get; }" in future
-    assert "public bool Impact { get; }" not in future
-    for field in ["CatalogId", "CatalogPath", "CatalogSource", "QueryText"]:
-        assert field in future
-
-
-def test_contract_stamp_mentions_future_sound_catalog_seam():
-    src = (ROOT / "LocalGenerator" / "infini_local" / "core" / "contract_versions.py").read_text(encoding="utf-8")
-    assert "futureSoundCatalogSeam" in src
-    assert "embedding_sound_catalog_future_seam_v0.4.190" in src
-    assert "externalSoundPackContract" not in src

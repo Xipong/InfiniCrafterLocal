@@ -73,7 +73,7 @@ def test_bad_infini_env_values_fallback_instead_of_crashing() -> None:
         "INFINI_IMAGE_BACKEND": "off",
     })
     proc = subprocess.run(
-        [sys.executable, "-c", "import infini_local.web.api as s; print(s.LLM_MAX_TOKENS, s.SDCPP_HEIGHT, s.SDCPP_TIMEOUT)"],
+        [sys.executable, "-c", "from infini_local.core.llm_config import LLM_MAX_TOKENS; from infini_local.pipelines.pipeline_visual_config import SDCPP_HEIGHT, SDCPP_TIMEOUT; print(LLM_MAX_TOKENS, SDCPP_HEIGHT, SDCPP_TIMEOUT)"],
         cwd=ROOT / "LocalGenerator",
         env=env,
         text=True,

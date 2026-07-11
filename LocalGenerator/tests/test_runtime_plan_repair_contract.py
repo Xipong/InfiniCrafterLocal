@@ -129,7 +129,7 @@ def test_runtime_plan_repair_triggers_on_compile_level_runtime_family_error(monk
 
 
 def test_validate_and_repair_preserves_runtime_plan_repair_path(monkeypatch):
-    from infini_local.pipelines import combine_pipeline as cp
+    from infini_local.pipelines import combine_validation as cp
 
     data = {
         "name": "Repair Path Probe",

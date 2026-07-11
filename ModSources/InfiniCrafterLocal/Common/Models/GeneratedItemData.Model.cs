@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.VFX;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,8 +14,8 @@ namespace InfiniCrafterLocal.Common.Models;
 
 // AGENT MAP: game-facing wire/cache/runtime DTO.
 // Python may preserve extra/future data, but C# executes only explicit supported
-// sub-specs below (Gameplay, Accessory, Armor, Attack, Visual, VfxManifest,
-// SoundProfile). Adding a property here is not enough: wire it through Normalize,
+// sub-specs below (Gameplay, Accessory, Armor, Attack, Visual, VfxManifest).
+// Adding a property here is not enough: wire it through Normalize,
 // Apply, runtime executors, tests, and docs before treating it as gameplay.
 public sealed partial class GeneratedItemData
 {
@@ -25,7 +26,7 @@ public sealed partial class GeneratedItemData
     private const int MaxSupportedOnHitCode = InfiniRuntimeLimits.MaxSupportedOnHitCode;
     private static readonly HashSet<string> SupportedRuntimeApiVersions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "", RuntimeApiCurrent
+        RuntimeApiCurrent
     };
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
     public string RecipeKey { get; set; } = "";
@@ -53,7 +54,6 @@ public sealed partial class GeneratedItemData
     public VisualSpec Visual { get; set; } = new();
     public PresentationGenomeSpec PresentationGenome { get; set; } = new();
     public VfxManifestSpec VfxManifest { get; set; } = new();
-    public SoundProfileSpec SoundProfile { get; set; } = new();
     public RuntimeArchetypeSpec RuntimeArchetype { get; set; } = new();
     public RuntimeContractSpec RuntimeContract { get; set; } = new();
     public Dictionary<string, JsonElement> Debug { get; set; } = new();
@@ -223,9 +223,10 @@ public sealed class RuntimeArchetypeSpec
         Schema = string.IsNullOrWhiteSpace(Schema) ? "infini.runtime-archetype.v1" : Clean(Schema, 64);
         Source = Clean(Source, 32).ToLowerInvariant().Replace('-', '_');
         if (Source is not ("" or "none" or "generated" or "vanilla" or "hybrid")) Source = "generated";
+        SupportNotes ??= new List<string>();
         Family = Clean(Family, 48).ToLowerInvariant().Replace('-', '_');
         if (string.IsNullOrWhiteSpace(Family)) Family = "custom_executor";
-        if (Family is not ("custom_executor" or "boomerang" or "yoyo" or "flail" or "whip" or "held_swing" or "held_thrust" or "channel_beam" or "delayed_starfall" or "secondary_attack" or "unsupported"))
+        if (Family is not ("custom_executor" or "boomerang" or "yoyo" or "flail" or "whip" or "held_swing" or "held_thrust" or "channel_beam" or "charge_release" or "overhead_barrage" or "sentry" or "secondary_attack" or "unsupported"))
         {
             SupportNotes.Add($"unknown_family:{Family}");
             Family = "unsupported";
@@ -239,6 +240,8 @@ public sealed class RuntimeArchetypeSpec
         {
             "boomerang" => "outbound_return",
             "yoyo" or "channel_beam" => "channel_hold",
+            "charge_release" or "overhead_barrage" => "charge_release",
+            "sentry" => "none",
             "held_swing" or "held_thrust" or "whip" => "swing_phase",
             _ => "none",
         };
@@ -267,7 +270,9 @@ public sealed class RuntimeArchetypeSpec
         }
         OverrideKnobs = normalized;
         SupportStatus = Clean(SupportStatus, 48).ToLowerInvariant().Replace('-', '_');
-        if (Family is "custom_executor" or "boomerang" or "yoyo" or "flail" or "whip" or "held_swing" or "held_thrust") SupportStatus = "executable";
+        if (Family is "custom_executor" or "boomerang" or "yoyo" or "flail" or "whip" or "held_swing" or "held_thrust" or "channel_beam" or "charge_release" or "overhead_barrage" or "sentry") SupportStatus = "executable";
+        if (Family is "yoyo" or "channel_beam" or "charge_release") Channelled = true;
+        if (Family is "yoyo" or "flail" or "whip" or "held_thrust" or "channel_beam" or "charge_release") UsesHeldProjectile = true;
         if (string.IsNullOrWhiteSpace(SupportStatus)) SupportStatus = Family == "unsupported" ? "unsupported" : "preserved_intent";
         SupportNotes = (SupportNotes ?? new List<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => Clean(x, 160)).Distinct(StringComparer.OrdinalIgnoreCase).Take(16).ToList();
     }
@@ -363,7 +368,7 @@ public sealed class GeneratedBuffSpec
         DurationTicks = Math.Min(21600, Math.Max(0, DurationTicks));
         MiningSpeedMultiplier = MathF.Min(4f, MathF.Max(0.25f, MiningSpeedMultiplier <= 0f ? 1f : MiningSpeedMultiplier));
         EmitLightStrength = MathF.Min(1.5f, MathF.Max(0f, EmitLightStrength));
-        LightColorName = string.IsNullOrWhiteSpace(LightColorName) ? "" : LightColorName.Trim()[..Math.Min(LightColorName.Trim().Length, 32)];
+        LightColorName = RuntimeColorPolicy.Normalize(LightColorName);
         OreSenseRadiusTiles = Math.Min(60, Math.Max(0, OreSenseRadiusTiles));
         MovementSpeed = MathF.Min(2f, MathF.Max(-0.5f, MovementSpeed));
         JumpBoost = MathF.Min(8f, MathF.Max(0f, JumpBoost));
@@ -617,10 +622,8 @@ public sealed class AttackSpec
     // vanilla item hitbox using Gameplay.Damage.
     public bool Enabled { get; set; } = false;
     public string Delivery { get; set; } = "none"; // compatibility/use-style hint; RuntimeFamily is authoritative for execution
-    public string RuntimeFamily { get; set; } = "none"; // swing, thrust, returning, flail, yoyo, whip, shoot, cast, throw, summon
+    public string RuntimeFamily { get; set; } = GeneratedRuntimeFamilyPolicy.None; // canonical values live in GeneratedRuntimeFamilyPolicy
     public string WeaponFamily { get; set; } = ""; // broadsword, spear, bow, gun, staff, flail, yoyo, whip, etc.
-    public string WeaponSubfamily { get; set; } = ""; // taxonomy/debug/sound hint: shotgun, magic_book, sentry_staff, etc.; not an executor router
-    public string[] AttackPatternTags { get; set; } = Array.Empty<string>(); // presentation/sound/debug tags; engineCalls remain authoritative
     public string ProjectileFamily { get; set; } = ""; // optional visual/projectile family emitted by authoring compiler
     public string AmmoKind { get; set; } = ""; // empty, arrow, bullet, rocket; advisory unless actual ammo output
     public int UseStyleCode { get; set; } = ItemUseStyleID.None; // explicit Terraria.ItemUseStyleID subset emitted by runtime compiler
@@ -630,6 +633,7 @@ public sealed class AttackSpec
     public bool ChannelUse { get; set; } = false; // explicit channelled use affordance for yoyo/beam-like generated weapons
     public string Stage { get; set; } = "early";
     public float PowerBudget { get; set; } = 1f;
+    public string DamageClass { get; set; } = "generic"; // exact projectile damage class; shared resolver owns item/projectile mapping
     public string Movement { get; set; } = "straight"; // straight, slow_homing, gravity_arc, drift, boomerang, bounce, phase
     public string Effect { get; set; } = "dust"; // dust, electric, slime, star, flame, frost, leaf, shadow, poison, blood, honey, sand, lunar
     public string OnHit { get; set; } = "none"; // none, burst, split, chain, burn, frostburn, poison, shadowflame, starburst, bleed
@@ -637,6 +641,13 @@ public sealed class AttackSpec
     public int EffectCode { get; set; } = 0;
     public int OnHitCode { get; set; } = 0;
     public float Speed { get; set; } = 8f;
+    public float RangeTiles { get; set; } = 35f; // targeting range and exact held-beam reach
+    public float HomingStrength { get; set; } = 0f; // explicit steering strength; 0 selects executor default
+    public float BeamWidthPx { get; set; } = 14f; // used only by RuntimeFamily=beam
+    public int BeamChargeTicks { get; set; } = 0; // bounded warmup before full beam power
+    public int ChargeTicks { get; set; } = 45; // RuntimeFamily=charge_release full-charge duration
+    public float ChargePowerMultiplier { get; set; } = 1.6f; // maximum released damage/knockback multiplier
+    public int DelayTicks { get; set; } = 0; // overhead_barrage telegraph before bounded authored projectiles descend
     public int Lifetime { get; set; } = 90;
     public int Pierce { get; set; } = 1;
     public float Scale { get; set; } = 1f;
@@ -662,9 +673,14 @@ public sealed class AttackSpec
     // v0.4.4: true when mechanics came from runtimePlan.engineCalls. In this mode
     // the projectile runtime must not parse prose to create gameplay child projectiles.
     public bool RuntimePlanAuthored { get; set; } = false;
+    public string SecondaryTrigger { get; set; } = GeneratedSecondaryTriggerPolicy.OnHit;
     public float SecondarySpreadRadians { get; set; } = 0.45f;
     public float SecondaryDamageMultiplier { get; set; } = 0.35f;
     public int SecondaryLifetimeTicks { get; set; } = 24;
+    public string SentryPlacement { get; set; } = "grounded";
+    public int SentryAttackIntervalTicks { get; set; } = 45;
+    public float SentryTargetRangeTiles { get; set; } = 30f;
+    public int SentryLifetimeTicks { get; set; } = 3600;
     public float SameTargetBias { get; set; } = 0.0f;
     public string DebuffHint { get; set; } = "";
     public int DebuffTime { get; set; } = 0;
@@ -678,7 +694,7 @@ public sealed class AttackSpec
     public int BurstDustCap { get; set; } = 20;
     public Dictionary<string, float> EngineMetrics { get; set; } = new();
 
-    // Derived presentation/audio layer. LLM authors mechanics; server derives these from genome.
+    // Presentation/audio layer. LLM may author exact catalog ids and bounded controls; server derives only safe fallbacks.
     public string VisualMode { get; set; } = "projectile"; // projectile, slash_arc, slash_plus_projectile, beam, falling_projectile, orbiting_projectile
     public string TrailStyle { get; set; } = "dust";
     public string ImpactStyle { get; set; } = "small_flash";
@@ -688,10 +704,9 @@ public sealed class AttackSpec
     public int MobilityRangeTiles { get; set; } = 0;
     public int MobilityCooldownTicks { get; set; } = 0;
     public bool MobilitySafeTileOnly { get; set; } = true;
-    public string UseSoundProfile { get; set; } = "soft";
-    public string ImpactSoundProfile { get; set; } = "soft";
     public float SoundPitch { get; set; } = 0f;
     public float SoundVolume { get; set; } = 0.85f;
+    public float SoundPitchVariance { get; set; } = 0.18f;
 
     // Presentation/debug pattern only. Runtime behavior is selected by Delivery/WeaponFamily/MovementCode.
     public string Pattern { get; set; } = "basic";
@@ -701,16 +716,11 @@ public sealed class AttackSpec
     public string ProjectileRotation { get; set; } = "";
     public string ProjectileTrail { get; set; } = "";
     public string ProjectileImpact { get; set; } = "";
-    public string SoundUse { get; set; } = "";
-    public string SoundImpact { get; set; } = "";
 
-    // Future-only sound catalog seam. These fields are intentionally inert in
-    // v0.4.190: a backend may later choose a concrete sound from a large
-    // embedding-indexed user catalog and write explicit ids/paths here. Runtime
-    // must not keyword-classify a huge sound library on the client.
+    // Exact sound-catalog contract. "terraria_vanilla" ids resolve through the
+    // built-in acoustic-role catalog; other sources remain available to the future
+    // explicit asset catalog seam. Runtime never keyword-classifies names/tooltips.
     public string SoundCatalogSource { get; set; } = "";
-    public string SoundUseSearchQuery { get; set; } = "";
-    public string SoundImpactSearchQuery { get; set; } = "";
     public string SoundUseCatalogId { get; set; } = "";
     public string SoundImpactCatalogId { get; set; } = "";
     public string SoundUseCatalogPath { get; set; } = "";
@@ -747,6 +757,13 @@ public sealed class AttackSpec
     // v0.3.16 hybrid VFX manifest compiled by LocalGenerator once per generated item.
     // GeneratedProjectile executes this frozen data; it does not re-parse prompt prose every tick.
     public string VfxManifestJson { get; set; } = "";
+
+    public AttackSpec CloneForRuntimeSpawn()
+    {
+        var clone = (AttackSpec)MemberwiseClone();
+        clone.EngineMetrics = EngineMetrics is null ? new Dictionary<string, float>() : new Dictionary<string, float>(EngineMetrics);
+        return clone;
+    }
 }
 
 
@@ -841,15 +858,3 @@ public sealed class TrailVisualSpec
     public float Density { get; set; } = 0.25f;
     public string Color { get; set; } = "white";
 }
-
-public sealed class SoundProfileSpec
-{
-    public string Schema { get; set; } = "soundProfile.v1";
-    public string Use { get; set; } = "soft";
-    public string Impact { get; set; } = "soft";
-    public string EffectLayer { get; set; } = "soft";
-    public float Volume { get; set; } = 0.85f;
-    public float Pitch { get; set; } = 0f;
-    public float Variation { get; set; } = 0.18f;
-}
-

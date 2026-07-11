@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.web import api as server
+from infini_local.pipelines import visual_delivery_gate
+from infini_local.pipelines import pipeline_visual_config as VISUAL_CONFIG
 
-VISUAL = server.visual_generation_pipeline
+VISUAL = visual_delivery_gate
 
 
 def _check_visual_delivery_gate_blocks_missing_required_item_sprite(monkeypatch):
@@ -57,7 +58,7 @@ def _check_visual_delivery_gate_accepts_existing_warn_invalid_item_sprite(monkey
 def _check_visual_delivery_gate_can_require_zimage_backend(monkeypatch, tmp_path):
     monkeypatch.setattr(VISUAL, "VISUAL_REQUIRE_ITEM_SPRITE", True)
     monkeypatch.setattr(VISUAL, "VISUAL_REQUIRE_ZIMAGE_BACKEND", True)
-    monkeypatch.setattr(VISUAL, "IMAGE_BACKEND", "procedural")
+    monkeypatch.setattr(VISUAL_CONFIG, "IMAGE_BACKEND", "procedural")
     sprite = tmp_path / "ok.png"
     sprite.write_bytes(b"\x89PNG\r\n\x1a\n")
     data = {"id": "wrong_backend", "visual": {"spriteStatus": "generated", "spritePath": str(sprite)}, "attack": {}, "debug": {}}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from infini_local.pipelines.combine_pipeline import apply_accessory_soft_budget, apply_armor_soft_budget
+from infini_local.pipelines.equipment_stats import apply_accessory_soft_budget, apply_armor_soft_budget
 
 
 def _stage() -> dict[str, object]:

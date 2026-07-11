@@ -7,8 +7,8 @@ from infini_local.pipelines.result_identity_policy import normalize_category
 from infini_local.pipelines.visual_prompt_contracts import compact_visual_words
 
 
-# AGENT MAP: generated-parent summary serialization shared by server.py and
-# pipeline_support.py. Keep this as read-only summary/debug shaping; no gameplay
+# AGENT MAP: generated-parent summary serialization shared by direct consumers.
+# Keep this as read-only summary/debug shaping; no gameplay
 # authoring or validation belongs here.
 
 

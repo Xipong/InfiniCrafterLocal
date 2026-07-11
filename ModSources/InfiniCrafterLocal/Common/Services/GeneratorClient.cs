@@ -630,7 +630,7 @@ public sealed class GeneratorClient
             reasons.Add("generated_parent_manifest");
             foreach (var slot in existing.VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>())
             {
-                if (!string.IsNullOrWhiteSpace(slot.Renderer)) renderers.Add(slot.Renderer);
+                if (!string.IsNullOrWhiteSpace(slot.RendererKind)) renderers.Add(slot.RendererKind);
                 if (!string.IsNullOrWhiteSpace(slot.Channel)) tags.Add("channel_" + slot.Channel);
             }
         }

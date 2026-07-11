@@ -1,225 +1,46 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
-import math
-import os
-import queue
-import random
-import re
-import shlex
-import subprocess
-import time
 import traceback
-from pathlib import Path
 from typing import Any
 
-from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first, env_path
-from urllib import request as urlrequest
-from urllib import error as urlerror
-from urllib.parse import urlencode
-from infini_local.pipelines.visual_soul import (
-    _clamp01,
-    _hex_from_rgb,
-    _rgb_to_hsv01,
-    _rgba_pixels,
-    analyze_visual_soul_from_sprite,
-    attach_visual_soul_from_sprite,
-    visual_soul_archetype,
-    visual_soul_tooltip,
-)
+from infini_local.core.boundary_models import validate_visual_kit_boundary
 
-from infini_local.pipelines.visual_prompt_contracts import (
-    asset_negative_prompt,
-    chroma_rgb,
-    chroma_name,
-    sprite_background_positive_clause,
-    sprite_background_negative_clause,
-    image_backend_is_zimage,
-    zimage_positive_only_enabled,
-    zimage_role_description,
-    zimage_positive_guard_clause,
-    _is_generated_usable_gear,
-    _compact_prompt_append,
-    _blade_shape_needs_fused_contour_guard,
-    _item_blade_guard_context,
-    _prompt_probe,
-    _append_item_role_guard_once,
-    _strip_item_role_guard_fragments,
-    _authored_item_silhouette_contract,
-    _prepend_prompt_contracts,
-    role_visual_prompt_guard,
-    _authored_tether_context,
-    authored_tether_like,
-    tether_sprite_guard_required,
-    _scrub_tether_sprite_body_prompt,
-    tether_visual_prompt_guard,
-    family_prompt_clause,
-    sanitize_projectile_family_prompt,
-    zimage_subject_sentence,
-    zimage_item_identity_sentence,
-    item_name_prompt_clause,
-    sprite_contract_for,
-    role_contract_prompt_clause,
-    role_style_prefix,
-    normalize_asset_prompt,
-    projectile_visual_blob,
-    is_tiny_projectile_visual,
-    is_melee_arc_projectile_visual,
-    effective_projectile_canvas,
-    compact_visual_words,
-    build_projectile_image_prompt,
-    build_impact_image_prompt,
-    build_child_image_prompt,
-    build_field_image_prompt,
-    _BLADE_SUBJECT_RE,
-    _FUSED_BLADE_RISK_RE,
-    _ITEM_USABLE_GEAR_GUARD,
-    _ITEM_USABLE_PARTS_GUARD,
-)
-
-from infini_local.pipelines.visual_asset_plan import (
-    should_generate_child_asset,
-    should_generate_field_asset,
-    _visual_kit,
-    _role_baked_asset_spec,
-    _role_asset_prompt,
-    _asset_mode_from_value,
-    compiled_child_projectile_needs_sprite,
-    authored_asset_mode,
-    visual_asset_runtime_gate,
-    apply_visual_asset_runtime_gates,
-    legacy_projectile_baked_sprite_fallback,
-    build_visual_asset_plan,
-)
-
-from infini_local.pipelines.visual_asset_manifest import (
-    _asset_sha256,
-    _asset_descriptor,
-    sprite_contract_for_asset,
-    _compact_text,
-    _parent_manifest_summary,
-    _asset_manifest_entry,
-    write_visual_manifest,
-)
-
-from infini_local.pipelines.visual_delivery_gate import (
-    VisualDeliveryBlocked,
-    _sprite_status_is_usable,
-    _item_sprite_status_is_usable,
-    _asset_path_exists,
-    visual_delivery_report,
-    assert_visual_delivery_ready,
-)
-
-from infini_local.pipelines.visual_sprite_generation import (
-    maybe_generate_sprite,
-    _validation_reasons,
-    refit_processed_sprite_to_contract,
-    generate_visual_asset,
-    maybe_generate_visual_assets,
-)
-
-from infini_local.pipelines.pipeline_support import (
-    Image,
-    ImageDraw,
-    APP_VERSION,
-    BG_COLOR,
-    BG_REMOVE_MODE,
-    CHILD_ICON_TARGET_FILL,
-    CHILD_SPRITE_CANVAS,
-    FIELD_ICON_TARGET_FILL,
-    FIELD_SPRITE_CANVAS,
-    GENERATE_VARIANTS,
-    IMAGE_BACKEND,
-    IMPACT_ICON_TARGET_FILL,
-    IMPACT_SPRITE_CANVAS,
-    ITEM_ICON_TARGET_FILL,
-    LLM_RUNTIME_AUTHORING,
-    PROJECTILE_ICON_TARGET_FILL,
-    PROJECTILE_SPRITE_CANVAS,
-    REMOVE_BG,
-    SDCPP_MODEL,
-    SDCPP_SERVER_COMMAND_TEMPLATE,
-    SDCPP_SERVER_EXTRA_ARGS,
-    SPRITE_DIR,
-    SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
-    SPRITE_ITEM_CORE_ALPHA_THRESHOLD,
-    SPRITE_RETRIES,
-    USE_LLM,
-    VISUAL_ALLOW_PROCEDURAL_FALLBACK,
-    VISUAL_ASSET_MODE,
-    VISUAL_DIRECTOR_LLM,
-    VISUAL_GENERATE_CHILD_FIELD_IMAGES,
-    VISUAL_GENERATE_IMPACT_IMAGES,
-    VISUAL_GENERATE_PROJECTILE_IMAGES,
-    VISUAL_PIPELINE_PROFILE,
-    VISUAL_REQUIRE_ITEM_SPRITE,
-    VISUAL_REQUIRE_ZIMAGE_BACKEND,
-    VISUAL_STRICT_AI_AUTHORSHIP,
-    WORLD_RECIPES_DIR,
-    ZIMAGE_POSITIVE_ONLY,
-    ZIMAGE_PROMPT_CONTRACT,
-    _env_float,
-    asset_sync_service,
-    compact_zimage_asset_prompt,
-    log_event,
-    name_of,
-    parse_first_valid_llm_json,
-    runtime_plan,
-    sanitize_image_prompt_background,
-    sanitize_projectile_prompt_multiplicity,
-    sanitize_visual_palette,
-    sprite_status_from_raw_path,
-    strip_conflicting_sprite_prompt_bits,
-    tags_of,
-    trace_event,
-    visual_asset_pipeline,
-    zimage_palette_sentence,
-    zimage_pe_clean_text,
-    zimage_text_policy_sentence,
-)
-
-from infini_local.pipelines.combine_validation import (
-    _stringish,
-)
-from infini_local.pipelines.combine_genome_contract import (
-    is_llm_planner,
-)
-from infini_local.pipelines.result_identity_policy import (
-    palette_from,
-    required_anchors_from,
-)
-from infini_local.pipelines.combine_balance import (
-    size_profile_for,
-    stage_profile_for,
-)
-from infini_local.pipelines.projectile_affordance import (
-    infer_projectile_visual_family,
-)
-
-from infini_local.pipelines.image_backend_pipeline import (
-    generate_a1111,
-    generate_comfyui,
-    generate_image_api,
-    generate_sdcpp,
-)
-
+from infini_local.core.env_utils import env_float, env_int
+from infini_local.core.item_identity_tools import name_of
+from infini_local.core.llm_config import USE_LLM
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
+from infini_local.pipelines.combine_genome_contract import is_llm_planner
+from infini_local.pipelines.combine_validation import _stringish
+from infini_local.pipelines.item_power_knowledge import tags_of
 from infini_local.pipelines.llm_transport import (
     llm_chat_json,
     llm_json_response_format,
     resolve_llm_model,
     visual_director_max_tokens,
 )
+from infini_local.pipelines.pipeline_visual_config import VISUAL_ASSET_MODE, VISUAL_DIRECTOR_LLM
+from infini_local.pipelines.result_identity_policy import palette_from, required_anchors_from
 
-from infini_local.pipelines.sprite_postprocess import (
-    build_retry_prompt_from_validation,
-    pick_best_sprite,
-    postprocess_sprite,
-    sprite_validation_fatal,
-    validate_processed_sprite,
+from infini_local.pipelines.visual_prompt_contracts import (
+    asset_negative_prompt,
+    sprite_background_positive_clause,
+    role_visual_prompt_guard,
+    sanitize_projectile_family_prompt,
+    role_contract_prompt_clause,
 )
+
+from infini_local.pipelines.visual_asset_plan import (
+    _asset_mode_from_value,
+    apply_visual_asset_runtime_gates,
+)
+from infini_local.services.visual_asset_pipeline import (
+    sanitize_image_prompt_background,
+    sanitize_visual_palette,
+    strip_conflicting_sprite_prompt_bits,
+)
+from infini_local.storage.trace_runtime import log_event
 
 
 
@@ -233,7 +54,7 @@ def attach_visual(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca
     visual["requiredAnchors"] = list(dict.fromkeys(anchors))[:10]
     visual["palette"] = visual.get("palette") or palette_from(tags)
     visual["style"] = "terraria_item_sprite"
-    stage = stage_profile_for(a, b, tags)
+    stage = stat_profile_for(a, b, tags)
     size = size_profile_for(str(data.get("name", "generated item")), tags, data.get("gameplay", {}).get("kind") or data.get("category") or "generic", stage)
     visual.setdefault("preferredCanvasSize", size["preferredCanvasSize"])
     visual.setdefault("inventoryScale", size["inventoryScale"])
@@ -397,13 +218,15 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "Return one JSON object; no markdown or analysis.",
                 "Build role-separated assets, not one copied generic prompt.",
                 "Each sprite prompt describes one pixel asset on solid #ff00ff, not a scene.",
-                "Item icon for a usable gear result should read as one handheld/carriable object; furniture/placeable parents may appear as parts or integrated cues, not automatically as a full placed tile scene.",
+                "Item icon should be one inventory-readable object: weapons/tools as one handheld object, armor as one wearable piece, accessories as one compact wearable/charm, potions as one container. Do not draw emitted projectiles, impact bursts, target markers or fields beside it unless physically integrated. Furniture/placeable parents may appear as parts or integrated cues, not automatically as a full placed tile scene.",
+                "Weapon topology: describe one continuous weapon object. Unless itemSilhouetteContract explicitly requires a paired or double-ended construction, use one primary grip/handle/hilt assembly only; do not duplicate handles, guards, pommels, triggers, stocks, or grip sections. Two-handed means one longer shared grip, not two separate handles.",
                 "Projectile sprite prompt describes the moving hit object texture; preserve weird authored forms, but do not change gameplay delivery/runtime in art text.",
                 "Impact sprite prompt is effect-only: dust, smoke, sparks, fragments, flash, ring, splash or debris burst; do not describe a persistent weapon/item/furniture body there.",
                 "Palette is foreground-only; do not list #ff00ff/background/canvas as material.",
-                "One core sprite per role; code animates it.",
-                "Distinct roles should look distinct when present.",
-                "Choose asset modes yourself. Prompt text is not demand; only mode=baked_sprite requests a PNG.",
+                "One core sprite per role; code animates it. shotCount/spread/splitCount are runtime multiplicity: projectileSpritePrompt describes one projectile body, while childSpritePrompt describes one child body.",
+                "Item-bodied attacks (returning boomerang, thrust spear, yoyo, thrown item) reuse the item sprite by default; itemIconPrompt is also the held/body sprite, so do not request or describe a separate held asset.",
+                "Use visualKit.bakedAssets as the only asset-mode decision surface. Set bakedAssets.projectile.distinctFromItem=true only for an explicitly transformed flight body or a separate emitted projectile. Similarity between a sword and its emitted shard is allowed.",
+                "Choose each role mode only in bakedAssets.<role>. Prompt text is not demand; only mode=baked_sprite requests a PNG. Do not add alternate asset-decision fields.",
                 "Ordinary melee, arrows/bullets, and simple hits usually use particle_vfx or none for impact.",
                 "Use ParticleLibrary/Dust/runtime VFX for sparks, dust, glints, smoke, small bursts, trails, and simple fields. Use baked_sprite only for a real separate body/decal/rune/cloud/child entity.",
                 "Keep the fantasy visible; avoid generic sword/wand/orb/bolt collapse.",
@@ -417,8 +240,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "For item icons, write one itemSilhouetteContract sentence: concrete proportions/parts/readability for this exact generated object; do not use a generic weapon class label alone.",
                 "No SD tags, negative-prompt blocks, masterpiece/8K/meta labels.",
                 "If exact text must appear, quote it; otherwise use no text/logos/UI marks.",
-                "Tethered/returning/harpoon sprites: compact moving body plus optional short local rope/chain attachment, not a full-canvas line.",
-                "Do not force literal parent silhouettes into every asset; draw the authored final object.",
+                "Tethered/returning/harpoon sprites: compact moving body plus optional short local rope/chain attachment, not a full-canvas line. Flail projectile is the compact head/weight; whip projectile is a compact tip/segment accent or particle_vfx, never a pre-drawn full lash because runtime animates the tether.",
+                "Do not force literal parent silhouettes into every asset; draw the authored final object. If a modded parent has no visual facts, do not invent claims of exact fidelity—use the authored child concept, mechanical facts, palette and explicit anchors.",
                 "Write short VFX intent lines as plain visual hints, not code.",
                 "VFX hints may use scale/tempo/material words, but no numeric particle counts.",
             ],
@@ -430,8 +253,10 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "concept": concept,
                 "runtimeAffordance": data.get("runtimeAffordance") if isinstance(data.get("runtimeAffordance"), dict) else {},
                 "attack": {k: attack.get(k) for k in [
-                    "delivery", "weaponFamily", "projectileFamily", "ammoKind",
-                    "projectileShape", "projectileMotion", "projectileRotation", "projectileTrail", "projectileImpact", "secondaryProjectileShape", "secondaryMaterial", "effect", "onHit", "movement"
+                    "runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "ammoKind",
+                    "projectileShape", "projectileMotion", "projectileRotation", "projectileTrail", "projectileImpact",
+                    "secondaryProjectileShape", "secondaryMaterial", "secondaryTrigger", "effect", "onHit", "movement",
+                    "shotCount", "spreadRadians", "splitCount", "chainCount", "channelUse", "beamWidthPx", "beamChargeTicks", "immunityCooldown"
                 ]},
                 "existingVisual": {k: visual.get(k) for k in ["objectType", "requiredAnchors", "palette", "imagePrompt", "projectileImagePrompt", "impactImagePrompt"]},
             },
@@ -442,17 +267,12 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                     "silhouetteSummary": "main readable shape",
                     "itemSilhouetteContract": "one sentence: exact item icon proportions, required readable parts, and forbidden near-miss silhouettes for this generated object",
                     "itemIconPrompt": "item sprite prompt",
-                    "heldSpritePrompt": "held sprite prompt or same as item",
                     "projectileSpritePrompt": "projectile sprite prompt",
-                    "childSpritePrompt": "child/spark/mote prompt or empty",
+                    "childSpritePrompt": "secondary projectile prompt or empty",
                     "impactSpritePrompt": "hit/expire prompt",
                     "fieldSpritePrompt": "field/trap/rune/cloud prompt or empty",
-                    "bakedAssets": {"projectile": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}, "impact": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}, "child": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}, "field": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}},
-                    "assetModes": {"projectile": "none|particle_vfx|baked_sprite", "impact": "none|particle_vfx|baked_sprite", "child": "none|particle_vfx|baked_sprite", "field": "none|particle_vfx|baked_sprite"},
-                    "projectileAssetMode": "none|particle_vfx|baked_sprite",
-                    "impactAssetMode": "none|particle_vfx|baked_sprite",
-                    "childAssetMode": "none|particle_vfx|baked_sprite",
-                    "fieldAssetMode": "none|particle_vfx|baked_sprite",
+                    "bakedAssets": {"projectile": {"mode": "none|particle_vfx|reuse_item_sprite|baked_sprite", "prompt": "only if baked_sprite", "distinctFromItem": "boolean; true only for a transformed flight body or separate emitted object", "reason": "short"}, "impact": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}, "child": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}, "field": {"mode": "none|particle_vfx|baked_sprite", "prompt": "only if baked_sprite", "reason": "short"}},
+
                     "vfxIntent": "max 12 words: overall runtime VFX intent, e.g. large impact burst, short ragged trail",
                     "projectileVfx": "max 10 words: travel/active VFX hint",
                     "impactVfx": "max 10 words: hit/expire VFX hint",
@@ -476,7 +296,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 {"role": "system", "content": "You direct pixel-art assets for Z-Image in a Terraria-like generated-item mod. Write concise final visual descriptions, not SD/negative-prompt recipes. Preserve authored subject, count, action, state, colors, and materials. Do not add unauthored glow, magic, energy, child motes, or material effects. Return one JSON object."},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
             ],
-            "temperature": _env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.42, 0.0, 1.2),
+            "temperature": env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.42, lo=0.0, hi=1.2),
             "max_tokens": visual_director_max_tokens(),
             "response_format": llm_json_response_format("infini_visual_director"),
         }
@@ -491,7 +311,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         # wording, making debug manifests look worse than the actual generated prompt.
         for prompt_key, role_hint in [
             ("itemIconPrompt", "item"),
-            ("heldSpritePrompt", "item"),
             ("projectileSpritePrompt", "projectile"),
             ("childSpritePrompt", "child"),
             ("impactSpritePrompt", "impact"),
@@ -507,39 +326,44 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         for text_key in ["styleGuide", "silhouetteSummary", "itemSilhouetteContract", "silhouetteContract", "shapeContract", "itemShapeContract", "vfxIntent", "projectileVfx", "impactVfx", "childVfx", "vfxAvoid"]:
             if kit.get(text_key):
                 kit[text_key] = sanitize_projectile_family_prompt(data, "projectile" if "projectile" in text_key.lower() else "item", str(kit.get(text_key)))[:700]
+        allowed_kit_keys = {
+            "styleGuide", "palette", "silhouetteSummary", "itemSilhouetteContract",
+            "itemIconPrompt", "projectileSpritePrompt", "childSpritePrompt", "impactSpritePrompt",
+            "fieldSpritePrompt", "bakedAssets", "vfxIntent", "projectileVfx", "impactVfx",
+            "childVfx", "fieldVfx", "vfxScaleHint", "vfxRhythmHint", "vfxMaterialHints",
+            "vfxAvoid", "animationPlan", "assetDependencies", "qualityNotes", "negativePrompt",
+        }
+        unknown_kit_keys = sorted(str(key) for key in kit if key not in allowed_kit_keys)
+        if unknown_kit_keys:
+            raise ValueError(f"visualKit contains noncanonical keys: {unknown_kit_keys[:8]}")
         data["visualKit"] = kit
-        # Preserve explicit model decisions about whether a role needs a baked PNG.
-        # build_visual_asset_plan() treats GUI flags as allow-gates, not force-generate.
-        mode_map = kit.get("assetModes") if isinstance(kit.get("assetModes"), dict) else {}
-        normalized_modes = {}
-        for role in ["projectile", "impact", "child", "field"]:
-            mode = _asset_mode_from_value(mode_map.get(role) if isinstance(mode_map, dict) else "") or _asset_mode_from_value(kit.get(f"{role}AssetMode")) or _asset_mode_from_value(kit.get(f"{role}SpriteMode"))
-            if mode:
-                normalized_modes[role] = mode
-                kit[f"{role}AssetMode"] = mode
+        # Current contract has exactly one authored asset-decision surface:
+        # visualKit.bakedAssets.<role>.
         baked_assets = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
-        if isinstance(baked_assets, dict):
-            clean_baked = {}
-            for role in ["projectile", "impact", "child", "field"]:
-                spec = baked_assets.get(role)
-                if isinstance(spec, dict):
-                    mode = _asset_mode_from_value(spec.get("mode") or spec.get("assetMode") or spec.get("enabled"))
-                    prompt = strip_conflicting_sprite_prompt_bits(spec.get("prompt") or spec.get("spritePrompt") or spec.get("imagePrompt") or "")
-                    if mode:
-                        clean_baked[role] = {"mode": mode}
-                        if prompt:
-                            prompt = sanitize_projectile_family_prompt(data, role, prompt)
-                            prompt = role_visual_prompt_guard(role, prompt, data)
-                            clean_baked[role]["prompt"] = prompt[:1400]
-                        if spec.get("reason"):
-                            clean_baked[role]["reason"] = str(spec.get("reason"))[:240]
-                        normalized_modes[role] = mode
-                        kit[f"{role}AssetMode"] = mode
-            if clean_baked:
-                kit["bakedAssets"] = clean_baked
-                kit["assetModes"] = normalized_modes
-        if normalized_modes:
-            kit["assetModes"] = normalized_modes
+        clean_baked: dict[str, dict[str, Any]] = {}
+        for role in ["projectile", "impact", "child", "field"]:
+            spec = baked_assets.get(role) if isinstance(baked_assets, dict) else None
+            spec = spec if isinstance(spec, dict) else {}
+            mode = _asset_mode_from_value(spec.get("mode"))
+            if not mode:
+                continue
+            row: dict[str, Any] = {"mode": mode}
+            prompt = strip_conflicting_sprite_prompt_bits(spec.get("prompt") or "")
+            if prompt:
+                prompt = sanitize_projectile_family_prompt(data, role, prompt)
+                prompt = role_visual_prompt_guard(role, prompt, data)
+                row["prompt"] = prompt[:1400]
+            if spec.get("reason"):
+                row["reason"] = str(spec.get("reason"))[:240]
+            if role == "projectile" and isinstance(spec.get("distinctFromItem"), bool):
+                row["distinctFromItem"] = bool(spec.get("distinctFromItem"))
+            clean_baked[role] = row
+        if clean_baked:
+            kit["bakedAssets"] = clean_baked
+        else:
+            kit.pop("bakedAssets", None)
+        kit = validate_visual_kit_boundary(kit)
+        data["visualKit"] = kit
         apply_visual_asset_runtime_gates(data, kit)
         data.setdefault("debug", {})["visualDirectorRawOutput"] = content[:10000]
         data["debug"]["visualDirectorModel"] = model_name

@@ -31,13 +31,16 @@ public sealed partial class GeneratedProjectile
 // =============================================================================
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
     {
-        if (IsThrustDelivery() || IsWhipDelivery())
+        if (IsThrustDelivery() || IsWhipDelivery() || IsBeamDelivery())
         {
             Vector2 start, end, dir;
-            if (IsWhipDelivery()) WhipLine(out start, out end, out dir);
+            if (IsBeamDelivery()) BeamLine(out start, out end, out dir);
+            else if (IsWhipDelivery()) WhipLine(out start, out end, out dir);
             else HeldThrustLine(out start, out end, out dir);
             float collisionPoint = 0f;
-            float lineWidth = Math.Max(8f, Math.Max(Projectile.width, Projectile.height) * Math.Max(0.8f, Projectile.scale) * Math.Max(0.75f, _spec.HitboxScale));
+            float lineWidth = IsBeamDelivery()
+                ? EffectiveBeamWidthPx()
+                : Math.Max(8f, Math.Max(Projectile.width, Projectile.height) * Math.Max(0.8f, Projectile.scale) * Math.Max(0.75f, _spec.HitboxScale));
             return Collision.CheckAABBvLineCollision(
                 new Vector2(targetHitbox.Left, targetHitbox.Top),
                 new Vector2(targetHitbox.Width, targetHitbox.Height),
@@ -126,6 +129,12 @@ public sealed partial class GeneratedProjectile
     {
         if (_spawnIgnoreTicks > 0 && target is not null && target.whoAmI == _spawnIgnoreNpc)
             return false;
+        if (IsBeamDelivery() && target is not null)
+        {
+            BeamLine(out Vector2 start, out _, out _);
+            if (!Collision.CanHitLine(start, 1, 1, target.position, target.width, target.height))
+                return false;
+        }
         return base.CanHitNPC(target);
     }
 
@@ -142,7 +151,10 @@ public sealed partial class GeneratedProjectile
         switch (onHit)
         {
             case 1: BurstDust(effect, 16, 2.2f); break;
-            case 2: SplitProjectiles(target, _spec.SplitCount); break;
+            case 2:
+                if (GeneratedSecondaryTriggerPolicy.Is(_spec.SecondaryTrigger, GeneratedSecondaryTriggerPolicy.OnHit))
+                    SplitProjectiles(target, _spec.SplitCount);
+                break;
             case 3: ChainProjectiles(target, _spec.ChainCount); target.AddBuff(BuffID.Electrified, DebuffDuration(90)); break;
             case 4: target.AddBuff(BuffID.OnFire, DebuffDuration(240)); break;
             case 5: target.AddBuff(BuffID.Frostburn, DebuffDuration(180)); break;
@@ -158,7 +170,7 @@ public sealed partial class GeneratedProjectile
             case 15: if (_spec.SplitCount > 0) RadialBurst(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
             case 16: if (_spec.ChainCount > 0) ChainProjectiles(target, _spec.ChainCount); target.AddBuff(BuffID.Electrified, DebuffDuration(140)); break;
             case 17: HealOwner(damageDone); BurstDust(effect, 8, 1.2f); break;
-            case 18: if (_spec.SplitCount > 0) Starfall(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
+            case 18: if (_spec.SplitCount > 0) SpawnOverheadBarrage(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
         }
     }
 
@@ -188,11 +200,14 @@ public sealed partial class GeneratedProjectile
     }
 
 
+    private int RemainingGameplayChildBudget()
+        => Math.Max(0, Math.Max(0, _spec.MaxChildProjectiles) - _spawnedGameplayChildCount);
+
     private int RuntimeChildCount(int requested)
     {
-        int cap = Math.Max(0, _spec.MaxChildProjectiles);
-        if (cap <= 0 || requested <= 0) return 0;
-        return Math.Clamp(requested, 1, cap);
+        int remaining = RemainingGameplayChildBudget();
+        if (remaining <= 0 || requested <= 0) return 0;
+        return Math.Clamp(requested, 1, remaining);
     }
 
     private bool CanRunChildEffect(bool rootOnly = false)
@@ -280,29 +295,25 @@ public sealed partial class GeneratedProjectile
         }
     }
 
-    private void Starfall(Vector2 center, int count, float damageMult, int ignoreNpc = -1)
+    private void SpawnOverheadBarrage(Vector2 center, int count, float damageMult, int ignoreNpc = -1)
     {
-        // Starfall is the finite Star Wrath-like primitive: bounded falling star
-        // child projectiles spawned above the hit point, not a name/prose router.
         if (!CanRunChildEffect(rootOnly: true) || _procced) return;
         _procced = true;
         count = RuntimeChildCount(count);
         if (count <= 0) return;
+
         AttackSpec childSpec = ChildSpec(2, 0, 0.62f);
-        childSpec.EffectCode = 3; // star
-        childSpec.TileCollide = false;
-        childSpec.Lifetime = _spec.SecondaryLifetimeTicks > 0 ? _spec.SecondaryLifetimeTicks : Math.Min(120, Math.Max(45, _spec.Lifetime / 2));
-        childSpec.ProjectileShape = string.IsNullOrWhiteSpace(_spec.SecondaryProjectileShape) ? "falling star" : _spec.SecondaryProjectileShape;
-        childSpec.ProjectileMotion = "falling star";
-        int dmg = Math.Max(1, (int)(Projectile.damage * Math.Max(0.12f, damageMult <= 0f ? 0.42f : damageMult)));
-        float spacing = count <= 1 ? 0f : MathHelper.Clamp(_spec.SecondarySpreadRadians <= 0f ? 0.44f : _spec.SecondarySpreadRadians, 0.12f, 1.2f);
+        GeneratedOverheadBarragePolicy.ConfigureChild(childSpec, _spec);
+        int damage = Math.Max(1, (int)(Projectile.damage * Math.Max(0.12f, damageMult <= 0f ? 0.42f : damageMult)));
         for (int i = 0; i < count; i++)
         {
-            float t = count <= 1 ? 0f : (i / (float)(count - 1) - 0.5f);
-            Vector2 origin = center + new Vector2(t * spacing * 96f + Main.rand.NextFloat(-18f, 18f), -220f - Main.rand.NextFloat(0f, 90f));
-            Vector2 toward = (center + Main.rand.NextVector2Circular(36f, 18f) - origin).SafeNormalize(Vector2.UnitY);
-            Vector2 velocity = toward * Main.rand.NextFloat(9.5f, 14.5f);
-            SpawnChild(origin, velocity, dmg, childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
+            (Vector2 origin, Vector2 velocity) = GeneratedOverheadBarragePolicy.Sample(
+                center,
+                i,
+                count,
+                _spec.SecondarySpreadRadians,
+                childSpec.Speed);
+            SpawnChild(origin, velocity, damage, childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
         }
     }
 
@@ -374,6 +385,7 @@ public sealed partial class GeneratedProjectile
     {
         if (Projectile.owner != Main.myPlayer) return;
         if (depth > Math.Max(0, _spec.MaxChildDepth)) return;
+        if (RemainingGameplayChildBudget() <= 0) return;
         float rootId = Projectile.localAI[2] > 0f ? Projectile.localAI[2] : Projectile.identity + 1f;
         if (CountOwnedGeneratedProjectiles(rootId) >= Math.Max(0, _spec.MaxChildProjectiles)) return;
         int idx = Projectile.NewProjectile(Projectile.GetSource_FromThis(), center, velocity, Type, damage, Projectile.knockBack * 0.55f, Projectile.owner, childSpec.MovementCode, childSpec.EffectCode, childSpec.OnHitCode);
@@ -385,6 +397,7 @@ public sealed partial class GeneratedProjectile
             gp._spawnIgnoreNpc = ignoreNpc;
             gp._spawnIgnoreTicks = ignoreNpc >= 0 ? 10 : 0;
             gp.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), _generatedItemId);
+            _spawnedGameplayChildCount++;
             Main.projectile[idx].netUpdate = true;
             gp.BroadcastVisualSync();
         }
@@ -411,9 +424,9 @@ public sealed partial class GeneratedProjectile
             if (slot is null)
                 continue;
             string ev = (slot.Event ?? "").ToLowerInvariant();
-            bool match = evNeed.Contains("hit")
+            bool match = evNeed == "hit"
                 ? (ev == "hit" || ev == "impact" || ev == "onhit")
-                : (ev == "kill" || ev == "expire" || ev == "decay");
+                : evNeed == "kill" && (ev == "kill" || ev == "expire" || ev == "decay");
             if (!match)
                 continue;
             int slotLife = Math.Clamp(slot.Duration + slot.StartTick + 8, 8, 180);
@@ -437,24 +450,15 @@ public sealed partial class GeneratedProjectile
             return;
         _lastImpactSoundLocalTick = localTick;
 
-        string authoredProfile = string.Join(" ", new[]
-        {
-            _spec.ImpactSoundProfile,
-            _spec.SoundImpact,
-            _spec.WeaponSubfamily,
-            _spec.ProjectileFamily,
-            string.Join(" ", _spec.AttackPatternTags ?? Array.Empty<string>())
-        }.Where(x => !string.IsNullOrWhiteSpace(x))).Trim();
         SoundStyle style = InfiniSoundLibrary.ForImpact(
-            authoredProfile,
             _spec.Effect,
             _spec.OnHitCode,
             _spec.EffectCode,
             _spec.SoundVolume,
             _spec.SoundPitch,
+            _spec.SoundPitchVariance,
             _spec.SoundImpactCatalogId,
             _spec.SoundImpactCatalogPath,
-            _spec.SoundImpactSearchQuery,
             _spec.SoundCatalogSource);
         SoundEngine.PlaySound(style, Projectile.Center);
     }
@@ -462,8 +466,48 @@ public sealed partial class GeneratedProjectile
 // =============================================================================
 // NAV: PROJECTILE_KILL_AND_DECAY
 // =============================================================================
+
+    private void SpawnExpireSecondaries()
+    {
+        if (_expireSecondariesSpawned
+            || !GeneratedSecondaryTriggerPolicy.Is(_spec.SecondaryTrigger, GeneratedSecondaryTriggerPolicy.OnExpire)
+            || !CanRunChildEffect(rootOnly: true))
+            return;
+
+        int count = RuntimeChildCount(_spec.SplitCount);
+        if (count <= 0) return;
+        _expireSecondariesSpawned = true;
+
+        AttackSpec childSpec = ChildSpec(0, 0);
+        childSpec.Lifetime = _spec.SecondaryLifetimeTicks;
+        childSpec.MaxChildProjectiles = 0;
+        childSpec.MaxChildDepth = 0;
+        int damage = Math.Max(1, (int)(Projectile.damage * Math.Max(0.05f, _spec.SecondaryDamageMultiplier)));
+        Vector2 baseDirection = Projectile.velocity.SafeNormalize(Vector2.UnitX * Projectile.direction);
+        float speed = Math.Max(4f, Projectile.velocity.Length() * 0.78f);
+        float spread = Math.Clamp(_spec.SecondarySpreadRadians, 0f, 2.2f);
+
+        for (int i = 0; i < count; i++)
+        {
+            float t = count <= 1 ? 0f : i / (float)(count - 1) - 0.5f;
+            Vector2 direction = spread > 0.001f
+                ? baseDirection.RotatedBy(t * spread)
+                : Vector2.UnitX.RotatedBy(MathHelper.TwoPi * i / Math.Max(1, count));
+            SpawnChild(Projectile.Center + direction * 12f, direction * speed, damage, childSpec, Projectile.localAI[1] + 1f);
+        }
+    }
+
     public override void OnKill(int timeLeft)
     {
+        if (IsChargeReleaseDelivery())
+            return;
+        if (IsSentryDelivery())
+        {
+            InfiniVfxRuntime.OnKill(Projectile, _spec, _vfxManifest, ref _vfxState);
+            SpawnPersistentVfxOverlay("kill", Projectile.Center, Math.Max(12, VfxEventLifetime("kill")), Projectile.velocity);
+            return;
+        }
+        SpawnExpireSecondaries();
         int effect = _spec.EffectCode;
         InfiniVfxRuntime.OnKill(Projectile, _spec, _vfxManifest, ref _vfxState);
         SpawnPersistentVfxOverlay("kill", Projectile.Center, Math.Max(12, VfxEventLifetime("kill")), Projectile.velocity);

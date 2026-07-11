@@ -5,11 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
+from infini_local.pipelines import visual_asset_plan as ASSET_PLAN
+from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
 from infini_local.services.visual_asset_pipeline import strip_conflicting_sprite_prompt_bits
-
-VISUAL = server.visual_generation_pipeline
 
 
 def test_incompatible_second_primary_cannot_override_first_executor() -> None:
@@ -59,7 +58,7 @@ def test_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routi
 
 
 def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     data = {
         "id": "bench_blade",
         "category": "weapon",
@@ -69,7 +68,7 @@ def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) ->
         "visualKit": {"bakedAssets": {"projectile": {"mode": "baked_sprite", "prompt": "spinning table plank"}}},
     }
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     projectile = next(x for x in plan if x["role"] == "projectile")
 
     assert projectile["status"] == "skipped_not_authored_baked"
@@ -78,7 +77,7 @@ def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) ->
 
 
 def test_field_baked_asset_requires_compiled_field_runtime(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
     data = {
         "id": "lantern_dart",
         "category": "weapon",
@@ -88,7 +87,7 @@ def test_field_baked_asset_requires_compiled_field_runtime(monkeypatch) -> None:
         "visualKit": {"bakedAssets": {"field": {"mode": "baked_sprite", "prompt": "anchored flame"}}},
     }
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     field = next(x for x in plan if x["role"] == "field")
 
     assert field["status"] == "skipped_not_authored_baked"

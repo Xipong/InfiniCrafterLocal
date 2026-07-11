@@ -69,13 +69,7 @@ def _vfx_int(value: Any, lo: int, hi: int, fallback: int) -> int:
 
 def _vfx_director_enum(value: Any, allowed: list[str], fallback: str | None = None) -> str | None:
     raw = str(value or "").strip()
-    if raw in allowed:
-        return raw
-    low = raw.lower().replace("_", "").replace("-", "")
-    for item in allowed:
-        if item.lower().replace("_", "").replace("-", "") == low:
-            return item
-    return fallback
+    return raw if raw in allowed else fallback
 
 def _vfx_director_enum_required(slot: dict[str, Any], field: str, allowed: list[str]) -> str | None:
     if field not in slot:

@@ -39,10 +39,15 @@ public sealed class GeneratedAssetSyncDebugSnapshot
 public sealed class GeneratedAssetSyncService : IDisposable
 {
     public const byte PacketNotifyGeneratedAssets = InfiniNetPacketIds.NotifyGeneratedAssets;
+    public const int MaxAssetBytes = 8 * 1024 * 1024;
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(12) };
-    private readonly HashSet<string> _inFlight = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, DateTime> _knownMissing = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxInFlightDownloads = 256;
+    private const int MaxKnownMissing = 512;
+    private static readonly TimeSpan InFlightPruneAge = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan KnownMissingPruneAge = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MissingRetryAfter = TimeSpan.FromSeconds(30);
+    private readonly Dictionary<string, DateTime> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _knownMissing = new(StringComparer.OrdinalIgnoreCase);
     private int _cacheHitCount;
     private int _cacheMissCount;
     private int _retryCount;
@@ -137,7 +142,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         // Local cache registration first, then notify other peers.
         QueueDownloads(baseUrl, files);
 
-        if (Main.netMode == NetmodeID.SinglePlayer)
+        if (Main.netMode != NetmodeID.Server)
             return;
 
         var packet = InfiniCrafterLocalMod.Instance.GetPacket();
@@ -166,16 +171,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
         if (Main.netMode == NetmodeID.Server)
         {
-            // Relay the tiny notification to all other clients. No PNG/JSON payload travels through Terraria.
-            var packet = InfiniCrafterLocalMod.Instance.GetPacket();
-            packet.Write(PacketNotifyGeneratedAssets);
-            packet.Write((byte)Math.Min(files.Count, 64));
-            packet.Write(baseUrl);
-            packet.Write(itemId ?? "");
-            packet.Write(recipeKey ?? "");
-            foreach (string file in files.Take(64))
-                packet.Write(file);
-            packet.Send(-1, whoAmI);
+            // Server is authoritative for generated assets. Clients must not be able
+            // to relay arbitrary baseUrl values via this compact packet.
             return;
         }
 
@@ -187,6 +184,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         if (Main.dedServ) return;
         baseUrl = SanitizeBaseUrl(baseUrl);
         if (string.IsNullOrWhiteSpace(baseUrl)) return;
+        DateTime now = DateTime.UtcNow;
         string endpointGuardKey = "asset:" + baseUrl;
         if (forceRetry)
             LocalHttpQuietFailure.Clear(endpointGuardKey);
@@ -204,8 +202,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
             string key = baseUrl + "|" + file;
             lock (_lock)
             {
+                ClearExpiredInFlightAndMissingLocked(now);
                 _cacheMissCount++;
-                if (_inFlight.Contains(key))
+                if (_inFlight.ContainsKey(key))
                 {
                     _duplicateSuppressedCount++;
                     continue;
@@ -222,7 +221,12 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 }
                 if (forceRetry && _knownMissing.Remove(key))
                     _retryCount++;
-                _inFlight.Add(key);
+                if (_inFlight.Count >= MaxInFlightDownloads)
+                {
+                    _duplicateSuppressedCount++;
+                    continue;
+                }
+                _inFlight[key] = now;
                 _downloadStartedCount++;
             }
             _ = Task.Run(async () => await DownloadOneAsync(baseUrl, file, local, key));
@@ -235,9 +239,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
         {
             Directory.CreateDirectory(CacheRoot);
             string url = baseUrl.TrimEnd('/') + "/get_asset?file=" + Uri.EscapeDataString(file);
-            byte[] bytes = await Http.GetByteArrayAsync(url).ConfigureAwait(false);
+            byte[] bytes = await DownloadAssetBytesWithBoundedStreamAsync(url).ConfigureAwait(false);
             LocalHttpQuietFailure.Clear("asset:" + SanitizeBaseUrl(baseUrl));
-            if (bytes.Length <= 0 || bytes.Length > 8 * 1024 * 1024)
+            if (bytes.Length <= 0 || bytes.Length > MaxAssetBytes)
                 throw new InvalidDataException("asset size out of range");
             if (file.EndsWith(".png", StringComparison.OrdinalIgnoreCase) && !LooksLikePng(bytes))
                 throw new InvalidDataException("asset is not png");
@@ -255,8 +259,61 @@ public sealed class GeneratedAssetSyncService : IDisposable
         }
         finally
         {
-            lock (_lock) _inFlight.Remove(key);
+            lock (_lock)
+            {
+                _inFlight.Remove(key);
+                ClearExpiredInFlightAndMissingLocked(DateTime.UtcNow);
+            }
         }
+    }
+
+    private static void PruneMapByCountAndAge(Dictionary<string, DateTime> map, DateTime now, int maxEntries, TimeSpan maxAge)
+    {
+        foreach (string stale in map.Where(x => now - x.Value >= maxAge).Select(x => x.Key).ToList())
+            map.Remove(stale);
+
+        if (map.Count <= maxEntries)
+            return;
+
+        foreach (string key in map.OrderBy(x => x.Value).Take(map.Count - maxEntries).Select(x => x.Key).ToList())
+            map.Remove(key);
+    }
+
+    private async Task<byte[]> DownloadAssetBytesWithBoundedStreamAsync(string url)
+    {
+        using HttpResponseMessage response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        long? contentLength = response.Content.Headers.ContentLength;
+        if (contentLength.HasValue && contentLength.Value > MaxAssetBytes)
+            throw new InvalidDataException($"asset size {contentLength.Value} exceeds maximum {MaxAssetBytes}");
+
+        await using Stream stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using MemoryStream memory = new(capacity: (int)Math.Min(Math.Max(contentLength.GetValueOrDefault(1024), 1024), MaxAssetBytes + 1024));
+        byte[] buffer = new byte[8192];
+        int total = 0;
+        while (true)
+        {
+            int read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false);
+            if (read <= 0)
+                break;
+            total += read;
+            if (total > MaxAssetBytes)
+                throw new InvalidDataException($"asset size exceeded maximum {MaxAssetBytes}");
+            await memory.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+        }
+
+        return memory.ToArray();
+    }
+
+    private static void ClearExpiredInFlightAndMissing(Dictionary<string, DateTime> inFlight, Dictionary<string, DateTime> knownMissing, DateTime now)
+    {
+        PruneMapByCountAndAge(inFlight, now, MaxInFlightDownloads, InFlightPruneAge);
+        PruneMapByCountAndAge(knownMissing, now, MaxKnownMissing, KnownMissingPruneAge);
+    }
+
+    private void ClearExpiredInFlightAndMissingLocked(DateTime now)
+    {
+        ClearExpiredInFlightAndMissing(_inFlight, _knownMissing, now);
     }
 
     private static bool LooksLikePng(byte[] bytes)

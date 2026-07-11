@@ -1,186 +1,40 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import math
-import os
-import queue
-import random
-import re
-import shlex
-import subprocess
-import time
-import traceback
-from pathlib import Path
-from typing import Any
-from urllib import request as urlrequest
-from urllib import error as urlerror
-from urllib.parse import urlencode
+from typing import AbstractSet, Any
+from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.runtime_executor_vocabulary import EFFECT_CODE, MOVEMENT_CODE, ONHIT_CODE
+from infini_local.core.effect_catalog import resolve_attack_pattern
+from infini_local.core.item_identity_tools import item_num
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.core.runtime_authoring.reports import infer_attack_pattern_from_runtime
+from infini_local.core.runtime_authoring.schema import _runtime_family_affordances
+from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_authoring.vocabulary import (
+    DELIVERIES,
+    normalize_authoring_enum,
+)
+from infini_local.pipelines.engine_pressure_metrics import (
+    behavior_cost_multiplier,
 
-from infini_local.core.balance_report import attach_balance_report
-from infini_local.core.balance_policy import weapon_envelope_for_bucket
-from infini_local.pipelines.result_identity_policy import (
-    _policy_seed,
-    _weighted_choice,
-    bad_result_name,
-    canonical_for_result,
-    category_policy,
-    choose_from,
-    choose_result_category,
-    clean_name,
-    coerce_category_by_policy,
-    creative_result_name,
-    inh_for_parent,
-    is_weapon_like_parent,
-    name_noun_for,
-    name_prefixes_for,
-    normalize_category,
-    palette_from,
-    parent_primary_category,
-    repair_name_if_needed,
-    rep,
-    rep_for_parent,
-    required_anchors_from,
-    required_anchors_from_tags,
-    theme_word,
-    title_words,
-    try_llm_name_repair,
+    effective_hit_cadence_ticks,
+
+    clamp_float,
+    sanitize_genome_engine,
 )
-from infini_local.pipelines.equipment_stats import (
-    _ACCESSORY_BOOLEAN_COSTS,
-    _ACCESSORY_COST_WEIGHTS,
-    _ARMOR_BOOLEAN_COSTS,
-    _ARMOR_PIECE_COST_WEIGHTS,
-    _SET_BONUS_COST_WEIGHTS,
-    _equipment_budget_base,
-    _equipment_cost,
-    _equipment_float,
-    _equipment_int,
-    _scale_equipment_fields,
-    accessory_stats_for,
-    apply_accessory_soft_budget,
-    apply_armor_soft_budget,
-    armor_slot_from_authoring,
-    armor_stats_for,
-)
-from infini_local.pipelines.pipeline_support import (
-    ACCESSORY_HINT_TAGS,
-    ALLOWED_CATEGORIES,
-    ALLOW_DETERMINISTIC_DEV_FALLBACK,
-    AMMO_HINT_TAGS,
-    APP_VERSION,
-    ARMOR_HINT_TAGS,
-    ASSET_PUBLIC_BASE_URL,
-    BAD_NAME_PATTERNS,
-    CACHE_DIR,
-    CATEGORY_CREATIVITY,
-    CATEGORY_ENFORCE_SAMPLED,
-    CATEGORY_SALT,
-    COMBAT_CATEGORIES,
-    DELIVERY_ALIASES,
-    DELIVERY_VALUES,
-    EFFECT_ALIASES,
-    EFFECT_CODE,
-    EFFECT_PRESENTATION,
-    HARD_TAGS,
-    LAST_COMBINE_FAILURE,
-    LAST_COMBINE_FAILURE_FILE,
+from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_NUMERIC_GENOME_LIMITS,
     LLM_OPTIONAL_GENOME_DEFAULTS,
     LLM_REQUIRED_GENOME_FIELDS,
     LLM_RUNTIME_AUTHORING,
-    MODDED_HIGH_TIERS,
-    MOVEMENT_ALIASES,
-    MOVEMENT_CODE,
-    NON_WEAPON_CATEGORIES,
-    ONHIT_ALIASES,
-    ONHIT_CODE,
-    PALETTES,
-    PLACEABLE_HINT_TAGS,
-    PlannerUnavailable,
-    RECIPE_IDENTITY_VERSION,
-    RECURSIVE_POWER_GROWTH,
-    RUNTIME_FAMILY_VALUES,
-    STRONG_ACCESSORY_TAGS,
-    TIER_DEFAULT_POWER,
-    TIER_RANK,
-    TOOL_HINT_TAGS,
-    USE_LLM,
-    VANILLA_ENDGAME_POWER,
-    VISUAL_PIPELINE_PROFILE,
-    VISUAL_SYNONYMS,
-    WEAPON_UPGRADE_TAGS,
-    _json_slim,
-    all_calls,
-    apply_item_knowledge,
-    asset_sync_service,
-    attach_generated_parent_summary,
-    attach_hybrid_vfx_manifest,
-    behavior_cost_multiplier,
-    build_item_knowledge,
-    cache_get,
-    cache_put,
-    canonicalize,
-    contract_versions_payload,
-    clamp_float,
-    estimate_engine_metrics,
-    failure_state,
-    final_normalize,
-    find_call,
-    generated_data_of,
-    generation_depth,
-    guess_head,
-    infer_attack_pattern_from_runtime,
-    infer_item_card,
-    is_deliverable_recipe_payload,
-    item_bool,
-    item_field,
-    item_identity,
-    item_num,
-    log_event,
-    lower_name,
-    mechanic_signal_power,
-    name_of,
-    normalize_world_id_from_payload,
-    pair_catalyst_pressure,
-    parse_first_valid_llm_json,
-    rarity_baseline_signal,
-    recipe_coherence,
-    recipe_key,
-    recipe_meta,
-    resolve_attack_pattern,
-    runtime_plan,
-    sanitize_genome_engine,
-    sanitize_recipe_for_delivery,
-    slug,
-    stable_hash,
-    tags_of,
-    trace_event,
-    world_recipe_dir,
-    world_storage,
 )
-from infini_local.pipelines.projectile_affordance import (
-    _explicit_visual_family_value,
-    apply_parent_projectile_affordance,
-    choose_parent_projectile_size_reference,
-    infer_projectile_visual_family,
-    parent_combo_looks_like_bow,
-    parent_projectile_family,
-    projectile_family_text,
-)
+from infini_local.storage.trace_runtime import log_event
 from infini_local.pipelines.presentation_sound import (
-    attach_presentation_and_sound,
-    clamp,
     effect_for,
     movement_for,
     onhit_for,
-    presentation_from_genome,
-    sound_profile_from_genome,
-)
-from infini_local.pipelines.result_knowledge_card import (
-    attach_result_knowledge_card,
-    build_result_item_card,
 )
 from infini_local.pipelines.llm_authoring_prompt import (
     runtime_plan_to_attack_genome_patch,
@@ -191,33 +45,19 @@ from infini_local.pipelines.llm_transport import (
     resolve_llm_model,
 )
 from infini_local.pipelines.parent_context_pipeline import (
-    _pbool,
-    _pnum,
-    effective_projectile_profile_of,
     llm_parent_card,
     parent_weapon_profiles,
-    proj_bool,
 )
 
 from infini_local.pipelines.combine_balance import apply_family_locks_to_genome, balanced_damage, clamp_vanilla_like_weapon_damage
-from infini_local.pipelines.combine_genome_contract import combat_genome_required_for, is_llm_planner
+from infini_local.pipelines.combine_genome_contract import combat_genome_required_for
 
-def _normalize_authored_enum_value(value: Any, allowed: dict[str, int] | set[str], field: str = "") -> str:
-    v = str(value or "").lower().strip().replace("-", "_").replace(" ", "_")
-    if allowed is MOVEMENT_CODE or field == "movement":
-        v = MOVEMENT_ALIASES.get(v, v)
-    elif allowed is EFFECT_CODE or field == "effect":
-        v = EFFECT_ALIASES.get(v, v)
-    elif allowed is ONHIT_CODE or field == "onHit":
-        v = ONHIT_ALIASES.get(v, v)
-    elif allowed is DELIVERY_VALUES or field == "delivery":
-        v = DELIVERY_ALIASES.get(v, v)
-    elif allowed is RUNTIME_FAMILY_VALUES or field == "runtimeFamily":
-        v = "returning" if v in {"boomerang", "chakram", "returning_throw", "glaive_throw"} else DELIVERY_ALIASES.get(v, v)
-    return v
+def _normalize_authored_enum_value(value: Any, field: str) -> str:
+    return normalize_authoring_enum(value, field)
 
-def safe_enum(value: Any, allowed: dict[str, int], fallback: str) -> tuple[str, int]:
-    v = _normalize_authored_enum_value(value, allowed)
+
+def safe_enum(value: Any, allowed: dict[str, int], fallback: str, field: str) -> tuple[str, int]:
+    v = _normalize_authored_enum_value(value, field)
     if v in allowed:
         return v, allowed[v]
     return fallback, allowed[fallback]
@@ -228,10 +68,10 @@ def proposed_attack_genome(data: dict[str, Any]) -> dict[str, Any]:
     # runtimePlan compiler is authoritative. Flat attack fields fill only numeric/presentation gaps;
     # deprecated prose/script fields are intentionally not copied into executable genome.
     merged = dict(genome)
-    for k in ["attackPattern", "pattern", "movement", "effect", "onHit", "shotCount", "spreadRadians", "pierce", "aoeRadiusTiles", "homingStrength", "lifetimeTicks", "extraUpdates", "rangeTiles", "reliability", "selfLockTicks", "missPunish", "useTimeTicks", "runtimeFamily", "delivery", "weaponFamily", "weaponSubfamily", "attackPatternTags", "projectileFamily", "ammoKind", "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "soundUseSearchQuery", "soundImpactSearchQuery"]:
+    for k in ["attackPattern", "pattern", "movement", "effect", "onHit", "shotCount", "spreadRadians", "pierce", "aoeRadiusTiles", "homingStrength", "lifetimeTicks", "extraUpdates", "rangeTiles", "reliability", "selfLockTicks", "missPunish", "useTimeTicks", "useAnimationTicks", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks", "immunityCooldown", "secondaryTrigger", "runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "ammoKind", "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource", "soundVolume", "soundPitch", "soundPitchVariance"]:
         if k in attack and k not in merged:
             merged[k] = attack[k]
-    if LLM_RUNTIME_AUTHORING:
+    if LLM_RUNTIME_AUTHORING and runtime_plan(data):
         merged.update(runtime_plan_to_attack_genome_patch(data))
     return merged
 
@@ -249,8 +89,9 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
             defects.append(f"missing attack.genome.{field}")
 
     # Enum fields must be chosen by the LLM from the grammar.
-    enum_checks: list[tuple[str, dict[str, int] | set[str]]] = [
-        ("delivery", DELIVERY_VALUES),
+    enum_checks: list[tuple[str, dict[str, int] | AbstractSet[str]]] = [
+        ("delivery", DELIVERIES),
+        ("runtimeFamily", RUNTIME_FAMILIES),
         ("movement", MOVEMENT_CODE),
         ("effect", EFFECT_CODE),
         ("onHit", ONHIT_CODE),
@@ -258,11 +99,13 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
     for field, allowed in enum_checks:
         if field not in proposed or proposed.get(field) in (None, ""):
             continue
-        value = _normalize_authored_enum_value(proposed.get(field), allowed, field)
+        value = _normalize_authored_enum_value(proposed.get(field), field)
         if isinstance(allowed, dict):
             ok = value in allowed
         else:
             ok = value in allowed
+        if field == "runtimeFamily" and value == "none":
+            ok = False
         if not ok:
             defects.append(f"unsupported attack.genome.{field}={proposed.get(field)!r}")
 
@@ -304,7 +147,7 @@ def merge_genome_repair(data: dict[str, Any], patch: dict[str, Any]) -> None:
     if not isinstance(src, dict):
         return
 
-    known = set(LLM_REQUIRED_GENOME_FIELDS) | set(LLM_OPTIONAL_GENOME_DEFAULTS) | {"spreadRadians", "homingStrength", "extraUpdates"}
+    known = set(LLM_REQUIRED_GENOME_FIELDS) | set(LLM_OPTIONAL_GENOME_DEFAULTS) | {"spreadRadians", "homingStrength", "extraUpdates", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks", "immunityCooldown", "useAnimationTicks", "secondaryTrigger"}
     for key, value in src.items():
         if key in known:
             genome[key] = value
@@ -345,7 +188,7 @@ def try_llm_genome_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "delivery": ["swing", "thrust", "spear", "stab", "rapier", "shortsword", "shoot", "bow", "gun", "launcher", "cast", "staff", "wand", "book", "throw", "boomerang", "summon", "minion", "sentry"],
                 "movement": "straight|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|returning_glaive|expanding_wave|flail_tether|yoyo_hover|whip_lash",
                 "effect": "none|dust|electric|slime|star|flame|frost|leaf|shadow|poison|blood|honey|sand|lunar|heal|holy|smoke",
-                "onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|starburst|starfall|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal",
+                "onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal",
                 "requiredFields": list(LLM_REQUIRED_GENOME_FIELDS),
                 "numericRanges": LLM_NUMERIC_GENOME_LIMITS,
                 "optionalFields": LLM_OPTIONAL_GENOME_DEFAULTS,
@@ -438,9 +281,9 @@ def _hard_clamp_authored_number(value: Any, field: str, debug: dict[str, Any]) -
         debug.setdefault("llmGenomeHardClamps", []).append({"field": field, "from": x, "to": y})
     return y
 
-def _require_authored_enum(proposed: dict[str, Any], field: str, allowed: dict[str, int] | set[str]) -> tuple[str, int | None]:
+def _require_authored_enum(proposed: dict[str, Any], field: str, allowed: dict[str, int] | AbstractSet[str]) -> tuple[str, int | None]:
     raw = proposed.get(field)
-    v = _normalize_authored_enum_value(raw, allowed, field)
+    v = _normalize_authored_enum_value(raw, field)
     if isinstance(allowed, dict):
         if v in allowed:
             return v, allowed[v]
@@ -467,18 +310,15 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         raise PlannerUnavailable("LLM planner did not author a complete attack.genome after repair (" + "; ".join(defects) + "); craft failed and ingredients must be refunded")
 
     debug: dict[str, Any] = {}
-    delivery, _ = _require_authored_enum(proposed, "delivery", DELIVERY_VALUES)
+    delivery, _ = _require_authored_enum(proposed, "delivery", DELIVERIES)
     movement, mcode = _require_authored_enum(proposed, "movement", MOVEMENT_CODE)
     effect, ecode = _require_authored_enum(proposed, "effect", EFFECT_CODE)
     onhit, hcode = _require_authored_enum(proposed, "onHit", ONHIT_CODE)
 
     # Required numeric fields: authored by the LLM, hard-clamped only for engine sanity.
-    runtime_family = _normalize_authored_enum_value(proposed.get("runtimeFamily"), RUNTIME_FAMILY_VALUES, "runtimeFamily")
-    if runtime_family not in RUNTIME_FAMILY_VALUES or runtime_family == "none":
-        # Legacy combat-genome compatibility only: accept exact delivery family as light repair.
-        runtime_family = "thrust" if delivery in {"thrust", "spear"} else delivery if delivery in RUNTIME_FAMILY_VALUES else "none"
-        if runtime_family == "none":
-            raise PlannerUnavailable("LLM planner did not author attack.genome.runtimeFamily and delivery was not an exact runtime family; craft failed and ingredients must be refunded")
+    runtime_family = _normalize_authored_enum_value(proposed.get("runtimeFamily"), "runtimeFamily")
+    if runtime_family not in RUNTIME_FAMILIES or runtime_family == "none":
+        raise PlannerUnavailable("LLM planner must author a canonical executable attack.genome.runtimeFamily; craft failed and ingredients must be refunded")
     g: dict[str, Any] = {
         "runtimeFamily": runtime_family,
         "delivery": delivery,
@@ -510,11 +350,63 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         g[field] = val
 
     # Preserve only authored presentation strings. Prose/script-like behavior fields are not executable.
-    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "weaponFamily", "weaponSubfamily", "projectileFamily", "ammoKind", "runtimeFamily", "projectileSizePolicy", "soundUseSearchQuery", "soundImpactSearchQuery"]:
+    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "secondaryProjectileShape", "secondaryMaterial", "weaponFamily", "projectileFamily", "ammoKind", "runtimeFamily", "projectileSizePolicy", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource"]:
         if field in proposed and proposed.get(field) not in (None, ""):
-            g[field] = str(proposed.get(field))[:260 if field not in {"soundUseSearchQuery", "soundImpactSearchQuery"} else 160]
-    if isinstance(proposed.get("attackPatternTags"), list):
-        g["attackPatternTags"] = [str(x)[:40] for x in proposed.get("attackPatternTags")[:12] if x not in (None, "")]
+            g[field] = str(proposed.get(field))[:260]
+    if proposed.get("useAnimationTicks") not in (None, ""):
+        g["useAnimationTicks"] = int(round(clamp_float(proposed.get("useAnimationTicks"), 6, 150, g.get("useTimeTicks", 24))))
+    if proposed.get("beamWidthPx") not in (None, ""):
+        g["beamWidthPx"] = round(clamp_float(proposed.get("beamWidthPx"), 2, 96, 14), 2)
+    if proposed.get("beamChargeTicks") not in (None, ""):
+        g["beamChargeTicks"] = int(round(clamp_float(proposed.get("beamChargeTicks"), 0, 300, 0)))
+    if proposed.get("delayTicks") not in (None, ""):
+        g["delayTicks"] = int(round(clamp_float(proposed.get("delayTicks"), 0, 300, 30)))
+    if proposed.get("secondaryTrigger") not in (None, ""):
+        g["secondaryTrigger"] = str(proposed.get("secondaryTrigger"))[:24]
+    if proposed.get("immunityCooldown") not in (None, ""):
+        g["immunityCooldown"] = int(round(clamp_float(proposed.get("immunityCooldown"), 0, 60, 0)))
+
+    # Family-specific compiler output. These values already come from exact engine
+    # calls and finite policies; this projection must preserve them rather than
+    # silently replacing them with AttackSpec defaults.
+    if runtime_family == "charge_release":
+        g["chargeTicks"] = int(round(clamp_float(proposed.get("chargeTicks"), 1, 300, 45)))
+        g["chargePowerMultiplier"] = round(clamp_float(proposed.get("chargePowerMultiplier"), 1, 3, 1.6), 3)
+    if runtime_family == "sentry":
+        placement = str(proposed.get("sentryPlacement") or "grounded").strip().lower()
+        if placement not in {"grounded", "floating"}:
+            raise PlannerUnavailable("sentryPlacement must be exact grounded|floating")
+        g["sentryPlacement"] = placement
+        g["sentryAttackIntervalTicks"] = int(round(clamp_float(proposed.get("sentryAttackIntervalTicks"), 12, 180, 45)))
+        g["sentryTargetRangeTiles"] = round(clamp_float(proposed.get("sentryTargetRangeTiles"), 8, 60, 30), 3)
+        g["sentryLifetimeTicks"] = int(round(clamp_float(proposed.get("sentryLifetimeTicks"), 120, 36000, 3600)))
+        g["secondaryLifetimeTicks"] = int(round(clamp_float(proposed.get("secondaryLifetimeTicks"), 5, 180, 24)))
+
+    # Compiler-owned child safety fields are not creative defaults. Preserve the
+    # finite caps produced by the runtime policy after LLM authoring.
+    for field in ("maxChildProjectiles", "maxChildDepth"):
+        if proposed.get(field) not in (None, ""):
+            g[field] = int(max(0, float(proposed.get(field))))
+
+    for field, lo, hi, default in [
+        ("soundVolume", 0.05, 1.0, 0.85),
+        ("soundPitch", -0.9, 0.9, 0.0),
+        ("soundPitchVariance", 0.0, 0.6, 0.18),
+    ]:
+        if proposed.get(field) not in (None, ""):
+            g[field] = round(clamp_float(proposed.get(field), lo, hi, default), 3)
+
+    # Runtime-family affordances are executor safety, not creative authoring. Reapply
+    # them after the authored genome has been sanitized so the final AttackSpec cannot
+    # lose noMelee/noUseGraphic/channel semantics at a later projection boundary.
+    g.update(_runtime_family_affordances(runtime_family, g.get("weaponFamily") or "", g.get("delivery") or ""))
+    g.setdefault("channelUse", False)
+
+    # Runtime-family affordances are executor safety, not creative authoring. Reapply
+    # them after the authored genome has been sanitized so the final AttackSpec cannot
+    # lose noMelee/noUseGraphic/channel semantics at a later projection boundary.
+    g.update(_runtime_family_affordances(runtime_family, g.get("weaponFamily") or ""))
+    g.setdefault("channelUse", False)
 
     # Server-side family locks keep only catastrophic/progression limits; they should not author the item.
     g = apply_family_locks_to_genome(g, a, b, data, stage)
@@ -541,8 +433,12 @@ def weapon_genome_for(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]
     only for explicit dev/self-test fallback. This keeps the mod fun-first: the model improvises the
     actual cadence/pierce/AoE/delivery, while code only guards engine safety and progression cliffs.
     """
-    if is_llm_planner(data):
-        return llm_authored_weapon_genome(data, a, b, stage)
+    if LLM_RUNTIME_AUTHORING and runtime_plan(data):
+
+        genome = llm_authored_weapon_genome(data, a, b, stage)
+        genome["damageClass"] = damage_class
+        return genome
+
 
     profiles = parent_weapon_profiles(a, b)
     proposed = proposed_attack_genome(data)
@@ -573,8 +469,8 @@ def weapon_genome_for(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]
         parent_hit_damage = 0.0
 
     # Delivery is not damage class. Melee can still have projectile channels.
-    proposed_delivery = _normalize_authored_enum_value(proposed.get("delivery"), DELIVERY_VALUES, "delivery")
-    if proposed_delivery in DELIVERY_VALUES and proposed_delivery != "none":
+    proposed_delivery = _normalize_authored_enum_value(proposed.get("delivery"), "delivery")
+    if proposed_delivery in DELIVERIES and proposed_delivery != "none":
         delivery = proposed_delivery
     elif damage_class == "magic":
         delivery = "cast"
@@ -598,9 +494,9 @@ def weapon_genome_for(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]
     movement, mcode = movement_for(tags | set(best.get("behaviorTags") or []), stage)
     effect, ecode = effect_for(tags, stage)
     onhit, hcode = onhit_for(tags, stage)
-    movement, mcode = safe_enum(proposed.get("movement"), MOVEMENT_CODE, movement)
-    effect, ecode = safe_enum(proposed.get("effect"), EFFECT_CODE, effect)
-    onhit, hcode = safe_enum(proposed.get("onHit"), ONHIT_CODE, onhit)
+    movement, mcode = safe_enum(proposed.get("movement"), MOVEMENT_CODE, movement, "movement")
+    effect, ecode = safe_enum(proposed.get("effect"), EFFECT_CODE, effect, "effect")
+    onhit, hcode = safe_enum(proposed.get("onHit"), ONHIT_CODE, onhit, "onHit")
 
     shot_count = int(clamp_float(proposed.get("shotCount"), 1, 8, 1))
     spread = clamp_float(proposed.get("spreadRadians"), 0.0, 0.75, 0.0 if shot_count <= 1 else 0.18 + 0.04 * shot_count)
@@ -653,14 +549,16 @@ def weapon_numbers_from_genome(max_parent_damage: int, tags: set[str], stage: di
     base_damage = balanced_damage(max_parent_damage, tags | {"weapon"}, stage)
     use_time = int(clamp_float(genome.get("useTimeTicks"), 10, 150, float(stage.get("useTime", 24))))
     cost = max(0.35, float(genome.get("costMultiplier") or 1.0))
-    # Convert current derived damage into a rough DPS envelope, then let cadence/cost buy burst.
+    hit_cadence = effective_hit_cadence_ticks(genome, use_time)
+    # Convert current derived damage into a rough DPS envelope, then let the real
+    # executable per-target cadence/cost buy burst. Held beams use local immunity.
     base_dps = max(4.0, base_damage * 60.0 / max(10.0, float(stage.get("useTime", 24))))
-    if use_time >= 60:
-        # Slow weapons may hit hard, but not linearly forever.
-        burst_bonus = 1.0 + min(0.45, (use_time - 60) / 220.0)
+    if hit_cadence >= 60:
+        # Slow damage opportunities may hit hard, but not linearly forever.
+        burst_bonus = 1.0 + min(0.45, (hit_cadence - 60) / 220.0)
     else:
         burst_bonus = 1.0
-    hit_damage = int(max(1.0, base_dps * use_time / 60.0 * burst_bonus / cost))
+    hit_damage = int(max(1.0, base_dps * hit_cadence / 60.0 * burst_bonus / cost))
 
     # Fun-first does not mean "accidentally nerf every complex endgame weapon into starter damage".
     # Expensive delivery (pierce, homing, long lifetime, multi-shot) may lower raw hit damage, but if two
@@ -720,7 +618,7 @@ def weapon_numbers_from_genome(max_parent_damage: int, tags: set[str], stage: di
         hit_damage,
         max_parent_damage,
         stage,
-        use_time=use_time,
+        use_time=int(round(hit_cadence)),
         shot_count=int(genome.get("shotCount") or 1),
         cost_multiplier=cost,
     )
@@ -852,4 +750,22 @@ def _bounded_parent_potion_stats(a: dict[str, Any], b: dict[str, Any]) -> dict[s
         },
     }
 
-__all__ = [name for name in globals() if callable(globals().get(name)) and not name.startswith("__")]
+__all__ = [
+    "_normalize_authored_enum_value",
+    "safe_enum",
+    "proposed_attack_genome",
+    "genome_defects",
+    "merge_genome_repair",
+    "try_llm_genome_repair",
+    "repair_llm_combat_genome_if_needed",
+    "_parse_required_float",
+    "_hard_clamp_authored_number",
+    "_require_authored_enum",
+    "llm_authored_weapon_genome",
+    "weapon_genome_for",
+    "normalize_authored_attack_pattern",
+    "weapon_numbers_from_genome",
+    "attack_pattern_for",
+    "_parent_tool_power",
+    "_bounded_parent_potion_stats",
+]

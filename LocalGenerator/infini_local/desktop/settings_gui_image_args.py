@@ -1,68 +1,19 @@
 from __future__ import annotations
 
-import json
-import os
-import re
-import signal
-import socket
-import subprocess
-import sys
-import threading
-import time
-import urllib.request
-import webbrowser
 from pathlib import Path, PureWindowsPath
 
-from infini_local.desktop.tk_compat import filedialog, messagebox, tk, ttk
+from infini_local.desktop.tk_compat import messagebox, tk, ttk
 from infini_local.desktop.settings_schema import (
-    DEFAULTS,
-    FIELD_HELP,
-    FIELD_ORDER,
-    OPTION_HELP,
-    PRESETS,
-    PRESET_HELP,
     SDCPP_DEFAULT_COMMAND_TEMPLATE,
     SDCPP_EXTRA_FLAG_SPECS,
     SDCPP_EXTRA_PROFILES,
     SDCPP_EXTRA_PROFILE_HELP,
-    repair_sdcpp_command_template,
 )
-from infini_local.desktop.settings_env import parse_env, quote_env_value, write_env
-from infini_local.desktop.settings_widgets import ScrollFrame, ToolTip
 from infini_local.desktop.settings_sdcpp_args import (
     extra_option_names,
     join_extra_for_gui,
     remove_extra_options,
     split_extra_for_gui,
-)
-from infini_local.desktop.settings_gui_theme import (
-    ROOT,
-    CONFIG_PATH,
-    EXAMPLE_PATH,
-    APP_TITLE,
-    APP_BG,
-    APP_PANEL_BG,
-    CARD_BG,
-    CARD_MUTED_BG,
-    HEADER_BG,
-    HEADER_BG_2,
-    TEXT_FG,
-    MUTED_FG,
-    SOFT_FG,
-    ACCENT_BG,
-    ACCENT_HOVER_BG,
-    ACCENT_SOFT_BG,
-    ACCENT_FG,
-    SUCCESS_BG,
-    SUCCESS_SOFT_BG,
-    SUCCESS_FG,
-    DANGER_BG,
-    DANGER_SOFT_BG,
-    DANGER_FG,
-    WARNING_SOFT_BG,
-    WARNING_FG,
-    BORDER_FG,
-    BORDER_DARK_FG,
 )
 
 

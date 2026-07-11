@@ -28,7 +28,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -62,11 +61,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0,
@@ -100,7 +99,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -133,7 +133,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -168,11 +167,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -215,11 +214,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -263,7 +262,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -297,7 +297,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -336,11 +335,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "active",
-          "renderer": "ghostArc",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -374,11 +373,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "ghostArc"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -423,7 +422,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -456,7 +456,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "variants": [
             1,
@@ -494,11 +493,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -542,11 +541,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             0,
@@ -580,7 +579,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -612,7 +612,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -651,11 +650,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -697,11 +696,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0,
@@ -736,7 +735,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -769,7 +769,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "variants": [
             0,
@@ -804,11 +803,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -851,11 +850,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             0,
@@ -889,7 +888,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -921,7 +921,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             1,
@@ -955,11 +954,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "tick",
-          "renderer": "orbitalMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -1002,11 +1001,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0,
@@ -1040,7 +1039,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1073,7 +1073,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -1107,11 +1106,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -1155,11 +1154,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "expire",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "variants": [
             0,
@@ -1193,7 +1192,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1225,7 +1225,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -1259,11 +1258,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -1307,11 +1306,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0,
@@ -1345,7 +1344,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1377,7 +1377,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0
@@ -1410,11 +1409,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0
@@ -1447,7 +1446,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1482,7 +1482,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             1,
@@ -1525,11 +1524,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -1573,11 +1572,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             0,
@@ -1612,7 +1611,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1646,7 +1646,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "variants": [
             1,
@@ -1681,11 +1680,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "tick",
-          "renderer": "orbitalMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -1728,11 +1727,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             0,
@@ -1766,7 +1765,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1801,7 +1801,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -1835,11 +1834,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -1883,11 +1882,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             1,
@@ -1921,7 +1920,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -1952,7 +1952,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             1,
@@ -1986,11 +1985,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "travel",
-          "renderer": "ghostArc",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -2025,11 +2024,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "ghostArc"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0,
@@ -2063,7 +2062,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2096,7 +2096,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "variants": [
             1,
@@ -2134,11 +2133,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             1,
@@ -2181,11 +2180,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             0,
@@ -2219,7 +2218,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2251,7 +2251,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "variants": [
             0,
@@ -2286,11 +2285,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -2332,11 +2331,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "expire",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0
@@ -2369,7 +2368,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2402,7 +2402,6 @@
       "slots": [
         {
           "event": "tick",
-          "renderer": "orbitalMotes",
           "textureRole": "child",
           "variants": [
             1,
@@ -2445,11 +2444,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "variants": [
             1,
@@ -2492,11 +2491,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0,
@@ -2530,7 +2529,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2564,7 +2564,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0
@@ -2597,11 +2596,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0
@@ -2634,7 +2633,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2670,7 +2670,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -2704,11 +2703,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             0,
@@ -2750,11 +2749,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -2797,7 +2796,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2831,7 +2831,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "variants": [
             1,
@@ -2865,11 +2864,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "tick",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "variants": [
             1,
@@ -2911,11 +2910,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "variants": [
             0,
@@ -2949,7 +2948,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -2982,7 +2982,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3022,11 +3021,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3074,11 +3073,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3117,7 +3116,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -3149,7 +3149,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3189,11 +3188,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3241,11 +3240,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3285,7 +3284,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -3318,7 +3318,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3358,11 +3357,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3410,11 +3409,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "expire",
-          "renderer": "genericSmoke",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3462,7 +3461,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -3495,7 +3495,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3535,11 +3534,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -3588,11 +3587,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3632,7 +3631,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -3663,7 +3663,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3707,11 +3706,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "active",
-          "renderer": "ghostArc",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3750,11 +3749,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "ghostArc"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3794,7 +3793,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -3827,7 +3827,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3871,11 +3870,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "active",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -3915,11 +3914,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -3967,7 +3966,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -3998,7 +3998,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "ghostArc",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4038,11 +4037,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "ghostArc"
         },
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4086,11 +4085,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -4138,7 +4137,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -4170,7 +4170,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "orbitalMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4218,11 +4217,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "active",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4262,11 +4261,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -4306,7 +4305,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -4339,7 +4339,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4383,11 +4382,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "active",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4435,11 +4434,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -4479,7 +4478,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -4511,7 +4511,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4555,11 +4554,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "active",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4599,11 +4598,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -4652,11 +4651,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -4696,7 +4695,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -4729,7 +4729,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4773,11 +4772,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "active",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -4825,11 +4824,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -4869,7 +4868,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -4901,7 +4901,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -4941,11 +4940,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -4993,11 +4992,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "expire",
-          "renderer": "genericSmoke",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5045,7 +5044,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -5076,7 +5076,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -5116,11 +5115,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "active",
-          "renderer": "orbitalMotes",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -5168,11 +5167,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5212,7 +5211,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -5244,7 +5244,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -5284,11 +5283,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "active",
-          "renderer": "ambientMotes",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -5336,11 +5335,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "expire",
-          "renderer": "genericSmoke",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -5388,7 +5387,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -5420,7 +5420,6 @@
       "slots": [
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5460,11 +5459,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5504,7 +5503,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -5537,7 +5537,6 @@
       "slots": [
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5577,11 +5576,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5620,11 +5619,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -5672,7 +5671,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -5705,7 +5705,6 @@
       "slots": [
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5753,11 +5752,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -5805,7 +5804,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -5838,7 +5838,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -5878,11 +5877,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5930,11 +5929,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -5974,11 +5973,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "expire",
-          "renderer": "genericSmoke",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -6026,7 +6025,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -6058,7 +6058,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "orbitalMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6107,11 +6106,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6159,11 +6158,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -6203,7 +6202,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -6236,7 +6236,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "orbitalMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6284,11 +6283,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "active",
-          "renderer": "ghostArc",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6328,11 +6327,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "ghostArc"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -6380,7 +6379,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -6411,7 +6411,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6451,11 +6450,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -6495,11 +6494,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -6548,7 +6547,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -6581,7 +6581,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6629,11 +6628,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -6681,11 +6680,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "expire",
-          "renderer": "genericSmoke",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -6733,7 +6732,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -6765,7 +6765,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6805,11 +6804,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -6849,7 +6848,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -6884,7 +6884,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6924,11 +6923,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -6976,11 +6975,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -7020,7 +7019,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -7053,7 +7053,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7093,11 +7092,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7145,11 +7144,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -7197,7 +7196,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -7232,7 +7232,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7272,11 +7271,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7324,11 +7323,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -7376,11 +7375,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "expire",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "particleRole": "child",
           "variants": [
@@ -7420,7 +7419,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         }
       ],
       "playbackMode": "Hybrid"
@@ -7453,7 +7453,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7493,11 +7492,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -7545,11 +7544,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -7597,7 +7596,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -7632,7 +7632,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7680,11 +7679,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7724,11 +7723,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -7776,7 +7775,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -7809,7 +7809,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -7853,11 +7852,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -7905,11 +7904,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -7957,7 +7956,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -7992,7 +7992,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8032,11 +8031,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8084,11 +8083,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -8136,7 +8135,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -8171,7 +8171,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8219,11 +8218,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -8263,11 +8262,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "expire",
-          "renderer": "genericSmoke",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -8315,7 +8314,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -8349,7 +8349,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8389,11 +8388,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8441,11 +8440,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -8493,7 +8492,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -8528,7 +8528,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "orbitalMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8576,11 +8575,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -8620,11 +8619,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -8672,7 +8671,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -8707,7 +8707,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8751,11 +8750,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -8795,11 +8794,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -8847,7 +8846,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -8880,7 +8880,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8920,11 +8919,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -8972,11 +8971,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -9024,7 +9023,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -9058,7 +9058,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9098,11 +9097,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9146,11 +9145,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -9190,11 +9189,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -9234,7 +9233,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -9268,7 +9268,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9308,11 +9307,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9360,11 +9359,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "variants": [
@@ -9412,7 +9411,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -9445,7 +9445,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9485,11 +9484,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9533,11 +9532,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9585,7 +9584,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ],
       "playbackMode": "Hybrid"
@@ -9618,7 +9618,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9658,11 +9657,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -9710,11 +9709,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -9754,7 +9753,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ],
       "playbackMode": "Hybrid"
@@ -9787,7 +9787,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "particleRole": "child",
           "variants": [
@@ -9827,11 +9826,11 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "variants": [
@@ -9871,7 +9870,8 @@
           "budgetWeight": [
             0.7,
             1.4
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ],
       "playbackMode": "Hybrid"
@@ -9904,10 +9904,9 @@
       "cost": "high",
       "slots": [
         {
-          "event": "windup",
+          "event": "active",
           "stage": "windup",
           "backend": "Realtime",
-          "renderer": "lightCue",
           "textureRole": "projectile",
           "anchor": "self",
           "scale": [
@@ -9933,13 +9932,13 @@
           "variants": [
             0,
             1
-          ]
+          ],
+          "rendererKind": "lightCue"
         },
         {
           "event": "active",
           "stage": "active",
           "backend": "Primitive",
-          "renderer": "historyRibbon",
           "textureRole": "projectile",
           "anchor": "tipHistory",
           "scale": [
@@ -9967,13 +9966,13 @@
             1,
             2,
             3
-          ]
+          ],
+          "rendererKind": "historyRibbon"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -9998,13 +9997,13 @@
             1,
             2,
             3
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "expire",
           "stage": "decay",
           "backend": "Realtime",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "anchor": "self",
           "scale": [
@@ -10031,7 +10030,8 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -10066,7 +10066,6 @@
           "event": "travel",
           "stage": "loop",
           "backend": "Sprite",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "anchor": "self",
           "scale": [
@@ -10089,13 +10088,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "travel",
           "stage": "loop",
           "backend": "Realtime",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "anchor": "self",
           "scale": [
@@ -10122,13 +10121,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -10153,13 +10152,13 @@
             1,
             2,
             3
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "anchor": "hitPoint",
           "scale": [
@@ -10182,7 +10181,8 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "impactRing"
         }
       ]
     },
@@ -10218,7 +10218,6 @@
           "event": "tick",
           "stage": "loop",
           "backend": "Sprite",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "anchor": "field",
           "scale": [
@@ -10241,13 +10240,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "tick",
           "stage": "loop",
           "backend": "Realtime",
-          "renderer": "orbitalMotes",
           "textureRole": "child",
           "particleRole": "child",
           "anchor": "field",
@@ -10276,13 +10275,13 @@
             1,
             2,
             3
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "expire",
           "stage": "decay",
           "backend": "Baked",
-          "renderer": "impactSpriteFlash",
           "textureRole": "field",
           "anchor": "field",
           "scale": [
@@ -10304,7 +10303,8 @@
           "variants": [
             0,
             1
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -10338,7 +10338,6 @@
           "event": "active",
           "stage": "active",
           "backend": "Primitive",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "anchor": "velocity",
           "scale": [
@@ -10361,13 +10360,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "active",
           "stage": "active",
           "backend": "Realtime",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "anchor": "velocity",
           "scale": [
@@ -10394,13 +10393,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "anchor": "hitPoint",
           "scale": [
@@ -10424,7 +10423,8 @@
             1,
             2,
             3
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -10457,10 +10457,9 @@
       ],
       "slots": [
         {
-          "event": "windup",
+          "event": "active",
           "stage": "windup",
           "backend": "Realtime",
-          "renderer": "lightCue",
           "textureRole": "projectile",
           "anchor": "self",
           "scale": [
@@ -10486,13 +10485,13 @@
           "variants": [
             0,
             1
-          ]
+          ],
+          "rendererKind": "lightCue"
         },
         {
           "event": "active",
           "stage": "active",
           "backend": "Primitive",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "anchor": "tipHistory",
           "scale": [
@@ -10520,13 +10519,13 @@
             1,
             2,
             3
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -10556,13 +10555,13 @@
             2,
             3
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "impactSprite"
         },
         {
-          "event": "decay",
+          "event": "kill",
           "stage": "decay",
           "backend": "Baked",
-          "renderer": "ambientMotes",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -10591,7 +10590,8 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -10627,7 +10627,6 @@
           "event": "travel",
           "stage": "loop",
           "backend": "Sprite",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "anchor": "self",
           "scale": [
@@ -10650,13 +10649,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "travel",
           "stage": "loop",
           "backend": "Baked",
-          "renderer": "spriteStampTrail",
           "textureRole": "projectile",
           "particleRole": "child",
           "anchor": "self",
@@ -10688,13 +10687,13 @@
             0,
             1
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "spriteStampTrail"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -10723,7 +10722,8 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -10758,7 +10758,6 @@
           "event": "active",
           "stage": "active",
           "backend": "Primitive",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "anchor": "velocity",
           "scale": [
@@ -10785,13 +10784,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "active",
           "stage": "active",
           "backend": "Baked",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "anchor": "velocity",
@@ -10824,13 +10823,13 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -10859,7 +10858,8 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "impactRing"
         }
       ]
     },
@@ -10894,7 +10894,6 @@
           "event": "tick",
           "stage": "loop",
           "backend": "Sprite",
-          "renderer": "fieldPulse",
           "textureRole": "field",
           "anchor": "field",
           "scale": [
@@ -10917,13 +10916,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "fieldPulse"
         },
         {
           "event": "tick",
           "stage": "loop",
           "backend": "Baked",
-          "renderer": "ambientMotes",
           "textureRole": "field",
           "particleRole": "child",
           "anchor": "field",
@@ -10956,13 +10955,13 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "childMotes"
         },
         {
           "event": "expire",
           "stage": "decay",
           "backend": "Baked",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "field",
@@ -10991,7 +10990,8 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "impactRing"
         }
       ]
     },
@@ -11027,7 +11027,6 @@
           "event": "travel",
           "stage": "loop",
           "backend": "Sprite",
-          "renderer": "orbitalMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "anchor": "self",
@@ -11055,13 +11054,13 @@
             0,
             1,
             2
-          ]
+          ],
+          "rendererKind": "orbitingMotes"
         },
         {
           "event": "travel",
           "stage": "loop",
           "backend": "Baked",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "anchor": "self",
@@ -11094,13 +11093,13 @@
             1,
             2
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
           "stage": "impact",
           "backend": "Baked",
-          "renderer": "childSpriteMotes",
           "textureRole": "impact",
           "particleRole": "child",
           "anchor": "hitPoint",
@@ -11130,7 +11129,8 @@
             2,
             3
           ],
-          "bake": true
+          "bake": true,
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -12026,7 +12026,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -12056,11 +12055,11 @@
           "signatureWeight": [
             0.05,
             0.2
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "variants": [
             0
@@ -12089,7 +12088,8 @@
           "signatureWeight": [
             0.2,
             0.45
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -12223,7 +12223,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "variants": [
             0,
@@ -12254,11 +12253,11 @@
           "signatureWeight": [
             0.2,
             0.45
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "backend": "Baked",
@@ -12296,11 +12295,11 @@
           "signatureWeight": [
             0.85,
             1.0
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "backend": "Sprite",
           "variants": [
@@ -12332,11 +12331,11 @@
           "signatureWeight": [
             0.55,
             0.9
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
-          "event": "decay",
-          "renderer": "childSpriteMotes",
+          "event": "kill",
           "textureRole": "child",
           "particleRole": "child",
           "backend": "Realtime",
@@ -12370,7 +12369,8 @@
           "signatureWeight": [
             0.35,
             0.7
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -12511,7 +12511,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "backend": "Realtime",
           "channel": "motionTrail",
@@ -12549,11 +12548,11 @@
           "signatureWeight": [
             0.75,
             1.0
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "backend": "Primitive",
           "channel": "motionTrail",
@@ -12590,11 +12589,11 @@
           "signatureWeight": [
             0.45,
             0.8
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "active",
-          "renderer": "ambientMotes",
           "textureRole": "child",
           "particleRole": "child",
           "backend": "Realtime",
@@ -12630,11 +12629,11 @@
           "signatureWeight": [
             0.25,
             0.55
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "backend": "Baked",
@@ -12674,11 +12673,11 @@
           "signatureWeight": [
             0.8,
             1.0
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "backend": "Sprite",
           "channel": "impactShape",
@@ -12712,11 +12711,11 @@
           "signatureWeight": [
             0.45,
             0.75
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "backend": "Baked",
@@ -12756,7 +12755,8 @@
           "signatureWeight": [
             0.35,
             0.7
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -12786,7 +12786,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "backend": "Sprite",
           "channel": "motionTrail",
@@ -12819,11 +12818,11 @@
           "signatureWeight": [
             0.2,
             0.45
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "backend": "Baked",
           "channel": "impactShape",
@@ -12861,11 +12860,11 @@
           "signatureWeight": [
             0.75,
             1.0
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "impactRing",
           "textureRole": "impact",
           "backend": "Sprite",
           "channel": "impactShape",
@@ -12903,11 +12902,11 @@
           "signatureWeight": [
             0.45,
             0.85
-          ]
+          ],
+          "rendererKind": "impactRing"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "backend": "Baked",
@@ -12947,7 +12946,8 @@
           "signatureWeight": [
             0.3,
             0.65
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -12976,7 +12976,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "historyRibbon",
           "textureRole": "projectile",
           "backend": "Primitive",
           "channel": "motionTrail",
@@ -13010,11 +13009,11 @@
           "signatureWeight": [
             0.7,
             1.0
-          ]
+          ],
+          "rendererKind": "historyRibbon"
         },
         {
           "event": "active",
-          "renderer": "ghostArc",
           "textureRole": "projectile",
           "backend": "Sprite",
           "channel": "motionTrail",
@@ -13052,11 +13051,11 @@
           "signatureWeight": [
             0.45,
             0.8
-          ]
+          ],
+          "rendererKind": "ghostArc"
         },
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "backend": "Primitive",
           "channel": "coreGlow",
@@ -13093,11 +13092,11 @@
           "signatureWeight": [
             0.25,
             0.55
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "backend": "Baked",
           "channel": "impactShape",
@@ -13131,7 +13130,8 @@
           "signatureWeight": [
             0.55,
             0.9
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -13159,7 +13159,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "tipTrail",
           "textureRole": "projectile",
           "backend": "Primitive",
           "channel": "motionTrail",
@@ -13192,11 +13191,11 @@
           "signatureWeight": [
             0.0,
             0.15
-          ]
+          ],
+          "rendererKind": "tipTrail"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "backend": "Baked",
           "channel": "impactShape",
@@ -13229,7 +13228,8 @@
           "signatureWeight": [
             0.0,
             0.12
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -13257,7 +13257,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "backend": "Sprite",
           "channel": "motionTrail",
@@ -13290,11 +13289,11 @@
           "signatureWeight": [
             0.0,
             0.12
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "backend": "Baked",
           "channel": "impactShape",
@@ -13327,7 +13326,8 @@
           "signatureWeight": [
             0.0,
             0.1
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -13355,7 +13355,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "backend": "Sprite",
           "channel": "motionTrail",
@@ -13387,11 +13386,11 @@
           "signatureWeight": [
             0.0,
             0.08
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "backend": "Baked",
           "channel": "impactShape",
@@ -13423,7 +13422,8 @@
           "signatureWeight": [
             0.0,
             0.08
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     },
@@ -13454,7 +13454,6 @@
       "slots": [
         {
           "event": "active",
-          "renderer": "historyRibbon",
           "textureRole": "projectile",
           "backend": "Primitive",
           "channel": "motionTrail",
@@ -13483,11 +13482,11 @@
           "signatureWeight": [
             0.55,
             0.9
-          ]
+          ],
+          "rendererKind": "historyRibbon"
         },
         {
           "event": "active",
-          "renderer": "beamLine",
           "textureRole": "projectile",
           "backend": "Primitive",
           "channel": "motionTrail",
@@ -13520,11 +13519,11 @@
           "signatureWeight": [
             0.25,
             0.55
-          ]
+          ],
+          "rendererKind": "beamLine"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteBurst",
           "textureRole": "impact",
           "particleRole": "child",
           "backend": "Baked",
@@ -13554,11 +13553,11 @@
           "signatureWeight": [
             0.55,
             0.92
-          ]
+          ],
+          "rendererKind": "impactSprite"
         },
         {
           "event": "hit",
-          "renderer": "childSpriteMotes",
           "textureRole": "child",
           "particleRole": "child",
           "backend": "Baked",
@@ -13589,7 +13588,8 @@
           "signatureWeight": [
             0.25,
             0.62
-          ]
+          ],
+          "rendererKind": "childMotes"
         }
       ]
     },
@@ -13619,7 +13619,6 @@
       "slots": [
         {
           "event": "travel",
-          "renderer": "projectileAfterimage",
           "textureRole": "projectile",
           "backend": "Sprite",
           "channel": "motionTrail",
@@ -13648,11 +13647,11 @@
           "signatureWeight": [
             0.25,
             0.62
-          ]
+          ],
+          "rendererKind": "projectileAfterimage"
         },
         {
           "event": "travel",
-          "renderer": "ambientMotes",
           "textureRole": "projectile",
           "particleRole": "child",
           "backend": "Realtime",
@@ -13683,11 +13682,11 @@
           "signatureWeight": [
             0.15,
             0.44
-          ]
+          ],
+          "rendererKind": "childMotes"
         },
         {
           "event": "hit",
-          "renderer": "impactSpriteFlash",
           "textureRole": "impact",
           "particleRole": "child",
           "backend": "Baked",
@@ -13717,7 +13716,8 @@
           "signatureWeight": [
             0.22,
             0.58
-          ]
+          ],
+          "rendererKind": "impactSprite"
         }
       ]
     }

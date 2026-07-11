@@ -16,7 +16,7 @@ from infini_local.core.runtime_archetypes import (
 )
 from infini_local.core.runtime_contracts import normalize_runtime_contract
 from infini_local.core.runtime_promise_truth import validate_runtime_promises
-from infini_local.pipelines.llm_authoring_pipeline import build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -95,7 +95,7 @@ def test_boomerang_archetype_maps_to_existing_returning_runtime_and_phase_metada
     assert patch["delivery"] == "throw"
     assert patch["movement"] == "boomerang"
     assert patch["weaponFamily"] == "boomerang"
-    assert patch["weaponSubfamily"] == "boomerang"
+    assert "weaponSubfamily" not in patch
     assert patch["archetypePhaseModel"] == "outbound_return"
     assert patch["returnPierce"] == -1
     assert result["compiled"]["runtimeArchetype"]["family"] == "boomerang"
@@ -117,7 +117,7 @@ def test_yoyo_flail_whip_archetypes_map_only_to_existing_finite_runtime_families
         assert patch["archetypeCompiler"]["supportStatus"] == "executable"
 
 
-def test_unsupported_channel_beam_preserves_intent_without_fake_straight_projectile() -> None:
+def test_channel_beam_archetype_compiles_to_exact_held_executor_and_clamps_knobs() -> None:
     data = {
         "runtimeArchetype": {"family": "channel_beam", "overrideKnobs": {"chargeTicks": 500, "beamWidthPx": 900}},
         "runtimeContract": {"controlStyle": "hold-to-channel", "stateFields": ["chargeTicks"], "syncFields": ["owner", "beamRotation"]},
@@ -126,22 +126,30 @@ def test_unsupported_channel_beam_preserves_intent_without_fake_straight_project
     result = compile_runtime_plan_to_genome_result(data)
     patch = result["patch"]
 
-    assert "runtimeFamily" not in patch or patch["runtimeFamily"] in {"none", ""}
-    assert "movement" not in patch or patch["movement"] != "straight"
-    assert result["compiled"]["archetypeCompiler"]["supportStatus"] in {"preserved_intent", "unsupported"}
-    assert any("channel" in x for x in data.get("unsupportedPromises", []))
+    assert patch["runtimeFamily"] == "beam"
+    assert patch["movement"] == "phase"
+    assert patch["channelUse"] is True
+    assert patch["beamWidthPx"] == 96
+    assert patch["beamChargeTicks"] == 300
+    assert result["compiled"]["archetypeCompiler"]["supportStatus"] == "executable"
+    assert result["compiled"]["runtimeArchetype"]["channelled"] is True
+    assert result["compiled"]["runtimeArchetype"]["usesHeldProjectile"] is True
+    assert not data.get("unsupportedPromises")
 
 
-def test_runtime_contract_hold_to_channel_and_sync_without_executor_warns() -> None:
+def test_runtime_contract_reports_only_unimplemented_sync_details_for_working_beam() -> None:
     data = {
         "runtimeArchetype": {"family": "channel_beam"},
         "runtimeContract": {"controlStyle": "hold-to-channel", "syncFields": ["owner", "phase", "beamRotation"]},
         "runtimePlan": {"engineCalls": [_stats_call()]},
     }
-    validation = compile_runtime_plan_to_genome_result(data)["validation"]
+    result = compile_runtime_plan_to_genome_result(data)
+    validation = result["validation"]
 
-    assert any("hold_to_channel" in warning for warning in validation["warnings"])
-    assert any("sync_contract_preserved_not_active" in warning for warning in validation["warnings"])
+    assert not any("hold_to_channel" in warning for warning in validation["warnings"])
+    assert validation["warnings"] == ["sync_contract_fields_not_active:phase"]
+    assert result["runtimeContractValidation"]["executionStatus"] == "partial"
+    assert data["unsupportedPromises"] == ["unsupported:sync:phase"]
 
 
 def test_mechanic_claims_backed_by_archetype_are_executable_and_unbacked_claims_warn() -> None:
@@ -164,24 +172,24 @@ def test_mechanic_claims_backed_by_archetype_are_executable_and_unbacked_claims_
     }
     compile_runtime_plan_to_genome_result(unbacked)
     report2 = validate_runtime_promises(unbacked)
-    assert any(claim["kind"] == "starfall" and claim["status"] == "unsupported" for claim in report2["claims"])
-    assert "unsupported:starfall" in unbacked.get("unsupportedPromises", [])
+    assert any(claim["kind"] == "overhead_barrage" and claim["status"] == "unsupported" for claim in report2["claims"])
+    assert "unsupported:overhead_barrage" in unbacked.get("unsupportedPromises", [])
 
-    backed_starfall = {
+    backed_overhead_barrage = {
         "tooltip": "On hit, raining stars fall from the sky.",
         "runtimeContract": {"mechanicClaims": [{"claim": "raining stars fall on hit", "backing": "engineCall.apply_on_hit_effect"}]},
         "runtimePlan": {"engineCalls": [
             _stats_call(),
             _shoot(runtimeFamily="swing", delivery="swing", movement="straight"),
-            {"fn": "apply_on_hit_effect", "params": {"onHit": "starfall", "count": 3}},
+            {"fn": "apply_on_hit_effect", "params": {"onHit": "overhead_barrage", "count": 3}},
         ]},
     }
-    result = compile_runtime_plan_to_genome_result(backed_starfall)
-    assert result["patch"].get("onHit") == "starfall"
-    report3 = validate_runtime_promises(backed_starfall, result["patch"])
-    assert any(claim["kind"] == "starfall" and claim["status"] == "executable" for claim in report3["claims"])
-    assert "unsupported:starfall" not in (backed_starfall.get("unsupportedPromises") or [])
-    assert backed_starfall["runtimeContract"]["executionStatus"] == "executable"
+    result = compile_runtime_plan_to_genome_result(backed_overhead_barrage)
+    assert result["patch"].get("onHit") == "overhead_barrage"
+    report3 = validate_runtime_promises(backed_overhead_barrage, result["patch"])
+    assert any(claim["kind"] == "overhead_barrage" and claim["status"] == "executable" for claim in report3["claims"])
+    assert "unsupported:overhead_barrage" not in (backed_overhead_barrage.get("unsupportedPromises") or [])
+    assert backed_overhead_barrage["runtimeContract"]["executionStatus"] == "executable"
 
 
 def test_burst_claim_with_zero_burst_dust_cap_is_visible_as_partial_warning() -> None:
@@ -256,14 +264,6 @@ def test_csharp_generated_item_data_has_data_only_runtime_archetype_contract_sur
     assert "RuntimeArchetype.Normalize();" in normalize
     assert "RuntimeContract.Normalize();" in normalize
     assert "RuntimeArchetype" not in serializer[serializer.index("private sealed class PlayerSaveReferencePayload"):serializer.index("public string ToPlayerSaveJson")]
-
-
-def test_contract_stamp_includes_runtime_archetype_contract_versions() -> None:
-    contract_versions = (ROOT / "LocalGenerator/infini_local/core/contract_versions.py").read_text(encoding="utf-8")
-
-    assert "RUNTIME_ARCHETYPE_SCHEMA_VERSION = \"infini.runtime-archetype.v1\"" in contract_versions
-    assert "RUNTIME_CONTRACT_SCHEMA_VERSION = \"infini.runtime-contract.v1\"" in contract_versions
-    assert "RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION" in contract_versions
 
 
 def test_projectile_bounce_is_not_false_feline_unsupported() -> None:

@@ -20,10 +20,7 @@ from infini_local.core.vfx_manifest_config import (
     VFX_RUNTIME_INTENT_FIRST,
 )
 from infini_local.core.vfx_composition_primitives import (
-    _VFX_PARTICLE_ADDRESS_CATALOG,
     _vfx_available_roles,
-    _vfx_mundane_duplicate_profile,
-    _vfx_trim_mundane_slots,
     _vfx_seed_int,
     _vfx_unit,
     _vfx_pick,
@@ -40,19 +37,11 @@ from infini_local.core.vfx_composition_primitives import (
     _vfx_renderer_family,
     _vfx_renderer_kind,
     _vfx_event_group,
-    _vfx_score_number,
     _vfx_slot_score,
-    _vfx_max_channel_count,
     _vfx_arbitrate_slots,
     _vfx_motif_from_data,
-    _vfx_magnitude_class,
-    _vfx_compute_effect_magnitude,
-    _vfx_budget_for_recipe,
-    _vfx_playback_mode_for_recipe,
     _vfx_words,
     _vfx_color_hex,
-    _vfx_particle_address_catalog,
-    _vfx_canonical_particle_address,
     _vfx_resolve_particle_system_id,
 )
 
@@ -163,10 +152,15 @@ def _vfx_baked_clip_meta(recipe_seed: int, slot_index: int, renderer: str, event
     }
 
 def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_budget: float, effect_magnitude: float = 0.5) -> dict[str, Any]:
-    slot_seed = _vfx_seed_int(seed, raw.get("renderer", "slot"), slot_index)
+    renderer_kind = _vfx_renderer_kind(raw.get("rendererKind") or raw.get("rendererKind"))
+    if renderer_kind == "none":
+        renderer_kind = "projectileAfterimage"
+    renderer = renderer_kind
+    event = str(raw.get("event") or "tick").strip()
+    if event not in {"travel", "active", "tick", "hit", "kill", "expire"}:
+        event = "tick"
+    slot_seed = _vfx_seed_int(seed, renderer_kind, slot_index)
     variants = raw.get("variants") if isinstance(raw.get("variants"), list) else []
-    renderer = str(raw.get("renderer") or "projectileAfterimage")
-    event = str(raw.get("event") or "tick")
     scale = _vfx_lerp_range(slot_seed, "scale", raw.get("scale"), 1.0)
     density = _vfx_lerp_range(slot_seed, "density", raw.get("density"), 0.35)
     duration = int(round(_vfx_lerp_range(slot_seed, "duration", raw.get("duration"), 10)))
@@ -179,28 +173,28 @@ def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_bud
     repeat_every = int(round(_vfx_lerp_range(slot_seed, "repeatEvery", raw.get("repeatEvery"), 0)))
     # Small power injection is allowed here; gameplay balance is not. Visual scale remains capped.
     visual_power = max(0.55, min(1.85, 0.72 + float(effect_magnitude or 0.5) * 0.86 + float(power_budget or 1.0) * 0.04))
-    backend = str(raw.get("backend") or _vfx_default_backend(event, renderer))
-    renderer_kind = str(raw.get("rendererKind") or _vfx_renderer_kind(renderer))
-    event_group = str(raw.get("eventGroup") or _vfx_event_group(event))
-    blend = str(raw.get("blend") or ("additive" if renderer_kind in {"lightCue", "beamLine"} or any(w in renderer.lower() for w in ("glow", "light", "spark", "beam")) else "alpha"))
-    channel = str(raw.get("channel") or _vfx_infer_channel(renderer, event))
-    importance = str(raw.get("importance") or _vfx_default_importance(event, renderer))
-    lane = str(raw.get("lane") or _vfx_infer_lane({**raw, "renderer": renderer, "event": event, "importance": importance, "channel": channel}))
-    emission_mode = str(raw.get("emissionMode") or _vfx_infer_emission_mode(renderer, event))
-    particle_system_id = _vfx_resolve_particle_system_id(raw, renderer, event, channel, blend, emission_mode)
-    baked_commands = _vfx_bake_slot_commands(raw, slot_seed, renderer, event, backend, density, duration, alpha, scale, spread)
-    baked_meta = _vfx_baked_clip_meta(seed, slot_index, renderer, event, baked_commands)
+    backend = str(raw.get("backend") or _vfx_default_backend(event, renderer_kind))
+    event_group = _vfx_event_group(event)
+    explicit_blend = str(raw.get("blend") or "").strip()
+    blend = explicit_blend if explicit_blend in {"alpha", "additive"} else ("additive" if renderer_kind in {"lightCue", "beamLine"} else "alpha")
+    channel = str(raw.get("channel") or _vfx_infer_channel(renderer_kind, event))
+    importance = str(raw.get("importance") or _vfx_default_importance(event, renderer_kind))
+    lane = str(raw.get("lane") or _vfx_infer_lane({**raw, "rendererKind": renderer_kind, "rendererKind": renderer_kind, "event": event, "importance": importance, "channel": channel}))
+    emission_mode = str(raw.get("emissionMode") or _vfx_infer_emission_mode(renderer_kind, event))
+    particle_system_id = _vfx_resolve_particle_system_id(raw, renderer_kind, event, channel, blend, emission_mode)
+    baked_commands = _vfx_bake_slot_commands(raw, slot_seed, renderer_kind, event, backend, density, duration, alpha, scale, spread)
+    baked_meta = _vfx_baked_clip_meta(seed, slot_index, renderer_kind, event, baked_commands)
     return {
         "event": event,
         "eventGroup": event_group,
-        "stage": str(raw.get("stage") or _vfx_event_stage(event, renderer)),
+        "stage": _vfx_event_stage(event, renderer_kind),
         "source": str(raw.get("source") or "recipe"),
         "backend": backend,
-        "renderer": renderer,
+        "rendererKind": renderer_kind,
         "rendererKind": renderer_kind,
         "textureRole": str(raw.get("textureRole") or "projectile"),
         "particleRole": str(raw.get("particleRole") or raw.get("textureRole") or "child"),
-        "anchor": str(raw.get("anchor") or _vfx_default_anchor(event, renderer)),
+        "anchor": str(raw.get("anchor") or _vfx_default_anchor(event, renderer_kind)),
         "blend": blend,
         "layer": str(raw.get("layer") or "BeforeProjectiles"),
         "channel": channel,
@@ -209,7 +203,7 @@ def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_bud
         "particleSystemId": particle_system_id,
         "fadeIn": round(max(0.0, min(0.95, _vfx_lerp_range(slot_seed, "fadeIn", raw.get("fadeIn"), 0.15))), 3),
         "fadeOut": round(max(0.0, min(0.95, _vfx_lerp_range(slot_seed, "fadeOut", raw.get("fadeOut"), 0.35))), 3),
-        "curve": str(raw.get("curve") or "smooth"),
+        "curve": str(raw.get("curve") if raw.get("curve") in {"smooth", "linear", "sharp"} else "smooth"),
         "slotSeed": int(_vfx_seed_int(seed, "slot", slot_index, renderer, event)),
         "variant": int(_vfx_pick(slot_seed, "variant", variants, 0) or 0),
         "startTick": max(0, min(600, start_tick)),
@@ -222,8 +216,6 @@ def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_bud
         "jitter": round(max(0.0, min(2.0, jitter)), 3),
         "phaseOffset": round(max(-2.0, min(2.0, phase_offset)), 3),
         "budgetWeight": round(max(0.05, min(8.0, budget_weight)), 3),
-        # v0.3.26: minQuality is deprecated/compat only. Slots are no longer design-gated by graphics presets.
-        "minQuality": str(raw.get("minQuality") or raw.get("quality") or "Full"),
         "importance": str(raw.get("importance") or _vfx_default_importance(event, renderer)),
         "visualCost": round(max(0.0, min(1.0, _vfx_lerp_range(slot_seed, "visualCost", raw.get("visualCost"), _vfx_default_visual_cost(renderer, density)))), 3),
         "signatureWeight": round(max(0.0, min(1.0, _vfx_lerp_range(slot_seed, "signatureWeight", raw.get("signatureWeight"), _vfx_default_signature_weight(event, renderer)))), 3),
@@ -236,16 +228,16 @@ def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_bud
 def _vfx_family_key(slot: dict[str, Any]) -> tuple[str, str, str]:
     return (
         _vfx_event_group(slot.get("event")),
-        str(slot.get("channel") or _vfx_infer_channel(slot.get("renderer"), slot.get("event"))),
-        _vfx_renderer_family(slot.get("renderer")),
+        str(slot.get("channel") or _vfx_infer_channel(slot.get("rendererKind"), slot.get("event"))),
+        _vfx_renderer_family(slot.get("rendererKind")),
     )
 
 def _vfx_slot_similarity_key(slot: dict[str, Any]) -> tuple[str, str, str, str]:
     return (
         _vfx_event_group(slot.get("event")),
-        str(slot.get("channel") or _vfx_infer_channel(slot.get("renderer"), slot.get("event"))),
+        str(slot.get("channel") or _vfx_infer_channel(slot.get("rendererKind"), slot.get("event"))),
         str(slot.get("lane") or _vfx_infer_lane(slot)),
-        _vfx_renderer_family(slot.get("renderer")),
+        _vfx_renderer_family(slot.get("rendererKind")),
     )
 
 def _vfx_demote_blended_raw_slot(raw: dict[str, Any], source_recipe_id: str, seed: int, order: int) -> dict[str, Any]:
@@ -296,9 +288,9 @@ def _vfx_blend_runner_up_slots(top: list[tuple[float, dict[str, Any], list[str]]
             continue
         raw_slots = [x for x in (recipe.get("slots") or []) if isinstance(x, dict)]
         # Prefer non-core hit particles / support motion / ambient layers from runner-up recipes.
-        raw_slots.sort(key=lambda x: (_vfx_slot_score({**x, "channel": _vfx_infer_channel(x.get("renderer"), x.get("event")), "lane": _vfx_infer_lane(x)}), str(x.get("renderer"))), reverse=True)
+        raw_slots.sort(key=lambda x: (_vfx_slot_score({**x, "channel": _vfx_infer_channel(x.get("rendererKind"), x.get("event")), "lane": _vfx_infer_lane(x)}), str(x.get("rendererKind"))), reverse=True)
         for raw in raw_slots:
-            channel = _vfx_infer_channel(raw.get("renderer"), raw.get("event"))
+            channel = _vfx_infer_channel(raw.get("rendererKind"), raw.get("event"))
             event_group = _vfx_event_group(raw.get("event"))
             if channel in {"sound", "light"}:
                 continue
@@ -312,7 +304,7 @@ def _vfx_blend_runner_up_slots(top: list[tuple[float, dict[str, Any], list[str]]
                 continue
             used.add(key)
             extras.append(candidate)
-            debug.append({"recipeId": rid, "renderer": candidate.get("renderer"), "event": candidate.get("event"), "channel": channel, "score": round(float(score), 3)})
+            debug.append({"recipeId": rid, "rendererKind": candidate.get("rendererKind"), "event": candidate.get("event"), "channel": channel, "score": round(float(score), 3)})
             order += 1
             if len(extras) >= max_slots:
                 return extras, debug
@@ -331,25 +323,25 @@ def _vfx_procedural_raw_slot_pool(pattern: str, roles: set[str], motif: dict[str
     out: list[dict[str, Any]] = []
     if "projectile" in roles:
         if any(x in pattern_l for x in ["slash", "beam_slash"]):
-            out.append({"event": "active", "renderer": "historyRibbon", "textureRole": "projectile", "channel": "motionTrail", "lane": "support", "importance": "secondary", "density": [0.22, 0.48], "scale": [0.75, 1.35], "alpha": [0.26, 0.58], "duration": [10, 28], "spread": [0.45, 1.05], "source": "procedural:slash_support_ribbon"})
-            out.append({"event": "active", "renderer": "beamLine", "textureRole": "projectile", "channel": "motionTrail", "lane": "accent", "importance": "accent", "density": [0.10, 0.34], "scale": [0.65, 1.20], "alpha": [0.18, 0.46], "duration": [5, 16], "spread": [0.25, 0.75], "source": "procedural:slash_light_streak"})
+            out.append({"event": "active", "rendererKind": "historyRibbon", "textureRole": "projectile", "channel": "motionTrail", "lane": "support", "importance": "secondary", "density": [0.22, 0.48], "scale": [0.75, 1.35], "alpha": [0.26, 0.58], "duration": [10, 28], "spread": [0.45, 1.05], "source": "procedural:slash_support_ribbon"})
+            out.append({"event": "active", "rendererKind": "beamLine", "textureRole": "projectile", "channel": "motionTrail", "lane": "accent", "importance": "accent", "density": [0.10, 0.34], "scale": [0.65, 1.20], "alpha": [0.18, 0.46], "duration": [5, 16], "spread": [0.25, 0.75], "source": "procedural:slash_light_streak"})
         elif "beam" in pattern_l or "laser" in pattern_l:
-            out.append({"event": "beam", "renderer": "beamLine", "textureRole": "projectile", "channel": "motionTrail", "lane": "primary", "importance": "core", "density": [0.30, 0.72], "scale": [1.0, 1.85], "alpha": [0.45, 0.85], "duration": [8, 28], "spread": [0.25, 0.90], "source": "procedural:beam_core_line"})
-            out.append({"event": "beam", "renderer": "ambientMotes", "textureRole": "child", "particleRole": "child", "channel": "ambientParticles", "lane": "accent", "importance": "accent", "emissionMode": "wake", "density": [0.12, 0.34], "scale": [0.5, 1.1], "alpha": [0.22, 0.52], "duration": [8, 20], "repeatEvery": [2, 5], "source": "procedural:beam_side_sparks"})
+            out.append({"event": "active", "rendererKind": "beamLine", "textureRole": "projectile", "channel": "motionTrail", "lane": "primary", "importance": "core", "density": [0.30, 0.72], "scale": [1.0, 1.85], "alpha": [0.45, 0.85], "duration": [8, 28], "spread": [0.25, 0.90], "source": "procedural:beam_core_line"})
+            out.append({"event": "active", "rendererKind": "childMotes", "rendererKind": "childMotes", "textureRole": "child", "particleRole": "child", "channel": "ambientParticles", "lane": "accent", "importance": "accent", "emissionMode": "wake", "density": [0.12, 0.34], "scale": [0.5, 1.1], "alpha": [0.22, 0.52], "duration": [8, 20], "repeatEvery": [2, 5], "source": "procedural:beam_side_sparks"})
         else:
-            out.append({"event": "travel", "renderer": "spriteStampTrail", "textureRole": "projectile", "channel": "motionTrail", "lane": "support", "importance": "secondary", "density": [0.18, 0.46], "scale": [0.65, 1.25], "alpha": [0.22, 0.55], "duration": [8, 22], "source": "procedural:travel_stamp_support"})
+            out.append({"event": "travel", "rendererKind": "spriteStampTrail", "textureRole": "projectile", "channel": "motionTrail", "lane": "support", "importance": "secondary", "density": [0.18, 0.46], "scale": [0.65, 1.25], "alpha": [0.22, 0.55], "duration": [8, 22], "source": "procedural:travel_stamp_support"})
     if "impact" in roles:
-        out.append({"event": "hit", "renderer": "impactRing", "textureRole": "impact", "particleRole": "child", "channel": "impactShape", "lane": "support", "importance": "secondary", "density": [0.18, 0.50], "scale": [0.9, 2.2 if large else 1.55], "alpha": [0.30, 0.72], "duration": [6, 18], "spread": [0.35, 1.15], "source": "procedural:impact_secondary_ring"})
-        out.append({"event": "hit", "renderer": "impactSpriteFlash", "textureRole": "impact", "particleRole": "child", "channel": "impactShape", "lane": "accent", "importance": "accent", "density": [0.08, 0.24], "scale": [0.85, 1.85], "alpha": [0.25, 0.68], "duration": [4, 12], "source": "procedural:impact_snap_flash"})
+        out.append({"event": "hit", "rendererKind": "impactRing", "textureRole": "impact", "particleRole": "child", "channel": "impactShape", "lane": "support", "importance": "secondary", "density": [0.18, 0.50], "scale": [0.9, 2.2 if large else 1.55], "alpha": [0.30, 0.72], "duration": [6, 18], "spread": [0.35, 1.15], "source": "procedural:impact_secondary_ring"})
+        out.append({"event": "hit", "rendererKind": "impactSprite", "rendererKind": "impactSprite", "textureRole": "impact", "particleRole": "child", "channel": "impactShape", "lane": "accent", "importance": "accent", "density": [0.08, 0.24], "scale": [0.85, 1.85], "alpha": [0.25, 0.68], "duration": [4, 12], "source": "procedural:impact_snap_flash"})
     if "child" in roles or "impact" in roles:
-        out.append({"event": "hit", "renderer": "childSpriteMotes", "textureRole": "impact", "particleRole": "child", "channel": "impactParticles", "lane": "accent", "importance": "accent", "emissionMode": "cone", "density": [0.18, 0.58 if large else 0.38], "scale": [0.45, 1.15], "alpha": [0.28, 0.72], "duration": [10, 32], "spread": [0.55, 1.65], "source": "procedural:impact_child_motes"})
+        out.append({"event": "hit", "rendererKind": "childMotes", "rendererKind": "childMotes", "textureRole": "impact", "particleRole": "child", "channel": "impactParticles", "lane": "accent", "importance": "accent", "emissionMode": "cone", "density": [0.18, 0.58 if large else 0.38], "scale": [0.45, 1.15], "alpha": [0.28, 0.72], "duration": [10, 32], "spread": [0.55, 1.65], "source": "procedural:impact_child_motes"})
         if signature:
-            out.append({"event": "kill", "renderer": "ambientMotes", "textureRole": "impact", "particleRole": "child", "channel": "decaySmoke", "lane": "accent", "importance": "accent", "emissionMode": "spiral", "density": [0.14, 0.42], "scale": [0.65, 1.45], "alpha": [0.20, 0.54], "duration": [18, 52], "spread": [0.75, 1.85], "source": "procedural:signature_spiral_decay"})
+            out.append({"event": "kill", "rendererKind": "childMotes", "rendererKind": "childMotes", "textureRole": "impact", "particleRole": "child", "channel": "decaySmoke", "lane": "accent", "importance": "accent", "emissionMode": "spiral", "density": [0.14, 0.42], "scale": [0.65, 1.45], "alpha": [0.20, 0.54], "duration": [18, 52], "spread": [0.75, 1.85], "source": "procedural:signature_spiral_decay"})
     if "field" in roles or "field" in pattern_l:
-        out.append({"event": "loop", "renderer": "fieldPulse", "textureRole": "field", "particleRole": "child", "channel": "coreGlow", "lane": "primary", "importance": "core", "density": [0.22, 0.60], "scale": [0.95, 2.25], "alpha": [0.28, 0.72], "duration": [20, 60], "spread": [0.55, 1.35], "source": "procedural:field_core_pulse"})
+        out.append({"event": "tick", "rendererKind": "fieldPulse", "textureRole": "field", "particleRole": "child", "channel": "coreGlow", "lane": "primary", "importance": "core", "density": [0.22, 0.60], "scale": [0.95, 2.25], "alpha": [0.28, 0.72], "duration": [20, 60], "spread": [0.55, 1.35], "source": "procedural:field_core_pulse"})
     # A tiny light cue makes layered recipes read cleaner, but only as cue and only for large-ish effects.
     if large:
-        out.append({"event": "hit", "renderer": "lightCue", "textureRole": "impact", "channel": "light", "lane": "cue", "importance": "accent", "density": [0.10, 0.25], "scale": [0.8, 1.6], "alpha": [0.35, 0.8], "duration": [4, 10], "source": "procedural:impact_light_cue"})
+        out.append({"event": "hit", "rendererKind": "lightCue", "textureRole": "impact", "channel": "light", "lane": "cue", "importance": "accent", "density": [0.10, 0.25], "scale": [0.8, 1.6], "alpha": [0.35, 0.8], "duration": [4, 10], "source": "procedural:impact_light_cue"})
     return out
 
 def _vfx_add_procedural_slots(base_raw_slots: list[dict[str, Any]], pattern: str, roles: set[str], motif: dict[str, Any], magnitude_class: str, seed: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -367,10 +359,10 @@ def _vfx_add_procedural_slots(base_raw_slots: list[dict[str, Any]], pattern: str
         if key in base_keys:
             continue
         chance = VFX_PROCEDURAL_CHANCE
-        u = _vfx_unit(seed, f"proc_chance_{idx}_{raw.get('renderer')}")
+        u = _vfx_unit(seed, f"proc_chance_{idx}_{raw.get('rendererKind')}")
         if u > chance and magnitude_class not in {"large", "signature"}:
             continue
-        score = _vfx_slot_score({**raw, "channel": raw.get("channel") or _vfx_infer_channel(raw.get("renderer"), raw.get("event")), "lane": raw.get("lane") or _vfx_infer_lane(raw)})
+        score = _vfx_slot_score({**raw, "channel": raw.get("channel") or _vfx_infer_channel(raw.get("rendererKind"), raw.get("event")), "lane": raw.get("lane") or _vfx_infer_lane(raw)})
         # Stable jitter so the same item does not always use the same procedural accent.
         score += (_vfx_unit(seed, f"proc_score_{idx}") - 0.5) * 18.0
         scored.append((score, raw))
@@ -384,7 +376,7 @@ def _vfx_add_procedural_slots(base_raw_slots: list[dict[str, Any]], pattern: str
             continue
         used.add(key)
         chosen.append(raw)
-        debug.append({"renderer": raw.get("renderer"), "event": raw.get("event"), "channel": raw.get("channel"), "lane": raw.get("lane"), "source": raw.get("source"), "score": round(score, 3)})
+        debug.append({"rendererKind": raw.get("rendererKind"), "event": raw.get("event"), "channel": raw.get("channel"), "lane": raw.get("lane"), "source": raw.get("source"), "score": round(score, 3)})
         if len(chosen) >= max_slots:
             break
     return chosen, debug
@@ -415,7 +407,7 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
     # Travel slot: small by default; no parent-inherited beam/history ribbons.
     if trail_len > 0 and effect not in {"none", ""}:
         slots_raw.append({
-            "event": "travel", "renderer": "projectileAfterimage", "textureRole": "projectile",
+            "event": "travel", "rendererKind": "projectileAfterimage", "textureRole": "projectile",
             "variants": [0, 1], "scale": [0.65, 1.05], "density": [0.10, 0.24], "duration": [5, min(18, max(6, trail_len))],
             "alpha": [0.18, 0.42], "stage": "loop", "backend": "Sprite", "anchor": "self", "blend": "alpha",
             "layer": "BeforeProjectiles", "budgetWeight": [0.45, 0.9], "source": "runtimePlan:travel"
@@ -423,7 +415,7 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
     # Hit feedback is a contact flash/chips/dust unless the LLM explicitly requested real child projectiles.
     if onhit not in {"none", ""} or burst_cap > 0 or str(vi.get("impact") or visual.get("impactVfx") or "").strip():
         slots_raw.append({
-            "event": "hit", "renderer": "impactSpriteFlash", "textureRole": "impact",
+            "event": "hit", "rendererKind": "impactSprite", "rendererKind": "impactSprite", "textureRole": "impact",
             "variants": [0, 1], "scale": [0.85, min(1.75, 0.98 + power * 0.20)], "density": [0.10, 0.26], "duration": [6, 13],
             "alpha": [0.45, 0.86], "stage": "impact", "backend": "Sprite", "anchor": "hitPoint", "blend": "alpha",
             "layer": "BeforeProjectiles", "budgetWeight": [0.60, 1.05], "source": "runtimePlan:impact_readable_flash_v0.4.174"
@@ -527,7 +519,7 @@ def _vfx_authored_cue_raw_slots(data: dict[str, Any]) -> tuple[list[dict[str, An
         if not isinstance(cue, dict):
             continue
         ev = _vfx_authored_cue_event(cue.get("event"))
-        renderer = str(cue.get("rendererKind") or cue.get("renderer") or "").strip()
+        renderer = str(cue.get("rendererKind") or "").strip()
         if renderer not in allowed_renderer:
             renderer = "impactRing" if ev in {"hit", "kill", "expire"} else "projectileAfterimage"
         channel = str(cue.get("channel") or "").strip()
@@ -560,7 +552,7 @@ def _vfx_authored_cue_raw_slots(data: dict[str, Any]) -> tuple[list[dict[str, An
                 return fallback
         slot = {
             "event": ev,
-            "renderer": renderer,
+            "rendererKind": renderer,
             "rendererKind": renderer,
             "backend": "Auto",
             "textureRole": texture_role,

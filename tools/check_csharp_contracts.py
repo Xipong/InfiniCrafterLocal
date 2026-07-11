@@ -332,7 +332,7 @@ def check_model_property_references() -> None:
     for required_prop in ["GeneratedBuff", "AltGeneratedBuff", "HoldGeneratedBuff", "MobilityMode", "AltMobilityMode", "ExtractinatorOutputItemType", "HoldLightStrength", "RuntimeState", "RejectedEngineCalls", "ConsumeChancePercent", "ChannelUse", "UseFantasy", "HeldVisibility", "ReleaseTiming", "HandPose", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy", "DrawDuringUse", "InitialOffsetPx"]:
         if required_prop not in gameplay:
             err(f"GameplaySpec missing `{required_prop}`")
-    for required_prop in ["RuntimeLightStrength", "MobilityMode", "AoeDamageRadiusPx", "ImpactVfxRadiusPx", "ContactForgivenessPx", "WeaponSubfamily", "AttackPatternTags", "SoundUseSearchQuery", "SoundImpactSearchQuery"]:
+    for required_prop in ["DamageClass", "RuntimeLightStrength", "MobilityMode", "AoeDamageRadiusPx", "ImpactVfxRadiusPx", "ContactForgivenessPx", "SoundUseCatalogId", "SoundImpactCatalogId", "SoundPitchVariance", "ChargeTicks", "ChargePowerMultiplier", "SentryPlacement", "SentryAttackIntervalTicks", "SentryTargetRangeTiles", "SentryLifetimeTicks", "SecondaryLifetimeTicks"]:
         if required_prop not in attack:
             err(f"AttackSpec missing `{required_prop}`")
     for required_prop in ["Enabled", "LightStrength", "LightColorName", "MovementSpeed", "JumpSpeed", "MinionSlots", "SentrySlots", "ManaCostReduction", "AmmoSaveChance", "Aggro", "Endurance", "ArmorPenetration"]:
@@ -382,8 +382,8 @@ def check_projectile_child_runtime_guards() -> None:
         "return depth < Math.Max(0, _spec.MaxChildDepth);",
         "if (depth > Math.Max(0, _spec.MaxChildDepth)) return;",
         "CountOwnedGeneratedProjectiles(rootId) >= Math.Max(0, _spec.MaxChildProjectiles)",
-        "int cap = Math.Max(0, _spec.MaxChildProjectiles);",
-        "return Math.Clamp(requested, 1, cap);",
+        "RemainingGameplayChildBudget()",
+        "return Math.Clamp(requested, 1, remaining);",
         "MaxChildProjectiles = Math.Max(4, _spec.MaxChildProjectiles / 2)",
         "MaxChildDepth = Math.Max(0, _spec.MaxChildDepth - 1)",
     ]:
@@ -432,13 +432,13 @@ def check_vfx_audio_presentation_guards() -> None:
         "private static bool SoundSlotTickAllowed",
         "InfiniLuminanceSoundBridge.TryUpdateLiveSoundCue",
         "SoundSlotTickAllowed(slot, state.Tick)",
-        "spec.UseSoundProfile",
-        "spec.SoundUse",
+        "spec.SoundUseCatalogId",
+        "spec.SoundImpactCatalogId",
         "spec.SoundVolume",
         "spec.SoundPitch",
         "InfiniSoundLibrary.ForVfxCue",
         "private static int DustForEffect(AttackSpec spec)",
-        "effect.Contains(\"electric\")",
+        "int code = spec?.EffectCode ?? -1;",
         "DustID.YellowStarDust",
     ]:
         required(vfx_path, vfx, needle)
@@ -451,51 +451,64 @@ def check_vfx_audio_presentation_guards() -> None:
     ]:
         required(projectile_path, projectile, needle)
     for needle in [
-        "public const string ContractVersion = \"infini.vanilla-sound-catalog.v6\";",
-        "public static readonly string[] KnownProfiles",
+        "public const string ContractVersion = \"infini.terraria-sound-catalog.v8\";",
+        "public const string BuiltInCatalogSource = \"terraria_vanilla\";",
+        "private static readonly IReadOnlyDictionary<string, SoundStyle> BuiltInCatalog",
+        "public static int BuiltInCatalogCount => BuiltInCatalog.Count;",
         "public static SoundStyle ForUse",
         "public static SoundStyle ForImpact",
         "public static SoundStyle ForVfxCue",
-        "HasAny(t, \"electric\"",
-        "HasAny(t, \"explosion\"",
-        "HasAny(t, \"crystal\"",
-        "StyleFromRangedText",
-        "StyleFromMagicText",
-        "StyleFromMeleeText",
-        "StyleFromSummonText",
-        "StyleFromMaterialOrEffectText",
-        "SoundID.Item36",
-        "SoundID.Item40",
-        "SoundID.Item41",
-        "SoundID.Item43",
-        "SoundID.Item72",
-        "SoundID.Item84",
-        "SoundID.Item108",
-        "SoundID.Item152",
-        "SoundID.Item169",
-        "SoundID.Item7",
-        "SoundID.Item10",
-        "SoundID.Item95",
-        "SoundID.Item124",
-        "Volume = Math.Clamp",
-        "Pitch = Math.Clamp",
+        "TryResolveBuiltIn",
+        "FallbackUse",
+        "FallbackImpact",
+        "StyleFromCodes",
+        '["melee_energy_slash"] = SoundID.Item60',
+        '["sniper_heavy"] = SoundID.Item40',
+        '["laser_space"] = SoundID.Item157',
+        '["magic_spectral"] = SoundID.Item124',
+        '["summon_lightning"] = SoundID.Item123',
+        '["impact_electric"] = SoundID.Item94',
+        '["impact_void"] = SoundID.Item113',
+        '["impact_portal"] = SoundID.Item78',
+        "style.Volume * authoredVolumeScale * volumeScale",
+        "style.Pitch + authoredPitch + pitchJitter",
+        "Math.Max(style.PitchVariance, authoredPitchVariance)",
+        "Pitch = pitch",
+        "PitchVariance = safeVariance",
         "InfiniFutureSoundCatalog.TryResolveOneShot",
     ]:
         required(library_path, library, needle)
+    catalog_pairs = re.findall(r'^\s*\[\"([a-z0-9_]+)\"\]\s*=\s*SoundID\.(Item\d+)', library, flags=re.M)
+    if len(catalog_pairs) < 85:
+        err(f"{rel(library_path)}: exact built-in sound catalog is too small ({len(catalog_pairs)} < 85)")
+    unique_sound_ids = {sound_id for _, sound_id in catalog_pairs}
+    if len(unique_sound_ids) < 65:
+        err(f"{rel(library_path)}: catalog collapses into too few actual SoundIDs ({len(unique_sound_ids)} < 65)")
+    for stale in [
+        "KnownProfiles", "HasAny(", "StyleFromRangedText", "StyleFromMagicText",
+        "StyleFromMeleeText", "StyleFromSummonText", "StyleFromMaterialOrEffectText",
+        "terra_blade", "last_prism", "starfury", "stardust_dragon",
+    ]:
+        haystack = library.lower() if stale == stale.lower() else library
+        if stale in haystack:
+            err(f"{rel(library_path)}: stale keyword/weapon sound router `{stale}`")
     if (SRC / "Common/Audio/InfiniExternalSoundPack.cs").exists():
         err("InfiniExternalSoundPack.cs: removed in v0.4.190; do not re-add fixed sound-pack bindings")
     if "InfiniExternalSoundPack" in library:
         err("InfiniSoundLibrary.cs: external sound-pack binding must stay removed; use future catalog seam instead")
     for needle in [
-        "public const string ContractVersion = \"infini.embedding-sound-catalog.future-seam.v1\";",
+        "public const string ContractVersion = \"infini.external-sound-catalog.future-seam.v2\";",
         "TryResolveOneShot",
         "return false;",
         "embedding",
-        "concrete asset/id",
-        "must not classify",
+        "explicit catalog id/path/source",
+        "never receives prose",
         "public bool IsImpact { get; }",
     ]:
         required(future_path, future, needle)
+    for stale in ["QueryText", "soundUseSearchQuery", "soundImpactSearchQuery", "SoundUseSearchQuery", "SoundImpactSearchQuery"]:
+        if stale in future or stale in library or stale in model:
+            err(f"audio contract: stale text-query field `{stale}`")
     if "public bool Impact { get; }" in future and "InfiniFutureSoundCatalogRequest Impact(" in future:
         err("InfiniFutureSoundCatalog.cs: request member `Impact` collides with static factory `Impact`; use `IsImpact` for the bool flag")
     if "InfiniSoundLibrary.ForUse" not in model:
@@ -503,9 +516,8 @@ def check_vfx_audio_presentation_guards() -> None:
     for needle in [
         "SoundUseCatalogId",
         "SoundImpactCatalogId",
-        "SoundUseSearchQuery",
-        "SoundImpactSearchQuery",
         "SoundCatalogSource",
+        "SoundPitchVariance",
         "SoundUseCatalogPath",
         "SoundImpactCatalogPath",
     ]:
@@ -615,6 +627,52 @@ def check_network_read_write_shape() -> None:
     projectile = read_projectile_bundle()
     if "writer.Write(ProjectileSyncVersion)" not in projectile or "reader.ReadInt32()" not in projectile:
         err("GeneratedProjectile.cs: versioned SendExtraAI/ReceiveExtraAI shape is incomplete")
+    for needle in [
+        "private const int ProjectileSyncVersion = 14",
+        "writer.Write(_spec.RangeTiles)",
+        "writer.Write(_spec.HomingStrength)",
+        "writer.Write(_spec.BeamWidthPx)",
+        "writer.Write(_spec.BeamChargeTicks)",
+        "writer.Write(_spec.ChargeTicks)",
+        "writer.Write(_spec.ChargePowerMultiplier)",
+        "writer.Write(ShortNet(_spec.DamageClass, 96))",
+        "writer.Write(_spec.SentryAttackIntervalTicks)",
+        "writer.Write(_spec.SentryTargetRangeTiles)",
+        "writer.Write(_spec.SentryLifetimeTicks)",
+        "writer.Write(_beamLengthPx)",
+        "_spec.RangeTiles = reader.ReadSingle()",
+        "_spec.HomingStrength = reader.ReadSingle()",
+        "_spec.BeamWidthPx = reader.ReadSingle()",
+        "_spec.BeamChargeTicks = reader.ReadInt32()",
+        "_spec.ChargeTicks = reader.ReadInt32()",
+        "_spec.ChargePowerMultiplier = reader.ReadSingle()",
+        "_spec.DamageClass = ReadStringKeepBase(reader, _spec.DamageClass, childShard)",
+        "_spec.SentryAttackIntervalTicks = reader.ReadInt32()",
+        "_spec.SentryTargetRangeTiles = reader.ReadSingle()",
+        "_spec.SentryLifetimeTicks = reader.ReadInt32()",
+        "_beamLengthPx = reader.ReadSingle()",
+        "Collision.LaserScan",
+        "CanPayChannelBeamMana",
+        "owner.CheckMana(manaCost, true, false)",
+        "writer.Write(ShortNet(_spec.SecondaryTrigger, 24))",
+        "_spec.SecondaryTrigger = reader.ReadString()",
+        "writer.Write(_spec.DelayTicks)",
+        "_spec.DelayTicks = reader.ReadInt32()",
+        "GeneratedSecondaryTriggerPolicy.Normalize",
+        "ApplyOverheadBarrageAI",
+        "SpawnExpireSecondaries();",
+        "RemainingGameplayChildBudget",
+        "_spawnedGameplayChildCount++",
+        "GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily",
+    ]:
+        if needle not in projectile:
+            err(f"GeneratedProjectile.cs: missing exact channel-beam runtime/sync guard `{needle}`")
+    onkill = method_block(projectile, "OnKill")
+    if "SpawnExpireSecondaries();" not in onkill:
+        err("GeneratedProjectile.Impact.cs: on_expire helper exists without an OnKill call-site")
+    trigger_policy = read(SRC / "Common/Models/GeneratedSecondaryTriggerPolicy.cs")
+    if '_ => ""' not in trigger_policy or "NormalizeForRuntimeFamily" not in trigger_policy:
+        err("GeneratedSecondaryTriggerPolicy.cs: unknown/incompatible triggers must normalize to inert empty state")
     for flag in ["SyncFlagMobility", "SyncFlagRuntimeLight", "SyncFlagSplitRadii"]:
         if flag not in projectile:
             err(f"GeneratedProjectile.cs: missing projectile sync flag `{flag}`")
@@ -632,7 +690,7 @@ def check_network_read_write_shape() -> None:
     for needle in ["InfiniNetPacketIds.RequestGeneratedItemById", "RequestOneFromServer", "TryGet(id, out var data)", "FlushPendingProjectileVisualSyncForGeneratedItem(data.Id)", "FlushPendingVfxEventsForGeneratedItem(data.Id)"]:
         if needle not in registry:
             err(f"GeneratedItemRegistryService.cs: missing targeted generated item resync guard `{needle}`")
-    for needle in ["MissingGeneratedItemRequestTicks", "MissingProjectileAssetRequestTicks", "MissingGeneratedItemRetryTicks", "MissingProjectileAssetRetryTicks", "MaybeRebroadcastVisualSyncForEarlyRemoteCatchup", "RequestProjectileAssetCatchupIfMissing(spritePath, _generatedItemId)", "payload.Owner = Math.Clamp(whoAmI", "ClearPresentationSyncCaches"]:
+    for needle in ["MissingGeneratedItemRequestTicks", "MissingProjectileAssetRequestTicks", "MissingGeneratedItemRetryTicks", "MissingProjectileAssetRetryTicks", "MaybeRebroadcastVisualSyncForEarlyRemoteCatchup", "RequestProjectileAssetCatchupIfMissing(spritePath, _generatedItemId)", "TryResolveServerOwnedGeneratedProjectile(whoAmI, payload.Identity", "payload.GeneratedItemId = ShortNet(generated._generatedItemId, 96)", "payload.Center = generated.Projectile.Center", "PrunePendingProjectileVisualSyncLocked", "PruneTickMapLocked", "ClearPresentationSyncCaches"]:
         if needle not in projectile:
             err(f"GeneratedProjectile.cs: missing per-item multiplayer catch-up guard `{needle}`")
     held_layer = read(SRC / "Common/Players/GeneratedHeldItemDrawLayer.cs")
@@ -658,8 +716,8 @@ def check_network_read_write_shape() -> None:
     ]:
         if needle not in held_layer and needle not in player:
             err(f"Generated held item sync/pose guard missing `{needle}`")
-    if "private const int HeldItemPresentationSyncVersion = 3" not in held_layer:
-        err("GeneratedHeldItemDrawLayer.cs: held item presentation sync must use v3 id+pose payload")
+    if "private const int HeldItemPresentationSyncVersion = 4" not in held_layer:
+        err("GeneratedHeldItemDrawLayer.cs: held item presentation sync must use v4 id+pose+animation-phase payload")
     held_payload_start = held_layer.find("private sealed class HeldItemPresentationPayload")
     held_payload_end = held_layer.find("private static readonly Dictionary", held_payload_start)
     held_build_start = held_layer.find("private static HeldItemPresentationPayload BuildLocalPayload")
@@ -671,9 +729,12 @@ def check_network_read_write_shape() -> None:
         held_layer[held_build_start:held_build_end] if held_build_start >= 0 and held_build_end >= 0 else "",
         held_layer[held_write_start:held_write_end] if held_write_start >= 0 and held_write_end >= 0 else "",
     ])
-    for removed in ["SpritePath", "RuntimeFamily", "WeaponFamily", "WeaponSubfamily", "HandPose", "RotationMode", "UseStyle", "HoldoutOffsetX", "HoldoutOffsetY", "InitialOffsetPx", "ItemScale"]:
+    for removed in ["SpritePath", "RuntimeFamily", "WeaponFamily", "HandPose", "RotationMode", "UseStyle", "HoldoutOffsetX", "HoldoutOffsetY", "InitialOffsetPx", "ItemScale"]:
         if removed in held_transport:
             err(f"GeneratedHeldItemDrawLayer.cs: held presentation packet must be id+pose only; remove `{removed}` from payload/build/read/write")
+    for phase_field in ["ActiveUse", "AnimationRemaining"]:
+        if phase_field not in held_transport:
+            err(f"GeneratedHeldItemDrawLayer.cs: v4 held presentation payload missing `{phase_field}`")
     for needle in ["registry.TryGet(payload.GeneratedItemId, out var registryData)", "RequestHeldItemCatchup(payload.GeneratedItemId, null)"]:
         if needle not in held_layer:
             err(f"GeneratedHeldItemDrawLayer.cs: missing registry catch-up guard `{needle}`")
@@ -689,9 +750,12 @@ def check_network_read_write_shape() -> None:
         err("InfiniCrafterLocal.cs: missing multiplayer presentation cache cleanup on unload")
     if "InfiniNetPacketIds.SyncGeneratedHeldItemPresentation" not in mod:
         err("InfiniCrafterLocal.cs: missing held item presentation sync packet routing")
-    for needle in ["EmitVanillaMotionPolish", "EmitVanillaImpactPolish", "DrawStockMotionPolish", "PolishDustForIdentity", "HasPresentationIdentity"]:
+    for needle in ["EmitVanillaMotionPolish", "EmitVanillaImpactPolish", "DrawStockMotionPolish", "VanillaPolishDust", "AllowsVanillaMotionPolish"]:
         if needle not in projectile:
-            err(f"GeneratedProjectile.cs: missing bounded presentation polish helper `{needle}`")
+            err(f"GeneratedProjectile.cs: missing exact presentation polish helper `{needle}`")
+    for forbidden in ["PresentationIdentityText", "HasPresentationIdentity", "PolishDustForIdentity"]:
+        if forbidden in projectile:
+            err(f"GeneratedProjectile.cs: fuzzy presentation router remains `{forbidden}`")
     for rel_path in ["Content/Items/GeneratedItem.cs", "Content/Items/GeneratedExtractinatorMaterial.cs"]:
         text = read(SRC / rel_path)
         if "NetPayloadVersion" in text or "GeneratedItemNetPayloadVersion" in text:
@@ -743,7 +807,7 @@ def check_tml_feedback_warning_patterns() -> None:
             err(f"InfiniLuminanceSoundBridge.cs: missing nullable-safe loop handle guard `{needle}`")
 
     apply = read(SRC / "Common/Models/GeneratedItemData.Apply.cs")
-    for needle in ["Attack.SoundUseSearchQuery ?? \"\"", "Attack.SoundCatalogSource ?? \"\""]:
+    for needle in ["Attack.SoundCatalogSource ?? \"\""]:
         if needle not in apply:
             err(f"GeneratedItemData.Apply.cs: nullable string argument to InfiniSoundLibrary.ForUse must be coalesced: `{needle}`")
 
@@ -936,6 +1000,128 @@ def check_maintenance_qol_cleanup() -> None:
     if loader_defs != ["LocalGenerator/infini_local/core/env_utils.py"]:
         err("load_env_file should have exactly one shared definition; found " + ", ".join(loader_defs))
 
+def check_runtime_family_policy_owner() -> None:
+    policy_path = SRC / "Common/Models/GeneratedRuntimeFamilyPolicy.cs"
+    if not policy_path.exists():
+        err("missing canonical Common/Models/GeneratedRuntimeFamilyPolicy.cs")
+        return
+    policy = read(policy_path)
+    for needle in [
+        "internal static class GeneratedRuntimeFamilyPolicy",
+        "internal enum GeneratedHeldRenderRole",
+        "public static string Normalize",
+        "public static bool IsProjectileOwned",
+        "public static bool UsesHeldProjectile",
+        "public static bool UsesItemSpriteAsProjectile",
+        "public static GeneratedHeldRenderRole HeldRenderRole",
+    ]:
+        if needle not in policy:
+            err(f"GeneratedRuntimeFamilyPolicy.cs: missing canonical contract `{needle}`")
+
+    consumers = {
+        "Common/Models/GeneratedItemData.Normalize.cs": "GeneratedRuntimeFamilyPolicy.Normalize",
+        "Common/Models/GeneratedItemData.Apply.cs": "GeneratedRuntimeFamilyPolicy.IsProjectileOwned",
+        "Content/Items/GeneratedItem.cs": "GeneratedRuntimeFamilyPolicy.Normalize",
+        "Content/Projectiles/GeneratedProjectile.Runtime.cs": "GeneratedRuntimeFamilyPolicy.Normalize",
+        "Content/Projectiles/GeneratedProjectile.Visuals.cs": "GeneratedRuntimeFamilyPolicy.UsesItemSpriteAsProjectile",
+    }
+    forbidden = [
+        'r is "swing" or "thrust" or "returning"',
+        'family is "returning" or "thrust" or "yoyo" or "throw"',
+        "IsFreeProjectileFamily",
+    ]
+    for rel_path, required in consumers.items():
+        source = read(SRC / rel_path)
+        if required not in source:
+            err(f"{rel_path}: runtime family decision must use canonical policy `{required}`")
+        for stale in forbidden:
+            if stale in source:
+                err(f"{rel_path}: duplicated runtime-family policy `{stale}`")
+
+    runtime_literal = re.compile(
+        r'\b(?:RuntimeFamily|runtimeFamily)\b[^;\n]*(?:==|!=|=|\bis\b)\s*"(?:none|swing|thrust|returning|flail|yoyo|whip|shoot|cast|throw|summon)"'
+    )
+    for path in SRC.rglob("*.cs"):
+        if path == policy_path:
+            continue
+        if runtime_literal.search(read(path)):
+            err(f"{rel(path)}: canonical runtime family literal bypasses GeneratedRuntimeFamilyPolicy")
+
+    held = read(SRC / "Common/Players/GeneratedHeldItemDrawLayer.cs")
+    for required in ["ResolveHeldRenderRole", "GeneratedRuntimeFamilyPolicy.HeldRenderRole", "GeneratedRuntimeFamilyPolicy.Normalize"]:
+        if required not in held:
+            err(f"GeneratedHeldItemDrawLayer.cs: missing canonical held-render role contract `{required}`")
+    for stale in ["enum HeldRenderRole", "BuildHeldRoleText", "ContainsAny(role", "ContainsPresentationTerm"]:
+        if stale in held:
+            err(f"GeneratedHeldItemDrawLayer.cs: stale keyword-role router `{stale}`")
+
+
+def check_project_namespace_references() -> None:
+    """Catch project types referenced without their declaring namespace import.
+
+    This is intentionally narrower than a C# compiler: only project-defined type names
+    are considered, comments/strings are stripped, and same-namespace references pass.
+    """
+    declared: dict[str, set[str]] = {}
+    files = list(SRC.rglob("*.cs"))
+    for path in files:
+        clean = strip_comments_and_strings(read(path))
+        match = re.search(r"\bnamespace\s+([A-Za-z_][\w.]*)\s*[;{]", clean)
+        if not match:
+            continue
+        ns = match.group(1)
+        for name in re.findall(r"\b(?:class|struct|interface|enum|record(?:\s+struct|\s+class)?)\s+([A-Z][A-Za-z0-9_]*)\b", clean):
+            if name.startswith(("Infini", "Generated", "Vfx")):
+                declared.setdefault(name, set()).add(ns)
+
+    for path in files:
+        text = read(path)
+        clean = strip_comments_and_strings(text)
+        match = re.search(r"\bnamespace\s+([A-Za-z_][\w.]*)\s*[;{]", clean)
+        current_ns = match.group(1) if match else ""
+        usings = set(re.findall(r"^\s*using\s+([A-Za-z_][\w.]*)\s*;", text, flags=re.M))
+        for name, namespaces in declared.items():
+            if not token(clean, name):
+                continue
+            if any(current_ns == ns or current_ns.startswith(ns + ".") for ns in namespaces) or any(ns in usings for ns in namespaces):
+                continue
+            if any((ns + "." + name) in clean or ("global::" + ns + "." + name) in clean for ns in namespaces):
+                continue
+            if any(current_ns and ns.startswith(current_ns + ".") and (ns[len(current_ns) + 1:] + "." + name) in clean for ns in namespaces):
+                continue
+            err(f"{rel(path)}: project type `{name}` needs declaring namespace import ({', '.join(sorted(namespaces))})")
+
+
+def check_strict_json_boundaries() -> None:
+    for rel_path in (
+        "Common/Models/GeneratedItemData.cs",
+        "Common/Models/VfxManifestSpec.cs",
+    ):
+        source = read(SRC / rel_path)
+        if "UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow" not in source:
+            err(f"{rel_path}: nested JSON contract must reject unknown fields")
+
+
+def check_exact_presentation_dispatch() -> None:
+    visuals = read(SRC / "Content/Projectiles/GeneratedProjectile.Visuals.cs")
+    registry = read(SRC / "Common/VFX/VfxRendererRegistry.cs")
+    particles = read(SRC / "Common/VFX/VfxParticleAddress.cs")
+    sound = read(SRC / "Common/Audio/InfiniLuminanceSoundBridge.cs")
+    runtime = read(SRC / "Common/VFX/InfiniVfxRuntime.cs")
+    forbidden_substring_dispatch = [
+        r"\b(?:effect|anchor|renderer|role|curve|channel|lane|color|identity|text|value|token|name)\s*\.Contains\(",
+        r"\b(?:effect|anchor|renderer|role|curve|channel|lane|color|identity|text|value|token|name)\s*\.StartsWith\(",
+    ]
+    for name, source in [("GeneratedProjectile.Visuals.cs", visuals), ("VfxRendererRegistry.cs", registry), ("VfxParticleAddress.cs", particles), ("InfiniVfxRuntime.cs", runtime)]:
+        clean = strip_comments_and_strings(source)
+        if any(re.search(pattern, clean) for pattern in forbidden_substring_dispatch):
+            err(f"{name}: canonical presentation dispatch must not use substring routing")
+    for forbidden in ["PresentationIdentityText", "HasPresentationIdentity", "PolishDustForIdentity"]:
+        if forbidden in visuals:
+            err(f"GeneratedProjectile.Visuals.cs: fuzzy presentation router remains `{forbidden}`")
+    if "VfxRendererRegistry.ParseKind(slot.RendererKind)" not in sound:
+        err("InfiniLuminanceSoundBridge.cs: live sound dispatch must use exact rendererKind")
+
 def main() -> int:
     if not SRC.exists():
         err(f"missing source root: {SRC}")
@@ -961,6 +1147,10 @@ def main() -> int:
     check_actual_build_hook_available()
     check_overhaul_qol_contract()
     check_maintenance_qol_cleanup()
+    check_runtime_family_policy_owner()
+    check_project_namespace_references()
+    check_strict_json_boundaries()
+    check_exact_presentation_dispatch()
 
     if ERRORS:
         print("[FAIL] C# contract scanner found issues:")

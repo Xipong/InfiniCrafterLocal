@@ -1,0 +1,112 @@
+{
+  "alwaysChecks": [
+    "compileall",
+    "schema_check",
+    "config_registry",
+    "contract_parity",
+    "mutation_gate",
+    "semantic_runtime_diff",
+    "runtime_impact",
+    "project_hygiene"
+  ],
+  "canonicalOwners": {
+    "childPolicy": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs",
+    "configRegistry": "contracts/config_registry.json",
+    "csharpDto": "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs",
+    "csharpNormalize": "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs",
+    "engineFunctionCatalog": "LocalGenerator/infini_local/core/runtime_authoring/schema.py",
+    "engineParamBoundary": "LocalGenerator/infini_local/core/runtime_authoring/engine_call_contracts.py",
+    "fieldLifecyclePolicy": "contracts/field_lifecycle.json",
+    "projectileNetwork": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
+    "wireBoundary": "LocalGenerator/infini_local/core/boundary_models.py"
+  },
+  "checks": {
+    "compileall": [
+      "python",
+      "-m",
+      "compileall",
+      "-q",
+      "LocalGenerator/infini_local",
+      "tools"
+    ],
+    "config_registry": [
+      "python",
+      "tools/config_registry.py",
+      "--check"
+    ],
+    "contract_parity": [
+      "python",
+      "tools/contract_parity.py",
+      "--json"
+    ],
+    "csharp_contracts": [
+      "python",
+      "tools/check_csharp_contracts.py"
+    ],
+    "mutation_gate": [
+      "python",
+      "tools/mutation_contract_gate.py"
+    ],
+    "planner_prompt": [
+      "python",
+      "tools/check_planner_prompt_usability.py",
+      "--limit-chars",
+      "24000"
+    ],
+    "project_hygiene": [
+      "python",
+      "tools/check_project_hygiene.py"
+    ],
+    "pyright": [
+      "pyright"
+    ],
+    "pytest": [
+      "python",
+      "tools/run_pytest_shards.py",
+      "--shards",
+      "4",
+      "--json-out",
+      "artifacts/agent/pytest_shards.json"
+    ],
+    "ruff": [
+      "ruff",
+      "check",
+      "LocalGenerator/infini_local",
+      "tools"
+    ],
+    "runtime_impact": [
+      "python",
+      "tools/runtime_impact_report.py"
+    ],
+    "schema_check": [
+      "python",
+      "tools/export_contract_schemas.py",
+      "--check"
+    ],
+    "semantic_runtime_diff": [
+      "python",
+      "tools/semantic_runtime_diff.py"
+    ]
+  },
+  "contractSafetyVersion": "v18",
+  "fullChecks": [
+    "pytest",
+    "compileall",
+    "schema_check",
+    "config_registry",
+    "contract_parity",
+    "mutation_gate",
+    "semantic_runtime_diff",
+    "runtime_impact",
+    "csharp_contracts",
+    "project_hygiene",
+    "planner_prompt",
+    "ruff",
+    "pyright"
+  ],
+  "project": "InfiniCrafterLocal",
+  "runtimeApiVersion": "v0.4.48",
+  "schema": "infini.agent-manifest.v1",
+  "testSuitePolicy": "Batched by default; isolate only reproduced subprocess/server/process-global pollution files.",
+  "testSuiteVersion": "v19"
+}

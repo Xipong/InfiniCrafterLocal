@@ -63,6 +63,9 @@ public sealed partial class GeneratedProjectile
         _stuckToTile = false;
         _impactMobilityUsed = false;
         _lastImpactSoundLocalTick = -9999;
+        _chargeReleaseFired = false;
+        _chargeTicksAccumulated = 0;
+        _sentryFireTimer = 0;
         _visualSyncRebroadcastsSent = 0;
         ApplyConfiguredStats();
     }
@@ -80,6 +83,10 @@ public sealed partial class GeneratedProjectile
         Projectile.ignoreWater = false;
         Projectile.DamageType = DamageClass.Generic;
         Projectile.scale = 1f;
+        // Runtime family is not hydrated during SetDefaults. Exact sentry flags are
+        // applied only after ApplyGeneratedSpec() in ApplyConfiguredStats().
+        Projectile.sentry = false;
+        Projectile.netImportant = false;
         Projectile.usesLocalNPCImmunity = true;
         Projectile.localNPCHitCooldown = 10;
         _statsApplied = false;
@@ -113,7 +120,7 @@ public sealed partial class GeneratedProjectile
     }
 
     private bool RuntimeCodesSupported()
-        => RuntimeFamily() != "none"
+        => GeneratedRuntimeFamilyPolicy.HasValidExecutorContract(_spec)
         && _spec.MovementCode >= 0 && _spec.MovementCode <= MaxSupportedMovementCode
         && _spec.EffectCode >= 0 && _spec.EffectCode <= MaxSupportedEffectCode
         && _spec.OnHitCode >= 0 && _spec.OnHitCode <= MaxSupportedOnHitCode;
@@ -124,6 +131,7 @@ public sealed partial class GeneratedProjectile
         AttackSpec child = new AttackSpec
         {
             Enabled = _spec.Enabled,
+            DamageClass = _spec.DamageClass,
             MovementCode = movement,
             EffectCode = _spec.EffectCode,
             OnHitCode = onHit,
@@ -132,6 +140,9 @@ public sealed partial class GeneratedProjectile
             ProjectileScale = Math.Max(0.45f, _spec.ProjectileScale * scale),
             HitboxScale = 1f,
             ExplosionRadius = 0,
+            RangeTiles = Math.Clamp(_spec.RangeTiles, 4f, 120f),
+            HomingStrength = Math.Clamp(_spec.HomingStrength, 0f, 1f),
+            BeamWidthPx = 14f,
             Lifetime = Math.Min(80, Math.Max(24, _spec.Lifetime / 2)),
             Pierce = 1,
             ExtraUpdates = Math.Min(1, _spec.ExtraUpdates),
@@ -142,17 +153,16 @@ public sealed partial class GeneratedProjectile
             ImmunityCooldown = 18,
             ProcMode = 0,
             RuntimePlanAuthored = _spec.RuntimePlanAuthored,
+            SecondaryTrigger = GeneratedSecondaryTriggerPolicy.OnHit,
             SecondarySpreadRadians = _spec.SecondarySpreadRadians,
             SecondaryDamageMultiplier = _spec.SecondaryDamageMultiplier,
             SecondaryLifetimeTicks = _spec.SecondaryLifetimeTicks,
             SameTargetBias = _spec.SameTargetBias,
             DebuffHint = "",
             DebuffTime = 0,
-            RuntimeFamily = "shoot",
+            RuntimeFamily = GeneratedRuntimeFamilyPolicy.Shoot,
             Delivery = "shoot",
             WeaponFamily = "child_projectile",
-            WeaponSubfamily = _spec.WeaponSubfamily,
-            AttackPatternTags = _spec.AttackPatternTags ?? Array.Empty<string>(),
             ProjectileFamily = string.IsNullOrWhiteSpace(_spec.SecondaryProjectileShape) ? "child_projectile" : "secondary_projectile",
             AmmoKind = "",
             SecondaryMaterial = _spec.SecondaryMaterial,
@@ -166,18 +176,14 @@ public sealed partial class GeneratedProjectile
             TrailStyle = _spec.TrailStyle,
             ImpactStyle = _spec.ImpactStyle,
             PrimaryColorName = _spec.PrimaryColorName,
-            ImpactSoundProfile = _spec.ImpactSoundProfile,
             SoundPitch = _spec.SoundPitch,
             SoundVolume = _spec.SoundVolume,
+            SoundPitchVariance = _spec.SoundPitchVariance,
             ProjectileShape = _spec.ProjectileShape,
             ProjectileMotion = _spec.ProjectileMotion,
             ProjectileRotation = _spec.ProjectileRotation,
             ProjectileTrail = _spec.ProjectileTrail,
             ProjectileImpact = _spec.ProjectileImpact,
-            SoundUse = _spec.SoundUse,
-            SoundImpact = _spec.SoundImpact,
-            SoundUseSearchQuery = _spec.SoundUseSearchQuery,
-            SoundImpactSearchQuery = _spec.SoundImpactSearchQuery,
             SoundUseCatalogId = _spec.SoundUseCatalogId,
             SoundImpactCatalogId = _spec.SoundImpactCatalogId,
             SoundUseCatalogPath = _spec.SoundUseCatalogPath,
@@ -212,49 +218,12 @@ public sealed partial class GeneratedProjectile
 
     private void SanitizeRuntimePlanChildSpec(AttackSpec child)
     {
-        // Real gameplay children must not inherit parent prompts/prose/VFX-manifest state.
-        // They carry only executable movement/effect/on-hit numbers plus a small authored presentation contract.
-        child.RuntimePlanAuthored = true;
-        child.Pattern = "basic";
-        child.VisualMode = "projectile";
-        child.VisualAnimationPlan = "";
-        child.TrailStyle = "none";
-        child.ImpactStyle = "none";
-        child.ProjectileMotion = "";
-        child.ProjectileRotation = "";
-        child.ProjectileTrail = "";
-        child.ProjectileImpact = "";
-        child.ProjectileSpritePath = "";
-        child.ProjectileSpriteUrl = "";
-        child.ProjectileSpriteStatus = "";
-        child.ProjectileSpritePrompt = "";
-        child.ProjectileSpriteScore = 0f;
-        child.ImpactSpritePath = "";
-        child.ImpactSpriteUrl = "";
-        child.ImpactSpriteStatus = "";
-        child.ImpactSpritePrompt = "";
-        child.ImpactSpriteScore = 0f;
-        child.ChildSpritePath = "";
-        child.ChildSpriteUrl = "";
-        child.ChildSpriteStatus = "";
-        child.ChildSpritePrompt = "";
-        child.ChildSpriteScore = 0f;
-        child.FieldSpritePath = "";
-        child.FieldSpriteUrl = "";
-        child.FieldSpriteStatus = "";
-        child.FieldSpritePrompt = "";
-        child.FieldSpriteScore = 0f;
-        child.VfxManifestJson = "";
-        child.MaxChildProjectiles = 0;
-        child.MaxChildDepth = 0;
-        child.SplitCount = 0;
-        child.ChainCount = 0;
-        child.ProcMode = 0;
-        child.ExplosionRadius = 0;
-        child.BurstDustCap = 0;
-        child.DustSpawnDenom = 0;
+        // Gameplay resets are centralized so agents can extend child families
+        // without copying a partial, recursion-prone subset in several executors.
+        GeneratedChildSpecPolicy.SanitizeGenericGameplayChild(child);
         ApplyAuthoredChildPresentation(child, _spec);
     }
+
 
 
     private void ResizeProjectilePreserveCenter(int width, int height)
@@ -265,16 +234,26 @@ public sealed partial class GeneratedProjectile
     }
 
     private string RuntimeFamily()
+        => GeneratedRuntimeFamilyPolicy.Normalize(_spec.RuntimeFamily);
+    private bool IsThrustDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Thrust);
+    private bool IsFlailDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Flail);
+    private bool IsYoyoDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Yoyo);
+    private bool IsWhipDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Whip);
+    private bool IsBeamDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Beam);
+    private bool IsChargeReleaseDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease);
+    private bool IsSentryDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
+    private bool IsOverheadBarrageDelivery() => GeneratedRuntimeFamilyPolicy.Is(_spec.RuntimeFamily, GeneratedRuntimeFamilyPolicy.OverheadBarrage);
+
+    private float ConfiguredRangePixels(float fallbackPx)
+        => Math.Clamp(_spec.RangeTiles > 0f ? _spec.RangeTiles * 16f : fallbackPx, 64f, 1920f);
+
+    private float ConfiguredHomingStrength(float fallback)
     {
-        string r = (_spec.RuntimeFamily ?? "").Trim().ToLowerInvariant();
-        return r is "swing" or "thrust" or "returning" or "flail" or "yoyo" or "whip" or "shoot" or "cast" or "throw" or "summon" ? r : "none";
+        if (_spec.HomingStrength <= 0f)
+            return Math.Clamp(fallback, 0.005f, 0.24f);
+        float authored = Math.Clamp(_spec.HomingStrength, 0f, 1f);
+        return MathHelper.Lerp(0.008f, 0.24f, authored);
     }
-
-    private bool IsThrustDelivery() => RuntimeFamily() == "thrust";
-    private bool IsFlailDelivery() => RuntimeFamily() == "flail";
-    private bool IsYoyoDelivery() => RuntimeFamily() == "yoyo";
-    private bool IsWhipDelivery() => RuntimeFamily() == "whip";
-
     private static float SideOnGeneratedSpriteRotation(Vector2 direction)
     {
         // Runtime-generated projectile assets are authored by the local visual pipeline
@@ -283,6 +262,15 @@ public sealed partial class GeneratedProjectile
         // here makes arrows/bolts fly sideways.
         Vector2 safe = direction.SafeNormalize(Vector2.UnitX);
         return safe.ToRotation();
+    }
+
+    private static void ApplyOwnerArmPose(Player owner, Vector2 direction, bool twoHanded)
+    {
+        Vector2 safe = direction.SafeNormalize(new Vector2(owner.direction == 0 ? 1 : owner.direction, 0f));
+        float armRotation = safe.ToRotation() - MathHelper.PiOver2 * owner.gravDir;
+        owner.SetCompositeArmFront(true, Player.CompositeArmStretchAmount.Full, armRotation);
+        if (twoHanded)
+            owner.SetCompositeArmBack(true, Player.CompositeArmStretchAmount.Full, armRotation);
     }
 
     private void HeldThrustLine(out Vector2 start, out Vector2 end, out Vector2 dir)
@@ -310,6 +298,7 @@ public sealed partial class GeneratedProjectile
 
         Vector2 start, end, dir;
         HeldThrustLine(out start, out end, out dir);
+        ApplyOwnerArmPose(owner, dir, twoHanded: true);
         int facing = dir.X >= 0f ? 1 : -1;
         owner.ChangeDir(facing);
         owner.heldProj = Projectile.whoAmI;
@@ -331,6 +320,7 @@ public sealed partial class GeneratedProjectile
         Player owner = Main.player[Projectile.owner];
         if (!owner.active || owner.dead) { Projectile.Kill(); return false; }
         Vector2 toOwner = owner.MountedCenter - Projectile.Center;
+        ApplyOwnerArmPose(owner, -toOwner, twoHanded: false);
         float maxRange = Math.Clamp(Math.Max(6f, _spec.Speed * Math.Max(8f, _spec.Lifetime) * 0.18f), 80f, 520f);
         if (Projectile.localAI[0] > Math.Max(12, _spec.Lifetime * 0.45f) || toOwner.Length() > maxRange)
         {
@@ -349,7 +339,13 @@ public sealed partial class GeneratedProjectile
     private bool ApplyYoyoHoverAI()
     {
         Player owner = Main.player[Projectile.owner];
-        if (!owner.active || owner.dead || (!owner.channel && Projectile.localAI[0] > 18f))
+        if (!owner.active || owner.dead)
+        {
+            Projectile.Kill();
+            return false;
+        }
+        ApplyOwnerArmPose(owner, Projectile.Center - owner.MountedCenter, twoHanded: false);
+        if (!owner.channel && Projectile.localAI[0] > 18f)
         {
             Vector2 home = owner.MountedCenter - Projectile.Center;
             Projectile.velocity = Vector2.Lerp(Projectile.velocity, home.SafeNormalize(Vector2.Zero) * Math.Max(9f, _spec.Speed), 0.18f);
@@ -391,6 +387,7 @@ public sealed partial class GeneratedProjectile
         if (!owner.active || owner.dead || owner.itemAnimation <= 0) { Projectile.Kill(); return false; }
         Vector2 start, end, dir;
         WhipLine(out start, out end, out dir);
+        ApplyOwnerArmPose(owner, dir, twoHanded: false);
         owner.ChangeDir(dir.X >= 0f ? 1 : -1);
         owner.heldProj = Projectile.whoAmI;
         Projectile.velocity = dir;
@@ -401,6 +398,105 @@ public sealed partial class GeneratedProjectile
         Projectile.penetrate = -1;
         return true;
     }
+
+    private void BeamLine(out Vector2 start, out Vector2 end, out Vector2 dir)
+    {
+        Player owner = Main.player[Projectile.owner];
+        dir = Projectile.velocity.SafeNormalize(new Vector2(owner.direction == 0 ? 1 : owner.direction, 0f));
+        start = owner.MountedCenter + dir * 18f;
+        float configuredRange = ConfiguredRangePixels(560f);
+        float length = _beamLengthPx > 1f ? Math.Min(_beamLengthPx, configuredRange) : configuredRange;
+        end = start + dir * length;
+    }
+
+    private float BeamChargeRatio()
+    {
+        int chargeTicks = Math.Clamp(_spec.BeamChargeTicks, 0, 300);
+        return chargeTicks <= 0 ? 1f : MathHelper.Clamp(Projectile.localAI[0] / chargeTicks, 0f, 1f);
+    }
+
+    private float EffectiveBeamWidthPx()
+        => Math.Max(2f, Math.Clamp(_spec.BeamWidthPx, 2f, 96f) * MathHelper.Lerp(0.22f, 1f, BeamChargeRatio()));
+
+    private float ScanBeamLength(Vector2 start, Vector2 direction)
+    {
+        float maximum = ConfiguredRangePixels(560f);
+        // Terraria's own Last Prism example uses a narrow tile scan so the visible
+        // beam ends at walls without stopping prematurely on nearby tile corners.
+        Collision.LaserScan(start, direction, 1f, maximum, _beamScanSamples);
+        float total = 0f;
+        for (int i = 0; i < _beamScanSamples.Length; i++)
+            total += Math.Clamp(_beamScanSamples[i], 0f, maximum);
+        return total / _beamScanSamples.Length;
+    }
+
+    private bool CanPayChannelBeamMana(Player owner)
+    {
+        // Mirror the tModLoader holdout pattern: the owning client pays mana and
+        // kills the projectile when the authored item can no longer sustain it.
+        // A zero-mana beam remains a valid authored non-magic capability.
+        if (Projectile.owner != Main.myPlayer)
+            return true;
+        int manaCost = Math.Max(0, owner.HeldItem.mana);
+        if (manaCost <= 0)
+            return true;
+        int cadenceTicks = Math.Clamp(owner.HeldItem.useTime, 6, 120);
+        int activeTick = Math.Max(1, (int)Projectile.localAI[0]);
+        return activeTick != 1 && activeTick % cadenceTicks != 0
+            || owner.CheckMana(manaCost, true, false);
+    }
+
+    private bool ApplyChannelBeamAI()
+    {
+        Player owner = Main.player[Projectile.owner];
+        if (!owner.active || owner.dead || !owner.channel || owner.noItems || owner.CCed || !CanPayChannelBeamMana(owner))
+        {
+            Projectile.Kill();
+            return false;
+        }
+
+        Vector2 previousDirection = Projectile.velocity.SafeNormalize(new Vector2(owner.direction == 0 ? 1 : owner.direction, 0f));
+        Vector2 direction = previousDirection;
+        if (Projectile.owner == Main.myPlayer)
+        {
+            Vector2 authoredAim = Main.MouseWorld - owner.MountedCenter;
+            if (authoredAim.LengthSquared() > 0.001f)
+                direction = authoredAim.SafeNormalize(previousDirection);
+            if (Vector2.Dot(previousDirection, direction) < 0.9994f || (int)Projectile.localAI[0] % 12 == 0)
+                Projectile.netUpdate = true;
+        }
+
+        Projectile.velocity = direction;
+        float chargeRatio = BeamChargeRatio();
+        if (_beamBaseDamage <= 0)
+            _beamBaseDamage = Math.Max(1, Projectile.damage);
+        Projectile.friendly = chargeRatio >= 0.08f;
+        Projectile.damage = Math.Max(1, (int)Math.Round(_beamBaseDamage * MathHelper.Lerp(0.35f, 1f, chargeRatio)));
+        Vector2 beamStart = owner.MountedCenter + direction * 18f;
+        float scannedLength = ScanBeamLength(beamStart, direction);
+        float previousLength = _beamLengthPx;
+        _beamLengthPx = previousLength <= 1f
+            ? scannedLength
+            : MathHelper.Lerp(previousLength, scannedLength, 0.75f);
+        if (Math.Abs(_beamLengthPx - previousLength) > 8f && (int)Projectile.localAI[0] % 6 == 0)
+            Projectile.netUpdate = true;
+
+        owner.ChangeDir(direction.X >= 0f ? 1 : -1);
+        owner.heldProj = Projectile.whoAmI;
+        owner.itemTime = Math.Max(owner.itemTime, 2);
+        owner.itemAnimation = Math.Max(owner.itemAnimation, 2);
+        ApplyOwnerArmPose(owner, direction, twoHanded: true);
+
+        BeamLine(out Vector2 start, out Vector2 end, out _);
+        Projectile.Center = (start + end) * 0.5f;
+        Projectile.rotation = SideOnGeneratedSpriteRotation(direction);
+        Projectile.timeLeft = 2;
+        Projectile.tileCollide = false;
+        Projectile.penetrate = -1;
+        return true;
+    }
+
+    public override bool ShouldUpdatePosition() => !IsBeamDelivery() && !IsOverheadBarrageDelivery();
 
     private static void SanitizeRuntimeSize(AttackSpec spec)
     {
@@ -414,6 +510,17 @@ public sealed partial class GeneratedProjectile
         spec.AoeDamageRadiusPx = Math.Clamp(spec.AoeDamageRadiusPx, 0, 160);
         spec.ContactForgivenessPx = Math.Clamp(spec.ContactForgivenessPx, 0, 32);
         spec.RuntimeLightStrength = Math.Clamp(spec.RuntimeLightStrength, 0f, 2f);
+        spec.RangeTiles = Math.Clamp(spec.RangeTiles <= 0f ? 35f : spec.RangeTiles, 4f, 120f);
+        spec.HomingStrength = Math.Clamp(spec.HomingStrength, 0f, 1f);
+        spec.BeamWidthPx = Math.Clamp(spec.BeamWidthPx <= 0f ? 14f : spec.BeamWidthPx, 2f, 96f);
+        spec.BeamChargeTicks = Math.Clamp(spec.BeamChargeTicks, 0, 300);
+        spec.ChargeTicks = Math.Clamp(spec.ChargeTicks <= 0 ? 45 : spec.ChargeTicks, 1, 300);
+        spec.ChargePowerMultiplier = Math.Clamp(spec.ChargePowerMultiplier <= 0f ? 1.6f : spec.ChargePowerMultiplier, 1f, 3f);
+        spec.SentryPlacement = spec.SentryPlacement == "floating" ? "floating" : "grounded";
+        spec.SentryAttackIntervalTicks = Math.Clamp(spec.SentryAttackIntervalTicks <= 0 ? 45 : spec.SentryAttackIntervalTicks, 12, 180);
+        spec.SentryTargetRangeTiles = Math.Clamp(spec.SentryTargetRangeTiles <= 0f ? 30f : spec.SentryTargetRangeTiles, 8f, 60f);
+        spec.SentryLifetimeTicks = Math.Clamp(spec.SentryLifetimeTicks <= 0 ? 3600 : spec.SentryLifetimeTicks, 120, 36000);
+        spec.DelayTicks = Math.Clamp(spec.DelayTicks, 0, 300);
     }
 
     private void ApplyConfiguredStats()
@@ -437,23 +544,31 @@ public sealed partial class GeneratedProjectile
         bool flailLike = IsFlailDelivery();
         bool yoyoLike = IsYoyoDelivery();
         bool whipLike = IsWhipDelivery();
-        bool heldLike = thrustLike || yoyoLike || whipLike;
-        Projectile.friendly = true;
+        bool beamLike = IsBeamDelivery();
+        bool chargeReleaseLike = IsChargeReleaseDelivery();
+        bool sentryLike = IsSentryDelivery();
+        bool overheadBarrage = IsOverheadBarrageDelivery();
+        bool heldLike = thrustLike || yoyoLike || whipLike || beamLike || chargeReleaseLike;
+        Projectile.friendly = !overheadBarrage && !chargeReleaseLike && !sentryLike;
         Projectile.hostile = false;
+        Projectile.DamageType = GeneratedDamageClassPolicy.Resolve(_spec.DamageClass);
+        Projectile.sentry = sentryLike;
+        Projectile.netImportant = sentryLike;
         Projectile.scale = Math.Clamp(_spec.ProjectileScale, 0.45f, 2.25f);
         // Pierce semantics are total hit budget for generated runtime projectiles:
         // -1 = explicit infinite/persistent, 0/1 = one hit. Older builds treated 0 as
         // infinite, which made many generated shots poke the same target 2-3 times.
-        Projectile.penetrate = heldLike ? -1 : (_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce));
-        Projectile.timeLeft = heldLike ? 2 : Math.Max(20, _spec.Lifetime);
-        Projectile.extraUpdates = heldLike ? 0 : Math.Clamp(_spec.ExtraUpdates, 0, 3);
+        Projectile.penetrate = (heldLike || overheadBarrage || sentryLike) ? -1 : (_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce));
+        Projectile.timeLeft = heldLike ? 2 : sentryLike ? _spec.SentryLifetimeTicks : overheadBarrage ? Math.Max(20, _spec.DelayTicks + 30) : Math.Max(20, _spec.Lifetime);
+        Projectile.extraUpdates = (heldLike || overheadBarrage || sentryLike) ? 0 : Math.Clamp(_spec.ExtraUpdates, 0, 3);
         Projectile.ownerHitCheck = _spec.OwnerHitCheck;
         if (!_stuckToTile)
-            Projectile.tileCollide = !heldLike && !flailLike && _spec.TileCollide && movement != 8 && movement != 12 && movement != 16 && movement != 17 && movement != 18;
+            Projectile.tileCollide = !heldLike && !overheadBarrage && !sentryLike && !flailLike && _spec.TileCollide && movement != 8 && movement != 12 && movement != 16 && movement != 17 && movement != 18;
         Projectile.usesLocalNPCImmunity = true;
         Projectile.localNPCHitCooldown = _spec.ImmunityCooldown <= 0 ? 12 : Math.Clamp(_spec.ImmunityCooldown, 4, 60);
         _spec.MaxChildProjectiles = Math.Clamp(_spec.MaxChildProjectiles <= 0 ? 0 : _spec.MaxChildProjectiles, 0, 48);
         _spec.MaxChildDepth = Math.Clamp(_spec.MaxChildDepth, 0, 3);
+        _spec.SecondaryTrigger = GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily(_spec.SecondaryTrigger, _spec.RuntimeFamily);
         _spec.SecondarySpreadRadians = Math.Clamp(_spec.SecondarySpreadRadians, 0f, 2.2f);
         _spec.SecondaryDamageMultiplier = Math.Clamp(_spec.SecondaryDamageMultiplier, 0f, 1.0f);
         _spec.SecondaryLifetimeTicks = Math.Clamp(_spec.SecondaryLifetimeTicks <= 0 ? 24 : _spec.SecondaryLifetimeTicks, 4, 120);
@@ -492,21 +607,42 @@ public sealed partial class GeneratedProjectile
         int movement = _spec.MovementCode;
         int effect = _spec.EffectCode;
 
+        bool beamLike = IsBeamDelivery();
+        bool chargeReleaseLike = IsChargeReleaseDelivery();
+        bool sentryLike = IsSentryDelivery();
+        bool overheadBarrage = IsOverheadBarrageDelivery();
         bool thrustLike = IsThrustDelivery();
-        if (thrustLike)
+        bool movementOwnsRotation = false;
+        if (chargeReleaseLike)
+        {
+            if (!ApplyChargeReleaseAI()) return;
+        }
+        else if (sentryLike)
+        {
+            if (!ApplySentryAI()) return;
+        }
+        else if (overheadBarrage)
+        {
+            if (!ApplyOverheadBarrageAI()) return;
+        }
+        else if (beamLike)
+        {
+            if (!ApplyChannelBeamAI()) return;
+        }
+        else if (thrustLike)
         {
             if (!ApplyHeldThrustAI()) return;
         }
         else if (!_stuckToTile)
         {
-            RunMovementExecutor(movement);
+            movementOwnsRotation = RunMovementExecutor(movement);
         }
 
         InfiniVfxRuntime.OnTick(Projectile, _spec, _vfxManifest, ref _vfxState);
         SpawnDust(effect);
         EmitVanillaMotionPolish();
         AddPresentationLight();
-        if (!thrustLike)
+        if (!beamLike && !chargeReleaseLike && !sentryLike && !overheadBarrage && !thrustLike && !movementOwnsRotation)
             Projectile.rotation = Projectile.velocity.LengthSquared() > 0.01f
                 ? SideOnGeneratedSpriteRotation(Projectile.velocity)
                 : Projectile.rotation + 0.18f * Projectile.direction;
@@ -580,7 +716,7 @@ public sealed partial class GeneratedProjectile
 
     private void SineHoming()
     {
-        SlowHoming(0.025f, 520f);
+        SlowHoming(ConfiguredHomingStrength(0.025f), ConfiguredRangePixels(520f));
         Projectile.velocity = Projectile.velocity.RotatedBy((float)Math.Sin(Projectile.localAI[0] * 0.18f) * 0.045f);
     }
 
@@ -626,7 +762,7 @@ public sealed partial class GeneratedProjectile
     {
         Projectile.velocity *= Projectile.localAI[0] < 30f ? 0.98f : 0.995f;
         Projectile.scale = Math.Min(_spec.ProjectileScale * 1.35f, Projectile.scale + 0.004f);
-        if (Projectile.localAI[0] > 35f) SlowHoming(0.05f, 850f);
+        if (Projectile.localAI[0] > 35f) SlowHoming(ConfiguredHomingStrength(0.05f), ConfiguredRangePixels(850f));
     }
 
     private void BlackholePull()
@@ -649,9 +785,9 @@ public sealed partial class GeneratedProjectile
 
     private void ProximityMissile()
     {
-        NPC? target = FindNearestNPC(Projectile.Center, 680f);
+        NPC? target = FindNearestNPC(Projectile.Center, ConfiguredRangePixels(680f));
         if (target is null) { Accelerate(); return; }
-        Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(target.Center) * Math.Max(8f, Projectile.velocity.Length() + 0.4f), 0.075f);
+        Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(target.Center) * Math.Max(8f, Projectile.velocity.Length() + 0.4f), ConfiguredHomingStrength(0.075f));
         if (!_procced && Projectile.Distance(target.Center) < 74f)
         {
             _procced = true;

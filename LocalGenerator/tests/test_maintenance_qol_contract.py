@@ -28,7 +28,7 @@ def test_projectile_extra_ai_uses_shared_shortnet_and_compact_reserved_flag():
     assert "writer.Write(ShortNet(_generatedItemId" in send
     assert "writer.Write((byte)0); // reserved bitset" in send
     assert 'writer.Write(""); // reserved' not in send
-    assert "private const int ProjectileSyncVersion = 6" in projectile
+    assert "private const int ProjectileSyncVersion = 14" in projectile
     assert "syncVersion != ProjectileSyncVersion" in projectile
     assert "expected {ProjectileSyncVersion}" in projectile
     assert "syncVersion <" not in projectile
@@ -36,7 +36,8 @@ def test_projectile_extra_ai_uses_shared_shortnet_and_compact_reserved_flag():
     assert "v3/v4 ProjectileChild" not in projectile
     assert "legacy v3-v5 manifest fallback slot" not in projectile
     assert "reader.ReadByte(); // reserved bitset" in projectile
-    assert "writer.Write(ShortNet(_spec.ProjectileImpact, 120));\n        writer.Write(ShortNet(_spec.SoundUse, 80));" in projectile
+    assert "writer.Write(ShortNet(_spec.SoundUseCatalogId, 64));\n        writer.Write(ShortNet(_spec.SoundImpactCatalogId, 64));" in projectile
+    assert "writer.Write(ShortNet(_spec.ProjectileImpact, 120));\n        writer.Write(SpritePathForNet(_spec.ProjectileSpritePath));" in projectile
 
 
 def test_csharp_attack_spec_no_legacy_prose_script_fields():
@@ -119,14 +120,13 @@ def test_env_loader_is_shared_not_duplicated():
     assert "from infini_local.core.vfx_manifest_config import (" in vfx
     assert "from infini_local.core.env_utils import load_env_file" not in vfx
     web = read(LOCAL / "infini_local" / "web" / "server.py")
-    api = read(LOCAL / "infini_local" / "web" / "api.py")
-    pipeline = read(LOCAL / "infini_local" / "pipelines" / "pipeline_support.py")
+    llm_config = read(LOCAL / "infini_local" / "core" / "llm_config.py")
+    knowledge = read(LOCAL / "infini_local" / "pipelines" / "item_power_knowledge.py")
     assert "from infini_local.core.config_bootstrap import (" in web
-    assert "from infini_local.core.config_bootstrap import (" in pipeline
-    assert "from infini_local.pipelines.item_power_knowledge import (" in api
-    assert "from infini_local.pipelines.item_power_knowledge import (" in pipeline
+    assert "from infini_local.core.env_utils import" in llm_config
+    assert "CATEGORY_CREATIVITY" in knowledge
     assert "def fingerprint_tags" not in web
-    assert "def fingerprint_tags" not in pipeline
+    assert "def fingerprint_tags" in knowledge
 
 
 def test_maintenance_contract_stamp_exists():
@@ -154,7 +154,7 @@ def test_maintenance_hardening_contracts_for_review_findings():
     assert "json_module.dumps(data" in endpoint
     assert "globals())" not in combine
     assert "def _dev_fallback_helpers" in combine
-    assert "from infini_local.core.item_identity_tools import (" in vfx
+    assert "from infini_local.core.item_identity_tools import _stringish" in vfx
     assert "def stable_hash" not in vfx
     assert "def tags_of" in identity
     assert "Settings GUI v0.4.239" in gui_theme

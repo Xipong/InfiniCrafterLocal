@@ -1,18 +1,42 @@
-# v0.4.239 — RuntimeArchetypeSpec + runtimeContract refactor
+# LocalGenerator v0.4.239 — current runtime authoring boundary
 
-v0.4.239 adds a typed data-authored runtime language around the existing `runtimePlan.engineCalls` path:
+LocalGenerator принимает parent/world facts, вызывает LLM authoring, компилирует explicit `runtimePlan.engineCalls`, валидирует bounded runtime contract и возвращает `GeneratedItemData`. Gameplay не выводится из name, tooltip, material или visual prose.
 
-- `runtimeArchetype` describes the supported behavior family (`custom_executor`, `boomerang`, `yoyo`, `flail`, `whip`, `held_swing`, `held_thrust`, or preserved unsupported intent such as `channel_beam`, `delayed_starfall`, `secondary_attack`).
-- `runtimeContract` describes control feel, phase/state/sync intent, and `mechanicClaims` truth backing.
-- Python normalizes/clamps known archetype knobs, preserves unknown knobs inertly, compiles only supported families to finite `AttackSpec` fields, and emits `debug.runtimePromiseTruth` / `unsupportedPromises`.
-- C# has data-only DTO support for the new fields and still executes only explicit finite runtime fields.
-- `apply_on_hit_effect(onHit=starfall)` is a supported finite child-projectile primitive; `runtimeArchetype.family=delayed_starfall` remains preserved/future unless backed by that explicit engineCall.
-- Old generated JSON without these fields remains compatible.
+## Текущие finite capabilities
 
-Existing v0.4.234 visual/secondary cleanup behavior is intentionally preserved: conflict swing-secondary salvage, held-light anti-fake-alt-use, fit-only sprite refit, trace/warning cleanup, and capability ontology remain in place.
+- `channel_beam` исполняется только при exact structured selection и компилируется в canonical `runtimeFamily=beam`.
+- `overhead_barrage` исполняется отдельным marker/delay/descending-child executor'ом. Projectile theme остаётся authored; старые family tokens не мигрируются.
+- `spawn_secondary_projectiles(trigger=on_hit|on_expire)` имеет один exact lifecycle trigger; смешанные triggers и скрытые dual-lifecycle комбинации отвергаются.
+- `state_meter` и `triggered_action` читаются для старых/debug payloads, но скрыты из active planner prompt и не исполняют произвольный gameplay.
+- `secondary_attack` и прочие неподдержанные advanced intents остаются preserved/unsupported, пока не получат отдельный finite vertical slice.
 
-Main invariant: LLM author’ит fantasy/resultKind/runtimePlan/numbers/visual intent + optional runtimeArchetype/runtimeContract; Python validates and soft-balances; C# applies only hard safety/runtime primitives.
+## Поддерживаемость
 
-See `../docs/runtime_archetype_contract.md` for schema examples and migration notes.
+Новая механика добавляется только как небольшой вертикальный срез:
 
-MP asset sync note: Steam не проксирует HTTP; для LAN/Radmin/hosted MP нужен доступный HTTP asset endpoint или корректный base URL. Клиенту не нужно руками открывать `/get_asset`: мод сам тянет assets через настроенный endpoint.
+```text
+exact authored enum/field
+→ один Python policy/compiler owner
+→ явная projection в result model
+→ один C# executor owner
+→ отдельный end-to-end test
+```
+
+Не создавать универсальный trigger/action/state framework и не делать derived/debug structures вторым writable contract. Sparse-output policy не меняется: явно authored zero/default сохраняет provenance. Подробно: `../docs/RUNTIME_VERTICAL_SLICES_RU.md`.
+
+## Balance modes
+
+`core/balance_mode.py` — единственный policy owner:
+
+- `safety` (default): сохраняет authored soft-balance numbers, применяет только технический Python safety corridor и пишет advice;
+- `normalize`: opt-in legacy soft normalization;
+- `report`: diagnostic mode без Python soft/safety mutations, при сохранении C# hard clamps.
+
+Переменная окружения: `INFINI_BALANCE_MODE`. LLM не выбирает режим и не получает дополнительную нагрузку.
+
+## Проверенное состояние v10 snapshot
+
+- Python tests: 330 passed.
+- Planner prompt: 22 422 / 24 000 chars, 24 active functions; `state_meter`/`triggered_action` hidden.
+- Static C# contracts and project hygiene: PASS.
+- Реальный tModLoader build не запускался: в окружении отсутствует `dotnet`.

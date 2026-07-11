@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import sys
 from typing import Any
 
 from infini_local.pipelines.pipeline_visual_config import (
@@ -26,21 +25,16 @@ from infini_local.pipelines.pipeline_visual_config import (
 # visual prompts and sprite postprocessing. No image IO or gameplay routing here.
 
 
-def _cfg(name: str, default: Any) -> Any:
-    facade = sys.modules.get("infini_local.pipelines.visual_generation_pipeline")
-    if facade is not None and hasattr(facade, name):
-        return getattr(facade, name)
-    return default
 
 
 def chroma_rgb() -> tuple[int, int, int]:
-    if _cfg("BG_COLOR", BG_COLOR) in {"green", "lime", "greenscreen"}:
+    if BG_COLOR in {"green", "lime", "greenscreen"}:
         return (0, 255, 0)
-    if _cfg("BG_COLOR", BG_COLOR) in {"blue"}:
+    if BG_COLOR in {"blue"}:
         return (0, 0, 255)
-    if _cfg("BG_COLOR", BG_COLOR) in {"white"}:
+    if BG_COLOR in {"white"}:
         return (255, 255, 255)
-    if _cfg("BG_COLOR", BG_COLOR) in {"black"}:
+    if BG_COLOR in {"black"}:
         return (0, 0, 0)
     return (255, 0, 255)
 
@@ -60,26 +54,26 @@ def chroma_name() -> str:
 
 def sprite_background_positive_clause() -> str:
     # Prefer a magenta key over requesting alpha/transparency. Local postprocess owns alpha.
-    if _cfg("REMOVE_BG", REMOVE_BG) and _cfg("BG_REMOVE_MODE", BG_REMOVE_MODE) in {"chroma", "floodfill"}:
+    if REMOVE_BG and BG_REMOVE_MODE in {"chroma", "floodfill"}:
         return f"on a perfectly solid untextured {chroma_name()}, object fully separated from background, no floor, no cast shadow, no gradient"
-    if _cfg("REMOVE_BG", REMOVE_BG) and _cfg("BG_REMOVE_MODE", BG_REMOVE_MODE) == "rembg":
+    if REMOVE_BG and BG_REMOVE_MODE == "rembg":
         return "on a plain solid magenta key background (#ff00ff), no scene, no floor, no cast shadow"
     return "on a perfectly solid untextured pure flat magenta background (#ff00ff), object fully separated from background, no floor, no cast shadow, no gradient"
 
 
 def image_backend_is_zimage() -> bool:
     """True when the configured image backend should use the Z-Image prompt contract."""
-    if (_cfg("IMAGE_BACKEND", IMAGE_BACKEND) or "").lower() != "sdcpp":
+    if (IMAGE_BACKEND or "").lower() != "sdcpp":
         return False
-    mode = _cfg("ZIMAGE_PROMPT_CONTRACT", ZIMAGE_PROMPT_CONTRACT)
+    mode = ZIMAGE_PROMPT_CONTRACT
     if mode in {"0", "false", "off", "no", "disabled", "disable"}:
         return False
     if mode in {"1", "true", "on", "yes", "force", "forced"}:
         return True
     hay = " ".join([
-        _cfg("SDCPP_MODEL", SDCPP_MODEL),
-        _cfg("SDCPP_SERVER_COMMAND_TEMPLATE", SDCPP_SERVER_COMMAND_TEMPLATE),
-        _cfg("SDCPP_SERVER_EXTRA_ARGS", SDCPP_SERVER_EXTRA_ARGS),
+        SDCPP_MODEL,
+        SDCPP_SERVER_COMMAND_TEMPLATE,
+        SDCPP_SERVER_EXTRA_ARGS,
     ]).lower().replace("_", "-")
     return "z-image" in hay or "zimage" in hay
 
@@ -89,10 +83,10 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
     size = max(16, min(96, int(target_size or 32)))
     table: dict[str, dict[str, Any]] = {
         "item": {
-            "targetFill": _cfg("ITEM_ICON_TARGET_FILL", ITEM_ICON_TARGET_FILL),
+            "targetFill": ITEM_ICON_TARGET_FILL,
             "minFill": 0.82,
             "maxFill": 0.98,
-            "coreAlphaThreshold": _cfg("SPRITE_ITEM_CORE_ALPHA_THRESHOLD", SPRITE_ITEM_CORE_ALPHA_THRESHOLD),
+            "coreAlphaThreshold": SPRITE_ITEM_CORE_ALPHA_THRESHOLD,
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.08,
@@ -100,10 +94,10 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptPoseWords": "compose it as a clean Terraria-style item sprite",
         },
         "projectile": {
-            "targetFill": _cfg("PROJECTILE_ICON_TARGET_FILL", PROJECTILE_ICON_TARGET_FILL),
+            "targetFill": PROJECTILE_ICON_TARGET_FILL,
             "minFill": 0.68,
             "maxFill": 0.96,
-            "coreAlphaThreshold": _cfg("SPRITE_EFFECT_CORE_ALPHA_THRESHOLD", SPRITE_EFFECT_CORE_ALPHA_THRESHOLD),
+            "coreAlphaThreshold": SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.10,
@@ -111,10 +105,10 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptPoseWords": "compose it as one clean projectile sprite in gameplay view",
         },
         "impact": {
-            "targetFill": _cfg("IMPACT_ICON_TARGET_FILL", IMPACT_ICON_TARGET_FILL),
+            "targetFill": IMPACT_ICON_TARGET_FILL,
             "minFill": 0.52,
             "maxFill": 0.95,
-            "coreAlphaThreshold": _cfg("SPRITE_EFFECT_CORE_ALPHA_THRESHOLD", SPRITE_EFFECT_CORE_ALPHA_THRESHOLD),
+            "coreAlphaThreshold": SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.18,
@@ -122,10 +116,10 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptPoseWords": "single compact effect burst only, no item or weapon body",
         },
         "child": {
-            "targetFill": _cfg("CHILD_ICON_TARGET_FILL", CHILD_ICON_TARGET_FILL),
+            "targetFill": CHILD_ICON_TARGET_FILL,
             "minFill": 0.48,
             "maxFill": 0.90,
-            "coreAlphaThreshold": _cfg("SPRITE_EFFECT_CORE_ALPHA_THRESHOLD", SPRITE_EFFECT_CORE_ALPHA_THRESHOLD),
+            "coreAlphaThreshold": SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.14,
@@ -133,10 +127,10 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptPoseWords": "one tiny separate object only",
         },
         "field": {
-            "targetFill": _cfg("FIELD_ICON_TARGET_FILL", FIELD_ICON_TARGET_FILL),
+            "targetFill": FIELD_ICON_TARGET_FILL,
             "minFill": 0.62,
             "maxFill": 0.98,
-            "coreAlphaThreshold": _cfg("SPRITE_EFFECT_CORE_ALPHA_THRESHOLD", SPRITE_EFFECT_CORE_ALPHA_THRESHOLD),
+            "coreAlphaThreshold": SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.14,

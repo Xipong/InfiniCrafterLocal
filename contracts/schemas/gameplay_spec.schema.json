@@ -1,0 +1,570 @@
+{
+  "$defs": {
+    "BuffEntryBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "buffCode": {
+          "default": 0,
+          "title": "Buffcode",
+          "type": "integer"
+        },
+        "buffTime": {
+          "default": 0,
+          "title": "Bufftime",
+          "type": "integer"
+        }
+      },
+      "title": "BuffEntryBoundary",
+      "type": "object"
+    },
+    "GeneratedBuffBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "durationTicks": {
+          "default": 0,
+          "title": "Durationticks",
+          "type": "integer"
+        },
+        "emitLightStrength": {
+          "default": 0.0,
+          "title": "Emitlightstrength",
+          "type": "number"
+        },
+        "jumpBoost": {
+          "default": 0.0,
+          "title": "Jumpboost",
+          "type": "number"
+        },
+        "lifeRegen": {
+          "default": 0,
+          "title": "Liferegen",
+          "type": "integer"
+        },
+        "lightColorName": {
+          "default": "",
+          "title": "Lightcolorname",
+          "type": "string"
+        },
+        "manaRegen": {
+          "default": 0,
+          "title": "Manaregen",
+          "type": "integer"
+        },
+        "miningSpeedMultiplier": {
+          "default": 1.0,
+          "title": "Miningspeedmultiplier",
+          "type": "number"
+        },
+        "movementSpeed": {
+          "default": 0.0,
+          "title": "Movementspeed",
+          "type": "number"
+        },
+        "oreSenseRadiusTiles": {
+          "default": 0,
+          "title": "Oresenseradiustiles",
+          "type": "integer"
+        }
+      },
+      "title": "GeneratedBuffBoundary",
+      "type": "object"
+    },
+    "RejectedEngineCallBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "default": "",
+          "title": "Action",
+          "type": "string"
+        },
+        "family": {
+          "default": "",
+          "title": "Family",
+          "type": "string"
+        },
+        "fn": {
+          "default": "",
+          "title": "Fn",
+          "type": "string"
+        },
+        "policy": {
+          "default": "",
+          "title": "Policy",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "title": "RejectedEngineCallBoundary",
+      "type": "object"
+    },
+    "RuntimeStateBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "executionStatus": {
+          "default": "",
+          "title": "Executionstatus",
+          "type": "string"
+        },
+        "stateMeters": {
+          "items": {
+            "$ref": "#/$defs/StateMeterBoundary"
+          },
+          "title": "Statemeters",
+          "type": "array"
+        },
+        "triggeredActions": {
+          "items": {
+            "$ref": "#/$defs/TriggeredActionBoundary"
+          },
+          "title": "Triggeredactions",
+          "type": "array"
+        }
+      },
+      "title": "RuntimeStateBoundary",
+      "type": "object"
+    },
+    "StateMeterBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "cooldownTicks": {
+          "default": 0,
+          "title": "Cooldownticks",
+          "type": "integer"
+        },
+        "decayPerSecond": {
+          "default": 0.0,
+          "title": "Decaypersecond",
+          "type": "number"
+        },
+        "gainOnHit": {
+          "default": 0,
+          "title": "Gainonhit",
+          "type": "integer"
+        },
+        "gainOnKill": {
+          "default": 0,
+          "title": "Gainonkill",
+          "type": "integer"
+        },
+        "gainOnUse": {
+          "default": 0,
+          "title": "Gainonuse",
+          "type": "integer"
+        },
+        "id": {
+          "default": "",
+          "title": "Id",
+          "type": "string"
+        },
+        "initialValue": {
+          "default": 0,
+          "title": "Initialvalue",
+          "type": "integer"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "maxValue": {
+          "default": 3,
+          "title": "Maxvalue",
+          "type": "integer"
+        },
+        "modeCount": {
+          "default": 0,
+          "title": "Modecount",
+          "type": "integer"
+        },
+        "spendOnAltUse": {
+          "default": 0,
+          "title": "Spendonaltuse",
+          "type": "integer"
+        },
+        "spendOnUse": {
+          "default": 0,
+          "title": "Spendonuse",
+          "type": "integer"
+        }
+      },
+      "title": "StateMeterBoundary",
+      "type": "object"
+    },
+    "TriggeredActionBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "default": "",
+          "title": "Action",
+          "type": "string"
+        },
+        "cooldownTicks": {
+          "default": 0,
+          "title": "Cooldownticks",
+          "type": "integer"
+        },
+        "meterId": {
+          "default": "",
+          "title": "Meterid",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "requiredValue": {
+          "default": 0,
+          "title": "Requiredvalue",
+          "type": "integer"
+        },
+        "spendValue": {
+          "default": 0,
+          "title": "Spendvalue",
+          "type": "integer"
+        },
+        "trigger": {
+          "default": "",
+          "title": "Trigger",
+          "type": "string"
+        }
+      },
+      "title": "TriggeredActionBoundary",
+      "type": "object"
+    }
+  },
+  "$id": "https://infinicrafter.local/contracts/gameplay_spec.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "altGeneratedBuff": {
+      "$ref": "#/$defs/GeneratedBuffBoundary"
+    },
+    "altMobilityCooldownTicks": {
+      "default": 0,
+      "title": "Altmobilitycooldownticks",
+      "type": "integer"
+    },
+    "altMobilityMode": {
+      "default": "",
+      "title": "Altmobilitymode",
+      "type": "string"
+    },
+    "altMobilityRangeTiles": {
+      "default": 0,
+      "title": "Altmobilityrangetiles",
+      "type": "integer"
+    },
+    "altMobilitySafeTileOnly": {
+      "default": true,
+      "title": "Altmobilitysafetileonly",
+      "type": "boolean"
+    },
+    "altUseMode": {
+      "default": "",
+      "title": "Altusemode",
+      "type": "string"
+    },
+    "ammoFor": {
+      "default": "",
+      "title": "Ammofor",
+      "type": "string"
+    },
+    "autoReuse": {
+      "default": true,
+      "title": "Autoreuse",
+      "type": "boolean"
+    },
+    "axePower": {
+      "default": 0,
+      "title": "Axepower",
+      "type": "integer"
+    },
+    "buffCode": {
+      "default": 0,
+      "title": "Buffcode",
+      "type": "integer"
+    },
+    "buffTime": {
+      "default": 0,
+      "title": "Bufftime",
+      "type": "integer"
+    },
+    "channelUse": {
+      "default": false,
+      "title": "Channeluse",
+      "type": "boolean"
+    },
+    "consumable": {
+      "default": false,
+      "title": "Consumable",
+      "type": "boolean"
+    },
+    "consumeChancePercent": {
+      "default": 100,
+      "title": "Consumechancepercent",
+      "type": "integer"
+    },
+    "craftYield": {
+      "default": 1,
+      "title": "Craftyield",
+      "type": "integer"
+    },
+    "damage": {
+      "default": 0,
+      "title": "Damage",
+      "type": "integer"
+    },
+    "damageClass": {
+      "default": "generic",
+      "title": "Damageclass",
+      "type": "string"
+    },
+    "drawDuringUse": {
+      "default": false,
+      "title": "Drawduringuse",
+      "type": "boolean"
+    },
+    "extraBuffs": {
+      "items": {
+        "$ref": "#/$defs/BuffEntryBoundary"
+      },
+      "title": "Extrabuffs",
+      "type": "array"
+    },
+    "extractinatorOutputItemType": {
+      "default": 0,
+      "title": "Extractinatoroutputitemtype",
+      "type": "integer"
+    },
+    "extractinatorOutputStack": {
+      "default": 0,
+      "title": "Extractinatoroutputstack",
+      "type": "integer"
+    },
+    "generatedBuff": {
+      "$ref": "#/$defs/GeneratedBuffBoundary"
+    },
+    "hammerPower": {
+      "default": 0,
+      "title": "Hammerpower",
+      "type": "integer"
+    },
+    "handPose": {
+      "default": "",
+      "title": "Handpose",
+      "type": "string"
+    },
+    "healLife": {
+      "default": 0,
+      "title": "Heallife",
+      "type": "integer"
+    },
+    "healMana": {
+      "default": 0,
+      "title": "Healmana",
+      "type": "integer"
+    },
+    "height": {
+      "default": 24,
+      "title": "Height",
+      "type": "integer"
+    },
+    "heldVisibility": {
+      "default": "",
+      "title": "Heldvisibility",
+      "type": "string"
+    },
+    "holdGeneratedBuff": {
+      "$ref": "#/$defs/GeneratedBuffBoundary"
+    },
+    "holdLightColorName": {
+      "default": "",
+      "title": "Holdlightcolorname",
+      "type": "string"
+    },
+    "holdLightStrength": {
+      "default": 0,
+      "title": "Holdlightstrength",
+      "type": "number"
+    },
+    "holdoutOffsetX": {
+      "default": 0,
+      "title": "Holdoutoffsetx",
+      "type": "integer"
+    },
+    "holdoutOffsetY": {
+      "default": 0,
+      "title": "Holdoutoffsety",
+      "type": "integer"
+    },
+    "initialOffsetPx": {
+      "default": 0,
+      "title": "Initialoffsetpx",
+      "type": "integer"
+    },
+    "itemScale": {
+      "default": 1.0,
+      "title": "Itemscale",
+      "type": "number"
+    },
+    "kind": {
+      "default": "generic",
+      "title": "Kind",
+      "type": "string"
+    },
+    "knockback": {
+      "default": 2.0,
+      "title": "Knockback",
+      "type": "number"
+    },
+    "manaCost": {
+      "default": 0,
+      "title": "Manacost",
+      "type": "integer"
+    },
+    "maxStack": {
+      "default": 1,
+      "title": "Maxstack",
+      "type": "integer"
+    },
+    "miningSpeedScale": {
+      "default": 1.0,
+      "title": "Miningspeedscale",
+      "type": "number"
+    },
+    "mobilityCooldownTicks": {
+      "default": 0,
+      "title": "Mobilitycooldownticks",
+      "type": "integer"
+    },
+    "mobilityMode": {
+      "default": "",
+      "title": "Mobilitymode",
+      "type": "string"
+    },
+    "mobilityRangeTiles": {
+      "default": 0,
+      "title": "Mobilityrangetiles",
+      "type": "integer"
+    },
+    "mobilitySafeTileOnly": {
+      "default": true,
+      "title": "Mobilitysafetileonly",
+      "type": "boolean"
+    },
+    "pickPower": {
+      "default": 0,
+      "title": "Pickpower",
+      "type": "integer"
+    },
+    "powerBudget": {
+      "default": 1.0,
+      "title": "Powerbudget",
+      "type": "number"
+    },
+    "projectileSizePolicy": {
+      "default": "",
+      "title": "Projectilesizepolicy",
+      "type": "string"
+    },
+    "rarity": {
+      "default": 0,
+      "title": "Rarity",
+      "type": "integer"
+    },
+    "rejectedEngineCalls": {
+      "items": {
+        "$ref": "#/$defs/RejectedEngineCallBoundary"
+      },
+      "title": "Rejectedenginecalls",
+      "type": "array"
+    },
+    "releaseTiming": {
+      "default": "",
+      "title": "Releasetiming",
+      "type": "string"
+    },
+    "rotationMode": {
+      "default": "",
+      "title": "Rotationmode",
+      "type": "string"
+    },
+    "runtimeState": {
+      "$ref": "#/$defs/RuntimeStateBoundary"
+    },
+    "spawnStyle": {
+      "default": "",
+      "title": "Spawnstyle",
+      "type": "string"
+    },
+    "stage": {
+      "default": "early",
+      "title": "Stage",
+      "type": "string"
+    },
+    "trailMode": {
+      "default": "",
+      "title": "Trailmode",
+      "type": "string"
+    },
+    "useAnimation": {
+      "default": 24,
+      "title": "Useanimation",
+      "type": "integer"
+    },
+    "useConditionMinLife": {
+      "default": 0,
+      "title": "Useconditionminlife",
+      "type": "integer"
+    },
+    "useConditionMinMana": {
+      "default": 0,
+      "title": "Useconditionminmana",
+      "type": "integer"
+    },
+    "useConditionMode": {
+      "default": "",
+      "title": "Useconditionmode",
+      "type": "string"
+    },
+    "useFantasy": {
+      "default": "",
+      "title": "Usefantasy",
+      "type": "string"
+    },
+    "useStyle": {
+      "default": 1,
+      "title": "Usestyle",
+      "type": "integer"
+    },
+    "useTime": {
+      "default": 24,
+      "title": "Usetime",
+      "type": "integer"
+    },
+    "useTurn": {
+      "default": false,
+      "title": "Useturn",
+      "type": "boolean"
+    },
+    "value": {
+      "default": 100,
+      "title": "Value",
+      "type": "integer"
+    },
+    "width": {
+      "default": 24,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "title": "GameplaySpecBoundary",
+  "type": "object",
+  "x-infini-generated": true,
+  "x-infini-owner": "infini_local.core.boundary_models.GameplaySpecBoundary"
+}

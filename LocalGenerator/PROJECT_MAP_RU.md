@@ -23,7 +23,7 @@ Boundary summary:
 - Python authors/validates/repairs explicit data.
 - `runtimePlan.engineCalls` remains the executable source.
 - `runtimeArchetype` and `runtimeContract` are optional v0.4.239 data contracts for family/feel/promise truth; unsupported mechanics are preserved inertly.
-- C# applies/executes supported fields only.
+- C# applies/executes supported fields only, including exact sound catalog ids and synced pitch variance; it never selects built-in audio from prose.
 - Asset sync exposes final filenames for HTTP `/get_asset`.
 - Contract stamps are provenance, not proof of implemented future behavior.
 

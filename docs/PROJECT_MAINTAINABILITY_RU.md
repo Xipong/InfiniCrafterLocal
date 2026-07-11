@@ -6,10 +6,12 @@
 
 - Runtime authoring живёт пакетом `LocalGenerator/infini_local/core/runtime_authoring/`.
 - `runtime_authoring/__init__.py` — явный public API; sibling-модули владеют schema/common/semantics/normalize/structural/compiler/reports.
+- `runtime_authoring/__init__.py` экспортирует только compile/validate/report surface; production импортирует sibling owners напрямую.
+- `pipelines/pipeline_support.py` удалён; возвращать forwarding barrel запрещено hygiene scanner'ом.
 - `ENGINE_RUNTIME_API_VERSION` имеет один owner: `runtime_authoring/common.py`.
 - HTTP entrypoint — `infini_local/web/server.py`.
-- Service dependency surface для HTTP — `web/server_services.py`.
-- Canonical Python API для tests/tools — `web/api.py`.
+- Image/sd.cpp config и lifecycle state имеют один owner: `pipelines/pipeline_visual_config.py`.
+- Tests/tools импортируют реальные owner-модули напрямую; общего `web/api.py` bucket нет.
 - `combine_pipeline.py` и `llm_authoring_pipeline.py` используют только явные imports.
 - Source modules не используют wildcard imports.
 
@@ -18,12 +20,12 @@
 | Boundary | Owner modules |
 |---|---|
 | Runtime authoring | `core/runtime_authoring/schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `compiler.py`, `reports.py` |
-| Web/HTTP | `web/server.py`, `server_handler.py`, `server_services.py`, `api.py`, `server_utility_routes.py`, `vfx_debug_routes.py`, `server_trace_snapshot.py` |
+| Web/HTTP | `web/server.py`, `server_handler.py`, `server_utility_routes.py`, `vfx_debug_routes.py`, `server_trace_snapshot.py` |
 | Combine | `combine_pipeline.py`, `combine_balance.py`, `combine_genome.py`, `combine_genome_contract.py`, `combine_validation.py`, `combine_gameplay.py` |
 | LLM authoring | `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` |
 | Parent context | `parent_context_pipeline.py`, `parent_context_cards.py`, `pipeline_runtime_dumps.py` |
-| Visual/sprites | `visual_generation_pipeline.py`, `visual_*`, `sprite_contracts.py`, `sprite_geometry.py`, `sprite_keyer.py`, `sprite_postprocess.py`, `sprite_processing_pipeline.py` |
-| VFX | `vfx_manifest.py`, `vfx_manifest_config.py`, `vfx_recipe_library.py`, `vfx_director_*`, `vfx_composition.py`, `vfx_composition_*`, `vfx_runtime_slots.py` |
+| Visual/sprites | `visual_generation_pipeline.py`, `visual_*`, `sprite_contracts.py`, `sprite_geometry.py`, `sprite_keyer.py`, `sprite_postprocess.py` |
+| VFX | `vfx_manifest.py`, `vfx_manifest_config.py`, `vfx_recipe_library.py`, `vfx_director_*`, `vfx_composition_primitives.py`, `vfx_composition_parent.py`, `vfx_runtime_slots.py` |
 | Desktop GUI | `settings_gui.py`, `settings_gui_theme.py`, `settings_gui_ui.py`, `settings_gui_image_args.py`, `settings_gui_trace_state.py`, `settings_gui_server_controls.py`, `settings_schema.py` |
 
 ## Правила контекста
@@ -50,7 +52,7 @@ AI-агент не должен читать весь проект перед к
 - Нельзя одновременно рефакторить Python generator и C# runtime.
 - Один refactor package = один ownership boundary.
 - Mechanical split не должен менять поведение.
-- Public API должен быть явным: package `__init__.py` или `api.py`, без wildcard imports.
+- Public API должен принадлежать своему domain owner или узкому package `__init__.py`; не создавать cross-domain barrel/facade ради тестов.
 - Runtime contract changes требуют Python + C# + tests + docs вместе.
 - Нельзя превращать runtime в giant name/prose/tooltip behavior map.
 - Нельзя давать LLM arbitrary C# или arbitrary runtime effects.

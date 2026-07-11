@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.pipelines.llm_authoring_pipeline import llm_runtime_result_kind_policy
+from infini_local.pipelines.llm_authoring_prompt import llm_runtime_result_kind_policy
 
 from csharp_partial_reader import read_text_with_partial_bundles
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,15 +62,11 @@ def _check_attack_enabled_is_documented_as_generated_executor_not_can_damage() -
 
 def _check_visual_manifest_distinguishes_runtime_executor_from_vanilla_hitbox() -> None:
     visual = (ROOT / "infini_local" / "pipelines" / "visual_asset_manifest.py").read_text(encoding="utf-8")
-    visual_facade = (ROOT / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
-    support = (ROOT / "infini_local" / "pipelines" / "pipeline_support.py").read_text(encoding="utf-8")
     generated_summary = (ROOT / "infini_local" / "pipelines" / "generated_parent_summary.py").read_text(encoding="utf-8")
-    assert "from infini_local.pipelines.visual_asset_manifest import" in visual_facade
     assert "runtimeExecutorEnabled" in visual
     assert "customAttackEnabled" in visual
     assert "vanillaItemHitboxDamage" in visual
     assert "damagePath" in visual
-    assert "generated_parent_summary" in support
     assert "vanilla_item_hitbox" in generated_summary
 
 

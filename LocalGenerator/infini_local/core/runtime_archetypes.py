@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-import json
 import math
-import re
 from typing import Any
+
+from infini_local.core.runtime_overhead_barrage_policy import (
+    OVERHEAD_BARRAGE_RUNTIME_FAMILY,
+    apply_overhead_barrage_contract,
+    normalize_overhead_barrage_family,
+)
 
 RUNTIME_ARCHETYPE_SCHEMA = "infini.runtime-archetype.v1"
 
@@ -17,13 +21,15 @@ KNOWN_FAMILIES = {
     "held_swing",
     "held_thrust",
     "channel_beam",
-    "delayed_starfall",
+    "charge_release",
+    "overhead_barrage",
+    "sentry",
     "secondary_attack",
     "unsupported",
 }
 KNOWN_PHASE_MODELS = {"none", "outbound_return", "charge_release", "swing_phase", "channel_hold"}
-EXECUTABLE_FAMILIES = {"custom_executor", "boomerang", "yoyo", "flail", "whip", "held_swing", "held_thrust"}
-PRESERVED_ONLY_FAMILIES = {"channel_beam", "delayed_starfall", "secondary_attack", "unsupported"}
+EXECUTABLE_FAMILIES = {"custom_executor", "boomerang", "yoyo", "flail", "whip", "held_swing", "held_thrust", "channel_beam", "charge_release", "overhead_barrage", "sentry"}
+PRESERVED_ONLY_FAMILIES = {"secondary_attack", "unsupported"}
 
 KNOB_LIMITS: dict[str, tuple[float, float, str]] = {
     "returnDelayTicks": (0, 180, "int"),
@@ -35,6 +41,7 @@ KNOB_LIMITS: dict[str, tuple[float, float, str]] = {
     "activeTicks": (1, 120, "int"),
     "recoveryTicks": (0, 120, "int"),
     "chargeTicks": (0, 300, "int"),
+    "chargePowerMultiplier": (1, 3, "float"),
     "beamWidthPx": (2, 96, "int"),
     "maxActiveProjectiles": (0, 32, "int"),
 }
@@ -78,8 +85,10 @@ def _default_phase_for_family(family: str) -> str:
         return "outbound_return"
     if family in {"held_swing", "held_thrust", "whip"}:
         return "swing_phase"
-    if family in {"channel_beam", "yoyo"}:
+    if family in {"channel_beam", "charge_release", "yoyo"}:
         return "channel_hold"
+    if family == OVERHEAD_BARRAGE_RUNTIME_FAMILY:
+        return "charge_release"
     return "none"
 
 
@@ -110,7 +119,7 @@ def normalize_runtime_archetype(raw: Any) -> dict[str, Any]:
     elif source not in KNOWN_SOURCES:
         source = "generated"
 
-    family = _norm(obj.get("family")) or "custom_executor"
+    family = normalize_overhead_barrage_family(_norm(obj.get("family"))) or "custom_executor"
     notes: list[str] = []
     if family not in KNOWN_FAMILIES:
         notes.append(f"unknown_family:{family}")
@@ -145,8 +154,8 @@ def normalize_runtime_archetype(raw: Any) -> dict[str, Any]:
         "vanillaProjectileId": _text(obj.get("vanillaProjectileId"), 64),
         "vanillaItemId": _text(obj.get("vanillaItemId"), 64),
         "aiType": _text(obj.get("aiType"), 64),
-        "channelled": _coerce_bool(obj.get("channelled")),
-        "usesHeldProjectile": _coerce_bool(obj.get("usesHeldProjectile")),
+        "channelled": _coerce_bool(obj.get("channelled")) or family in {"yoyo", "channel_beam", "charge_release"},
+        "usesHeldProjectile": _coerce_bool(obj.get("usesHeldProjectile")) or family in {"yoyo", "flail", "whip", "held_thrust", "channel_beam", "charge_release"},
         "phaseModel": phase,
         "overrideKnobs": normalize_override_knobs(obj.get("overrideKnobs")),
         "supportStatus": support_status,
@@ -216,7 +225,8 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
         return patch, {"schema": "infini.archetype-compiler-report.v1", "active": False, "supportStatus": "omitted"}
 
     raw_spec = data.get("runtimeArchetype") if isinstance(data.get("runtimeArchetype"), dict) else {}
-    raw_family = _norm(raw_spec.get("family")) if isinstance(raw_spec, dict) else ""
+    raw_family_input = _norm(raw_spec.get("family")) if isinstance(raw_spec, dict) else ""
+    raw_family = normalize_overhead_barrage_family(raw_family_input)
     if raw_family and raw_family not in KNOWN_FAMILIES and (_has_finite_executable_attack_patch(patch) or _has_utility_engine_calls(data)):
         raw_spec = dict(raw_spec)
         raw_spec["family"] = "custom_executor"
@@ -257,7 +267,7 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
     if family == "custom_executor":
         report["supportStatus"] = "executable"
     elif family == "boomerang":
-        apply(runtimeFamily="returning", delivery="throw", movement="boomerang", weaponFamily="boomerang", weaponSubfamily="boomerang", archetypePhaseModel="outbound_return")
+        apply(runtimeFamily="returning", delivery="throw", movement="boomerang", weaponFamily="boomerang", archetypePhaseModel="outbound_return")
         for key in ["returnDelayTicks", "outboundPierce", "returnPierce", "localImmunityTicks", "trailProfile"]:
             if key in knobs:
                 patch[key] = knobs[key]
@@ -277,6 +287,52 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
         report["supportStatus"] = "executable"
     elif family == "held_thrust":
         apply(runtimeFamily="thrust", delivery="thrust", movement=patch.get("movement") or "straight", weaponFamily=patch.get("weaponFamily") or "spear", archetypePhaseModel="swing_phase", hideUseGraphic=True, disableItemMeleeHitbox=True, ownerHitCheck=True)
+        report["supportStatus"] = "executable"
+    elif family == "channel_beam":
+        apply(runtimeFamily="beam", delivery="cast", movement="phase", weaponFamily=patch.get("weaponFamily") or "beam_staff", projectileFamily="beam", archetypePhaseModel="channel_hold", channelUse=True, hideUseGraphic=True, disableItemMeleeHitbox=True, ownerHitCheck=True)
+        if "beamWidthPx" in knobs:
+            patch["beamWidthPx"] = knobs["beamWidthPx"]
+            report["appliedFields"]["beamWidthPx"] = knobs["beamWidthPx"]
+        if "chargeTicks" in knobs:
+            patch["beamChargeTicks"] = knobs["chargeTicks"]
+            report["appliedFields"]["beamChargeTicks"] = knobs["chargeTicks"]
+        if "localImmunityTicks" in knobs:
+            patch["immunityCooldown"] = knobs["localImmunityTicks"]
+            report["appliedFields"]["immunityCooldown"] = knobs["localImmunityTicks"]
+        if "activeTicks" in knobs:
+            report["warnings"].append("activeTicks_not_executed_for_hold_until_release_beam")
+        report["supportStatus"] = "executable"
+    elif family == "charge_release":
+        apply(runtimeFamily="charge_release", delivery=patch.get("delivery") or "shoot", archetypePhaseModel="charge_release", channelUse=True, hideUseGraphic=True, disableItemMeleeHitbox=True, ownerHitCheck=True)
+        if "chargeTicks" in knobs:
+            patch["chargeTicks"] = knobs["chargeTicks"]
+            report["appliedFields"]["chargeTicks"] = knobs["chargeTicks"]
+        if "chargePowerMultiplier" in knobs:
+            patch["chargePowerMultiplier"] = knobs["chargePowerMultiplier"]
+            report["appliedFields"]["chargePowerMultiplier"] = knobs["chargePowerMultiplier"]
+        report["supportStatus"] = "executable"
+    elif family == "sentry":
+        apply(runtimeFamily="sentry", delivery="summon", archetypePhaseModel="none", channelUse=False, hideUseGraphic=False, disableItemMeleeHitbox=True, ownerHitCheck=False)
+        report["supportStatus"] = "executable"
+    elif family == OVERHEAD_BARRAGE_RUNTIME_FAMILY:
+        apply(
+            runtimeFamily=OVERHEAD_BARRAGE_RUNTIME_FAMILY,
+            delivery=patch.get("delivery") or "shoot",
+            movement="phase",
+            weaponFamily=patch.get("weaponFamily") or "ranged",
+            projectileFamily=patch.get("projectileFamily") or "projectile",
+            archetypePhaseModel="charge_release",
+            hideUseGraphic=True,
+            disableItemMeleeHitbox=True,
+        )
+        patch["delayTicks"] = knobs.get("chargeTicks", patch.get("delayTicks", 30))
+        apply_overhead_barrage_contract(patch)
+        report["appliedFields"].update({
+            "delayTicks": patch["delayTicks"],
+            "shotCount": patch["shotCount"],
+            "maxChildProjectiles": patch["maxChildProjectiles"],
+            "maxChildDepth": 1,
+        })
         report["supportStatus"] = "executable"
     else:
         report["supportStatus"] = spec.get("supportStatus") or "preserved_intent"

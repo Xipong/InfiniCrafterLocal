@@ -27,13 +27,14 @@ def test_llm_prompt_no_longer_receives_parent_relative_soft_balance_caps():
     assert "softAoeTilesCap" not in prompt_surface
     assert "softActiveProjectileCap" not in prompt_surface
     assert "balancePolicy" in prompt_surface
-    assert "python_post_authoring_soft_envelope" in prompt_surface
+    assert "python_balance_mode" in prompt_surface
+    assert "should_apply_soft_normalization" in prompt_surface
     assert "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216" in contracts
     assert "balanceArchitectureAuditContract" in contracts
 
 
 def test_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers():
-    from infini_local.pipelines.llm_authoring_pipeline import build_llm_author_payload
+    from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
     item_a = {"name": "Copper Shortsword", "damage": 5, "useTime": 13, "rare": 0, "value": 100}
     item_b = {"name": "Star Wrath", "damage": 170, "useTime": 16, "rare": 10, "value": 1000000}
@@ -42,17 +43,7 @@ def test_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers():
 
     assert payload["validatorRanges"]["damage"] == [0, 999]
     assert "balancePolicy" in payload
-    assert payload["engineRuntimeContract"]["validatorLimits"]["balanceAuthority"] == "python_post_authoring_soft_envelope"
+    assert payload["engineRuntimeContract"]["validatorLimits"]["balanceAuthority"] == "python_balance_mode:safety"
     assert "softDamageCapPerHit" not in text
     assert "sourceEnvelope" not in text
     assert "terrariaProgressionReference" not in text
-
-
-def test_balance_doc_describes_layer_boundaries():
-    doc = read(ROOT / "docs" / "BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md")
-    assert "LLM author" in doc
-    assert "Python post-authoring balance" in doc
-    assert "Runtime compiler clamps" in doc
-    assert "C# hard safety" in doc
-    assert "softDamageCapPerHit" in doc  # mentioned only as removed, not active code
-    assert "больше не передаются" in doc

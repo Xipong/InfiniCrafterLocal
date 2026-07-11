@@ -1,0 +1,253 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
+from infini_local.core.runtime_authoring.reports import runtime_plan_provenance_report
+from infini_local.core.runtime_promise_truth import validate_runtime_promises
+from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.final_normalize import final_normalize
+
+ROOT = Path(__file__).resolve().parents[2]
+
+PARENT_BOW = {"name": "Daedalus Stormbow", "type": 1, "damage": 38, "useTime": 19, "value": 1000}
+PARENT_ARROW = {"name": "Wooden Arrow", "type": 2, "damage": 5, "value": 10}
+
+
+def _plan(family: str = "overhead_barrage", *, projectile_family: str = "arrow", effect: str = "none") -> dict:
+    return {
+        "name": "Skyline Volley",
+        "tooltip": "Arrows descend over the aimed area.",
+        "category": "weapon",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {
+                    "fn": "set_item_stats",
+                    "params": {
+                        "resultKind": "weapon",
+                        "damageClass": "ranged",
+                        "damage": 42,
+                        "useTimeTicks": 28,
+                    },
+                },
+                {
+                    "fn": "fire_ranged_weapon",
+                    "params": {
+                        "family": family,
+                        "ammoFor": "arrow",
+                        "projectileFamily": projectile_family,
+                        "projectileShape": "wooden arrow",
+                        "effect": effect,
+                        "shotCount": 4,
+                        "delayTicks": 12,
+                        "rangeTiles": 55,
+                    },
+                },
+            ],
+        },
+    }
+
+
+def test_daedalus_like_ranged_authoring_keeps_delivery_and_theme_separate() -> None:
+    data = _plan()
+    patch = compile_runtime_plan_to_genome_patch(data)
+
+    assert patch["runtimeFamily"] == "overhead_barrage"
+    assert patch["delivery"] == "shoot"
+    assert patch["weaponFamily"] == "ranged"
+    assert patch["projectileFamily"] == "arrow"
+    assert patch["projectileShape"] == "wooden arrow"
+    assert patch["effect"] == "none"
+    assert patch["ammoFor"] == "arrow"
+    assert patch["shotCount"] == 4
+    assert patch["delayTicks"] == 12
+    assert patch["maxChildProjectiles"] == 4
+    assert patch["maxChildDepth"] == 1
+
+
+def test_daedalus_like_ranged_authoring_survives_full_pipeline() -> None:
+    child = final_normalize(
+        validate_and_repair(_plan(), PARENT_BOW, PARENT_ARROW, {}, {}, "v11_daedalus_like")
+    )
+    genome = child["attack"]["genome"]
+
+    assert genome["runtimeFamily"] == "overhead_barrage"
+    assert genome["projectileFamily"] == "arrow"
+    assert genome["projectileShape"] == "wooden arrow"
+    assert genome["effect"] == "none"
+    assert genome["ammoFor"] == "arrow"
+    assert genome["shotCount"] == 4
+    assert genome["delayTicks"] == 12
+
+
+def test_removed_family_token_and_names_do_not_select_gameplay() -> None:
+    unknown = compile_runtime_plan_to_genome_patch(_plan("unknown_delivery_family", projectile_family="ice_shard"))
+    assert unknown["runtimeFamily"] == "shoot"
+    assert unknown["projectileFamily"] == "ice_shard"
+    assert "delayTicks" not in unknown
+
+    ordinary = _plan("starfall_bow")
+    ordinary["name"] = "Starfall Bow"
+    ordinary["tooltip"] = "A bow decorated with stars."
+    patch = compile_runtime_plan_to_genome_patch(ordinary)
+    assert patch["runtimeFamily"] == "shoot"
+    assert patch["projectileFamily"] == "arrow"
+
+
+def test_overhead_barrage_provenance_marks_authored_projectile_identity() -> None:
+    data = _plan()
+    patch = compile_runtime_plan_to_genome_patch(data)
+    report = runtime_plan_provenance_report(data, patch)
+
+    for field in (
+        "runtimeFamily",
+        "projectileFamily",
+        "projectileShape",
+        "ammoFor",
+        "effect",
+        "shotCount",
+        "delayTicks",
+        "rangeTiles",
+    ):
+        assert report["authoredFields"][field] is True, field
+        assert report["fieldSources"][field] == "fire_ranged_weapon", field
+
+    assert report["gameplayChildren"]["source"] == "overhead_barrage"
+    assert report["gameplayChildren"]["overheadBarrageChildEstimate"] == 4
+
+
+def test_promise_truth_validates_generic_overhead_wording_without_selecting_it() -> None:
+    unsupported = _plan("bow")
+    unsupported["tooltip"] = "Arrows rain from the sky over the aimed point."
+    patch = compile_runtime_plan_to_genome_patch(unsupported)
+    report = validate_runtime_promises(unsupported, patch)
+    assert any(
+        claim["kind"] == "overhead_barrage" and claim["status"] == "unsupported"
+        for claim in report["claims"]
+    )
+
+    backed = _plan()
+    backed_report = validate_runtime_promises(backed, compile_runtime_plan_to_genome_patch(backed))
+    assert any(
+        claim["kind"] == "overhead_barrage" and claim["status"] == "executable"
+        for claim in backed_report["claims"]
+    )
+
+
+def test_csharp_executor_configures_geometry_without_forcing_star_theme() -> None:
+    policy_path = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedOverheadBarragePolicy.cs"
+    executor_path = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs"
+    old_policy = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedDelayedStarfallPolicy.cs"
+    old_executor = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.DelayedStarfall.cs"
+
+    policy = policy_path.read_text(encoding="utf-8")
+    impact = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
+    item = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
+
+    assert policy_path.exists() and executor_path.exists()
+    assert not old_policy.exists() and not old_executor.exists()
+    assert "child.TileCollide = parent.TileCollide" in policy
+    assert "parent.ProjectileFamily" in policy
+    assert "parent.ProjectileShape" in policy
+    assert "EffectCode = 3" not in policy
+    assert "falling_star" not in policy.lower()
+    assert "falling star" not in policy.lower()
+    assert "SpawnOverheadBarrage" in impact
+    assert "SpawnGeneratedSwingOverheadBarrage" in item
+
+
+def _starfury_plan(*, family: str = "overhead_barrage") -> dict:
+    return {
+        "name": "Astral Edge",
+        "tooltip": "A melee swing calls an authored star down from above.",
+        "category": "weapon",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {
+                    "fn": "set_item_stats",
+                    "params": {
+                        "resultKind": "weapon",
+                        "damageClass": "melee",
+                        "damage": 34,
+                        "useTimeTicks": 22,
+                    },
+                },
+                {
+                    "fn": "shoot_projectile",
+                    "params": {
+                        "runtimeFamily": family,
+                        "delivery": "swing",
+                        "weaponFamily": "broadsword",
+                        "projectileFamily": "star",
+                        "projectileShape": "five-point falling star",
+                        "effect": "star",
+                        "shotCount": 1,
+                        "delayTicks": 0,
+                        "rangeTiles": 50,
+                    },
+                },
+            ],
+        },
+    }
+
+
+def test_starfury_like_swing_keeps_authored_star_theme_and_zero_delay() -> None:
+    patch = compile_runtime_plan_to_genome_patch(_starfury_plan())
+
+    assert patch["runtimeFamily"] == "overhead_barrage"
+    assert patch["delivery"] == "swing"
+    assert patch["useStyleCode"] == 1
+    assert patch["hideUseGraphic"] is False
+    assert patch["disableItemMeleeHitbox"] is False
+    assert patch["projectileFamily"] == "star"
+    assert patch["projectileShape"] == "five-point falling star"
+    assert patch["effect"] == "star"
+    assert patch["delayTicks"] == 0
+    assert patch["soundUseCatalogId"] == "melee_swing"
+    assert patch["soundImpactCatalogId"] == "impact_star"
+
+
+def test_starfury_like_star_theme_survives_full_pipeline() -> None:
+    child = final_normalize(
+        validate_and_repair(
+            _starfury_plan(),
+            {"name": "Gold Broadsword", "type": 1, "damage": 13, "useTime": 21, "value": 1000},
+            {"name": "Fallen Star", "type": 75, "damage": 0, "value": 500},
+            {},
+            {},
+            "v11_starfury_like",
+        )
+    )
+    genome = child["attack"]["genome"]
+    assert child["gameplay"]["damageClass"] == "melee"
+    assert genome["runtimeFamily"] == "overhead_barrage"
+    assert genome["delivery"] == "swing"
+    assert genome["useStyleCode"] == 1
+    assert genome["disableItemMeleeHitbox"] is False
+    assert genome["projectileFamily"] == "star"
+    assert genome["projectileShape"] == "five-point falling star"
+    assert genome["effect"] == "star"
+    assert genome["delayTicks"] == 0
+
+
+def test_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_from_delivery() -> None:
+    family_policy = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedRuntimeFamilyPolicy.cs").read_text(encoding="utf-8")
+    apply_source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
+    child_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
+    barrage_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedOverheadBarragePolicy.cs").read_text(encoding="utf-8")
+
+    assert "UsesProjectileOnlyItemAffordance" in family_policy
+    assert 'family == OverheadBarrage && carrier == "swing"' in family_policy
+    assert "UsesProjectileOnlyItemAffordance(runtimeFamily, Attack.Delivery)" in apply_source
+    assert "EffectCode = _spec.EffectCode" in child_runtime
+    assert "child.EffectCode =" not in barrage_policy
+    assert "parent.ProjectileFamily" in barrage_policy
+    assert "parent.ProjectileShape" in barrage_policy
+
+
+def test_llm_repair_prompt_advertises_only_canonical_overhead_name() -> None:
+    repair_source = (ROOT / "LocalGenerator/infini_local/pipelines/combine_genome.py").read_text(encoding="utf-8")
+    assert "starburst|overhead_barrage|aura_pulse" in repair_source
+    assert "starburst|starfall|aura_pulse" not in repair_source

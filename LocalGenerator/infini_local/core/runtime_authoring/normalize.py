@@ -6,11 +6,9 @@ from typing import Any
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION, _clamp, _norm_name
 from infini_local.core.runtime_authoring.schema import (
     ENGINE_FN_CATALOG_V2,
-    FN_ALIASES,
     FORBIDDEN_WORLD_ENTITY_FAMILIES,
     FORBIDDEN_WORLD_ENTITY_FN_NAMES,
     SAFE_SUMMON_FAMILIES,
-    STATE_METER_TRIGGERS,
     TRIGGERED_ACTION_KINDS,
     TRIGGERED_ACTION_TRIGGERS,
 )
@@ -25,11 +23,11 @@ def _forbidden_world_entity_rejection(raw: dict[str, Any], fn: str, params: dict
     norm_fn = _norm_name(fn)
     if norm_fn in FORBIDDEN_WORLD_ENTITY_FN_NAMES:
         return {"index": index, "fn": fn, "reason": "forbidden_world_entity_spawn", "policy": "boss_npc_mob_spawn_disabled"}
-    if norm_fn == "summon_combat_entity":
+    if norm_fn == "spawn_temporary_helper_projectile":
         family = _norm_name(params.get("family") or params.get("entity") or params.get("kind") or params.get("mob") or params.get("npc"))
         if family and family not in SAFE_SUMMON_FAMILIES:
             if family in FORBIDDEN_WORLD_ENTITY_FAMILIES or any(x in family for x in ("boss", "npc", "mob", "enemy", "monster")):
-                return {"index": index, "fn": fn, "family": family, "reason": "forbidden_world_entity_spawn", "policy": "only_minion_sentry_turret_projectile_summons"}
+                return {"index": index, "fn": fn, "family": family, "reason": "forbidden_world_entity_spawn", "policy": "temporary_helper_projectiles_only"}
     if norm_fn == "triggered_action":
         action = _norm_name(params.get("action") or params.get("fn") or params.get("effect"))
         if action in FORBIDDEN_WORLD_ENTITY_FN_NAMES or any(x in action for x in ("boss", "npc", "mob", "enemy", "monster")):
@@ -122,11 +120,11 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(raw, dict):
             dropped.append({"index": i, "reason": "not_object", "rawType": type(raw).__name__})
             continue
-        original_fn = str(raw.get("fn") or raw.get("function") or raw.get("name") or "").strip()
-        fn = _norm_name(original_fn)
-        fn = FN_ALIASES.get(fn, fn)
-        params = raw.get("params") if isinstance(raw.get("params"), dict) else {k: v for k, v in raw.items() if k not in {"fn", "function", "name"}}
-        params = params if isinstance(params, dict) else {}
+        current_fn = str(raw.get("fn") or "").strip()
+        original_fn = str(raw.get("_rawFn") or current_fn).strip()
+        prior_semantic_fn = str(raw.get("_semanticFn") or "").strip()
+        fn = _norm_name(current_fn)
+        params = raw.get("params") if isinstance(raw.get("params"), dict) else {}
         hard_reject = _forbidden_world_entity_rejection(raw, fn or original_fn, params, i)
         if hard_reject:
             rejected.append(hard_reject)
@@ -143,7 +141,9 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
                 dropped.append({"index": i, "reason": "semantic_expand_unknown_fn", "fn": expanded_fn, "from": original_fn})
                 continue
             row = {"fn": expanded_fn, "params": expanded_params, "_index": i, "_rawFn": original_fn}
-            if expanded_fn != fn:
+            if prior_semantic_fn:
+                row["_semanticFn"] = prior_semantic_fn
+            elif expanded_fn != fn:
                 row["_semanticFn"] = fn
             out.append(row)
     rp["engineCalls"] = out

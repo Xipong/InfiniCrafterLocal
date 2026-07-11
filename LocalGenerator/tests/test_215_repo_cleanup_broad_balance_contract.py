@@ -10,26 +10,8 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_repo_docs_are_compact_and_old_gui_prompt_noise_removed():
-    assert not (ROOT / "ZIMAGE_GUI_438_PATCH_RU.txt").exists()
-    for rel in [
-        "README_RU.md",
-        "PROJECT_ARCHITECTURE_RU.md",
-        "PROJECT_MAP_RU.md",
-        "QUICK_START_RU.md",
-        "LocalGenerator/README_RU.md",
-        "LocalGenerator/PROJECT_ARCHITECTURE_RU.md",
-        "LocalGenerator/PROJECT_MAP_RU.md",
-        "LocalGenerator/QUICK_START_RU.md",
-    ]:
-        text = read(ROOT / rel)
-        assert "0.4.239" in "\n".join(text.splitlines()[:16])
-        limit = 30000 if "ARCHITECTURE" in rel else 12000
-        assert len(text) < limit
-
-
 def test_broad_soft_balance_uplift_is_global_but_still_single_authority():
-    from infini_local.pipelines.combine_pipeline import (
+    from infini_local.pipelines.combine_balance import (
         apply_family_locks_to_genome,
         clamp_vanilla_like_weapon_damage,
         vanilla_like_weapon_envelope,

@@ -1,187 +1,33 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
-import math
-import os
-import queue
-import random
-import re
-import shlex
-import subprocess
-import time
-import traceback
-from pathlib import Path
 from typing import Any
-from urllib import request as urlrequest
-from urllib import error as urlerror
-from urllib.parse import urlencode
-
 from infini_local.core.balance_report import attach_balance_report
-from infini_local.core.balance_policy import weapon_envelope_for_bucket
+
+from infini_local.core.balance_mode import should_apply_soft_normalization
+
+from infini_local.core.category_policy import COMBAT_CATEGORIES, NON_WEAPON_CATEGORIES
+from infini_local.core.item_identity_tools import item_field, item_num
+from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.core.runtime_authoring.structural import all_calls, find_call
+from infini_local.pipelines.runtime_presentation_policy import runtime_presentation_defaults
 from infini_local.pipelines.result_identity_policy import (
-    _policy_seed,
-    _weighted_choice,
-    bad_result_name,
-    canonical_for_result,
-    category_policy,
-    choose_from,
     choose_result_category,
-    clean_name,
     coerce_category_by_policy,
-    creative_result_name,
-    inh_for_parent,
-    is_weapon_like_parent,
-    name_noun_for,
-    name_prefixes_for,
     normalize_category,
-    palette_from,
-    parent_primary_category,
-    repair_name_if_needed,
-    rep,
-    rep_for_parent,
-    required_anchors_from,
-    required_anchors_from_tags,
-    theme_word,
-    title_words,
-    try_llm_name_repair,
 )
 from infini_local.pipelines.equipment_stats import (
-    _ACCESSORY_BOOLEAN_COSTS,
-    _ACCESSORY_COST_WEIGHTS,
-    _ARMOR_BOOLEAN_COSTS,
-    _ARMOR_PIECE_COST_WEIGHTS,
-    _SET_BONUS_COST_WEIGHTS,
-    _equipment_budget_base,
-    _equipment_cost,
-    _equipment_float,
-    _equipment_int,
-    _scale_equipment_fields,
     accessory_stats_for,
     apply_accessory_soft_budget,
     apply_armor_soft_budget,
     armor_slot_from_authoring,
     armor_stats_for,
 )
-from infini_local.pipelines.pipeline_support import (
-    ACCESSORY_HINT_TAGS,
-    ALLOWED_CATEGORIES,
-    ALLOW_DETERMINISTIC_DEV_FALLBACK,
-    AMMO_HINT_TAGS,
-    APP_VERSION,
-    ARMOR_HINT_TAGS,
-    ASSET_PUBLIC_BASE_URL,
-    BAD_NAME_PATTERNS,
-    CACHE_DIR,
-    CATEGORY_CREATIVITY,
-    CATEGORY_ENFORCE_SAMPLED,
-    CATEGORY_SALT,
-    COMBAT_CATEGORIES,
-    DELIVERY_ALIASES,
-    DELIVERY_VALUES,
-    EFFECT_ALIASES,
-    EFFECT_CODE,
-    EFFECT_PRESENTATION,
-    HARD_TAGS,
-    LAST_COMBINE_FAILURE,
-    LAST_COMBINE_FAILURE_FILE,
-    LLM_NUMERIC_GENOME_LIMITS,
-    LLM_OPTIONAL_GENOME_DEFAULTS,
-    LLM_REQUIRED_GENOME_FIELDS,
-    LLM_RUNTIME_AUTHORING,
-    MODDED_HIGH_TIERS,
-    MOVEMENT_ALIASES,
-    MOVEMENT_CODE,
-    NON_WEAPON_CATEGORIES,
-    ONHIT_ALIASES,
-    ONHIT_CODE,
-    PALETTES,
-    PLACEABLE_HINT_TAGS,
-    PlannerUnavailable,
-    RECIPE_IDENTITY_VERSION,
-    RECURSIVE_POWER_GROWTH,
-    RUNTIME_FAMILY_VALUES,
-    STRONG_ACCESSORY_TAGS,
-    TIER_DEFAULT_POWER,
-    TIER_RANK,
-    TOOL_HINT_TAGS,
-    USE_LLM,
-    VANILLA_ENDGAME_POWER,
-    VISUAL_PIPELINE_PROFILE,
-    VISUAL_SYNONYMS,
-    WEAPON_UPGRADE_TAGS,
-    _json_slim,
-    all_calls,
-    apply_item_knowledge,
-    asset_sync_service,
-    attach_generated_parent_summary,
-    attach_hybrid_vfx_manifest,
-    behavior_cost_multiplier,
-    build_item_knowledge,
-    cache_get,
-    cache_put,
-    canonicalize,
-    contract_versions_payload,
-    clamp_float,
-    estimate_engine_metrics,
-    failure_state,
-    final_normalize,
-    find_call,
-    generated_data_of,
-    generation_depth,
-    guess_head,
-    infer_attack_pattern_from_runtime,
-    infer_item_card,
-    is_deliverable_recipe_payload,
-    item_bool,
-    item_field,
-    item_identity,
-    item_num,
-    log_event,
-    lower_name,
-    mechanic_signal_power,
-    name_of,
-    normalize_world_id_from_payload,
-    pair_catalyst_pressure,
-    parse_first_valid_llm_json,
-    rarity_baseline_signal,
-    recipe_coherence,
-    recipe_key,
-    recipe_meta,
-    resolve_attack_pattern,
-    runtime_plan,
-    sanitize_genome_engine,
-    sanitize_recipe_for_delivery,
-    slug,
-    stable_hash,
-    tags_of,
-    trace_event,
-    world_recipe_dir,
-    world_storage,
-)
-from infini_local.pipelines.projectile_affordance import (
-    _explicit_visual_family_value,
-    apply_parent_projectile_affordance,
-    choose_parent_projectile_size_reference,
-    infer_projectile_visual_family,
-    parent_combo_looks_like_bow,
-    parent_projectile_family,
-    projectile_family_text,
-)
-from infini_local.pipelines.presentation_sound import (
-    attach_presentation_and_sound,
-    clamp,
-    effect_for,
-    movement_for,
-    onhit_for,
-    presentation_from_genome,
-    sound_profile_from_genome,
-)
-from infini_local.pipelines.result_knowledge_card import (
-    attach_result_knowledge_card,
-    build_result_item_card,
-)
+from infini_local.pipelines.engine_pressure_metrics import estimate_engine_metrics
+from infini_local.pipelines.item_power_knowledge import tags_of
+from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
+from infini_local.pipelines.projectile_affordance import apply_parent_projectile_affordance
+from infini_local.pipelines.combine_genome_contract import is_llm_planner
 from infini_local.pipelines.llm_authoring_prompt import (
     authored_int,
     authored_num,
@@ -189,17 +35,14 @@ from infini_local.pipelines.llm_authoring_prompt import (
     llm_category_without_router,
     llm_runtime_result_kind_policy,
 )
-from infini_local.pipelines.parent_context_pipeline import (
-    _pbool,
-    _pnum,
-    effective_projectile_profile_of,
-    llm_parent_card,
-    parent_weapon_profiles,
-    proj_bool,
-)
-
 from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
-from infini_local.pipelines.combine_genome import _bounded_parent_potion_stats, _parent_tool_power, normalize_authored_attack_pattern, weapon_genome_for, weapon_numbers_from_genome, is_llm_planner
+from infini_local.pipelines.combine_genome import _bounded_parent_potion_stats, _parent_tool_power, normalize_authored_attack_pattern, weapon_genome_for, weapon_numbers_from_genome
+
+
+def _authored_float_or_default(values: dict[str, Any], key: str, default: float | int) -> float:
+    raw = values.get(key)
+    return float(default if raw in (None, "") else raw)
+
 
 def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any]) -> dict[str, Any]:
     tags = set(data.get("tags", [])) | tags_of(a) | tags_of(b)
@@ -275,7 +118,10 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
                     armor["defense"] = max(0, min(80, int(round(defense_val))))
         armor["enabled"] = True
         armor["slot"] = armor.get("slot") if armor.get("slot") in {"head", "body", "legs"} else slot
-        armor, armor_budget_report = apply_armor_soft_budget(armor, stage, str(armor.get("slot") or slot))
+        armor, armor_budget_report = apply_armor_soft_budget(
+            armor, stage, str(armor.get("slot") or slot),
+            apply_clamps=should_apply_soft_normalization(),
+        )
         data.setdefault("debug", {})["armorBudgetReport"] = json.dumps(armor_budget_report, ensure_ascii=False)
         data["armor"] = armor
         gp.update({
@@ -292,7 +138,9 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         acc = accessory_stats_for(tags, stage)
         acc.update(data.get("accessory") or {})
         acc["enabled"] = True
-        acc, accessory_budget_report = apply_accessory_soft_budget(acc, stage)
+        acc, accessory_budget_report = apply_accessory_soft_budget(
+            acc, stage, apply_clamps=should_apply_soft_normalization(),
+        )
         data.setdefault("debug", {})["accessoryBudgetReport"] = json.dumps(accessory_budget_report, ensure_ascii=False)
         data["accessory"] = acc
         gp.update({
@@ -324,13 +172,17 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         genome = weapon_genome_for(data, a, b, tags, stage, damage_class)
         numbers = weapon_numbers_from_genome(max_parent_damage, tags, stage, genome)
         delivery = str(genome.get("delivery") or "swing")
-        pattern, pattern_source = normalize_authored_attack_pattern(genome, attack, damage_class, allow_fallback=not is_llm_planner(data))
+        runtime_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data))
+        pattern, pattern_source = normalize_authored_attack_pattern(genome, attack, damage_class, allow_fallback=not runtime_authored)
         genome["attackPattern"] = pattern
         genome["attackPatternSource"] = pattern_source
         genome = apply_parent_projectile_affordance(genome, a, b, tags, data, damage_class)
         delivery = str(genome.get("delivery") or delivery)
         runtime_family = str(genome.get("runtimeFamily") or "none")
-        use_style = 5 if runtime_family in {"thrust", "returning", "shoot", "cast", "throw", "summon", "flail", "yoyo", "whip"} or damage_class in {"magic", "ranged", "summon"} else 1
+
+        presentation_defaults = runtime_presentation_defaults(runtime_family, damage_class, delivery)
+
+        use_style = int(presentation_defaults["useStyle"])
         gp.update({
             "kind": "weapon",
             "categoryIntent": kind,
@@ -340,7 +192,7 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "damage": authored_weapon_damage(gp, int(numbers["damage"]), max_parent_damage, stage, genome, data.setdefault("debug", {}).setdefault("authorPreservingValidation", {})),
             "knockback": round(authored_num(gp, "knockback", 2.0 + min(stage["powerBudget"], 3.8) * 0.42 + (0.8 if int(numbers["useTime"]) >= 60 else 0.0), 0.0, 12.0), 2),
             "useTime": authored_int(gp, "useTime", int(numbers["useTime"]), 6, 150),
-            "useAnimation": authored_int(gp, "useAnimation", int(numbers["useAnimation"]), 6, 150),
+            "useAnimation": authored_int(gp, "useAnimation", int(float(genome.get("useAnimationTicks") or numbers["useAnimation"])), 6, 150),
             "useStyle": authored_int(gp, "useStyle", use_style, 0, 5),
             "autoReuse": bool(gp.get("autoReuse", stage["derivedPower"] > 12 and int(numbers["useTime"]) <= 45)),
             "manaCost": authored_int(gp, "manaCost", int(stage["mana"]) if damage_class == "magic" else 0, 0, 80),
@@ -355,18 +207,38 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "holdoutOffsetX": size["holdoutOffsetX"],
             "holdoutOffsetY": size["holdoutOffsetY"],
         })
+        if not str(gp.get("heldVisibility") or "").strip():
+            gp["heldVisibility"] = presentation_defaults["heldVisibility"]
+        if not str(gp.get("releaseTiming") or "").strip():
+            gp["releaseTiming"] = presentation_defaults["releaseTiming"]
+        if not str(gp.get("handPose") or "").strip():
+            gp["handPose"] = presentation_defaults["handPose"]
+        if gp.get("drawDuringUse") in (None, ""):
+            gp["drawDuringUse"] = gp["heldVisibility"] == "show_item"
         aoe_damage_radius_px = int(float(genome.get("aoeRadiusTiles") or 0) * 16)
-        impact_vfx_radius_px = int(float(genome.get("impactVfxRadiusPx") or max(size.get("explosionRadius", 0), aoe_damage_radius_px)))
-        contact_forgiveness_px = int(float(genome.get("contactForgivenessPx") or (min(14, max(0, aoe_damage_radius_px // 6)) if str(genome.get("onHit") or "") in {"burst", "starburst", "aura_pulse"} else 0)))
+        impact_vfx_radius_px = int(_authored_float_or_default(
+            genome,
+            "impactVfxRadiusPx",
+            max(size.get("explosionRadius", 0), aoe_damage_radius_px),
+        ))
+        contact_forgiveness_px = int(_authored_float_or_default(
+            genome,
+            "contactForgivenessPx",
+            min(14, max(0, aoe_damage_radius_px // 6)) if str(genome.get("onHit") or "") in {"burst", "starburst", "aura_pulse"} else 0,
+        ))
         attack.update({
             "enabled": True,
             "stage": stage_name,
             "powerBudget": stage["powerBudget"],
+            "damageClass": damage_class,
             "runtimeFamily": runtime_family,
             "delivery": delivery,
+            "useStyleCode": int(float(genome.get("useStyleCode") or use_style)),
+            "hideUseGraphic": bool(genome.get("hideUseGraphic", False)),
+            "disableItemMeleeHitbox": bool(genome.get("disableItemMeleeHitbox", False)),
+            "ownerHitCheck": bool(genome.get("ownerHitCheck", False)),
+            "channelUse": bool(genome.get("channelUse", False)),
             "weaponFamily": str(genome.get("weaponFamily") or ""),
-            "weaponSubfamily": str(genome.get("weaponSubfamily") or ""),
-            "attackPatternTags": list(genome.get("attackPatternTags") or []) if isinstance(genome.get("attackPatternTags"), list) else [],
             "projectileFamily": str(genome.get("projectileFamily") or ""),
             "ammoKind": str(genome.get("ammoFor") or genome.get("ammoKind") or gp.get("ammoFor") or ""),
             "pattern": pattern,
@@ -379,10 +251,22 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "spreadRadians": float(genome["spreadRadians"]),
             "procMode": 1 if genome["movementCode"] == 13 else 2 if genome["movementCode"] == 11 else 3 if genome["movementCode"] == 12 else 0,
             "splitCount": max(0, min(8, int(float(genome.get("splitCount") or 0)))),
+            "secondaryTrigger": str(genome.get("secondaryTrigger") or "on_hit"),
             "chainCount": max(0, min(6, int(float(genome.get("chainCount") or (2 if genome["onHit"] in {"chain", "lightning_arc"} else 0))))),
             "bounceCount": 2 if genome["movement"] in {"bounce", "boomerang", "returning_glaive"} else 0,
             "genome": genome,
             "speed": round(float(genome.get("speed") or stage["speed"]), 2),
+            "rangeTiles": round(max(4.0, min(120.0, float(genome.get("rangeTiles") or 35.0))), 2),
+            "homingStrength": round(max(0.0, min(1.0, float(genome.get("homingStrength") or 0.0))), 3),
+            "beamWidthPx": round(max(2.0, min(96.0, float(genome.get("beamWidthPx") or 14.0))), 2),
+            "beamChargeTicks": max(0, min(300, int(float(genome.get("beamChargeTicks") or 0)))),
+            "chargeTicks": max(1, min(300, int(float(genome.get("chargeTicks") or 45)))),
+            "chargePowerMultiplier": round(max(1.0, min(3.0, float(genome.get("chargePowerMultiplier") or 1.6))), 3),
+            "delayTicks": max(0, min(300, int(float(genome.get("delayTicks") or 0)))),
+            "sentryPlacement": str(genome.get("sentryPlacement") or "grounded"),
+            "sentryAttackIntervalTicks": max(12, min(180, int(float(genome.get("sentryAttackIntervalTicks") or 45)))),
+            "sentryTargetRangeTiles": round(max(8.0, min(60.0, float(genome.get("sentryTargetRangeTiles") or 30.0))), 2),
+            "sentryLifetimeTicks": max(120, min(36000, int(float(genome.get("sentryLifetimeTicks") or 3600)))),
             "lifetime": int(genome["lifetimeTicks"]),
             # Runtime C# treats this as total projectile hit budget.
             # 0/1 = one hit; -1 = explicitly infinite/persistent. Older builds added +1,
@@ -401,7 +285,7 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "tileCollide": False if int(genome["movementCode"]) in {8, 11, 12, 13, 15, 16, 17, 18} else True,
             # Local immunity must never default to -1 for generated damaging projectiles;
             # with finite pierce this could re-hit the same NPC while still overlapping.
-            "immunityCooldown": max(10, int(10 + float(genome.get("aoeRadiusTiles") or 0) * 2)),
+            "immunityCooldown": max(4, min(60, int(float(genome.get("immunityCooldown") or 0)))) if int(float(genome.get("immunityCooldown") or 0)) > 0 else max(10, int(10 + float(genome.get("aoeRadiusTiles") or 0) * 2)),
             "trailLength": int(float(genome.get("trailLength") if genome.get("trailLength") is not None else (10 if genome["effect"] in {"star", "shadow", "electric", "flame", "lunar"} else 4))),
             "maxChildProjectiles": int(genome.get("maxChildProjectiles") or 0),
             "maxChildDepth": int(genome.get("maxChildDepth") or 0),
@@ -411,6 +295,7 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "debuffTime": int(float(genome.get("debuffTime") or 0)),
             "secondaryMaterial": str(genome.get("secondaryMaterial") or ""),
             "secondaryProjectileShape": str(genome.get("secondaryProjectileShape") or ""),
+            "secondaryLifetimeTicks": max(5, min(180, int(float(genome.get("secondaryLifetimeTicks") or 24)))),
             "engineMetrics": genome.get("engineMetrics") or estimate_engine_metrics(genome, stage),
             "projectileShape": genome.get("projectileShape") or attack.get("projectileShape") or (data.get("projectileGenome") if isinstance(data.get("projectileGenome"), dict) else {}).get("shape", ""),
             "projectileMotion": genome.get("projectileMotion") or attack.get("projectileMotion") or (data.get("projectileGenome") if isinstance(data.get("projectileGenome"), dict) else {}).get("motionFeel", ""),
@@ -422,8 +307,12 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "mobilityRangeTiles": int(float(gp.get("mobilityRangeTiles") or genome.get("mobilityRangeTiles") or 0)),
             "mobilityCooldownTicks": int(float(gp.get("mobilityCooldownTicks") or genome.get("mobilityCooldownTicks") or 0)),
             "mobilitySafeTileOnly": bool(gp.get("mobilitySafeTileOnly", genome.get("mobilitySafeTileOnly", True))),
-            "soundUseSearchQuery": str(genome.get("soundUseSearchQuery") or ""),
-            "soundImpactSearchQuery": str(genome.get("soundImpactSearchQuery") or ""),
+            "soundUseCatalogId": str(genome.get("soundUseCatalogId") or ""),
+            "soundImpactCatalogId": str(genome.get("soundImpactCatalogId") or ""),
+            "soundCatalogSource": str(genome.get("soundCatalogSource") or ""),
+            "soundVolume": round(float(genome.get("soundVolume") or 0.85), 3),
+            "soundPitch": round(float(genome.get("soundPitch") or 0.0), 3),
+            "soundPitchVariance": round(float(genome.get("soundPitchVariance") if genome.get("soundPitchVariance") is not None else 0.18), 3),
         })
         data.setdefault("accessory", {"enabled": False})
     elif kind == "tool":
@@ -449,12 +338,15 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         axe = authored_int(gp, "axePower", inferred_axe, 0, 50) if axe_signal else 0
         hammer = authored_int(gp, "hammerPower", inferred_hammer, 0, 120) if hammer_signal else 0
         genome = (attack.get("genome") if isinstance(attack.get("genome"), dict) else {}) or {}
-        light_strength = gp.get("runtimeLightStrength")
+        # emit_light on a non-projectile tool is executable held-item light.
+        # Keep it in the existing Gameplay.HoldLight* contract instead of
+        # inventing Python-only Gameplay.RuntimeLight* wire fields.
+        light_strength = gp.get("holdLightStrength")
         if light_strength in (None, ""):
             light_strength = genome.get("runtimeLightStrength")
-        light_color = gp.get("runtimeLightColorName")
+        light_color = gp.get("holdLightColorName")
         if light_color in (None, ""):
-            light_color = genome.get("runtimeLightColorName")
+            light_color = genome.get("runtimeLightColorName") or genome.get("primaryColorName")
         mining_speed = gp.get("miningSpeedScale")
         if mining_speed in (None, ""):
             mining_speed = genome.get("miningSpeedScale")
@@ -485,11 +377,11 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
                 data.setdefault("debug", {})["ignoredInvalidMiningSpeedScale"] = json.dumps({"value": mining_speed, "error": repr(exc)}, ensure_ascii=False)
         if light_strength not in (None, ""):
             try:
-                gp["runtimeLightStrength"] = max(0.0, min(1.5, float(light_strength)))
+                gp["holdLightStrength"] = max(0.0, min(1.5, float(light_strength)))
             except Exception as exc:
-                data.setdefault("debug", {})["ignoredInvalidRuntimeLightStrength"] = json.dumps({"value": light_strength, "error": repr(exc)}, ensure_ascii=False)
+                data.setdefault("debug", {})["ignoredInvalidHoldLightStrength"] = json.dumps({"value": light_strength, "error": repr(exc)}, ensure_ascii=False)
         if light_color not in (None, ""):
-            gp["runtimeLightColorName"] = str(light_color)
+            gp["holdLightColorName"] = str(light_color)
         attack.update({"enabled": False})
         data.setdefault("accessory", {"enabled": False})
     elif kind == "potion" or "potion" in tags or "consumable" in tags:

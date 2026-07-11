@@ -37,4 +37,4 @@ def test_runtime_api_sync_guard_reads_python_and_csharp_contracts():
         r'RuntimeApiCurrent = "([^"]+)"',
         "C# runtime API",
     )
-    assert py_runtime_api == cs_runtime_api == "v0.4.47"
+    assert py_runtime_api == cs_runtime_api == "v0.4.48"

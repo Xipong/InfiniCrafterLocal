@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from infini_local.core.balance_policy import power_band_for_bucket
+from infini_local.core.balance_mode import current_balance_mode
 from infini_local.core.result_models import BalanceReportModel
 
 
@@ -81,6 +82,16 @@ def _clamp_taxonomy(debug: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         row = dict(author_validation.get("authoredDamageEnvelopeClamp") or {})
         row.setdefault("kind", "authored_damage_soft_envelope")
         taxonomy["balance"].append(row)
+    if isinstance(author_validation.get("authoredDamageBalanceAdvice"), dict):
+        row = dict(author_validation.get("authoredDamageBalanceAdvice") or {})
+        row.setdefault("kind", "authored_damage_soft_envelope_advice")
+        row["applied"] = False
+        taxonomy["balance"].append(row)
+    if isinstance(author_validation.get("recursiveDamageBalanceAdvice"), dict):
+        row = dict(author_validation.get("recursiveDamageBalanceAdvice") or {})
+        row.setdefault("kind", "recursive_generated_damage_advice")
+        row["applied"] = False
+        taxonomy["balance"].append(row)
     if isinstance(author_validation.get("recursiveDamageSoftCap"), dict):
         row = dict(author_validation.get("recursiveDamageSoftCap") or {})
         row.setdefault("kind", "recursive_generated_damage_soft_cap")
@@ -105,8 +116,16 @@ def _clamp_taxonomy(debug: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
                     entry = dict(row)
                     entry.setdefault("kind", "balance")
                     entry.setdefault("source", fallback_kind)
+                    entry["applied"] = True
                     taxonomy["balance"].append(entry)
-            if budget_report.get("reasons") and not budget_report.get("clamps"):
+            for row in budget_report.get("suggestedClamps") or []:
+                if isinstance(row, dict):
+                    entry = dict(row)
+                    entry.setdefault("kind", "balance_advice")
+                    entry.setdefault("source", fallback_kind)
+                    entry["applied"] = False
+                    taxonomy["balance"].append(entry)
+            if budget_report.get("reasons") and not budget_report.get("clamps") and not budget_report.get("suggestedClamps"):
                 taxonomy["balance"].append({"kind": fallback_kind, "reasons": budget_report.get("reasons"), "details": budget_report})
 
     if debug.get("runtimeRepairPath"):
@@ -175,9 +194,10 @@ def build_balance_report(data: dict[str, Any], stage: dict[str, Any] | None = No
         repair=repair,
         extra={
             **{k: v for k, v in band.items() if k not in {"powerBand", "label"}},
+            "balanceMode": current_balance_mode(),
             "authority": {
                 "author": "LLM writes fantasy/resultKind/runtimePlan/numbers",
-                "softBalance": "Python post-authoring envelope",
+                "softBalance": "applied only in INFINI_BALANCE_MODE=normalize; otherwise reported as advice",
                 "repair": "code structural repair first; targeted LLM retry only when not executable",
                 "runtimeSafety": "compiler/C# hard clamps for Terraria safety",
             },

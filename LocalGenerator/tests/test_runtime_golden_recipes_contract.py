@@ -1,5 +1,6 @@
 from infini_local.core import runtime_authoring as ra
-from infini_local.web import api as server
+from infini_local.pipelines.llm_authoring_prompt import engine_runtime_capability_contract_for_llm
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 
 def _compile(engine_calls):
@@ -30,7 +31,7 @@ def _check_golden_silt_star_authors_extractinator_proxy_contract():
 
 
 def _check_golden_spelunker_style_contract_does_not_add_ore_visual_executor():
-    card = server.engine_runtime_capability_contract_for_llm({}, {}, {})
+    card = engine_runtime_capability_contract_for_llm({}, {}, {})
     text = str(card)
     assert "Ore visual execution is not added in this patch" in text
     assert "accessory_effect" in text
@@ -47,7 +48,7 @@ def _check_generated_parent_card_enrichment_keeps_utility_and_accessory_identity
             "generatedParentSummary": {"name": "Generated Lumen Band", "visualIdentity": "brass ring with star light"},
         },
     }
-    card = server.raw_parent_card_for_llm(parent)
+    card = raw_parent_card_for_llm(parent)
     gp = card["raw"]["generatedParent"]
     assert gp["gameplay"]["kind"] == "accessory"
     assert gp["gameplay"]["holdLightStrength"] == 0.6

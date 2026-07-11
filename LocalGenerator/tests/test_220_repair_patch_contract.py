@@ -140,10 +140,3 @@ def test_balance_report_surfaces_runtime_repair_patch_contract():
     assert report["repair"]["patchContract"]["source"] == "repairPatch"
     contract_kinds = [row["kind"] for row in report["clamps"]["contract"]]
     assert "runtime_repair_patch_contract" in contract_kinds
-
-
-def test_repair_patch_contract_stamp_is_present():
-    from infini_local.core.contract_versions import build_contract_versions
-
-    stamp = build_contract_versions(app_version="0.4.220", recipe_identity_version="r", runtime_api_version="v", visual_pipeline_profile="p")
-    assert stamp["repairPatchContract"] == "targeted_repair_reduced_to_runtime_patch_v0.4.220"

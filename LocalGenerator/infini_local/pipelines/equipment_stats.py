@@ -7,7 +7,7 @@ from infini_local.core.result_models import ClampRecord
 
 # AGENT MAP: generated equipment stat budgets for combine_pipeline.
 # Owns accessory/armor stat generation and soft total-stat budget clamps.
-# Public callers use infini_local.pipelines.combine_pipeline.
+# Callers import this owner directly.
 
 _ACCESSORY_COST_WEIGHTS: dict[str, float] = {
     "genericDamage": 42.0,
@@ -148,7 +148,7 @@ def _scale_equipment_fields(stats: dict[str, Any], fields: list[str], scale: flo
             clamps.append(ClampRecord(field=field, raw=raw, final=final, kind="balance", reason=reason, source=source).to_dict())
     return clamps
 
-def apply_accessory_soft_budget(stats: dict[str, Any], stage: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def apply_accessory_soft_budget(stats: dict[str, Any], stage: dict[str, Any], *, apply_clamps: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
     """Soft total-stat budget for accessories; no prompt-word routing."""
     acc = dict(stats)
     budget = _equipment_budget_base(stage, kind="accessory")
@@ -169,6 +169,10 @@ def apply_accessory_soft_budget(stats: dict[str, Any], stage: dict[str, Any]) ->
             raw = acc.get("lavaImmune")
             acc["lavaImmune"] = False
             clamps.append(ClampRecord(field="lavaImmune", raw=raw, final=False, kind="balance", reason="all_in_one_accessory", source="accessory_soft_budget").to_dict())
+    suggested_clamps = list(clamps)
+    if not apply_clamps:
+        acc = dict(stats)
+        clamps = []
     final_cost, final_active = _equipment_cost(acc, _ACCESSORY_COST_WEIGHTS, _ACCESSORY_BOOLEAN_COSTS)
     report = {
         "schema": "infini.equipment-budget.v1",
@@ -180,11 +184,13 @@ def apply_accessory_soft_budget(stats: dict[str, Any], stage: dict[str, Any]) ->
         "activeFields": active[:24],
         "finalActiveFields": final_active[:24],
         "reasons": sorted(set(reasons)),
+        "applied": bool(apply_clamps),
         "clamps": clamps,
+        "suggestedClamps": [] if apply_clamps else suggested_clamps,
     }
     return acc, report
 
-def apply_armor_soft_budget(stats: dict[str, Any], stage: dict[str, Any], slot: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def apply_armor_soft_budget(stats: dict[str, Any], stage: dict[str, Any], slot: str, *, apply_clamps: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
     """Soft total-stat budget for armor piece + separate set bonus budget."""
     armor = dict(stats)
     piece_budget = _equipment_budget_base(stage, kind="armor", slot=slot)
@@ -203,6 +209,10 @@ def apply_armor_soft_budget(stats: dict[str, Any], stage: dict[str, Any], slot: 
     if set_scale < 0.999:
         reasons.append("set_bonus_pressure")
         clamps.extend(_scale_equipment_fields(armor, list(_SET_BONUS_COST_WEIGHTS), set_scale, "set_bonus_pressure", "armor_soft_budget"))
+    suggested_clamps = list(clamps)
+    if not apply_clamps:
+        armor = dict(stats)
+        clamps = []
     final_piece_cost, final_piece_active = _equipment_cost(armor, _ARMOR_PIECE_COST_WEIGHTS, _ARMOR_BOOLEAN_COSTS)
     final_set_cost, final_set_active = _equipment_cost(armor, _SET_BONUS_COST_WEIGHTS, {})
     report = {
@@ -222,7 +232,9 @@ def apply_armor_soft_budget(stats: dict[str, Any], stage: dict[str, Any], slot: 
         "finalPieceActiveFields": final_piece_active[:24],
         "finalSetBonusActiveFields": final_set_active[:24],
         "reasons": sorted(set(reasons)),
+        "applied": bool(apply_clamps),
         "clamps": clamps,
+        "suggestedClamps": [] if apply_clamps else suggested_clamps,
     }
     return armor, report
 

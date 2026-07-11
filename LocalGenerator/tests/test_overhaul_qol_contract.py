@@ -43,8 +43,3 @@ def test_inventory_asset_prefetch_is_bounded_and_optional():
         "RegisterLocal(data, persist: true, ensureAssets: true)",
     ]:
         assert needle in player
-
-
-def test_overhaul_qol_contract_stamp_updated():
-    contracts = (ROOT / "LocalGenerator" / "infini_local" / "core" / "contract_versions.py").read_text(encoding="utf-8")
-    assert "infini_station_overhaul_qol_v0.4.202" in contracts

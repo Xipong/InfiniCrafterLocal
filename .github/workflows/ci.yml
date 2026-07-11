@@ -17,11 +17,9 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r LocalGenerator/requirements-dev.txt
-      - name: Run pytest
-        run: |
-          cd LocalGenerator
-          pytest -q
+          python -m pip install -r LocalGenerator/requirements-dev.lock
+      - name: Run pytest in isolated deterministic shards
+        run: PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4 --json-out artifacts/validation/pytest_shards.json
       - name: Python compileall
         run: python -m compileall LocalGenerator
       - name: Env poisoning smoke
@@ -41,9 +39,25 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r LocalGenerator/requirements-dev.txt
+          python -m pip install -r LocalGenerator/requirements-dev.lock
       - name: Project hygiene
         run: python tools/check_project_hygiene.py
+      - name: Generated schema drift
+        run: PYTHONPATH=LocalGenerator python tools/export_contract_schemas.py --check
+      - name: Generated config registry drift
+        run: PYTHONPATH=LocalGenerator python tools/config_registry.py --check
+      - name: Python C# lifecycle parity
+        run: PYTHONPATH=LocalGenerator python tools/contract_parity.py --quiet
+      - name: Contract mutation gate
+        run: PYTHONPATH=LocalGenerator python tools/mutation_contract_gate.py
+      - name: Frozen runtime semantic diff
+        run: PYTHONPATH=LocalGenerator python tools/semantic_runtime_diff.py
+      - name: Runtime impact and infrastructure isolation
+        run: PYTHONPATH=LocalGenerator python tools/runtime_impact_report.py
+      - name: Ruff contract-boundary lint
+        run: ruff check LocalGenerator/infini_local tools
+      - name: Pyright contract-boundary types
+        run: pyright
       - name: C# static contract surface
         run: python tools/check_csharp_contracts.py
       - name: Planner prompt usability

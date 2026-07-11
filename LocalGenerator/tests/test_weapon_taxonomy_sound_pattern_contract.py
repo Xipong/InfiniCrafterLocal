@@ -5,15 +5,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.web import api as server
-
+from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.pipelines import presentation_sound
 
 from csharp_partial_reader import read_text_with_partial_bundles
+
 PARENT_A = {"name": "Shotgun", "type": 534, "damage": 24, "useTime": 45, "value": 1000}
 PARENT_B = {"name": "Fallen Star", "type": 75, "damage": 0, "value": 100}
 
 
-def test_runtime_plan_preserves_weapon_subfamily_attack_tags_and_sound_queries() -> None:
+def _compile(plan: dict, key: str) -> dict:
+    child = final_normalize(validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, key))
+    attack = child["attack"]
+    return attack.get("genome") if isinstance(attack.get("genome"), dict) else attack
+
+
+def test_auxiliary_weapon_taxonomy_is_not_part_of_runtime_contract() -> None:
     plan = {
         "name": "Starfall Scattergun",
         "tooltip": "A shotgun that bursts into falling star pellets.",
@@ -38,19 +46,17 @@ def test_runtime_plan_preserves_weapon_subfamily_attack_tags_and_sound_queries()
         },
     }
 
-    child = server.final_normalize(server.validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "taxonomy_sound"))
-    attack = child["attack"]
-    genome = attack.get("genome") if isinstance(attack.get("genome"), dict) else attack
+    genome = _compile(plan, "taxonomy_removed")
     assert genome["weaponFamily"] == "shotgun"
-    assert genome["weaponSubfamily"] == "shotgun"
-    assert "shotgun_spread" in genome["attackPatternTags"]
-    assert "falling_star" in genome["attackPatternTags"]
-    assert "shotgun" in genome["soundUseSearchQuery"]
-    assert "falling star" in genome["soundImpactSearchQuery"]
     assert genome["runtimeFamily"] == "shoot"
+    assert "weaponSubfamily" not in genome
+    assert "attackPatternTags" not in genome
+    assert genome["soundUseCatalogId"] == "firearm_light"
+    assert genome["soundImpactCatalogId"] == "impact_star"
+    assert genome["soundCatalogSource"] == "terraria_vanilla"
 
 
-def test_slash_text_does_not_false_positive_as_whip_lash_tag() -> None:
+def test_overhead_visual_role_uses_exact_runtime_fields_without_tags() -> None:
     plan = {
         "name": "Falling Star Saber",
         "tooltip": "A broadsword slash calls down bounded falling stars.",
@@ -60,29 +66,43 @@ def test_slash_text_does_not_false_positive_as_whip_lash_tag() -> None:
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 28, "useTimeTicks": 32}},
                 {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "wide golden star slash arc", "effect": "star"}},
-                {"fn": "apply_on_hit_effect", "params": {"onHit": "starfall", "count": 4, "aoeRadiusTiles": 2}},
+                {"fn": "apply_on_hit_effect", "params": {"onHit": "overhead_barrage", "count": 4, "aoeRadiusTiles": 2}},
             ],
         },
     }
 
-    child = server.final_normalize(server.validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "slash_not_whip"))
-    attack = child["attack"]
-    genome = attack.get("genome") if isinstance(attack.get("genome"), dict) else attack
-    tags = set(genome.get("attackPatternTags") or [])
-    assert "falling_star" in tags
-    assert "whip_lash" not in tags
-    assert "whip lash" not in str(genome.get("soundUseSearchQuery") or "").lower()
-    assert "whip lash" not in str(genome.get("soundImpactSearchQuery") or "").lower()
+    genome = _compile(plan, "overhead_no_tags")
+    assert genome["runtimeFamily"] == "swing"
+    assert genome["onHit"] == "overhead_barrage"
+    assert genome["splitCount"] == 4
+    assert "attackPatternTags" not in genome
 
 
-def test_csharp_model_and_sound_catalog_preserve_taxonomy_surface() -> None:
+def test_runtime_color_is_exact_effect_derived_not_mode_or_visual_palette() -> None:
+    def payload(effect: str, primary: str = "") -> dict:
+        return {
+            "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {}}]},
+            "attack": {"enabled": True, "effect": effect, "primaryColorName": primary},
+            "presentationGenome": {"palette": ["white_gold"], "projectileVisual": {"color": "toxic_green"}},
+        }
+
+    assert presentation_sound.attach_presentation_and_sound(payload("none"))["attack"]["primaryColorName"] == "white"
+    assert presentation_sound.attach_presentation_and_sound(payload("star"))["attack"]["primaryColorName"] == "gold"
+    assert presentation_sound.attach_presentation_and_sound(payload("electric", "cyan"))["attack"]["primaryColorName"] == "cyan"
+    assert presentation_sound.attach_presentation_and_sound(payload("electric", "white_gold"))["attack"]["primaryColorName"] == "cyan"
+
+def test_csharp_contract_has_no_auxiliary_taxonomy_or_sound_text_router() -> None:
     root = Path(__file__).resolve().parents[2]
     model = read_text_with_partial_bundles(root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.cs")
     sound = (root / "ModSources/InfiniCrafterLocal/Common/Audio/InfiniSoundLibrary.cs").read_text(encoding="utf-8")
     projectile = read_text_with_partial_bundles(root / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs")
-    for needle in ["WeaponSubfamily", "AttackPatternTags", "SoundUseSearchQuery", "SoundImpactSearchQuery"]:
-        assert needle in model
-    for needle in ["starfury", "enchanted_sword", "water_bolt", "last_prism", "phantasm", "stardust_dragon"]:
-        assert needle in sound
-    assert "_spec.WeaponSubfamily" in projectile
-    assert "_spec.AttackPatternTags" in projectile
+
+    for removed in ["WeaponSubfamily", "AttackPatternTags", "SoundUseSearchQuery", "SoundImpactSearchQuery"]:
+        assert removed not in model
+    for forbidden in ["starfury", "enchanted_sword", "water_bolt", "last_prism", "stardust_dragon", "StyleFromRangedText", "HasAny"]:
+        assert forbidden not in sound
+    for exact_id in ["shotgun_heavy", "magic_spectral", "summon_portal", "impact_star"]:
+        assert f'["{exact_id}"]' in sound
+    impact_method = projectile.split("private void PlayImpactSound", 1)[1].split("public override void OnKill", 1)[0]
+    assert "WeaponFamily" not in impact_method
+    assert "ProjectileFamily" not in impact_method

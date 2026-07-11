@@ -12,7 +12,7 @@ Design: frozen dataclasses with explicit fields, a kind tag, a reason, and a
 to_dict() that round-trips for JSON debug output. No mutation in place — return a
 new record on change. This keeps provenance/clamp records easy to reason about.
 """
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Any
 
 

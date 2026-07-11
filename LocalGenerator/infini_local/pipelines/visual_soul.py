@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from pathlib import Path
 from typing import Any
 
-from infini_local.pipelines.pipeline_support import Image, log_event
+from infini_local.core.image_dependencies import Image
+from infini_local.storage.trace_runtime import log_event
 
 
 # AGENT MAP: final-PNG visual-soul analysis. Reads postprocessed sprite pixels

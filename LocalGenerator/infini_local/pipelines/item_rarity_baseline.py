@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.env_utils import env_bool, env_float
-from infini_local.core.item_identity_tools import fingerprint_of, item_num, item_field
+from infini_local.core.item_identity_tools import fingerprint_of, item_num
 from infini_local.core.item_signals import knowledge_key
-from infini_local.pipelines.result_identity_policy import normalize_category, parent_primary_category
+from infini_local.pipelines.result_identity_policy import normalize_category
 
 # AGENT MAP: rarity/tier baseline for parent item knowledge.
 # Owns vanilla and modded rarity conversion only; live stat/mechanics power stays
@@ -203,15 +203,9 @@ def rarity_role_weight(category: str, tags: set[str]) -> tuple[float, str]:
         return 0.50, "cosmetic rarity transfers mostly to novelty"
     return 0.70, "unknown role rarity baseline"
 
-def _tags_of(item: dict[str, Any]) -> set[str]:
-    from infini_local.pipelines.item_power_knowledge import tags_of as _impl
-
-    return _impl(item)
-
-
-def rarity_baseline_signal(item: dict[str, Any], tags: set[str] | None = None, category: str | None = None) -> dict[str, Any]:
-    tags = set(tags or _tags_of(item))
-    category = normalize_category(category or parent_primary_category(item))
+def rarity_baseline_signal(item: dict[str, Any], tags: set[str], category: str) -> dict[str, Any]:
+    tags = set(tags)
+    category = normalize_category(category)
     raw = int(item_num(item, "rare"))
     details = rarity_details_of(item)
     est = rarity_tier_estimate(raw, details)

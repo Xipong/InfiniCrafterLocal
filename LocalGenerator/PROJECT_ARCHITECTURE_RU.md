@@ -20,36 +20,69 @@ LocalGenerator — Python-сторона InfiniCrafterLocal. Она приним
 - `runtimePlan.engineCalls` становится executable intent только после нормализации, structural repair, semantic lowering и compile в `core/runtime_authoring/`.
 - Gameplay не выводится из name/tooltip/flavor/prompt/debug prose.
 - Python может чинить форму JSON, bounds и support surface; изменение identity/fantasy должно быть видно в trace/provenance.
-- C# исполняет только явные bounded поля: `Gameplay`, `Attack`, `Accessory`, `Armor`, `VfxManifest`, `Visual`, `SoundProfile`, sprite paths, movement/effect/onHit codes.
+- C# исполняет только явные bounded поля: `Gameplay`, `Attack`, `Accessory`, `Armor`, `VfxManifest`, `Visual`, exact sound catalog ids/volume/pitch/pitch variance, sprite paths, movement/effect/onHit codes.
 - Asset sync отдаёт только финальные `.png/.json` через `/get_asset`; raw/intermediate generation files не являются runtime API.
 - World recipe cache scoped by world id; generated parents/items/assets не смешиваются между мирами.
+
+## Maintainability rule for new runtime capabilities
+
+Do not extend the project through a universal semantic graph or shared action state-machine. Follow `../docs/RUNTIME_VERTICAL_SLICES_RU.md`:
+
+```text
+one exact authored field/enum
+→ one small Python policy/compiler owner
+→ explicit result-model projection
+→ one isolated C# executor owner
+→ one end-to-end contract test
+```
+
+Derived reports are read-only diagnostics, not a second authoring surface. Explicit authored defaults/zeroes keep provenance; sparse-output behavior is unchanged.
 
 ## Canonical source layout
 
 | Area | Canonical modules | Responsibility |
 |---|---|---|
-| HTTP entrypoint | `web/server.py`, `web/server_handler.py` | process env/config, compose routes, start `ThreadingHTTPServer`, map request errors to JSON |
-| Web services/API | `web/server_services.py`, `web/api.py` | named dependency surface for HTTP wiring and diagnostic/tooling imports |
+| HTTP entrypoint | `web/server.py`, `web/server_handler.py` | compose owner modules/routes, start `ThreadingHTTPServer`, map request errors to JSON |
+| HTTP dependencies | `services/combine_endpoint.py`, `pipelines/pipeline_visual_config.py`, `pipelines/image_backend_pipeline.py` | request boundary and the single image/sd.cpp config + lifecycle state used by HTTP wiring |
 | Utility/debug routes | `web/server_utility_routes.py`, `web/vfx_debug_routes.py`, `web/server_trace_snapshot.py`, `web/trace_dashboard.py` | route-level request handling, trace/debug payloads, asset inspection |
 | Combine orchestration | `pipelines/combine_pipeline.py` | cache lookup, parent context, authoring, validation, gameplay, visual delivery, final response |
 | Combine subdomains | `combine_balance.py`, `combine_genome.py`, `combine_genome_contract.py`, `combine_validation.py`, `combine_gameplay.py` | balance envelope, genome shaping/repair, planner policy, validation, gameplay attachment |
+| Balance mode policy | `core/balance_mode.py` | exact `report/safety/normalize` selection only; no formulas |
+| Small runtime policies | `core/runtime_secondary_policy.py`, `core/runtime_overhead_barrage_policy.py`, `core/runtime_charge_release_policy.py`, `core/runtime_sentry_policy.py` | exact vocabulary/defaults/limits for their own vertical slices |
+| Secondary lowering | `core/runtime_authoring/secondary.py` | sole Python compile owner for `spawn_secondary_projectiles`, including exact `on_expire` |
 | LLM authoring | `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` | prompt payloads, response parsing, auth/transport/fallback, targeted repair |
-| Runtime authoring | `core/runtime_authoring/__init__.py`, `schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `compiler.py`, `reports.py` | public runtime API, enum/range schema, single runtime API version, semantic lowering, plan normalization, structural repair, compile, validation/provenance reports |
+| Runtime executor vocabulary | `core/runtime_executor_vocabulary.py` | единственный owner canonical movement/effect/onHit names и их C# opcodes; name-sets выводятся из keys |
+| Runtime family policy | `core/runtime_family_policy.py` | strict canonical executor-family enum и одна per-family profile-table для capability/presentation metadata; no natural-language aliases |
+| Sound catalog | `core/sound_catalog.py` | exact 92-role LLM vocabulary, Python/C# parity contract, bounded volume/pitch/variance controls and tiny compiled-mechanic fallbacks; no item-name/prose aliases |
+| Runtime authoring | `core/runtime_authoring/__init__.py`, `vocabulary.py`, `schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `compiler.py`, `reports.py` | узкий public compile/validate/report API, authoring-only terminology repair, enum/range schema, semantic lowering, normalization, repair and reports |
 | Runtime API version | `core/runtime_authoring/common.py` | single source of truth for `ENGINE_RUNTIME_API_VERSION` |
 | Parent context | `parent_context_pipeline.py`, `parent_context_cards.py`, `pipeline_runtime_dumps.py` | compact factual parent/projectile/ammo cards and runtime dump lookup |
 | Visual assets | `visual_generation_pipeline.py`, `visual_prompt_contracts.py`, `visual_asset_plan.py`, `visual_asset_manifest.py`, `visual_sprite_generation.py`, `visual_delivery_gate.py`, `visual_soul.py` | role-separated prompts, asset plan/manifest, generation, delivery gate, sprite-derived visual soul |
-| Sprite processing | `sprite_processing_pipeline.py`, `sprite_contracts.py`, `sprite_geometry.py`, `sprite_keyer.py`, `sprite_postprocess.py` | public sprite processing API, role contracts, geometry/keying/postprocess/validation |
-| Image backends | `image_backend_pipeline.py`, `pipeline_visual_config.py` | sd.cpp/A1111/ComfyUI/OpenAI-compatible image backend request shaping and service lifecycle |
-| VFX | `core/vfx_manifest.py`, `vfx_manifest_config.py`, `vfx_recipe_library.py`, `vfx_director_*`, `vfx_composition.py`, `vfx_composition_*`, `vfx_runtime_slots.py` | VFX recipes, director contract/prompt/context, composition primitives/parent/runtime slots, manifest assembly |
-| Storage/traces | `storage/world_storage.py`, `storage/world_recipe_runtime.py`, `storage/trace_runtime.py`, `storage/trace_tools.py`, `storage/failure_state.py` | world cache, recipe serialization/delivery shape, trace events, last failure state |
+| Sprite processing | `sprite_contracts.py`, `sprite_geometry.py`, `sprite_keyer.py`, `sprite_postprocess.py` | role contracts, geometry/keying/postprocess/validation; callers import owners directly |
+| Image backends | `image_backend_pipeline.py`, `pipeline_visual_config.py`, `services/sdcpp_backend.py`, `services/sdcpp_service.py` | sd.cpp/A1111/ComfyUI/OpenAI-compatible request shaping, isolated child-process environment and service lifecycle |
+| VFX | `core/vfx_manifest.py`, `vfx_manifest_config.py`, `vfx_recipe_library.py`, `vfx_director_*`, `vfx_composition_*`, `vfx_runtime_slots.py` | VFX recipes, director contract/prompt/context, composition primitives/parent/runtime slots, manifest assembly; callers import concrete owners directly |
+| Storage/traces | `storage/world_storage.py`, `storage/world_recipe_runtime.py`, `storage/trace_runtime.py`, `storage/trace_tools.py`, `storage/failure_state.py`, `pipelines/generation_debug.py` | world cache, recipe serialization/delivery shape, trace events; storage shapes/persists failures while generation_debug owns the live last-combine diagnostic state |
 | Desktop settings | `desktop/settings_gui.py`, `settings_gui_theme.py`, `settings_gui_ui.py`, `settings_gui_image_args.py`, `settings_gui_server_controls.py`, `settings_gui_trace_state.py`, `settings_schema.py`, `settings_env.py` | GUI shell, themed widgets, env schema, sd.cpp args, server lifecycle, trace/radmin panels |
+
+## Production image profile
+
+- Default local preset is FLUX.2 Klein 4B on the RX 6800 XT hybrid build: diffusion and text-encoder compute use `rocm0`, VAE compute uses `vulkan0`, and text-encoder parameters stay in CPU RAM (`--params-backend te=cpu`).
+- `INFINI_SDCPP_ROCM_COMPAT_ROOT` points to the isolated HIP6-compatible sd.cpp runtime. `sdcpp_backend.build_server_process_env()` applies ROCm/HIP/rocBLAS variables only to the child `sd-server.exe`; the parent LocalGenerator process is not mutated.
+- The measured idle soak20 baseline is mean 3.408 s and p95 3.441 s at 512×512, 4 steps. Game-load validation remains a separate manual check and is not a compile gate.
+- Z-Image remains an explicit optional preset. Model-specific prompt contracts are selected by configuration, never by item prose.
 
 ## Runtime authoring package
 
-`core/runtime_authoring/__init__.py` is the public package API. It re-exports explicit names from sibling modules and contains no wildcard imports.
+`core/runtime_authoring/__init__.py` is the public package API. Он экспортирует только 14 stable compile/validate/report operations и не экспортирует schema constants или private helpers. Production-модули внутри `infini_local` импортируют конкретных owners напрямую.
 
-- `schema.py` owns finite movement/effect/onHit/delivery/runtime-family vocabularies, engine function catalog, aliases and numeric limits.
-- `common.py` owns shared normalization helpers and `ENGINE_RUNTIME_API_VERSION`.
+- `core/runtime_executor_vocabulary.py` owns canonical movement/effect/onHit names and numeric opcodes. `dust` and `heal` exist only as authoring aliases to `smoke` and `lifesteal`.
+- `core/runtime_family_policy.py` owns the strict cross-language `runtimeFamily` vocabulary and one profile row per family. Downstream consumers must not repair aliases.
+- `beam` is a canonical finite family: exact `channelled_beam`/`runtimeArchetype.channel_beam` lowering only; range/homing/width/charge/cadence cross Python -> DTO -> net -> held C# executor.
+- `runtime_authoring/vocabulary.py` owns only permissive movement/effect/onHit/delivery terminology accepted from the LLM boundary. It does not re-export canonical executor enums.
+- `schema.py` owns the engine function catalog, Terraria-family grouping, affordance projection and numeric limits; executable enums come directly from their canonical owners.
+- `common.py` owns shared authoring normalization helpers and `ENGINE_RUNTIME_API_VERSION`.
+
+`pipelines/pipeline_support.py` удалён. Внутренние consumers импортируют symbols из реальных domain owners; compatibility facade запрещён hygiene scanner'ом.
 - `semantics.py` lowers finite parent-backed/runtime-family hints into engine-call parameters.
 - `normalize.py` canonicalizes `runtimePlan.engineCalls` and rejects unsupported world-entity authoring.
 - `structural.py` repairs malformed plan shape without authoring new gameplay identity.
@@ -58,10 +91,10 @@ LocalGenerator — Python-сторона InfiniCrafterLocal. Она приним
 
 ## HTTP/public API shape
 
-- `web/server.py` is the executable HTTP entrypoint.
-- `web/server_services.py` names the services, pipelines and helper functions consumed by the entrypoint.
-- `web/api.py` is the canonical import target for tests/tools that need generator services without starting the server.
-- Root `LocalGenerator/server.py` remains a launcher; when imported as `server` by local tooling it exposes `web.api`.
+- `web/server.py` is the executable HTTP composition root, not a cross-domain import API.
+- Root `LocalGenerator/server.py` is launcher-only and calls `web.server.main()`.
+- Tests/tools import functions and state from their real owner modules (`combine_pipeline`, `llm_authoring_pipeline`, `pipeline_visual_config`, sprite/visual/service modules).
+- Do not add `server_services.py`, a web API barrel, wildcard imports or `sys.modules` launcher substitution.
 
 ## Change routing
 
@@ -81,3 +114,19 @@ LocalGenerator — Python-сторона InfiniCrafterLocal. Она приним
 - `PYTHONPATH=LocalGenerator python tools/check_project_hygiene.py`
 - `PYTHONPATH=LocalGenerator python tools/check_csharp_contracts.py`
 - `PYTHONPATH=LocalGenerator python tools/check_planner_prompt_usability.py`
+
+## Pre-livetest author/image boundary v12
+
+- `pipelines/llm_authoring_prompt.py` advertises only executable finite calls. `spawn_temporary_helper_projectile` is temporary projectile behavior; removed function names are rejected, not migrated.
+- `pipelines/visual_asset_plan.py` and `pipelines/visual_generation_pipeline.py` canonicalize visual decisions into `visualKit.bakedAssets`; old aliases are read and removed at the boundary.
+- `pipelines/visual_prompt_contracts.py` owns final role framing. Exact resultKind may shape inventory-icon composition but never selects gameplay.
+- `core/vfx_director_prompt.py` passes compiled runtime facts to the VFX Director.
+- `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` is the required negative-example map before extending these contracts.
+
+## Charge-release + sentry v15
+
+- `runtime_charge_release_policy.py` owns exact charge limits/conflicts; `runtime_sentry_policy.py` owns placement/interval/range/lifetime/budget and recursive-effect rejection.
+- `deploy_sentry` is the only true sentry authoring call. `spawn_temporary_helper_projectile` remains a temporary helper and does not imply sentry lifecycle.
+- `normalize_runtime_plan_inplace()` preserves `_rawFn` across repeated passes so provenance identifies the authored family call.
+- Final fields must survive `combine_genome.py` and `combine_gameplay.py`; compiler-only GREEN is insufficient.
+- Full projection proof lives in `tests/test_v15_charge_release_sentry_contract.py`.

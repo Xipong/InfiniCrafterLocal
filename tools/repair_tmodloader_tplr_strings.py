@@ -30,7 +30,7 @@ try:
 except Exception:
     # Last-resort tool fallback only.  Keep this value in sync with
     # LocalGenerator/infini_local/core/runtime_authoring/common.py; the normal path imports it.
-    ENGINE_RUNTIME_API_VERSION = "v0.4.47"
+    ENGINE_RUNTIME_API_VERSION = "v0.4.48"
 
 PROMPT_VISUAL_KEYS = [
     "ImagePrompt", "ProjectileImagePrompt", "ImpactImagePrompt", "ChildImagePrompt",
@@ -74,7 +74,6 @@ def compact_infini_json(raw: str) -> str:
     data["Inheritance"] = []
     data["ItemKnowledge"] = {}
     data["PresentationGenome"] = {}
-    data["SoundProfile"] = {}
     recipe = data.get("RecipeMeta") if isinstance(data.get("RecipeMeta"), dict) else {}
     for key in ["ParentIdentities", "ParentCategories", "AssetFiles"]:
         recipe[key] = []

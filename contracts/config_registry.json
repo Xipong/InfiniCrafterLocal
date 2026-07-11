@@ -1,0 +1,6410 @@
+{
+  "authority": "derived-evidence-only",
+  "documentedFieldCount": 92,
+  "entries": [
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "A1111_BATCH_SIZE"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "line": 562,
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "default": 1,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 215,
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": [
+        {
+          "expression": "A1111_BATCH_SIZE"
+        },
+        1
+      ],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 16,
+      "minimum": 1,
+      "name": "INFINI_A1111_BATCH_SIZE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5.5,
+          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "line": 575,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 5.5,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_CFG",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "A1111_HEIGHT"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "line": 560,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        },
+        {
+          "default": {
+            "expression": "A1111_WIDTH"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 214,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        }
+      ],
+      "default": [
+        {
+          "expression": "A1111_HEIGHT"
+        },
+        {
+          "expression": "A1111_WIDTH"
+        }
+      ],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 2048,
+      "minimum": 64,
+      "name": "INFINI_A1111_HEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 210,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_LORA_NAME",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "0.8",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 211,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "0.8",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_LORA_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "Euler a",
+          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "line": 580,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "Euler a",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_SAMPLER",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 16,
+          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "line": 574,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 16,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_STEPS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 212,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_TRIGGER",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "http://127.0.0.1:7860",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 20,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "http://127.0.0.1:7860",
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_A1111_URL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "A1111_WIDTH"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "line": 559,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        },
+        {
+          "default": 512,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 213,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        }
+      ],
+      "default": [
+        {
+          "expression": "A1111_WIDTH"
+        },
+        512
+      ],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 2048,
+      "minimum": 64,
+      "name": "INFINI_A1111_WIDTH",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_AGENT_SELFTEST",
+      "owners": [
+        "ModSources/InfiniCrafterLocal/Common/Systems/InfiniAgentContractSelfTestSystem.cs",
+        "tools/runtime_impact_report.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_AGENT_SELFTEST_REPORT",
+      "owners": [
+        "ModSources/InfiniCrafterLocal/Common/Systems/InfiniAgentContractSelfTestSystem.cs",
+        "tools/agentctl.py",
+        "tools/runtime_impact_report.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 9,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 161,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
+      "owners": [
+        "LocalGenerator/infini_local/core/dev_fallback.py",
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/combine_pipeline.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 28,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 173,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 28,
+      "documented": true,
+      "example": "28",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ALPHA_THRESHOLD",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "line": 33,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "http://26.x.x.x:5055",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ASSET_PUBLIC_BASE_URL",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "LocalGenerator/infini_local/desktop/settings_gui.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "DEFAULT_BALANCE_MODE"
+          },
+          "file": "LocalGenerator/infini_local/core/balance_mode.py",
+          "line": 28,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": {
+        "expression": "DEFAULT_BALANCE_MODE"
+      },
+      "documented": true,
+      "example": "safety",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_BALANCE_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/core/balance_mode.py",
+        "LocalGenerator/infini_local/core/balance_report.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "magenta",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 169,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "magenta",
+      "documented": true,
+      "example": "magenta",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_BG_COLOR",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "sprite_keyer",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 168,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "sprite_keyer",
+      "documented": true,
+      "example": "sprite_keyer",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_BG_REMOVE_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "ROOT / \"cache\""
+          },
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "line": 23,
+          "maximum": null,
+          "minimum": null,
+          "type": "path"
+        }
+      ],
+      "default": {
+        "expression": "ROOT / \"cache\""
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CACHE_DIR",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "tools/replay_generation_case.py"
+      ],
+      "secret": false,
+      "type": "path",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.38,
+          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
+          "line": 39,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.38,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CATEGORY_CREATIVITY",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+        "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+          "line": 56,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
+          "line": 40,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CATEGORY_ENFORCE_SAMPLED",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+        "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "default",
+          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+          "line": 57,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "default",
+          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
+          "line": 41,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "default",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CATEGORY_SALT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+        "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.72,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 197,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.72,
+      "documented": true,
+      "example": "0.72",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CHILD_ICON_TARGET_FILL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 24,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 160,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 24,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CHILD_SPRITE_CANVAS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 34,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 172,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 34,
+      "documented": true,
+      "example": "34",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CHROMA_TOLERANCE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0,
+          "file": "LocalGenerator/infini_local/services/combine_endpoint.py",
+          "line": 18,
+          "maximum": 600,
+          "minimum": 0,
+          "type": "integer"
+        }
+      ],
+      "default": 0,
+      "documented": true,
+      "example": "210",
+      "gui": false,
+      "maximum": 600,
+      "minimum": 0,
+      "name": "INFINI_COMBINE_BUSY_WAIT_SECONDS",
+      "owners": [
+        "LocalGenerator/infini_local/services/combine_endpoint.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1,
+          "file": "LocalGenerator/infini_local/services/combine_endpoint.py",
+          "line": 16,
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 1,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 8,
+      "minimum": 1,
+      "name": "INFINI_COMBINE_CONCURRENCY",
+      "owners": [
+        "LocalGenerator/infini_local/services/combine_endpoint.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5.5,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 118,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 5.5,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_CFG",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 111,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_CHECKPOINT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "infinicrafterlocal",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 124,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "infinicrafterlocal",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_CLIENT_ID",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1.0,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 121,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 1.0,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_DENOISE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "COMFYUI_WIDTH"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 116,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "COMFYUI_WIDTH"
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 2048,
+      "minimum": 64,
+      "name": "INFINI_COMFYUI_HEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 112,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_LORA_NAME",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "0.8",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 113,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "0.8",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_LORA_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.75,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 123,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.75,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_POLL_INTERVAL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "euler",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 119,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "euler",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_SAMPLER",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "normal",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 120,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "normal",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_SCHEDULER",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 16,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 117,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 16,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_STEPS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 122,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_COMFYUI_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 114,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_TRIGGER",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "http://127.0.0.1:8188",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 21,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "http://127.0.0.1:8188",
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_URL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 512,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 115,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 512,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_WIDTH",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 108,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_WORKFLOW",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 109,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_WORKFLOW_LORA",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 110,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_COMFYUI_WORKFLOW_NO_LORA",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CRAFT_CACHE_HTTP_TIMEOUT_SECONDS",
+      "owners": [
+        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CRAFT_CACHE_RECOVERY_SECONDS",
+      "owners": [
+        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": true,
+      "example": "2",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CRAFT_HTTP_ATTEMPTS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": true,
+      "example": "900",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 188,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_DENOISE_STRAY_PIXELS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.86,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 198,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.86,
+      "documented": true,
+      "example": "0.86",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_FIELD_ICON_TARGET_FILL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 32,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 161,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 32,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_FIELD_SPRITE_CANVAS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": true,
+      "example": "Локалка: LM Studio + local Z-Image/sd.cpp",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_GUI_PIPELINE_PRESET",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "127.0.0.1",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 522,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "127.0.0.1",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 153,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "127.0.0.1",
+      "documented": true,
+      "example": "0.0.0.0",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_HOST",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_env.py",
+        "LocalGenerator/infini_local/desktop/settings_gui.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "https://api.openai.com/v1",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 125,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "https://api.openai.com/v1",
+      "documented": true,
+      "example": "https://api.openai.com/v1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_API_BASE_URL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 131,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_API_EXTRA_HEADERS_JSON",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 126,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_API_KEY",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "gpt-image-1",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 127,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "gpt-image-1",
+      "documented": true,
+      "example": "gpt-image-1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_API_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "/images/generations",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 128,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "/images/generations",
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_API_PATH",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "512x512",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 129,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "512x512",
+      "documented": true,
+      "example": "512x512",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_API_SIZE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 130,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
+      },
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_IMAGE_API_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "procedural",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 19,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": {
+            "expression": "visual_config.IMAGE_BACKEND"
+          },
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 520,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": [
+        "procedural",
+        {
+          "expression": "visual_config.IMAGE_BACKEND"
+        }
+      ],
+      "documented": true,
+      "example": "sdcpp",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_BACKEND",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_env.py",
+        "LocalGenerator/infini_local/desktop/settings_gui.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/web/server.py",
+        "LocalGenerator/infini_local/web/server_utility_routes.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 132,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 1,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_VARIANTS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.82,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 196,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.82,
+      "documented": true,
+      "example": "0.82",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMPACT_ICON_TARGET_FILL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 32,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 159,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 32,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMPACT_SPRITE_CANVAS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ITEMS_DUMP",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ITEMS_RUNTIME_DUMP",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.91,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 194,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.91,
+      "documented": true,
+      "example": "0.91",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ITEM_ICON_TARGET_FILL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "DATA_DIR / \"item_knowledge.json\""
+          },
+          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+          "line": 61,
+          "maximum": null,
+          "minimum": null,
+          "type": "path"
+        }
+      ],
+      "default": {
+        "expression": "DATA_DIR / \"item_knowledge.json\""
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ITEM_KNOWLEDGE_PATH",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
+      ],
+      "secret": false,
+      "type": "path",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+          "line": 60,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_KNOWLEDGE_ENABLED",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 3,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 65,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 3,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_AMMO_REP_LIMIT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_ENGINE_CONTRACT_STYLE",
+      "owners": [
+        "tools/check_planner_prompt_usability.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 28,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_FALLBACK_API_KEY",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 27,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_FALLBACK_BASE_URL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 26,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_FALLBACK_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 29,
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 2,
+      "documented": true,
+      "example": "2",
+      "gui": true,
+      "maximum": 10,
+      "minimum": 1,
+      "name": "INFINI_LLM_FALLBACK_NETWORK_FAILS",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 25,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_FALLBACK_PROVIDER",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 68,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "0",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_INCLUDE_AISTYLE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 36,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 182,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_LOCAL_REASONING_PROMPT",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "<redacted>",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 32,
+          "maximum": 64000,
+          "minimum": 256,
+          "type": "integer"
+        },
+        {
+          "default": "<redacted>",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 178,
+          "maximum": 64000,
+          "minimum": 256,
+          "type": "integer"
+        }
+      ],
+      "default": "<redacted>",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": 64000,
+      "minimum": 256,
+      "name": "INFINI_LLM_MAX_TOKENS",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": true,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 69,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_PROJECTILE_BEHAVIOR_DIGEST",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 11,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 164,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "local",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_PROVIDER",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "<redacted>",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 64,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "<redacted>",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_RAW_TOKEN_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 35,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 181,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_REASONING_EXCLUDE",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "<redacted>",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 34,
+          "maximum": 32000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "default": "<redacted>",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 180,
+          "maximum": 32000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      ],
+      "default": "<redacted>",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": 32000,
+      "minimum": 0,
+      "name": "INFINI_LLM_REASONING_MAX_TOKENS",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": true,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "off",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 33,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "off",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 179,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "off",
+      "documented": true,
+      "example": "off",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_REASONING_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "env_int(\"INFINI_LLM_TIMEOUT\", 95, lo=1, hi=3600)"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "line": 414,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "env_int(\"INFINI_LLM_TIMEOUT\", 95, lo=1, hi=3600)"
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_LLM_REPAIR_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/llm_transport.py",
+          "line": 485,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_REPLAY_RAW",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "tools/replay_generation_case.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 31,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 175,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": true,
+      "example": "auto",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_RESPONSE_FORMAT",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 60,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_RUNTIME_AUTHORING",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 63,
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 5,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 16,
+      "minimum": 1,
+      "name": "INFINI_LLM_RUNTIME_MAX_CONCEPT_CANDIDATES",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 61,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_RUNTIME_PLAN_REQUIRED",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
+          "line": 62,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.38,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "line": 104,
+          "maximum": 1.2,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      ],
+      "default": 0.38,
+      "documented": true,
+      "example": "0.38",
+      "gui": true,
+      "maximum": 1.2,
+      "minimum": 0.0,
+      "name": "INFINI_LLM_TEMPERATURE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 95,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "line": 113,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        },
+        {
+          "default": 95,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "line": 138,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        },
+        {
+          "default": 95,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "line": 414,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "default": 95,
+          "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+          "line": 303,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 95,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_LLM_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 13,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 166,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": true,
+      "example": "auto",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LMSTUDIO_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "http://127.0.0.1:1234",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 12,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "http://127.0.0.1:1234",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 165,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "http://127.0.0.1:1234",
+      "documented": true,
+      "example": "http://127.0.0.1:1234",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LMSTUDIO_URL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_MATERIAL_RARITY_MULT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 32,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 179,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 32,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_MAX_COLORS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "tools/replay_generation_case.py",
+          "line": 46,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_MULTIPASS_AUTHORING",
+      "owners": [
+        "tools/replay_generation_case.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 22,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 173,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_API_KEY",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 21,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 172,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "https://api.example.com/v1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_BASE_URL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 126,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_IMAGE_API_KEY",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "https://api.openai.com/v1",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 125,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "https://api.openai.com/v1",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_IMAGE_BASE_URL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "gpt-image-1",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 127,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "gpt-image-1",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_IMAGE_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "512x512",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 129,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "512x512",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_IMAGE_SIZE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 23,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 174,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": true,
+      "example": "PASTE_MODEL_HERE",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENAI_COMPAT_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 16,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 168,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENROUTER_API_KEY",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "InfiniCrafterLocal",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 19,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "InfiniCrafterLocal",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 171,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "InfiniCrafterLocal",
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENROUTER_APP_TITLE",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "https://openrouter.ai/api/v1",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 15,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "https://openrouter.ai/api/v1",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 167,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "https://openrouter.ai/api/v1",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENROUTER_BASE_URL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "https://github.com/InfiniCrafterLocal",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 18,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "https://github.com/InfiniCrafterLocal",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 170,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "https://github.com/InfiniCrafterLocal",
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENROUTER_HTTP_REFERER",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 17,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        },
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 169,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": true,
+      "example": "PASTE_MODEL_SLUG_HERE",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENROUTER_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 4,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 141,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 4,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PATTERN_LIBRARY_CARDS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "0 if _LLM_RUNTIME_AUTHORING_DEFAULT else 2"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 142,
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "0 if _LLM_RUNTIME_AUTHORING_DEFAULT else 2"
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 8,
+      "minimum": 0,
+      "name": "INFINI_PATTERN_REPAIR_ATTEMPTS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 20,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 143,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 20,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PATTERN_REPAIR_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 112,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PIXEL_LORA_NAME",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "0.8",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 113,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "0.8",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PIXEL_LORA_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 178,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PIXEL_POSTERIZE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 114,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PIXEL_TRIGGER",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5055,
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 523,
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "default": 5055,
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 150,
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 5055,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": 65535,
+      "minimum": 1,
+      "name": "INFINI_PORT",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PROJECTILES_DUMP",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PROJECTILES_RUNTIME_DUMP",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.84,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 195,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.84,
+      "documented": true,
+      "example": "0.84",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PROJECTILE_ICON_TARGET_FILL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 32,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 158,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 32,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PROJECTILE_SPRITE_CANVAS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py",
+          "line": 18,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_RARITY_BASELINE_ENABLED",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_RARITY_BASELINE_STRENGTH",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "recipe_v4_25_no_item_family_routing",
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "line": 22,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "recipe_v4_25_no_item_family_routing",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_RECIPE_IDENTITY_VERSION",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_RECURSIVE_POWER_GROWTH",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 167,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_REMOVE_BG",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 171,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_REQUIRE_PILLOW",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 177,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "0",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SAVE_SPRITE_STAGES",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1.0,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 45,
+          "maximum": 30.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      ],
+      "default": 1.0,
+      "documented": true,
+      "example": "1.0",
+      "gui": true,
+      "maximum": 30.0,
+      "minimum": 0.0,
+      "name": "INFINI_SDCPP_CFG",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "SDCPP_WIDTH"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 43,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "SDCPP_WIDTH"
+      },
+      "documented": true,
+      "example": "512",
+      "gui": true,
+      "maximum": 2048,
+      "minimum": 64,
+      "name": "INFINI_SDCPP_HEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 28,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "C:\\Games\\sdcpp\\models\\Flux 2 4B\\Qwen3-4B-UD-Q5_K_XL.gguf",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_LLM",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 29,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_LORA_DIR",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 30,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_LORA_FILE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 32,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_LORA_PROMPT_TAGS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "0.65",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 31,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "0.65",
+      "documented": true,
+      "example": "0.65",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_LORA_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 24,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "C:\\Games\\sdcpp\\models\\Flux 2 4B\\flux-2-klein-4b-Q8_0.gguf",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 55,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_ROCM_COMPAT_ROOT",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "euler",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 46,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "euler",
+      "documented": true,
+      "example": "euler",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SAMPLER",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": -1,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 47,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": -1,
+      "documented": true,
+      "example": "-1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SEED",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 53,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_AUTOSTART",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "safe_args",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 57,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "safe_args",
+      "documented": true,
+      "example": "safe_args",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_COMMAND_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 58,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-method {sampler} {extra}",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 54,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030\\sd-server.exe",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_EXE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 59,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "-v --backend diffusion=rocm0,vae=vulkan0,te=rocm0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_EXTRA_ARGS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "/,/health,/sdapi/v1/sd-models",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 62,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "/,/health,/sdapi/v1/sd-models",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_HEALTH_PATHS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "127.0.0.1",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 51,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "127.0.0.1",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_HOST",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "str(CACHE_DIR / \"sdcpp_server.log\")"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 70,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": {
+        "expression": "str(CACHE_DIR / \"sdcpp_server.log\")"
+      },
+      "documented": true,
+      "example": "cache/sdcpp_server.log",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_LOG_FILE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 64,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_PAYLOAD_STYLE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 7861,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 52,
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 7861,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 65535,
+      "minimum": 1,
+      "name": "INFINI_SDCPP_SERVER_PORT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "SDCPP_TIMEOUT"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 66,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "SDCPP_TIMEOUT"
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_SDCPP_SERVER_REQUEST_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "os.name == \"nt\""
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 69,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": {
+        "expression": "os.name == \"nt\""
+      },
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_SHOW_CONSOLE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 180,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 65,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 180,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_STARTUP_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "/sdapi/v1/txt2img,/txt2img,/generate",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 63,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "/sdapi/v1/txt2img,/txt2img,/generate",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_TXT2IMG_PATHS",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "http://127.0.0.1:7861",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 50,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "http://127.0.0.1:7861",
+      "documented": true,
+      "example": "http://127.0.0.1:7861",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_SERVER_URL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 8,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 44,
+          "maximum": 150,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 8,
+      "documented": true,
+      "example": "4",
+      "gui": true,
+      "maximum": 150,
+      "minimum": 1,
+      "name": "INFINI_SDCPP_STEPS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 61,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": {
+        "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_SDCPP_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 27,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "C:\\Games\\sdcpp\\models\\Flux 2 4B\\ae.safetensors",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SDCPP_VAE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 512,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 42,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        }
+      ],
+      "default": 512,
+      "documented": true,
+      "example": "512",
+      "gui": true,
+      "maximum": 2048,
+      "minimum": 64,
+      "name": "INFINI_SDCPP_WIDTH",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SKIP_CONFIG_FILE",
+      "owners": [
+        "LocalGenerator/infini_local/core/env_utils.py",
+        "tools/agentctl.py",
+        "tools/run_pytest_shards.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 186,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1              # removes only key-colored edge leftovers",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_CHROMA_DEFRINGE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "box",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 185,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "box",
+      "documented": true,
+      "example": "box           # box, lanczos, bicubic, nearest",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_DOWNSCALE_FILTER",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 40,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 193,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 40,
+      "documented": true,
+      "example": "40",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_EFFECT_CORE_ALPHA_THRESHOLD",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 56,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 192,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 56,
+      "documented": true,
+      "example": "56",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_ITEM_CORE_ALPHA_THRESHOLD",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 8,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 175,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 8,
+      "documented": true,
+      "example": "8",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_KEYER_RESIDUE_STEPS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 3,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 174,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 3,
+      "documented": true,
+      "example": "3",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_KEYER_SPILL_RADIUS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 256,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 184,
+          "maximum": 2048,
+          "minimum": 64,
+          "type": "integer"
+        }
+      ],
+      "default": 256,
+      "documented": true,
+      "example": "256",
+      "gui": true,
+      "maximum": 2048,
+      "minimum": 64,
+      "name": "INFINI_SPRITE_MASTER_CANVAS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.92,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 191,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.92,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_MAX_BBOX_RATIO",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.12,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 209,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.12,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_MAX_EDGE_TOUCH_PCT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.82,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 208,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.82,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_MAX_OPAQUE_PCT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.1,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 190,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.1,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_MIN_BBOX_RATIO",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.015,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 207,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.015,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_MIN_OPAQUE_PCT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 176,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 2,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_PADDING",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 187,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1         # prevents magenta/key RGB bleed during resize",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_PREMULTIPLIED_RESIZE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "master_soft",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 183,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "master_soft",
+      "documented": true,
+      "example": "master_soft  # master_soft, pixel_strict, legacy_nearest",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_SPRITE_PROCESSING_PROFILE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 189,
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        }
+      ],
+      "default": 2,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": 8,
+      "minimum": 0,
+      "name": "INFINI_SPRITE_RETRIES",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "7777",
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "line": 34,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "7777",
+      "documented": true,
+      "example": "7777",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_TERRARIA_PORT",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_TML_DEPS_SRC",
+      "owners": [
+        "tools/agentctl.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 120,
+          "file": "LocalGenerator/infini_local/storage/trace_runtime.py",
+          "line": 20,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 120,
+      "documented": true,
+      "example": "120",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_TRACE_EVENTS_TAIL",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/storage/trace_runtime.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 18000,
+          "file": "LocalGenerator/infini_local/storage/trace_runtime.py",
+          "line": 19,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 18000,
+      "documented": true,
+      "example": "18000",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_TRACE_MAX_PROMPT_CHARS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/storage/trace_runtime.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/storage/trace_runtime.py",
+          "line": 18,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_TRACE_PROMPTS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_env.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/storage/trace_runtime.py",
+        "tools/replay_generation_case.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
+          "line": 59,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_UNIVERSAL_RECIPE_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "line": 8,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
+          "line": 38,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "line": 157,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_USE_LLM",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 8,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 58,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 8,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_EFFECT_NAME_BANK_MAX_CARDS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 42,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 59,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 42,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_EFFECT_NAME_BANK_MAX_NAMES",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 420,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 79,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 420,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_EMERGENCY_MAX_DRAW_CALLS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 240,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 77,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 240,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_EMERGENCY_MAX_PARTICLES_PER_TICK",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 9000,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 78,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 9000,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_EMERGENCY_MAX_PARTICLES_TOTAL",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 52,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_LLM_DIRECTOR",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 53,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 5,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_LLM_DIRECTOR_MAX_SLOTS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "<redacted>",
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 54,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": "<redacted>",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": true,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 57,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 1,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.34,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 55,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.34,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_LLM_DIRECTOR_TEMPERATURE",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 75,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 56,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 75,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_LLM_DIRECTOR_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.18,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 80,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.18,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_MAGNITUDE_JITTER",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 68,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_MUNDANE_DUPLICATE_GUARD",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 3,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 69,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 3,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_MUNDANE_MAX_SLOTS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 71,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PARENT_EFFECT_INHERITANCE",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 3,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 74,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 3,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PARENT_EFFECT_MAX_INHERITED_SLOTS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.48,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 73,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.48,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PARENT_EFFECT_STRONG_THRESHOLD",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.75,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 72,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.75,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PARENT_EFFECT_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 65,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 2,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PROCEDURAL_BLEND_CANDIDATES",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.82,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 66,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 0.82,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PROCEDURAL_CHANCE",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 62,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PROCEDURAL_COMPOSE",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 64,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 5,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_PROCEDURAL_MAX_EXTRA_SLOTS",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 63,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_RECIPE_BLEND",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 40,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_RUNTIME_INTENT_FIRST",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 37,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_SELECTOR",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 41,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_SELECTOR_DEBUG",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1.0,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 43,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 1.0,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_SELECTOR_HINT_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 18.0,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 44,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 18.0,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_SELECTOR_JITTER",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 6.0,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 45,
+          "maximum": null,
+          "minimum": null,
+          "type": "number"
+        }
+      ],
+      "default": 6.0,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_SELECTOR_NOVELTY_WEIGHT",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": 5,
+          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "line": 42,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 5,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VFX_SELECTOR_TOP",
+      "owners": [
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 200,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "0",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "full",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 134,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "full",
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_ASSET_MODE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_env.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 146,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_DIRECTOR_LLM",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/llm_transport.py",
+          "line": 253,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_DIRECTOR_MAX_TOKENS",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+      ],
+      "secret": true,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 0.42,
+          "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+          "line": 299,
+          "maximum": 1.2,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      ],
+      "default": 0.42,
+      "documented": true,
+      "example": "0.42",
+      "gui": true,
+      "maximum": 1.2,
+      "minimum": 0.0,
+      "name": "INFINI_VISUAL_DIRECTOR_TEMPERATURE",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
+      ],
+      "secret": false,
+      "type": "number",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 135,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 136,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_GENERATE_IMPACT_IMAGES",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 137,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 240,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 157,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        },
+        {
+          "default": 240,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 61,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "default": 240,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 122,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "default": 240,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 130,
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 240,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_VISUAL_GENERATION_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "author_visualpack_v2",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 147,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "author_visualpack_v2",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_PIPELINE_PROFILE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 203,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_REQUIRE_ITEM_SPRITE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 206,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "1",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/pipelines/visual_delivery_gate.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 199,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_STRICT_AI_AUTHORSHIP",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "CACHE_DIR / \"world_recipes\""
+          },
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "line": 25,
+          "maximum": null,
+          "minimum": null,
+          "type": "path"
+        }
+      ],
+      "default": {
+        "expression": "CACHE_DIR / \"world_recipes\""
+      },
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_WORLD_RECIPES_DIR",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "tools/replay_generation_case.py"
+      ],
+      "secret": false,
+      "type": "path",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 49,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ZIMAGE_POSITIVE_ONLY",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "auto",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 48,
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "auto",
+      "documented": true,
+      "example": "0",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ZIMAGE_PROMPT_CONTRACT",
+      "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1800,
+          "file": "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
+          "line": 764,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 1800,
+      "documented": true,
+      "example": "1800",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ZIMAGE_PROMPT_LIMIT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "documented"
+    },
+    {
+      "declarations": [
+        {
+          "default": 2200,
+          "file": "LocalGenerator/infini_local/pipelines/sprite_postprocess.py",
+          "line": 628,
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        }
+      ],
+      "default": 2200,
+      "documented": true,
+      "example": "2200",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_ZIMAGE_RETRY_PROMPT_LIMIT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/sprite_postprocess.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "documented"
+    }
+  ],
+  "errors": [],
+  "fieldCount": 233,
+  "fingerprint": "e302b832c7d08b386282279d46f78a62c46486269a5bb76116450ba5a63b60ad",
+  "generatedFrom": [
+    "env_* calls in LocalGenerator/infini_local and tools",
+    "LocalGenerator/infini_local/desktop/settings_schema.py",
+    "LocalGenerator/config.example.env",
+    "C# INFINI_* references"
+  ],
+  "guiFieldCount": 97,
+  "ok": true,
+  "schema": "infini.config-registry.v1",
+  "secretFieldCount": 10,
+  "warnings": [
+    {
+      "field": "INFINI_CRAFT_HTTP_ATTEMPTS",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
+      "field": "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
+      "field": "INFINI_GUI_PIPELINE_PRESET",
+      "kind": "presented_without_env_helper_declaration"
+    }
+  ]
+}

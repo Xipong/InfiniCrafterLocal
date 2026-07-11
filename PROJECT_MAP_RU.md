@@ -93,3 +93,25 @@ C# is not a generator, not a prompt interpreter, and not a fallback author.
 - MP craft is **server-authoritative**; do not design a client commit path.
 - If you change X, also check Y: use `AGENTS.md` and `PROJECT_ARCHITECTURE_RU.md` decision tables, not guesses.
 - Do not claim a second model-judge exists unless source implements it.
+
+## Current pre-livetest contract
+
+- `CHATGPT_CHANGES_20260710_V12_RU.md` — v12 patch facts and verification.
+- `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` — ten manual Author/Runtime/Image traces and residual live-test risks.
+
+
+## v15 charge/sentry owners
+
+- Python: `runtime_charge_release_policy.py`, `runtime_sentry_policy.py`, runtime authoring semantics/compiler and final gameplay projection.
+- C#: `GeneratedProjectile.ChargeRelease.cs`, `GeneratedItem.Sentry.cs`, `GeneratedProjectile.Sentry.cs`, `GeneratedDamageClassPolicy.cs`, protocol 14 sync.
+- Proof: `LocalGenerator/tests/test_v15_charge_release_sentry_contract.py`.
+
+## Contract safety v17
+
+- `LocalGenerator/infini_local/core/boundary_models.py` — strict external DTO boundaries.
+- `contracts/field_lifecycle.json` — critical field lifecycle manifest.
+- `contracts/schemas/` — generated JSON Schemas.
+- `tools/contract_parity.py` — Python/C# DTO/default/net parity.
+- `tools/export_contract_schemas.py` — deterministic schema exporter/checker.
+- `tools/validate_release.sh` / `validate_release_windows.ps1` — full validation orchestration.
+- `tools/render_validation_report.py` — machine-readable report assembly.

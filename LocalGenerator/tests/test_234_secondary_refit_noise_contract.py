@@ -5,10 +5,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import server
+from infini_local.core import image_dependencies as IMAGE_DEPS
+from infini_local.pipelines import visual_asset_plan as ASSET_PLAN
+from infini_local.pipelines import visual_sprite_generation as SPRITES
+from infini_local.pipelines.engine_pressure_metrics import sanitize_genome_engine
+from infini_local.pipelines.sprite_postprocess import validate_processed_sprite
+from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
-
-VISUAL = server.visual_generation_pipeline
 
 
 def test_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted() -> None:
@@ -40,8 +43,8 @@ def test_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted()
 
 
 def test_compiled_swing_secondary_forces_child_sprite_not_main_projectile(monkeypatch) -> None:
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
-    monkeypatch.setattr(VISUAL, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
     data = {
         "id": "shadowbrand",
         "category": "weapon",
@@ -65,7 +68,7 @@ def test_compiled_swing_secondary_forces_child_sprite_not_main_projectile(monkey
         },
     }
 
-    plan = server.build_visual_asset_plan(data)
+    plan = build_visual_asset_plan(data)
     projectile = next(x for x in plan if x["role"] == "projectile")
     child = next(x for x in plan if x["role"] == "child")
 
@@ -83,11 +86,11 @@ def test_hold_light_does_not_synthesize_fake_alt_use() -> None:
 
 
 def test_refit_helper_can_salvage_too_small_projectile_sprite(tmp_path, monkeypatch) -> None:
-    if VISUAL.Image is None:
+    if IMAGE_DEPS.Image is None:
         return
-    monkeypatch.setattr(VISUAL, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(SPRITES, "SPRITE_DIR", tmp_path)
     path = tmp_path / "tiny.png"
-    img = VISUAL.Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+    img = IMAGE_DEPS.Image.new("RGBA", (48, 48), (0, 0, 0, 0))
     for x in range(18, 30):
         for y in range(18, 30):
             img.putpixel((x, y), (80, 20, 120, 255))
@@ -102,19 +105,19 @@ def test_refit_helper_can_salvage_too_small_projectile_sprite(tmp_path, monkeypa
         },
     }
 
-    refit = VISUAL.refit_processed_sprite_to_contract(str(path), "tiny_projectile", 48, "projectile", validation)
+    refit = SPRITES.refit_processed_sprite_to_contract(str(path), "tiny_projectile", 48, "projectile", validation)
 
     assert refit
     assert Path(refit).exists()
-    assert VISUAL.validate_processed_sprite(refit, "projectile")["ok"]
+    assert validate_processed_sprite(refit, "projectile")["ok"]
 
 
 def test_refit_helper_can_salvage_too_small_item_sprite(tmp_path, monkeypatch) -> None:
-    if VISUAL.Image is None:
+    if IMAGE_DEPS.Image is None:
         return
-    monkeypatch.setattr(VISUAL, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(SPRITES, "SPRITE_DIR", tmp_path)
     path = tmp_path / "tiny_item.png"
-    img = VISUAL.Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+    img = IMAGE_DEPS.Image.new("RGBA", (48, 48), (0, 0, 0, 0))
     for x in range(21, 27):
         for y in range(12, 36):
             img.putpixel((x, y), (210, 210, 80, 255))
@@ -129,11 +132,11 @@ def test_refit_helper_can_salvage_too_small_item_sprite(tmp_path, monkeypatch) -
         },
     }
 
-    refit = VISUAL.refit_processed_sprite_to_contract(str(path), "tiny_item", 48, "item", validation)
+    refit = SPRITES.refit_processed_sprite_to_contract(str(path), "tiny_item", 48, "item", validation)
 
     assert refit
     assert Path(refit).exists()
-    assert VISUAL.validate_processed_sprite(refit, "item")["ok"]
+    assert validate_processed_sprite(refit, "item")["ok"]
 
 
 def test_item_sprite_generation_runs_refit_before_accepting_too_small_sprite() -> None:
@@ -146,10 +149,7 @@ def test_item_sprite_generation_runs_refit_before_accepting_too_small_sprite() -
 
 def test_single_variant_sprite_score_is_not_hardcoded_half() -> None:
     source = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_sprite_generation.py"
-    facade = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py"
     text = source.read_text(encoding="utf-8")
-    facade_text = facade.read_text(encoding="utf-8")
-    assert "from infini_local.pipelines.visual_sprite_generation import" in facade_text
     assert "else (variants[0], 0.5)" not in text
     assert 'best, score = pick_best_sprite(variants, "item", canvas)' in text
     assert "best, score = pick_best_sprite(variants, role, canvas)" in text
@@ -183,11 +183,11 @@ def test_burst_onhit_zero_cap_gets_minimum_visual_feedback() -> None:
     assert not onhit_uses_burst_dust_feedback("burn", 4)
 
     for on_hit, code in [("burst", 1), ("aura_pulse", 10), ("lifesteal", 17)]:
-        sanitized = server.sanitize_genome_engine(_zero_cap_genome(on_hit, code), {"powerBudget": 1.0})
+        sanitized = sanitize_genome_engine(_zero_cap_genome(on_hit, code), {"powerBudget": 1.0})
         assert sanitized["burstDustCap"] >= 4
         assert "burst_onhit_requires_nonzero_burstDustCap" in sanitized.get("engineSanityRepairs", [])
 
-    burn = server.sanitize_genome_engine(_zero_cap_genome("burn", 4), {"powerBudget": 1.0})
+    burn = sanitize_genome_engine(_zero_cap_genome("burn", 4), {"powerBudget": 1.0})
     assert burn["burstDustCap"] == 0
     assert "burst_onhit_requires_nonzero_burstDustCap" not in burn.get("engineSanityRepairs", [])
 
@@ -196,7 +196,7 @@ def test_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers() -> None:
     root = Path(__file__).resolve().parents[1]
     engine_metrics = (root / "infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
     assert "onhit_uses_burst_dust_feedback(onhit_key, onhit_code)" in engine_metrics
-    for rel in ["infini_local/web/server.py", "infini_local/pipelines/pipeline_support.py", "infini_local/pipelines/engine_pressure_metrics.py"]:
+    for rel in ["infini_local/web/server.py", "infini_local/pipelines/engine_pressure_metrics.py"]:
         text = (root / rel).read_text(encoding="utf-8")
         assert 'onhit_key in {"burst", "aura_pulse"}' not in text
         assert "onhit_code in {1, 10}" not in text

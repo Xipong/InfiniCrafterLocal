@@ -1,204 +1,73 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
-import re
 from typing import Any
 
+from infini_local.core.boundary_models import validate_vfx_manifest_boundary
+
 from infini_local.core.effect_catalog import normalize_attack_pattern
-from infini_local.core.item_identity_tools import (
-    _stringish,
-    dict_get_ci,
-    fingerprint_of,
-    generation_depth,
-    generated_data_of,
-    item_bool,
-    item_field,
-    item_identity,
-    item_num,
-    name_of,
-    slug,
-    stable_hash,
-    tags_of,
-)
-from infini_local.core.vfx_composition import (
-    _VFX_PARTICLE_ADDRESS_CATALOG,
-    _vfx_add_procedural_slots,
+from infini_local.core.item_identity_tools import _stringish
+from infini_local.core.vfx_composition_primitives import (
     _vfx_arbitrate_slots,
-    _vfx_authored_cue_event,
-    _vfx_authored_cue_raw_slots,
     _vfx_available_roles,
-    _vfx_baked_clip_meta,
-    _vfx_baked_command_count,
-    _vfx_bake_slot_commands,
-    _vfx_blend_runner_up_slots,
     _vfx_budget_for_recipe,
-    _vfx_canonical_particle_address,
-    _vfx_color_hex,
-    _vfx_compile_slot,
-    _vfx_compute_effect_magnitude,
-    _vfx_default_anchor,
     _vfx_default_backend,
-    _vfx_default_importance,
-    _vfx_default_signature_weight,
-    _vfx_default_visual_cost,
-    _vfx_demote_blended_raw_slot,
-    _vfx_event_group,
     _vfx_event_stage,
-    _vfx_family_key,
-    _vfx_infer_channel,
-    _vfx_infer_emission_mode,
-    _vfx_infer_lane,
-    _vfx_lerp_range,
-    _vfx_magnitude_class,
-    _vfx_manifest_from_parent_item,
-    _vfx_max_channel_count,
     _vfx_motif_from_data,
     _vfx_mundane_duplicate_profile,
-    _vfx_parent_effect_profile,
-    _vfx_parent_effect_recipe_bonus,
-    _vfx_parent_effect_tag_set,
-    _vfx_parent_inherited_raw_slots,
-    _vfx_parent_profile_from_item,
-    _vfx_particle_address_catalog,
-    _vfx_pick,
     _vfx_playback_mode_for_recipe,
-    _vfx_procedural_raw_slot_pool,
-    _vfx_resolve_particle_system_id,
-    _vfx_renderer_family,
-    _vfx_renderer_kind,
-    _vfx_runtime_plan_direct_manifest,
-    _vfx_score_number,
     _vfx_seed_int,
-    _vfx_should_bake_slot,
-    _vfx_slot_score,
-    _vfx_slot_similarity_key,
-    _vfx_transform_parent_slot_for_child,
     _vfx_trim_mundane_slots,
     _vfx_unit,
     _vfx_words,
 )
-from infini_local.core.vfx_director_context import (
-    _vfx_clean_tag,
-    _vfx_collect_legacy_hint_tags,
-    _vfx_director_name_tokens,
-    _vfx_director_runtime_auto_features,
-    _vfx_director_tag_packet,
-    _vfx_generated_authored_tags,
-    _vfx_list_strings,
-    _vfx_semantic_expansion_for_director,
-    _vfx_weak_hint_confidence,
-    build_vfx_director_weak_hints,
+from infini_local.core.vfx_composition_parent import (
+    _vfx_manifest_from_parent_item,
+    _vfx_parent_effect_profile,
+    _vfx_parent_effect_recipe_bonus,
+    _vfx_parent_inherited_raw_slots,
+)
+from infini_local.core.vfx_runtime_slots import (
+    _vfx_add_procedural_slots,
+    _vfx_authored_cue_raw_slots,
+    _vfx_blend_runner_up_slots,
+    _vfx_compile_slot,
+    _vfx_runtime_plan_direct_manifest,
+    _vfx_should_bake_slot,
 )
 from infini_local.core.vfx_director_prompt import (
-    _vfx_compact_child_for_director,
-    _vfx_compact_item_for_director,
-    _vfx_planner_continuation_from_item,
-    _vfx_text_for_name_bank,
     build_vfx_director_continuation_messages,
-    build_vfx_director_continuation_payload,
     build_vfx_director_prompt,
-    get_vfx_effect_name_bank,
-    vfx_director_name_bank,
 )
 from infini_local.core.vfx_director_contract import (
-    _vfx_director_check_enum,
-    _vfx_director_check_number,
-    _vfx_director_enum,
     _vfx_director_enum_required,
-    _vfx_director_error,
     _vfx_director_error_fields,
     _vfx_director_number_required,
     _vfx_director_repair_prompt,
     _vfx_director_validation_report,
-    _vfx_director_warning,
-    _vfx_float,
-    _vfx_int,
     _vfx_particle_id_is_explicit,
     vfx_director_surface,
 )
-from infini_local.core.vfx_projectile_profile import (
-    effective_projectile_profile_of,
-    proj_bool,
-    proj_num,
-    projectile_behavior_tags,
-    projectile_profile_of,
-    source_weapon_profile,
-)
-from infini_local.core.vfx_recipe_library import (
-    _vfx_deep_merge,
-    _vfx_expand_recipe_macros,
-    _vfx_expand_slot_macro,
-    compact_vfx_macro_card,
-    get_vfx_recipes,
-)
-from infini_local.core.vfx_lint_timeline import (
-    VFX_KNOWN_BACKENDS,
-    VFX_KNOWN_CHANNELS,
-    VFX_KNOWN_EMISSION_MODES,
-    VFX_KNOWN_EVENTS,
-    VFX_KNOWN_LANES,
-    VFX_KNOWN_RENDERERS,
-    VFX_KNOWN_ROLES,
-    VFX_MAGNITUDE_CLASSES,
-    _vfx_layer_kind_for_renderer,
-    _vfx_lint_recipe,
-    _vfx_lint_slot,
-    _vfx_slot_cost_estimate,
-    _vfx_slot_value_range_ok,
-    _vfx_timeline_from_manifest,
-    vfx_manifest_effect_stack,
-)
+from infini_local.core.vfx_recipe_library import get_vfx_recipes
 from infini_local.core.vfx_manifest_config import (
-    DATA_DIR,
-    ROOT,
-    VFX_EFFECT_NAME_BANK_MAX_CARDS,
-    VFX_EFFECT_NAME_BANK_MAX_NAMES,
-    VFX_EFFECT_NAME_BANK_PATH,
-    VFX_EMERGENCY_MAX_DRAW_CALLS,
-    VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
-    VFX_EMERGENCY_MAX_PARTICLES_TOTAL,
     VFX_LLM_DIRECTOR_ENABLED,
     VFX_LLM_DIRECTOR_MAX_SLOTS,
     VFX_LLM_DIRECTOR_MAX_TOKENS,
     VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS,
     VFX_LLM_DIRECTOR_TEMPERATURE,
     VFX_LLM_DIRECTOR_TIMEOUT,
-    VFX_LLM_WEAK_HINTS_CONFIDENCE_CAP,
-    VFX_LLM_WEAK_HINTS_ENABLED,
-    VFX_LLM_WEAK_HINTS_MAX,
-    VFX_MAGNITUDE_JITTER,
-    VFX_MORPH_LIBRARY,
-    VFX_MORPH_RECIPES,
-    VFX_MORPH_RECIPES_RAW,
-    VFX_MUNDANE_DUPLICATE_GUARD,
-    VFX_MUNDANE_MAX_SLOTS,
-    VFX_PARENT_EFFECT_INHERITANCE,
-    VFX_PARENT_EFFECT_MAX_INHERITED_SLOTS,
-    VFX_PARENT_EFFECT_STRONG_THRESHOLD,
-    VFX_PARENT_EFFECT_WEIGHT,
-    VFX_PROCEDURAL_BLEND_CANDIDATES,
-    VFX_PROCEDURAL_CHANCE,
-    VFX_PROCEDURAL_COMPOSE,
-    VFX_PROCEDURAL_MAX_EXTRA_SLOTS,
-    VFX_RECIPE_BLEND_ENABLED,
-    VFX_RENDER_QUALITY,
-    VFX_RUNTIME_INTENT_FIRST,
     VFX_SELECTOR_DEBUG,
     VFX_SELECTOR_ENABLED,
     VFX_SELECTOR_HINT_WEIGHT,
     VFX_SELECTOR_JITTER,
     VFX_SELECTOR_NOVELTY_WEIGHT,
     VFX_SELECTOR_TOP,
-    VFX_SLOT_MACRO_LIBRARY,
-    VFX_SLOT_MACROS,
-    load_json_file,
 )
 
 
 # AGENT MAP: Python VFX manifest authoring/normalization contract.
-# Public facade for VFX manifest assembly. Config/data/env ownership lives in
+# Owns VFX manifest assembly. Config/data/env ownership lives in
 # vfx_manifest_config.py; optional LLM Director context helpers live in
 # vfx_director_context.py. Keep gameplay out of motif/effect prose; combat
 # behavior belongs in explicit runtime fields compiled by the runtime_authoring package.
@@ -256,9 +125,6 @@ def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], rec
         # field, reject the Director manifest and let the deterministic VFX pipeline take over.
         # We do not silently replace bad enum values with inferred defaults here.
         rk = _vfx_director_enum_required(slot, "rendererKind", surface["rendererKind"])
-        if not rk and "renderer" in slot:
-            # compatibility: accept renderer only when it is already a canonical rendererKind value.
-            rk = _vfx_director_enum(slot.get("renderer"), surface["rendererKind"])
         ev = _vfx_director_enum_required(slot, "event", surface["events"])
         backend = _vfx_director_enum_required(slot, "backend", surface["backend"])
         texture_role = _vfx_director_enum_required(slot, "textureRole", surface["textureRole"])
@@ -293,7 +159,7 @@ def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], rec
 
         compiled_raw.append({
             "event": ev,
-            "renderer": rk,
+            "rendererKind": rk,
             "rendererKind": rk,
             "backend": backend,
             "textureRole": texture_role,
@@ -394,16 +260,8 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
     debug = child_item.setdefault("debug", {})
     try:
         input_packet = build_vfx_director_prompt(parent_a, parent_b, child_item, surface, constraints).get("vfxInputPacket", {})
-        weak_hints = input_packet.get("weakHints") if isinstance(input_packet, dict) else []
-        if not isinstance(weak_hints, list):
-            weak_hints = []
         debug["vfxLlmDirectorInputPacket"] = json.dumps(input_packet, ensure_ascii=False)[:12000]
-        debug["vfxWeakHintsEnabled"] = bool(VFX_LLM_WEAK_HINTS_ENABLED)
-        debug["vfxWeakHintsCount"] = len(weak_hints)
-        debug["vfxWeakHints"] = json.dumps(weak_hints, ensure_ascii=False)[:4000]
     except Exception:
-        debug["vfxWeakHintsEnabled"] = bool(VFX_LLM_WEAK_HINTS_ENABLED)
-        debug["vfxWeakHintsCount"] = 0
         pass
 
     def validate_or_repair(raw: Any, mode: str, base_messages: list[dict[str, str]] | None = None) -> dict[str, Any] | None:
@@ -429,9 +287,6 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
                 comp = manifest.setdefault("debug", {}).setdefault("composition", {})
                 comp["repairAttempted"] = False
                 comp["validationErrorCountBeforeRepair"] = 0
-                comp["weakHintsEnabled"] = bool(VFX_LLM_WEAK_HINTS_ENABLED)
-                comp["weakHintsCount"] = int(debug.get("vfxWeakHintsCount") or 0)
-                comp["weakHints"] = json.loads(debug.get("vfxWeakHints") or "[]") if isinstance(debug.get("vfxWeakHints"), str) else []
                 comp["vfxPath"] = "llm_director"
                 return manifest
             _set_mode_fallback("valid_contract_but_compile_failed")
@@ -467,9 +322,6 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
                     comp["repairAttempts"] = attempt
                     comp["validationErrorCountBeforeRepair"] = len(report.get("errors", []))
                     comp["repairedFields"] = _vfx_director_error_fields(report)
-                    comp["weakHintsEnabled"] = bool(VFX_LLM_WEAK_HINTS_ENABLED)
-                    comp["weakHintsCount"] = int(debug.get("vfxWeakHintsCount") or 0)
-                    comp["weakHints"] = json.loads(debug.get("vfxWeakHints") or "[]") if isinstance(debug.get("vfxWeakHints"), str) else []
                     comp["vfxPath"] = "llm_director"
                     debug["vfxLlmDirectorRepairStatus"] = "success"
                     return manifest
@@ -496,7 +348,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
             debug["vfxLlmDirectorContinuationFallbackReason"] = "missing_planner_chat_history"
             debug["vfxLlmDirectorContinuationFallback"] = "missing_planner_chat_history"
 
-        # Legacy fallback: standalone VFX director prompt with compact parent/child cards.
+        # Standalone VFX Director fallback with compact exact parent/child cards.
         payload = build_vfx_director_prompt(parent_a, parent_b, child_item, surface, constraints)
         raw = llm_client(system, payload, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT)
         manifest = validate_or_repair(raw, "standalone_fallback", base_messages=None)
@@ -508,13 +360,13 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
         debug["vfxLlmDirectorStandaloneFallbackReason"] = final_reason
         debug["vfxLlmDirectorFinalFallbackReason"] = final_reason
         debug["vfxLlmDirectorFallbackReason"] = final_reason
-        debug["vfxPath"] = "legacy_recipe_fallback"
+        debug["vfxPath"] = "deterministic_recipe_fallback"
         return None
     except Exception as e:
         debug["vfxLlmDirectorError"] = repr(e)
         debug["vfxLlmDirectorFinalFallbackReason"] = "exception"
         debug["vfxLlmDirectorFallbackReason"] = "exception"
-        debug["vfxPath"] = "legacy_recipe_fallback"
+        debug["vfxPath"] = "deterministic_recipe_fallback"
         return None
 
 
@@ -557,7 +409,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         return data
     if VFX_LLM_DIRECTOR_ENABLED:
         data.setdefault("debug", {})["vfxLlmDirector"] = data.setdefault("debug", {}).get("vfxLlmDirectorError") or "fallback"
-    data.setdefault("debug", {}).setdefault("vfxPath", "legacy_recipe_fallback")
+    data.setdefault("debug", {}).setdefault("vfxPath", "deterministic_recipe_fallback")
     # All dirty selection/randomness must freeze at generation/reroll time.
     # selector_key is allowed to change only when the user explicitly rerolls VFX.
     selector_key = f"{recipe_key_value}|vfxsalt={str(reroll_salt or data.get('recipeMeta', {}).get('vfxRerollSalt', '') or '')}"
@@ -633,7 +485,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             reasons.extend(parent_reasons[:3])
         raw_recipe_slots = [x for x in (recipe.get("slots") or []) if isinstance(x, dict)]
         slot_count = len(raw_recipe_slots)
-        renderers = [str(x.get("renderer") or "") for x in raw_recipe_slots]
+        renderers = [str(x.get("rendererKind") or "") for x in raw_recipe_slots]
         unique_renderers = len({r.lower() for r in renderers if r})
         if unique_renderers >= 3:
             score += VFX_SELECTOR_NOVELTY_WEIGHT
@@ -663,8 +515,8 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             "confidence": 0.15,
             "budget": _vfx_budget_for_recipe({"cost": "low"}, power, selector_key, data),
             "slots": [
-                {"event": "travel", "renderer": "projectileAfterimage", "textureRole": "projectile", "particleRole": "child", "variant": 0, "scale": 0.9, "density": 0.18, "duration": 8, "alpha": 0.28, "spread": 0.5},
-                {"event": "hit", "renderer": "impactSpriteFlash", "textureRole": "impact", "particleRole": "child", "variant": 0, "scale": 1.4, "density": 0.2, "duration": 7, "alpha": 0.55, "spread": 0.5},
+                {"event": "travel", "rendererKind": "projectileAfterimage", "textureRole": "projectile", "particleRole": "child", "variant": 0, "scale": 0.9, "density": 0.18, "duration": 8, "alpha": 0.28, "spread": 0.5},
+                {"event": "hit", "rendererKind": "impactSprite", "rendererKind": "impactSprite", "textureRole": "impact", "particleRole": "child", "variant": 0, "scale": 1.4, "density": 0.2, "duration": 7, "alpha": 0.55, "spread": 0.5},
             ],
             "debug": {"reason": "no compatible recipe", "pattern": pattern, "roles": sorted(roles)},
         }
@@ -710,7 +562,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
     slots = _vfx_arbitrate_slots(slots, budget_class)
     slots = _vfx_trim_mundane_slots(slots, mundane_profile)
     if not slots:
-        slots = [{"event": "travel", "renderer": "projectileAfterimage", "textureRole": "projectile", "particleRole": "child", "variant": 0, "scale": 0.9, "density": 0.18, "duration": 8, "alpha": 0.28, "spread": 0.5, "source": "fallback"}]
+        slots = [{"event": "travel", "rendererKind": "projectileAfterimage", "textureRole": "projectile", "particleRole": "child", "variant": 0, "scale": 0.9, "density": 0.18, "duration": 8, "alpha": 0.28, "spread": 0.5, "source": "fallback"}]
     top_debug = [[str(r.get("id")), round(float(score), 3), reasons[:6]] for score, r, reasons in top]
     confidence = max(0.05, min(0.98, (selected_score - (top[-1][0] if len(top) > 1 else selected_score - 20.0)) / 90.0 + 0.45))
     provenance = attack.get("runtimeAuthoringProvenance") if isinstance(attack.get("runtimeAuthoringProvenance"), dict) else {}
@@ -758,6 +610,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             "effectLineage": effect_lineage,
         }
     }
+    manifest = validate_vfx_manifest_boundary(manifest)
     data["vfxManifest"] = manifest
     attack["vfxManifestJson"] = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))
     data["attack"] = attack
@@ -830,6 +683,7 @@ def _vfx_manifest_from_recipe(data: dict[str, Any], recipe: dict[str, Any], reci
             "effectLineage": effect_lineage,
         }
     }
+    manifest = validate_vfx_manifest_boundary(manifest)
     data["vfxManifest"] = manifest
     attack["vfxManifestJson"] = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))
     data["attack"] = attack
@@ -850,9 +704,9 @@ def compact_vfx_recipe_card(recipe: dict[str, Any]) -> dict[str, Any]:
         "hints": recipe.get("hints", []),
         "slotCount": len(slots),
         "renderers": [str(x.get("renderer", "")) for x in slots if isinstance(x, dict)],
-        "backends": sorted({str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("renderer"))) for x in slots if isinstance(x, dict)}),
-        "stages": sorted({str(x.get("stage") or _vfx_event_stage(x.get("event"), x.get("renderer"))) for x in slots if isinstance(x, dict)}),
-        "bakedEligibleSlots": sum(1 for x in slots if isinstance(x, dict) and _vfx_should_bake_slot(x, str(x.get("event") or ""), str(x.get("renderer") or ""), str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("renderer"))))),
+        "backends": sorted({str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("rendererKind"))) for x in slots if isinstance(x, dict)}),
+        "stages": sorted({str(x.get("stage") or _vfx_event_stage(x.get("event"), x.get("rendererKind"))) for x in slots if isinstance(x, dict)}),
+        "bakedEligibleSlots": sum(1 for x in slots if isinstance(x, dict) and _vfx_should_bake_slot(x, str(x.get("event") or ""), str(x.get("rendererKind") or ""), str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("rendererKind"))))),
         "expandedFromMacros": bool(recipe.get("expandedFromMacros")),
         "useMacros": recipe.get("useMacros", []),
         "macroIds": sorted({str(x.get("macroId")) for x in slots if isinstance(x, dict) and x.get("macroId")}),
@@ -861,18 +715,10 @@ def compact_vfx_recipe_card(recipe: dict[str, Any]) -> dict[str, Any]:
 # VFX lint/effect-stack/timeline helpers live in vfx_lint_timeline.py.
 
 __all__ = [
-    name for name in globals()
-    if name.startswith("VFX_")
-    or name.startswith("_vfx")
-    or name in {
-        "attach_hybrid_vfx_manifest",
-        "build_vfx_director_prompt",
-        "build_vfx_director_weak_hints",
-        "try_llm_vfx_director",
-        "vfx_director_surface",
-        "get_vfx_effect_name_bank",
-        "vfx_director_name_bank",
-        "get_vfx_recipes",
-        "vfx_manifest_effect_stack",
-    }
+    "_vfx_validate_director_output",
+    "try_llm_vfx_director",
+    "attach_hybrid_vfx_manifest",
+    "_vfx_find_recipe",
+    "_vfx_manifest_from_recipe",
+    "compact_vfx_recipe_card",
 ]

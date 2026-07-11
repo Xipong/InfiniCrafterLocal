@@ -35,8 +35,6 @@ def test_client_timeout_cancels_host_request_without_local_refund_dup_path():
     result_body = src[src.index("public void HandleCraftCommitResult"):src.index("private static void RunLocalCraftReveal")]
     assert "server is authoritative for ingredient ownership" in result_body
     assert "RefundIngredients();" not in result_body
-
-
 def test_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
     env_utils = read("LocalGenerator/infini_local/core/env_utils.py")
     assert "def env_int" in env_utils
@@ -48,13 +46,17 @@ def test_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
     assert "COMBINE_CONCURRENCY = env_int(" in endpoint
     assert "COMBINE_BUSY_WAIT_SECONDS = env_int(" in endpoint
     assert "int(os.environ.get(\"INFINI_COMBINE" not in endpoint
-    for rel in ("LocalGenerator/infini_local/pipelines/pipeline_support.py", "LocalGenerator/infini_local/web/server.py"):
-        text = read(rel)
-        assert "env_bool" in text and "env_int" in text and "env_path" in text
-        assert "LLM_MAX_TOKENS = env_int(" in text
-        assert "from infini_local.core.config_bootstrap import (" in text
-        assert "CACHE_DIR," in text
-        assert "USE_LLM = env_bool(" in text
+    llm_config = read("LocalGenerator/infini_local/core/llm_config.py")
+    assert "LLM_MAX_TOKENS = env_int(" in llm_config
+    assert "USE_LLM = env_bool(" in llm_config
+    bootstrap = read("LocalGenerator/infini_local/core/config_bootstrap.py")
+    assert "CACHE_DIR =" in bootstrap
+    server = read("LocalGenerator/infini_local/web/server.py")
+    assert "env_bool" in server and "env_int" in server
+    assert "from infini_local.core.config_bootstrap import (" in server
+    assert "USE_LLM = env_bool(" in server
+    visual = read("LocalGenerator/infini_local/pipelines/pipeline_visual_config.py")
+    assert "env_bool" in visual and "env_float" in visual and "env_int" in visual
 
 
 def test_generated_json_compat_migration_code_is_removed_for_test_worlds_only():
@@ -76,7 +78,7 @@ def test_generated_json_compat_migration_code_is_removed_for_test_worlds_only():
 
 def test_ci_contains_pytest_and_real_tml_build_job():
     workflow = read(".github/workflows/ci.yml")
-    assert "pytest -q" in workflow
+    assert "tools/run_pytest_shards.py" in workflow
     assert "tools/check_project_hygiene.py" in workflow
     assert "tools/check_csharp_contracts.py" in workflow
     assert "windows-latest" in workflow

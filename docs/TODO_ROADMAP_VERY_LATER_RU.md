@@ -536,7 +536,7 @@ Shift-tooltip short summary
 
 ```text
 Stage 1: model + JSON/network/save preservation only, no behavior change.
-Stage 2: explicit adapters for a tiny whitelist: boomerang/yoyo/held projectile/channel beam.
+Stage 2: explicit adapters for a tiny whitelist: boomerang/yoyo/held projectile/channel beam. (`channel_beam` completed in the 2026-07-10 v9 gameplay patch.)
 Stage 3: planner may author archetype, but validators decide supported/applied/future_disabled.
 ```
 
@@ -619,10 +619,10 @@ Every archetype field must participate in Applied-vs-Authored reporting:
   "parsed": true,
   "compiled": true,
   "csharpField": true,
-  "runtimeApplied": false,
+  "runtimeApplied": true,
   "tooltipVisible": true,
-  "status": "future_disabled",
-  "reason": "RuntimeArchetype family channel_beam is preserved but no executor adapter is enabled"
+  "status": "applied",
+  "reason": "Exact overhead_barrage is backed by the bounded marker/delay/descending-child executor; retired family names are rejected"
 }
 ```
 

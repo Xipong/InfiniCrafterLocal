@@ -5,6 +5,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from infini_local.desktop import settings_schema
+
 
 class _BlockTkinter(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname: str, path=None, target=None):  # type: ignore[override]
@@ -41,9 +43,9 @@ def test_settings_gui_imports_without_tkinter_installed() -> None:
         sys.modules.update(saved_tk_modules)
         sys.modules.update(saved_compat)
 
-    assert module.TKINTER_AVAILABLE is False
-    assert "INFINI_LLM_FALLBACK_MODEL" in module.FIELD_ORDER
-    assert module.DEFAULTS["INFINI_LLM_FALLBACK_NETWORK_FAILS"] == "2"
+    assert module.tk_compat.TKINTER_AVAILABLE is False
+    assert "INFINI_LLM_FALLBACK_MODEL" in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS["INFINI_LLM_FALLBACK_NETWORK_FAILS"] == "2"
     # The fallback exposes real class objects, so isinstance checks used by GUI
     # helper methods do not explode under headless pytest.
     assert isinstance(module.tk.Tk(), module.tk.Widget)

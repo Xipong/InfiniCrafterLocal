@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from infini_local.core.item_identity_tools import item_num
 from infini_local.pipelines.parent_context_pipeline import (
     _pbool,
     _pnum,
@@ -14,35 +13,9 @@ from infini_local.pipelines.parent_context_pipeline import (
 # AGENT MAP: projectile visual-family and parent-projectile affordance seam.
 # Owns visual-family inference and raw parent projectile size reference only;
 # executable behavior stays authored through runtimePlan/attack genome.
-# Public callers use infini_local.pipelines.combine_pipeline.
+# Callers import this owner directly.
 
-def parent_combo_looks_like_bow(a: dict[str, Any], b: dict[str, Any], tags: set[str], data: dict[str, Any]) -> bool:
-    text = " ".join(str(x or "") for x in [
-        a.get("name"), b.get("name"), a.get("internalName"), b.get("internalName"),
-        data.get("name"), data.get("tooltip"), data.get("sourceReading"),
-    ]).lower()
-    return bool("bow" in tags or "arrow" in tags or "bow" in text or int(item_num(a, "useAmmo", 0)) == 40 or int(item_num(b, "useAmmo", 0)) == 40)
 
-def projectile_family_text(data: dict[str, Any], a: dict[str, Any] | None = None, b: dict[str, Any] | None = None) -> str:
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
-    chunks = [
-        data.get("name"), data.get("tooltip"), data.get("parentA"), data.get("parentB"),
-        concept.get("fantasy"), concept.get("mergeLogic"), concept.get("weirdTwist"),
-        attack.get("weaponFamily"), attack.get("projectileFamily"), attack.get("projectileShape"), attack.get("projectileMotion"), attack.get("projectileTrail"),
-        visual.get("imagePrompt"), visual.get("projectileImagePrompt"), visual.get("impactImagePrompt"), visual.get("silhouetteSummary"),
-        " ".join(str(x) for x in (data.get("tags") or [])),
-    ]
-    for item in (a or {}, b or {}):
-        chunks.extend([item.get("name"), item.get("internalName"), item.get("fullName"), " ".join(str(x) for x in (item.get("tags") or []))])
-        try:
-            proj = effective_projectile_profile_of(item)
-            if isinstance(proj, dict):
-                chunks.extend([proj.get("internalName"), proj.get("fullName"), proj.get("sourceItemInternalName")])
-        except Exception:
-            pass
-    return " ".join(str(x or "") for x in chunks).lower()
 
 def _explicit_visual_family_value(data: dict[str, Any]) -> str:
     raw = str(data.get("projectileVisualFamily") or data.get("projectileVisualFamilyHint") or "").strip().lower().replace("-", "_")
@@ -214,8 +187,6 @@ def apply_parent_projectile_affordance(genome: dict[str, Any], a: dict[str, Any]
     return genome
 
 __all__ = [
-    "parent_combo_looks_like_bow",
-    "projectile_family_text",
     "_explicit_visual_family_value",
     "infer_projectile_visual_family",
     "parent_projectile_family",

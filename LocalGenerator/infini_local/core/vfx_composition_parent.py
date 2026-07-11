@@ -10,15 +10,12 @@ from infini_local.core.item_identity_tools import (
     item_identity,
     item_num,
     name_of,
-    tags_of,
 )
 from infini_local.core.vfx_composition_primitives import (
     _vfx_default_anchor,
     _vfx_default_backend,
-    _vfx_event_group,
     _vfx_infer_channel,
     _vfx_renderer_family,
-    _vfx_slot_score,
     _vfx_unit,
 )
 from infini_local.core.vfx_manifest_config import (
@@ -64,7 +61,6 @@ def _vfx_manifest_from_parent_item(item: dict[str, Any]) -> dict[str, Any]:
 
 def _vfx_parent_profile_from_item(item: dict[str, Any], index: int = 0) -> dict[str, Any]:
     name = name_of(item)
-    tags = set(tags_of(item))
     try:
         rarity = int(float(item_field(item, "rare", item_field(item, "rarity", 0)) or 0))
     except Exception:
@@ -124,17 +120,16 @@ def _vfx_parent_profile_from_item(item: dict[str, Any], index: int = 0) -> dict[
             effect_tags.add(f"aiStyle_{ai_style}")
     for t in behavior:
         effect_tags.add(t)
-        tl = t.lower()
-        if any(x in tl for x in ["homing", "boomerang", "return"]):
-            suggested.add("orbitalMotes")
-        if any(x in tl for x in ["beam", "laser"]):
+        if t in {"homing", "boomerang", "returning"}:
+            suggested.add("orbitingMotes")
+        if t in {"beam", "channel"}:
             suggested.add("beamLine")
-        if any(x in tl for x in ["trail", "oldpos", "extra_updates"]):
+        if t in {"trail", "oldPos", "extraUpdates"}:
             suggested.add("historyRibbon")
     if manifest_slots:
         effect_tags.add("generated_vfx_parent")
         for slot in manifest_slots:
-            renderer = str(slot.get("renderer") or "")
+            renderer = str(slot.get("rendererKind") or "")
             if renderer:
                 suggested.add(renderer)
             ch = str(slot.get("channel") or "")
@@ -240,8 +235,8 @@ def _vfx_parent_effect_profile(data: dict[str, Any], parent_a: dict[str, Any] | 
 def _vfx_parent_effect_tag_set(profile: dict[str, Any]) -> set[str]:
     if not isinstance(profile, dict) or not profile.get("enabled"):
         return set()
-    tags = {str(x).lower() for x in (profile.get("effectTags") or []) if str(x)}
-    renderers = {str(x).lower() for x in (profile.get("suggestedRenderers") or []) if str(x)}
+    tags = {str(x) for x in (profile.get("effectTags") or []) if str(x)}
+    renderers = {str(x) for x in (profile.get("suggestedRenderers") or []) if str(x)}
     return tags | renderers
 
 def _vfx_parent_effect_recipe_bonus(recipe: dict[str, Any], profile: dict[str, Any]) -> tuple[float, list[str]]:
@@ -251,19 +246,19 @@ def _vfx_parent_effect_recipe_bonus(recipe: dict[str, Any], profile: dict[str, A
     if not tags:
         return 0.0, []
     raw_slots = [x for x in (recipe.get("slots") or []) if isinstance(x, dict)]
-    slot_renderers = {_vfx_renderer_family(str(s.get("renderer") or "")).lower() for s in raw_slots}
-    slot_channels = {str(s.get("channel") or _vfx_infer_channel(s.get("renderer"), s.get("event"))).lower() for s in raw_slots}
+    slot_renderers = {_vfx_renderer_family(str(s.get("rendererKind") or "")) for s in raw_slots}
+    slot_channels = {str(s.get("channel") or _vfx_infer_channel(s.get("rendererKind"), s.get("event"))) for s in raw_slots}
     bonus = 0.0
     reasons: list[str] = []
-    if any(x in tags for x in {"slash", "held", "tiptrail", "historyribbon"}) and (slot_renderers & {"tiptrail", "historyribbon", "ghostarc"}):
+    if any(x in tags for x in {"slash", "held"}) and (slot_renderers & {"tipTrail", "historyRibbon", "ghostArc"}):
         bonus += 22.0; reasons.append("parent_slash_renderer_match")
-    if any(x in tags for x in {"projectile", "travel", "projectileafterimage"}) and (slot_renderers & {"projectileafterimage", "spritestamptrail"}):
+    if any(x in tags for x in {"projectile", "travel"}) and (slot_renderers & {"projectileAfterimage", "spriteStampTrail"}):
         bonus += 17.0; reasons.append("parent_projectile_renderer_match")
-    if any(x in tags for x in {"beam", "channel", "beamline"}) and ("beamline" in slot_renderers or "beam" in " ".join(slot_renderers)):
+    if any(x in tags for x in {"beam", "channel"}) and ("beamLine" in slot_renderers):
         bonus += 24.0; reasons.append("parent_beam_renderer_match")
-    if any(x in tags for x in {"multihit", "pierce", "impactspriteburst", "impactshape"}) and ("impactshape" in slot_channels or "impactspriteburst" in slot_renderers):
+    if any(x in tags for x in {"multihit", "pierce", "strong_parent", "generated_vfx_parent"}) and ("impactShape" in slot_channels or "impactSprite" in slot_renderers):
         bonus += 18.0; reasons.append("parent_impact_renderer_match")
-    if any(x in tags for x in {"light", "lightcue"}) and ("lightcue" in slot_renderers or "light" in slot_channels):
+    if any(x in tags for x in {"light"}) and ("lightCue" in slot_renderers or "light" in slot_channels):
         bonus += 10.0; reasons.append("parent_light_cue_match")
     score = float(profile.get("maxSpecialScore") or 0.0)
     if score >= 0.70 and str(recipe.get("cost") or "") in {"high", "signature", "ultra"}:
@@ -274,7 +269,7 @@ def _vfx_parent_effect_recipe_bonus(recipe: dict[str, Any], profile: dict[str, A
 
 def _vfx_transform_parent_slot_for_child(slot: dict[str, Any], source: str, seed: int, order: int) -> dict[str, Any]:
     out = dict(slot)
-    renderer = str(out.get("renderer") or "ambientMotes")
+    renderer = str(out.get("rendererKind") or "childMotes")
     event = str(out.get("event") or "travel")
     # Parent effects become support/accent layers; the child result still owns the primary composition.
     out["source"] = f"parentEffect:{source}"
@@ -326,17 +321,17 @@ def _vfx_parent_inherited_raw_slots(profile: dict[str, Any], pattern: str, roles
         slot = dict(slot)
         slot.setdefault("source", f"parentEffect:{reason}")
         raw.append(slot)
-        debug.append({"reason": reason, "renderer": slot.get("renderer"), "event": slot.get("event"), "channel": slot.get("channel", "")})
-    if "projectile" in roles and any(x in tags for x in {"slash", "held", "tiptrail", "historyribbon", "strong_parent"}) and pattern in {"slash_holdout", "beam_slash", "basic"}:
-        add({"event":"active", "renderer":"historyRibbon", "textureRole":"projectile", "backend":"Primitive", "channel":"motionTrail", "lane":"support", "importance":"secondary", "scale":[0.9,1.65], "density":[0.18,0.48], "duration":[10,24], "alpha":[0.22,0.58], "visualCost":[0.12,0.36], "signatureWeight":[0.22,0.55]}, "slash_history")
-    if "projectile" in roles and any(x in tags for x in {"projectile", "travel", "projectileafterimage", "fast"}):
-        add({"event":"travel", "renderer":"projectileAfterimage", "textureRole":"projectile", "backend":"Sprite", "channel":"motionTrail", "lane":"support", "importance":"secondary", "scale":[0.75,1.28], "density":[0.12,0.38], "duration":[6,16], "alpha":[0.18,0.46], "visualCost":[0.08,0.28], "signatureWeight":[0.12,0.42]}, "projectile_afterimage")
-    if "impact" in roles and any(x in tags for x in {"multihit", "pierce", "strong_parent", "generated_vfx_parent", "impactspriteburst"}):
-        add({"event":"hit", "renderer":"impactSpriteBurst", "textureRole":"impact", "particleRole":"child", "backend":"Baked", "channel":"impactShape", "lane":"support", "importance":"secondary", "scale":[1.25,2.65], "density":[0.18,0.55], "duration":[6,15], "alpha":[0.38,0.82], "visualCost":[0.12,0.42], "signatureWeight":[0.20,0.56]}, "impact_inherited")
-    if any(x in tags for x in {"beam", "channel", "beamline"}) and "projectile" in roles:
-        add({"event":"active", "renderer":"beamLine", "textureRole":"projectile", "backend":"Primitive", "channel":"motionTrail", "lane":"support", "importance":"secondary", "scale":[0.75,1.55], "density":[0.16,0.42], "duration":[10,24], "alpha":[0.18,0.48], "visualCost":[0.10,0.34], "signatureWeight":[0.18,0.50]}, "beam_inherited")
-    if any(x in tags for x in {"light", "lightcue"}):
-        add({"event":"active", "renderer":"lightCue", "textureRole":"projectile", "backend":"Realtime", "channel":"light", "lane":"cue", "importance":"accent", "scale":[0.8,1.7], "density":[0.08,0.22], "duration":[8,22], "alpha":[0.2,0.55], "visualCost":[0.03,0.10], "signatureWeight":[0.10,0.25]}, "light_inherited")
+        debug.append({"reason": reason, "rendererKind": slot.get("rendererKind"), "event": slot.get("event"), "channel": slot.get("channel", "")})
+    if "projectile" in roles and any(x in tags for x in {"slash", "held", "strong_parent"}) and pattern in {"slash_holdout", "beam_slash", "basic"}:
+        add({"event":"active", "rendererKind":"historyRibbon", "textureRole":"projectile", "backend":"Primitive", "channel":"motionTrail", "lane":"support", "importance":"secondary", "scale":[0.9,1.65], "density":[0.18,0.48], "duration":[10,24], "alpha":[0.22,0.58], "visualCost":[0.12,0.36], "signatureWeight":[0.22,0.55]}, "slash_history")
+    if "projectile" in roles and any(x in tags for x in {"projectile", "travel", "fast"}):
+        add({"event":"travel", "rendererKind":"projectileAfterimage", "textureRole":"projectile", "backend":"Sprite", "channel":"motionTrail", "lane":"support", "importance":"secondary", "scale":[0.75,1.28], "density":[0.12,0.38], "duration":[6,16], "alpha":[0.18,0.46], "visualCost":[0.08,0.28], "signatureWeight":[0.12,0.42]}, "projectile_afterimage")
+    if "impact" in roles and any(x in tags for x in {"multihit", "pierce", "strong_parent", "generated_vfx_parent"}):
+        add({"event":"hit", "rendererKind":"impactSprite", "textureRole":"impact", "particleRole":"child", "backend":"Baked", "channel":"impactShape", "lane":"support", "importance":"secondary", "scale":[1.25,2.65], "density":[0.18,0.55], "duration":[6,15], "alpha":[0.38,0.82], "visualCost":[0.12,0.42], "signatureWeight":[0.20,0.56]}, "impact_inherited")
+    if any(x in tags for x in {"beam", "channel"}) and "projectile" in roles:
+        add({"event":"active", "rendererKind":"beamLine", "textureRole":"projectile", "backend":"Primitive", "channel":"motionTrail", "lane":"support", "importance":"secondary", "scale":[0.75,1.55], "density":[0.16,0.42], "duration":[10,24], "alpha":[0.18,0.48], "visualCost":[0.10,0.34], "signatureWeight":[0.18,0.50]}, "beam_inherited")
+    if any(x in tags for x in {"light"}):
+        add({"event":"active", "rendererKind":"lightCue", "textureRole":"projectile", "backend":"Realtime", "channel":"light", "lane":"cue", "importance":"accent", "scale":[0.8,1.7], "density":[0.08,0.22], "duration":[8,22], "alpha":[0.2,0.55], "visualCost":[0.03,0.10], "signatureWeight":[0.10,0.25]}, "light_inherited")
     raw = raw[:max_slots]
     return raw, debug
 

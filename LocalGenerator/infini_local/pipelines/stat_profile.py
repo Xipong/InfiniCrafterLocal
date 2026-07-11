@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-"""Parent stats, source damage, generated depth, weak anchor signals.
-
-The heavy stat_profile_for/stage_profile_for implementations live in
-combine_balance. This module owns small pure summaries used by tests/debug code
-and provides the canonical import path for new callers.
-"""
+"""Pure parent stat, generated-depth, and weak-anchor summaries."""
 
 from typing import Any
-
-from infini_local.pipelines.combine_balance import stat_profile_for, stage_profile_for
-
 
 def _num(value: Any, default: float = 0.0) -> float:
     try:
@@ -71,8 +63,6 @@ def stat_profile_summary(stage: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
-    "stat_profile_for",
-    "stage_profile_for",
     "parent_source_damage",
     "parent_use_time",
     "generated_depth_from_sources",
