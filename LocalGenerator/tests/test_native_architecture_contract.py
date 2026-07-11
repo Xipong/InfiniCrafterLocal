@@ -46,6 +46,14 @@ def test_native_source_has_no_legacy_named_modules() -> None:
         for p in (LOCAL / "infini_local").rglob("*_legacy_*.py")
     ]
     assert offenders == []
+    retired = [
+        LOCAL / "infini_local" / "core" / "vfx_composition.py",
+        LOCAL / "infini_local" / "pipelines" / "combine_orchestrator.py",
+        LOCAL / "infini_local" / "pipelines" / "pipeline_support.py",
+        LOCAL / "infini_local" / "pipelines" / "repair_orchestrator.py",
+        LOCAL / "infini_local" / "pipelines" / "sprite_processing_pipeline.py",
+    ]
+    assert [path.relative_to(ROOT).as_posix() for path in retired if path.exists()] == []
 
 
 def test_runtime_authoring_public_api_is_package_owned() -> None:

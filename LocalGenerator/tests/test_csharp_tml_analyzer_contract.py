@@ -50,3 +50,9 @@ def test_dump_tools_use_projectile_id_none_for_projectile_fields() -> None:
     assert "ProjectileID.None" in dump_sources
     assert not re.search(r"\.shoot\s*>\s*0", dump_sources)
     assert not re.search(r"projectileType\s*>?=\s*0", dump_sources)
+
+    all_source = "\n".join(path.read_text(encoding="utf-8") for path in MOD.rglob("*.cs"))
+    project = (MOD / "InfiniCrafterLocal.csproj").read_text(encoding="utf-8")
+    assert "#pragma warning disable" not in all_source
+    assert "#nullable disable warnings" not in all_source
+    assert "<NoWarn>" not in project

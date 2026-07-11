@@ -50,8 +50,32 @@ def clean_replay_dir(replay_runner, monkeypatch, tmp_path):
 
 
 def test_replay_save_with_synthetic_parents(replay_runner, clean_replay_dir, capsys):
-    """Save a synthetic case and verify parents.json is written."""
+    """Exercise the compact CLI surface and save a synthetic case."""
     tmp = clean_replay_dir
+    assert all(hasattr(replay_runner, name) for name in ("main", "save_case", "replay_case", "_replay_root"))
+    assert replay_runner._slugify("My Case 123!") == "My_Case_123"
+    assert replay_runner._slugify("") == "case"
+
+    assert replay_runner.main(["list"]) == 0
+    assert "replay cases" in capsys.readouterr().out.lower()
+
+    show_dir = tmp / "replay_cases" / "show_test"
+    show_dir.mkdir(parents=True)
+    (show_dir / "parents.json").write_text("{}", encoding="utf-8")
+    assert replay_runner.main(["show", "show_test", "final_item.json"]) == 1
+    assert "not found" in capsys.readouterr().out.lower()
+
+    summary_dir = tmp / "summary_case"
+    summary_dir.mkdir()
+    (summary_dir / "parents.json").write_text(json.dumps([{"name": "A"}, {"name": "B"}]), encoding="utf-8")
+    (summary_dir / "compiled_runtime.json").write_text(json.dumps({"patch": {}, "provenance": {"fieldSources": {"damage": "set_item_stats"}}}), encoding="utf-8")
+    (summary_dir / "balance_report.json").write_text(json.dumps({"schema": "infini.balance-report.v1", "powerBand": "early", "clamps": {}}), encoding="utf-8")
+    (summary_dir / "final_item.json").write_text(json.dumps({"name": "Replay Blade", "category": "weapon", "id": "abc"}), encoding="utf-8")
+    assert replay_runner.main([str(summary_dir), "--json"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["ok"] is True
+    assert summary["finalItem"]["name"] == "Replay Blade"
+    assert summary["compiledRuntime"]["fieldSourceCount"] == 1
     item_a = {"name": "Wooden Sword", "category": "weapon"}
     item_b = {"name": "Iron Bow", "category": "weapon"}
     (tmp / "a.json").write_text(json.dumps(item_a))

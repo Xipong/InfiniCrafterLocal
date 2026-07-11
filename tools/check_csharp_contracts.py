@@ -979,6 +979,14 @@ def check_maintenance_qol_cleanup() -> None:
     if (SRC / "Common/Models/GeneratedItemData.Compat.cs").exists():
         err("GeneratedItemData.Compat.cs should be deleted after test-world-only legacy cleanup")
 
+    generator_client = read(SRC / "Common/Services/GeneratorClient.cs")
+    if "ProjectileProfileFromItem" in generator_client:
+        err("GeneratorClient.cs: retired parent projectile profile inference returned")
+    vfx_manifest = read(SRC / "Common/Models/VfxManifestSpec.cs")
+    for removed in ["public string Quality", "public string RenderQuality", "public string MinQuality"]:
+        if removed in vfx_manifest:
+            err(f"VfxManifestSpec.cs: retired quality alias returned `{removed}`")
+
     cache = read(SRC / "Common" / "Services" / "RuntimeSpriteCache.cs")
     for needle in ["DefaultMaxCachedTextures = 512", "RuntimeSpriteCacheMaxTextures", "EffectiveLimits", "CachedTexture", "LastAccessTick", "TrimTextureCacheIfNeeded", "while (_textures.Count > maxCachedTextures)", "DefaultMaxTextureDimensionPixels = 192", "DefaultMaxTextureFileMegabytes = 8", "IsRuntimePngFileSizeAllowed", "MaxMissingOrBadRecords", "TrimMissingOrBadCacheIfNeeded"]:
         if needle not in cache:

@@ -21,6 +21,10 @@ def test_runtime_sprite_cache_uses_vanilla_like_soft_limits():
     assert "tex.Width > limits.MaxTextureDimensionPixels" in cache
     assert "tex.Height > limits.MaxTextureDimensionPixels" in cache
     assert "TrimTextureCacheIfNeeded(limits.MaxCachedTextures)" in cache
+    assert "while (_textures.Count > maxCachedTextures)" in cache
+    assert "texture.Dispose();" in cache
+    assert "MaxMissingOrBadRecords = 256" in cache
+    assert "TrimMissingOrBadCacheIfNeeded" in cache
     assert "[DefaultValue(512)]" in config
     assert "[Range(64, 2048)]" in config
     assert "RuntimeSpriteMaxDimensionPixels" in config
