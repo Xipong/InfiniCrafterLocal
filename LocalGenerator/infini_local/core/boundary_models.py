@@ -39,6 +39,12 @@ class BakedAssetBoundary(StrictBoundaryModel):
     distinctFromItem: bool | None = None
 
 
+class AnimeReferenceBoundary(StrictBoundaryModel):
+    strength: str
+    source: str
+    motifs: list[str] = Field(default_factory=list)
+
+
 class VisualKitBoundary(StrictBoundaryModel):
     styleGuide: str = ""
     palette: list[str] = Field(default_factory=list)
@@ -63,6 +69,7 @@ class VisualKitBoundary(StrictBoundaryModel):
     assetDependencies: list[str] = Field(default_factory=list)
     qualityNotes: list[str] = Field(default_factory=list)
     negativePrompt: str = ""
+    animeReference: AnimeReferenceBoundary | None = None
 
     @field_validator("bakedAssets")
     @classmethod

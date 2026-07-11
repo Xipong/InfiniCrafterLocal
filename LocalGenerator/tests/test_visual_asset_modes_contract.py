@@ -220,6 +220,54 @@ def _check_reuse_item_sprite_slot_never_calls_image_backend(monkeypatch) -> None
     SPRITES.maybe_generate_visual_assets(data)
 
 
+def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeypatch) -> None:
+    levels = [
+        VISUAL.anime_reference_opportunity({"recipeKey": f"anime-reference-{index}"})
+        for index in range(2000)
+    ]
+    assert levels.count("none") >= 1700
+    assert 120 <= levels.count("subtle") <= 260
+    assert 15 <= levels.count("strong") <= 70
+    assert VISUAL.anime_reference_opportunity({"recipeKey": "stable-reference"}) == VISUAL.anime_reference_opportunity({"recipeKey": "stable-reference"})
+
+    strong_key = next(f"anime-reference-{index}" for index in range(2000) if levels[index] == "strong")
+    captured = {}
+
+    monkeypatch.setattr(VISUAL, "USE_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(VISUAL, "is_llm_planner", lambda _data: True)
+    monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "strong-test-model")
+
+    def fake_llm(req, timeout=None):
+        captured["payload"] = json.loads(req["messages"][1]["content"])
+        return {"choices": [{"message": {"content": json.dumps({
+            "visualKit": {
+                "itemIconPrompt": "an original crescent scythe with a recognizable Soul Eater homage",
+                "animeReference": {
+                    "strength": "strong",
+                    "source": "Soul Eater",
+                    "motifs": ["asymmetric crescent blade", "black-red soul stitching"],
+                },
+            }
+        })}}]}
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", fake_llm)
+    data = _base_item()
+    data["recipeKey"] = strong_key
+    result = apply_visual_director(data, {}, {}, {}, {})
+
+    policy = captured["payload"]["animeReferenceOpportunity"]
+    assert policy["maximumStrength"] == "strong"
+    assert policy["optional"] is True
+    assert "animeReference" in captured["payload"]["requiredJsonShape"]["visualKit"]
+    assert result["visualKit"]["animeReference"] == {
+        "strength": "strong",
+        "source": "Soul Eater",
+        "motifs": ["asymmetric crescent blade", "black-red soul stitching"],
+    }
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -235,7 +283,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_nested_baked_assets_can_request_projectile_sprite',
     '_check_item_bodied_projectiles_reuse_item_sprite_unless_distinct',
     '_check_visual_director_preserves_distinct_projectile_contract',
-    '_check_reuse_item_sprite_slot_never_calls_image_backend'
+    '_check_reuse_item_sprite_slot_never_calls_image_backend',
+    '_check_anime_reference_opportunity_is_rare_deterministic_and_bounded'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

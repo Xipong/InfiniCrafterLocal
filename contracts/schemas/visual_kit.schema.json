@@ -1,5 +1,31 @@
 {
   "$defs": {
+    "AnimeReferenceBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "motifs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Motifs",
+          "type": "array"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "strength": {
+          "title": "Strength",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strength",
+        "source"
+      ],
+      "title": "AnimeReferenceBoundary",
+      "type": "object"
+    },
     "BakedAssetBoundary": {
       "additionalProperties": false,
       "properties": {
@@ -47,6 +73,17 @@
       },
       "title": "Animationplan",
       "type": "array"
+    },
+    "animeReference": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AnimeReferenceBoundary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "assetDependencies": {
       "items": {

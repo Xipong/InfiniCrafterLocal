@@ -7,7 +7,7 @@ from typing import Any
 from infini_local.core.boundary_models import validate_visual_kit_boundary
 
 from infini_local.core.env_utils import env_float, env_int
-from infini_local.core.item_identity_tools import name_of
+from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
@@ -41,6 +41,32 @@ from infini_local.services.visual_asset_pipeline import (
     strip_conflicting_sprite_prompt_bits,
 )
 from infini_local.storage.trace_runtime import log_event
+
+
+def anime_reference_opportunity(data: dict[str, Any]) -> str:
+    """Return a stable, deliberately rare visual-reference budget for one recipe."""
+    seed = str(data.get("recipeKey") or data.get("id") or data.get("name") or "generated-item")
+    roll = int(stable_hash("anime-reference-opportunity-v1", seed, length=8), 16) % 1000
+    if roll < 20:
+        return "strong"
+    if roll < 120:
+        return "subtle"
+    return "none"
+
+
+def _sanitize_anime_reference(value: Any, maximum_strength: str) -> dict[str, Any] | None:
+    if maximum_strength not in {"subtle", "strong"} or not isinstance(value, dict):
+        return None
+    strength = str(value.get("strength") or "").strip().lower()
+    if strength not in {"subtle", "strong"}:
+        return None
+    if maximum_strength == "subtle":
+        strength = "subtle"
+    source = " ".join(str(value.get("source") or "").split())[:160]
+    motifs = [" ".join(str(item).split())[:120] for item in (value.get("motifs") or []) if str(item).strip()][:3]
+    if not source or not motifs:
+        return None
+    return {"strength": strength, "source": source, "motifs": motifs}
 
 
 
@@ -211,6 +237,14 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
         attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
         visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+        anime_opportunity = anime_reference_opportunity(data)
+        anime_rule = (
+            "This recipe has a rare optional anime-reference opportunity. You may decline it. "
+            f"If used, animeReference.strength must not exceed {anime_opportunity}; name one source and use concrete visual motifs only. "
+            "Keep the item original: no character portrait, copied logo, title text, or direct asset replica. Weave the homage into the relevant sprite prompts."
+            if anime_opportunity in {"subtle", "strong"}
+            else "Do not introduce named anime, manga, character, or franchise references for this recipe."
+        )
         payload = {
             "task": "Create a coherent pixel-art visual asset pack for this generated Terraria-like toy. Do not change gameplay stats.",
             "zImageAssumption": "For Z-Image Turbo, write PE-style final visual descriptions: preserve subject, quantity, action, state, colors and material identity; describe composition and texture as objective visual facts; do not rely on a negative prompt.",
@@ -240,6 +274,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "For item icons, write one itemSilhouetteContract sentence: concrete proportions/parts/readability for this exact generated object; do not use a generic weapon class label alone.",
                 "No SD tags, negative-prompt blocks, masterpiece/8K/meta labels.",
                 "If exact text must appear, quote it; otherwise use no text/logos/UI marks.",
+                anime_rule,
                 "Tethered/returning/harpoon sprites: compact moving body plus optional short local rope/chain attachment, not a full-canvas line. Flail projectile is the compact head/weight; whip projectile is a compact tip/segment accent or particle_vfx, never a pre-drawn full lash because runtime animates the tether.",
                 "Do not force literal parent silhouettes into every asset; draw the authored final object. If a modded parent has no visual facts, do not invent claims of exact fidelity—use the authored child concept, mechanical facts, palette and explicit anchors.",
                 "Write short VFX intent lines as plain visual hints, not code.",
@@ -259,6 +294,12 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                     "shotCount", "spreadRadians", "splitCount", "chainCount", "channelUse", "beamWidthPx", "beamChargeTicks", "immunityCooldown"
                 ]},
                 "existingVisual": {k: visual.get(k) for k in ["objectType", "requiredAnchors", "palette", "imagePrompt", "projectileImagePrompt", "impactImagePrompt"]},
+            },
+            "animeReferenceOpportunity": {
+                "enabled": anime_opportunity in {"subtle", "strong"},
+                "optional": True,
+                "maximumStrength": anime_opportunity,
+                "frequencyPolicy": "rare deterministic recipe opportunity; most recipes receive none",
             },
             "requiredJsonShape": {
                 "visualKit": {
@@ -289,6 +330,12 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 }
             }
         }
+        if anime_opportunity in {"subtle", "strong"}:
+            payload["requiredJsonShape"]["visualKit"]["animeReference"] = {
+                "strength": f"subtle or strong, never above {anime_opportunity}; omit to decline",
+                "source": "one anime/manga title, character, or iconic object used only as visual inspiration",
+                "motifs": ["1-3 concrete shape, palette, material, or ornament cues"],
+            }
         model_name = resolve_llm_model()
         req = {
             "model": model_name,
@@ -332,6 +379,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "fieldSpritePrompt", "bakedAssets", "vfxIntent", "projectileVfx", "impactVfx",
             "childVfx", "fieldVfx", "vfxScaleHint", "vfxRhythmHint", "vfxMaterialHints",
             "vfxAvoid", "animationPlan", "assetDependencies", "qualityNotes", "negativePrompt",
+            "animeReference",
         }
         unknown_kit_keys = sorted(str(key) for key in kit if key not in allowed_kit_keys)
         if unknown_kit_keys:
@@ -362,6 +410,11 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             kit["bakedAssets"] = clean_baked
         else:
             kit.pop("bakedAssets", None)
+        anime_reference = _sanitize_anime_reference(kit.get("animeReference"), anime_opportunity)
+        if anime_reference:
+            kit["animeReference"] = anime_reference
+        else:
+            kit.pop("animeReference", None)
         kit = validate_visual_kit_boundary(kit)
         data["visualKit"] = kit
         apply_visual_asset_runtime_gates(data, kit)

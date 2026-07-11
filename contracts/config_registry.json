@@ -2599,7 +2599,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 303,
+          "line": 350,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5984,7 +5984,7 @@
         {
           "default": 0.42,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 299,
+          "line": 346,
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -6382,7 +6382,7 @@
   ],
   "errors": [],
   "fieldCount": 233,
-  "fingerprint": "e302b832c7d08b386282279d46f78a62c46486269a5bb76116450ba5a63b60ad",
+  "fingerprint": "8dab5db49171664748e03cd1a4640678a7415ea94f3c4f65ae0b7a4a10e4b008",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
