@@ -371,6 +371,7 @@
       "owners": [
         "LocalGenerator/infini_local/core/dev_fallback.py",
         "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
         "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/combine_pipeline.py",
         "LocalGenerator/infini_local/web/server.py"
@@ -462,6 +463,7 @@
       "owners": [
         "LocalGenerator/infini_local/core/balance_mode.py",
         "LocalGenerator/infini_local/core/balance_report.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
         "LocalGenerator/infini_local/desktop/settings_schema.py"
       ],
       "secret": false,
@@ -2459,6 +2461,7 @@
       "minimum": null,
       "name": "INFINI_LLM_RUNTIME_AUTHORING",
       "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
         "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
       ],
@@ -2510,6 +2513,7 @@
       "minimum": null,
       "name": "INFINI_LLM_RUNTIME_PLAN_REQUIRED",
       "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
         "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
       ],
@@ -2536,6 +2540,7 @@
       "minimum": null,
       "name": "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
       "owners": [
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
         "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
       ],
@@ -5106,6 +5111,7 @@
       "name": "INFINI_USE_LLM",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
         "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
         "LocalGenerator/infini_local/web/server.py"
@@ -6382,7 +6388,7 @@
   ],
   "errors": [],
   "fieldCount": 233,
-  "fingerprint": "8dab5db49171664748e03cd1a4640678a7415ea94f3c4f65ae0b7a4a10e4b008",
+  "fingerprint": "4ff1e141e62e1d3eb8d63207ebf90af60b4e9a1f57fa170e89183bc6c50c18de",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

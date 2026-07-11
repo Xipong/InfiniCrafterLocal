@@ -565,6 +565,13 @@ class SettingsGuiUiMixin:
 
     def _build_llm(self, parent):
         ttk.Label(parent, text="LLM: кто пишет контракт предмета", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
+        self.row(parent, "Use LLM", "INFINI_USE_LLM", values=["1", "0"], hint="Главный переключатель LLM-авторинга. 0 допустим только для явных debug/dev сценариев.")
+        self.row(parent, "Runtime authoring", "INFINI_LLM_RUNTIME_AUTHORING", values=["1", "0"], hint="Разрешить planner-у писать строгий runtimePlan с конечными engine calls.")
+        self.row(parent, "Runtime plan required", "INFINI_LLM_RUNTIME_PLAN_REQUIRED", values=["1", "0"], hint="1 = не принимать LLM-результат без runtimePlan; безопасный режим для обычной игры.")
+        self.row(parent, "Strict runtime validation", "INFINI_LLM_RUNTIME_STRICT_VALIDATION", values=["1", "0"], hint="Проверять engine calls и compiled runtime contract до применения предмета.")
+        self.row(parent, "Balance mode", "INFINI_BALANCE_MODE", values=["safety", "normalize", "report"])
+        self.row(parent, "Deterministic dev fallback", "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", values=["0", "1"], hint="Только для разработки: разрешает кодовый fallback, если LLM недоступна. В обычной игре оставлять 0.")
+        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         self.row(parent, "LLM provider", "INFINI_LLM_PROVIDER", values=["local", "openrouter", "openai_compat"], hint="OpenRouter может писать контракт, а картинки при этом могут идти локально через Z-Image.")
         self.row(parent, "LM Studio URL", "INFINI_LMSTUDIO_URL")
         self.row(parent, "LM Studio model", "INFINI_LMSTUDIO_MODEL")
@@ -594,15 +601,15 @@ class SettingsGuiUiMixin:
         self.row(parent, "Local prompt reasoning", "INFINI_LLM_LOCAL_REASONING_PROMPT", values=["1", "0"], hint="Для локалок без API reasoning: разрешить короткий внутренний чек в system prompt. Цепочку мыслей выводить всё равно запрещено.")
 
     def _build_zimage_guide(self, parent):
-        box = ttk.LabelFrame(parent, text="Z-Image / stable-diffusion.cpp Vulkan — краткий гайд", padding=(10, 8))
+        box = ttk.LabelFrame(parent, text="FLUX.2 / Z-Image / stable-diffusion.cpp — краткий гайд", padding=(10, 8))
         box.pack(fill="x", padx=10, pady=(6, 10))
         guide = (
-            "1) Пути: укажи sd-server.exe, z-image-turbo *.gguf, ae.safetensors и Qwen/LLM *.gguf. "
+            "1) Пути: укажи sd-server.exe, diffusion *.gguf, ae.safetensors и Qwen/LLM *.gguf. "
             "VAE/Qwen/LoRA не надо дублировать в extra args — GUI добавит --vae/--llm/--lora-model-dir сам.\n"
-            "2) AMD/Vulkan дефолт: нажми AMD safe. У него runtime diffusion/VAE/TE на Vulkan, параметры Qwen/TE в RAM, поэтому скорость близка к full GPU при меньшей постоянной VRAM.\n"
-            "3) Если VRAM душит/игра фризит: AMD low VRAM. Если нужен максимум скорости и хватает VRAM: AMD full GPU.\n"
+            "2) Текущий FLUX.2 Klein 4B preset: нажми FLUX hybrid. Diffusion+TE работают через ROCm, VAE через Vulkan, TE weights лежат в CPU RAM.\n"
+            "3) Для Z-Image нажми AMD safe: runtime diffusion/VAE/TE на Vulkan, параметры Qwen/TE в RAM. Если VRAM душит/игра фризит: AMD low VRAM; для максимума скорости при достаточной VRAM: AMD full GPU.\n"
             "4) LoRA: выбери LoRA file и нажми Browse + use / Use selected LoRA. Отдельного поля folder нет: папка берётся из файла, а в prompt добавляется <lora:name:weight>.\n"
-            "5) steps/cfg/sampler для Z-Image Turbo обычно держи примерно 6-12 / 1.0 / euler. Дальше регулируй prompt/postprocess, а не гоняй 30 шагов.\n"
+            "5) FLUX.2 Klein preset использует 4 / 1.0 / euler; Z-Image Turbo обычно 6-12 / 1.0 / euler.\n"
             "6) safe_args лучше template: меньше риска сломать --sampling-method или случайно вставить текст пресета в команду."
         )
         msg = tk.Message(box, text=guide, width=980, foreground="#444")
@@ -622,7 +629,7 @@ class SettingsGuiUiMixin:
     def _build_image(self, parent):
         ttk.Label(parent, text="Image backend: кто рисует PNG", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
         self._build_zimage_guide(parent)
-        self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "image_api", "off", "comfyui", "a1111"], hint="sdcpp = локальный Z-Image; image_api = внешний API; off = без PNG.")
+        self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "image_api", "off", "comfyui", "a1111"], hint="sdcpp = локальный FLUX.2/Z-Image через stable-diffusion.cpp; image_api = внешний API; off = без PNG.")
         self.row(parent, "sd-server.exe", "INFINI_SDCPP_SERVER_EXE", browse="file")
         self.row(parent, "ROCm hybrid runtime", "INFINI_SDCPP_ROCM_COMPAT_ROOT", browse="dir", hint="Папка sdcpp-hybrid-gfx1030. ROCm/HIP/rocBLAS env применяется только к дочернему sd-server.exe.")
         self.row(parent, "Diffusion model", "INFINI_SDCPP_MODEL", browse="model", hint="FLUX.2 Klein или Z-Image *.gguf.")

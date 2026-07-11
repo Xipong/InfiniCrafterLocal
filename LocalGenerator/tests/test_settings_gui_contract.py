@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -39,6 +40,16 @@ def _check_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
     assert "Cache DBCache" in labels
     assert "Params disk" in labels
     assert len(labels) >= 12
+
+
+def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
+    visible_rows = set(re.findall(r"self\.(?:row|text_row)\([^)]*?[\"'](INFINI_[A-Z0-9_]+)[\"']", GUI_SOURCE, flags=re.S))
+    intentionally_hidden = {
+        "INFINI_GUI_PIPELINE_PRESET",  # top-level preset combobox, not a normal row
+        "INFINI_SDCPP_LORA_DIR",  # derived from the selected LoRA file
+    }
+    assert set(settings_schema.FIELD_ORDER) - intentionally_hidden == visible_rows
+    assert all(profile in GUI_SOURCE for profile in settings_schema.SDCPP_EXTRA_PROFILES)
 
 
 def _check_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
@@ -180,6 +191,7 @@ def _run_coarse_contracts(tmp_path):
     for _name in [
     '_check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env',
     '_check_sdcpp_option_help_is_visible_and_has_expanded_flags',
+    '_check_schema_fields_and_image_profiles_are_reachable_from_gui',
     '_check_gui_extra_arg_helpers_replace_conflicting_value_flags',
     '_check_sdcpp_presets_use_measured_amd_placements_without_redundant_assignments',
     '_check_flow_shift_help_explains_meaning_not_only_quality',

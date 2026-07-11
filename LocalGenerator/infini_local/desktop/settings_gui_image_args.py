@@ -115,6 +115,7 @@ class SettingsGuiImageArgsMixin:
         ttk.Label(frame, text="", width=30).pack(side="left")
         ttk.Label(frame, text="Пресеты:", foreground="#666").pack(side="left", padx=(0, 4))
         preset_specs = [
+            ("FLUX hybrid", lambda: self.set_extra_profile("flux2_klein4b_rx6800xt_hybrid"), SDCPP_EXTRA_PROFILE_HELP["flux2_klein4b_rx6800xt_hybrid"]),
             ("AMD safe", lambda: self.set_extra_profile("zimage_amd_safe"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_safe"]),
             ("AMD low VRAM", lambda: self.set_extra_profile("zimage_amd_low_vram"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_low_vram"]),
             ("AMD full GPU", lambda: self.set_extra_profile("zimage_amd_full_gpu"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_full_gpu"]),
@@ -129,7 +130,7 @@ class SettingsGuiImageArgsMixin:
         ttk.Label(frame2, text="", width=30).pack(side="left")
         ttk.Label(frame2, text="", foreground="#666").pack(side="left", padx=(0, 4))
         for i, (text, command, help_text) in enumerate(preset_specs):
-            target = frame if i < 4 else frame2
+            target = frame if i < 5 else frame2
             btn = ttk.Button(target, text=text, command=command)
             btn.pack(side="left", padx=2)
             self.extra_arg_buttons.append(btn)
@@ -183,7 +184,7 @@ class SettingsGuiImageArgsMixin:
         frame = ttk.Frame(parent, padding=(10, 2))
         frame.pack(fill="x")
         ttk.Label(frame, text="", width=30).pack(side="left")
-        start_btn = ttk.Button(frame, text="Start / check Z-Image", command=self.open_sdcpp_start)
+        start_btn = ttk.Button(frame, text="Start / check Image Gen", command=self.open_sdcpp_start)
         start_btn.pack(side="left", padx=2)
         debug_btn = ttk.Button(frame, text="Open sd.cpp debug", command=self.open_sdcpp_debug)
         debug_btn.pack(side="left", padx=2)
@@ -194,9 +195,9 @@ class SettingsGuiImageArgsMixin:
         self.sdcpp_debug_buttons.extend([start_btn, debug_btn, doctor_btn, probe_btn])
         self._attach_static_help(start_btn, "Сохранить config.env и открыть /sdcpp_start: server.py попробует поднять sd.cpp до крафта.")
         self._attach_static_help(debug_btn, "Открыть /sdcpp_debug: команда запуска, активный backend и хвост лога sd.cpp.")
-        self._attach_static_help(doctor_btn, "Открыть /visual_doctor: проверка полного пути Z-Image -> postprocess -> asset delivery.")
+        self._attach_static_help(doctor_btn, "Открыть /visual_doctor: проверка полного пути FLUX/Z-Image -> postprocess -> asset delivery.")
         self._attach_static_help(probe_btn, "Открыть /visual_doctor.json?probe=1: реальная тестовая генерация item sprite без крафта в игре.")
-        ttk.Label(frame, text="/sdcpp_start запускает sd-server; Visual Doctor проверяет Z-Image и обязательный sprite delivery.", foreground="#666").pack(side="left", padx=8)
+        ttk.Label(frame, text="/sdcpp_start запускает sd-server; Visual Doctor проверяет Image Gen и обязательный sprite delivery.", foreground="#666").pack(side="left", padx=8)
 
     def _extra_text(self):
         return self.text_widgets.get("INFINI_SDCPP_SERVER_EXTRA_ARGS")
