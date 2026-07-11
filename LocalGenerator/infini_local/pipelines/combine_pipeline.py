@@ -21,6 +21,7 @@ from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.executable_boundary_projection import project_attack_presentation_fields
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
 from infini_local.pipelines.item_power_knowledge import (
@@ -89,6 +90,8 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     recipe_identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
     key = recipe_key(a, b, world_id, recipe_identity_version)
     cached = cache_get(key, world_id, world_name)
+    if isinstance(cached, dict):
+        cached = project_attack_presentation_fields(cached, source="cache_lookup")
     if cached is not None and not is_deliverable_recipe_payload(cached):
         trace_event("step", "HTTP:/combine", "world recipe cache skipped non-deliverable payload", {"recipeKey": key, "sourceMode": cached.get("sourceMode") if isinstance(cached, dict) else ""})
         cached = None
@@ -107,6 +110,8 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     recipe_identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
     key = recipe_key(a, b, world_id, recipe_identity_version)
     cached = cache_get(key, world_id, world_name)
+    if isinstance(cached, dict):
+        cached = project_attack_presentation_fields(cached, source="cache_delivery")
     if cached:
         visual_report = visual_delivery_report(cached)
         if visual_report.get("ok"):
@@ -120,10 +125,10 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     data: dict[str, Any] | None = None
     generation_debug.clear_combine_failure("new_combine_started")
 
-    def step(label: str, fn, *args):
+    def step(label: str, fn, *args, **kwargs):
         t0 = time.time()
         try:
-            out = fn(*args)
+            out = fn(*args, **kwargs)
             pipeline_log.append({"stage": label, "ok": True, "ms": int((time.time() - t0) * 1000)})
             return out
         except Exception as e:
@@ -151,14 +156,19 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("02_schema_validate_and_minimal_repair", validate_and_repair, data, a, b, ca, cb, key)
         data = step("03_runtime_knowledge_context", apply_item_knowledge, data, a, b, ca, cb)
         data = step("04_author_gameplay_to_runtime_envelope", attach_gameplay_and_attack, data, a, b, ca, cb)
+        data = step("04b_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="post_gameplay_compile")
+        step("04c_strict_executable_preflight", validate_executable_item_boundary, data)
         data = step("05_presentation_sound_from_author_intent", attach_presentation_and_sound, data)
         data = step("06_result_card_after_runtime_stats", attach_result_knowledge_card, data, a, b)
         data = step("07_item_visual_brief_preserve_author", attach_visual, data, a, b, ca, cb)
         data = step("08_visual_director_asset_pack", apply_visual_director, data, a, b, ca, cb)
+        data = step("08b_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="post_visual_director")
+        step("08c_strict_executable_preflight", validate_executable_item_boundary, data)
         data = step("09_visual_asset_generation", maybe_generate_visual_assets, data)
         data = step("09b_visual_delivery_gate", assert_visual_delivery_ready, data)
         data = step("10_hybrid_vfx_manifest", attach_hybrid_vfx_manifest, data, key, "", a, b, call_llm_vfx_director if USE_LLM else None)
         data = step("11_generated_parent_summary", attach_generated_parent_summary, data)
+        data = step("11a_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="final_pre_boundary")
         step("11b_strict_executable_boundary", validate_executable_item_boundary, data)
         data = step("12_final_normalize", final_normalize, data)
         step("12b_strict_executable_boundary", validate_executable_item_boundary, data)

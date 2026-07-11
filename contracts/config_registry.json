@@ -2604,7 +2604,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 350,
+          "line": 353,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5990,7 +5990,7 @@
         {
           "default": 0.42,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 346,
+          "line": 349,
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -6340,7 +6340,7 @@
         {
           "default": 1800,
           "file": "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
-          "line": 764,
+          "line": 847,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -6388,7 +6388,7 @@
   ],
   "errors": [],
   "fieldCount": 233,
-  "fingerprint": "4ff1e141e62e1d3eb8d63207ebf90af60b4e9a1f57fa170e89183bc6c50c18de",
+  "fingerprint": "b3a75c8863747c8b9fef1eab9e461641e74493dc4ac89cca321658690e200a75",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

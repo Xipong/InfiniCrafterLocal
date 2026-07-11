@@ -71,6 +71,17 @@ class VisualKitBoundary(StrictBoundaryModel):
     negativePrompt: str = ""
     animeReference: AnimeReferenceBoundary | None = None
 
+    @field_validator("vfxMaterialHints", "animationPlan", "assetDependencies", "qualityNotes", mode="before")
+    @classmethod
+    def canonicalize_singleton_text_lists(cls, value: Any) -> Any:
+        # OpenAI-compatible JSON modes still occasionally serialize a one-entry text
+        # list as a plain string.  This is a shape-only canonicalization: no splitting,
+        # guessing, or semantic repair.  Other wrong types remain strict failures.
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return [cleaned] if cleaned else []
+        return value
+
     @field_validator("bakedAssets")
     @classmethod
     def validate_baked_roles(cls, value: dict[str, BakedAssetBoundary]) -> dict[str, BakedAssetBoundary]:

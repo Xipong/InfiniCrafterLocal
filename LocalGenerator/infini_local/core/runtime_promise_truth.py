@@ -25,6 +25,8 @@ CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("burst", re.compile(r"\b(bursts?|explode|explosion|nova)\b", re.I)),
     ("burn_on_hit", re.compile(r"\b(burn|ignite|on-hit burn|sets? on fire)\b", re.I)),
     ("alternating_phase", re.compile(r"\b(alternate|alternates|cycle|light.dark|dark.light|phase)\b", re.I)),
+    ("temporary_platform", re.compile(r"\b(platforms?|walkable\s+(?:surface|platform)|temporary\s+work\s+surface|stand(?:s|ing)?\s+on\s+(?:it|them|the\s+platform))\b", re.I)),
+    ("damaging_field", re.compile(r"\b(damaging\s+(?:field|zone|area)|lingering\s+(?:damage|hazard|field|zone)|damage[- ]over[- ]time\s+(?:field|zone)|hazardous\s+(?:field|zone))\b", re.I)),
 ]
 
 
@@ -63,8 +65,9 @@ def _collect_structured_text(data: dict[str, Any]) -> list[tuple[str, str]]:
     if data.get("tooltip"):
         out.append(("tooltip", _text(data.get("tooltip"))))
     concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
-    if concept.get("fantasy"):
-        out.append(("concept.fantasy", _text(concept.get("fantasy"))))
+    for key in ("fantasy", "mergeLogic", "weirdTwist"):
+        if concept.get(key):
+            out.append((f"concept.{key}", _text(concept.get(key))))
     rp = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
     if rp.get("runtimeStateIntent"):
         out.append(("runtimePlan.runtimeStateIntent", _text(rp.get("runtimeStateIntent"))))
@@ -147,6 +150,10 @@ def _claim_status(kind: str, source: str, text: str, data: dict[str, Any], patch
         if visual_source:
             return "visual_only", "visual wording only"
         return ("partial", "state intent preserved, no gameplay executor") if has_state else ("unsupported", "no finite executor")
+    if kind == "temporary_platform":
+        return ("visual_only", "platform-like silhouette wording only") if visual_source else ("unsupported", "no walkable/platform executor")
+    if kind == "damaging_field":
+        return ("visual_only", "field wording is visual-only") if visual_source else ("unsupported", "current leave_trail_or_field contract is presentation-only and has no damage hitbox")
     if kind == "burn_on_hit":
         return ("executable", "apply_on_hit_effect.burn") if on_hit == "burn" else (("visual_only", "burn wording only") if visual_source else ("unsupported", "no burn onHit executor"))
     if kind == "charge_release":

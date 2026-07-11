@@ -233,6 +233,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         return data
     if VISUAL_ASSET_MODE not in {"full", "all", "projectile", "visualpack", "assetpack"}:
         return data
+    had_visual_kit = "visualKit" in data
+    previous_visual_kit = data.get("visualKit")
     try:
         concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
         attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
@@ -250,6 +252,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "zImageAssumption": "For Z-Image Turbo, write PE-style final visual descriptions: preserve subject, quantity, action, state, colors and material identity; describe composition and texture as objective visual facts; do not rely on a negative prompt.",
             "rules": [
                 "Return one JSON object; no markdown or analysis.",
+                "All list-valued fields in the required JSON shape must remain JSON arrays even when they contain only one entry.",
                 "Build role-separated assets, not one copied generic prompt.",
                 "Each sprite prompt describes one pixel asset on solid #ff00ff, not a scene.",
                 "Item icon should be one inventory-readable object: weapons/tools as one handheld object, armor as one wearable piece, accessories as one compact wearable/charm, potions as one container. Do not draw emitted projectiles, impact bursts, target markers or fields beside it unless physically integrated. Furniture/placeable parents may appear as parts or integrated cues, not automatically as a full placed tile scene.",
@@ -384,7 +387,13 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         unknown_kit_keys = sorted(str(key) for key in kit if key not in allowed_kit_keys)
         if unknown_kit_keys:
             raise ValueError(f"visualKit contains noncanonical keys: {unknown_kit_keys[:8]}")
-        data["visualKit"] = kit
+        singleton_list_repairs: list[str] = []
+        for list_key in ("vfxMaterialHints", "animationPlan", "assetDependencies", "qualityNotes"):
+            raw_value = kit.get(list_key)
+            if isinstance(raw_value, str):
+                cleaned_value = raw_value.strip()
+                kit[list_key] = [cleaned_value] if cleaned_value else []
+                singleton_list_repairs.append(f"{list_key}:string_to_singleton_list")
         # Current contract has exactly one authored asset-decision surface:
         # visualKit.bakedAssets.<role>.
         baked_assets = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
@@ -416,9 +425,13 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         else:
             kit.pop("animeReference", None)
         kit = validate_visual_kit_boundary(kit)
+        # Commit the visual kit transaction only after strict validation.  Invalid raw
+        # model output must not leak into prompt assembly through data.visualKit.
         data["visualKit"] = kit
         apply_visual_asset_runtime_gates(data, kit)
         data.setdefault("debug", {})["visualDirectorRawOutput"] = content[:10000]
+        if singleton_list_repairs:
+            data["debug"]["visualDirectorBoundaryRepairs"] = singleton_list_repairs
         data["debug"]["visualDirectorModel"] = model_name
         visual = data.setdefault("visual", {})
         attack = data.setdefault("attack", {})
@@ -467,7 +480,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             val = str(kit.get(src_key) or "").strip()
             if val:
                 visual[dst_key] = val[:700]
-                attack[dst_key] = val[:700]
         if kit.get("animationPlan"):
             attack["visualAnimationPlan"] = _stringish(kit.get("animationPlan"), "")[:1200]
         if kit.get("assetDependencies"):
@@ -478,10 +490,15 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             material_hints = [str(x).strip() for x in (kit.get("vfxMaterialHints") or []) if str(x).strip()][:12]
             if material_hints:
                 visual["vfxMaterialHints"] = material_hints
-                attack["vfxMaterialHints"] = material_hints
         data["attack"] = attack
         data["visual"] = visual
     except Exception as e:
+        # Transactional fallback: keep the previous validated kit (if any), never the
+        # partially sanitized raw response that just failed validation.
+        if had_visual_kit:
+            data["visualKit"] = previous_visual_kit
+        else:
+            data.pop("visualKit", None)
         data.setdefault("debug", {})["visualDirectorError"] = repr(e)
         log_event("warn", "visual director failed", {"error": repr(e), "trace": traceback.format_exc()})
     return data

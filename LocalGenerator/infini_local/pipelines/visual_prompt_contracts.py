@@ -33,11 +33,29 @@ _TETHER_GUARD_RUNTIME_FAMILIES = frozenset({"returning", "flail", "yoyo", "whip"
 _EMITTED_SPEAR_FORM_RUNTIME_FAMILIES = frozenset({"cast", "shoot", "throw"})
 _ITEM_FANTASY_PROJECTILE_FAMILIES = ITEM_BODIED_PROJECTILE_RUNTIME_FAMILIES | frozenset({"flail", "whip"})
 
+_PRIMARY_MATERIAL_ALIASES: dict[str, tuple[str, ...]] = {
+    "wood": ("wood", "wooden", "timber", "plank", "workbench"),
+    "stone": ("stone", "rock", "granite", "marble"),
+    "obsidian": ("obsidian", "volcanic glass"),
+    "bone": ("bone", "skeletal", "ivory"),
+    "slime": ("slime", "gel", "goo", "viscous"),
+    "ice": ("ice", "icy", "frost", "frozen"),
+    "crystal": ("crystal", "crystalline", "gemstone"),
+    "glass": ("glass", "glasslike", "translucent glass"),
+    "cloth": ("cloth", "fabric", "woven"),
+    "leather": ("leather", "hide"),
+    "copper": ("copper", "bronze"),
+    "iron": ("iron",),
+    "steel": ("steel", "silver blade", "metal blade"),
+    "gold": ("gold", "golden"),
+}
+_GENERIC_METALLIC_MATERIALS = frozenset({"copper", "iron", "steel", "gold"})
+
 
 def asset_negative_prompt(role: str = "item") -> str:
     # Z-Image Turbo does not use negative prompts as a reliable CFG channel;
     # technical exclusions are injected into the positive prompt instead.
-    if image_backend_is_zimage():
+    if image_backend_uses_semantic_prompt_contract():
         return ""
     base = sprite_background_negative_clause()
     if role == "projectile":
@@ -100,6 +118,24 @@ def image_backend_is_zimage() -> bool:
         return True
     hay = " ".join([visual_config.SDCPP_MODEL, visual_config.SDCPP_SERVER_COMMAND_TEMPLATE, visual_config.SDCPP_SERVER_EXTRA_ARGS]).lower().replace("_", "-")
     return "z-image" in hay or "zimage" in hay
+
+def image_backend_uses_semantic_prompt_contract() -> bool:
+    """Use concise subject-first prompts for modern Qwen-text-encoder flow models.
+
+    Z-Image and FLUX.2 Klein both respond better to objective natural-language
+    descriptions than to the legacy comma-tag recipe.  This is image-backend metadata
+    only and never changes gameplay or asset-role routing.
+    """
+    if image_backend_is_zimage():
+        return True
+    if (visual_config.IMAGE_BACKEND or "").lower() != "sdcpp":
+        return False
+    hay = " ".join([
+        visual_config.SDCPP_MODEL,
+        visual_config.SDCPP_SERVER_COMMAND_TEMPLATE,
+        visual_config.SDCPP_SERVER_EXTRA_ARGS,
+    ]).lower().replace("_", "-")
+    return any(token in hay for token in ("flux-2", "flux2", "flux.2"))
 
 def zimage_positive_only_enabled() -> bool:
     return bool(image_backend_is_zimage() and visual_config.ZIMAGE_POSITIVE_ONLY)
@@ -546,6 +582,64 @@ def family_prompt_clause(data: dict[str, Any], role: str, canvas: int) -> str:
         ])
     return role_contract_prompt_clause(role, canvas)
 
+def authored_primary_material_clause(role: str, authored_prompt: str, data: dict[str, Any]) -> str:
+    """Protect strongly authored non-metal bodies from generic steel collapse.
+
+    This is a visual grounding hint, not a gameplay classifier.  It activates only
+    when the same material appears repeatedly across authored prompt/anchors/fantasy.
+    Secondary explicitly named fasteners and accents remain allowed.
+    """
+    if (role or "item").lower() not in {"item", "projectile"} or not isinstance(data, dict):
+        return ""
+    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
+    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    rp = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
+    vi = rp.get("visualIntent") if isinstance(rp.get("visualIntent"), dict) else {}
+    role_name = (role or "item").lower()
+    if role_name == "projectile":
+        # Emitted projectiles may intentionally use a different material than the
+        # launcher/item.  Ground only against projectile-authored surfaces here.
+        chunks = [
+            str(authored_prompt or ""),
+            str(visual.get("projectileImagePrompt") or ""),
+            str(attack.get("projectileSpritePrompt") or ""),
+            str(vi.get("projectile") or ""),
+            " ".join(str(x) for x in (visual.get("vfxMaterialHints") or []) if str(x).strip()),
+        ]
+    else:
+        chunks = [
+            str(authored_prompt or ""),
+            str(concept.get("fantasy") or ""),
+            str(visual.get("imagePrompt") or ""),
+            str(visual.get("itemSilhouetteContract") or ""),
+            " ".join(str(x) for x in (visual.get("requiredAnchors") or []) if str(x).strip()),
+            " ".join(str(x) for x in (visual.get("vfxMaterialHints") or []) if str(x).strip()),
+            str(vi.get("item") or ""),
+            str(data.get("parentA") or ""),
+            str(data.get("parentB") or ""),
+        ]
+    blob = " ".join(chunks).lower().replace("_", "-")
+    scores: dict[str, int] = {}
+    for material, aliases in _PRIMARY_MATERIAL_ALIASES.items():
+        score = 0
+        for alias in aliases:
+            score += len(re.findall(r"(?<![a-z])" + re.escape(alias) + r"(?![a-z])", blob))
+        if score:
+            scores[material] = score
+    if not scores:
+        return ""
+    material, score = max(scores.items(), key=lambda item: (item[1], len(item[0])))
+    if score < 2 or material in _GENERIC_METALLIC_MATERIALS:
+        return ""
+    role_word = "item" if (role or "item").lower() == "item" else "projectile"
+    return (
+        f"Primary authored material: {material}. Keep the main {role_word} body visibly made of {material}; "
+        "do not replace it with generic polished steel, silver, or an unrelated material. "
+        "Separately authored fasteners and accents may keep their own materials."
+    )
+
+
 def sanitize_projectile_family_prompt(data: dict[str, Any], role: str, prompt: str) -> str:
     """Final technical prompt guard for sprite assets.
 
@@ -748,20 +842,23 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
 
     prompt = role_visual_prompt_guard(role, prompt, data)
 
-    if image_backend_is_zimage():
-        # Z-Image Turbo: feed one final objective visual description, similar to
-        # the public PE layer, not a Stable Diffusion negative-prompt recipe.
+    material_clause = authored_primary_material_clause(role, prompt, data)
+    if image_backend_uses_semantic_prompt_contract():
+        # Modern Qwen-text-encoder flow models: feed one final objective visual
+        # description, not a legacy Stable Diffusion comma-tag recipe.
         role_clause = family_prompt_clause(data, role, canvas) if role == "projectile" else role_contract_prompt_clause(role, canvas)
-        z_parts = [
+        semantic_parts = [
             zimage_role_description(role, canvas),
             zimage_item_identity_sentence(role, data),
             zimage_subject_sentence(role, prompt, fantasy),
+            material_clause,
             role_clause,
             zimage_palette_sentence(palette_words),
             zimage_text_policy_sentence(data),
             zimage_positive_guard_clause(role, data),
         ]
-        return compact_zimage_asset_prompt(z_parts, role, limit=env_int("INFINI_ZIMAGE_PROMPT_LIMIT", 1800))
+        semantic_limit = env_int("INFINI_ZIMAGE_PROMPT_LIMIT", 1800 if image_backend_is_zimage() else 2200)
+        return compact_zimage_asset_prompt(semantic_parts, role, limit=semantic_limit)
 
     parts = [
         ((role_style_prefix(role, canvas) if role != "projectile" else (f"pixel art held spear/thrust projection sprite for a Terraria-like mod, {sprite_background_positive_clause()}, readable {'16x16 to 32x32' if canvas <= 32 else '32x32 to 64x64'} silhouette, {family_prompt_clause(data, role, canvas)}" if str((data.get("attack") if isinstance(data.get("attack"), dict) else {}).get("runtimeFamily") or "") == "thrust" else f"pixel art flying projectile sprite for a Terraria-like mod, {sprite_background_positive_clause()}, readable {'16x16 to 32x32' if canvas <= 32 else '32x32 to 64x64'} silhouette, {family_prompt_clause(data, role, canvas)}"))),
@@ -769,6 +866,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         item_name_prompt_clause(role, data),
         f"item fantasy: {fantasy}" if fantasy else "",
         prompt,
+        material_clause,
         f"palette: {palette_words}" if palette_words else "palette: limited high-contrast named colors",
         ("one authored projectile texture only; if the authored subject is a bundle, cluster, swarm, or fan, keep it as one readable projectile bundle rather than separate copies" if role == "projectile" else ""),
         "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, centered single readable asset, keep unused area pure magenta key (#ff00ff)",
@@ -925,6 +1023,7 @@ __all__ = [
     "sprite_background_positive_clause",
     "sprite_background_negative_clause",
     "image_backend_is_zimage",
+    "image_backend_uses_semantic_prompt_contract",
     "zimage_positive_only_enabled",
     "zimage_role_description",
     "zimage_positive_guard_clause",

@@ -287,16 +287,15 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     vi = rp.get("visualIntent") if isinstance(rp.get("visualIntent"), dict) else {}
     if vi:
         visual = data.setdefault("visual", {}) if isinstance(data.get("visual"), dict) else data.setdefault("visual", {})
-        attack = data.setdefault("attack", {}) if isinstance(data.get("attack"), dict) else data.setdefault("attack", {})
         for src, dst in [("projectile", "projectileImagePrompt"), ("impact", "impactImagePrompt"), ("item", "imagePrompt")]:
             if vi.get(src) and not visual.get(dst):
                 visual[dst] = str(vi.get(src))
+        # Visual intent belongs to presentation/VFX owners.  AttackSpec is the strict
+        # executable Python <-> C# contract and must not carry authoring prose.
         if vi.get("vfxIntent"):
             visual["vfxIntent"] = str(vi.get("vfxIntent"))
-            attack["vfxIntent"] = str(vi.get("vfxIntent"))
         if vi.get("vfxAvoid"):
             visual["vfxAvoid"] = str(vi.get("vfxAvoid"))
-            attack["vfxAvoid"] = str(vi.get("vfxAvoid"))
     return data
 
 def terraria_tick_guide_for_llm() -> dict[str, Any]:

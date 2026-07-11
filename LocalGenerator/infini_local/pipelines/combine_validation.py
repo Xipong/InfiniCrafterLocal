@@ -148,7 +148,13 @@ def validate_and_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
     if isinstance(raw_palette, list) and raw_palette:
         visual["palette"] = [str(x) for x in raw_palette if str(x).strip()][:8]
     else:
-        visual["palette"] = palette_from(tags)
+        # Runtime-authoring deliberately does not inject parent semantic tags into the
+        # result item, but visual grounding still needs the physical parent materials.
+        # Using result tags alone made ordinary Wood + Work Bench fall back to gray/white
+        # and pushed the image model toward a generic steel sword.
+        visual_grounding_tags = tags | tags_of(a) | tags_of(b)
+        visual["palette"] = palette_from(visual_grounding_tags)
+        data["debug"]["visualPaletteSource"] = "result_and_parent_grounding_tags"
     visual.setdefault("objectType", slug(data.get("name", "generated_item")))
     if isinstance(data.get("attack"), dict) and data["attack"].get("genome") is None:
         data["attack"]["genome"] = {}
