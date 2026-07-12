@@ -229,6 +229,14 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
     assert 120 <= levels.count("subtle") <= 260
     assert 15 <= levels.count("strong") <= 70
     assert VISUAL.anime_reference_opportunity({"recipeKey": "stable-reference"}) == VISUAL.anime_reference_opportunity({"recipeKey": "stable-reference"})
+    assert VISUAL._sanitize_anime_reference(
+        {"strength": "strong", "source": "Example", "motifs": ["crescent blade"]},
+        "subtle",
+    ) is None
+    assert VISUAL._sanitize_anime_reference(
+        {"strength": "strong", "source": "Example", "motifs": ["COPIED LOGO"]},
+        "strong",
+    ) is None
 
     strong_key = next(f"anime-reference-{index}" for index in range(2000) if levels[index] == "strong")
     captured = {}
@@ -243,7 +251,7 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
         captured["payload"] = json.loads(req["messages"][1]["content"])
         return {"choices": [{"message": {"content": json.dumps({
             "visualKit": {
-                "itemIconPrompt": "an original crescent scythe with a recognizable Soul Eater homage",
+                "itemIconPrompt": "an original crescent scythe",
                 "animeReference": {
                     "strength": "strong",
                     "source": "Soul Eater",
@@ -266,6 +274,10 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
         "source": "Soul Eater",
         "motifs": ["asymmetric crescent blade", "black-red soul stitching"],
     }
+    item_prompt = result["visual"]["imagePrompt"].casefold()
+    assert "soul eater" in item_prompt
+    assert "asymmetric crescent blade" in item_prompt
+    assert "black-red soul stitching" in item_prompt
 
 
 # Coarse test bundle: the checks below used to be separate pytest items.

@@ -66,13 +66,47 @@ def _sanitize_anime_reference(value: Any, maximum_strength: str) -> dict[str, An
     strength = str(value.get("strength") or "").strip().lower()
     if strength not in {"subtle", "strong"}:
         return None
-    if maximum_strength == "subtle":
-        strength = "subtle"
+    if maximum_strength == "subtle" and strength == "strong":
+        return None
     source = " ".join(str(value.get("source") or "").split())[:160]
-    motifs = [" ".join(str(item).split())[:120] for item in (value.get("motifs") or []) if str(item).strip()][:3]
-    if not source or not motifs:
+    raw_motifs = value.get("motifs")
+    if not isinstance(raw_motifs, list):
+        return None
+    motifs = [" ".join(str(item).split())[:120] for item in raw_motifs if str(item).strip()][:3]
+    blocked_motif_fragments = (
+        "character portrait",
+        "official artwork",
+        "screenshot",
+        "copied logo",
+        "title text",
+        "direct asset replica",
+    )
+    if not source or not motifs or any(
+        blocked in motif.casefold()
+        for motif in motifs
+        for blocked in blocked_motif_fragments
+    ):
         return None
     return {"strength": strength, "source": source, "motifs": motifs}
+
+
+def _append_anime_reference_to_prompt(prompt: Any, reference: dict[str, Any]) -> str:
+    """Project an accepted visual-only reference into the actual item prompt."""
+    base = " ".join(str(prompt or "").split())
+    source = str(reference.get("source") or "").strip()
+    motifs = [str(item).strip() for item in (reference.get("motifs") or []) if str(item).strip()]
+    if not source or not motifs:
+        return base[:1400]
+    folded = base.casefold()
+    if source.casefold() in folded and all(motif.casefold() in folded for motif in motifs):
+        return base[:1400]
+    strength = str(reference.get("strength") or "subtle").strip().lower()
+    intensity = "clear but original" if strength == "strong" else "subtle original"
+    clause = f"{intensity} visual homage inspired by {source}, expressed through {', '.join(motifs)}"
+    available = 1400 - len(clause) - 2
+    if not base or available <= 0:
+        return clause[:1400]
+    return f"{base[:available].rstrip(' ,;')}, {clause}"
 
 
 def _visual_director_backend_profile() -> tuple[str, str]:
@@ -310,6 +344,11 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         anime_reference = _sanitize_anime_reference(kit.get("animeReference"), anime_opportunity)
         if anime_reference:
             kit["animeReference"] = anime_reference
+            if kit.get("itemIconPrompt"):
+                kit["itemIconPrompt"] = _append_anime_reference_to_prompt(
+                    kit["itemIconPrompt"],
+                    anime_reference,
+                )
         else:
             kit.pop("animeReference", None)
 
@@ -372,6 +411,11 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             val = strip_conflicting_sprite_prompt_bits(kit.get(src_key) or "")
             if val:
                 dst[dst_key] = val[:1400]
+        if anime_reference and visual.get("imagePrompt"):
+            visual["imagePrompt"] = _append_anime_reference_to_prompt(
+                visual["imagePrompt"],
+                anime_reference,
+            )
 
         if kit.get("styleGuide"):
             visual["styleGuide"] = str(kit.get("styleGuide"))[:700]
