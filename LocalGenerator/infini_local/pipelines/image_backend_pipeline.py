@@ -605,8 +605,8 @@ def generate_comfyui(prompt: str, negative: str, sprite_id: str) -> list[str]:
     """
     workflow_path = resolve_comfyui_workflow_path()
     if not workflow_path:
-        log_event("warn", "ComfyUI selected but no workflow template was found; using procedural fallback", {"workflow": COMFYUI_WORKFLOW})
-        return [visual_asset_pipeline.generate_procedural_sprite({"id": sprite_id, "name": prompt, "tags": [], "visual": {"preferredCanvasSize": 32}}, variant=0, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)]
+        log_event("warn", "ComfyUI selected but no workflow template was found", {"workflow": COMFYUI_WORKFLOW, "spriteId": sprite_id})
+        return []
     workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
     seed = random.randint(1, 2**31 - 1)
     workflow = json_deep_replace(workflow, comfyui_mapping(prompt, negative, sprite_id, seed))

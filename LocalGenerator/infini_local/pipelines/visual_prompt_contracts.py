@@ -13,11 +13,13 @@ from infini_local.core.runtime_family_policy import (
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.services.visual_asset_pipeline import (
+    compact_prompt_parts,
     compact_zimage_asset_prompt,
     sanitize_image_prompt_background,
     sanitize_projectile_prompt_multiplicity,
     sanitize_visual_palette,
     strip_conflicting_sprite_prompt_bits,
+    truncate_prompt_at_boundary,
     zimage_palette_sentence,
     zimage_pe_clean_text,
     zimage_text_policy_sentence,
@@ -240,12 +242,12 @@ def _compact_prompt_append(prompt: str, addition: str, *, limit: int = 1800) -> 
     p = re.sub(r"\s+", " ", str(prompt or "").strip())
     add = re.sub(r"\s+", " ", str(addition or "").strip())
     if not add:
-        return p[:limit]
+        return truncate_prompt_at_boundary(p, limit)
     probe = re.sub(r"[^a-z0-9]+", " ", p.lower()).strip()
     add_probe = re.sub(r"[^a-z0-9]+", " ", add.lower()).strip()
     if add_probe and add_probe not in probe:
         p = (p.rstrip(" ,.;") + ", " + add).strip()
-    return p[:limit]
+    return truncate_prompt_at_boundary(p, limit)
 
 _ITEM_USABLE_GEAR_GUARD = (
     "depict the authored final item as one handheld or carriable usable item inventory sprite composition, not a placed tile, room scene, floor layout, "
@@ -262,7 +264,7 @@ def _append_item_role_guard_once(prompt: str) -> str:
     probe = _prompt_probe(p)
     if "authored final item as one handheld or carriable usable item inventory sprite composition" not in probe:
         return _compact_prompt_append(p, _ITEM_USABLE_GEAR_GUARD)
-    return p[:1800]
+    return truncate_prompt_at_boundary(p, 1800)
 
 def _strip_item_role_guard_fragments(prompt: str) -> str:
     """Remove old/duplicated generated-item role boilerplate before adding one canonical guard."""
@@ -313,7 +315,7 @@ def _prepend_prompt_contracts(prompt: str, clauses: list[str], *, limit: int = 1
         add = re.sub(r"\s+", " ", str(clause).strip())
         if _prompt_probe(add) not in _prompt_probe(p):
             p = (add.rstrip(" ,.;") + ", " + p.lstrip(" ,.;")).strip()
-    return p[:limit]
+    return truncate_prompt_at_boundary(p, limit)
 
 def role_visual_prompt_guard(role: str, prompt: str, data: dict[str, Any]) -> str:
     """Small, role-local visual guard with no gameplay routing.
@@ -752,7 +754,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         ("one authored projectile texture only; if the authored subject is a bundle, cluster, swarm, or fan, keep it as one readable projectile bundle rather than separate copies" if role == "projectile" else ""),
         "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, centered single readable asset, keep unused area pure magenta key (#ff00ff)",
     ]
-    return ", ".join(p for p in parts if p)[:2200]
+    return compact_prompt_parts(parts, limit=2200, separator=", ")
 
 def projectile_visual_blob(data: dict[str, Any]) -> str:
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}

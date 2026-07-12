@@ -126,8 +126,8 @@ def zimage_pe_clean_text(text: str) -> str:
         (r"\bno full[- ]canvas chains?\b", "with only compact local chain detail when it belongs to the subject"),
         (r"\bno full[- ]screen cord\b", "with only compact local cord detail when it belongs to the subject"),
         (r"\bno oversized empty icon\b", "with the subject kept large in frame"),
-        (r"\bno magic glow\b", "with a matte physical surface when the authored subject is nonmagical"),
-        (r"\bno coin silhouette\b", "jagged impact fragments rather than a coin-shaped body"),
+        (r"\bno magic glow\b", "without magical glow"),
+        (r"\bno coin silhouette\b", "without a coin silhouette"),
         (r"\bno readable letters, numbers, logo marks, UI labels, or symbols\b", "without text, logos, or UI marks"),
         (r"\bzero readable letters, numbers, logo marks, UI labels, or symbols\b", "without text, logos, or UI marks"),
         (r"\bstring/tether is runtime/VFX, not in the PNG\b", "the visible yoyo string, if shown, is only a short local nub"),
@@ -145,12 +145,57 @@ def zimage_pe_clean_text(text: str) -> str:
     t = re.sub(r"\s+", " ", t).strip(" ,.;")
     return t
 
-def compact_zimage_asset_prompt(parts: list[str], role: str, limit: int = 1800) -> str:
-    """Build a Z-Image-friendly final prompt.
+def truncate_prompt_at_boundary(text: str, limit: int) -> str:
+    """Trim prompt text without leaving a broken word or half instruction."""
+    value = re.sub(r"\s+", " ", str(text or "")).strip(" ,.;")
+    if limit <= 0:
+        return ""
+    if len(value) <= limit:
+        return value
+    window = value[:limit + 1]
+    minimum = max(24, int(limit * 0.55))
+    cut = -1
+    for separator in (". ", "; ", ", ", " "):
+        candidate = window.rfind(separator)
+        if candidate >= minimum:
+            cut = candidate + (1 if separator != " " else 0)
+            break
+    if cut < 0:
+        cut = limit
+    return value[:cut].rstrip(" ,.;")
 
-    The public prompt expander asks for an objective, concrete final visual
-    description: preserve the subject/count/state, add composition/material/
-    palette details, and avoid meta tags or prompt instructions.
+
+def compact_prompt_parts(parts: list[str], *, limit: int, separator: str = ", ") -> str:
+    """Join prompt parts with exact de-duplication and a reserved final guard."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in parts:
+        value = re.sub(r"\s+", " ", str(raw or "")).strip(" ,.;")
+        if not value:
+            continue
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(value)
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return truncate_prompt_at_boundary(cleaned[0], limit)
+    guard = cleaned[-1]
+    guard_budget = min(len(guard), max(120, limit // 2))
+    guard = truncate_prompt_at_boundary(guard, guard_budget)
+    body_budget = max(1, limit - len(guard) - len(separator))
+    body = truncate_prompt_at_boundary(separator.join(cleaned[:-1]), body_budget)
+    return separator.join(part for part in (body, guard) if part)
+
+
+def compact_zimage_asset_prompt(parts: list[str], role: str, limit: int = 1800) -> str:
+    """Build a subject-first prompt while preserving the final technical guard.
+
+    Character slicing used to cut prompts mid-sentence and could remove the chroma/one-
+    subject guard entirely. The last part is the caller-owned technical guard; reserve it
+    and compact only the descriptive body. No item semantics are added here.
     """
     cleaned: list[str] = []
     seen: set[str] = set()
@@ -165,11 +210,19 @@ def compact_zimage_asset_prompt(parts: list[str], role: str, limit: int = 1800) 
         cleaned.append(t)
     if not cleaned:
         cleaned.append(f"A single Terraria-like {role} pixel sprite on a uniform #ff00ff magenta chroma-key canvas")
-    # Short sentences are easier for the Qwen text encoder than a comma soup, but
-    # still form one final positive prompt.
-    prompt = ". ".join(cleaned)
-    prompt = re.sub(r"\s+", " ", prompt).strip(" .")
-    return (prompt + ".")[:limit]
+
+    if len(cleaned) == 1:
+        return truncate_prompt_at_boundary(cleaned[0], max(1, limit - 1)).rstrip(".") + "."
+
+    guard = cleaned[-1].rstrip(".")
+    reserved = min(len(guard), max(120, limit // 2))
+    if len(guard) > reserved:
+        guard = truncate_prompt_at_boundary(guard, reserved)
+    body_limit = max(1, limit - len(guard) - 3)
+    body = truncate_prompt_at_boundary(". ".join(cleaned[:-1]), body_limit)
+    prompt = ". ".join(part for part in (body, guard) if part).strip(" .")
+    return prompt + "."
+
 
 def strip_conflicting_sprite_prompt_bits(text: str) -> str:
     text = strip_sprite_resolution_tokens(str(text or "")).strip()
@@ -203,7 +256,7 @@ def strip_conflicting_sprite_prompt_bits(text: str) -> str:
             continue
         cleaned_parts.append(part)
     cleaned = ", ".join(cleaned_parts)
-    return cleaned[:1400]
+    return truncate_prompt_at_boundary(cleaned, 1400)
 
 def sanitize_projectile_prompt_multiplicity(prompt: str, *, force_single: bool = False) -> str:
     """Keep executable multiplicity out of a single projectile texture.

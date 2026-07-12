@@ -16,7 +16,21 @@ from infini_local.storage.trace_runtime import log_event
 # AGENT MAP: canonical visual/image backend env/config and lifecycle state.
 # Consumers import this owner directly. No gameplay/runtime authoring logic belongs here.
 
-IMAGE_BACKEND = env_str("INFINI_IMAGE_BACKEND", "procedural").lower()  # procedural, a1111, comfyui, sdcpp, off
+IMAGE_BACKEND_ALIASES = {
+    "stablediffusioncpp": "sdcpp",
+    "stable-diffusion.cpp": "sdcpp",
+    "stable_diffusion_cpp": "sdcpp",
+    "api_image": "image_api",
+    "openai_image": "image_api",
+    "openai_images": "image_api",
+    "openai_compat_image": "image_api",
+    "none": "off",
+    "disabled": "off",
+}
+SUPPORTED_IMAGE_BACKENDS = frozenset({"off", "sdcpp", "a1111", "comfyui", "image_api", "procedural"})
+IMAGE_BACKEND_RAW = env_str("INFINI_IMAGE_BACKEND", "sdcpp").strip().lower()
+IMAGE_BACKEND = IMAGE_BACKEND_ALIASES.get(IMAGE_BACKEND_RAW, IMAGE_BACKEND_RAW)
+IMAGE_BACKEND_CONFIG_ERROR = "" if IMAGE_BACKEND in SUPPORTED_IMAGE_BACKENDS else f"unsupported image backend: {IMAGE_BACKEND_RAW or '<empty>'}"
 A1111_URL = env_str("INFINI_A1111_URL", "http://127.0.0.1:7860").rstrip("/")
 COMFYUI_URL = env_str("INFINI_COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
 # stable-diffusion.cpp backend. v0.4.19 removes per-image CLI generation entirely.
@@ -216,7 +230,10 @@ A1111_BATCH_SIZE = env_int("INFINI_A1111_BATCH_SIZE", 1, lo=1, hi=16)
 
 
 __all__ = [
+    "IMAGE_BACKEND_RAW",
     "IMAGE_BACKEND",
+    "IMAGE_BACKEND_CONFIG_ERROR",
+    "SUPPORTED_IMAGE_BACKENDS",
     "A1111_URL",
     "COMFYUI_URL",
     "SDCPP_MODEL",

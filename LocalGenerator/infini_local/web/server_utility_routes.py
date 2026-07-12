@@ -264,7 +264,24 @@ class ServerUtilityRoutes:
         def add(name: str, ok: bool, level: str, message: str, **extra: Any) -> None:
             checks.append({"name": name, "ok": bool(ok), "level": level, "message": message, **extra})
 
-        add("image_backend", backend == "sdcpp", "error" if backend != "sdcpp" else "ok", "Z-Image gameplay loop expects INFINI_IMAGE_BACKEND=sdcpp.", value=backend)
+        backend_error = str(health.get("imageBackendConfigError") or "").strip()
+        backend_ok = bool(backend and not backend_error and backend != "off")
+        add(
+            "image_backend",
+            backend_ok,
+            "error" if not backend_ok else "ok",
+            backend_error or "A supported image backend must be active for required item sprites.",
+            value=backend,
+            rawValue=health.get("imageBackendRaw"),
+        )
+        if health.get("visualRequireZImageBackend"):
+            add(
+                "zimage_backend_required",
+                backend == "sdcpp",
+                "error" if backend != "sdcpp" else "ok",
+                "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND=1 requires the sd.cpp backend.",
+                value=backend,
+            )
         add("visual_item_required", bool(health.get("visualRequireItemSprite")), "error" if not health.get("visualRequireItemSprite") else "ok", "Broken/missing item sprites should block craft delivery.")
         add("positive_only_prompt", bool(health.get("zImagePositiveOnly", True)), "warn" if not health.get("zImagePositiveOnly", True) else "ok", "Z-Image should use positive-only prompt contract.")
         add("pillow", bool(health.get("pillowAvailable")), "error" if not health.get("pillowAvailable") else "ok", "Pillow is required for sprite postprocess/keying.")

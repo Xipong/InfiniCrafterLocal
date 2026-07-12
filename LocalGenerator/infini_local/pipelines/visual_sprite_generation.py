@@ -13,13 +13,14 @@ from infini_local.core.image_dependencies import (
 from infini_local.pipelines.pipeline_visual_config import (
     GENERATE_VARIANTS,
     IMAGE_BACKEND,
+    IMAGE_BACKEND_CONFIG_ERROR,
     SPRITE_RETRIES,
     VISUAL_ALLOW_PROCEDURAL_FALLBACK,
     VISUAL_ASSET_MODE,
     VISUAL_STRICT_AI_AUTHORSHIP,
 )
 from infini_local.services import visual_asset_pipeline
-from infini_local.services.visual_asset_pipeline import sprite_status_from_raw_path
+from infini_local.services.visual_asset_pipeline import sprite_status_from_raw_path, truncate_prompt_at_boundary
 from infini_local.storage.trace_runtime import (
     log_event,
     trace_event,
@@ -49,6 +50,65 @@ from infini_local.pipelines.visual_soul import attach_visual_soul_from_sprite
 # and plans are already authored.
 
 
+class ImageBackendConfigurationError(RuntimeError):
+    """Selected image backend cannot produce an authored sprite in this configuration."""
+
+
+def _backend_configuration_error() -> str:
+    if IMAGE_BACKEND_CONFIG_ERROR:
+        return IMAGE_BACKEND_CONFIG_ERROR
+    if IMAGE_BACKEND == "procedural" and (VISUAL_STRICT_AI_AUTHORSHIP or not VISUAL_ALLOW_PROCEDURAL_FALLBACK):
+        return "procedural backend requires strict AI authorship=0 and explicit procedural fallback=1"
+    return ""
+
+
+def _generate_backend_variants(
+    data: dict[str, Any],
+    *,
+    prompt: str,
+    negative: str,
+    asset_id: str,
+    canvas: int,
+    role: str,
+) -> list[str]:
+    """Dispatch one configured backend without silently changing authorship mode."""
+    config_error = _backend_configuration_error()
+    if config_error:
+        raise ImageBackendConfigurationError(config_error)
+    if IMAGE_BACKEND == "a1111":
+        return generate_a1111(prompt, negative, asset_id, canvas)
+    if IMAGE_BACKEND == "comfyui":
+        return generate_comfyui(prompt, negative, asset_id)
+    if IMAGE_BACKEND == "sdcpp":
+        return generate_sdcpp(prompt, negative, asset_id, canvas)
+    if IMAGE_BACKEND == "image_api":
+        return generate_image_api(prompt, negative, asset_id, canvas)
+    if IMAGE_BACKEND == "procedural":
+        if role == "item":
+            return [
+                visual_asset_pipeline.generate_procedural_sprite(
+                    data,
+                    variant=i,
+                    sprite_dir=SPRITE_DIR,
+                    image_cls=Image,
+                    image_draw_cls=ImageDraw,
+                )
+                for i in range(max(1, GENERATE_VARIANTS))
+            ]
+        return [
+            visual_asset_pipeline.generate_procedural_asset(
+                data,
+                role,
+                variant=0,
+                canvas_size=canvas,
+                sprite_dir=SPRITE_DIR,
+                image_cls=Image,
+                image_draw_cls=ImageDraw,
+            )
+        ]
+    if IMAGE_BACKEND == "off":
+        return []
+    raise ImageBackendConfigurationError(f"unsupported image backend: {IMAGE_BACKEND}")
 
 
 def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
@@ -56,9 +116,18 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     visual.setdefault("authoringPolicy", "ai_primary_non_procedural")
     base_prompt = normalize_asset_prompt(data, "item", str(visual.get("imagePrompt") or ""), int(visual.get("preferredCanvasSize") or 32))
     visual["imagePrompt"] = base_prompt
-    visual["finalItemPrompt"] = base_prompt[:1800]
+    visual["finalItemPrompt"] = truncate_prompt_at_boundary(base_prompt, 1800)
     if IMAGE_BACKEND == "off":
         visual["spriteStatus"] = "prompt_only"
+        return data
+    config_error = _backend_configuration_error()
+    if config_error:
+        visual["spriteStatus"] = "backend_config_error"
+        visual["spritePath"] = ""
+        visual["spriteRawPath"] = ""
+        visual["spriteUrl"] = ""
+        data.setdefault("debug", {})["imageBackendConfigError"] = config_error
+        trace_event("error", "IMAGE:item", "image backend configuration is invalid", {"backend": IMAGE_BACKEND, "error": config_error})
         return data
     canvas = int(visual.get("preferredCanvasSize") or 32)
     negative = str(visual.get("negativePrompt") or asset_negative_prompt("item"))
@@ -77,16 +146,14 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
             "backend": IMAGE_BACKEND, "canvas": canvas, "spriteRetries": SPRITE_RETRIES,
         }, prompt=attempt_prompt, negative=negative)
         try:
-            if IMAGE_BACKEND == "a1111":
-                variants = generate_a1111(attempt_prompt, negative, attempt_id, canvas)
-            elif IMAGE_BACKEND == "comfyui":
-                variants = generate_comfyui(attempt_prompt, negative, attempt_id)
-            elif IMAGE_BACKEND in {"sdcpp", "stablediffusioncpp", "stable-diffusion.cpp", "stable_diffusion_cpp"}:
-                variants = generate_sdcpp(attempt_prompt, negative, attempt_id, canvas)
-            elif IMAGE_BACKEND in {"image_api", "api_image", "openai_image", "openai_images", "openai_compat_image"}:
-                variants = generate_image_api(attempt_prompt, negative, attempt_id, canvas)
-            else:
-                variants = [] if VISUAL_STRICT_AI_AUTHORSHIP else [visual_asset_pipeline.generate_procedural_sprite(data, variant=i, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw) for i in range(max(1, GENERATE_VARIANTS))]
+            variants = _generate_backend_variants(
+                data,
+                prompt=attempt_prompt,
+                negative=negative,
+                asset_id=attempt_id,
+                canvas=canvas,
+                role="item",
+            )
             variants = [p for p in variants if p and Path(p).exists()]
             if not variants:
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
@@ -240,10 +307,15 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     """
     base_prompt = normalize_asset_prompt(data, role, prompt, canvas)
     negative = negative or asset_negative_prompt(role)
-    data.setdefault("debug", {})[f"{role}FinalPrompt"] = base_prompt[:1800]
+    data.setdefault("debug", {})[f"{role}FinalPrompt"] = truncate_prompt_at_boundary(base_prompt, 1800)
     data.setdefault("debug", {})[f"{role}AuthoringPolicy"] = "ai_primary_non_procedural"
     if IMAGE_BACKEND == "off":
         return "", "", 0.0, "prompt_only"
+    config_error = _backend_configuration_error()
+    if config_error:
+        data.setdefault("debug", {})["imageBackendConfigError"] = config_error
+        trace_event("error", f"IMAGE:{role}", "image backend configuration is invalid", {"backend": IMAGE_BACKEND, "error": config_error})
+        return "", "", 0.0, "backend_config_error"
     attempts: list[dict[str, Any]] = []
     max_attempts = max(1, int(SPRITE_RETRIES) + 1)
     last_path = ""
@@ -258,16 +330,14 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             "backend": IMAGE_BACKEND, "canvas": canvas, "spriteRetries": SPRITE_RETRIES,
         }, prompt=attempt_prompt, negative=negative)
         try:
-            if IMAGE_BACKEND == "a1111":
-                variants = generate_a1111(attempt_prompt, negative, attempt_id, canvas)
-            elif IMAGE_BACKEND == "comfyui":
-                variants = generate_comfyui(attempt_prompt, negative, attempt_id)
-            elif IMAGE_BACKEND in {"sdcpp", "stablediffusioncpp", "stable-diffusion.cpp", "stable_diffusion_cpp"}:
-                variants = generate_sdcpp(attempt_prompt, negative, attempt_id, canvas)
-            elif IMAGE_BACKEND in {"image_api", "api_image", "openai_image", "openai_images", "openai_compat_image"}:
-                variants = generate_image_api(attempt_prompt, negative, attempt_id, canvas)
-            else:
-                variants = [] if VISUAL_STRICT_AI_AUTHORSHIP else [visual_asset_pipeline.generate_procedural_asset(data, role, variant=0, canvas_size=canvas, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)]
+            variants = _generate_backend_variants(
+                data,
+                prompt=attempt_prompt,
+                negative=negative,
+                asset_id=attempt_id,
+                canvas=canvas,
+                role=role,
+            )
             variants = [p for p in variants if p and Path(p).exists()]
             if not variants:
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
@@ -463,6 +533,9 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "ImageBackendConfigurationError",
+    "_backend_configuration_error",
+    "_generate_backend_variants",
     "maybe_generate_sprite",
     "_validation_reasons",
     "refit_processed_sprite_to_contract",

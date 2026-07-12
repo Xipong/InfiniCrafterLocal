@@ -11,6 +11,8 @@ from infini_local.core.config_bootstrap import (
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines.pipeline_visual_config import (
     IMAGE_BACKEND,
+    IMAGE_BACKEND_CONFIG_ERROR,
+    IMAGE_BACKEND_RAW,
     VISUAL_ALLOW_PROCEDURAL_FALLBACK,
     VISUAL_REQUIRE_ITEM_SPRITE,
     VISUAL_REQUIRE_ZIMAGE_BACKEND,
@@ -57,7 +59,7 @@ def _asset_path_exists(path_value: Any) -> bool:
     except Exception:
         return False
 
-def visual_delivery_report(data: dict[str, Any]) -> dict[str, Any]:
+def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool = True) -> dict[str, Any]:
     """Inspect the exact visual payload that will be sent to tML.
 
     This is a delivery gate, not an art critic: it verifies that required runtime
@@ -70,7 +72,23 @@ def visual_delivery_report(data: dict[str, Any]) -> dict[str, Any]:
     problems: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
 
-    if VISUAL_REQUIRE_ZIMAGE_BACKEND and not image_backend_is_zimage():
+    if check_backend_config and IMAGE_BACKEND_CONFIG_ERROR:
+        problems.append({
+            "code": "image_backend_configuration_invalid",
+            "message": IMAGE_BACKEND_CONFIG_ERROR,
+            "imageBackendRaw": IMAGE_BACKEND_RAW,
+            "imageBackend": IMAGE_BACKEND,
+        })
+    if check_backend_config and IMAGE_BACKEND == "procedural" and (VISUAL_STRICT_AI_AUTHORSHIP or not VISUAL_ALLOW_PROCEDURAL_FALLBACK):
+        problems.append({
+            "code": "procedural_backend_not_explicitly_allowed",
+            "message": "Procedural image authoring is disabled by the active AI-authorship policy.",
+            "imageBackend": IMAGE_BACKEND,
+            "strictAiAuthorship": bool(VISUAL_STRICT_AI_AUTHORSHIP),
+            "proceduralFallbackAllowed": bool(VISUAL_ALLOW_PROCEDURAL_FALLBACK),
+        })
+
+    if check_backend_config and VISUAL_REQUIRE_ZIMAGE_BACKEND and not image_backend_is_zimage():
         problems.append({
             "code": "zimage_required_but_inactive",
             "message": "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND=1, but the active image backend is not Z-Image/sd.cpp.",
@@ -143,6 +161,9 @@ def visual_delivery_report(data: dict[str, Any]) -> dict[str, Any]:
         "requiredItemSprite": bool(VISUAL_REQUIRE_ITEM_SPRITE),
         "requireZImageBackend": bool(VISUAL_REQUIRE_ZIMAGE_BACKEND),
         "imageBackend": IMAGE_BACKEND,
+        "imageBackendRaw": IMAGE_BACKEND_RAW,
+        "imageBackendConfigError": IMAGE_BACKEND_CONFIG_ERROR,
+        "backendConfigChecked": bool(check_backend_config),
         "zImageBackendActive": image_backend_is_zimage(),
         "strictAiAuthorship": bool(VISUAL_STRICT_AI_AUTHORSHIP),
         "proceduralFallbackAllowed": bool(VISUAL_ALLOW_PROCEDURAL_FALLBACK),

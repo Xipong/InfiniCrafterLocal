@@ -52,9 +52,10 @@ def test_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
     bootstrap = read("LocalGenerator/infini_local/core/config_bootstrap.py")
     assert "CACHE_DIR =" in bootstrap
     server = read("LocalGenerator/infini_local/web/server.py")
-    assert "env_bool" in server and "env_int" in server
     assert "from infini_local.core.config_bootstrap import (" in server
-    assert "USE_LLM = env_bool(" in server
+    assert "from infini_local.core.llm_config import (" in server
+    assert "USE_LLM = env_bool(" not in server
+    assert "LLM_MAX_TOKENS = env_int(" not in server
     visual = read("LocalGenerator/infini_local/pipelines/pipeline_visual_config.py")
     assert "env_bool" in visual and "env_float" in visual and "env_int" in visual
 

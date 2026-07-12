@@ -280,6 +280,7 @@ DEFAULTS = {
 
 PRESETS = {
     "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": {
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
         "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe",
@@ -300,6 +301,7 @@ PRESETS = {
         "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
     },
     "Локалка: LM Studio + local Z-Image/sd.cpp": {
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
         "INFINI_SDCPP_SERVER_AUTOSTART": "1",
@@ -310,6 +312,7 @@ PRESETS = {
         "INFINI_SDCPP_SAMPLER": "euler",
     },
     "OpenRouter + local Z-Image/sd.cpp": {
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "openrouter",
         "INFINI_IMAGE_BACKEND": "sdcpp",
         "INFINI_SDCPP_SERVER_AUTOSTART": "1",
@@ -320,11 +323,14 @@ PRESETS = {
         "INFINI_SDCPP_SAMPLER": "euler",
     },
     "OpenRouter + Image API": {
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "openrouter",
         "INFINI_IMAGE_BACKEND": "image_api",
         "INFINI_SDCPP_SERVER_AUTOSTART": "0",
     },
     "API LLM only: без картинок": {
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "0",
+        "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND": "0",
         "INFINI_LLM_PROVIDER": "openrouter",
         "INFINI_IMAGE_BACKEND": "off",
         "INFINI_SDCPP_SERVER_AUTOSTART": "0",

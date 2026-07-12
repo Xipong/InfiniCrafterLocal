@@ -62,6 +62,7 @@ from infini_local.storage.world_recipe_runtime import (
     cache_put,
     is_deliverable_recipe_payload,
     normalize_world_id_from_payload,
+    quarantine_world_recipe_cache,
     recipe_key,
     sanitize_recipe_for_delivery,
     world_recipe_dir,
@@ -74,6 +75,46 @@ from infini_local.storage.world_recipe_runtime import (
 # runtimePlan compile/repair -> balance/final normalize -> visual/assets ->
 # deliverable GeneratedItemData. Stage labels in combine() are debug breadcrumbs;
 # do not insert hidden gameplay authoring into cache, visual, or trace helpers.
+
+
+def _quarantine_cached_recipe(
+    *,
+    world_id: str,
+    recipe_key_value: str,
+    reason: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    try:
+        quarantined = quarantine_world_recipe_cache(
+            recipe_key_value,
+            world_id,
+            reason,
+            details=details,
+        )
+        if quarantined:
+            trace_event(
+                "warn",
+                "COMBINE:cache",
+                "invalid cached recipe quarantined",
+                {
+                    "recipeKey": recipe_key_value,
+                    "worldId": world_id,
+                    "reason": reason,
+                    "path": quarantined,
+                },
+            )
+    except (OSError, ValueError, TypeError) as exc:
+        trace_event(
+            "warn",
+            "COMBINE:cache",
+            "could not quarantine invalid cached recipe",
+            {
+                "recipeKey": recipe_key_value,
+                "worldId": world_id,
+                "reason": reason,
+                "error": repr(exc),
+            },
+        )
 
 
 def _cached_payload_passes_executable_boundary(
@@ -127,14 +168,33 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
             recipe_key_value=key,
             source="cache_lookup",
         ):
+            _quarantine_cached_recipe(
+                world_id=world_id,
+                recipe_key_value=key,
+                reason="executable_boundary_invalid",
+                details={"source": "cache_lookup"},
+            )
             cached = None
     if cached is not None and not is_deliverable_recipe_payload(cached):
-        trace_event("step", "HTTP:/combine", "world recipe cache skipped non-deliverable payload", {"recipeKey": key, "sourceMode": cached.get("sourceMode") if isinstance(cached, dict) else ""})
+        source_mode = cached.get("sourceMode") if isinstance(cached, dict) else ""
+        trace_event("step", "HTTP:/combine", "world recipe cache skipped non-deliverable payload", {"recipeKey": key, "sourceMode": source_mode})
+        _quarantine_cached_recipe(
+            world_id=world_id,
+            recipe_key_value=key,
+            reason="payload_not_deliverable",
+            details={"sourceMode": str(source_mode or "")},
+        )
         cached = None
     if cached is not None:
-        visual_report = visual_delivery_report(cached)
+        visual_report = visual_delivery_report(cached, check_backend_config=False)
         if not visual_report.get("ok"):
             trace_event("step", "HTTP:/combine", "world recipe cache skipped missing required visual asset", {"recipeKey": key, "visualDelivery": visual_report})
+            _quarantine_cached_recipe(
+                world_id=world_id,
+                recipe_key_value=key,
+                reason="required_visual_asset_invalid",
+                details={"problems": visual_report.get("problems") or []},
+            )
             cached = None
     return key, cached
 
@@ -153,13 +213,25 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             recipe_key_value=key,
             source="cache_delivery",
         ):
+            _quarantine_cached_recipe(
+                world_id=world_id,
+                recipe_key_value=key,
+                reason="executable_boundary_invalid",
+                details={"source": "cache_delivery"},
+            )
             cached = None
     if cached:
-        visual_report = visual_delivery_report(cached)
+        visual_report = visual_delivery_report(cached, check_backend_config=False)
         if visual_report.get("ok"):
             generation_debug.clear_combine_failure("cache_hit_delivered")
             return sanitize_recipe_for_delivery(cached)
         trace_event("step", "COMBINE:cache", "cached recipe ignored because required visual asset is not deliverable", {"recipeKey": key, "visualDelivery": visual_report})
+        _quarantine_cached_recipe(
+            world_id=world_id,
+            recipe_key_value=key,
+            reason="required_visual_asset_invalid",
+            details={"problems": visual_report.get("problems") or []},
+        )
 
     ca = canonicalize(a)
     cb = canonicalize(b)

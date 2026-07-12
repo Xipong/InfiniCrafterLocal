@@ -15,6 +15,7 @@ from infini_local.core.category_policy import (
     WEAPON_UPGRADE_TAGS,
 )
 from infini_local.core.env_utils import env_bool, env_float, env_str
+from infini_local.core.llm_config import USE_LLM
 from infini_local.core.item_identity_tools import (
     generated_data_of,
     generation_depth,
@@ -35,7 +36,6 @@ from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 # representation helpers and palette/anchor derivation. Callers import this
 # owner directly; combine_pipeline is not a compatibility API.
 
-USE_LLM = env_bool("INFINI_USE_LLM", False)
 CATEGORY_CREATIVITY = env_float("INFINI_CATEGORY_CREATIVITY", 0.38)
 CATEGORY_ENFORCE_SAMPLED = env_bool("INFINI_CATEGORY_ENFORCE_SAMPLED", False)
 CATEGORY_SALT = env_str("INFINI_CATEGORY_SALT", "default")

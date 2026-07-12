@@ -22,6 +22,7 @@ class SdcppServerState:
     process: subprocess.Popen | None = None
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     cleanup_registered: bool = False
+    previous_signal_handlers: dict[int, Any] = field(default_factory=dict, repr=False)
     last_command: str = ""
     last_log_file: str = ""
     last_start_error: str = ""
@@ -37,6 +38,57 @@ ServerIsConfigured = Callable[[], bool]
 CleanupProcess = Callable[[str], None]
 
 
+def _close_process_log_handle(proc: subprocess.Popen | Any) -> None:
+    handle = getattr(proc, "_infini_log_handle", None)
+    if handle is None:
+        return
+    try:
+        handle.close()
+    except (OSError, ValueError):
+        pass
+
+
+def _terminate_process_tree(proc: subprocess.Popen | Any, *, hard: bool) -> None:
+    """Terminate the sd.cpp process and children without leaking helper processes.
+
+    sd-server may be launched through WSL interop, cmd.exe, or a wrapper script. Killing
+    only the immediate Popen object can leave the real model process alive, which in turn
+    keeps tests/Python shutdown hanging and makes the next autostart race for the port.
+    """
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        # Always target the whole Windows process tree. A wrapper can exit quickly while
+        # the real sd-server child keeps the port/VRAM alive, so waiting for a timeout
+        # before using /T is too late.
+        command = ["taskkill", "/PID", str(proc.pid), "/T"]
+        if hard:
+            command.append("/F")
+        try:
+            subprocess.run(
+                command,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            return
+        except (OSError, subprocess.SubprocessError):
+            proc.kill() if hard else proc.terminate()
+        return
+
+    grouped = bool(getattr(proc, "_infini_process_group", False))
+    if grouped:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL if hard else signal.SIGTERM)
+            return
+        except ProcessLookupError:
+            return
+        except OSError:
+            pass
+    proc.kill() if hard else proc.terminate()
+
+
 def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason: str = "cleanup") -> None:
     with state.lock:
         proc = state.process
@@ -45,26 +97,21 @@ def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason:
         state.process = None
         try:
             if proc.poll() is None:
-                log_event("info", "terminating stable-diffusion.cpp server", {"reason": reason})
-                proc.terminate()
+                log_event("info", "terminating stable-diffusion.cpp server", {"reason": reason, "pid": getattr(proc, "pid", None)})
+                _terminate_process_tree(proc, hard=False)
                 try:
                     proc.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    log_event("warn", "stable-diffusion.cpp server did not terminate; killing", {"reason": reason})
-                    proc.kill()
+                    log_event("warn", "stable-diffusion.cpp server did not terminate; killing process tree", {"reason": reason, "pid": getattr(proc, "pid", None)})
+                    _terminate_process_tree(proc, hard=True)
                     try:
                         proc.wait(timeout=3)
-                    except Exception:
+                    except (subprocess.TimeoutExpired, OSError):
                         pass
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             log_event("warn", "stable-diffusion.cpp cleanup failed", {"reason": reason, "error": repr(e)})
         finally:
-            handle = getattr(proc, "_infini_log_handle", None)
-            if handle is not None:
-                try:
-                    handle.close()
-                except Exception:
-                    pass
+            _close_process_log_handle(proc)
 
 
 def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupProcess) -> None:
@@ -72,23 +119,32 @@ def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupPr
         return
     state.cleanup_registered = True
     atexit.register(lambda: cleanup_process("atexit"))
-    # Windows supports SIGINT/SIGTERM in normal console runs; if a host forbids
-    # signal handlers, keep atexit cleanup and continue.
+
+    # Python only permits signal registration on the main thread. Tests and embedded
+    # hosts may import the visual pipeline elsewhere; atexit remains enough there.
+    if threading.current_thread() is not threading.main_thread():
+        return
+
     for sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)):
         if sig is None:
             continue
         try:
             previous = signal.getsignal(sig)
+            state.previous_signal_handlers[int(sig)] = previous
 
             def _handler(signum, frame, previous=previous):
                 cleanup_process(f"signal:{signum}")
                 if callable(previous):
                     previous(signum, frame)
-                else:
+                    return
+                if previous == signal.SIG_IGN:
+                    return
+                if signum == getattr(signal, "SIGINT", None):
                     raise KeyboardInterrupt
+                raise SystemExit(128 + int(signum))
 
             signal.signal(sig, _handler)
-        except Exception:
+        except (ValueError, OSError, RuntimeError):
             pass
 
 
@@ -217,6 +273,9 @@ def ensure_server(
                 log_handle.flush()
                 stdout_target = log_handle
                 stderr_target = subprocess.STDOUT
+            start_new_session = os.name != "nt"
+            if os.name == "nt" and not show_console:
+                creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             state.process = subprocess.Popen(
                 cmd,
                 shell=shell,
@@ -226,7 +285,9 @@ def ensure_server(
                 stderr=stderr_target,
                 text=False if stdout_target is None else True,
                 creationflags=creationflags,
+                start_new_session=start_new_session,
             )
+            setattr(state.process, "_infini_process_group", bool(start_new_session or creationflags & getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)))
             # The Popen object does not keep this handle alive reliably across implementations if it is GC'd.
             # Store it as a private attribute so logs keep flowing while the process lives.
             if log_handle is not None:
@@ -246,8 +307,11 @@ def ensure_server(
                     "logTail": tail_text_file(state.last_log_file, 16000),
                 }
                 log_event("warn", "stable-diffusion.cpp server exited during startup", {"returncode": state.process.returncode, "logFile": state.last_log_file, "logTail": state.last_exit.get("logTail", "")[-2000:]})
+                cleanup_process("startup_exited")
                 return False
             time.sleep(1.0)
         state.last_start_error = f"startup timeout after {startup_timeout}s"
-        log_event("warn", "stable-diffusion.cpp server startup timeout", {"url": server_url, "timeout": startup_timeout, "cmd": state.last_command, "logFile": state.last_log_file, "logTail": tail_text_file(state.last_log_file, 16000)[-2000:]})
+        timeout_tail = tail_text_file(state.last_log_file, 16000)[-2000:]
+        log_event("warn", "stable-diffusion.cpp server startup timeout", {"url": server_url, "timeout": startup_timeout, "cmd": state.last_command, "logFile": state.last_log_file, "logTail": timeout_tail})
+        cleanup_process("startup_timeout")
         return False

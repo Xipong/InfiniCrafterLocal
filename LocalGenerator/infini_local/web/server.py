@@ -6,7 +6,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from infini_local.core.env_utils import env_bool, env_int, env_str, env_first
+from infini_local.core.env_utils import env_int, env_str
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.config_bootstrap import (
     APP_VERSION,
@@ -26,6 +26,27 @@ from infini_local.core.effect_catalog import (
 )
 from infini_local.core.item_identity_tools import (
     item_field,
+)
+from infini_local.core.llm_config import (
+    ALLOW_DETERMINISTIC_DEV_FALLBACK,
+    LLM_MAX_TOKENS,
+    LLM_PROVIDER,
+    LLM_REASONING_EXCLUDE,
+    LLM_REASONING_MAX_TOKENS,
+    LLM_REASONING_MODE,
+    LLM_LOCAL_REASONING_PROMPT,
+    LLM_RESPONSE_FORMAT_MODE,
+    LMSTUDIO_MODEL,
+    LMSTUDIO_URL,
+    OPENAI_COMPAT_API_KEY,
+    OPENAI_COMPAT_BASE_URL,
+    OPENAI_COMPAT_MODEL,
+    OPENROUTER_API_KEY,
+    OPENROUTER_APP_TITLE,
+    OPENROUTER_BASE_URL,
+    OPENROUTER_HTTP_REFERER,
+    OPENROUTER_MODEL,
+    USE_LLM,
 )
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
 from infini_local.pipelines.pipeline_runtime_constants import (
@@ -154,32 +175,6 @@ def _multiplayer_connect_info() -> dict[str, Any]:
     )
 
 
-USE_LLM = env_bool("INFINI_USE_LLM", False)
-# The LLM authors engine-facing parameters and runtime calls;
-# Python validates ranges and translates them to explicit C# AttackSpec fields.
-# Deterministic fallback/self-test paths are kept isolated from the authored runtime.
-ALLOW_DETERMINISTIC_DEV_FALLBACK = env_bool("INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", False)
-# LLM provider selection. Local LM Studio/Ollama remains the default, but v0.4.49
-# can also use OpenRouter or any OpenAI-compatible remote API.
-LLM_PROVIDER = env_str("INFINI_LLM_PROVIDER", "").lower()  # local, openrouter, openai_compat
-LMSTUDIO_URL = env_first(("INFINI_LMSTUDIO_URL", "OPENAI_BASE_URL"), "http://127.0.0.1:1234").rstrip("/")
-LMSTUDIO_MODEL = env_first(("INFINI_LMSTUDIO_MODEL", "OPENAI_MODEL"), "auto")
-OPENROUTER_BASE_URL = env_str("INFINI_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-OPENROUTER_API_KEY = env_first(("INFINI_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"), "")
-OPENROUTER_MODEL = env_first(("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL"), "auto")
-OPENROUTER_HTTP_REFERER = env_str("INFINI_OPENROUTER_HTTP_REFERER", "https://github.com/InfiniCrafterLocal")
-OPENROUTER_APP_TITLE = env_str("INFINI_OPENROUTER_APP_TITLE", "InfiniCrafterLocal")
-OPENAI_COMPAT_BASE_URL = env_first(("INFINI_OPENAI_COMPAT_BASE_URL", "OPENAI_BASE_URL"), "").rstrip("/")
-OPENAI_COMPAT_API_KEY = env_first(("INFINI_OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"), "")
-OPENAI_COMPAT_MODEL = env_first(("INFINI_OPENAI_COMPAT_MODEL", "OPENAI_MODEL"), "auto")
-LLM_RESPONSE_FORMAT_MODE = env_str("INFINI_LLM_RESPONSE_FORMAT", "auto").lower()  # auto, json_schema, json_object, off
-# LLM output/reasoning control. OpenRouter supports a unified `reasoning` object;
-# local OpenAI-compatible servers usually do not, so local reasoning is prompt-hint only.
-LLM_MAX_TOKENS = env_int("INFINI_LLM_MAX_TOKENS", 9000, lo=256, hi=64000)
-LLM_REASONING_MODE = env_str("INFINI_LLM_REASONING_MODE", "off").lower()
-LLM_REASONING_MAX_TOKENS = env_int("INFINI_LLM_REASONING_MAX_TOKENS", 1500, lo=0, hi=32000)
-LLM_REASONING_EXCLUDE = env_bool("INFINI_LLM_REASONING_EXCLUDE", True)
-LLM_LOCAL_REASONING_PROMPT = env_bool("INFINI_LLM_LOCAL_REASONING_PROMPT", True)
 
 # Visual/image/sd.cpp config and lifecycle are owned by pipelines/pipeline_visual_config.py.
 
@@ -387,6 +382,8 @@ def _health_payload() -> dict[str, Any]:
         "contractVersions": visual_config.contract_versions_payload(),
         "tmodloaderGreyZoneNotes": TMODLOADER_GREY_ZONE_NOTES,
         "imageBackend": visual_config.IMAGE_BACKEND,
+        "imageBackendRaw": visual_config.IMAGE_BACKEND_RAW,
+        "imageBackendConfigError": visual_config.IMAGE_BACKEND_CONFIG_ERROR,
         "visualAssetMode": visual_config.VISUAL_ASSET_MODE,
         "visualDirectorLLM": visual_config.VISUAL_DIRECTOR_LLM,
         "visualDirectorLLMConfigured": visual_director_configured,

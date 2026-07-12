@@ -77,6 +77,21 @@ def write_world_recipe_cache(recipe_key_value: str, world_id: Any, data: dict[st
     )
 
 
+def quarantine_world_recipe_cache(
+    recipe_key_value: str,
+    world_id: Any,
+    reason: str,
+    details: dict[str, Any] | None = None,
+) -> str:
+    return world_storage.quarantine_world_recipe_cache(
+        WORLD_RECIPES_DIR,
+        world_id=world_id,
+        recipe_key_value=recipe_key_value,
+        reason=reason,
+        details=details,
+    )
+
+
 def read_world_recipe_cache(recipe_key_value: str, world_id: Any, world_name: Any = None) -> dict[str, Any] | None:
     return world_storage.read_world_recipe_cache(
         WORLD_RECIPES_DIR,
@@ -145,6 +160,7 @@ __all__ = [
     "_delivery_safe_debug",
     "sanitize_recipe_for_delivery",
     "write_world_recipe_cache",
+    "quarantine_world_recipe_cache",
     "read_world_recipe_cache",
     "is_deliverable_recipe_payload",
     "cache_get",

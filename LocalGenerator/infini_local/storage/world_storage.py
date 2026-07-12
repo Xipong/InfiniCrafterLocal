@@ -475,6 +475,64 @@ def write_world_recipe_cache(
         )
 
 
+
+def quarantine_world_recipe_cache(
+    world_recipes_dir: Path,
+    *,
+    world_id: Any,
+    recipe_key_value: str,
+    reason: str,
+    details: dict[str, Any] | None = None,
+) -> str:
+    """Move a broken cache entry aside so it cannot poison every future craft.
+
+    The original payload is preserved for debugging under ``invalid/``. Index entries
+    are removed because the active cache no longer contains a deliverable recipe.
+    """
+    source = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
+    if not source.exists():
+        return ""
+    invalid_dir = world_recipe_dir(world_recipes_dir, world_id) / "invalid"
+    invalid_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    reason_part = safe_file_part(reason, "invalid", 48)
+    destination = invalid_dir / f"{safe_file_part(recipe_key_value, 'recipe')}_{stamp}_{reason_part}.json"
+    counter = 1
+    while destination.exists():
+        destination = invalid_dir / f"{safe_file_part(recipe_key_value, 'recipe')}_{stamp}_{reason_part}_{counter}.json"
+        counter += 1
+    source.replace(destination)
+    atomic_write_json(
+        destination.with_suffix(".reason.json"),
+        {
+            "schema": "infini-invalid-recipe-cache-v1",
+            "worldId": str(world_id),
+            "recipeKey": str(recipe_key_value),
+            "reason": str(reason),
+            "quarantinedAt": time.time(),
+            "payloadFile": destination.name,
+            "details": details or {},
+        },
+    )
+
+    for index_name in ("index.json", "health.json"):
+        index_path = world_recipe_dir(world_recipes_dir, world_id) / index_name
+        index = read_json_file(index_path)
+        if not isinstance(index, dict):
+            continue
+        recipes = index.get("recipes")
+        if isinstance(recipes, dict) and recipes.pop(recipe_key_value, None) is not None:
+            index["updatedAt"] = time.time()
+            if index_name == "health.json":
+                counts: dict[str, int] = {}
+                for row in recipes.values():
+                    if isinstance(row, dict):
+                        status = str(row.get("status") or "unknown")
+                        counts[status] = counts.get(status, 0) + 1
+                index["counts"] = counts
+            atomic_write_json(index_path, index)
+    return str(destination)
+
 def read_world_recipe_cache(
     world_recipes_dir: Path,
     app_version: str,
@@ -483,8 +541,23 @@ def read_world_recipe_cache(
     world_id: Any,
     world_name: Any = None,
 ) -> dict[str, Any] | None:
-    data = read_json_file(world_recipe_file(world_recipes_dir, world_id, recipe_key_value))
+    recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
+    data = read_json_file(recipe_path)
     if not data:
+        # A syntactically broken/empty cache file otherwise survives forever and is
+        # reparsed on every craft. Preserve it under invalid/ for diagnosis, then let
+        # the caller regenerate from the original parents.
+        if recipe_path.exists():
+            try:
+                quarantine_world_recipe_cache(
+                    world_recipes_dir,
+                    world_id=world_id,
+                    recipe_key_value=recipe_key_value,
+                    reason="json_unreadable_or_empty",
+                    details={"sourcePath": str(recipe_path)},
+                )
+            except (OSError, ValueError, TypeError):
+                pass
         return None
     data.pop("_llmContinuation", None)
     write_world_manifest(world_recipes_dir, app_version, world_id, world_name)

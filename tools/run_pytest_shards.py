@@ -61,7 +61,19 @@ def _passed_count(output: str) -> int | None:
 def _stop_process_tree(proc: subprocess.Popen[str], *, hard: bool = False) -> None:
     if os.name == "nt":
         if proc.poll() is None:
-            proc.kill() if hard else proc.terminate()
+            command = ["taskkill", "/PID", str(proc.pid), "/T"]
+            if hard:
+                command.append("/F")
+            try:
+                subprocess.run(
+                    command,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                )
+            except (OSError, subprocess.SubprocessError):
+                proc.kill() if hard else proc.terminate()
         return
     try:
         os.killpg(proc.pid, signal.SIGKILL if hard else signal.SIGTERM)
