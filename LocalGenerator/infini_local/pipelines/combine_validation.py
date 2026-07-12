@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any
 from infini_local.core.item_identity_tools import name_of, slug, stable_hash
-from infini_local.core.item_signals import VISUAL_SYNONYMS
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines.combine_balance import preservation_score
 from infini_local.pipelines.result_identity_policy import (
@@ -13,6 +12,7 @@ from infini_local.pipelines.result_identity_policy import (
     inh_for_parent,
     normalize_category,
     palette_from,
+    required_anchors_from_tags,
     repair_name_if_needed,
     rep_for_parent,
 )
@@ -139,14 +139,19 @@ def validate_and_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
     # Required visual anchors must include hard visual anchors.
     visual = data.setdefault("visual", {})
     anchors = list(visual.get("requiredAnchors") or [])
-    for c in [ca, cb]:
-        for t in c.get("hardTags") or []:
-            anchors.extend(VISUAL_SYNONYMS.get(t, []))
-        anchors.extend(c.get("visualAnchors") or [])
+    for c in (ca, cb):
+        hard_tags = {
+            str(tag).strip().lower()
+            for tag in (c.get("hardTags") or [])
+            if str(tag).strip()
+        }
+        anchors.extend(required_anchors_from_tags(hard_tags))
+        anchors.extend(str(x) for x in (c.get("visualAnchors") or []) if str(x).strip())
     visual["requiredAnchors"] = list(dict.fromkeys([a for a in anchors if a]))[:10]
     raw_palette = visual.get("palette")
     if isinstance(raw_palette, list) and raw_palette:
         visual["palette"] = [str(x) for x in raw_palette if str(x).strip()][:8]
+        data["debug"]["visualPaletteSource"] = "planner_authored"
     else:
         # Runtime-authoring deliberately does not inject parent semantic tags into the
         # result item, but visual grounding still needs the physical parent materials.

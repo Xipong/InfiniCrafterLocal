@@ -33,25 +33,6 @@ _TETHER_GUARD_RUNTIME_FAMILIES = frozenset({"returning", "flail", "yoyo", "whip"
 _EMITTED_SPEAR_FORM_RUNTIME_FAMILIES = frozenset({"cast", "shoot", "throw"})
 _ITEM_FANTASY_PROJECTILE_FAMILIES = ITEM_BODIED_PROJECTILE_RUNTIME_FAMILIES | frozenset({"flail", "whip"})
 
-_PRIMARY_MATERIAL_ALIASES: dict[str, tuple[str, ...]] = {
-    "wood": ("wood", "wooden", "timber", "plank", "workbench"),
-    "stone": ("stone", "rock", "granite", "marble"),
-    "obsidian": ("obsidian", "volcanic glass"),
-    "bone": ("bone", "skeletal", "ivory"),
-    "slime": ("slime", "gel", "goo", "viscous"),
-    "ice": ("ice", "icy", "frost", "frozen"),
-    "crystal": ("crystal", "crystalline", "gemstone"),
-    "glass": ("glass", "glasslike", "translucent glass"),
-    "cloth": ("cloth", "fabric", "woven"),
-    "leather": ("leather", "hide"),
-    "copper": ("copper", "bronze"),
-    "iron": ("iron",),
-    "steel": ("steel", "silver blade", "metal blade"),
-    "gold": ("gold", "golden"),
-}
-_GENERIC_METALLIC_MATERIALS = frozenset({"copper", "iron", "steel", "gold"})
-
-
 def asset_negative_prompt(role: str = "item") -> str:
     # Z-Image Turbo does not use negative prompts as a reliable CFG channel;
     # technical exclusions are injected into the positive prompt instead.
@@ -241,18 +222,17 @@ def _item_output_kind_visual_guard(data: dict[str, Any]) -> str:
 
 
 def _item_weapon_topology_guard(data: dict[str, Any]) -> str:
-    """Prevent duplicate structural parts in generated weapon icons.
+    """Prevent accidental image-model duplication without choosing the design.
 
-    This is image-prompt topology only. It reads the exact authored result kind and
-    never infers gameplay from names, tooltip text, materials, or visual prose.
-    The rule stays generic on purpose: it does not classify every weapon subtype.
+    The planner/Visual Director owns topology and part count. This guard only asks the
+    image backend not to invent mirrored or repeated structural parts that are absent
+    from the authored prompt and silhouette contract.
     """
     if _explicit_result_kind(data) not in {"weapon", "consumable_weapon"}:
         return ""
     return (
-        "one continuous weapon object topology; unless the authored silhouette contract explicitly requires a paired or double-ended construction, "
-        "use exactly one primary grip, handle, or hilt assembly; do not mirror or duplicate handles, hilts, guards, pommels, triggers, stocks, or grip sections; "
-        "a two-handed weapon uses one longer shared grip, not two separate handles"
+        "preserve the planner-authored topology and part count; do not add mirrored or duplicated structural parts "
+        "that are absent from the authored item prompt or silhouette contract"
     )
 
 
@@ -267,53 +247,21 @@ def _compact_prompt_append(prompt: str, addition: str, *, limit: int = 1800) -> 
         p = (p.rstrip(" ,.;") + ", " + add).strip()
     return p[:limit]
 
-_BLADE_SUBJECT_RE = re.compile(r"\b(?:blade|sword|broadsword|greatsword|dagger|saber|sabre)\b")
-
-_FUSED_BLADE_RISK_RE = re.compile(
-    r"\b(?:split[-\s]?blade|forked|two[-\s]?toned?|dual[-\s]?toned?|light[-/\s]*dark|dark[-/\s]*light)\b"
-)
-
-def _blade_shape_needs_fused_contour_guard(text: str) -> bool:
-    """Detect blade-shape composition risk without a growing per-item keyword table."""
-    blob = re.sub(r"[_/]+", " ", str(text or "").lower())
-    return bool(_BLADE_SUBJECT_RE.search(blob) and _FUSED_BLADE_RISK_RE.search(blob))
-
-def _item_blade_guard_context(prompt: str, data: dict[str, Any]) -> str:
-    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    return " ".join(
-        str(part or "")
-        for part in (
-            prompt,
-            data.get("name"),
-            concept.get("fantasy"),
-            visual.get("silhouetteSummary"),
-        )
-    )
-
 _ITEM_USABLE_GEAR_GUARD = (
-    "depict one handheld or carriable usable item object, not a placed tile, room scene, "
-    "furniture placement preview, pedestal, or environment; if furniture or placeable "
-    "material is part of the design, show usable parts, fragments, straps, handle, head, "
-    "blade, tool body, or silhouette cues integrated into the item"
-)
-
-_ITEM_USABLE_PARTS_GUARD = (
-    "if furniture or placeable material is part of the design, show usable parts, "
-    "fragments, straps, handle, head, blade, tool body, or silhouette cues integrated into the item"
+    "depict the authored final item as one handheld or carriable usable item inventory sprite composition, not a placed tile, room scene, floor layout, "
+    "furniture placement preview, pedestal, or environment; preserve authored literal, attached, fused, disassembled, "
+    "or separate-but-associated parent components inside the sprite"
 )
 
 def _prompt_probe(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
 
 def _append_item_role_guard_once(prompt: str) -> str:
-    """Keep the role guard once; add only the missing half for partial authored guards."""
+    """Keep one generic item-role guard without redesigning the authored object."""
     p = _strip_item_role_guard_fragments(prompt)
     probe = _prompt_probe(p)
-    if "handheld or carriable usable item" not in probe:
+    if "authored final item as one handheld or carriable usable item inventory sprite composition" not in probe:
         return _compact_prompt_append(p, _ITEM_USABLE_GEAR_GUARD)
-    if "usable parts fragments" not in probe:
-        return _compact_prompt_append(p, _ITEM_USABLE_PARTS_GUARD)
     return p[:1800]
 
 def _strip_item_role_guard_fragments(prompt: str) -> str:
@@ -321,13 +269,13 @@ def _strip_item_role_guard_fragments(prompt: str) -> str:
     p = str(prompt or "")
     stop = r"(?=\s*,?\s*depict one handheld|\s*\.\s*Flat #ff00ff|\s*\.\s*Color scheme|\s*\.\s*without letters|$)"
     full_guard = (
-        r"\s*,?\s*depict\s+one\s+handheld\s+or\s+carriable\s+usable\s+item\s+object,\s*"
-        r"not\s+a\s+placed\s+tile(?:(?!depict\s+one\s+handheld).){0,560}?"
-        r"silhouette\s+cues\s+integrated\s+into\s+the\s+item\s*[.;,]?"
+        r"\s*,?\s*(?:depict\s+one\s+(?:connected\s+)?handheld\s+or\s+carriable(?:\s+usable)?\s+item\s+object|depict\s+the\s+authored\s+final\s+item\s+as\s+one\s+(?:handheld\s+or\s+carriable\s+usable\s+item\s+)?inventory\s+sprite\s+composition),\s*"
+        r"not\s+(?:a\s+placed\s+tile|a\s+room\s+scene)(?:(?!depict\s+(?:one\s+handheld|the\s+authored\s+final)).){0,760}?"
+        r"(?:silhouette\s+cues\s+integrated\s+into\s+the\s+item|same\s+readable\s+item\s+silhouette\s+when\s+authored|parent\s+components\s+inside\s+the\s+sprite)\s*[.;,]?"
     )
     partial_guard = (
-        r"\s*,?\s*depict\s+one\s+handheld\s+or\s+carriable\s+usable\s+item\s+object,\s*"
-        r"not\s+a\s+placed\s+tile(?:(?!depict\s+one\s+handheld).){0,260}?"
+        r"\s*,?\s*(?:depict\s+one\s+(?:connected\s+)?handheld\s+or\s+carriable(?:\s+usable)?\s+item\s+object|depict\s+the\s+authored\s+final\s+item\s+as\s+one\s+(?:handheld\s+or\s+carriable\s+usable\s+item\s+)?inventory\s+sprite\s+composition),\s*"
+        r"not\s+(?:a\s+placed\s+tile|a\s+room\s+scene)(?:(?!depict\s+(?:one\s+handheld|the\s+authored\s+final)).){0,420}?"
         r"(?:pedestal\s*,?\s*or\s+environment|furniture\s+placement\s+preview\s*,?\s*or\s+environment|environment)\s*[.;,]?"
     )
     p = re.sub(full_guard + stop, " ", p, flags=re.IGNORECASE)
@@ -394,12 +342,6 @@ def role_visual_prompt_guard(role: str, prompt: str, data: dict[str, Any]) -> st
             p = _compact_prompt_append(
                 p,
                 "inventory item asset only; do not draw its emitted projectile, child projectile, overhead marker, impact burst, trail, target, enemy, or attack scene beside the item",
-            )
-        blade_blob = _item_blade_guard_context(p, data)
-        if _blade_shape_needs_fused_contour_guard(blade_blob):
-            p = _compact_prompt_append(
-                p,
-                "if the blade is split, forked, light-dark, or two-toned, draw one fused weapon silhouette with the dark/black portion flush to the blade contour; avoid detached second-sword shapes, stray side spurs, dangling black tails, or extra protruding appendages",
             )
         return p[:1800]
     if r == "impact":
@@ -581,64 +523,6 @@ def family_prompt_clause(data: dict[str, Any], role: str, canvas: int) -> str:
             str(fill),
         ])
     return role_contract_prompt_clause(role, canvas)
-
-def authored_primary_material_clause(role: str, authored_prompt: str, data: dict[str, Any]) -> str:
-    """Protect strongly authored non-metal bodies from generic steel collapse.
-
-    This is a visual grounding hint, not a gameplay classifier.  It activates only
-    when the same material appears repeatedly across authored prompt/anchors/fantasy.
-    Secondary explicitly named fasteners and accents remain allowed.
-    """
-    if (role or "item").lower() not in {"item", "projectile"} or not isinstance(data, dict):
-        return ""
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    rp = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
-    vi = rp.get("visualIntent") if isinstance(rp.get("visualIntent"), dict) else {}
-    role_name = (role or "item").lower()
-    if role_name == "projectile":
-        # Emitted projectiles may intentionally use a different material than the
-        # launcher/item.  Ground only against projectile-authored surfaces here.
-        chunks = [
-            str(authored_prompt or ""),
-            str(visual.get("projectileImagePrompt") or ""),
-            str(attack.get("projectileSpritePrompt") or ""),
-            str(vi.get("projectile") or ""),
-            " ".join(str(x) for x in (visual.get("vfxMaterialHints") or []) if str(x).strip()),
-        ]
-    else:
-        chunks = [
-            str(authored_prompt or ""),
-            str(concept.get("fantasy") or ""),
-            str(visual.get("imagePrompt") or ""),
-            str(visual.get("itemSilhouetteContract") or ""),
-            " ".join(str(x) for x in (visual.get("requiredAnchors") or []) if str(x).strip()),
-            " ".join(str(x) for x in (visual.get("vfxMaterialHints") or []) if str(x).strip()),
-            str(vi.get("item") or ""),
-            str(data.get("parentA") or ""),
-            str(data.get("parentB") or ""),
-        ]
-    blob = " ".join(chunks).lower().replace("_", "-")
-    scores: dict[str, int] = {}
-    for material, aliases in _PRIMARY_MATERIAL_ALIASES.items():
-        score = 0
-        for alias in aliases:
-            score += len(re.findall(r"(?<![a-z])" + re.escape(alias) + r"(?![a-z])", blob))
-        if score:
-            scores[material] = score
-    if not scores:
-        return ""
-    material, score = max(scores.items(), key=lambda item: (item[1], len(item[0])))
-    if score < 2 or material in _GENERIC_METALLIC_MATERIALS:
-        return ""
-    role_word = "item" if (role or "item").lower() == "item" else "projectile"
-    return (
-        f"Primary authored material: {material}. Keep the main {role_word} body visibly made of {material}; "
-        "do not replace it with generic polished steel, silver, or an unrelated material. "
-        "Separately authored fasteners and accents may keep their own materials."
-    )
-
 
 def sanitize_projectile_family_prompt(data: dict[str, Any], role: str, prompt: str) -> str:
     """Final technical prompt guard for sprite assets.
@@ -842,7 +726,6 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
 
     prompt = role_visual_prompt_guard(role, prompt, data)
 
-    material_clause = authored_primary_material_clause(role, prompt, data)
     if image_backend_uses_semantic_prompt_contract():
         # Modern Qwen-text-encoder flow models: feed one final objective visual
         # description, not a legacy Stable Diffusion comma-tag recipe.
@@ -851,7 +734,6 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
             zimage_role_description(role, canvas),
             zimage_item_identity_sentence(role, data),
             zimage_subject_sentence(role, prompt, fantasy),
-            material_clause,
             role_clause,
             zimage_palette_sentence(palette_words),
             zimage_text_policy_sentence(data),
@@ -866,7 +748,6 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         item_name_prompt_clause(role, data),
         f"item fantasy: {fantasy}" if fantasy else "",
         prompt,
-        material_clause,
         f"palette: {palette_words}" if palette_words else "palette: limited high-contrast named colors",
         ("one authored projectile texture only; if the authored subject is a bundle, cluster, swarm, or fan, keep it as one readable projectile bundle rather than separate copies" if role == "projectile" else ""),
         "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, centered single readable asset, keep unused area pure magenta key (#ff00ff)",
@@ -1029,8 +910,6 @@ __all__ = [
     "zimage_positive_guard_clause",
     "_is_generated_usable_gear",
     "_compact_prompt_append",
-    "_blade_shape_needs_fused_contour_guard",
-    "_item_blade_guard_context",
     "_prompt_probe",
     "_append_item_role_guard_once",
     "_strip_item_role_guard_fragments",
@@ -1060,8 +939,5 @@ __all__ = [
     "build_impact_image_prompt",
     "build_child_image_prompt",
     "build_field_image_prompt",
-    "_BLADE_SUBJECT_RE",
-    "_FUSED_BLADE_RISK_RE",
     "_ITEM_USABLE_GEAR_GUARD",
-    "_ITEM_USABLE_PARTS_GUARD",
 ]

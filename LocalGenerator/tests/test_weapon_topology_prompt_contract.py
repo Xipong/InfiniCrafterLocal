@@ -11,7 +11,7 @@ def _enable_zimage(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "SDCPP_SERVER_EXTRA_ARGS", "")
 
 
-def test_weapon_item_prompt_has_one_primary_grip_topology(monkeypatch) -> None:
+def test_weapon_item_prompt_preserves_authored_topology_without_choosing_grip_count(monkeypatch) -> None:
     _enable_zimage(monkeypatch)
     data = {
         "name": "Emberleaf Saber",
@@ -23,10 +23,10 @@ def test_weapon_item_prompt_has_one_primary_grip_topology(monkeypatch) -> None:
 
     prompt = normalize_asset_prompt(data, "item", "leaf-shaped dark steel saber with an ornate brass hilt", 48).lower()
 
-    assert "one continuous weapon object topology" in prompt
-    assert "exactly one primary grip, handle, or hilt assembly" in prompt
-    assert "do not mirror or duplicate handles" in prompt
-    assert "two-handed weapon uses one longer shared grip, not two separate handles" in prompt
+    assert "preserve the planner-authored topology and part count" in prompt
+    assert "absent from the authored item prompt or silhouette contract" in prompt
+    assert "exactly one primary grip" not in prompt
+    assert "two-handed weapon uses one longer shared grip" not in prompt
 
 
 def test_weapon_topology_guard_allows_explicit_paired_contract_without_erasing_it(monkeypatch) -> None:
@@ -44,7 +44,8 @@ def test_weapon_topology_guard_allows_explicit_paired_contract_without_erasing_i
     prompt = normalize_asset_prompt(data, "item", "paired black-steel tonfa with cyan cores", 48).lower()
 
     assert "deliberately paired set of two compact tonfa" in prompt
-    assert "unless the authored silhouette contract explicitly requires a paired or double-ended construction" in prompt
+    assert "preserve the planner-authored topology and part count" in prompt
+    assert "exactly one primary grip" not in prompt
 
 
 def test_non_weapon_item_does_not_receive_weapon_topology_guard(monkeypatch) -> None:
@@ -58,5 +59,5 @@ def test_non_weapon_item_does_not_receive_weapon_topology_guard(monkeypatch) -> 
 
     prompt = normalize_asset_prompt(data, "item", "one braided brass charm with a brown cord", 32).lower()
 
-    assert "one continuous weapon object topology" not in prompt
+    assert "preserve the planner-authored topology and part count" not in prompt
     assert "exactly one primary grip" not in prompt

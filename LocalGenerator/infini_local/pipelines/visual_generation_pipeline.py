@@ -25,6 +25,8 @@ from infini_local.pipelines.result_identity_policy import palette_from, required
 
 from infini_local.pipelines.visual_prompt_contracts import (
     asset_negative_prompt,
+    image_backend_is_zimage,
+    image_backend_uses_semantic_prompt_contract,
     sprite_background_positive_clause,
     role_visual_prompt_guard,
     sanitize_projectile_family_prompt,
@@ -68,6 +70,45 @@ def _sanitize_anime_reference(value: Any, maximum_strength: str) -> dict[str, An
         return None
     return {"strength": strength, "source": source, "motifs": motifs}
 
+
+def _visual_director_backend_profile() -> tuple[str, str]:
+    if image_backend_is_zimage():
+        return (
+            "Z-Image Turbo",
+            "Write concise subject-first objective visual descriptions. Preserve subject, quantity, action, state, colors, and material identity; do not rely on a negative prompt.",
+        )
+    if image_backend_uses_semantic_prompt_contract():
+        return (
+            "modern flow image model (FLUX.2/Qwen-text-encoder style)",
+            "Write concise subject-first objective visual descriptions with concrete shape, materials, and palette. Avoid legacy Stable Diffusion tag soup.",
+        )
+    return (
+        "configured image backend",
+        "Write concise final sprite descriptions with concrete shape, materials, palette, role, and composition.",
+    )
+
+
+def _merge_visual_director_palette(
+    data: dict[str, Any],
+    existing_palette: Any,
+    proposed_palette: Any,
+) -> tuple[list[str], str]:
+    """Preserve explicit planner palette; otherwise let the art director decide.
+
+    This uses provenance only. It does not inspect materials, parent types, item names,
+    or decide how the parents should be fused. A fallback palette is context, not a
+    hard visual rule; an explicitly authored planner palette is part of the authored
+    item and therefore stays first.
+    """
+    existing = sanitize_visual_palette(existing_palette or [], limit=8)
+    proposed = sanitize_visual_palette(proposed_palette or [], limit=8)
+    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
+    source = str(debug.get("visualPaletteSource") or "")
+    if source == "planner_authored":
+        return sanitize_visual_palette(existing + proposed, limit=8), "planner_authored_first"
+    if proposed:
+        return proposed, "visual_director_authored"
+    return existing, "fallback_preserved"
 
 
 
@@ -237,6 +278,9 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     previous_visual_kit = data.get("visualKit")
     try:
         concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
+        runtime_plan = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
+        planner_visual_intent = runtime_plan.get("visualIntent") if isinstance(runtime_plan.get("visualIntent"), dict) else {}
+        source_role_preservation = runtime_plan.get("sourceRolePreservation") if isinstance(runtime_plan.get("sourceRolePreservation"), dict) else {}
         attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
         visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
         anime_opportunity = anime_reference_opportunity(data)
@@ -247,16 +291,18 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             if anime_opportunity in {"subtle", "strong"}
             else "Do not introduce named anime, manga, character, or franchise references for this recipe."
         )
+        backend_name, backend_contract = _visual_director_backend_profile()
         payload = {
             "task": "Create a coherent pixel-art visual asset pack for this generated Terraria-like toy. Do not change gameplay stats.",
-            "zImageAssumption": "For Z-Image Turbo, write PE-style final visual descriptions: preserve subject, quantity, action, state, colors and material identity; describe composition and texture as objective visual facts; do not rely on a negative prompt.",
+            "imageBackend": backend_name,
+            "imageBackendContract": backend_contract,
             "rules": [
                 "Return one JSON object; no markdown or analysis.",
                 "All list-valued fields in the required JSON shape must remain JSON arrays even when they contain only one entry.",
                 "Build role-separated assets, not one copied generic prompt.",
                 "Each sprite prompt describes one pixel asset on solid #ff00ff, not a scene.",
-                "Item icon should be one inventory-readable object: weapons/tools as one handheld object, armor as one wearable piece, accessories as one compact wearable/charm, potions as one container. Do not draw emitted projectiles, impact bursts, target markers or fields beside it unless physically integrated. Furniture/placeable parents may appear as parts or integrated cues, not automatically as a full placed tile scene.",
-                "Weapon topology: describe one continuous weapon object. Unless itemSilhouetteContract explicitly requires a paired or double-ended construction, use one primary grip/handle/hilt assembly only; do not duplicate handles, guards, pommels, triggers, stocks, or grip sections. Two-handed means one longer shared grip, not two separate handles.",
+                "Item icon is one inventory sprite for the authored final item, not a room, floor layout, placement preview, pedestal, or environment. Preserve the planner-authored relationship between parent objects: literal, attached, fused, disassembled, or multiple associated parts are all allowed when authored. Do not add emitted projectiles, impact bursts, target markers, or fields unless the planner made them physical parts of the item.",
+                "Preserve the authored item topology. Do not accidentally duplicate bodies, handles, guards, pommels, triggers, or stocks, but keep any multiplicity or unusual construction that the planner explicitly authored. Do not infer topology from the generic weapon class alone.",
                 "Projectile sprite prompt describes the moving hit object texture; preserve weird authored forms, but do not change gameplay delivery/runtime in art text.",
                 "Impact sprite prompt is effect-only: dust, smoke, sparks, fragments, flash, ring, splash or debris burst; do not describe a persistent weapon/item/furniture body there.",
                 "Palette is foreground-only; do not list #ff00ff/background/canvas as material.",
@@ -279,7 +325,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "If exact text must appear, quote it; otherwise use no text/logos/UI marks.",
                 anime_rule,
                 "Tethered/returning/harpoon sprites: compact moving body plus optional short local rope/chain attachment, not a full-canvas line. Flail projectile is the compact head/weight; whip projectile is a compact tip/segment accent or particle_vfx, never a pre-drawn full lash because runtime animates the tether.",
-                "Do not force literal parent silhouettes into every asset; draw the authored final object. If a modded parent has no visual facts, do not invent claims of exact fidelity—use the authored child concept, mechanical facts, palette and explicit anchors.",
+                "Preserve the planner-authored choice about parent silhouettes. Do not independently force a literal parent object, and do not remove one when the authored final object explicitly keeps or attaches it. If a modded parent has no visual facts, do not invent claims of exact fidelity—use the authored child concept, mechanical facts, palette and explicit anchors.",
                 "Write short VFX intent lines as plain visual hints, not code.",
                 "VFX hints may use scale/tempo/material words, but no numeric particle counts.",
             ],
@@ -289,6 +335,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "category": data.get("category"),
                 "parents": [name_of(a), name_of(b)],
                 "concept": concept,
+                "sourceRolePreservation": source_role_preservation,
+                "plannerVisualIntent": planner_visual_intent,
                 "runtimeAffordance": data.get("runtimeAffordance") if isinstance(data.get("runtimeAffordance"), dict) else {},
                 "attack": {k: attack.get(k) for k in [
                     "runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "ammoKind",
@@ -296,7 +344,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                     "secondaryProjectileShape", "secondaryMaterial", "secondaryTrigger", "effect", "onHit", "movement",
                     "shotCount", "spreadRadians", "splitCount", "chainCount", "channelUse", "beamWidthPx", "beamChargeTicks", "immunityCooldown"
                 ]},
-                "existingVisual": {k: visual.get(k) for k in ["objectType", "requiredAnchors", "palette", "imagePrompt", "projectileImagePrompt", "impactImagePrompt"]},
+                "existingVisual": {k: visual.get(k) for k in ["objectType", "requiredAnchors", "palette", "imagePrompt", "projectileImagePrompt", "impactImagePrompt", "childImagePrompt", "fieldImagePrompt", "itemSilhouetteContract"]},
             },
             "animeReferenceOpportunity": {
                 "enabled": anime_opportunity in {"subtle", "strong"},
@@ -343,7 +391,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         req = {
             "model": model_name,
             "messages": [
-                {"role": "system", "content": "You direct pixel-art assets for Z-Image in a Terraria-like generated-item mod. Write concise final visual descriptions, not SD/negative-prompt recipes. Preserve authored subject, count, action, state, colors, and materials. Do not add unauthored glow, magic, energy, child motes, or material effects. Return one JSON object."},
+                {"role": "system", "content": f"You direct pixel-art assets for {backend_name} in a Terraria-like generated-item mod. Write concise final visual descriptions, not legacy SD tag recipes. Preserve authored subject, count, action, state, colors, and materials. Do not add unauthored glow, magic, energy, child motes, or material effects. Return one JSON object."},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
             ],
             "temperature": env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.42, lo=0.0, hi=1.2),
@@ -436,10 +484,15 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         visual = data.setdefault("visual", {})
         attack = data.setdefault("attack", {})
         if kit.get("palette"):
-            cleaned_palette = sanitize_visual_palette(kit.get("palette") or [], limit=8)
+            cleaned_palette, palette_policy = _merge_visual_director_palette(
+                data,
+                visual.get("palette"),
+                kit.get("palette"),
+            )
             if cleaned_palette:
                 kit["palette"] = cleaned_palette
                 visual["palette"] = cleaned_palette
+                data.setdefault("debug", {})["visualDirectorPalettePolicy"] = palette_policy
             else:
                 kit.pop("palette", None)
         neg = str(kit.get("negativePrompt") or "").strip()

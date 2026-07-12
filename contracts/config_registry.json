@@ -587,7 +587,7 @@
         {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "line": 56,
+          "line": 60,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -621,7 +621,7 @@
         {
           "default": "default",
           "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "line": 57,
+          "line": 61,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1827,7 +1827,7 @@
             "expression": "DATA_DIR / \"item_knowledge.json\""
           },
           "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "line": 61,
+          "line": 65,
           "maximum": null,
           "minimum": null,
           "type": "path"
@@ -1854,7 +1854,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "line": 60,
+          "line": 64,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -2604,7 +2604,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 353,
+          "line": 401,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5055,7 +5055,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "line": 59,
+          "line": 63,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5990,7 +5990,7 @@
         {
           "default": 0.42,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 349,
+          "line": 397,
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -6338,15 +6338,19 @@
     {
       "declarations": [
         {
-          "default": 1800,
+          "default": {
+            "expression": "1800 if image_backend_is_zimage() else 2200"
+          },
           "file": "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
-          "line": 847,
+          "line": 742,
           "maximum": null,
           "minimum": null,
           "type": "integer"
         }
       ],
-      "default": 1800,
+      "default": {
+        "expression": "1800 if image_backend_is_zimage() else 2200"
+      },
       "documented": true,
       "example": "1800",
       "gui": false,
@@ -6388,7 +6392,7 @@
   ],
   "errors": [],
   "fieldCount": 233,
-  "fingerprint": "b3a75c8863747c8b9fef1eab9e461641e74493dc4ac89cca321658690e200a75",
+  "fingerprint": "81ceffce2655ef5ee2aab1ba4b5b7217cab0fa6cad22c461d6db1423db78d8c6",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

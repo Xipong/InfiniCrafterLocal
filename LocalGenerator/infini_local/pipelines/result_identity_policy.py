@@ -79,6 +79,15 @@ PALETTES = {
     "coin": ["gold", "silver", "copper"],
 }
 
+# Visual tag order must not depend on Python's randomized ``set`` iteration.
+# The insertion order of the canonical dictionaries is intentional and is the
+# only policy here: this helper does not reinterpret a parent or decide how its
+# silhouette must be fused into the result.
+def _ordered_known_tags(tags: set[str], canonical: dict[str, Any]) -> list[str]:
+    known = [key for key in canonical if key in tags]
+    unknown = sorted(str(tag) for tag in tags if tag not in canonical)
+    return known + unknown
+
 
 def guess_head(name: str, tags: set[str]) -> str:
     for t in ["boots", "wings", "shield", "emblem", "charm", "ring", "glove", "accessory", "dirt", "stone", "sand", "block", "material", "chair", "wire", "headset", "computer", "circuit", "workbench", "bench", "potion", "sword", "blade", "bow", "gun", "wand", "staff", "flower", "daybloom", "star", "gel", "slime", "tool", "pickaxe", "axe", "hammer", "drill", "chainsaw", "ammo", "armor"]:
@@ -621,15 +630,16 @@ def required_anchors_from(ca: dict[str, Any], cb: dict[str, Any], tags: set[str]
 
 def required_anchors_from_tags(tags: set[str]) -> list[str]:
     anchors = []
-    for tag in tags:
+    for tag in _ordered_known_tags(tags, VISUAL_SYNONYMS):
         anchors.extend(VISUAL_SYNONYMS.get(tag, []))
     return list(dict.fromkeys(anchors))
 
 def palette_from(tags: set[str]) -> list[str]:
     colors = []
-    for t in tags:
+    for t in _ordered_known_tags(tags, PALETTES):
         colors.extend(PALETTES.get(t, []))
     return list(dict.fromkeys(colors))[:6] or ["gray", "white"]
+
 
 __all__ = [
     "clean_name",

@@ -25,6 +25,8 @@
 13. **Author API не должен обещать несуществующий lifecycle.** Temporary helper — короткоживущий projectile; persistent summon требует отдельного vertical slice.
 14. **Visual Director имеет одну writable surface:** `visualKit.bakedAssets`. Старые aliases читаются только на boundary.
 15. **PNG описывает одно runtime-тело.** `shotCount/splitCount` остаются multiplicity runtime, а не количеством тел внутри текстуры.
+
+16. **Визуальное слияние родителей авторит модель.** Код передаёт факты и сохраняет authored-поля, но не выбирает literal/attached/fused/disassembled/parts-вариант, не вводит material locks и не строит parent-type visual router. Технические role/JSON/runtime gates не должны становиться вторым художником.
 16. Предлайфтестовые негативные примеры и residual risks: `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md`.
 13. **Balance mode выбирается только через `core/balance_mode.py`.** `safety` по умолчанию, `normalize` opt-in, `report` diagnostics; формулы и mode-policy не смешивать.
 

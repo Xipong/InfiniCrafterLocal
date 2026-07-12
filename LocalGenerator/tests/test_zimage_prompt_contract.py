@@ -323,7 +323,7 @@ def _check_role_hygiene_keeps_weapon_icon_from_placeable_scene(monkeypatch) -> N
     assert "handheld or carriable usable item" in prompt
     assert "not a placed tile" in prompt
     assert "furniture placement preview" in prompt
-    assert "parts, fragments" in prompt
+    assert "preserve authored literal, attached, fused, disassembled" in prompt
 
 
 def _check_thrust_projectile_prompt_does_not_force_spear_category(monkeypatch) -> None:
@@ -371,7 +371,7 @@ def _check_item_prompt_carries_generated_name_without_text_rendering(monkeypatch
     assert "draw letters" not in prompt.replace("without drawn letters", "")
 
 
-def _check_split_blade_guard_blocks_black_appendage_artifact(monkeypatch) -> None:
+def _check_split_blade_prompt_stays_authored_without_code_shape_router(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "IMAGE_BACKEND", "sdcpp")
     monkeypatch.setattr(VISUAL, "SDCPP_MODEL", "z-image-turbo-Q6_K.gguf")
     monkeypatch.setattr(VISUAL, "SDCPP_SERVER_COMMAND_TEMPLATE", "")
@@ -385,26 +385,16 @@ def _check_split_blade_guard_blocks_black_appendage_artifact(monkeypatch) -> Non
         "concept": {"fantasy": "A light-dark split blade made as one fused sword."},
         "visual": {"palette": ["gold", "black", "white"]},
     }
-    prompt = normalize_asset_prompt(data, "item", "single split-blade broadsword with a black rear blade portion", 48).lower()
+    authored = "single split-blade broadsword with a black rear blade portion"
+    prompt = normalize_asset_prompt(data, "item", authored, 48).lower()
 
-    assert "one fused weapon silhouette" in prompt
-    assert "dark/black portion flush to the blade contour" in prompt
-    assert "stray side spurs" in prompt
-    assert "extra protruding appendages" in prompt
-
-
-def _check_split_blade_guard_uses_semantic_helper_not_keyword_soup() -> None:
-    from infini_local.pipelines.visual_prompt_contracts import _blade_shape_needs_fused_contour_guard
-
-    assert _blade_shape_needs_fused_contour_guard("single split-blade broadsword with a black rear blade portion")
-    assert _blade_shape_needs_fused_contour_guard("forked shadow blade made as one weapon")
-    assert _blade_shape_needs_fused_contour_guard("two-toned gold and black sword")
-    assert not _blade_shape_needs_fused_contour_guard("plain black blade with intact silhouette")
+    assert authored in prompt
+    assert "if the blade is split" not in prompt
+    assert "dark/black portion flush" not in prompt
 
     source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_prompt_contracts.py").read_text(encoding="utf-8")
-    guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def _authored_tether_context", 1)[0]
-    assert "_blade_shape_needs_fused_contour_guard(blade_blob)" in guard_body
-    assert "for w in [" not in guard_body
+    assert "_FUSED_BLADE_RISK_RE" not in source
+    assert "_blade_shape_needs_fused_contour_guard" not in source
 
 
 def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> None:
@@ -429,7 +419,7 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
 
     assert prompt.count("handheld or carriable usable item") == 1
     assert prompt.count("furniture placement preview") == 1
-    assert "usable parts, fragments" in prompt
+    assert "preserve authored literal, attached, fused, disassembled" in prompt
 
     duplicated = (
         "A wooden chair leg cudgel, depict one handheld or carriable usable item object, "
@@ -442,7 +432,7 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
 
     assert prompt.count("handheld or carriable usable item") == 1
     assert prompt.count("furniture placement preview") == 1
-    assert prompt.count("usable parts, fragments") == 1
+    assert prompt.count("preserve authored literal, attached, fused, disassembled") == 1
 
 
 def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -> None:
@@ -629,8 +619,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_role_hygiene_keeps_weapon_icon_from_placeable_scene',
     '_check_thrust_projectile_prompt_does_not_force_spear_category',
     '_check_item_prompt_carries_generated_name_without_text_rendering',
-    '_check_split_blade_guard_blocks_black_appendage_artifact',
-    '_check_split_blade_guard_uses_semantic_helper_not_keyword_soup',
+    '_check_split_blade_prompt_stays_authored_without_code_shape_router',
     '_check_item_prompt_deduplicates_handheld_guard_for_zimage',
     '_check_item_shape_contract_is_data_authored_not_code_taxonomy',
     '_check_visual_director_requests_shape_contract_without_weapon_taxonomy',

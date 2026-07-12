@@ -226,7 +226,7 @@ def test_promise_gate_blocks_fake_platform_and_damaging_field_but_keeps_real_chi
     assert planner_runtime_promise_gate(valid)["ok"] is True
 
 
-def test_flux2_uses_subject_first_material_grounded_prompt(monkeypatch) -> None:
+def test_flux2_preserves_authored_literal_workbench_prompt_without_code_material_router(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL_CONFIG, "IMAGE_BACKEND", "sdcpp")
     monkeypatch.setattr(VISUAL_CONFIG, "SDCPP_MODEL", "C:/models/flux-2-klein-4b-Q8_0.gguf")
     monkeypatch.setattr(VISUAL_CONFIG, "ZIMAGE_PROMPT_CONTRACT", "auto")
@@ -241,9 +241,10 @@ def test_flux2_uses_subject_first_material_grounded_prompt(monkeypatch) -> None:
     lower = prompt.lower()
     assert lower.startswith("a terraria-like pixel-art item sprite")
     assert "color scheme and materials: brown, tan, dark brown" in lower
-    assert "primary authored material: wood" in lower
-    assert "main item body visibly made of wood" in lower
-    assert "generic polished steel" in lower
+    assert "thick wooden plank blade" in lower
+    assert "square workbench guard" in lower
+    assert "primary authored material:" not in lower
+    assert "generic polished steel" not in lower
     assert "show only the item sprite" in lower
     assert "palette: gray, white" not in lower
 
@@ -253,3 +254,85 @@ def test_strict_preflights_run_before_expensive_image_generation() -> None:
     assert source.index("04c_strict_executable_preflight") < source.index("08_visual_director_asset_pack")
     assert source.index("08c_strict_executable_preflight") < source.index("09_visual_asset_generation")
     assert source.index("11a_project_presentation_out_of_attack") < source.index("11b_strict_executable_boundary")
+
+
+def test_visual_director_palette_policy_uses_provenance_not_material_semantics() -> None:
+    fallback = _compiled_carpentry_item()
+    assert fallback["debug"]["visualPaletteSource"] == "result_and_parent_grounding_tags"
+    palette, policy = VISUAL._merge_visual_director_palette(
+        fallback,
+        fallback["visual"]["palette"],
+        ["painted red", "brass"],
+    )
+    assert palette == ["painted red", "brass"]
+    assert policy == "visual_director_authored"
+
+    planner_authored = _carpentry_plan()
+    planner_authored.setdefault("visual", {})["palette"] = ["painted blue", "white"]
+    a = _wooden_sword()
+    b = _workbench()
+    ca = canonicalize(a)
+    cb = canonicalize(b)
+    planner_authored = validate_and_repair(planner_authored, a, b, ca, cb, "planner_palette")
+    assert planner_authored["debug"]["visualPaletteSource"] == "planner_authored"
+    palette, policy = VISUAL._merge_visual_director_palette(
+        planner_authored,
+        planner_authored["visual"]["palette"],
+        ["orange", "black"],
+    )
+    assert palette == ["painted blue", "white", "orange", "black"]
+    assert policy == "planner_authored_first"
+
+
+def test_visual_anchor_and_palette_order_is_deterministic_without_fusion_policy() -> None:
+    from infini_local.pipelines.result_identity_policy import palette_from, required_anchors_from_tags
+
+    tags = {"workbench", "wood", "sword", "iron", "placeable"}
+    assert required_anchors_from_tags(tags) == required_anchors_from_tags(set(reversed(sorted(tags))))
+    assert palette_from(tags) == palette_from(set(reversed(sorted(tags))))
+    assert "wooden work bench" in required_anchors_from_tags(tags)
+    assert "crafting table" in required_anchors_from_tags(tags)
+
+
+def test_invalid_cached_attack_contract_is_not_delivered() -> None:
+    data = _compiled_carpentry_item()
+    data["attack"]["futureImaginaryField"] = 1
+    assert COMBINE._cached_payload_passes_executable_boundary(
+        data,
+        recipe_key_value="bad-cache",
+        source="test",
+    ) is False
+
+
+def test_visual_director_receives_planner_fusion_choice_without_code_rewrite(monkeypatch) -> None:
+    captured: dict = {}
+    monkeypatch.setattr(VISUAL, "USE_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(VISUAL, "is_llm_planner", lambda _data: True)
+    monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(VISUAL, "anime_reference_opportunity", lambda _data: "none")
+
+    def fake_chat(req, timeout=None):
+        captured.update(json.loads(req["messages"][1]["content"]))
+        return {"choices": [{"message": {"content": json.dumps({
+            "visualKit": {
+                "palette": ["brown", "tan"],
+                "itemIconPrompt": "A whole workbench bolted sideways to a wooden sword, used as one absurd club-blade.",
+                "itemSilhouetteContract": "The complete rectangular workbench remains visibly bolted to the sword blade.",
+            }
+        })}}]}
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", fake_chat)
+    data = _compiled_carpentry_item()
+    data["runtimePlan"]["sourceRolePreservation"] = {
+        "itemA": "wooden sword remains the handle and striking spine",
+        "itemB": "the complete workbench is bolted to the blade",
+    }
+    data["runtimePlan"]["visualIntent"]["item"] = "A whole workbench bolted to the sword."
+    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+
+    assert captured["item"]["sourceRolePreservation"]["itemB"] == "the complete workbench is bolted to the blade"
+    assert captured["item"]["plannerVisualIntent"]["item"] == "A whole workbench bolted to the sword."
+    assert "whole workbench bolted" in result["visual"]["imagePrompt"].lower()
+    assert "complete rectangular workbench" in result["visual"]["itemSilhouetteContract"].lower()

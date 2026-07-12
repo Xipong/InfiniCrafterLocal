@@ -75,6 +75,36 @@ from infini_local.storage.world_recipe_runtime import (
 # deliverable GeneratedItemData. Stage labels in combine() are debug breadcrumbs;
 # do not insert hidden gameplay authoring into cache, visual, or trace helpers.
 
+
+def _cached_payload_passes_executable_boundary(
+    cached: dict[str, Any],
+    *,
+    recipe_key_value: str,
+    source: str,
+) -> bool:
+    """Reject stale/partial cache payloads instead of delivering silent defaults.
+
+    Cache compatibility migration is intentionally limited to known presentation
+    fields.  Any remaining executable-contract drift means the recipe must be
+    regenerated from its parents; a cache hit is not permission to bypass the same
+    strict Python ↔ C# boundary used by a fresh craft.
+    """
+    try:
+        validate_executable_item_boundary(cached)
+    except Exception as exc:
+        trace_event(
+            "step",
+            "COMBINE:cache",
+            "cached recipe ignored because executable boundary is invalid",
+            {
+                "recipeKey": recipe_key_value,
+                "source": str(source or "cache"),
+                "error": repr(exc),
+            },
+        )
+        return False
+    return True
+
 def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     """Return a world-scoped cached recipe without starting generation.
 
@@ -92,6 +122,12 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     cached = cache_get(key, world_id, world_name)
     if isinstance(cached, dict):
         cached = project_attack_presentation_fields(cached, source="cache_lookup")
+        if not _cached_payload_passes_executable_boundary(
+            cached,
+            recipe_key_value=key,
+            source="cache_lookup",
+        ):
+            cached = None
     if cached is not None and not is_deliverable_recipe_payload(cached):
         trace_event("step", "HTTP:/combine", "world recipe cache skipped non-deliverable payload", {"recipeKey": key, "sourceMode": cached.get("sourceMode") if isinstance(cached, dict) else ""})
         cached = None
@@ -112,6 +148,12 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     cached = cache_get(key, world_id, world_name)
     if isinstance(cached, dict):
         cached = project_attack_presentation_fields(cached, source="cache_delivery")
+        if not _cached_payload_passes_executable_boundary(
+            cached,
+            recipe_key_value=key,
+            source="cache_delivery",
+        ):
+            cached = None
     if cached:
         visual_report = visual_delivery_report(cached)
         if visual_report.get("ok"):

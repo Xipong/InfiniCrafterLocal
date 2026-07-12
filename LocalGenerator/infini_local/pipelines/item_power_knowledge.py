@@ -26,7 +26,11 @@ from infini_local.core.item_identity_tools import (
 )
 from infini_local.core.item_signals import HARD_TAGS, VISUAL_SYNONYMS, knowledge_key, wire_identity_names
 from infini_local.core.runtime_authoring.normalize import runtime_plan
-from infini_local.pipelines.result_identity_policy import normalize_category, parent_primary_category
+from infini_local.pipelines.result_identity_policy import (
+    normalize_category,
+    parent_primary_category,
+    required_anchors_from_tags,
+)
 from infini_local.pipelines.item_rarity_baseline import (
     TIER_DEFAULT_POWER,
     rarity_details_of,
@@ -529,9 +533,7 @@ def canonicalize(item: dict[str, Any]) -> dict[str, Any]:
     head = guess_head(n, tags)
     material = "wood" if "wood" in tags else "dirt" if "dirt" in tags or "earth" in tags else "stone" if "stone" in tags else "sand" if "sand" in tags else "iron" if "iron" in tags else "gold" if "gold" in tags else ""
     cls = "accessory" if "accessory" in tags else "weapon" if "weapon" in tags else "consumable" if "consumable" in tags else "tool" if "tool" in tags else "ammo" if "ammo" in tags else "armor" if "armor" in tags else "placeable" if "placeable" in tags else "material" if "material" in tags or "block" in tags else "generic"
-    visual = []
-    for tag in tags:
-        visual.extend(VISUAL_SYNONYMS.get(tag, []))
+    visual = required_anchors_from_tags(tags)
     if not visual:
         visual = [n]
     hard = sorted(t for t in tags if t in HARD_TAGS)
