@@ -513,8 +513,8 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
 def _check_visual_director_requests_shape_contract_without_weapon_taxonomy() -> None:
     source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
     assert "itemSilhouetteContract" in source
-    assert "concrete proportions/parts/readability" in source
-    assert "do not use a generic weapon class label alone" in source
+    assert "exact proportions, readable parts, and near-miss silhouettes" in source
+    assert "without replacing it with a generic class label" in source
 
 
 def _check_starfall_projectile_and_child_prompts_are_semantic_role_contracts(monkeypatch) -> None:

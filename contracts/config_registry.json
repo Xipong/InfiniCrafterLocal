@@ -2321,7 +2321,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/llm_transport.py",
-          "line": 485,
+          "line": 495,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2363,8 +2363,7 @@
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py",
         "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
       ],
       "secret": false,
       "type": "string",
@@ -2532,7 +2531,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 401,
+          "line": 370,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5785,7 +5784,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/llm_transport.py",
-          "line": 253,
+          "line": 263,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -5812,7 +5811,7 @@
         {
           "default": 0.42,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "line": 397,
+          "line": 362,
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -6167,7 +6166,7 @@
             "expression": "1800 if image_backend_is_zimage() else 2200"
           },
           "file": "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
-          "line": 744,
+          "line": 739,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -6217,7 +6216,7 @@
   ],
   "errors": [],
   "fieldCount": 233,
-  "fingerprint": "f21eeacf0917fbb4a1f83951e5dc0a62d5f3dbd480f2805fd5730db01ffee9b8",
+  "fingerprint": "99acf9a47c727a43f480fd438266f3198e01fdc4e4f6e205a0204dfb2b15ccd9",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

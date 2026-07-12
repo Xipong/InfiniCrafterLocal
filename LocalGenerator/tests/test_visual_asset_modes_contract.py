@@ -260,7 +260,7 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
     policy = captured["payload"]["animeReferenceOpportunity"]
     assert policy["maximumStrength"] == "strong"
     assert policy["optional"] is True
-    assert "animeReference" in captured["payload"]["requiredJsonShape"]["visualKit"]
+    assert "animeReference" in captured["payload"]["fieldGuide"]
     assert result["visualKit"]["animeReference"] == {
         "strength": "strong",
         "source": "Soul Eater",

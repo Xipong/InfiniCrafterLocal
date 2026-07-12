@@ -58,8 +58,8 @@ def test_multishot_projectile_prompt_is_one_body_but_explicit_bundle_survives() 
         "visual": {"palette": ["iron", "amber"]},
     }
     prompt = normalize_asset_prompt(shotgun, "projectile", "six pellets in a wide fan", 32).lower()
-    assert "six pellets" not in prompt
-    assert "one projectile" in prompt
+    assert "six pellets in a wide fan" in prompt
+    assert "one authored projectile texture" in prompt
 
     bundle = {
         "name": "Shard Cluster",
@@ -95,7 +95,7 @@ def test_child_and_item_role_guards_separate_runtime_multiplicity_and_inventory_
     assert "no furnished room" in furniture_prompt
 
 
-def test_visual_director_uses_only_canonical_baked_assets(monkeypatch) -> None:
+def test_visual_director_rejects_noncanonical_response_keys(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
@@ -124,7 +124,7 @@ def test_visual_director_uses_only_canonical_baked_assets(monkeypatch) -> None:
     out = VISUAL.apply_visual_director(data, {}, {}, {}, {})
     assert "visualKit" not in out
     error = str(out.get("debug", {}).get("visualDirectorError", ""))
-    assert "noncanonical keys" in error
+    assert "Extra inputs are not permitted" in error
     assert "assetModes" in error
     assert "heldSpritePrompt" in error
     assert "projectileAssetMode" in error

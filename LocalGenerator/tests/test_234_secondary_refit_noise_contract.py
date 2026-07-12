@@ -42,7 +42,7 @@ def test_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted()
     assert patch["secondaryPreservedAlongsidePrimaryOnHit"] == "lifesteal"
 
 
-def test_compiled_swing_secondary_forces_child_sprite_not_main_projectile(monkeypatch) -> None:
+def test_compiled_swing_secondary_keeps_visual_director_child_mode(monkeypatch) -> None:
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
     data = {
@@ -74,8 +74,8 @@ def test_compiled_swing_secondary_forces_child_sprite_not_main_projectile(monkey
 
     assert projectile["assetMode"] == "particle_vfx"
     assert projectile["status"] == "skipped_not_authored_baked"
-    assert child["assetMode"] == "baked_sprite"
-    assert "status" not in child or not str(child.get("status", "")).startswith("skipped")
+    assert child["assetMode"] == "particle_vfx"
+    assert child["status"] == "skipped_not_authored_baked"
 
 
 def test_hold_light_does_not_synthesize_fake_alt_use() -> None:

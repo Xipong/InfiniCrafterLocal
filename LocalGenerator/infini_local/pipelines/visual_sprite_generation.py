@@ -462,6 +462,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         write_visual_manifest(data, plan)
         return data
     visual = data.setdefault("visual", {})
+    visual_kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
+    director_negative = str(visual_kit.get("negativePrompt") or "").strip()
 
     for slot in plan:
         role = slot.get("role")
@@ -481,7 +483,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             continue
         prompt = str(slot.get("prompt") or "")
         canvas = int(slot.get("canvas") or 32)
-        path, url, score, status = generate_visual_asset(data, role, prompt, asset_negative_prompt(role), str(slot.get("assetId") or (str(data.get("id")) + "_" + role)), canvas)
+        role_negative = director_negative or asset_negative_prompt(role)
+        path, url, score, status = generate_visual_asset(data, role, prompt, role_negative, str(slot.get("assetId") or (str(data.get("id")) + "_" + role)), canvas)
         # Store the actual backend prompt in the manifest/debug plan. The raw
         # visual-director prompt remains in visual/attack fields, but manifests
         # should show what was really sent after Z-Image PE cleanup.
@@ -493,7 +496,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         slot["url"] = url
         slot["score"] = score
         key = role.capitalize()
-        usable_path = bool(path) and status not in {"failed", "prompt_only", "placeholder", "generated_warn_invalid"}
+        usable_path = bool(path) and status not in {"failed", "prompt_only", "placeholder"}
         if role == "projectile":
             attack["projectileSpritePrompt"] = prompt
             attack["projectileSpriteStatus"] = status

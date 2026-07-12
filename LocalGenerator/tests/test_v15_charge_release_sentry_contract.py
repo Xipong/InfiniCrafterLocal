@@ -264,5 +264,6 @@ def test_child_image_prompt_is_generic_secondary_body_not_forced_mote() -> None:
         },
     }).lower()
     assert "single crystal bolt" in prompt
-    assert "one separate secondary projectile body" in prompt
+    assert "one authored child-projectile texture/composition" in prompt
+    assert "preserve explicitly authored connected parts" in prompt
     assert "tiny echo spark/mote" not in prompt

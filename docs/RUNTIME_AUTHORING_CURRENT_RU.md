@@ -12,7 +12,9 @@
 - Active helper call — `spawn_temporary_helper_projectile`; это bounded temporary projectile, не minion/sentry lifecycle. Удалённые function names отклоняются.
 - `on_expire` означает любой projectile kill; `shotCount` — simultaneous multishot, не timed burst.
 - Generated arrow/bullet ammo не обещает собственного generated AttackSpec; authored throwable/dart использует weapon/consumable_weapon + empty ammoFor.
-- Visual Director авторит только `visualKit.bakedAssets`; неканонические asset-decision поля отклоняются; канонический output содержит только `visualKit.bakedAssets`.
+- Visual Director авторит строгий `visualKit`: shared style/palette, authored item silhouette, по одному каноническому prompt на item/projectile/impact/child/field и VFX-намерение. Только `visualKit.bakedAssets` решает способ доставки optional asset (`none|particle_vfx|reuse_item_sprite|baked_sprite`); вложенный `bakedAssets.<role>.prompt` остаётся только legacy-входом и мигрирует в top-level role prompt.
+- Planner/Visual Director владеют художественным слиянием родителей. Код передаёт raw/canonical parent evidence, валидирует форму и runtime-потребляемость, но не выбирает материалы, буквальность слияния или «правильную» форму предмета. Применение Visual Director атомарно: невалидный/непроецируемый kit не оставляет частично изменённые `visual`, `attack` или `debug`.
+- VFX manifest компилируется до optional asset gates, поэтому field/impact decisions проверяются против уже существующего runtime/VFX consumer, а не против ещё не созданного позднего состояния.
 - Projectile/child PNG описывает одно тело; runtime multiplicity не запекается в sprite.
 - VFX Director получает compiled runtime fields, а не восстанавливает механику по prose.
 - Десять ручных предлайфтестовых трейсов: `PRE_LIVETEST_MANUAL_TRACES_V12_RU.md`.

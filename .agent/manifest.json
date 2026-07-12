@@ -18,6 +18,7 @@
     "engineParamBoundary": "LocalGenerator/infini_local/core/runtime_authoring/engine_call_contracts.py",
     "fieldLifecyclePolicy": "contracts/field_lifecycle.json",
     "projectileNetwork": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
+    "visualDirectorContract": "LocalGenerator/infini_local/pipelines/visual_director_contract.py",
     "wireBoundary": "LocalGenerator/infini_local/core/boundary_models.py"
   },
   "checks": {

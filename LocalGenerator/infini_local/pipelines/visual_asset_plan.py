@@ -26,26 +26,6 @@ from infini_local.pipelines.visual_prompt_contracts import effective_projectile_
 # gameplay from prompt prose.
 
 
-def should_generate_child_asset(data: dict[str, Any]) -> bool:
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    try:
-        if int(float(attack.get("splitCount") or 0)) > 0 or int(float(attack.get("maxChildProjectiles") or 0)) > 0:
-            return True
-    except Exception:
-        pass
-    onhit = str(attack.get("onHit") or "").lower()
-    if onhit in {"split", "starburst", "overhead_barrage", "spore_cloud", "mini_missiles", "vortex_spawn", "radial_beams"}:
-        return True
-    visual = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    return bool(str(visual.get("childSpritePrompt") or visual.get("childVfx") or "").strip())
-
-def should_generate_field_asset(data: dict[str, Any]) -> bool:
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    text = " ".join(str(attack.get(k, "")).lower() for k in ["impactStyle", "projectileImpact", "visualMode"])
-    visual = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    text += " " + str(visual.get("fieldSpritePrompt") or visual.get("fieldVfx") or "").lower()
-    return any(w in text for w in ["field", "trap", "rune", "cloud", "aura", "puddle", "anchor", "sigil", "zone", "mark on ground", "imprint"])
-
 def _visual_kit(data: dict[str, Any]) -> dict[str, Any]:
     kit = data.get("visualKit")
     return kit if isinstance(kit, dict) else {}
@@ -57,39 +37,46 @@ def _role_baked_asset_spec(data: dict[str, Any], role: str) -> dict[str, Any]:
     spec = baked.get((role or "").strip().lower())
     return spec if isinstance(spec, dict) else {}
 
+_ROLE_KIT_PROMPT_FIELDS = {
+    "projectile": "projectileSpritePrompt",
+    "impact": "impactSpritePrompt",
+    "child": "childSpritePrompt",
+    "field": "fieldSpritePrompt",
+}
+
+
 def _role_asset_prompt(data: dict[str, Any], role: str) -> str:
-    spec = _role_baked_asset_spec(data, role)
-    for key in ["prompt", "spritePrompt", "imagePrompt"]:
-        if isinstance(spec, dict) and spec.get(key):
-            return str(spec.get(key) or "").strip()
+    """Resolve the one canonical role prompt, with legacy cache fallback last."""
+    role = (role or "").strip().lower()
+    kit = _visual_kit(data)
+    prompt_field = _ROLE_KIT_PROMPT_FIELDS.get(role, "")
+    canonical_prompt = str(kit.get(prompt_field) or "").strip() if prompt_field else ""
+    if canonical_prompt:
+        return canonical_prompt
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    return str(
+    projected_prompt = str(
         visual.get(f"{role}ImagePrompt")
         or attack.get(f"{role}SpritePrompt")
         or ""
     ).strip()
+    if projected_prompt:
+        return projected_prompt
+    # Old cache/replay payloads can still reach isolated tools without the combine
+    # boundary migration. Keep this read-only fallback; fresh authoring never writes it.
+    spec = _role_baked_asset_spec(data, role)
+    for key in ("prompt", "spritePrompt", "imagePrompt"):
+        legacy_prompt = str(spec.get(key) or "").strip() if isinstance(spec, dict) else ""
+        if legacy_prompt:
+            return legacy_prompt
+    return ""
 
 def _asset_mode_from_value(value: Any) -> str:
     raw = str(value or "").strip()
     return raw if raw in {"baked_sprite", "particle_vfx", "reuse_item_sprite", "none"} else ""
 
-def compiled_child_projectile_needs_sprite(data: dict[str, Any]) -> bool:
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    try:
-        count = int(float(attack.get("splitCount") or 0))
-        max_children = int(float(attack.get("maxChildProjectiles") or 0))
-    except (TypeError, ValueError):
-        count = max_children = 0
-    if count <= 0 and max_children <= 0:
-        return False
-    return bool(str(attack.get("secondaryProjectileShape") or attack.get("secondaryMaterial") or "").strip())
-
 def authored_asset_mode(data: dict[str, Any], role: str) -> str:
     role = (role or "").strip().lower()
-    if role == "child" and compiled_child_projectile_needs_sprite(data):
-        final, _reason = visual_asset_runtime_gate(data, role, "baked_sprite")
-        return final or "baked_sprite"
     spec = _role_baked_asset_spec(data, role)
     return visual_asset_runtime_gate(data, role, _asset_mode_from_value(spec.get("mode")))[0]
 
@@ -145,6 +132,15 @@ def apply_visual_asset_runtime_gates(data: dict[str, Any], kit: dict[str, Any]) 
     if not isinstance(kit, dict):
         return
     baked = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
+    debug = data.setdefault("debug", {})
+    authored_modes = {
+        role: _asset_mode_from_value(spec.get("mode"))
+        for role, spec in baked.items()
+        if isinstance(spec, dict) and _asset_mode_from_value(spec.get("mode"))
+    }
+    if authored_modes and "visualAssetAuthoredModes" not in debug:
+        debug["visualAssetAuthoredModes"] = authored_modes
+
     canonical: dict[str, dict[str, Any]] = {}
     reports: list[dict[str, str]] = []
     for role in ["projectile", "impact", "child", "field"]:
@@ -161,8 +157,27 @@ def apply_visual_asset_runtime_gates(data: dict[str, Any], kit: dict[str, Any]) 
         kit["bakedAssets"] = canonical
     else:
         kit.pop("bakedAssets", None)
+
+    final_modes = {
+        role: str(spec.get("mode") or "")
+        for role, spec in canonical.items()
+        if isinstance(spec, dict) and str(spec.get("mode") or "")
+    }
+    if final_modes:
+        debug["visualAssetFinalModes"] = final_modes
+    else:
+        debug.pop("visualAssetFinalModes", None)
     if reports:
-        data.setdefault("debug", {})["visualAssetRuntimeGates"] = json.dumps(reports, ensure_ascii=False)
+        debug["visualAssetRuntimeGates"] = json.dumps(reports, ensure_ascii=False)
+    else:
+        debug.pop("visualAssetRuntimeGates", None)
+
+def finalize_visual_asset_runtime_gates(data: dict[str, Any]) -> dict[str, Any]:
+    """Apply structural asset gates after the VFX manifest has been compiled."""
+    kit = _visual_kit(data)
+    if kit:
+        apply_visual_asset_runtime_gates(data, kit)
+    return data
 
 def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
     kit = _visual_kit(data)
@@ -203,15 +218,13 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 __all__ = [
-    "should_generate_child_asset",
-    "should_generate_field_asset",
     "_visual_kit",
     "_role_baked_asset_spec",
     "_role_asset_prompt",
     "_asset_mode_from_value",
-    "compiled_child_projectile_needs_sprite",
     "authored_asset_mode",
     "visual_asset_runtime_gate",
     "apply_visual_asset_runtime_gates",
+    "finalize_visual_asset_runtime_gates",
     "build_visual_asset_plan",
 ]

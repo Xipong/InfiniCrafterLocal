@@ -224,34 +224,52 @@ def compact_zimage_asset_prompt(parts: list[str], role: str, limit: int = 1800) 
     return prompt + "."
 
 
+_CONFLICTING_SPRITE_WRAPPER_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\b(?:dark|black|white|blue|plain|solid|textured)\s+background\b",
+        r"\bbackground\b",
+        r"\bbackdrop\b",
+        r"\bvignette\b",
+        r"\batmospheric\s+(?:scene|background|backdrop)\b",
+        r"\b(?:full|wide|environmental|room|landscape|action)\s+scene\b",
+        r"\bscene\s+background\b",
+        r"\bon\s+(?:a|the)\s+pedestal\b",
+        r"\bcharacter\s+holding\b",
+        r"\b(?:human|character|player)\s+hands?\b",
+        r"\bhands?\s+holding\b",
+        r"\bheld\s+in\s+(?:a|two|the)\s+hands?\b",
+        r"\bui\s+frame\b",
+        r"\b(?:no|without)\s+text\b",
+        r"\btext[- ]free\b",
+        r"\bwatermark\b",
+    )
+)
+
+
+
+def _has_conflicting_sprite_wrapper(text: str) -> bool:
+    return any(pattern.search(str(text or "")) for pattern in _CONFLICTING_SPRITE_WRAPPER_PATTERNS)
+
+
 def strip_conflicting_sprite_prompt_bits(text: str) -> str:
     text = strip_sprite_resolution_tokens(str(text or "")).strip()
     if not text:
         return ""
-    bad_bits = [
-        "dark background", "black background", "white background", "blue background",
-        "plain background", "background", "backdrop", "vignette", "atmospheric",
-        "scene", "landscape", "room", "floor", "ground", "pedestal",
-        "character holding", "hands", "ui frame", "text", "watermark",
-    ]
     cleaned_parts = []
     for raw_part in text.replace(";", ",").split(","):
         part = raw_part.strip()
         if not part:
             continue
-        lower = part.lower()
-        if any(bit in lower for bit in bad_bits):
+        if _has_conflicting_sprite_wrapper(part):
             # Visual Director often writes wrappers like:
             # "single pixel-art icon on solid magenta key background (#ff00ff):
-            # two silver shurikens ...".  Dropping the whole comma-part removes
-            # the actual authored subject and leaves only material fragments
-            # ("white edge glints, gray bevels"), which makes item/projectile
-            # sprites diverge.  Keep the meaningful post-colon subject while
-            # discarding the background/wrapper half.
+            # two silver shurikens ...". Keep a clean post-colon subject. Word-boundary
+            # matching is intentional: old substring checks treated ``texture`` as
+            # forbidden ``text`` and ``grounded`` as forbidden ``ground``.
             if ":" in part:
                 tail = part.split(":", 1)[1].strip(" ,.;")
-                tail_lower = tail.lower()
-                if tail and not any(bit in tail_lower for bit in bad_bits):
+                if tail and not _has_conflicting_sprite_wrapper(tail):
                     cleaned_parts.append(tail)
             continue
         cleaned_parts.append(part)

@@ -108,6 +108,32 @@
       ]
     },
     {
+      "id": "visual-authoring-contract",
+      "patterns": [
+        "LocalGenerator/infini_local/pipelines/visual_director_contract.py",
+        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+        "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
+        "LocalGenerator/infini_local/pipelines/visual_asset_plan.py",
+        "LocalGenerator/infini_local/pipelines/visual_sprite_generation.py",
+        "LocalGenerator/infini_local/pipelines/visual_delivery_gate.py",
+        "LocalGenerator/infini_local/services/visual_asset_pipeline.py",
+        "contracts/schemas/visual_kit.schema.json"
+      ],
+      "checks": [
+        "pytest",
+        "schema_check",
+        "project_hygiene",
+        "ruff",
+        "pyright"
+      ],
+      "context": [
+        "AGENTS.md",
+        "docs/RUNTIME_AUTHORING_CURRENT_RU.md",
+        "LocalGenerator/infini_local/core/boundary_models.py",
+        "LocalGenerator/infini_local/pipelines/visual_director_contract.py"
+      ]
+    },
+    {
       "id": "configuration-surface",
       "patterns": [
         "LocalGenerator/config.example.env",

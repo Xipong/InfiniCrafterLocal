@@ -15,6 +15,10 @@
           "type": "string"
         },
         "strength": {
+          "enum": [
+            "subtle",
+            "strong"
+          ],
           "title": "Strength",
           "type": "string"
         }
@@ -42,6 +46,12 @@
           "title": "Distinctfromitem"
         },
         "mode": {
+          "enum": [
+            "baked_sprite",
+            "particle_vfx",
+            "reuse_item_sprite",
+            "none"
+          ],
           "title": "Mode",
           "type": "string"
         },
@@ -197,11 +207,25 @@
     },
     "vfxRhythmHint": {
       "default": "normal",
+      "enum": [
+        "slow",
+        "normal",
+        "snappy",
+        "delayed",
+        "pulsing"
+      ],
       "title": "Vfxrhythmhint",
       "type": "string"
     },
     "vfxScaleHint": {
       "default": "normal",
+      "enum": [
+        "tiny",
+        "small",
+        "normal",
+        "large",
+        "huge"
+      ],
       "title": "Vfxscalehint",
       "type": "string"
     }

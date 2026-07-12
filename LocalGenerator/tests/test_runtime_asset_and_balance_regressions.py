@@ -21,10 +21,10 @@ ITEM_POWER_KNOWLEDGE = ROOT / "LocalGenerator" / "infini_local" / "pipelines" / 
 MODEL = ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs"
 
 
-def _check_warn_invalid_generated_assets_do_not_attach_runtime_paths() -> None:
+def _check_nonfatal_warn_invalid_generated_assets_keep_runtime_paths() -> None:
     src = VISUAL_SPRITE_GENERATION.read_text(encoding="utf-8")
     assert "generated_warn_invalid" in src
-    assert "usable_path = bool(path) and status not in {\"failed\", \"prompt_only\", \"placeholder\", \"generated_warn_invalid\"}" in src
+    assert "usable_path = bool(path) and status not in {\"failed\", \"prompt_only\", \"placeholder\"}" in src
     assert "strict_ai_authorship_keep_imperfect_ai_sprite_not_placeholder" in src
 
 
@@ -130,7 +130,7 @@ def _run_coarse_contracts(tmp_path):
     import pytest as _pytest
 
     for _name in [
-    '_check_warn_invalid_generated_assets_do_not_attach_runtime_paths',
+    '_check_nonfatal_warn_invalid_generated_assets_keep_runtime_paths',
     '_check_csharp_hydrates_conventional_role_asset_names_for_old_cached_recipes',
     '_check_low_tier_consumable_projectile_power_is_capped',
     '_check_projectile_prompt_for_linear_family_is_horizontal_side_view',

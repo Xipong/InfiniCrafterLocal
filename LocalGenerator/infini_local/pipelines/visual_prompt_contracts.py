@@ -16,7 +16,6 @@ from infini_local.services.visual_asset_pipeline import (
     compact_prompt_parts,
     compact_zimage_asset_prompt,
     sanitize_image_prompt_background,
-    sanitize_projectile_prompt_multiplicity,
     sanitize_visual_palette,
     strip_conflicting_sprite_prompt_bits,
     truncate_prompt_at_boundary,
@@ -158,13 +157,13 @@ def zimage_positive_guard_clause(role: str, data: dict[str, Any] | None = None) 
     if r == "projectile":
         if isinstance(data, dict) and tether_sprite_guard_required(data, "projectile"):
             return base + " If rope, cord, chain, or tether detail is present, keep it as a short local attachment on the projectile body."
-        return base + " Show one projectile body only."
+        return base + " Show one authored projectile texture/composition only; preserve an explicitly authored connected bundle or multi-part body."
     if r == "impact":
         return base + " Show one compact impact burst only."
     if r == "field":
-        return base + " Show one field, rune, cloud, or trap-mark body only."
+        return base + " Show one authored field texture/composition only; preserve its explicitly authored connected parts."
     if r == "child":
-        return base + " Show one compact secondary projectile body only."
+        return base + " Show one authored child-projectile texture/composition only; preserve an explicitly authored connected multi-part body."
     return base + " Show only the item sprite."
 
 def _is_generated_usable_gear(data: dict[str, Any]) -> bool:
@@ -487,27 +486,27 @@ def family_prompt_clause(data: dict[str, Any], role: str, canvas: int) -> str:
             "free-flying spear/lance-shaped projectile body in a flight pose",
             "short readable spearhead or spectral lance aligned along its flight axis",
             "empty magenta canvas around the projectile body",
-            "one projectile only",
+            "one authored projectile texture; preserve an explicitly authored connected bundle or multi-part body inside that texture",
             str(fill),
         ])
     if runtime_family == "flail" or pattern == "flail_tether":
         return ", ".join([
             "compact flail or mace head projectile body",
             "optional short local chain segment attached to the head",
-            "one projectile head only",
+            "render the authored flail projectile body as one texture; preserve explicitly authored connected heads or parts",
             str(fill),
         ])
     if runtime_family == "yoyo" or pattern == "yoyo_hover":
         return ", ".join([
             "compact circular yoyo body sprite",
             "optional short local string nub attached to the yoyo",
-            "one yoyo only",
+            "render the authored yoyo projectile body as one texture; preserve explicitly authored connected parts",
             str(fill),
         ])
     if runtime_family == "whip" or pattern == "whip_lash":
         return ", ".join([
             "compact whip tip or short lash segment body",
-            "one readable tip or short segment only",
+            "render the authored whip projectile accent as one texture; preserve explicitly authored connected parts",
             str(fill),
         ])
     if family == "linear_side":
@@ -515,13 +514,13 @@ def family_prompt_clause(data: dict[str, Any], role: str, canvas: int) -> str:
             "canonical side-view gameplay projectile, long axis horizontal left-to-right",
             "tip/nose points right in the texture because the game rotates projectile sprites at runtime",
             "not a vertical inventory icon, not a tiny upright arrow",
-            "one projectile only",
+            "one authored projectile texture; preserve an explicitly authored connected bundle or multi-part body inside that texture",
             str(fill),
         ])
     if family == "spark_mote":
         return ", ".join([
             "compact spark or ember-like body if the authored projectile is a small spark",
-            "one projectile only",
+            "one authored projectile texture; preserve an explicitly authored connected bundle or multi-part body inside that texture",
             str(fill),
         ])
     return role_contract_prompt_clause(role, canvas)
@@ -693,18 +692,13 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     """
     role = (role or "item").lower()
     prompt = sanitize_image_prompt_background(re.sub(r"\s+", " ", str(prompt or "")).strip())
-    if role == "projectile":
-        attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-        projectile_family = str(attack.get("projectileFamily") or "").strip().lower()
-        family_tokens = {token for token in re.split(r"[^a-z0-9]+", projectile_family) if token}
-        authored_bundle = bool(family_tokens.intersection({"bundle", "cluster", "swarm", "fan", "volley"}))
-        try:
-            runtime_multiplicity = max(int(float(attack.get("shotCount") or 1)), int(float(attack.get("splitCount") or 0))) > 1
-        except (TypeError, ValueError):
-            runtime_multiplicity = False
-        prompt = sanitize_projectile_prompt_multiplicity(prompt, force_single=runtime_multiplicity and not authored_bundle)
+    # Runtime shot/split counts do not rewrite authored visual topology. The role
+    # contract already tells the image model that this file is one projectile texture;
+    # an explicitly authored bundle or multi-part projectile remains allowed.
     prompt = sanitize_projectile_family_prompt(data, role, prompt)
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
+    shared_style = compact_visual_words(kit.get("styleGuide") or visual.get("styleGuide") or "", 260)
     palette = sanitize_visual_palette(visual.get("palette") or [], limit=8)
     palette_words = ", ".join(str(x).replace("_", " ") for x in palette[:6] if str(x).strip())
     concept_raw = data.get("concept")
@@ -736,6 +730,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
             zimage_role_description(role, canvas),
             zimage_item_identity_sentence(role, data),
             zimage_subject_sentence(role, prompt, fantasy),
+            (f"Shared authored art direction: {shared_style}." if shared_style else ""),
             role_clause,
             zimage_palette_sentence(palette_words),
             zimage_text_policy_sentence(data),
@@ -750,6 +745,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         item_name_prompt_clause(role, data),
         f"item fantasy: {fantasy}" if fantasy else "",
         prompt,
+        (f"shared authored art direction: {shared_style}" if shared_style else ""),
         f"palette: {palette_words}" if palette_words else "palette: limited high-contrast named colors",
         ("one authored projectile texture only; if the authored subject is a bundle, cluster, swarm, or fan, keep it as one readable projectile bundle rather than separate copies" if role == "projectile" else ""),
         "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, centered single readable asset, keep unused area pure magenta key (#ff00ff)",
@@ -832,7 +828,7 @@ def build_projectile_image_prompt(data: dict[str, Any]) -> str:
     return ", ".join([
         "pixel art projectile sprite for a Terraria-like mod",
         sprite_background_positive_clause(),
-        "single projectile only, no item card, no player, no scene",
+        "one authored projectile texture/composition, no item card, no player, no scene; preserve an explicitly authored connected bundle or multi-part body",
         f"readable projectile silhouette filling the useful area of a {projectile_canvas}x{projectile_canvas} sprite target",
         "limited palette, crisp hard edges",
         family_prompt_clause(data, "projectile", projectile_canvas),
@@ -872,7 +868,7 @@ def build_child_image_prompt(data: dict[str, Any]) -> str:
     return ", ".join([
         "pixel art child projectile sprite for a Terraria-like mod",
         sprite_background_positive_clause(),
-        "one separate secondary projectile body only, no item card, no player, no scene",
+        "one authored child-projectile texture/composition, no item card, no player, no scene; preserve explicitly authored connected parts",
         "readable 12x12 to 24x24 silhouette",
         "crisp hard pixels, limited palette",
         role_contract_prompt_clause("child", visual_config.CHILD_SPRITE_CANVAS),

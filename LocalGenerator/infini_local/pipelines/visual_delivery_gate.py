@@ -35,7 +35,7 @@ class VisualDeliveryBlocked(RuntimeError):
 
 def _sprite_status_is_usable(status: Any) -> bool:
     s = str(status or "").strip().lower()
-    return bool(s) and s not in {"failed", "prompt_only", "placeholder", "generated_warn_invalid", "skipped", "skipped_disabled_by_settings", "skipped_not_authored_baked"}
+    return bool(s) and s not in {"failed", "prompt_only", "placeholder", "skipped", "skipped_disabled_by_settings", "skipped_not_authored_baked"}
 
 def _item_sprite_status_is_usable(status: Any) -> bool:
     s = str(status or "").strip().lower()
@@ -136,6 +136,13 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
         exists = _asset_path_exists(path)
         usable = _sprite_status_is_usable(status) and exists
         required = role == "projectile" and bool(attack.get("enabled")) and authored_asset_mode(data, "projectile") == "baked_sprite" and not runtime_plan(data)
+        if status.strip().lower() == "generated_warn_invalid" and exists:
+            warnings.append({
+                "code": f"{role}_sprite_generated_warn_invalid",
+                "status": status,
+                "path": path,
+                "message": f"{role} sprite exists and has only nonfatal fit/art warnings; deliver the AI-authored asset with diagnostics.",
+            })
         if required and not usable:
             problems.append({
                 "code": f"required_{role}_sprite_missing",

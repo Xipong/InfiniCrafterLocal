@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+import copy
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -33,14 +34,14 @@ class RuntimePlanBoundary(StrictBoundaryModel):
 
 
 class BakedAssetBoundary(StrictBoundaryModel):
-    mode: str
+    mode: Literal["baked_sprite", "particle_vfx", "reuse_item_sprite", "none"]
     prompt: str = ""
     reason: str = ""
     distinctFromItem: bool | None = None
 
 
 class AnimeReferenceBoundary(StrictBoundaryModel):
-    strength: str
+    strength: Literal["subtle", "strong"]
     source: str
     motifs: list[str] = Field(default_factory=list)
 
@@ -61,8 +62,8 @@ class VisualKitBoundary(StrictBoundaryModel):
     impactVfx: str = ""
     childVfx: str = ""
     fieldVfx: str = ""
-    vfxScaleHint: str = "normal"
-    vfxRhythmHint: str = "normal"
+    vfxScaleHint: Literal["tiny", "small", "normal", "large", "huge"] = "normal"
+    vfxRhythmHint: Literal["slow", "normal", "snappy", "delayed", "pulsing"] = "normal"
     vfxMaterialHints: list[str] = Field(default_factory=list)
     vfxAvoid: str = ""
     animationPlan: list[str] = Field(default_factory=list)
@@ -70,6 +71,16 @@ class VisualKitBoundary(StrictBoundaryModel):
     qualityNotes: list[str] = Field(default_factory=list)
     negativePrompt: str = ""
     animeReference: AnimeReferenceBoundary | None = None
+
+    @field_validator("palette", mode="before")
+    @classmethod
+    def canonicalize_palette_shape(cls, value: Any) -> Any:
+        # Shape-only repair for providers that serialize a JSON string instead of
+        # a one-dimensional string array. Palette semantics remain authored.
+        if isinstance(value, str):
+            import re
+            return [part.strip() for part in re.split(r"[,;/]", value) if part.strip()]
+        return value
 
     @field_validator("vfxMaterialHints", "animationPlan", "assetDependencies", "qualityNotes", mode="before")
     @classmethod
@@ -504,14 +515,143 @@ def runtime_plan_boundary_report(data_or_plan: Any) -> dict[str, Any]:
     return {"ok": not errors, "errors": errors, "unknownParams": unknown_params, "typedCalls": typed_params}
 
 
+_VISUAL_ROLE_PROMPT_FIELDS = {
+    "projectile": "projectileSpritePrompt",
+    "impact": "impactSpritePrompt",
+    "child": "childSpritePrompt",
+    "field": "fieldSpritePrompt",
+}
+_VISUAL_PROJECTED_PROMPT_FIELDS = {
+    "projectile": ("projectileImagePrompt", "projectileSpritePrompt"),
+    "impact": ("impactImagePrompt", "impactSpritePrompt"),
+    "child": ("childImagePrompt", "childSpritePrompt"),
+    "field": ("fieldImagePrompt", "fieldSpritePrompt"),
+}
+_VISUAL_LIST_FIELDS = (
+    "palette",
+    "vfxMaterialHints",
+    "animationPlan",
+    "assetDependencies",
+    "qualityNotes",
+)
+
+
+def canonical_visual_kit_view(value: Any, *, repairs: list[str] | None = None) -> dict[str, Any]:
+    """Validate VisualKit and collapse legacy duplicate role prompts.
+
+    New authoring has exactly one prompt field per role at VisualKit top level.
+    Old cache/replay payloads may still carry ``bakedAssets.<role>.prompt``; that
+    value is migrated only when the canonical role prompt is absent, then removed.
+    All repairs are shape/provenance migrations only; no visual meaning is inferred.
+    """
+    if not isinstance(value, dict):
+        raise TypeError("visualKit must be a JSON object")
+    raw = copy.deepcopy(value)
+    repair_log = repairs if repairs is not None else []
+
+    for legacy_key in ("silhouetteContract", "shapeContract", "itemShapeContract", "iconShapeContract"):
+        legacy_value = str(raw.get(legacy_key) or "").strip()
+        if legacy_value and not str(raw.get("itemSilhouetteContract") or "").strip():
+            raw["itemSilhouetteContract"] = legacy_value
+            repair_log.append(f"{legacy_key}:moved_to_itemSilhouetteContract")
+        raw.pop(legacy_key, None)
+
+    for field in _VISUAL_LIST_FIELDS:
+        field_value = raw.get(field)
+        if not isinstance(field_value, str):
+            continue
+        if field == "palette":
+            import re
+            raw[field] = [part.strip() for part in re.split(r"[,;/]", field_value) if part.strip()]
+            repair_log.append("palette:string_to_list")
+        else:
+            cleaned = field_value.strip()
+            raw[field] = [cleaned] if cleaned else []
+            repair_log.append(f"{field}:string_to_singleton_list")
+
+    baked_value = raw.get("bakedAssets")
+    baked: dict[str, Any] = dict(baked_value) if isinstance(baked_value, dict) else {}
+    unknown_roles = sorted(set(baked) - set(_VISUAL_ROLE_PROMPT_FIELDS))
+    if unknown_roles:
+        raise ValueError(f"visualKit.bakedAssets contains unknown roles: {unknown_roles}")
+    for role, prompt_field in _VISUAL_ROLE_PROMPT_FIELDS.items():
+        spec = baked.get(role) if isinstance(baked.get(role), dict) else None
+        if not isinstance(spec, dict):
+            continue
+        legacy_prompt = str(spec.get("prompt") or "").strip()
+        canonical_prompt = str(raw.get(prompt_field) or "").strip()
+        if legacy_prompt and not canonical_prompt:
+            raw[prompt_field] = legacy_prompt
+            repair_log.append(f"bakedAssets.{role}.prompt:moved_to_{prompt_field}")
+        elif legacy_prompt and canonical_prompt and legacy_prompt != canonical_prompt:
+            repair_log.append(f"bakedAssets.{role}.prompt:discarded_duplicate_of_{prompt_field}")
+        spec.pop("prompt", None)
+        baked[role] = spec
+    raw["bakedAssets"] = baked
+
+    parsed = VisualKitBoundary.model_validate(raw)
+    out: dict[str, Any] = parsed.model_dump(exclude_none=True)
+    out_baked_value = out.get("bakedAssets")
+    out_baked: dict[str, Any] = dict(out_baked_value) if isinstance(out_baked_value, dict) else {}
+    for role, spec in out_baked.items():
+        if not isinstance(spec, dict):
+            continue
+        spec.pop("prompt", None)
+        mode = str(spec.get("mode") or "")
+        distinct = spec.get("distinctFromItem")
+        if mode == "reuse_item_sprite" and role != "projectile":
+            raise ValueError("reuse_item_sprite is valid only for the projectile role")
+        if distinct is not None and role != "projectile":
+            raise ValueError("distinctFromItem is valid only for the projectile role")
+        if distinct is True and mode != "baked_sprite":
+            raise ValueError("distinctFromItem=true requires projectile mode=baked_sprite")
+    return out
+
+
 def validate_visual_kit_boundary(value: Any) -> dict[str, Any]:
-    parsed = VisualKitBoundary.model_validate(value)
-    return parsed.model_dump(exclude_none=True)
+    return canonical_visual_kit_view(value)
 
 
 def validate_vfx_manifest_boundary(value: Any) -> dict[str, Any]:
     parsed = VfxManifestBoundary.model_validate(value)
     return parsed.model_dump(exclude_none=True, by_alias=True)
+
+
+def validate_visual_authoring_boundaries(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate presentation-authoring contracts independently of gameplay DTOs.
+
+    VisualKit and VFX manifest are not C# gameplay-authoring surfaces, so they stay
+    outside ``validate_executable_item_boundary``. Fresh crafts and cache hits must
+    nevertheless pass the same strict presentation boundaries before delivery.
+    """
+    normalized: dict[str, Any] = {}
+    if "visualKit" in data:
+        kit: dict[str, Any] = canonical_visual_kit_view(data.get("visualKit"))
+        visual_value = data.get("visual")
+        attack_value = data.get("attack")
+        visual: dict[str, Any] = visual_value if isinstance(visual_value, dict) else {}
+        attack: dict[str, Any] = attack_value if isinstance(attack_value, dict) else {}
+        baked_value = kit.get("bakedAssets")
+        baked: dict[str, Any] = dict(baked_value) if isinstance(baked_value, dict) else {}
+        for role, prompt_field in _VISUAL_ROLE_PROMPT_FIELDS.items():
+            spec_value = baked.get(role)
+            spec: dict[str, Any] = spec_value if isinstance(spec_value, dict) else {}
+            if str(spec.get("mode") or "") != "baked_sprite":
+                continue
+            prompt = str(
+                kit.get(prompt_field)
+                or visual.get(f"{role}ImagePrompt")
+                or attack.get(f"{role}SpritePrompt")
+                or ""
+            ).strip()
+            if not prompt:
+                raise ValueError(
+                    f"visualKit.bakedAssets.{role}: baked_sprite requires an authored role prompt"
+                )
+        normalized["visualKit"] = kit
+    if "vfxManifest" in data:
+        normalized["vfxManifest"] = validate_vfx_manifest_boundary(data.get("vfxManifest"))
+    return normalized
 
 
 def executable_wire_view(data: dict[str, Any]) -> dict[str, Any]:
@@ -586,6 +726,7 @@ __all__ = [
     "BuffEntryBoundary", "GeneratedBuffBoundary", "RuntimeStateBoundary",
     "VisualKitBoundary", "VfxManifestBoundary", "GameplaySpecBoundary", "AttackSpecBoundary",
     "ATTACK_DEBUG_ONLY_FIELDS", "GAMEPLAY_DEBUG_ONLY_FIELDS", "REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS",
-    "runtime_plan_boundary_report", "validate_visual_kit_boundary",
-    "validate_vfx_manifest_boundary", "validate_executable_item_boundary", "executable_wire_view",
+    "runtime_plan_boundary_report", "canonical_visual_kit_view", "validate_visual_kit_boundary",
+    "validate_vfx_manifest_boundary", "validate_visual_authoring_boundaries",
+    "validate_executable_item_boundary", "executable_wire_view",
 ]

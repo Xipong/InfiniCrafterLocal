@@ -6,7 +6,10 @@ from typing import Any
 
 from infini_local.core import dev_fallback
 
-from infini_local.core.boundary_models import validate_executable_item_boundary
+from infini_local.core.boundary_models import (
+    validate_executable_item_boundary,
+    validate_visual_authoring_boundaries,
+)
 
 from infini_local.core.config_bootstrap import (
     APP_VERSION,
@@ -52,6 +55,7 @@ from infini_local.pipelines.visual_generation_pipeline import (
     apply_visual_director,
     attach_visual,
 )
+from infini_local.pipelines.visual_asset_plan import finalize_visual_asset_runtime_gates
 from infini_local.pipelines.visual_delivery_gate import assert_visual_delivery_ready, visual_delivery_report
 from infini_local.pipelines.visual_sprite_generation import maybe_generate_visual_assets
 from infini_local.services import asset_sync_service
@@ -69,6 +73,17 @@ from infini_local.storage.world_recipe_runtime import (
 )
 
 
+
+
+
+def _validate_and_project_visual_authoring_boundaries(data: dict[str, Any]) -> dict[str, Any]:
+    """Apply shape-only visual cache migration, then validate VFX authoring data."""
+    normalized = validate_visual_authoring_boundaries(data)
+    if "visualKit" in normalized:
+        data["visualKit"] = normalized["visualKit"]
+    # VFX is validated but not rewritten here: its frozen JSON is already mirrored
+    # into AttackSpec for C# runtime consumption and must stay byte-consistent.
+    return data
 
 # AGENT MAP: main /combine pipeline spine. The important shape is:
 # request payload -> parent/world context -> LLM or fallback authored data ->
@@ -132,11 +147,14 @@ def _cached_payload_passes_executable_boundary(
     """
     try:
         validate_executable_item_boundary(cached)
+        normalized = validate_visual_authoring_boundaries(cached)
+        if "visualKit" in normalized:
+            cached["visualKit"] = normalized["visualKit"]
     except Exception as exc:
         trace_event(
             "step",
             "COMBINE:cache",
-            "cached recipe ignored because executable boundary is invalid",
+            "cached recipe ignored because a strict contract boundary is invalid",
             {
                 "recipeKey": recipe_key_value,
                 "source": str(source or "cache"),
@@ -278,14 +296,17 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("08_visual_director_asset_pack", apply_visual_director, data, a, b, ca, cb)
         data = step("08b_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="post_visual_director")
         step("08c_strict_executable_preflight", validate_executable_item_boundary, data)
+        data = step("08d_hybrid_vfx_manifest", attach_hybrid_vfx_manifest, data, key, "", a, b, call_llm_vfx_director if USE_LLM else None)
+        data = step("08e_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
+        data = step("08f_strict_visual_authoring_boundaries", _validate_and_project_visual_authoring_boundaries, data)
         data = step("09_visual_asset_generation", maybe_generate_visual_assets, data)
         data = step("09b_visual_delivery_gate", assert_visual_delivery_ready, data)
-        data = step("10_hybrid_vfx_manifest", attach_hybrid_vfx_manifest, data, key, "", a, b, call_llm_vfx_director if USE_LLM else None)
         data = step("11_generated_parent_summary", attach_generated_parent_summary, data)
         data = step("11a_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="final_pre_boundary")
         step("11b_strict_executable_boundary", validate_executable_item_boundary, data)
         data = step("12_final_normalize", final_normalize, data)
         step("12b_strict_executable_boundary", validate_executable_item_boundary, data)
+        data = step("12c_strict_visual_authoring_boundaries", _validate_and_project_visual_authoring_boundaries, data)
         data.setdefault("recipeMeta", {})["worldScoped"] = True
         data.setdefault("recipeMeta", {})["worldId"] = world_id
         data.setdefault("recipeMeta", {})["worldName"] = world_name

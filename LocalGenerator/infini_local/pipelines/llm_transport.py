@@ -211,17 +211,27 @@ def llm_headers(extra: dict[str, str] | None = None, context: dict[str, Any] | N
         headers.update(extra)
     return headers
 
-def llm_json_response_format(name: str = "infini_json") -> dict[str, Any] | None:
+def llm_json_response_format(
+    name: str = "infini_json",
+    *,
+    schema: dict[str, Any] | None = None,
+    strict: bool = False,
+) -> dict[str, Any] | None:
     """OpenAI-compatible structured JSON hint.
 
-    Local LM Studio usually handles json_schema well. Remote gateways/models vary, so
-    INFINI_LLM_RESPONSE_FORMAT can be set to json_schema/json_object/off. In auto mode
-    remote APIs use json_object and llm_chat_json retries without response_format if a
-    provider rejects the field.
+    Callers may supply their real boundary schema. In auto mode, a supplied schema
+    is attempted on every OpenAI-compatible provider; ``llm_chat_json`` retries
+    without the field when a gateway rejects it. Calls without a schema keep the
+    conservative remote ``json_object`` behavior. The Pydantic boundary remains
+    authoritative in every mode.
     """
     mode = LLM_RESPONSE_FORMAT_MODE
     if mode == "auto":
-        mode = "json_schema" if active_llm_provider() == "local" else "json_object"
+        # When a caller supplies a real schema, try it on every OpenAI-compatible
+        # provider. llm_chat_json already retries without response_format when a
+        # gateway rejects json_schema, so remote capability variance does not need
+        # to weaken the first attempt. Callers without a schema keep the old policy.
+        mode = "json_schema" if schema is not None or active_llm_provider() == "local" else "json_object"
     if mode in {"off", "none", "0", "false", "disabled"}:
         return None
     if mode == "json_object":
@@ -230,8 +240,8 @@ def llm_json_response_format(name: str = "infini_json") -> dict[str, Any] | None
         "type": "json_schema",
         "json_schema": {
             "name": name,
-            "strict": False,
-            "schema": {"type": "object", "additionalProperties": True},
+            "strict": bool(strict),
+            "schema": schema or {"type": "object", "additionalProperties": True},
         },
     }
 
@@ -551,7 +561,19 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context
         try:
             if label != "original":
                 log_event("warn", "retrying LLM request with reduced compatibility fields", {"provider": active_llm_provider(context), "mode": label, "label": context.get("label")})
-            return http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
+            result = http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
+            if isinstance(result, dict):
+                debug = result.get("_debug") if isinstance(result.get("_debug"), dict) else {}
+                result["_debug"] = {
+                    **debug,
+                    "requestMode": label,
+                    "provider": active_llm_provider(context),
+                    "responseFormatRequested": bool(payload.get("response_format")),
+                    "responseFormatUsed": bool(candidate.get("response_format")),
+                    "reasoningRequested": bool(payload.get("reasoning")),
+                    "reasoningUsed": bool(candidate.get("reasoning")),
+                }
+            return result
         except urlerror.HTTPError as e:
             body = ""
             try:

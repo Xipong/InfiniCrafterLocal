@@ -136,18 +136,24 @@ def validate_and_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
         data.setdefault("accessory", {})["enabled"] = True
         data.setdefault("attack", {})["enabled"] = False
 
-    # Required visual anchors must include hard visual anchors.
+    # Keep author-owned required anchors separate from code-derived parent context.
+    # Parent facts must reach the Visual Director, but code must not silently turn them
+    # into mandatory literal parts of the final design.
     visual = data.setdefault("visual", {})
-    anchors = list(visual.get("requiredAnchors") or [])
+    authored_anchors = [str(x).strip() for x in (visual.get("requiredAnchors") or []) if str(x).strip()]
+    visual["requiredAnchors"] = list(dict.fromkeys(authored_anchors))[:10]
+    data["debug"]["visualRequiredAnchorsSource"] = "planner_authored" if authored_anchors else "none"
+
+    parent_visual_context: list[str] = []
     for c in (ca, cb):
         hard_tags = {
             str(tag).strip().lower()
             for tag in (c.get("hardTags") or [])
             if str(tag).strip()
         }
-        anchors.extend(required_anchors_from_tags(hard_tags))
-        anchors.extend(str(x) for x in (c.get("visualAnchors") or []) if str(x).strip())
-    visual["requiredAnchors"] = list(dict.fromkeys([a for a in anchors if a]))[:10]
+        parent_visual_context.extend(required_anchors_from_tags(hard_tags))
+        parent_visual_context.extend(str(x).strip() for x in (c.get("visualAnchors") or []) if str(x).strip())
+    visual["parentVisualContext"] = list(dict.fromkeys(parent_visual_context))[:16]
     raw_palette = visual.get("palette")
     if isinstance(raw_palette, list) and raw_palette:
         visual["palette"] = [str(x) for x in raw_palette if str(x).strip()][:8]
