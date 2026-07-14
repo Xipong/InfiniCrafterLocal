@@ -11,7 +11,7 @@ from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_p
 from infini_local.services.visual_asset_pipeline import strip_conflicting_sprite_prompt_bits
 
 
-def test_incompatible_second_primary_cannot_override_first_executor() -> None:
+def _contract_check_incompatible_second_primary_cannot_override_first_executor() -> None:
     data = {
         "category": "weapon",
         "runtimePlan": {
@@ -31,7 +31,7 @@ def test_incompatible_second_primary_cannot_override_first_executor() -> None:
     assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
 
 
-def test_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routing() -> None:
+def _contract_check_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routing() -> None:
     data = {
         "category": "weapon",
         "itemKnowledge": {
@@ -57,7 +57,7 @@ def test_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routi
     assert patch["primaryColorName"] == "orange"
 
 
-def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) -> None:
+def _contract_check_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) -> None:
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     data = {
         "id": "bench_blade",
@@ -65,7 +65,7 @@ def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) ->
         "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {"resultKind": "weapon"}}]},
         "attack": {"enabled": True, "runtimeFamily": "swing", "delivery": "swing", "disableItemMeleeHitbox": False},
         "visual": {"imagePrompt": "heavy wooden bench blade", "projectileImagePrompt": "spinning table plank"},
-        "visualKit": {"bakedAssets": {"projectile": {"mode": "baked_sprite", "prompt": "spinning table plank"}}},
+        "visualKit": {"bakedAssets": {"projectile": {"mode": "baked_sprite", "prompt": "spinning table plank", "distinctFromItem": True}}},
     }
 
     plan = build_visual_asset_plan(data)
@@ -73,10 +73,11 @@ def test_melee_swing_runtime_gates_wasted_projectile_baked_asset(monkeypatch) ->
 
     assert projectile["status"] == "skipped_not_authored_baked"
     assert projectile["assetMode"] == "particle_vfx"
+    assert "distinctFromItem" not in data["visualKit"]["bakedAssets"]["projectile"]
     assert "melee_swing_uses_item_sprite_no_projectile_asset" in data["debug"]["visualAssetRuntimeGates"]
 
 
-def test_field_baked_asset_requires_compiled_field_runtime(monkeypatch) -> None:
+def _contract_check_field_baked_asset_requires_compiled_field_runtime(monkeypatch) -> None:
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
     data = {
         "id": "lantern_dart",
@@ -90,12 +91,12 @@ def test_field_baked_asset_requires_compiled_field_runtime(monkeypatch) -> None:
     plan = build_visual_asset_plan(data)
     field = next(x for x in plan if x["role"] == "field")
 
-    assert field["status"] == "skipped_not_authored_baked"
+    assert field["status"] == "skipped_runtime_unused"
     assert field["assetMode"] == "none"
     assert "no_compiled_field_runtime_or_vfx_slot" in data["debug"]["visualAssetRuntimeGates"]
 
 
-def test_zimage_prompt_sanitizer_strips_sprite_resolution_tokens() -> None:
+def _contract_check_zimage_prompt_sanitizer_strips_sprite_resolution_tokens() -> None:
     cleaned = strip_conflicting_sprite_prompt_bits(
         "glowing purple wooden splinter, sharp, dark trail, 16x16 pixel art, 24x24 resolution"
     ).lower()
@@ -104,3 +105,20 @@ def test_zimage_prompt_sanitizer_strips_sprite_resolution_tokens() -> None:
     assert "24x24" not in cleaned
     assert "resolution" not in cleaned
     assert "pixel art" in cleaned
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_233_gameplay_truth_visual_discipline_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_incompatible_second_primary_cannot_override_first_executor',
+            '_contract_check_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routing',
+            '_contract_check_melee_swing_runtime_gates_wasted_projectile_baked_asset',
+            '_contract_check_field_baked_asset_requires_compiled_field_runtime',
+            '_contract_check_zimage_prompt_sanitizer_strips_sprite_resolution_tokens',
+        ),
+    )

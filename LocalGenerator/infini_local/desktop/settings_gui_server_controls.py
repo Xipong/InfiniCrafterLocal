@@ -353,6 +353,15 @@ class SettingsGuiServerControlsMixin:
                 warnings.append("Qwen/LLM пустой: для FLUX.2 Klein и Z-Image обычно нужен Qwen3 *.gguf.")
         if data.get("INFINI_LLM_PROVIDER") == "openrouter" and not data.get("INFINI_OPENROUTER_API_KEY"):
             warnings.append("OpenRouter выбран, но API key пустой.")
+        for slot in (2, 3, 4):
+            prefix = f"INFINI_LLM_POOL_{slot}_"
+            if data.get(prefix + "ENABLED") != "1":
+                continue
+            provider = (data.get(prefix + "PROVIDER") or "openai_compat").strip().lower()
+            if not (data.get(prefix + "MODEL") or "").strip():
+                warnings.append(f"LLM {slot} включён, но Model пустой — profile не попадёт в round-robin pool.")
+            if provider == "openrouter" and not (data.get(prefix + "API_KEY") or "").strip():
+                warnings.append(f"LLM {slot}: OpenRouter выбран, но API key пустой.")
         if backend == "image_api" and not data.get("INFINI_IMAGE_API_KEY"):
             warnings.append("Image API выбран, но API key пустой.")
         if self.radmin_enabled.get():

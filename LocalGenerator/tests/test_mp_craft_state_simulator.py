@@ -26,7 +26,7 @@ def _slot(type_: int, stack: int = 1, **kw) -> Slot:
     return Slot(type=type_, stack=stack, **kw)
 
 
-def test_success_grants_item_once():
+def _contract_check_success_grants_item_once():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75, 3), _slot(43, 2)))  # Wood 75, Copper 43
     rid = sim.begin_client_craft_request(0)
@@ -42,7 +42,7 @@ def test_success_grants_item_once():
     assert sim.get_player(0).server_has_pending is False
 
 
-def test_timeout_cancel_then_late_response_does_not_grant():
+def _contract_check_timeout_cancel_then_late_response_does_not_grant():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75), _slot(43)))
     rid = sim.begin_client_craft_request(0)
@@ -57,7 +57,7 @@ def test_timeout_cancel_then_late_response_does_not_grant():
     assert sim.get_player(0).revealed_item is None
 
 
-def test_cancel_after_server_debit_refunds_ingredients_once():
+def _contract_check_cancel_after_server_debit_refunds_ingredients_once():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75), _slot(43)))
     rid = sim.begin_client_craft_request(0)
@@ -72,7 +72,7 @@ def test_cancel_after_server_debit_refunds_ingredients_once():
     assert len(player.refunded_slots) == 2, "ingredients must be refunded exactly once"
 
 
-def test_old_late_response_does_not_mix_with_new_request():
+def _contract_check_old_late_response_does_not_mix_with_new_request():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75), _slot(43), _slot(9), _slot(71)))  # 2 pairs
     rid1 = sim.begin_client_craft_request(0)
@@ -90,7 +90,7 @@ def test_old_late_response_does_not_mix_with_new_request():
     assert player.revealed_item == "New Item"
 
 
-def test_second_craft_after_timeout_works():
+def _contract_check_second_craft_after_timeout_works():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75, 2), _slot(43, 2)))
     rid1 = sim.begin_client_craft_request(0)
@@ -105,7 +105,7 @@ def test_second_craft_after_timeout_works():
     assert sim.get_player(0).revealed_item == "Second Item"
 
 
-def test_invalid_client_packet_cannot_craft_from_nonexistent_slots():
+def _contract_check_invalid_client_packet_cannot_craft_from_nonexistent_slots():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv())  # empty inventory
     rid = sim.begin_client_craft_request(0)
@@ -117,7 +117,7 @@ def test_invalid_client_packet_cannot_craft_from_nonexistent_slots():
     assert sim.get_player(0).refunded_slots == []
 
 
-def test_favorited_items_are_not_spent():
+def _contract_check_favorited_items_are_not_spent():
     sim = CraftStateSimulator()
     fav = _slot(75, 1, favorited=True)
     ok_slot = _slot(75, 2)
@@ -131,7 +131,7 @@ def test_favorited_items_are_not_spent():
     assert inv[1].stack == 1  # 2-1 spent
 
 
-def test_server_invalid_generated_items_are_not_spent():
+def _contract_check_server_invalid_generated_items_are_not_spent():
     """A slot with valid_ingredient=False (InfiniCore.IsValidIngredient false) must not be spent."""
     sim = CraftStateSimulator()
     invalid = _slot(75, 1, valid_ingredient=False)
@@ -145,7 +145,7 @@ def test_server_invalid_generated_items_are_not_spent():
     assert inv[1].stack == 1  # valid spent
 
 
-def test_duplicate_request_returns_committed_name():
+def _contract_check_duplicate_request_returns_committed_name():
     """Re-sending the same request id after success returns a duplicate ack, no new craft."""
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75, 2), _slot(43, 2)))
@@ -162,7 +162,7 @@ def test_duplicate_request_returns_committed_name():
     assert inv[0].stack == 1 and inv[1].stack == 1
 
 
-def test_pending_craft_blocks_new_request():
+def _contract_check_pending_craft_blocks_new_request():
     sim = CraftStateSimulator()
     sim.set_inventory(0, _inv(_slot(75, 2), _slot(43, 2)))
     rid1 = sim.begin_client_craft_request(0)
@@ -173,3 +173,25 @@ def test_pending_craft_blocks_new_request():
     ok, name, msg = sim.handle_request_server_craft(0, rid2, CraftItemRef(75), CraftItemRef(43))
     assert ok is False
     assert "уже есть активный" in msg
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_mp_craft_state_simulator_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_success_grants_item_once',
+            '_contract_check_timeout_cancel_then_late_response_does_not_grant',
+            '_contract_check_cancel_after_server_debit_refunds_ingredients_once',
+            '_contract_check_old_late_response_does_not_mix_with_new_request',
+            '_contract_check_second_craft_after_timeout_works',
+            '_contract_check_invalid_client_packet_cannot_craft_from_nonexistent_slots',
+            '_contract_check_favorited_items_are_not_spent',
+            '_contract_check_server_invalid_generated_items_are_not_spent',
+            '_contract_check_duplicate_request_returns_committed_name',
+            '_contract_check_pending_craft_blocks_new_request',
+        ),
+    )

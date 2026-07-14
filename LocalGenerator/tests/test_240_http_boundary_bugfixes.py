@@ -216,7 +216,7 @@ class _CaptureHandler:
         self.called += 1
 
 
-def test_get_asset_route_stays_available_to_remote_peer_and_control_routes_stay_loopback_bound() -> None:
+def _contract_check_get_asset_route_stays_available_to_remote_peer_and_control_routes_stay_loopback_bound() -> None:
     Handler = _make_boundary_handler_class()
     remote_address = ("198.51.100.20", 1234)
 
@@ -243,7 +243,7 @@ def test_get_asset_route_stays_available_to_remote_peer_and_control_routes_stay_
     assert control_capture.payload["error"] == "loopback_only"
 
 
-def test_ipv4_mapped_loopback_is_still_allowed_for_control_routes() -> None:
+def _contract_check_ipv4_mapped_loopback_is_still_allowed_for_control_routes() -> None:
     Handler = _make_boundary_handler_class()
     handler, capture = _make_handler(
         Handler,
@@ -257,7 +257,7 @@ def test_ipv4_mapped_loopback_is_still_allowed_for_control_routes() -> None:
     assert capture.payload == {"ok": True, "route": "combine"}
 
 
-def test_remote_post_control_route_is_denied_and_body_is_not_read() -> None:
+def _contract_check_remote_post_control_route_is_denied_and_body_is_not_read() -> None:
     Handler = _make_boundary_handler_class()
     rfile = _NoReadFile()
     handler, capture = _make_handler(
@@ -273,7 +273,7 @@ def test_remote_post_control_route_is_denied_and_body_is_not_read() -> None:
     assert rfile.read_calls == 0
 
 
-def test_boundary_route_classification_rejects_shutdown_prefix_and_allows_allowed_assets() -> None:
+def _contract_check_boundary_route_classification_rejects_shutdown_prefix_and_allows_allowed_assets() -> None:
     Handler = _make_boundary_handler_class()
     handler, _ = _make_handler(
         Handler,
@@ -291,7 +291,7 @@ def test_boundary_route_classification_rejects_shutdown_prefix_and_allows_allowe
     assert handler._route_requires_loopback("/health", is_post=False) is False
 
 
-def test_utility_shutdown_route_match_is_exact_with_query_string_allowed() -> None:
+def _contract_check_utility_shutdown_route_match_is_exact_with_query_string_allowed() -> None:
     tmp_path = Path("/tmp/http-boundary-test")
     tmp_path.mkdir(parents=True, exist_ok=True)
     routes = _build_shutdown_routes(tmp_path)
@@ -306,7 +306,7 @@ def test_utility_shutdown_route_match_is_exact_with_query_string_allowed() -> No
     assert handler.called == 0
 
 
-def test_post_payload_length_limit_rejects_too_large_body_without_reading() -> None:
+def _contract_check_post_payload_length_limit_rejects_too_large_body_without_reading() -> None:
     Handler = _make_boundary_handler_class()
     rfile = _NoReadFile()
     handler, capture = _make_handler(
@@ -323,7 +323,7 @@ def test_post_payload_length_limit_rejects_too_large_body_without_reading() -> N
     assert rfile.read_calls == 0
 
 
-def test_post_negative_content_length_is_rejected() -> None:
+def _contract_check_post_negative_content_length_is_rejected() -> None:
     Handler = _make_boundary_handler_class()
     rfile = _NoReadFile()
     handler, capture = _make_handler(
@@ -340,7 +340,7 @@ def test_post_negative_content_length_is_rejected() -> None:
     assert rfile.read_calls == 0
 
 
-def test_post_body_read_timeout_uses_bounded_timeout_and_returns_408() -> None:
+def _contract_check_post_body_read_timeout_uses_bounded_timeout_and_returns_408() -> None:
     Handler = _make_boundary_handler_class()
     rfile = _BlockingReadFile()
     handler, capture = _make_handler(
@@ -359,7 +359,7 @@ def test_post_body_read_timeout_uses_bounded_timeout_and_returns_408() -> None:
     assert handler.connection.set_calls[1] is None
 
 
-def test_vfx_debug_get_routes_require_an_exact_parsed_path() -> None:
+def _contract_check_vfx_debug_get_routes_require_an_exact_parsed_path() -> None:
     routes = object.__new__(VfxDebugRoutes)
     object.__setattr__(routes, "recipe_matrix", lambda: {"route": "matrix"})
     handler = _CaptureHandler()
@@ -370,7 +370,7 @@ def test_vfx_debug_get_routes_require_an_exact_parsed_path() -> None:
     assert handler.json_payload == {"route": "matrix"}
 
 
-def test_vfx_debug_post_routes_require_an_exact_parsed_path() -> None:
+def _contract_check_vfx_debug_post_routes_require_an_exact_parsed_path() -> None:
     routes = object.__new__(VfxDebugRoutes)
     object.__setattr__(routes, "select_manifest", lambda payload: {"payload": payload})
     handler = _CaptureHandler()
@@ -379,3 +379,25 @@ def test_vfx_debug_post_routes_require_an_exact_parsed_path() -> None:
     assert handler.called == 0
     assert routes.handle_post(handler, "/debug/vfx_select?dryRun=1", {"x": 1}) is True
     assert handler.json_payload == {"payload": {"x": 1}}
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_240_http_boundary_bugfixes_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_get_asset_route_stays_available_to_remote_peer_and_control_routes_stay_loopback_bound',
+            '_contract_check_ipv4_mapped_loopback_is_still_allowed_for_control_routes',
+            '_contract_check_remote_post_control_route_is_denied_and_body_is_not_read',
+            '_contract_check_boundary_route_classification_rejects_shutdown_prefix_and_allows_allowed_assets',
+            '_contract_check_utility_shutdown_route_match_is_exact_with_query_string_allowed',
+            '_contract_check_post_payload_length_limit_rejects_too_large_body_without_reading',
+            '_contract_check_post_negative_content_length_is_rejected',
+            '_contract_check_post_body_read_timeout_uses_bounded_timeout_and_returns_408',
+            '_contract_check_vfx_debug_get_routes_require_an_exact_parsed_path',
+            '_contract_check_vfx_debug_post_routes_require_an_exact_parsed_path',
+        ),
+    )

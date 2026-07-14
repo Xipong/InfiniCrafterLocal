@@ -28,6 +28,38 @@ LLM_FALLBACK_BASE_URL = env_str("INFINI_LLM_FALLBACK_BASE_URL", "").rstrip("/")
 LLM_FALLBACK_API_KEY = env_str("INFINI_LLM_FALLBACK_API_KEY", "")
 LLM_FALLBACK_NETWORK_FAILS = env_int("INFINI_LLM_FALLBACK_NETWORK_FAILS", 2, lo=1, hi=10)
 
+LLM_API_MODE = env_str("INFINI_LLM_API_MODE", "auto").strip().lower()
+LLM_POOL_FAILURE_COOLDOWN_SECONDS = env_int("INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS", 45)
+LLM_POOL_PROFILES = (
+    {
+        "id": "llm_2",
+        "enabled": env_bool("INFINI_LLM_POOL_2_ENABLED", False),
+        "provider": env_str("INFINI_LLM_POOL_2_PROVIDER", "openai_compat").lower(),
+        "base_url": env_str("INFINI_LLM_POOL_2_BASE_URL", "").rstrip("/"),
+        "api_key": env_str("INFINI_LLM_POOL_2_API_KEY", ""),
+        "model": env_str("INFINI_LLM_POOL_2_MODEL", ""),
+        "api_mode": env_str("INFINI_LLM_POOL_2_API_MODE", "auto").lower(),
+    },
+    {
+        "id": "llm_3",
+        "enabled": env_bool("INFINI_LLM_POOL_3_ENABLED", False),
+        "provider": env_str("INFINI_LLM_POOL_3_PROVIDER", "openai_compat").lower(),
+        "base_url": env_str("INFINI_LLM_POOL_3_BASE_URL", "").rstrip("/"),
+        "api_key": env_str("INFINI_LLM_POOL_3_API_KEY", ""),
+        "model": env_str("INFINI_LLM_POOL_3_MODEL", ""),
+        "api_mode": env_str("INFINI_LLM_POOL_3_API_MODE", "auto").lower(),
+    },
+    {
+        "id": "llm_4",
+        "enabled": env_bool("INFINI_LLM_POOL_4_ENABLED", False),
+        "provider": env_str("INFINI_LLM_POOL_4_PROVIDER", "openai_compat").lower(),
+        "base_url": env_str("INFINI_LLM_POOL_4_BASE_URL", "").rstrip("/"),
+        "api_key": env_str("INFINI_LLM_POOL_4_API_KEY", ""),
+        "model": env_str("INFINI_LLM_POOL_4_MODEL", ""),
+        "api_mode": env_str("INFINI_LLM_POOL_4_API_MODE", "auto").lower(),
+    },
+)
+
 LLM_RESPONSE_FORMAT_MODE = env_str("INFINI_LLM_RESPONSE_FORMAT", "auto").lower()
 LLM_MAX_TOKENS = env_int("INFINI_LLM_MAX_TOKENS", 9000, lo=256, hi=64000)
 LLM_REASONING_MODE = env_str("INFINI_LLM_REASONING_MODE", "off").lower()

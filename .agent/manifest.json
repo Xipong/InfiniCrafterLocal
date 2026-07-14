@@ -50,9 +50,7 @@
     ],
     "planner_prompt": [
       "python",
-      "tools/check_planner_prompt_usability.py",
-      "--limit-chars",
-      "24000"
+      "tools/check_planner_prompt_usability.py"
     ],
     "project_hygiene": [
       "python",

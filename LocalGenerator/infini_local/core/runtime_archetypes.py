@@ -246,7 +246,7 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
     spec = normalize_runtime_archetype(raw_spec)
     data["runtimeArchetype"] = spec
     family = spec["family"]
-    knobs = spec.get("overrideKnobs") if isinstance(spec.get("overrideKnobs"), dict) else {}
+    knobs: dict[str, Any] = dict(spec.get("overrideKnobs") or {}) if isinstance(spec.get("overrideKnobs"), dict) else {}
     report: dict[str, Any] = {
         "schema": "infini.archetype-compiler-report.v1",
         "active": True,
@@ -264,13 +264,16 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
                 patch[key] = value
                 report["appliedFields"][key] = value
 
+    consumed_knobs: set[str] = set()
+
     if family == "custom_executor":
         report["supportStatus"] = "executable"
     elif family == "boomerang":
         apply(runtimeFamily="returning", delivery="throw", movement="boomerang", weaponFamily="boomerang", archetypePhaseModel="outbound_return")
-        for key in ["returnDelayTicks", "outboundPierce", "returnPierce", "localImmunityTicks", "trailProfile"]:
-            if key in knobs:
-                patch[key] = knobs[key]
+        if "localImmunityTicks" in knobs:
+            patch["immunityCooldown"] = knobs["localImmunityTicks"]
+            report["appliedFields"]["immunityCooldown"] = knobs["localImmunityTicks"]
+            consumed_knobs.add("localImmunityTicks")
         patch["boomerangHitEstimate"] = boomerang_hit_estimate_from_patch(patch)
         report["supportStatus"] = "executable"
     elif family == "yoyo":
@@ -293,12 +296,15 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
         if "beamWidthPx" in knobs:
             patch["beamWidthPx"] = knobs["beamWidthPx"]
             report["appliedFields"]["beamWidthPx"] = knobs["beamWidthPx"]
+            consumed_knobs.add("beamWidthPx")
         if "chargeTicks" in knobs:
             patch["beamChargeTicks"] = knobs["chargeTicks"]
             report["appliedFields"]["beamChargeTicks"] = knobs["chargeTicks"]
+            consumed_knobs.add("chargeTicks")
         if "localImmunityTicks" in knobs:
             patch["immunityCooldown"] = knobs["localImmunityTicks"]
             report["appliedFields"]["immunityCooldown"] = knobs["localImmunityTicks"]
+            consumed_knobs.add("localImmunityTicks")
         if "activeTicks" in knobs:
             report["warnings"].append("activeTicks_not_executed_for_hold_until_release_beam")
         report["supportStatus"] = "executable"
@@ -307,9 +313,11 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
         if "chargeTicks" in knobs:
             patch["chargeTicks"] = knobs["chargeTicks"]
             report["appliedFields"]["chargeTicks"] = knobs["chargeTicks"]
+            consumed_knobs.add("chargeTicks")
         if "chargePowerMultiplier" in knobs:
             patch["chargePowerMultiplier"] = knobs["chargePowerMultiplier"]
             report["appliedFields"]["chargePowerMultiplier"] = knobs["chargePowerMultiplier"]
+            consumed_knobs.add("chargePowerMultiplier")
         report["supportStatus"] = "executable"
     elif family == "sentry":
         apply(runtimeFamily="sentry", delivery="summon", archetypePhaseModel="none", channelUse=False, hideUseGraphic=False, disableItemMeleeHitbox=True, ownerHitCheck=False)
@@ -326,6 +334,8 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
             disableItemMeleeHitbox=True,
         )
         patch["delayTicks"] = knobs.get("chargeTicks", patch.get("delayTicks", 30))
+        if "chargeTicks" in knobs:
+            consumed_knobs.add("chargeTicks")
         apply_overhead_barrage_contract(patch)
         report["appliedFields"].update({
             "delayTicks": patch["delayTicks"],
@@ -338,6 +348,15 @@ def compile_runtime_archetype_to_attack_patch(data: dict[str, Any], patch: dict[
         report["supportStatus"] = spec.get("supportStatus") or "preserved_intent"
         report["warnings"].append(f"{family}_preserved_not_executed")
         _append_unique_list(data, "unsupportedPromises", [f"unsupported:{family}"])
+
+    unused_knobs = sorted(set(knobs) - consumed_knobs)
+    if unused_knobs:
+        report["warnings"].extend(f"overrideKnob_not_executed:{key}" for key in unused_knobs)
+        _append_unique_list(
+            data,
+            "unsupportedPromises",
+            [f"runtimeArchetype.overrideKnob_not_executed:{key}" for key in unused_knobs],
+        )
 
     patch["archetypeCompiler"] = report
     return patch, report

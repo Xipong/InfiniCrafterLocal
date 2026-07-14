@@ -14,7 +14,7 @@ from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
 
 
-def test_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted() -> None:
+def _contract_check_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted() -> None:
     data = {
         "category": "weapon",
         "runtimePlan": {
@@ -42,7 +42,7 @@ def test_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted()
     assert patch["secondaryPreservedAlongsidePrimaryOnHit"] == "lifesteal"
 
 
-def test_compiled_swing_secondary_keeps_visual_director_child_mode(monkeypatch) -> None:
+def _contract_check_compiled_swing_secondary_keeps_visual_director_child_mode(monkeypatch) -> None:
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
     data = {
@@ -78,14 +78,14 @@ def test_compiled_swing_secondary_keeps_visual_director_child_mode(monkeypatch) 
     assert child["status"] == "skipped_not_authored_baked"
 
 
-def test_hold_light_does_not_synthesize_fake_alt_use() -> None:
+def _contract_check_hold_light_does_not_synthesize_fake_alt_use() -> None:
     source = Path(__file__).resolve().parents[2] / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.Normalize.cs"
     text = source.read_text(encoding="utf-8")
     assert 'Gameplay.AltUseMode = "light"' not in text
     assert "Held light is passive" in text
 
 
-def test_refit_helper_can_salvage_too_small_projectile_sprite(tmp_path, monkeypatch) -> None:
+def _contract_check_refit_helper_can_salvage_too_small_projectile_sprite(tmp_path, monkeypatch) -> None:
     if IMAGE_DEPS.Image is None:
         return
     monkeypatch.setattr(SPRITES, "SPRITE_DIR", tmp_path)
@@ -112,7 +112,7 @@ def test_refit_helper_can_salvage_too_small_projectile_sprite(tmp_path, monkeypa
     assert validate_processed_sprite(refit, "projectile")["ok"]
 
 
-def test_refit_helper_can_salvage_too_small_item_sprite(tmp_path, monkeypatch) -> None:
+def _contract_check_refit_helper_can_salvage_too_small_item_sprite(tmp_path, monkeypatch) -> None:
     if IMAGE_DEPS.Image is None:
         return
     monkeypatch.setattr(SPRITES, "SPRITE_DIR", tmp_path)
@@ -139,7 +139,7 @@ def test_refit_helper_can_salvage_too_small_item_sprite(tmp_path, monkeypatch) -
     assert validate_processed_sprite(refit, "item")["ok"]
 
 
-def test_item_sprite_generation_runs_refit_before_accepting_too_small_sprite() -> None:
+def _contract_check_item_sprite_generation_runs_refit_before_accepting_too_small_sprite() -> None:
     source = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_sprite_generation.py"
     text = source.read_text(encoding="utf-8")
     item_block = text[text.index("def maybe_generate_sprite"):text.index("def _validation_reasons")]
@@ -147,7 +147,7 @@ def test_item_sprite_generation_runs_refit_before_accepting_too_small_sprite() -
     assert 'debug", {})["itemSpriteRefit"]' in item_block
 
 
-def test_single_variant_sprite_score_is_not_hardcoded_half() -> None:
+def _contract_check_single_variant_sprite_score_is_not_hardcoded_half() -> None:
     source = Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_sprite_generation.py"
     text = source.read_text(encoding="utf-8")
     assert "else (variants[0], 0.5)" not in text
@@ -174,7 +174,7 @@ def _zero_cap_genome(on_hit: str, on_hit_code: int) -> dict:
     }
 
 
-def test_burst_onhit_zero_cap_gets_minimum_visual_feedback() -> None:
+def _contract_check_burst_onhit_zero_cap_gets_minimum_visual_feedback() -> None:
     from infini_local.core.runtime_effect_policy import onhit_uses_burst_dust_feedback
 
     assert onhit_uses_burst_dust_feedback("burst", 1)
@@ -192,7 +192,7 @@ def test_burst_onhit_zero_cap_gets_minimum_visual_feedback() -> None:
     assert "burst_onhit_requires_nonzero_burstDustCap" not in burn.get("engineSanityRepairs", [])
 
 
-def test_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers() -> None:
+def _contract_check_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers() -> None:
     root = Path(__file__).resolve().parents[1]
     engine_metrics = (root / "infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
     assert "onhit_uses_burst_dust_feedback(onhit_key, onhit_code)" in engine_metrics
@@ -204,3 +204,24 @@ def test_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers() -> None:
     csharp = (Path(__file__).resolve().parents[2] / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.Visuals.cs").read_text(encoding="utf-8")
     assert "private static bool OnHitUsesBurstDustFallback(int onHitCode)" in csharp
     assert "OnHitUsesBurstDustFallback(_spec.OnHitCode)" in csharp
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_234_secondary_refit_noise_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted',
+            '_contract_check_compiled_swing_secondary_keeps_visual_director_child_mode',
+            '_contract_check_hold_light_does_not_synthesize_fake_alt_use',
+            '_contract_check_refit_helper_can_salvage_too_small_projectile_sprite',
+            '_contract_check_refit_helper_can_salvage_too_small_item_sprite',
+            '_contract_check_item_sprite_generation_runs_refit_before_accepting_too_small_sprite',
+            '_contract_check_single_variant_sprite_score_is_not_hardcoded_half',
+            '_contract_check_burst_onhit_zero_cap_gets_minimum_visual_feedback',
+            '_contract_check_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers',
+        ),
+    )

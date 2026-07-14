@@ -23,8 +23,8 @@ class SettingsGuiImageArgsMixin:
         frame.pack(fill="x")
         ttk.Label(frame, text="", width=30).pack(side="left")
         specs = [
-            ("Use selected LoRA", self.use_selected_lora, "Взять LoRA file, вывести папку из файла и добавить тег <lora:filename:weight> в LoRA prompt tags."),
-            ("Browse + use", self.browse_and_use_lora_file, "Выбрать LoRA файл и сразу подключить его: hidden --lora-model-dir + prompt tag."),
+            ("Use selected LoRA", self.use_selected_lora, "Взять LoRA file, вывести папку из файла и подготовить безопасный структурированный lora[] payload с выбранным весом."),
+            ("Browse + use", self.browse_and_use_lora_file, "Выбрать LoRA файл и сразу подключить его: hidden --lora-model-dir + структурированный HTTP payload."),
             ("Clear LoRA", self.clear_lora_settings, "Очистить LoRA file, prompt tags и скрытый LoRA dir."),
         ]
         for text, command, help_text in specs:
@@ -34,7 +34,7 @@ class SettingsGuiImageArgsMixin:
             self._attach_static_help(btn, help_text)
         ttk.Label(
             frame,
-            text="sd.cpp: GUI сам выводит --lora-model-dir из LoRA file; активная LoRA — через <lora:name:weight> в prompt.",
+            text="sd.cpp: GUI сам выводит --lora-model-dir из LoRA file; активная LoRA передаётся через структурированный HTTP payload.",
             foreground="#666",
         ).pack(side="left", padx=8)
 
@@ -59,7 +59,7 @@ class SettingsGuiImageArgsMixin:
     def _lora_tag_from_file(path: str, weight: str) -> str:
         raw = str(path or "").strip()
         stem = (PureWindowsPath(raw).stem if "\\" in raw or ":" in raw else Path(raw).stem).strip()
-        weight = str(weight or "0.65").strip() or "0.65"
+        weight = str(weight or "0.25").strip() or "0.25"
         if not stem:
             return ""
         return f"<lora:{stem}:{weight}>"
@@ -90,7 +90,7 @@ class SettingsGuiImageArgsMixin:
         if "INFINI_SDCPP_LORA_DIR" in self.vars and lora_dir:
             self.vars["INFINI_SDCPP_LORA_DIR"].set(lora_dir)
         p = Path(path)
-        weight = self.vars.get("INFINI_SDCPP_LORA_WEIGHT", tk.StringVar(value="0.65")).get().strip() or "0.65"
+        weight = self.vars.get("INFINI_SDCPP_LORA_WEIGHT", tk.StringVar(value="0.25")).get().strip() or "0.25"
         tag = self._lora_tag_from_file(path, weight)
         self._append_lora_tag(tag)
         self.data["INFINI_SDCPP_LORA_DIR"] = lora_dir or str(p.parent)
@@ -278,9 +278,8 @@ class SettingsGuiImageArgsMixin:
         self.row(parent, "Sprite keyer residue steps", "INFINI_SPRITE_KEYER_RESIDUE_STEPS", width=16, hint="sprite_keyer: сколько шагов проходить по connected magenta/dark-key residue от выбранного фона. Обычно 8.")
         self.row(parent, "Sprite retries", "INFINI_SPRITE_RETRIES", width=16)
         self.row(parent, "Save sprite stages", "INFINI_SAVE_SPRITE_STAGES", values=["1", "0"], hint="1 = сохранять 00_raw / 10_bg_removed_fullres / 20_master_norm / 30_baked_final в cache\\sprites для дебага.")
-        self.row(parent, "Sprite processing", "INFINI_SPRITE_PROCESSING_PROFILE", values=["master_soft", "pixel_strict", "legacy_nearest"], hint="master_soft = full-res bg cut/normalize + premultiplied downscale; legacy_nearest = старый прямой resize.")
         self.row(parent, "Master canvas", "INFINI_SPRITE_MASTER_CANVAS", width=16, hint="Большой промежуточный RGBA-canvas перед финальным 32/48/64 bake. Нужен для master-first нормализации: вырезали фон, вписали объект в 256x256, потом уже уменьшили в 32/48/64.")
-        self.row(parent, "Downscale filter", "INFINI_SPRITE_DOWNSCALE_FILTER", values=["box", "lanczos", "bicubic", "nearest"], hint="box обычно лучше для fake pixel-art 512→32; nearest оставлен для strict/legacy.")
+        self.row(parent, "Downscale filter", "INFINI_SPRITE_DOWNSCALE_FILTER", values=["box", "bilinear", "bicubic", "lanczos"], hint="box — дефолт для high-res fake pixel-art; bilinear мягче, bicubic/lanczos резче.")
         self.row(parent, "Premultiplied resize", "INFINI_SPRITE_PREMULTIPLIED_RESIZE", values=["1", "0"], hint="Убирает magenta bleed по краям при resize RGBA.")
         self.row(parent, "Chroma defringe", "INFINI_SPRITE_CHROMA_DEFRINGE", values=["1", "0"], hint="Консервативно удаляет остатки magenta-key только на краях alpha.")
         self.row(parent, "Posterize", "INFINI_PIXEL_POSTERIZE", values=["1", "0"])

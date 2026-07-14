@@ -185,7 +185,6 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "soundVolume": "soundVolume",
             "soundPitch": "soundPitch",
             "soundPitchVariance": "soundPitchVariance",
-            "reliability": "reliability",
         },
         "spawn_secondary_projectiles": {
             "secondaryTrigger": "trigger",
@@ -204,6 +203,7 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "aoeRadiusTiles": "aoeRadiusTiles",
             "chainCount": "chainCount",
             "pullStrength": "pullStrength",
+            "pullMode": "pullMode",
             "debuffHint": "debuffHint",
             "debuffTime": "debuffTime",
         },

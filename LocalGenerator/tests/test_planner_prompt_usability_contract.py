@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import ENGINE_FN_CATALOG_V2
+from infini_local.core.contract_versions import PLANNER_PROMPT_PROFILE_VERSION
 from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
 from infini_local.pipelines.combine_validation import validate_and_repair
 from infini_local.pipelines.final_normalize import final_normalize
@@ -26,7 +27,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     report = planner_prompt_usability_report(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     assert report["ok"], report
     assert report["contractStyle"] == "sharp"
-    assert len(text) <= 24_000
+    assert len(text) <= 24_750
     functions = payload["engineRuntimeContract"]["availableFunctions"]
     assert set(functions) == set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
     assert not (set(functions) & set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
@@ -35,9 +36,15 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     assert "Low-level primary projectile" in functions["shoot_projectile"]["does"]
     assert "boss/NPC/mob/enemy" in functions["spawn_temporary_helper_projectile"].get("safety", "")
     assert "plannerChecklist" in payload["engineRuntimeContract"]
+    backing_rules = payload["backingRefRules"]
+    assert any("source must be exactly" in rule and "engineCall" in rule for rule in backing_rules)
+    assert any("zero-based absolute index into runtimePlan.engineCalls" in rule for rule in backing_rules)
+    assert any('"source":"engineCall"' in rule and '"callIndex":1' in rule for rule in backing_rules)
     assert payload["priorityHeader"][0].startswith("Author one playable result")
     assert any("set_item_stats" in line and "first" in line for line in payload["priorityHeader"])
     assert "runtimePlan" in payload["requiredJsonShape"]
+    assert "playerViewTimeline" in payload["requiredJsonShape"]["runtimeContract"]
+    assert any("simulate" in line.lower() and "surface collision" in line.lower() for line in payload["priorityHeader"])
     assert "attack.genome" in payload["authorRules"][-1]
     assert "summon_boss" in text and "hard-rejected" in text
     critical = payload["engineRuntimeContract"]["criticalValueSemantics"]
@@ -57,6 +64,28 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     stats = functions["set_item_stats"]["params"]
     assert "one action/click" in stats["useAnimationTicks"]
     assert "vanilla ammo identity" in stats["ammoFor"]
+
+
+def _check_planner_payload_keeps_all_static_contract_bytes_before_recipe_data() -> None:
+    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_static_prefix_v0.4.194"
+    other_a = {"name": "Magic Mirror", "type": 50, "damage": 0, "useTime": 90, "value": 5000}
+    other_b = {"name": "Fallen Star", "type": 75, "damage": 0, "maxStack": 9999, "value": 5}
+    first = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_prefix_a")
+    second = build_llm_author_payload(other_a, other_b, {}, {}, "planner_prefix_b")
+    dynamic_keys = ("creativeVariance", "itemA", "itemB")
+    assert tuple(first)[-len(dynamic_keys):] == dynamic_keys
+    assert tuple(second)[-len(dynamic_keys):] == dynamic_keys
+
+    encoded_first = json.dumps(first, ensure_ascii=False, separators=(",", ":"))
+    encoded_second = json.dumps(second, ensure_ascii=False, separators=(",", ":"))
+    boundary = ',"creativeVariance":'
+    prefix_first, separator_first, _ = encoded_first.partition(boundary)
+    prefix_second, separator_second, _ = encoded_second.partition(boundary)
+    assert separator_first == separator_second == boundary
+    assert '"engineRuntimeContract"' in prefix_first
+    assert '"requiredJsonShape"' in prefix_first
+    assert prefix_first == prefix_second
+    assert encoded_first != encoded_second
 
 
 def _check_legacy_catalog_style_env_cannot_starve_or_bloat_planner(monkeypatch) -> None:
@@ -151,15 +180,28 @@ def _check_forbidden_boss_npc_mob_calls_are_rejected_without_killing_valid_item_
 def _check_prompt_usability_cli_runs_the_same_contract() -> None:
     root = Path(__file__).resolve().parents[2]
     proc = subprocess.run(
-        [sys.executable, str(root / "tools" / "check_planner_prompt_usability.py"), "--limit-chars", "24000"],
+        [sys.executable, str(root / "tools" / "check_planner_prompt_usability.py")],
         cwd=root,
         text=True,
         capture_output=True,
         check=True,
     )
-    payload = json.loads(proc.stdout)
-    assert payload["ok"] is True
-    assert payload["report"]["functionCount"] == len(ENGINE_FN_CATALOG_V2) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+    report = json.loads(proc.stdout)
+    assert report["ok"], report
+    assert report["limitChars"] == 24_750
+    assert report["report"]["functionCount"] == len(ENGINE_FN_CATALOG_V2) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+
+
+def _check_release_wrappers_do_not_override_canonical_planner_limit() -> None:
+    root = Path(__file__).resolve().parents[2]
+    for rel in ("tools/validate_release.sh", "tools/validate_release_windows.ps1"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert "--limit-chars" not in text, f"{rel} must use the canonical CLI default"
+
+    manifest = json.loads((root / ".agent" / "manifest.json").read_text(encoding="utf-8"))
+    planner_command = manifest["checks"]["planner_prompt"]
+    assert "--limit-chars" not in planner_command, ".agent manifest must use the canonical CLI default"
+
 
 
 
@@ -207,7 +249,7 @@ def _check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair(mon
 
     assert "overhead_barrage" in functions["apply_on_hit_effect"]["params"]["onHit"]
     assert "overhead barrage" in text and "mechanicclaims" in text
-    assert "backing=enginecall" in text
+    assert '"backingrefs":[{"source":"compiledattack|runtimearchetype|enginecall"' in text
     assert "enginecalls/numbers/contracts" in text
     assert "do not infer mechanics from names" in text
     assert "custom_executor for normal/utility enginecalls" in text or "never family=unsupported" in text
@@ -223,11 +265,13 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_real_planner_payload_has_sharp_complete_catalog_for_api_models',
+    '_check_planner_payload_keeps_all_static_contract_bytes_before_recipe_data',
     '_check_legacy_catalog_style_env_cannot_starve_or_bloat_planner',
     '_check_minimal_llm_weapon_plan_can_become_generated_item_contract',
     '_check_minimal_llm_accessory_and_extractinator_plans_survive_validation',
     '_check_forbidden_boss_npc_mob_calls_are_rejected_without_killing_valid_item_parts',
     '_check_prompt_usability_cli_runs_the_same_contract',
+    '_check_release_wrappers_do_not_override_canonical_planner_limit',
     '_check_planner_catalog_exposes_safe_terraria_item_capabilities_without_loss',
     '_check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw_flags',
     '_check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair'

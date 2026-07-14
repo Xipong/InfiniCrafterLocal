@@ -13,7 +13,7 @@ def _plan(*calls: dict) -> dict:
     return {"runtimePlan": {"engineCalls": list(calls)}}
 
 
-def test_charge_release_compiles_as_exact_held_root() -> None:
+def _contract_check_charge_release_compiles_as_exact_held_root() -> None:
     patch = compile_runtime_plan_to_genome_patch(_plan(
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged"}},
         {"fn": "fire_ranged_weapon", "params": {
@@ -32,14 +32,14 @@ def test_charge_release_compiles_as_exact_held_root() -> None:
     assert patch["shotCount"] == 3
 
 
-def test_charge_release_rejects_vanilla_ammo() -> None:
+def _contract_check_charge_release_rejects_vanilla_ammo() -> None:
     with pytest.raises(ValueError, match="charge_release_does_not_support_vanilla_ammo"):
         compile_runtime_plan_to_genome_patch(_plan(
             {"fn": "fire_ranged_weapon", "params": {"family": "charge_release", "ammoFor": "arrow"}},
         ))
 
 
-def test_sentry_compiles_bounded_lifetime_budget() -> None:
+def _contract_check_sentry_compiles_bounded_lifetime_budget() -> None:
     patch = compile_runtime_plan_to_genome_patch(_plan(
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "summon"}},
         {"fn": "deploy_sentry", "params": {
@@ -61,7 +61,7 @@ def test_sentry_compiles_bounded_lifetime_budget() -> None:
     assert patch["secondaryProjectileShape"] == "crystal bolt"
 
 
-def test_sentry_rejects_recursive_child_mechanics() -> None:
+def _contract_check_sentry_rejects_recursive_child_mechanics() -> None:
     with pytest.raises(ValueError, match="sentry_does_not_support_child_producing_onhit"):
         compile_runtime_plan_to_genome_patch(_plan(
             {"fn": "deploy_sentry", "params": {"onHit": "mini_missiles", "shotCount": 1}},
@@ -73,7 +73,7 @@ def test_sentry_rejects_recursive_child_mechanics() -> None:
         ))
 
 
-def test_sentry_flags_are_applied_only_after_runtime_spec_hydration() -> None:
+def _contract_check_sentry_flags_are_applied_only_after_runtime_spec_hydration() -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
     defaults = source.split("public override void SetDefaults()", 1)[1].split("private void DisableUnsupportedProjectile", 1)[0]
     configured = source.split("private void ApplyConfiguredStats()", 1)[1].split("public override void AI()", 1)[0]
@@ -84,7 +84,7 @@ def test_sentry_flags_are_applied_only_after_runtime_spec_hydration() -> None:
     assert "Projectile.netImportant = sentryLike;" in configured
 
 
-def test_item_and_projectile_share_one_damage_class_policy() -> None:
+def _contract_check_item_and_projectile_share_one_damage_class_policy() -> None:
     policy = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedDamageClassPolicy.cs").read_text(encoding="utf-8")
     item = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     projectile = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
@@ -95,7 +95,7 @@ def test_item_and_projectile_share_one_damage_class_policy() -> None:
     assert "Projectile.DamageType = DamageClass.Generic;" in projectile  # safe pre-hydration default only
 
 
-def test_charge_and_sentry_provenance_keeps_authored_family_call_owner() -> None:
+def _contract_check_charge_and_sentry_provenance_keeps_authored_family_call_owner() -> None:
     from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
 
     charged = compile_runtime_plan_to_genome_result({
@@ -128,7 +128,7 @@ def test_charge_and_sentry_provenance_keeps_authored_family_call_owner() -> None
         assert sources[field] == "deploy_sentry"
 
 
-def test_runtime_plan_normalization_preserves_raw_function_owner_across_repeated_passes() -> None:
+def _contract_check_runtime_plan_normalization_preserves_raw_function_owner_across_repeated_passes() -> None:
     from infini_local.core.runtime_authoring import normalize_runtime_plan_inplace
 
     payload = {"runtimePlan": {"engineCalls": [{
@@ -175,7 +175,7 @@ def _attach_v15(plan: dict, a: dict, b: dict) -> dict:
     return attach_gameplay_and_attack(data, a, b, ca, cb)
 
 
-def test_charge_release_survives_full_gameplay_projection_for_ranged_and_magic() -> None:
+def _contract_check_charge_release_survives_full_gameplay_projection_for_ranged_and_magic() -> None:
     cases = [
         ("ranged", "fire_ranged_weapon", 50, 1.8),
         ("magic", "cast_magic_weapon", 40, 2.0),
@@ -198,7 +198,7 @@ def test_charge_release_survives_full_gameplay_projection_for_ranged_and_magic()
         assert data["attack"]["genome"]["damageClass"] == damage_class
 
 
-def test_sentry_survives_full_gameplay_projection_with_live_child_budget() -> None:
+def _contract_check_sentry_survives_full_gameplay_projection_with_live_child_budget() -> None:
     plan = {
         "name": "Crystal Sentry",
         "category": "weapon",
@@ -222,7 +222,7 @@ def test_sentry_survives_full_gameplay_projection_with_live_child_budget() -> No
     assert attack["maxChildDepth"] == 1
 
 
-def test_charge_release_sound_occurs_on_release_not_item_press() -> None:
+def _contract_check_charge_release_sound_occurs_on_release_not_item_press() -> None:
     apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     charge = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ChargeRelease.cs").read_text(encoding="utf-8")
     branch = apply.split("else if (chargeReleaseLike)", 1)[1].split("else if (sentryLike)", 1)[0]
@@ -231,7 +231,7 @@ def test_charge_release_sound_occurs_on_release_not_item_press() -> None:
     assert "SoundEngine.PlaySound(releaseSound, Projectile.Center)" in charge
 
 
-def test_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp() -> None:
+def _contract_check_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp() -> None:
     policy = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedRuntimeFamilyPolicy.cs").read_text(encoding="utf-8")
     normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
     runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
@@ -242,7 +242,7 @@ def test_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp() -> None:
     assert "GeneratedRuntimeFamilyPolicy.HasValidExecutorContract(_spec)" in runtime
 
 
-def test_sentry_expires_when_lifetime_shot_budget_is_consumed() -> None:
+def _contract_check_sentry_expires_when_lifetime_shot_budget_is_consumed() -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8")
     block = source.split("int count = RuntimeChildCount", 1)[1].split("float spread", 1)[0]
     policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
@@ -252,7 +252,7 @@ def test_sentry_expires_when_lifetime_shot_budget_is_consumed() -> None:
     assert "sentry_shot" not in policy
 
 
-def test_child_image_prompt_is_generic_secondary_body_not_forced_mote() -> None:
+def _contract_check_child_image_prompt_is_generic_secondary_body_not_forced_mote() -> None:
     from infini_local.pipelines.visual_prompt_contracts import build_child_image_prompt
 
     prompt = build_child_image_prompt({
@@ -267,3 +267,29 @@ def test_child_image_prompt_is_generic_secondary_body_not_forced_mote() -> None:
     assert "one authored child-projectile texture/composition" in prompt
     assert "preserve explicitly authored connected parts" in prompt
     assert "tiny echo spark/mote" not in prompt
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v15_charge_release_sentry_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_charge_release_compiles_as_exact_held_root',
+            '_contract_check_charge_release_rejects_vanilla_ammo',
+            '_contract_check_sentry_compiles_bounded_lifetime_budget',
+            '_contract_check_sentry_rejects_recursive_child_mechanics',
+            '_contract_check_sentry_flags_are_applied_only_after_runtime_spec_hydration',
+            '_contract_check_item_and_projectile_share_one_damage_class_policy',
+            '_contract_check_charge_and_sentry_provenance_keeps_authored_family_call_owner',
+            '_contract_check_runtime_plan_normalization_preserves_raw_function_owner_across_repeated_passes',
+            '_contract_check_charge_release_survives_full_gameplay_projection_for_ranged_and_magic',
+            '_contract_check_sentry_survives_full_gameplay_projection_with_live_child_budget',
+            '_contract_check_charge_release_sound_occurs_on_release_not_item_press',
+            '_contract_check_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp',
+            '_contract_check_sentry_expires_when_lifetime_shot_budget_is_consumed',
+            '_contract_check_child_image_prompt_is_generic_secondary_body_not_forced_mote',
+        ),
+    )

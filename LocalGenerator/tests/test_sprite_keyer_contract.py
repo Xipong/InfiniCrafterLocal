@@ -19,6 +19,7 @@ os.environ["INFINI_SPRITE_PROCESSING_PROFILE"] = "master_soft"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image, ImageDraw
+from infini_local.pipelines import sprite_postprocess as SPRITE_POSTPROCESS
 from infini_local.pipelines.sprite_postprocess import (
     alpha_stats,
     postprocess_sprite,
@@ -174,6 +175,32 @@ def _check_technical_score_describes_final_validation_not_raw_candidate() -> Non
     assert 0.0 < accepted_warning < 1.0
 
 
+def _check_postprocess_failure_preserves_the_original_asset_path(monkeypatch) -> None:
+    original = "/tmp/original_generated_sprite.png"
+
+    def fail_open(_path):
+        raise OSError("synthetic decode failure")
+
+    monkeypatch.setattr(SPRITE_POSTPROCESS.Image, "open", fail_open)
+    assert postprocess_sprite(original, "decode_failure", target_size=32, role="item") == original
+
+
+def _check_nearest_downscale_is_not_a_supported_runtime_or_gui_path(monkeypatch) -> None:
+    source = (Path(__file__).resolve().parents[1] / "infini_local/pipelines/sprite_postprocess.py").read_text(encoding="utf-8")
+    gui = (Path(__file__).resolve().parents[1] / "infini_local/desktop/settings_gui_image_args.py").read_text(encoding="utf-8")
+    schema = (Path(__file__).resolve().parents[1] / "infini_local/desktop/settings_schema.py").read_text(encoding="utf-8")
+
+    monkeypatch.setattr(SPRITE_POSTPROCESS, "SPRITE_PROCESSING_PROFILE", "master_soft")
+    monkeypatch.setattr(SPRITE_POSTPROCESS, "SPRITE_DOWNSCALE_FILTER", "nearest")
+
+    assert SPRITE_POSTPROCESS.sprite_resample_filter() == Image.Resampling.BOX
+    assert "Resampling.NEAREST" not in source
+    assert 'values=["nearest"' not in gui
+    assert '"nearest":' not in schema
+    assert "legacy_nearest" not in gui
+    assert "pixel_strict" not in gui
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -188,7 +215,9 @@ def _run_coarse_contracts(tmp_path):
     '_check_sprite_keyer_removes_enclosed_sampled_magenta_holes',
     '_check_sprite_keyer_removes_inner_white_poster_card_when_foreground_exists',
     '_check_sprite_keyer_removes_disconnected_nested_pink_frame',
-    '_check_technical_score_describes_final_validation_not_raw_candidate'
+    '_check_technical_score_describes_final_validation_not_raw_candidate',
+    '_check_postprocess_failure_preserves_the_original_asset_path',
+    '_check_nearest_downscale_is_not_a_supported_runtime_or_gui_path'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

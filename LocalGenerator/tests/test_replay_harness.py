@@ -49,12 +49,13 @@ def clean_replay_dir(replay_runner, monkeypatch, tmp_path):
     return tmp_path
 
 
-def test_replay_save_with_synthetic_parents(replay_runner, clean_replay_dir, capsys):
+def test_replay_save_with_synthetic_parents(replay_runner, clean_replay_dir, capsys, monkeypatch):
     """Exercise the compact CLI surface and save a synthetic case."""
     tmp = clean_replay_dir
     assert all(hasattr(replay_runner, name) for name in ("main", "save_case", "replay_case", "_replay_root"))
     assert replay_runner._slugify("My Case 123!") == "My_Case_123"
     assert replay_runner._slugify("") == "case"
+    assert replay_runner._slugify("test-case_v0.4") == "test-case_v0_4"
 
     assert replay_runner.main(["list"]) == 0
     assert "replay cases" in capsys.readouterr().out.lower()
@@ -81,8 +82,13 @@ def test_replay_save_with_synthetic_parents(replay_runner, clean_replay_dir, cap
     (tmp / "a.json").write_text(json.dumps(item_a))
     (tmp / "b.json").write_text(json.dumps(item_b))
 
-    # Save the case. This tries combine() and always writes parents.json first;
-    # if generation is unavailable, the saved input artifact is still inspectable.
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
+    from infini_local.qa.runtime_proof import build_gameplay_seam_report
+
+    generated = build_gameplay_seam_report(GOLDEN_RUNTIME_CASES[0])["item"]
+    monkeypatch.setattr(combine_pipeline, "combine", lambda _parents: generated)
+
     rc = replay_runner.main(
         [
             "save",
@@ -94,10 +100,11 @@ def test_replay_save_with_synthetic_parents(replay_runner, clean_replay_dir, cap
         ]
     )
     out = capsys.readouterr().out
-    # Either success or a documented failure (LLM unavailable)
-    assert "saved" in out.lower() or "error" in out.lower()
-    # parents.json should always be saved regardless of pipeline outcome
-    assert (tmp / "replay_cases" / "synthetic_test_case" / "parents.json").exists()
+    assert rc == 0
+    assert "saved" in out.lower()
+    case_dir = tmp / "replay_cases" / "synthetic_test_case"
+    for artifact in ("parents.json", "final_item.json", "compiled_runtime.json", "balance_report.json"):
+        assert (case_dir / artifact).is_file(), artifact
 
 
 def test_strict_replay_compares_saved_compiler_semantics(replay_runner, clean_replay_dir):

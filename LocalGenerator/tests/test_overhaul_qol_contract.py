@@ -9,7 +9,7 @@ def read(rel: str) -> str:
     return (SRC / rel).read_text(encoding="utf-8")
 
 
-def test_overhaul_qol_config_surface_exists():
+def _contract_check_overhaul_qol_config_surface_exists():
     text = read("Common/Config/InfiniGameplayQolConfig.cs")
     for needle in [
         "EnableInventoryAssetPrefetch",
@@ -21,7 +21,7 @@ def test_overhaul_qol_config_surface_exists():
         assert removed not in text
 
 
-def test_station_keeps_manual_clear_qol_without_quickfill_or_swap():
+def _contract_check_station_keeps_manual_clear_qol_without_quickfill_or_swap():
     ui = read("Common/UI/InfiniCraftStationUISystem.cs")
     player = read("Common/Players/InfiniCraftPlayer.cs")
     for needle in ["clearButton", "TryClearAllInputsToInventory", "TryClearInputToInventory", "Main.mouseRight"]:
@@ -31,7 +31,7 @@ def test_station_keeps_manual_clear_qol_without_quickfill_or_swap():
         assert removed not in player
 
 
-def test_inventory_asset_prefetch_is_bounded_and_optional():
+def _contract_check_inventory_asset_prefetch_is_bounded_and_optional():
     player = read("Common/Players/InfiniCraftPlayer.cs")
     for needle in [
         "TickGeneratedInventoryAssetPrefetch",
@@ -43,3 +43,18 @@ def test_inventory_asset_prefetch_is_bounded_and_optional():
         "RegisterLocal(data, persist: true, ensureAssets: true)",
     ]:
         assert needle in player
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_overhaul_qol_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_overhaul_qol_config_surface_exists',
+            '_contract_check_station_keeps_manual_clear_qol_without_quickfill_or_swap',
+            '_contract_check_inventory_asset_prefetch_is_bounded_and_optional',
+        ),
+    )

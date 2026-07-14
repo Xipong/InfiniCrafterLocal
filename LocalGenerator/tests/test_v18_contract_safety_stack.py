@@ -41,7 +41,7 @@ def _run_tool(relative: str) -> tuple[int, str]:
     return proc.returncode, proc.stdout
 
 
-def test_dynamic_engine_models_follow_the_canonical_catalog() -> None:
+def _contract_check_dynamic_engine_models_follow_the_canonical_catalog() -> None:
     inventory = engine_contract_inventory()
     assert set(inventory) == set(ENGINE_FN_CATALOG_V2)
     for fn in ENGINE_FN_CATALOG_V2:
@@ -66,7 +66,7 @@ def test_dynamic_engine_models_follow_the_canonical_catalog() -> None:
         engine_params_model.cache_clear()
 
 
-def test_engine_call_boundary_rejects_wrong_types_and_unambiguous_unknown_enums() -> None:
+def _contract_check_engine_call_boundary_rejects_wrong_types_and_unambiguous_unknown_enums() -> None:
     wrong_type = runtime_plan_boundary_report({
         "runtimePlan": {"engineCalls": [{
             "fn": "fire_ranged_weapon",
@@ -149,7 +149,7 @@ def test_engine_call_boundary_rejects_wrong_types_and_unambiguous_unknown_enums(
     assert any("trigger" in error for error in narrow_trigger["errors"])
 
 
-def test_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_them() -> None:
+def _contract_check_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_them() -> None:
     case = next(case for case in GOLDEN_RUNTIME_CASES if case["caseId"] == "ranged_straight_shot")
     report = build_gameplay_seam_report(case)
     assert report["error"] is None
@@ -159,7 +159,7 @@ def test_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_the
         validate_executable_item_boundary(item)
 
 
-def test_boundary_validation_and_wire_projection_do_not_mutate_inputs() -> None:
+def _contract_check_boundary_validation_and_wire_projection_do_not_mutate_inputs() -> None:
     case = next(case for case in GOLDEN_RUNTIME_CASES if case["caseId"] == "forbidden_world_entity")
     report = build_gameplay_seam_report(case)
     assert report["error"] is None
@@ -172,7 +172,7 @@ def test_boundary_validation_and_wire_projection_do_not_mutate_inputs() -> None:
     assert "index" not in (wire["gameplay"].get("rejectedEngineCalls") or [{}])[0]
 
 
-def test_nested_vfx_contract_is_strict_and_defaults_match_csharp() -> None:
+def _contract_check_nested_vfx_contract_is_strict_and_defaults_match_csharp() -> None:
     with pytest.raises(ValidationError):
         validate_vfx_manifest_boundary({
             "schema": "infini.vfx.hybrid.v14",
@@ -191,14 +191,127 @@ def test_nested_vfx_contract_is_strict_and_defaults_match_csharp() -> None:
     assert parsed["slots"][0]["budgetWeight"] == 1.0
 
 
-def test_all_golden_gameplay_cases_cross_the_final_strict_boundary() -> None:
+def _contract_check_nested_vfx_contract_projects_known_diagnostics_and_stays_strict() -> None:
+    parsed = validate_vfx_manifest_boundary({
+        "schema": "infini.vfx.hybrid.v14",
+        "parentEffectProfile": {"effectTags": ["fire"]},
+        "budget": {
+            "renderQuality": "Full",
+            "quality": "Full",
+            "effectMagnitude": 0.25,
+        },
+        "debug": {
+            "pattern": "thrown_simple",
+            "composition": {"mode": "runtime_plan_direct"},
+            "effectLineage": {"mode": "runtime_plan_direct"},
+            "rerollSalt": "test-salt",
+        },
+    })
+    assert "parentEffectProfile" not in parsed
+    assert "renderQuality" not in parsed["budget"]
+    assert "quality" not in parsed["budget"]
+    assert parsed["budget"]["effectMagnitude"] == 0.25
+    assert parsed["debug"]["pattern"] == "thrown_simple"
+    assert "composition" not in parsed["debug"]
+    assert "effectLineage" not in parsed["debug"]
+    assert "rerollSalt" not in parsed["debug"]
+
+    with pytest.raises(ValidationError):
+        validate_vfx_manifest_boundary({
+            "schema": "infini.vfx.hybrid.v14",
+            "debug": {"futureField": True},
+        })
+
+
+def _contract_check_compiler_only_gameplay_markers_do_not_cross_executable_wire_boundary() -> None:
+    wire = executable_wire_view({
+        "gameplay": {
+            "kind": "weapon",
+            "consumable": True,
+            "maxStack": 50,
+            "craftYield": 25,
+            "runtimeOutputKind": "consumable_weapon",
+            "actualAmmoMode": "diagnostic only",
+            "unsupportedAmmoFor": "empty",
+        },
+        "attack": {},
+    })
+    assert wire["gameplay"]["kind"] == "weapon"
+    assert wire["gameplay"]["consumable"] is True
+    assert wire["gameplay"]["maxStack"] == 50
+    assert wire["gameplay"]["craftYield"] == 25
+    assert "runtimeOutputKind" not in wire["gameplay"]
+    assert "actualAmmoMode" not in wire["gameplay"]
+    assert "unsupportedAmmoFor" not in wire["gameplay"]
+
+
+def _contract_check_direct_runtime_vfx_is_projected_before_frozen_csharp_json(monkeypatch) -> None:
+    from infini_local.core import vfx_manifest as vfx
+
+    monkeypatch.setattr(vfx, "VFX_SELECTOR_ENABLED", True)
+    monkeypatch.setattr(vfx, "_vfx_runtime_plan_direct_manifest", lambda *_args, **_kwargs: {
+        "schema": "infini.vfx.hybrid.v14",
+        "budget": {"renderQuality": "Full", "quality": "Full", "effectMagnitude": 0.2},
+        "slots": [],
+        "debug": {
+            "pattern": "thrown_simple",
+            "composition": {"mode": "runtime_plan_direct"},
+            "effectLineage": {"mode": "runtime_plan_direct"},
+            "rerollSalt": "",
+        },
+    })
+    data = {"id": "g_direct", "attack": {"enabled": True}, "debug": {}}
+    result = vfx.attach_hybrid_vfx_manifest(data, "direct-test")
+    frozen = json.loads(result["attack"]["vfxManifestJson"])
+    assert result["vfxManifest"] != frozen
+    assert result["vfxManifest"]["debug"]["composition"]["mode"] == "runtime_plan_direct"
+    assert result["vfxManifest"]["debug"]["effectLineage"]["mode"] == "runtime_plan_direct"
+    assert "renderQuality" not in frozen["budget"]
+    assert "quality" not in frozen["budget"]
+    assert "composition" not in frozen["debug"]
+    assert "effectLineage" not in frozen["debug"]
+    assert "rerollSalt" not in frozen["debug"]
+
+
+def _contract_check_runtime_vfx_baked_commands_use_the_authored_item_palette(monkeypatch) -> None:
+    from infini_local.core import vfx_runtime_slots as slots
+
+    monkeypatch.setattr(slots, "VFX_RUNTIME_INTENT_FIRST", True)
+    authored = {"#123456", "#ABCDEF"}
+    manifest = slots._vfx_runtime_plan_direct_manifest({
+        "id": "palette_probe",
+        "name": "Palette Probe",
+        "runtimePlan": {"engineCalls": [{"fn": "apply_on_hit_effect", "params": {"effect": "burn"}}]},
+        "attack": {
+            "enabled": True,
+            "effect": "flame",
+            "onHit": "burn",
+            "powerBudget": 1.0,
+            "burstDustCap": 8,
+        },
+        "gameplay": {"powerBudget": 1.0},
+        "visual": {"palette": sorted(authored), "impactVfx": "compact palette-matched flash"},
+    }, "palette-probe")
+
+    assert manifest is not None
+    colors = {
+        str(command.get("startColor") or "").upper()
+        for slot in manifest["slots"]
+        for command in slot.get("bakedCommands", [])
+        if command.get("startColor")
+    }
+    assert colors
+    assert colors <= authored
+
+
+def _contract_check_all_golden_gameplay_cases_cross_the_final_strict_boundary() -> None:
     for case in GOLDEN_RUNTIME_CASES:
         report = build_gameplay_seam_report(case)
         assert report["error"] is None, f"{case['caseId']}: {report['error']}"
         assert report["strictExecutableBoundary"]["ok"] is True
 
 
-def test_parity_checker_and_mutation_gate_are_release_gates() -> None:
+def _contract_check_parity_checker_and_mutation_gate_are_release_gates() -> None:
     parity_code, parity_out = _run_tool("tools/contract_parity.py")
     assert parity_code == 0, parity_out
     parity = json.loads(parity_out)
@@ -214,7 +327,7 @@ def test_parity_checker_and_mutation_gate_are_release_gates() -> None:
     assert all(row["caught"] for row in mutations["mutations"])
 
 
-def test_csharp_strict_json_failures_are_structurally_observable() -> None:
+def _contract_check_csharp_strict_json_failures_are_structurally_observable() -> None:
     diagnostics = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/ContractJsonDiagnostics.cs").read_text(encoding="utf-8-sig")
     generated = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.cs").read_text(encoding="utf-8-sig")
     vfx = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/VfxManifestSpec.cs").read_text(encoding="utf-8-sig")
@@ -230,7 +343,7 @@ def test_csharp_strict_json_failures_are_structurally_observable() -> None:
     assert "Errors[safeBoundary] = error" in diagnostics
 
 
-def test_contract_evidence_owners_allow_safe_file_splitting_without_global_token_search() -> None:
+def _contract_check_contract_evidence_owners_allow_safe_file_splitting_without_global_token_search() -> None:
     import importlib.util
 
     module_path = ROOT / "tools/contract_parity.py"
@@ -270,7 +383,7 @@ def test_contract_evidence_owners_allow_safe_file_splitting_without_global_token
     assert family["sentryShot"]["ownerEvidence"]
 
 
-def test_runtime_refactor_preserves_family_separation_in_one_pure_policy_owner() -> None:
+def _contract_check_runtime_refactor_preserves_family_separation_in_one_pure_policy_owner() -> None:
     policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8-sig")
     sentry = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8-sig")
     charge = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ChargeRelease.cs").read_text(encoding="utf-8-sig")
@@ -280,7 +393,7 @@ def test_runtime_refactor_preserves_family_separation_in_one_pure_policy_owner()
     assert "GeneratedChildSpecPolicy.ConfigureChargeReleasedShot" in charge
 
 
-def test_agent_control_plane_is_machine_readable_and_diff_aware() -> None:
+def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> None:
     for args in (["doctor"], ["context", "--task", "contract safety", "--budget", "1200"], ["diff", "--semantic"]):
         proc = subprocess.run(
             [sys.executable, str(ROOT / "tools/agentctl.py"), *args],
@@ -302,7 +415,7 @@ def test_agent_control_plane_is_machine_readable_and_diff_aware() -> None:
     assert "mutation_gate" in csharp["checks"]
 
 
-def test_generated_config_registry_is_current_and_redacts_secrets() -> None:
+def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -> None:
     # Run the AST scanner in a fresh process. Some older runtime tests install
     # signal/thread state globally; importing the scanner into that process made
     # the all-in-one suite order-dependent even though the tool itself was fine.
@@ -319,7 +432,7 @@ def test_generated_config_registry_is_current_and_redacts_secrets() -> None:
     assert all("PASTE_KEY" not in json.dumps(row) for row in secrets)
 
 
-def test_agent_task_contract_enforces_revision_boundaries_and_build_flag(tmp_path: Path) -> None:
+def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag(tmp_path: Path) -> None:
     doctor = subprocess.run(
         [sys.executable, str(ROOT / "tools" / "agentctl.py"), "doctor"],
         cwd=ROOT,
@@ -369,7 +482,7 @@ def test_agent_task_contract_enforces_revision_boundaries_and_build_flag(tmp_pat
     assert "baseRevision mismatch" in proc.stdout
 
 
-def test_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable(tmp_path: Path) -> None:
+def _contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable(tmp_path: Path) -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Systems/InfiniAgentContractSelfTestSystem.cs").read_text(encoding="utf-8-sig")
     assert 'Environment.GetEnvironmentVariable(EnabledEnv), "1"' in source
     assert "PostSetupContent" in source
@@ -412,7 +525,7 @@ def test_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable
     assert json.loads(proc.stdout)["ok"] is True
 
 
-def test_runtime_impact_gate_proves_tooling_is_not_loaded_by_game() -> None:
+def _contract_check_runtime_impact_gate_proves_tooling_is_not_loaded_by_game() -> None:
     code, output = _run_tool("tools/runtime_impact_report.py")
     assert code == 0, output
     report = json.loads(output)
@@ -421,7 +534,7 @@ def test_runtime_impact_gate_proves_tooling_is_not_loaded_by_game() -> None:
     assert all(row["ok"] for row in report["intentionalRuntimeCorrections"])
 
 
-def test_semantic_tools_run_without_preconfigured_pythonpath() -> None:
+def _contract_check_semantic_tools_run_without_preconfigured_pythonpath() -> None:
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)
     for relative in ("tools/semantic_runtime_diff.py", "tools/runtime_impact_report.py"):
@@ -438,7 +551,7 @@ def test_semantic_tools_run_without_preconfigured_pythonpath() -> None:
         assert json.loads(proc.stdout)["ok"] is True
 
 
-def test_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker() -> None:
+def _contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker() -> None:
     from infini_local.pipelines.llm_authoring_pipeline import _merge_raw_boundary_errors
 
     raw = {
@@ -474,7 +587,7 @@ def test_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker(
     assert repaired["rawStrictBoundary"]["ok"] is False
 
 
-def test_source_only_agent_diff_uses_file_index_before_git_bootstrap(tmp_path: Path) -> None:
+def _contract_check_source_only_agent_diff_uses_file_index_before_git_bootstrap(tmp_path: Path) -> None:
     import hashlib
     import importlib.util
 
@@ -504,7 +617,7 @@ def test_source_only_agent_diff_uses_file_index_before_git_bootstrap(tmp_path: P
     assert module._source_index_changes(tmp_path) == ["new.txt", "tracked.txt"]
 
 
-def test_source_snapshot_index_excludes_hidden_tool_state(tmp_path: Path) -> None:
+def _contract_check_source_snapshot_index_excludes_hidden_tool_state(tmp_path: Path) -> None:
     import importlib.util
 
     module_path = ROOT / "tools/agentctl.py"
@@ -518,3 +631,92 @@ def test_source_snapshot_index_excludes_hidden_tool_state(tmp_path: Path) -> Non
     assert module._ignored_repository_path(".pytest_cache/v/cache/nodeids") is True
     assert module._ignored_repository_path(".agent/manifest.json") is False
     assert module._ignored_repository_path(".gitignore") is False
+
+
+def _contract_check_agentctl_resolves_pyright_from_current_python_environment(monkeypatch, tmp_path: Path) -> None:
+    import importlib.util
+
+    module_path = ROOT / "tools/agentctl.py"
+    spec = importlib.util.spec_from_file_location("agentctl_venv_tool_test", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    bin_dir = tmp_path / "venv" / "bin"
+    bin_dir.mkdir(parents=True)
+    python = bin_dir / "python"
+    python.write_text("", encoding="utf-8")
+    pyright = bin_dir / "pyright"
+    pyright.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    pyright.chmod(0o755)
+
+    monkeypatch.setattr(module.sys, "executable", str(python))
+    monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+
+    row = module._run_check("pyright", ["pyright"])
+
+    assert row["status"] == "passed"
+    assert row["command"] == [str(pyright), "--pythonpath", str(python)]
+
+
+def _contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python(monkeypatch, tmp_path: Path) -> None:
+    import importlib.util
+
+    module_path = ROOT / "tools/agentctl.py"
+    spec = importlib.util.spec_from_file_location("agentctl_windows_venv_tool_test", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    scripts_dir = tmp_path / "venv" / "Scripts"
+    scripts_dir.mkdir(parents=True)
+    python = scripts_dir / "python.exe"
+    python.write_text("", encoding="utf-8")
+    pyright = scripts_dir / "pyright.exe"
+    pyright.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    pyright.chmod(0o755)
+
+    monkeypatch.setattr(module.sys, "executable", str(python))
+    monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+
+    row = module._run_check("pyright", ["pyright"])
+
+    assert row["status"] == "passed"
+    assert row["command"] == [str(pyright), "--pythonpath", str(python)]
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v18_contract_safety_stack_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_dynamic_engine_models_follow_the_canonical_catalog',
+            '_contract_check_engine_call_boundary_rejects_wrong_types_and_unambiguous_unknown_enums',
+            '_contract_check_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_them',
+            '_contract_check_boundary_validation_and_wire_projection_do_not_mutate_inputs',
+            '_contract_check_nested_vfx_contract_is_strict_and_defaults_match_csharp',
+            '_contract_check_nested_vfx_contract_projects_known_diagnostics_and_stays_strict',
+            '_contract_check_compiler_only_gameplay_markers_do_not_cross_executable_wire_boundary',
+            '_contract_check_direct_runtime_vfx_is_projected_before_frozen_csharp_json',
+            '_contract_check_runtime_vfx_baked_commands_use_the_authored_item_palette',
+            '_contract_check_all_golden_gameplay_cases_cross_the_final_strict_boundary',
+            '_contract_check_parity_checker_and_mutation_gate_are_release_gates',
+            '_contract_check_csharp_strict_json_failures_are_structurally_observable',
+            '_contract_check_contract_evidence_owners_allow_safe_file_splitting_without_global_token_search',
+            '_contract_check_runtime_refactor_preserves_family_separation_in_one_pure_policy_owner',
+            '_contract_check_agent_control_plane_is_machine_readable_and_diff_aware',
+            '_contract_check_generated_config_registry_is_current_and_redacts_secrets',
+            '_contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag',
+            '_contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable',
+            '_contract_check_runtime_impact_gate_proves_tooling_is_not_loaded_by_game',
+            '_contract_check_semantic_tools_run_without_preconfigured_pythonpath',
+            '_contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker',
+            '_contract_check_source_only_agent_diff_uses_file_index_before_git_bootstrap',
+            '_contract_check_source_snapshot_index_excludes_hidden_tool_state',
+            '_contract_check_agentctl_resolves_pyright_from_current_python_environment',
+            '_contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python',
+        ),
+    )

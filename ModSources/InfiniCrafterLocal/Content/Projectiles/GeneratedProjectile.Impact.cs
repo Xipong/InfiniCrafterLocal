@@ -31,7 +31,25 @@ public sealed partial class GeneratedProjectile
 // =============================================================================
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
     {
-        if (IsThrustDelivery() || IsWhipDelivery() || IsBeamDelivery())
+        if (IsWhipDelivery())
+        {
+            FillGeneratedWhipControlPoints(_whipControlPoints);
+            float lineWidth = Math.Max(8f, Math.Max(Projectile.width, Projectile.height) * Math.Max(0.8f, Projectile.scale) * Math.Max(0.75f, _spec.HitboxScale));
+            for (int i = 1; i < _whipControlPoints.Count; i++)
+            {
+                float collisionPoint = 0f;
+                if (Collision.CheckAABBvLineCollision(
+                    new Vector2(targetHitbox.Left, targetHitbox.Top),
+                    new Vector2(targetHitbox.Width, targetHitbox.Height),
+                    _whipControlPoints[i - 1],
+                    _whipControlPoints[i],
+                    lineWidth,
+                    ref collisionPoint))
+                    return true;
+            }
+            return false;
+        }
+        if (IsThrustDelivery() || IsBeamDelivery())
         {
             Vector2 start, end, dir;
             if (IsBeamDelivery()) BeamLine(out start, out end, out dir);
@@ -66,6 +84,12 @@ public sealed partial class GeneratedProjectile
     public override void ModifyDamageHitbox(ref Rectangle hitbox)
     {
         float scale = Math.Clamp(Math.Max(1f, _spec.HitboxScale), 1f, 2.25f);
+        if (_spec.MovementCode == 15 && _spec.ProjectileScale > 0.001f)
+        {
+            // Expanding-wave visuals and damage geometry must grow together.
+            float expansion = Projectile.scale / _spec.ProjectileScale;
+            scale = Math.Clamp(Math.Max(scale, expansion), 1f, 2.5f);
+        }
         int radiusBonus = ProjectileHitboxRadiusBonus();
         int inflateX = (int)(hitbox.Width * (scale - 1f) * 0.5f) + radiusBonus;
         int inflateY = (int)(hitbox.Height * (scale - 1f) * 0.5f) + radiusBonus;
@@ -144,6 +168,14 @@ public sealed partial class GeneratedProjectile
         int effect = _spec.EffectCode;
         PlayImpactSound();
         TryRunImpactMobility(target.Center);
+        ApplyAuthoredPull(target);
+        if (_spec.MovementCode is 5 or 14)
+        {
+            // Vanilla aiStyle 3 changes to return on the first outbound hit,
+            // but keeps penetrate=-1 and can keep damaging targets on the way home.
+            if (!_returningPhase)
+                BeginReturningPhase();
+        }
         // If an overlay carrier is spawned, it owns the timed hit VFX. Otherwise draw it on this projectile.
         if (!SpawnPersistentVfxOverlay("hit", target.Center, Math.Max(12, VfxEventLifetime("hit")), Projectile.velocity))
             InfiniVfxRuntime.OnHit(Projectile, target.Center, _spec, _vfxManifest, ref _vfxState);
@@ -171,6 +203,7 @@ public sealed partial class GeneratedProjectile
             case 16: if (_spec.ChainCount > 0) ChainProjectiles(target, _spec.ChainCount); target.AddBuff(BuffID.Electrified, DebuffDuration(140)); break;
             case 17: HealOwner(damageDone); BurstDust(effect, 8, 1.2f); break;
             case 18: if (_spec.SplitCount > 0) SpawnOverheadBarrage(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
+            case 19: target.AddBuff(BuffID.Slow, DebuffDuration(180)); break;
         }
     }
 
@@ -179,6 +212,52 @@ public sealed partial class GeneratedProjectile
         int authored = _spec.DebuffTime;
         if (authored <= 0) return fallbackTicks;
         return Math.Clamp(authored, 30, 600);
+    }
+
+    private void ApplyAuthoredPull(NPC target)
+    {
+        float strength = Math.Clamp(_spec.PullStrength, 0f, 1f);
+        if (strength <= 0f || target is null) return;
+        if (Projectile.owner < 0 || Projectile.owner >= Main.maxPlayers) return;
+        Player owner = Main.player[Projectile.owner];
+        if (owner is null || !owner.active || owner.dead) return;
+
+        switch (_spec.PullMode)
+        {
+            case "target_to_owner":
+            {
+                if (target.knockBackResist <= 0f || !InfiniRuntimeAuthority.ShouldRunNpcGameplay()) return;
+                Vector2 delta = owner.Center - target.Center;
+                if (delta.LengthSquared() < 16f * 16f) return;
+                float resistance = Math.Clamp(target.knockBackResist, 0.1f, 1f);
+                float impulse = MathHelper.Lerp(1.5f, 8f, strength) * resistance;
+                target.velocity = Vector2.Lerp(target.velocity, delta.SafeNormalize(Vector2.Zero) * impulse, 0.7f);
+                target.netUpdate = true;
+                break;
+            }
+            case "target_to_projectile":
+            {
+                if (target.knockBackResist <= 0f || !InfiniRuntimeAuthority.ShouldRunNpcGameplay()) return;
+                Vector2 delta = Projectile.Center - target.Center;
+                if (delta.LengthSquared() < 16f * 16f) return;
+                float resistance = Math.Clamp(target.knockBackResist, 0.1f, 1f);
+                float impulse = MathHelper.Lerp(1.5f, 8f, strength) * resistance;
+                target.velocity = Vector2.Lerp(target.velocity, delta.SafeNormalize(Vector2.Zero) * impulse, 0.7f);
+                target.netUpdate = true;
+                break;
+            }
+            case "owner_to_target":
+            {
+                if (owner.CCed || owner.noItems || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)) return;
+                Vector2 delta = target.Center - owner.Center;
+                if (delta.LengthSquared() < 16f * 16f) return;
+                float impulse = MathHelper.Lerp(2.5f, 12f, strength);
+                Vector2 desiredVelocity = delta.SafeNormalize(Vector2.Zero) * impulse;
+                owner.velocity = Vector2.Lerp(owner.velocity, desiredVelocity, 0.65f);
+                owner.fallStart = (int)(owner.position.Y / 16f);
+                break;
+            }
+        }
     }
 
     private bool RuntimePlanMode => _configured && _spec.RuntimePlanAuthored;

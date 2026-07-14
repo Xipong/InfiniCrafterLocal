@@ -29,6 +29,7 @@ from infini_local.core.item_identity_tools import (
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_signals import HARD_TAGS, VISUAL_SYNONYMS
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
 
 
 # AGENT MAP: result identity/category policy seam for combine_pipeline.
@@ -238,6 +239,30 @@ def repair_name_if_needed(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     data["canonical"] = canonical_for_result(new_name, category, list(tags))
     return data
 
+def _name_parent_evidence(item: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    """Bounded parent semantics needed by Name Repair, without transient internals."""
+    generated_raw = generated_data_of(item)
+    generated = generated_raw if isinstance(generated_raw, dict) else {}
+    gameplay = generated.get("gameplay") if isinstance(generated.get("gameplay"), dict) else {}
+    evidence = {
+        "name": name_of(item),
+        "primaryCategory": parent_primary_category(item),
+        "tags": sorted(tags_of(item))[:20],
+        "tooltip": item.get("tooltip") or generated.get("tooltip"),
+        "generatedIdentity": {
+            "category": generated.get("category"),
+            "concept": generated.get("concept") or generated.get("mergeMode"),
+            "gameplayKind": gameplay.get("kind"),
+        },
+        "context": {
+            key: context.get(key)
+            for key in ("headNoun", "semanticTags", "themes", "materials", "mechanicHints")
+            if context.get(key) not in (None, "", [], {})
+        },
+    }
+    return {key: value for key, value in evidence.items() if value not in (None, "", [], {})}
+
+
 def try_llm_name_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str, tags: set[str], category: str) -> str | None:
     try:
         from infini_local.pipelines.llm_transport import (
@@ -246,22 +271,57 @@ def try_llm_name_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
             resolve_llm_model,
         )
 
+        history_state = planner_history_state(data)
+        live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
+        if history_state == "malformed" or (history_state == "absent" and live_planner):
+            data.setdefault("debug", {})["nameRepairHistoryStatus"] = (
+                "malformed_fail_closed" if history_state == "malformed" else "missing_live_planner_history_fail_closed"
+            )
+            return None
         model_name = resolve_llm_model()
+        user = {
+            "agentHandoff": agent_handoff(
+                previous_speaker="item_planner" if history_state == "valid" else "pipeline_orchestrator",
+                current_speaker="name_repair_context",
+                next_speaker="name_repairer",
+                cause_by="result_name_validation",
+                artifact_source="currentItem",
+            ),
+            "parentA": name_of(a),
+            "parentB": name_of(b),
+            "parents": [_name_parent_evidence(a, ca), _name_parent_evidence(b, cb)],
+            "category": category,
+            "tags": sorted(tags)[:24],
+            "concept": data.get("tooltip") or data.get("mergeMode") or "combined item",
+            "badName": data.get("name"),
+            "currentItem": {
+                "name": data.get("name"),
+                "tooltip": data.get("tooltip"),
+                "concept": data.get("concept"),
+                "category": category,
+                "tags": sorted(tags)[:24],
+            },
+            "shape": {"a": ca.get("headNoun"), "b": cb.get("headNoun")},
+            "required": {"name": "short flavorful English item name, 2-5 words"},
+        }
+        system = (
+            "You are the Name Repairer for a Terraria-like generated item. "
+            "The latest name_repair_context currentItem is the authoritative current identity state; any earlier item_planner response is provenance only. "
+            "Return strict JSON only with one flavorful item name. Do not use Infini, Generated, Hybrid, Combined, or a bare parent name."
+        )
+        user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
+        messages = [
+            stage_chat_message("system", "name_repair_contract", system),
+            stage_chat_message("user", "name_repair_context", user_content),
+        ]
+        message_mode = (
+            "authoritative_stage_dossier_v31"
+            if history_state == "valid"
+            else "legacy_authoritative_stage_dossier_v31"
+        )
         req = {
             "model": model_name,
-            "messages": [
-                {"role": "system", "content": "Return STRICT JSON only. Create one flavorful Terraria-like item name. Do not use Infini, Generated, Hybrid, Combined, or a bare parent name."},
-                {"role": "user", "content": json.dumps({
-                    "parentA": name_of(a),
-                    "parentB": name_of(b),
-                    "category": category,
-                    "tags": sorted(tags)[:24],
-                    "concept": data.get("tooltip") or data.get("mergeMode") or "combined item",
-                    "badName": data.get("name"),
-                    "shape": {"a": ca.get("headNoun"), "b": cb.get("headNoun")},
-                    "required": {"name": "short flavorful English item name, 2-5 words"},
-                }, ensure_ascii=False)},
-            ],
+            "messages": messages,
             "temperature": 0.45,
             "max_tokens": 160,
             "response_format": llm_json_response_format("infini_name"),
@@ -270,6 +330,7 @@ def try_llm_name_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
         content = raw["choices"][0]["message"]["content"]
         obj = parse_first_valid_llm_json(content)
         n = str(obj.get("name") or "").strip()
+        data.setdefault("debug", {})["nameRepairMessageMode"] = message_mode
         return n or None
     except Exception as e:
         from infini_local.storage.trace_runtime import log_event

@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import runtime_plan_validation_report
@@ -17,7 +19,18 @@ def _enable_runtime_repair(monkeypatch):
     monkeypatch.setattr(lap, "apply_llm_common_options", lambda req, **kwargs: req)
 
 
-def test_structural_runtime_shape_repair_is_code_only_for_exact_contract_scalar_types(monkeypatch):
+def _attach_planner_history(data: dict) -> None:
+    data["_llmHistory"] = {
+        "kind": "attributed_planner_history_v1",
+        "messages": [
+            {"role": "system", "name": "item_author_contract", "content": "planner contract"},
+            {"role": "user", "name": "recipe_context", "content": '{"recipe":"repair boundary test"}'},
+            {"role": "assistant", "name": "item_planner", "content": json.dumps(data, ensure_ascii=False)},
+        ],
+    }
+
+
+def _contract_check_structural_runtime_shape_repair_is_code_only_for_exact_contract_scalar_types(monkeypatch):
     data = {
         "name": "Crooked Spark Rifle",
         "category": "weapon",
@@ -70,13 +83,14 @@ def test_structural_runtime_shape_repair_is_code_only_for_exact_contract_scalar_
     assert calls[1]["params"]["homingStrength"] == 0.35
 
 
-def test_dead_or_missing_runtime_plan_gets_one_retry_then_fails_with_debug(monkeypatch):
+def _contract_check_dead_or_missing_runtime_plan_gets_one_retry_then_fails_with_debug(monkeypatch):
     data = {
         "name": "Dead Runtime Probe",
         "category": "weapon",
         "gameplay": {"kind": "weapon"},
         "debug": {"planner": "llm_author_first"},
     }
+    _attach_planner_history(data)
     calls = {"n": 0}
 
     def still_dead_llm(req, timeout=10):
@@ -85,15 +99,16 @@ def test_dead_or_missing_runtime_plan_gets_one_retry_then_fails_with_debug(monke
 
     _enable_runtime_repair(monkeypatch)
     monkeypatch.setattr(lap, "llm_chat_json", still_dead_llm)
-    out = lap.repair_runtime_plan_if_needed(data, {}, {}, {}, {}, "r_dead")
+    with pytest.raises(lap.PlannerUnavailable, match="runtime repair exhausted"):
+        lap.repair_runtime_plan_if_needed(data, {}, {}, {}, {}, "r_dead")
     assert calls["n"] == 1
-    assert out["debug"]["runtimeRepairKind"] == "dead_missing_runtime_plan_retry_once"
-    assert out["debug"]["runtimeRepairAttemptBudget"] == "1"
-    assert out["debug"]["runtimeRepairPath"] == "targeted_runtime_repair_failed_then_strict_validation"
-    assert "runtimePlan.engineCalls has no accepted executable calls" in out["debug"]["runtimePlanValidationAfterRepair"]
+    assert data["debug"]["runtimeRepairKind"] == "dead_missing_runtime_plan_retry_once"
+    assert data["debug"]["runtimeRepairAttemptBudget"] == "1"
+    assert data["debug"]["runtimeRepairPath"] == "targeted_runtime_repair_exhausted"
+    assert "runtimePlan.engineCalls has no accepted executable calls" in data["debug"]["runtimePlanValidationAfterRepair"]
 
 
-def test_runtime_repair_preserves_identity_fields_even_if_model_returns_full_rewrite(monkeypatch):
+def _contract_check_runtime_repair_patch_preserves_identity_fields(monkeypatch):
     data = {
         "name": "Original Hive Blade",
         "tooltip": "Original tooltip.",
@@ -107,20 +122,17 @@ def test_runtime_repair_preserves_identity_fields_even_if_model_returns_full_rew
         "recipeKey": "r_original",
         "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {"resultKind": "weapon", "damage": 8, "useTimeTicks": 20}}]},
     }
-    repaired = {
-        "name": "Rewritten Name",
-        "tooltip": "Rewritten tooltip.",
-        "concept": {"fantasy": "rewritten"},
-        "visual": {"itemPrompt": "rewritten sprite"},
-        "tags": ["rewritten"],
-        "category": "weapon",
+    _attach_planner_history(data)
+    repaired = {"repairPatch": {
+        "name": "Rejected rewrite",
+        "visual": {"itemPrompt": "rejected sprite"},
         "runtimePlan": {
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
                 {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 10, "shotCount": 1, "pierce": 0, "lifetimeTicks": 90}},
             ]
         },
-    }
+    }}
 
     def fake_llm(req, timeout=10):
         return {"choices": [{"message": {"content": json.dumps(repaired)}}]}
@@ -137,3 +149,18 @@ def test_runtime_repair_preserves_identity_fields_even_if_model_returns_full_rew
     assert out["id"] == "g_original"
     assert out["recipeKey"] == "r_original"
     assert out["debug"]["runtimeRepairPath"] == "llm_targeted_runtime_contract_repair"
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_217_repair_boundary_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_structural_runtime_shape_repair_is_code_only_for_exact_contract_scalar_types',
+            '_contract_check_dead_or_missing_runtime_plan_gets_one_retry_then_fails_with_debug',
+            '_contract_check_runtime_repair_patch_preserves_identity_fields',
+        ),
+    )

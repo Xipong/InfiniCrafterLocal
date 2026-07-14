@@ -16,7 +16,7 @@ from infini_local.qa.runtime_proof import (
 )
 
 
-def test_golden_runtime_cases_cover_core_gameplay_shapes() -> None:
+def _contract_check_golden_runtime_cases_cover_core_gameplay_shapes() -> None:
     case_ids = {case["caseId"] for case in GOLDEN_RUNTIME_CASES}
     assert len(GOLDEN_RUNTIME_CASES) >= 6
     assert {
@@ -37,7 +37,7 @@ def test_golden_runtime_cases_cover_core_gameplay_shapes() -> None:
         assert case.get("expectGameplay"), f"{case['caseId']} missing expectGameplay"
 
 
-def test_golden_runtime_proof_reports_match_expected_envelopes() -> None:
+def _contract_check_golden_runtime_proof_reports_match_expected_envelopes() -> None:
     reports = [build_runtime_proof_report(case) for case in GOLDEN_RUNTIME_CASES]
     for report in reports:
         assert_runtime_proof_report(report)
@@ -60,7 +60,7 @@ def test_golden_runtime_proof_reports_match_expected_envelopes() -> None:
     assert "worldEntitySpawn" not in forbidden["patch"]
 
 
-def test_golden_gameplay_seam_reports_match_expected_generated_item_fields() -> None:
+def _contract_check_golden_gameplay_seam_reports_match_expected_generated_item_fields() -> None:
     reports = [build_gameplay_seam_report(case) for case in GOLDEN_RUNTIME_CASES]
     for report in reports:
         assert_runtime_proof_report(report)
@@ -87,7 +87,7 @@ def test_golden_gameplay_seam_reports_match_expected_generated_item_fields() -> 
     assert "bossNpcType" not in (forbidden.get("gameplay") or {})
 
 
-def test_golden_runtime_proof_artifact_writer_outputs_stable_json(tmp_path) -> None:
+def _contract_check_golden_runtime_proof_artifact_writer_outputs_stable_json(tmp_path) -> None:
     reports = [build_runtime_proof_report(case) for case in GOLDEN_RUNTIME_CASES[:2]]
     written = write_runtime_proof_artifacts(reports, tmp_path)
     assert len(written) == 2
@@ -101,7 +101,7 @@ def test_golden_runtime_proof_artifact_writer_outputs_stable_json(tmp_path) -> N
         assert "mismatches" in payload
 
 
-def test_generate_golden_runtime_proof_cli_writes_summary(tmp_path) -> None:
+def _contract_check_generate_golden_runtime_proof_cli_writes_summary(tmp_path) -> None:
     out = tmp_path / "runtime_proof"
     import os
     env = dict(os.environ)
@@ -126,17 +126,35 @@ def test_generate_golden_runtime_proof_cli_writes_summary(tmp_path) -> None:
     assert len(summary["artifactPaths"]) >= len(GOLDEN_RUNTIME_CASES)
 
 
-def test_live_semantic_gate_fails_on_partial_or_unsupported_heavy_rows() -> None:
-    from tools.live_semantic_sample_run import summarize_rows
+def _contract_check_live_semantic_gate_fails_on_partial_or_unsupported_heavy_rows() -> None:
+    from infini_local.qa.runtime_proof import summarize_semantic_sample_rows
 
     rows = [
         {"caseId": "ok", "ok": True, "runtimeFamily": "shoot", "movement": "straight", "onHit": "burn", "executionStatus": "executable", "unsupportedPromises": []},
         {"caseId": "weak", "ok": True, "runtimeFamily": "", "movement": "", "onHit": "none", "executionStatus": "partial", "unsupportedPromises": ["unsupported:charge_release"]},
     ]
 
-    summary = summarize_rows(rows)
+    summary = summarize_semantic_sample_rows(rows)
 
     assert summary["ok"] is False
     assert summary["failedCount"] == 0
     assert summary["semanticGate"]["ok"] is False
     assert any("partial" in reason or "unsupported" in reason for reason in summary["semanticGate"]["reasons"])
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_239_golden_runtime_proof_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_golden_runtime_cases_cover_core_gameplay_shapes',
+            '_contract_check_golden_runtime_proof_reports_match_expected_envelopes',
+            '_contract_check_golden_gameplay_seam_reports_match_expected_generated_item_fields',
+            '_contract_check_golden_runtime_proof_artifact_writer_outputs_stable_json',
+            '_contract_check_generate_golden_runtime_proof_cli_writes_summary',
+            '_contract_check_live_semantic_gate_fails_on_partial_or_unsupported_heavy_rows',
+        ),
+    )

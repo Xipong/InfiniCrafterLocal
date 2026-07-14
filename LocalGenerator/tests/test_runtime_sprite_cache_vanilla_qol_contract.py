@@ -9,7 +9,7 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_runtime_sprite_cache_uses_vanilla_like_soft_limits():
+def _contract_check_runtime_sprite_cache_uses_vanilla_like_soft_limits():
     cache = read(MOD / "Common" / "Services" / "RuntimeSpriteCache.cs")
     config = read(MOD / "Common" / "Config" / "InfiniGameplayQolConfig.cs")
     assert "DefaultMaxCachedTextures = 512" in cache
@@ -31,7 +31,7 @@ def test_runtime_sprite_cache_uses_vanilla_like_soft_limits():
     assert "RuntimeSpriteMaxPngFileMegabytes" in config
 
 
-def test_runtime_sprite_cache_has_in_game_ru_en_config_labels():
+def _contract_check_runtime_sprite_cache_has_in_game_ru_en_config_labels():
     en = read(MOD / "Localization" / "en-US_Mods.InfiniCrafterLocal.hjson")
     ru = read(MOD / "Localization" / "ru-RU_Mods.InfiniCrafterLocal.hjson")
     for text in (en, ru):
@@ -45,3 +45,17 @@ def test_runtime_sprite_cache_has_in_game_ru_en_config_labels():
     assert "Размер кэша спрайтов" in ru
     assert "Максимальная сторона спрайта" in ru
     assert "Лимит PNG-файла" in ru
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_runtime_sprite_cache_vanilla_qol_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_runtime_sprite_cache_uses_vanilla_like_soft_limits',
+            '_contract_check_runtime_sprite_cache_has_in_game_ru_en_config_labels',
+        ),
+    )

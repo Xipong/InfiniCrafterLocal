@@ -222,7 +222,6 @@ class SettingsGuiTraceStateMixin:
         provider = (self._value("INFINI_LLM_PROVIDER", "local") or "local").lower()
         backend = (self._value("INFINI_IMAGE_BACKEND", "sdcpp") or "sdcpp").lower()
         visual_mode = (self._value("INFINI_VISUAL_ASSET_MODE", "full") or "full").lower()
-        sprite_profile = (self._value("INFINI_SPRITE_PROCESSING_PROFILE", "master_soft") or "master_soft").lower()
         reasoning_mode = (self._value("INFINI_LLM_REASONING_MODE", "off") or "off").lower().replace("-", "_")
         remove_bg = self._value("INFINI_REMOVE_BG", "1") == "1"
         bg_mode = (self._value("INFINI_BG_REMOVE_MODE", "sprite_keyer") or "sprite_keyer").lower()
@@ -241,6 +240,16 @@ class SettingsGuiTraceStateMixin:
             self._set_field_enabled(key, provider == "openrouter", f"LLM provider сейчас `{provider}`, OpenRouter поля не используются.")
         for key in compat_llm:
             self._set_field_enabled(key, provider == "openai_compat", f"LLM provider сейчас `{provider}`, compat API поля не используются.")
+
+        set_field_enabled = getattr(self, "_set_field_enabled")
+        for slot in (2, 3, 4):
+            enabled = self._value(f"INFINI_LLM_POOL_{slot}_ENABLED", "0") == "1"
+            for suffix in ("PROVIDER", "BASE_URL", "API_KEY", "MODEL", "API_MODE"):
+                set_field_enabled(
+                    f"INFINI_LLM_POOL_{slot}_{suffix}",
+                    enabled,
+                    f"LLM {slot} выключен; сначала установи Enabled = 1.",
+                )
 
         off_modes = {"", "off", "false", "0", "disabled", "disable", "none", "no_reasoning"}
         prompt_modes = {"prompt", "prompt_light", "prompt_strong", "local_prompt", "local_light", "local_strong"}
@@ -307,7 +316,7 @@ class SettingsGuiTraceStateMixin:
 
         sprite_processing_active = image_active
         for key in [
-            "INFINI_REMOVE_BG", "INFINI_SPRITE_RETRIES", "INFINI_SPRITE_PROCESSING_PROFILE",
+            "INFINI_REMOVE_BG", "INFINI_SPRITE_RETRIES",
             "INFINI_PIXEL_POSTERIZE", "INFINI_VISUAL_STRICT_AI_AUTHORSHIP",
         ]:
             self._set_field_enabled(key, sprite_processing_active, "Image backend = off; PNG не генерируются, sprite postprocess не запускается.")
@@ -320,19 +329,9 @@ class SettingsGuiTraceStateMixin:
         self._set_field_enabled("INFINI_MAX_COLORS", sprite_processing_active and posterize, "Max colors используется только когда Posterize=1 и image backend не off.")
 
         if sprite_processing_active:
-            if sprite_profile in {"legacy", "legacy_nearest"}:
-                self._set_field_enabled("INFINI_SPRITE_MASTER_CANVAS", False, "legacy_nearest не использует master canvas: идёт старый прямой fit_to_canvas.")
-                self._set_field_enabled("INFINI_SPRITE_DOWNSCALE_FILTER", False, "legacy_nearest принудительно использует NEAREST; фильтр игнорируется.")
-                self._set_field_enabled("INFINI_SPRITE_PREMULTIPLIED_RESIZE", False, "legacy_nearest делает прямой NEAREST resize; premultiplied resize не вызывается.")
-            elif sprite_profile == "pixel_strict":
-                self._set_field_enabled("INFINI_SPRITE_MASTER_CANVAS", True, "")
-                self._set_field_enabled("INFINI_SPRITE_DOWNSCALE_FILTER", False, "pixel_strict принудительно использует NEAREST; ручной filter игнорируется.")
-                self._set_field_enabled("INFINI_SPRITE_PREMULTIPLIED_RESIZE", False, "pixel_strict использует NEAREST, а premultiplied resize нужен только для мягких alpha-фильтров.")
-            else:
-                self._set_field_enabled("INFINI_SPRITE_MASTER_CANVAS", True, "")
-                self._set_field_enabled("INFINI_SPRITE_DOWNSCALE_FILTER", True, "")
-                filter_value = (self._value("INFINI_SPRITE_DOWNSCALE_FILTER", "box") or "box").lower()
-                self._set_field_enabled("INFINI_SPRITE_PREMULTIPLIED_RESIZE", filter_value != "nearest", "При downscale filter=nearest premultiplied resize не используется.")
+            self._set_field_enabled("INFINI_SPRITE_MASTER_CANVAS", True, "")
+            self._set_field_enabled("INFINI_SPRITE_DOWNSCALE_FILTER", True, "")
+            self._set_field_enabled("INFINI_SPRITE_PREMULTIPLIED_RESIZE", True, "")
 
         if strict_ai:
             if "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK" in self.vars:
@@ -385,7 +384,7 @@ class SettingsGuiTraceStateMixin:
                 if "INFINI_SDCPP_LORA_DIR" in self.vars:
                     self.vars["INFINI_SDCPP_LORA_DIR"].set(lora_dir)
             if not data.get("INFINI_SDCPP_LORA_PROMPT_TAGS", "").strip():
-                tag = self._lora_tag_from_file(lora_file, data.get("INFINI_SDCPP_LORA_WEIGHT", "0.65"))
+                tag = self._lora_tag_from_file(lora_file, data.get("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
                 data["INFINI_SDCPP_LORA_PROMPT_TAGS"] = tag
                 self._set_lora_tags(tag)
         else:

@@ -13,6 +13,105 @@ from infini_local.core.boundary_models import (
 )
 
 
+# Exact lower-camel JSON surface accepted by strict C# VisualSpec deserialization.
+# Visual Director/planner fields remain available during generation in visualKit/debug,
+# but must not leak into the committed Terraria wire payload.
+VISUAL_DELIVERY_FIELDS = frozenset({
+    "accentColorHex",
+    "assetManifestPath",
+    "childImagePrompt",
+    "dominantColorHex",
+    "drawOffsetX",
+    "drawOffsetY",
+    "fieldImagePrompt",
+    "imagePrompt",
+    "impactImagePrompt",
+    "inventoryScale",
+    "negativePrompt",
+    "objectType",
+    "palette",
+    "preferredCanvasSize",
+    "preservationScore",
+    "projectileImagePrompt",
+    "requiredAnchors",
+    "spritePath",
+    "spriteRawPath",
+    "spriteStatus",
+    "spriteUrl",
+    "style",
+    "visualJudgeScore",
+    "visualSoulArchetype",
+    "visualSoulCoverage",
+    "visualSoulEdgeDensity",
+    "visualSoulGlow",
+    "visualSoulPulse",
+    "visualSoulSignature",
+    "visualSoulTooltip",
+    "worldScale",
+})
+
+GENERATED_PARENT_SUMMARY_DELIVERY_FIELDS = frozenset({
+    "category",
+    "damageClass",
+    "fantasy",
+    "name",
+    "notableEffects",
+    "runtime",
+    "visualIdentity",
+})
+
+PARENT_ITEM_CARD_DELIVERY_FIELDS = frozenset({
+    "category",
+    "confidence",
+    "generatedDepth",
+    "identity",
+    "name",
+    "powerScore",
+    "sourceHint",
+    "tags",
+    "tier",
+})
+
+RECIPE_META_DELIVERY_FIELDS = frozenset({
+    "assetBaseUrl",
+    "assetFiles",
+    "chaosBudget",
+    "generationDepth",
+    "noveltyBudget",
+    "parentCategories",
+    "parentGeneratedDepths",
+    "parentIdentities",
+    "recipeCoherence",
+    "sampledCategory",
+    "sampledLane",
+    "universalRecipe",
+    "worldId",
+    "worldScoped",
+})
+
+VFX_QUALITY_BUDGET_DELIVERY_FIELDS = frozenset({
+    "effectMagnitude",
+    "emergencyCap",
+    "enablePersistentSmoke",
+    "enablePointSparks",
+    "enableSoftGlow",
+    "maxDrawCalls",
+    "maxParticlesPerTick",
+    "maxParticlesTotal",
+    "spawnRateMultiplier",
+    "visualBudgetClass",
+})
+
+VFX_DEBUG_DELIVERY_FIELDS = frozenset({
+    "pattern",
+    "roles",
+    "selectedReasons",
+    "selectedScore",
+    "topCandidates",
+    "wordProbe",
+})
+
+
 
 # AGENT MAP: world-scoped recipe storage.
 # Generated recipes/items are keyed by recipe/world context. Preserve world scoping
@@ -381,7 +480,7 @@ def strip_runtime_only_fields(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         return data
     out = dict(data)
-    out.pop("_llmContinuation", None)
+    out.pop("_llmHistory", None)
     out.pop("_runtimePlanCompileCache", None)
     return out
 
@@ -406,13 +505,54 @@ def delivery_safe_debug(debug: Any) -> dict[str, str]:
     return out
 
 
+def _project_delivery_fields(value: Any, allowed: frozenset[str]) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return {key: item for key, item in value.items() if key in allowed}
+
+
+def _project_runtime_archetype_for_delivery(value: Any) -> dict[str, Any] | None:
+    """Project model-authored data to the exact strict C# RuntimeArchetypeSpec surface."""
+    if not isinstance(value, dict):
+        return None
+    projected: dict[str, Any] = {}
+    for key in (
+        "schema",
+        "source",
+        "family",
+        "vanillaProjectileId",
+        "vanillaItemId",
+        "aiType",
+        "phaseModel",
+        "supportStatus",
+    ):
+        if isinstance(value.get(key), str):
+            projected[key] = value[key]
+    for key in ("channelled", "usesHeldProjectile"):
+        if isinstance(value.get(key), bool):
+            projected[key] = value[key]
+    if isinstance(value.get("overrideKnobs"), dict):
+        projected["overrideKnobs"] = value["overrideKnobs"]
+    if isinstance(value.get("supportNotes"), list):
+        projected["supportNotes"] = [note for note in value["supportNotes"] if isinstance(note, str)]
+    return projected
+
+
 def sanitize_recipe_for_delivery(data: Any) -> Any:
     """Make a recipe payload safe to send to Terraria clients without changing runtime semantics."""
     if not isinstance(data, dict):
         return data
     out = strip_runtime_only_fields(data)
+    if "runtimeArchetype" in out:
+        runtime_archetype = _project_runtime_archetype_for_delivery(out.get("runtimeArchetype"))
+        if runtime_archetype is None:
+            # Scalar labels are descriptive only and are not executed by Python.
+            out.pop("runtimeArchetype", None)
+        else:
+            out["runtimeArchetype"] = runtime_archetype
     attack = out.get("attack") if isinstance(out.get("attack"), dict) else None
     gameplay = out.get("gameplay") if isinstance(out.get("gameplay"), dict) else None
+    visual = out.get("visual") if isinstance(out.get("visual"), dict) else None
     if attack is not None:
         out["attack"] = {k: v for k, v in attack.items() if k not in ATTACK_DEBUG_ONLY_FIELDS}
     if gameplay is not None:
@@ -425,6 +565,43 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
                 for row in rejected
             ]
         out["gameplay"] = clean_gameplay
+    if visual is not None:
+        out["visual"] = {k: v for k, v in visual.items() if k in VISUAL_DELIVERY_FIELDS}
+
+    summary = _project_delivery_fields(out.get("generatedParentSummary"), GENERATED_PARENT_SUMMARY_DELIVERY_FIELDS)
+    if summary is not None:
+        out["generatedParentSummary"] = summary
+
+    recipe_meta = _project_delivery_fields(out.get("recipeMeta"), RECIPE_META_DELIVERY_FIELDS)
+    if recipe_meta is not None:
+        out["recipeMeta"] = recipe_meta
+
+    item_knowledge = out.get("itemKnowledge")
+    if isinstance(item_knowledge, dict):
+        clean_knowledge = dict(item_knowledge)
+        parents = clean_knowledge.get("parents")
+        if isinstance(parents, list):
+            clean_knowledge["parents"] = [
+                _project_delivery_fields(parent, PARENT_ITEM_CARD_DELIVERY_FIELDS)
+                if isinstance(parent, dict) else parent
+                for parent in parents
+            ]
+        result_card = _project_delivery_fields(clean_knowledge.get("resultCard"), PARENT_ITEM_CARD_DELIVERY_FIELDS)
+        if result_card is not None:
+            clean_knowledge["resultCard"] = result_card
+        out["itemKnowledge"] = clean_knowledge
+
+    vfx_manifest = out.get("vfxManifest")
+    if isinstance(vfx_manifest, dict):
+        clean_vfx_manifest = dict(vfx_manifest)
+        budget = _project_delivery_fields(clean_vfx_manifest.get("budget"), VFX_QUALITY_BUDGET_DELIVERY_FIELDS)
+        if budget is not None:
+            clean_vfx_manifest["budget"] = budget
+        vfx_debug = _project_delivery_fields(clean_vfx_manifest.get("debug"), VFX_DEBUG_DELIVERY_FIELDS)
+        if vfx_debug is not None:
+            clean_vfx_manifest["debug"] = vfx_debug
+        out["vfxManifest"] = clean_vfx_manifest
+
     out["debug"] = delivery_safe_debug(out.get("debug"))
     return out
 
@@ -559,7 +736,7 @@ def read_world_recipe_cache(
             except (OSError, ValueError, TypeError):
                 pass
         return None
-    data.pop("_llmContinuation", None)
+    data.pop("_llmHistory", None)
     write_world_manifest(world_recipes_dir, app_version, world_id, world_name)
     data.setdefault("debug", {})["cacheHit"] = "world_file"
     data.setdefault("debug", {})["cacheScope"] = "world"

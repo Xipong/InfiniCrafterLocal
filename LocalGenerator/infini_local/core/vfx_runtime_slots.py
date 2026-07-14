@@ -59,6 +59,20 @@ def _vfx_baked_command_count(renderer: str, density: float, duration: int) -> in
         return max(2, min(12, int(round(2 + density * 12))))
     return max(1, min(8, int(round(1 + density * 8))))
 
+
+def _vfx_authored_palette(data: dict[str, Any]) -> list[str]:
+    visual_raw = data.get("visual")
+    visual: dict[str, Any] = visual_raw if isinstance(visual_raw, dict) else {}
+    raw = visual.get("palette")
+    values = raw if isinstance(raw, list) else []
+    out: list[str] = []
+    for value in values:
+        color = str(value or "").strip().upper()
+        if re.fullmatch(r"#[0-9A-F]{6}(?:[0-9A-F]{2})?", color) and color not in out:
+            out.append(color)
+    return out[:8]
+
+
 def _vfx_should_bake_slot(raw: dict[str, Any], event: str, renderer: str, backend: str) -> bool:
     if raw.get("bake") is False or raw.get("baked") is False:
         return False
@@ -93,6 +107,8 @@ def _vfx_bake_slot_commands(raw: dict[str, Any], seed: int, renderer: str, event
     if not _vfx_should_bake_slot(raw, event, renderer, backend):
         return []
     count = _vfx_baked_command_count(renderer, density, duration)
+    palette_raw = raw.get("palette")
+    palette = palette_raw if isinstance(palette_raw, list) else []
     r = str(renderer or "").lower()
     out: list[dict[str, Any]] = []
     # Spread in local-space units. Runtime multiplies by projectile dimensions/scale.
@@ -124,7 +140,7 @@ def _vfx_bake_slot_commands(raw: dict[str, Any], seed: int, renderer: str, event
             "localY": round(local_y, 3),
             "velocityX": round(vel_x, 3),
             "velocityY": round(vel_y, 3),
-            "startColor": _vfx_color_hex(cmd_seed, "start"),
+            "startColor": str(_vfx_pick(cmd_seed, "start", palette, "") or _vfx_color_hex(cmd_seed, "start")),
             "endColor": "#00000000",
             "scaleX": round(max(0.08, min(4.0, scale * (0.18 + _vfx_unit(cmd_seed, "sx") * 0.55))), 3),
             "scaleY": round(max(0.08, min(4.0, scale * (0.18 + _vfx_unit(cmd_seed, "sy") * 0.55))), 3),
@@ -438,6 +454,9 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
         "enablePointSparks": effect not in {"none", "dust", "sand", "smoke"},
         "enablePersistentSmoke": False,
     }
+    authored_palette = _vfx_authored_palette(data)
+    if authored_palette:
+        slots_raw = [{**slot, "palette": authored_palette} for slot in slots_raw]
     slots = [_vfx_compile_slot(slot, seed, i, power, effect_mag) for i, slot in enumerate(slots_raw)]
     slots = _vfx_arbitrate_slots(slots, str(budget.get("visualBudgetClass") or "small"))
     provenance = attack.get("runtimeAuthoringProvenance") if isinstance(attack.get("runtimeAuthoringProvenance"), dict) else {}

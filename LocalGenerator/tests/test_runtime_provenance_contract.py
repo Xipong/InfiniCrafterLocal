@@ -3,7 +3,7 @@ from __future__ import annotations
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
 
 
-def test_authored_runtime_fields_have_precise_provenance() -> None:
+def _contract_check_authored_runtime_fields_have_precise_provenance() -> None:
     data = {
         "category": "weapon",
         "runtimePlan": {
@@ -50,7 +50,7 @@ def test_authored_runtime_fields_have_precise_provenance() -> None:
     assert provenance["authoredFields"]["damage"] is True
 
 
-def test_defaults_are_distinguishable_from_authored_fields() -> None:
+def _contract_check_defaults_are_distinguishable_from_authored_fields() -> None:
     data = {
         "category": "weapon",
         "runtimePlan": {
@@ -68,3 +68,17 @@ def test_defaults_are_distinguishable_from_authored_fields() -> None:
     assert sources["shotCount"] == "runtime_compiler_default"
     assert provenance["authoredFields"]["shotCount"] is False
     assert sources["speed"] == "shoot_projectile"
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_runtime_provenance_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_authored_runtime_fields_have_precise_provenance',
+            '_contract_check_defaults_are_distinguishable_from_authored_fields',
+        ),
+    )

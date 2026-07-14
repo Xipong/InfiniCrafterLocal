@@ -44,14 +44,13 @@ def behavior_cost_multiplier(genome: dict[str, Any]) -> float:
     homing = max(0.0, min(1.0, float(genome.get("homingStrength") or 0)))
     lifetime = max(20.0, min(1200.0, float(genome.get("lifetimeTicks") or 90)))
     extra_updates = max(0.0, min(3.0, float(genome.get("extraUpdates") or 0)))
-    reliability = max(0.35, min(1.35, float(genome.get("reliability") or 1.0)))
     range_tiles = max(3.0, min(120.0, float(genome.get("rangeTiles") or 35)))
-    self_lock = max(0.0, min(120.0, float(genome.get("selfLockTicks") or 0)))
-    miss_punish = max(0.0, min(1.0, float(genome.get("missPunish") or 0)))
     child_pressure = _child_spawn_estimate(genome)
     runtime_family = str(genome.get("runtimeFamily") or "").strip().lower()
     beam_width = max(2.0, min(96.0, float(genome.get("beamWidthPx") or 14.0)))
     beam_charge = max(0.0, min(300.0, float(genome.get("beamChargeTicks") or 0.0)))
+    pull_strength = max(0.0, min(1.0, float(genome.get("pullStrength") or 0.0)))
+    pull_mode = str(genome.get("pullMode") or "none").strip().lower()
     cost = 1.0
     cost *= 1.0 + (shot_count - 1.0) * 0.55
     cost *= 1.0 + min(1.35, pierce * 0.22)
@@ -61,14 +60,18 @@ def behavior_cost_multiplier(genome: dict[str, Any]) -> float:
     cost *= 1.0 + extra_updates * 0.16
     cost *= 1.0 + min(0.32, max(0.0, range_tiles - 35.0) / 220.0)
     cost *= 1.0 + min(1.10, child_pressure * 0.075)
+    if pull_mode in {"target_to_owner", "target_to_projectile"}:
+        cost *= 1.0 + pull_strength * 0.35
+    elif pull_mode == "owner_to_target":
+        cost *= 1.0 + pull_strength * 0.25
     if runtime_family == "beam":
         # Persistent line collision can cover several targets even with shotCount=1.
         # Price geometry, while charge-up buys back a small amount of the cost.
         cost *= 1.20 + min(0.65, max(0.0, beam_width - 8.0) / 88.0)
         cost /= 1.0 + min(0.18, beam_charge / 600.0)
-    cost *= reliability
-    discount = 1.0 + min(0.65, self_lock / 150.0) + miss_punish * 0.22
-    return max(0.35, cost / discount)
+    # Only executable mechanics can buy or spend damage budget. Former metadata
+    # (reliability/selfLockTicks/missPunish) never reached Terraria and is ignored.
+    return max(0.35, cost)
 
 
 def _child_spawn_estimate(genome: dict[str, Any]) -> float:
@@ -106,7 +109,6 @@ def estimate_engine_metrics(genome: dict[str, Any], stage: dict[str, Any] | None
     shot_count = max(1.0, float(genome.get("shotCount") or 1))
     lifetime = max(10.0, min(1200.0, float(genome.get("lifetimeTicks") or 90)))
     extra_updates = max(0.0, min(3.0, float(genome.get("extraUpdates") or 0)))
-    reliability = max(0.05, min(1.35, float(genome.get("reliability") or 1.0)))
     runtime_family = str(genome.get("runtimeFamily") or "").strip().lower()
     uses_per_second = 60.0 / use_time
     hit_cadence = effective_hit_cadence_ticks(genome, use_time)
@@ -124,7 +126,7 @@ def estimate_engine_metrics(genome: dict[str, Any], stage: dict[str, Any] | None
     child_per_proc = _child_spawn_estimate(genome)
     # Children are proc-gated/on-hit and depth-limited. Persistent beams proc at
     # local-immunity cadence, not at item spawn cadence.
-    child_pressure = child_per_proc * hit_events_per_second * reliability * 0.55
+    child_pressure = child_per_proc * hit_events_per_second * 0.55
     active_projectiles = active_primary + child_pressure
     raw_dust = genome.get("dustSpawnDenom")
     try:

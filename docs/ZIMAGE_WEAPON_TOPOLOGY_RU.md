@@ -8,13 +8,18 @@
 
 ## Текущее правило
 
-Код сохраняет authored-топологию и не придумывает предпочтительную конструкцию.
+Visual Director задаёт topology положительным физическим описанием и передаёт её image backend без повторной нормализации:
 
-Допустимо технически напомнить image backend:
+```text
+visualKit.itemSilhouetteContract
+→ visualKit.itemIconPrompt
+→ style/palette
+→ positive sprite framing
+```
 
-- не добавлять зеркальные или повторные конструктивные детали, которых нет в authored prompt/`itemSilhouetteContract`;
-- не превращать один asset slot в сцену или набор несвязанных вариантов;
-- сохранять явно заданное planner/Visual Director количество и расположение частей.
+`itemSilhouetteContract` описывает количество, непрерывные и намеренно раздельные тела, пропорции и соединения глаголами. `itemIconPrompt` добавляет материалы, цвета, локальный декор и освещение.
+
+Python сохраняет этот authored-контракт, но не добавляет отрицательные topology-подсказки вроде `do not mirror`, `duplicate`, `cross` или `not a second handle`: такие слова сами могут подсадить нежелательную форму. Если Visual Director отсутствует, planner prompt используется только как fallback; code fallback остаётся последним.
 
 Код **не имеет права** требовать:
 

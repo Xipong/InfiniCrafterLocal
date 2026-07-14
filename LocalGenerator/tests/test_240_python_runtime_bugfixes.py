@@ -17,12 +17,12 @@ from infini_local.services import combine_endpoint, sdcpp_backend, sdcpp_service
 from infini_local.web import server
 
 
-def test_dev_fallback_helper_exposes_runtime_api_version() -> None:
+def _contract_check_dev_fallback_helper_exposes_runtime_api_version() -> None:
     helpers = combine_pipeline._dev_fallback_helpers()
     assert helpers["ENGINE_RUNTIME_API_VERSION"]
 
 
-def test_dev_fallback_resolves_its_package_owner() -> None:
+def _contract_check_dev_fallback_resolves_its_package_owner() -> None:
     result = combine_pipeline.deterministic_plan(
         {"name": "Copper Shortsword"},
         {"name": "Gel"},
@@ -33,7 +33,7 @@ def test_dev_fallback_resolves_its_package_owner() -> None:
     assert isinstance(result, dict)
 
 
-def test_combine_exception_carries_immutable_request_failure_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+def _contract_check_combine_exception_carries_immutable_request_failure_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     semaphore = threading.BoundedSemaphore(1)
     monkeypatch.setattr(combine_endpoint, "COMBINE_SEMAPHORE", semaphore)
     failure = {"request": "A", "stage": "planner"}
@@ -63,7 +63,7 @@ def test_combine_exception_carries_immutable_request_failure_snapshot(monkeypatc
     semaphore.release()
 
 
-def test_busy_combine_returns_409_without_releasing_unacquired_semaphore(monkeypatch: pytest.MonkeyPatch) -> None:
+def _contract_check_busy_combine_returns_409_without_releasing_unacquired_semaphore(monkeypatch: pytest.MonkeyPatch) -> None:
     semaphore = threading.BoundedSemaphore(1)
     assert semaphore.acquire(blocking=False) is True
     monkeypatch.setattr(combine_endpoint, "COMBINE_SEMAPHORE", semaphore)
@@ -94,7 +94,34 @@ def test_busy_combine_returns_409_without_releasing_unacquired_semaphore(monkeyp
     semaphore.release()
 
 
-def test_cached_combine_clears_stale_failure_diagnostics_before_delivery() -> None:
+def _contract_check_combine_rejects_non_json_serializable_delivery_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(combine_endpoint, "COMBINE_SEMAPHORE", threading.BoundedSemaphore(1))
+    statuses: list[tuple[int, dict]] = []
+    delivered: list[dict] = []
+
+    combine_endpoint.handle_combine_request(
+        {},
+        app_version="test",
+        combine_cache_lookup=lambda _payload: ("key", None),
+        sanitize_recipe_for_delivery=lambda value: value,
+        combine=lambda _payload: {"bad": object()},
+        trace_event=lambda *_args, **_kwargs: None,
+        json=delivered.append,
+        json_status=lambda status, value: statuses.append((status, value)),
+    )
+
+    assert delivered == []
+    assert len(statuses) == 1
+    status, payload = statuses[0]
+    assert status == 500
+    assert payload["ok"] is False
+    assert payload["status"] == "combine_response_not_json_serializable"
+    assert payload["error"] == "combine_response_not_json_serializable"
+    assert payload["httpStatus"] == 500
+    assert payload["cacheRecoveryAllowed"] is False
+
+
+def _contract_check_cached_combine_clears_stale_failure_diagnostics_before_delivery() -> None:
     clear_reasons: list[str] = []
     delivered: list[dict] = []
 
@@ -114,7 +141,7 @@ def test_cached_combine_clears_stale_failure_diagnostics_before_delivery() -> No
     assert delivered == [{"id": "cached-item"}]
 
 
-def test_failure_summary_error_does_not_mask_original_combine_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def _contract_check_failure_summary_error_does_not_mask_original_combine_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(combine_endpoint, "COMBINE_SEMAPHORE", threading.BoundedSemaphore(1))
 
     class CraftFailed(RuntimeError):
@@ -140,7 +167,7 @@ def test_failure_summary_error_does_not_mask_original_combine_exception(monkeypa
         )
 
 
-def test_server_main_clamps_invalid_port_before_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+def _contract_check_server_main_clamps_invalid_port_before_binding(monkeypatch: pytest.MonkeyPatch) -> None:
     bound: dict[str, object] = {}
 
     class FakeHttpServer:
@@ -160,7 +187,7 @@ def test_server_main_clamps_invalid_port_before_binding(monkeypatch: pytest.Monk
 
 
 
-def test_sdcpp_readiness_rejects_http_404(monkeypatch: pytest.MonkeyPatch) -> None:
+def _contract_check_sdcpp_readiness_rejects_http_404(monkeypatch: pytest.MonkeyPatch) -> None:
     def not_found(*_args, **_kwargs):
         raise HTTPError("http://127.0.0.1:7861/health", 404, "not found", Message(), None)
 
@@ -168,7 +195,7 @@ def test_sdcpp_readiness_rejects_http_404(monkeypatch: pytest.MonkeyPatch) -> No
     assert sdcpp_backend.server_is_alive("http://127.0.0.1:7861", ["/health"], timeout=1) is False
 
 
-def test_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() -> None:
+def _contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() -> None:
     env = os.environ.copy()
     env.update({
         "INFINI_SDCPP_WIDTH": "-5",
@@ -186,7 +213,7 @@ def test_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() -> None:
     assert json.loads(result.stdout.strip()) == [64, 2048, 1, 0.0, 65535, 64, 2048]
 
 
-def test_parallel_sdcpp_ensure_spawns_only_one_process(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _contract_check_parallel_sdcpp_ensure_spawns_only_one_process(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     state = sdcpp_service.SdcppServerState()
     spawn_ids: list[int] = []
     spawn_lock = threading.Lock()
@@ -258,3 +285,26 @@ def test_parallel_sdcpp_ensure_spawns_only_one_process(monkeypatch: pytest.Monke
     assert all(not thread.is_alive() for thread in threads)
     assert results == [True, True]
     assert spawn_ids == [1]
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_240_python_runtime_bugfixes_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_dev_fallback_helper_exposes_runtime_api_version',
+            '_contract_check_dev_fallback_resolves_its_package_owner',
+            '_contract_check_combine_exception_carries_immutable_request_failure_snapshot',
+            '_contract_check_busy_combine_returns_409_without_releasing_unacquired_semaphore',
+            '_contract_check_combine_rejects_non_json_serializable_delivery_payload',
+            '_contract_check_cached_combine_clears_stale_failure_diagnostics_before_delivery',
+            '_contract_check_failure_summary_error_does_not_mask_original_combine_exception',
+            '_contract_check_server_main_clamps_invalid_port_before_binding',
+            '_contract_check_sdcpp_readiness_rejects_http_404',
+            '_contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend',
+            '_contract_check_parallel_sdcpp_ensure_spawns_only_one_process',
+        ),
+    )

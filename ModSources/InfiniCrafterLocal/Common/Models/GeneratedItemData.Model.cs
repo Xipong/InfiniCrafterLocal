@@ -280,7 +280,7 @@ public sealed class RuntimeArchetypeSpec
 
 public sealed class RuntimeContractSpec
 {
-    public string Schema { get; set; } = "infini.runtime-contract.v1";
+    public string Schema { get; set; } = "infini.runtime-contract.v2";
     public string PrimaryVerb { get; set; } = "";
     public string ControlStyle { get; set; } = "";
     public List<string> MustFeelLike { get; set; } = new();
@@ -288,6 +288,7 @@ public sealed class RuntimeContractSpec
     public List<string> StateFields { get; set; } = new();
     public List<string> SyncFields { get; set; } = new();
     public List<string> VisualStateFields { get; set; } = new();
+    public List<string> PlayerViewTimeline { get; set; } = new();
     public List<MechanicClaimSpec> MechanicClaims { get; set; } = new();
     public List<string> UnsupportedPromises { get; set; } = new();
     public string ExecutionStatus { get; set; } = "";
@@ -304,7 +305,7 @@ public sealed class RuntimeContractSpec
 
     public void Normalize()
     {
-        Schema = string.IsNullOrWhiteSpace(Schema) ? "infini.runtime-contract.v1" : Clean(Schema, 64);
+        Schema = "infini.runtime-contract.v2";
         PrimaryVerb = Clean(PrimaryVerb, 120);
         ControlStyle = Clean(ControlStyle, 48).ToLowerInvariant().Replace('_', '-');
         if (ControlStyle is not ("" or "tap" or "hold-to-channel" or "right-click-alt" or "combo" or "passive" or "on-hit-trigger")) ControlStyle = "";
@@ -313,6 +314,7 @@ public sealed class RuntimeContractSpec
         StateFields = CleanList(StateFields, 16, 48);
         SyncFields = CleanList(SyncFields, 16, 48);
         VisualStateFields = CleanList(VisualStateFields, 16, 48);
+        PlayerViewTimeline = CleanList(PlayerViewTimeline, 8, 180);
         MechanicClaims = (MechanicClaims ?? new List<MechanicClaimSpec>()).Where(x => x is not null).Take(16).ToList();
         foreach (var claim in MechanicClaims) claim.Normalize();
         UnsupportedPromises = CleanList(UnsupportedPromises, 24, 120);
@@ -325,6 +327,7 @@ public sealed class MechanicClaimSpec
 {
     public string Claim { get; set; } = "";
     public string Backing { get; set; } = "";
+    public List<MechanicBackingRefSpec> BackingRefs { get; set; } = new();
     public string Status { get; set; } = "";
 
     private static string Clean(string? value, int maxLen)
@@ -338,8 +341,35 @@ public sealed class MechanicClaimSpec
     {
         Claim = Clean(Claim, 220);
         Backing = Clean(Backing, 160);
+        BackingRefs = (BackingRefs ?? new List<MechanicBackingRefSpec>()).Where(x => x is not null).Take(12).ToList();
+        foreach (var backingRef in BackingRefs) backingRef.Normalize();
         Status = Clean(Status, 48).ToLowerInvariant().Replace('-', '_');
         if (Status is not ("" or "executable" or "partial" or "visual_only" or "unsupported" or "ambiguous")) Status = "";
+    }
+}
+
+public sealed class MechanicBackingRefSpec
+{
+    public string Source { get; set; } = "";
+    public int CallIndex { get; set; } = -1;
+    public string Fn { get; set; } = "";
+    public string Field { get; set; } = "";
+    public JsonElement Expected { get; set; }
+
+    private static string Clean(string? value, int maxLen)
+    {
+        string s = value ?? "";
+        if (s.Length > maxLen) s = s[..maxLen];
+        return s.Replace('\0', ' ').Trim();
+    }
+
+    public void Normalize()
+    {
+        Source = Clean(Source, 32);
+        if (Source is not ("compiledAttack" or "runtimeArchetype" or "engineCall")) Source = "";
+        CallIndex = Source == "engineCall" ? Math.Max(-1, CallIndex) : -1;
+        Fn = Source == "engineCall" ? Clean(Fn, 64).ToLowerInvariant() : "";
+        Field = Clean(Field, 64);
     }
 }
 
@@ -664,6 +694,8 @@ public sealed class AttackSpec
     public int BounceCount { get; set; } = 0;
     public int SplitCount { get; set; } = 0;
     public int ChainCount { get; set; } = 0;
+    public float PullStrength { get; set; } = 0f;
+    public string PullMode { get; set; } = "none";
     public int ImmunityCooldown { get; set; } = 10;
     public int TrailLength { get; set; } = 4;
     public int ShotCount { get; set; } = 1;

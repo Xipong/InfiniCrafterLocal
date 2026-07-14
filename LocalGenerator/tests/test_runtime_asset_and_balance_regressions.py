@@ -105,8 +105,9 @@ def _check_child_and_starfall_pressure_are_priced_in_balance_cost() -> None:
 def _check_csharp_runtime_surface_contains_overhead_barrage_onhit_opcode() -> None:
     src = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
     limits = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "InfiniRuntimeLimits.cs").read_text(encoding="utf-8")
-    assert "MaxSupportedOnHitCode = 18" in limits
+    assert "MaxSupportedOnHitCode = 19" in limits
     assert "case 18:" in src
+    assert "case 19:" in src and "BuffID.Slow" in src
     assert "SpawnOverheadBarrage" in src
     assert "GeneratedOverheadBarragePolicy" in src
     assert "childSpec.EffectCode = 3" not in src

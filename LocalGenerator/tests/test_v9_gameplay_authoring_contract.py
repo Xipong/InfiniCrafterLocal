@@ -49,7 +49,7 @@ def _attach(plan: dict) -> dict:
     return attach_gameplay_and_attack(data, a, b, ca, cb)
 
 
-def test_exact_channelled_beam_reaches_final_attack_without_prose_inference() -> None:
+def _contract_check_exact_channelled_beam_reaches_final_attack_without_prose_inference() -> None:
     plan = {
         "name": "Totally Ordinary Stick",
         "tooltip": "This prose says sword, gun, prism and laser; none of it selects gameplay.",
@@ -116,7 +116,7 @@ def test_exact_channelled_beam_reaches_final_attack_without_prose_inference() ->
         assert provenance["fieldSources"][field] in {"set_item_stats", "shoot_projectile", "cast_magic_weapon"}
 
 
-def test_beam_like_names_and_visual_prose_do_not_select_channel_beam() -> None:
+def _contract_check_beam_like_names_and_visual_prose_do_not_select_channel_beam() -> None:
     data = {
         "name": "Channelled Laser Prism Staff",
         "tooltip": "Hold to fire an endless wall-piercing beam.",
@@ -140,7 +140,7 @@ def test_beam_like_names_and_visual_prose_do_not_select_channel_beam() -> None:
     assert patch["weaponFamily"] == "beam_staff"
 
 
-def test_regular_homing_range_and_strength_are_not_dead_fields() -> None:
+def _contract_check_regular_homing_range_and_strength_are_not_dead_fields() -> None:
     data = {
         "runtimePlan": {
             "engineCalls": [
@@ -165,7 +165,7 @@ def test_regular_homing_range_and_strength_are_not_dead_fields() -> None:
     assert result["provenance"]["authoredFields"]["homingStrength"] is True
 
 
-def test_beam_balance_uses_local_immunity_cadence_and_one_active_primary() -> None:
+def _contract_check_beam_balance_uses_local_immunity_cadence_and_one_active_primary() -> None:
     beam = {
         "runtimeFamily": "beam",
         "useTimeTicks": 40,
@@ -184,7 +184,7 @@ def test_beam_balance_uses_local_immunity_cadence_and_one_active_primary() -> No
     assert metrics["hitEventsPerSecond"] == 7.5
 
 
-def test_no_wiki_weapon_alias_router_and_csharp_beam_contract_is_exact() -> None:
+def _contract_check_no_wiki_weapon_alias_router_and_csharp_beam_contract_is_exact() -> None:
     semantics = (ROOT / "LocalGenerator/infini_local/core/runtime_authoring/semantics.py").read_text(encoding="utf-8")
     assert "_WEAPON_SUBFAMILY_ALIASES" not in semantics
     assert "_material_effect_hint" not in semantics
@@ -204,13 +204,13 @@ def test_no_wiki_weapon_alias_router_and_csharp_beam_contract_is_exact() -> None
     assert "ownedProjectileCounts" not in active_guard
     assert "Collision.LaserScan" in projectile_source
     assert "effective_hit_cadence_ticks" in (ROOT / "LocalGenerator/infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
-    assert "ProjectileSyncVersion = 14" in net_source
+    assert "ProjectileSyncVersion = 18" in net_source
     for field in ("RangeTiles", "HomingStrength", "BeamWidthPx", "BeamChargeTicks"):
         assert f"public" in model_source and field in model_source
         assert f"_spec.{field}" in net_source
 
 
-def test_channel_beam_pays_authored_mana_and_respects_player_lockout() -> None:
+def _contract_check_channel_beam_pays_authored_mana_and_respects_player_lockout() -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
     assert "private bool CanPayChannelBeamMana(Player owner)" in source
     assert "owner.HeldItem.mana" in source
@@ -218,3 +218,21 @@ def test_channel_beam_pays_authored_mana_and_respects_player_lockout() -> None:
     assert "owner.CheckMana(manaCost, true, false)" in source
     assert "owner.noItems || owner.CCed || !CanPayChannelBeamMana(owner)" in source
     assert "Projectile.owner != Main.myPlayer" in source
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v9_gameplay_authoring_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_exact_channelled_beam_reaches_final_attack_without_prose_inference',
+            '_contract_check_beam_like_names_and_visual_prose_do_not_select_channel_beam',
+            '_contract_check_regular_homing_range_and_strength_are_not_dead_fields',
+            '_contract_check_beam_balance_uses_local_immunity_cadence_and_one_active_primary',
+            '_contract_check_no_wiki_weapon_alias_router_and_csharp_beam_contract_is_exact',
+            '_contract_check_channel_beam_pays_authored_mana_and_respects_player_lockout',
+        ),
+    )

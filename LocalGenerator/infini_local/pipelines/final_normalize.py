@@ -23,7 +23,7 @@ from infini_local.pipelines.result_knowledge_card import build_result_item_card
 
 
 def final_normalize(data: dict[str, Any]) -> dict[str, Any]:
-    data.pop("_llmContinuation", None)
+    data.pop("_llmHistory", None)
     data.pop("_runtimePlanCompileCache", None)
     data.setdefault("schemaVersion", 1)
     # Runtime API/engine-call contract version is intentionally separate from the

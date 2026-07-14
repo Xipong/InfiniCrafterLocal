@@ -34,6 +34,7 @@ from infini_local.pipelines.item_power_knowledge import (
     tags_of,
 )
 from infini_local.pipelines.llm_authoring_pipeline import call_llm_vfx_director, try_llm_plan
+from infini_local.pipelines.llm_transport import begin_llm_item_lease, end_llm_item_lease
 from infini_local.pipelines.pipeline_visual_config import (
     VISUAL_PIPELINE_PROFILE,
     contract_versions_payload,
@@ -256,6 +257,10 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     pipeline_log: list[dict[str, Any]] = []
     data: dict[str, Any] | None = None
     generation_debug.clear_combine_failure("new_combine_started")
+    llm_lease = None
+    llm_lease_token = None
+    if USE_LLM:
+        llm_lease, llm_lease_token = begin_llm_item_lease(key)
 
     def step(label: str, fn, *args, **kwargs):
         t0 = time.time()
@@ -332,6 +337,9 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         if not generation_debug.last_combine_failure_summary():
             generation_debug.record_combine_failure("unknown", e, payload, data, pipeline_log)
         raise
+    finally:
+        if llm_lease is not None and llm_lease_token is not None:
+            end_llm_item_lease(llm_lease, llm_lease_token)
 
 def deterministic_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
     """Run the explicit dev-only fallback planner.

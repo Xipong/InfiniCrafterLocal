@@ -378,6 +378,22 @@
       "title": "Projectilewidth",
       "type": "integer"
     },
+    "pullMode": {
+      "default": "none",
+      "enum": [
+        "none",
+        "target_to_owner",
+        "owner_to_target",
+        "target_to_projectile"
+      ],
+      "title": "Pullmode",
+      "type": "string"
+    },
+    "pullStrength": {
+      "default": 0.0,
+      "title": "Pullstrength",
+      "type": "number"
+    },
     "rangeTiles": {
       "default": 35.0,
       "title": "Rangetiles",

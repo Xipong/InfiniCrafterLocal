@@ -134,6 +134,13 @@ public sealed partial class GeneratedItemData
     private static string NormalizeRuntimeFamily(string? value)
         => GeneratedRuntimeFamilyPolicy.Normalize(value);
 
+    private static string NormalizePullMode(string? value, float pullStrength)
+    {
+        if (pullStrength <= 0f) return "none";
+        string mode = SafeText(value, 24).ToLowerInvariant();
+        return mode is "target_to_owner" or "owner_to_target" or "target_to_projectile" ? mode : "none";
+    }
+
     private static string NormalizeArmorSlot(string? value)
     {
         string s = (value ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
@@ -426,6 +433,9 @@ public sealed partial class GeneratedItemData
         Attack.BounceCount = ClampInt(Attack.BounceCount, 0, 128);
         Attack.SplitCount = ClampInt(Attack.SplitCount, 0, 128);
         Attack.ChainCount = ClampInt(Attack.ChainCount, 0, 128);
+        Attack.PullStrength = ClampFloat(Attack.PullStrength, 0f, 1f);
+        Attack.PullMode = NormalizePullMode(Attack.PullMode, Attack.PullStrength);
+        if (Attack.PullMode == "none") Attack.PullStrength = 0f;
         Attack.ImmunityCooldown = ClampInt(Attack.ImmunityCooldown, 0, 600);
         Attack.TrailLength = ClampInt(Attack.TrailLength, 0, 600);
         Attack.ShotCount = ClampInt(Attack.ShotCount, 1, 128);

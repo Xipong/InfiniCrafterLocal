@@ -628,7 +628,7 @@ def check_network_read_write_shape() -> None:
     if "writer.Write(ProjectileSyncVersion)" not in projectile or "reader.ReadInt32()" not in projectile:
         err("GeneratedProjectile.cs: versioned SendExtraAI/ReceiveExtraAI shape is incomplete")
     for needle in [
-        "private const int ProjectileSyncVersion = 14",
+        "private const int ProjectileSyncVersion = 18",
         "writer.Write(_spec.RangeTiles)",
         "writer.Write(_spec.HomingStrength)",
         "writer.Write(_spec.BeamWidthPx)",

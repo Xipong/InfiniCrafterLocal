@@ -252,9 +252,9 @@ def _validation_reasons(validation: dict[str, Any] | None) -> list[str]:
 def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, role: str, validation: dict[str, Any] | None) -> str:
     """Local no-regeneration salvage for fit-only sprite failures.
 
-    If Z-Image produced a good subject but postprocess made the core silhouette a
-    few pixels too small, crop the transparent bbox, scale it up with nearest-neighbor
-    pixels, and center it back on the target canvas. Fatal alpha/key failures are not
+    If image generation produced a good subject but the final fit made the core silhouette
+    a few pixels too small, crop the transparent bbox, scale it with the production BOX
+    filter, and center it back on the target canvas. Fatal alpha/key failures are not
     repaired here.
     """
     reasons = _validation_reasons(validation)
@@ -289,7 +289,7 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
             return ""
         new_w = max(1, min(canvas - 2 * margin, int(round(crop.width * scale))))
         new_h = max(1, min(canvas - 2 * margin, int(round(crop.height * scale))))
-        resampling = getattr(getattr(Image, "Resampling", Image), "NEAREST", 0)
+        resampling = getattr(getattr(Image, "Resampling", Image), "BOX", 4)
         resized = crop.resize((new_w, new_h), resampling)
         out = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
         out.alpha_composite(resized, ((canvas - new_w) // 2, (canvas - new_h) // 2))

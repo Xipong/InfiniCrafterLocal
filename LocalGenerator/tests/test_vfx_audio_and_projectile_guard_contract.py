@@ -4,14 +4,14 @@ from csharp_partial_reader import read_text_with_partial_bundles
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_chain_projectiles_uses_runtime_child_count_cap():
+def _contract_check_chain_projectiles_uses_runtime_child_count_cap():
     src = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
     body = src.split("private void ChainProjectiles", 1)[1].split("private void", 1)[0]
     assert "count = RuntimeChildCount(count);" in body
     assert "for (int chain = 0; chain < count; chain++)" in body
 
 
-def test_projectile_impact_sound_uses_authored_volume_pitch_and_cooldown():
+def _contract_check_projectile_impact_sound_uses_authored_volume_pitch_and_cooldown():
     src = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
     assert "private int _lastImpactSoundLocalTick = -9999;" in src
     assert "localTick - _lastImpactSoundLocalTick < 4" in src
@@ -20,7 +20,7 @@ def test_projectile_impact_sound_uses_authored_volume_pitch_and_cooldown():
     assert "_spec.SoundPitch" in src
 
 
-def test_vfx_sound_cues_are_rate_limited_and_use_authored_audio_fields():
+def _contract_check_vfx_sound_cues_are_rate_limited_and_use_authored_audio_fields():
     src = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "VFX" / "InfiniVfxRuntime.cs").read_text(encoding="utf-8")
     assert "private static bool SoundSlotTickAllowed" in src
     assert "InfiniLuminanceSoundBridge.TryUpdateLiveSoundCue" in src
@@ -35,7 +35,7 @@ def test_vfx_sound_cues_are_rate_limited_and_use_authored_audio_fields():
     assert "InfiniSoundLibrary.ForVfxCue" in src
 
 
-def test_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier():
+def _contract_check_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier():
     src = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Audio" / "InfiniSoundLibrary.cs").read_text(encoding="utf-8")
     assert 'public const string ContractVersion = "infini.terraria-sound-catalog.v8";' in src
     assert 'public const string BuiltInCatalogSource = "terraria_vanilla";' in src
@@ -54,7 +54,7 @@ def test_infini_sound_library_has_large_exact_catalog_without_weapon_name_classi
         assert forbidden not in src.lower() if forbidden == forbidden.lower() else forbidden not in src
 
 
-def test_generated_item_use_sound_resolves_through_library():
+def _contract_check_generated_item_use_sound_resolves_through_library():
     src = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "using InfiniCrafterLocal.Common.Audio;" in src
     assert "InfiniSoundLibrary.ForUse" in src
@@ -62,7 +62,7 @@ def test_generated_item_use_sound_resolves_through_library():
         assert field in src
 
 
-def test_vfx_fallback_dust_uses_effect_before_color_guess():
+def _contract_check_vfx_fallback_dust_uses_effect_before_color_guess():
     src = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "VFX" / "InfiniVfxRuntime.cs").read_text(encoding="utf-8")
     assert "private static int DustForEffect(AttackSpec spec)" in src
     assert "int effectDust = DustForEffect(spec);" in src
@@ -71,7 +71,7 @@ def test_vfx_fallback_dust_uses_effect_before_color_guess():
     assert "DustID.Shadowflame" in src
 
 
-def test_external_luminance_sound_bridge_is_wired_for_live_vfx_audio():
+def _contract_check_external_luminance_sound_bridge_is_wired_for_live_vfx_audio():
     root = ROOT / "ModSources" / "InfiniCrafterLocal"
     build = (root / "build.txt").read_text(encoding="utf-8")
     bridge = (root / "Common" / "Audio" / "InfiniLuminanceSoundBridge.cs").read_text(encoding="utf-8")
@@ -91,3 +91,22 @@ def test_external_luminance_sound_bridge_is_wired_for_live_vfx_audio():
     assert "EnableLuminanceSoundBackend" in options
     assert "DefaultValue(false)" in config
     assert "Config?.EnableLuminanceSoundBackend ?? false" in options
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_vfx_audio_and_projectile_guard_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_chain_projectiles_uses_runtime_child_count_cap',
+            '_contract_check_projectile_impact_sound_uses_authored_volume_pitch_and_cooldown',
+            '_contract_check_vfx_sound_cues_are_rate_limited_and_use_authored_audio_fields',
+            '_contract_check_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier',
+            '_contract_check_generated_item_use_sound_resolves_through_library',
+            '_contract_check_vfx_fallback_dust_uses_effect_before_color_guess',
+            '_contract_check_external_luminance_sound_bridge_is_wired_for_live_vfx_audio',
+        ),
+    )

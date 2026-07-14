@@ -8,9 +8,9 @@ namespace InfiniCrafterLocal.Common;
 /// </summary>
 public static class InfiniRuntimeLimits
 {
-    public const string RuntimeApiCurrent = "v0.4.48";
+    public const string RuntimeApiCurrent = "v0.4.51";
     public const int MaxSupportedMovementCode = 18;
     public const int MaxSupportedEffectCode = 15;
-    public const int MaxSupportedOnHitCode = 18;
+    public const int MaxSupportedOnHitCode = 19;
     public const int NetProseMaxChars = 0;
 }

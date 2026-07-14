@@ -304,55 +304,46 @@ def recipe_meta(a: dict[str, Any], b: dict[str, Any], tags: set[str], policy: di
 
 
 def is_material_parent(item: dict[str, Any]) -> bool:
-    cat = parent_primary_category(item)
-    return cat == "material" or "material" in tags_of(item)
+    # Material-ness for balance must come from live item mechanics, not words such
+    # as "ore", "fragment" or "lunar" in a display name.
+    return (
+        int(item_num(item, "maxStack", 1)) > 1
+        and int(item_num(item, "damage", 0)) <= 0
+        and int(item_num(item, "defense", 0)) <= 0
+        and int(item_num(item, "pick", 0)) <= 0
+        and int(item_num(item, "axe", 0)) <= 0
+        and int(item_num(item, "hammer", 0)) <= 0
+        and int(item_num(item, "healLife", 0)) <= 0
+        and int(item_num(item, "healMana", 0)) <= 0
+        and not bool(item_field(item, "accessory", False))
+    )
 
 
 def material_catalyst_pressure(item: dict[str, Any], weapon_tags: set[str] | None = None) -> dict[str, Any]:
-    """Broad progression/crafting pressure for non-weapon ingredients.
+    """Progression pressure from live material facts, never fantasy tokens.
 
-    This is not a recipe graph and does not know that A+B=C. It only detects that a
-    material looks like a serious progression catalyst: high rarity/value, hardmode/lunar
-    tags, fragments/bars/souls/hero pieces, and optional class alignment with the weapon.
-    The goal is to let routes like Minishark + hardmode gun materials climb without
-    writing per-item recipes, while Dirt/Wood/Torch remain weak anchors.
+    tModLoader rarity class metadata and sell value are observable. Words such as
+    ``lunar``, ``hero`` or ``fragment`` are not. ``weapon_tags`` remains in the signature
+    for call compatibility but deliberately cannot alter power.
     """
+    _ = weapon_tags
     tags = tags_of(item)
-    weapon_tags = weapon_tags or set()
     rare = int(item_num(item, "rare", 0))
     value = max(0.0, item_num(item, "value", 0))
     pressure = 0.0
     reasons: list[str] = []
     if not is_material_parent(item):
         return {"pressure": 0.0, "reasons": []}
-    if tags & {"dirt", "wood", "stone", "sand", "block", "torch", "gel"}:
-        pressure -= 0.45
-        reasons.append("primitive_or_common_material")
     if rare >= 2:
         pressure += min(0.85, rare * 0.08)
         reasons.append("rarity")
     if value >= 10000:
         pressure += min(0.75, math.sqrt(value) / 520.0)
         reasons.append("value")
-    if tags & {"hardmode", "soul", "mech", "hero", "hallowed", "chlorophyte", "crystal"}:
-        pressure += 0.45
-        reasons.append("hardmode_catalyst")
-    if tags & {"fragment", "lunar", "solar", "vortex", "nebula", "stardust", "luminite", "moon_lord"}:
-        pressure += 0.85
-        reasons.append("lunar_catalyst")
-    if tags & {"bar", "ore"}:
-        pressure += 0.22
-        reasons.append("bar_or_ore")
-    if tags & {"soul", "fragment", "hero"}:
-        pressure += 0.18
-        reasons.append("rare_crafting_part")
-    # Class/thematic alignment: Vortex with ranged, Nebula with magic, Broken Hero Sword with melee, etc.
-    if weapon_tags & tags & {"melee", "ranged", "magic", "summon", "sword", "blade", "gun", "bow"}:
-        pressure += 0.35
-        reasons.append("class_or_weapon_family_alignment")
-    elif ("ranged" in weapon_tags and tags & {"gun", "bullet", "vortex"}) or ("magic" in weapon_tags and tags & {"mana", "nebula", "crystal"}) or ("melee" in weapon_tags and tags & {"sword", "blade", "hero"}):
-        pressure += 0.35
-        reasons.append("class_catalyst_alignment")
+    rarity = rarity_baseline_signal(item, tags, parent_primary_category(item))
+    if str(rarity.get("role") or "").startswith(("calamity_rarity_class", "special_rarity_class")):
+        pressure += min(0.6, float(rarity.get("convertedPower") or 0.0) / 900.0)
+        reasons.append("recognized_mod_rarity_class")
     pressure = max(0.0, min(2.2, pressure))
     return {"pressure": round(pressure, 3), "reasons": reasons}
 
@@ -661,64 +652,38 @@ def stat_signal_power(item: dict[str, Any]) -> float:
 
 
 def infer_item_card(item: dict[str, Any], canonical: dict[str, Any] | None = None) -> dict[str, Any]:
-    gd = generated_data_of(item)
-    item_knowledge_raw = dict_get_ci(gd, "itemKnowledge", {})
-    if isinstance(item_knowledge_raw, dict):
-        rc = dict_get_ci(item_knowledge_raw, "resultCard")
-        if isinstance(rc, dict) and rc.get("powerScore") is not None:
-            card = dict(rc)
-            card.setdefault("name", name_of(item))
-            card.setdefault("generatedDepth", generation_depth(item))
-            card.setdefault("confidence", 0.72)
-            card.setdefault("source", "generated_parent_card")
-            return card
-
+    # Cached/generated result cards and item-name knowledge are descriptive context only.
+    # Recompute progression from the live Terraria item facts every time.
+    _ = canonical
     tags = set(tags_of(item))
     entry = known_item_entry(item) or {}
     tags |= {str(t).lower() for t in entry.get("tags", []) if str(t).strip()}
-    category = normalize_category(entry.get("category") or ("material" if "material" in tags else parent_primary_category(item)))
-    stage = str(entry.get("stage") or entry.get("tier") or "unknown")
-    tier = stage
-    # Runtime uses tier defaults, mechanics, rarity baseline, and generated result cards.
-    # Hand-authored per-item power labels must live outside the runtime archive.
-    explicit_power = float(TIER_DEFAULT_POWER.get(tier, 0))
+    category = normalize_category(parent_primary_category(item))
+    tier = "unknown"
     signal = mechanic_signal_power(item)
     signal_power = float(signal.get("score") or 0)
-    # If we have an exact knowledge card, do not let sell value alone override it too hard.
-    # Real mechanics (damage/defense/tool power) can still raise the score, but a weird value field should not turn Wulfrum into superboss material.
-    if entry and str(signal.get("basis", "")) == "value_baseline":
-        signal_power = min(signal_power, explicit_power + 20.0)
-    rarity_base = rarity_baseline_signal(item, tags, category)
+    rarity_base = rarity_baseline_signal(item, set(), category)
     rarity_power = float(rarity_base.get("convertedPower") or 0)
     depth = generation_depth(item)
-    # Generated depth is novelty, not pure power. Small boost only.
-    # Known cards win, then mechanics, then rarity baseline. Rarity is approximate but meaningful.
-    # If a generic name-pattern entry is weaker than a concrete ModRarity class (for example
-    # Calamity BurnishedAuric/CosmicPurple), let the rarity class lift the tier label too.
-    if rarity_power > explicit_power * 1.08 and str(rarity_base.get("role", "")).startswith(("calamity_rarity_class", "special_rarity_class")):
-        tier = str(rarity_base.get("tierEstimate") or tier)
-    power = max(explicit_power, signal_power, rarity_power) + min(14.0, depth * 2.5)
+    power = max(signal_power, rarity_power)
     if power <= 0:
-        if "material" in tags or "block" in tags:
+        if is_material_parent(item):
             power = max(8.0, rarity_power)
-        elif int(item.get("damage") or 0) > 0:
-            power = max(10.0, int(item.get("damage") or 0) * 1.05, rarity_power * 0.72)
+        elif int(item_num(item, "damage", 0)) > 0:
+            power = max(10.0, int(item_num(item, "damage", 0)) * 1.05, rarity_power * 0.72)
         else:
             power = max(5.0, rarity_power * 0.65)
+    for candidate, default in sorted(TIER_DEFAULT_POWER.items(), key=lambda kv: kv[1], reverse=True):
+        if power >= default * 0.92:
+            tier = candidate
+            break
     if tier == "unknown":
-        for t, default in sorted(TIER_DEFAULT_POWER.items(), key=lambda kv: kv[1], reverse=True):
-            if power >= default * 0.92:
-                tier = t
-                break
-        else:
-            tier = "trash" if power < 8 else "early"
-    confidence = 0.9 if entry else 0.48
-    if signal_power > explicit_power and not entry:
-        confidence = 0.66 if str(signal.get("basis", "")).startswith("mechanics") else 0.56
-    if rarity_power > max(explicit_power, signal_power) and not entry:
-        confidence = max(confidence, 0.58 if int(rarity_base.get("rawRare") or 0) <= 13 else 0.52)
-    if depth:
-        confidence = max(confidence, 0.62)
+        tier = "trash" if power < 8 else "early"
+    confidence = 0.48
+    if str(signal.get("basis", "")).startswith("mechanics"):
+        confidence = 0.66
+    if rarity_power > signal_power:
+        confidence = max(confidence, 0.58 if int(rarity_base.get("rawRare") or 0) <= 11 else 0.52)
     return {
         "name": name_of(item),
         "identity": item_identity(item),
@@ -726,7 +691,7 @@ def infer_item_card(item: dict[str, Any], canonical: dict[str, Any] | None = Non
         "tier": tier,
         "powerScore": round(power, 2),
         "confidence": round(min(0.98, confidence), 2),
-        "sourceHint": str(entry.get("sourceHint") or ("generated parent" if depth else ("rarity baseline + mechanics/name/tags" if rarity_power > 0 else "inferred from mechanics/name/tags"))),
+        "sourceHint": "live rarity metadata + Terraria mechanics" if rarity_power > 0 else "live Terraria mechanics",
         "tags": sorted(tags),
         "generatedDepth": depth,
         "recipeFrame": runtime_recipe_frame_for_entry(entry),
@@ -745,7 +710,7 @@ def infer_item_card(item: dict[str, Any], canonical: dict[str, Any] | None = Non
             "internalName": str(item_field(item, "internalName", "")),
             "mechanicPower": signal,
             "rarityBaseline": rarity_base,
-            "isMaterial": "material" in tags or category == "material",
+            "isMaterial": is_material_parent(item),
             "isGenerated": depth > 0,
         },
     }

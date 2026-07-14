@@ -18,7 +18,7 @@ PARENT_A = {"name": "Wooden Sword", "type": 24, "damage": 7, "useTime": 25, "use
 PARENT_B = {"name": "Fallen Star", "type": 75, "value": 500}
 
 
-def test_active_planner_contract_is_honest_and_compact() -> None:
+def _contract_check_active_planner_contract_is_honest_and_compact() -> None:
     payload = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "v12_manual_trace")
     functions = payload["engineRuntimeContract"]["availableFunctions"]
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -32,7 +32,7 @@ def test_active_planner_contract_is_honest_and_compact() -> None:
     assert "authored dart/throwable attack" in text
 
 
-def test_only_canonical_temporary_helper_name_is_accepted_and_world_entities_stay_rejected() -> None:
+def _contract_check_only_canonical_temporary_helper_name_is_accepted_and_world_entities_stay_rejected() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "spawn_temporary_helper_projectile", "params": {"family": "drone", "movement": "orbit", "lifetimeTicks": 120}},
         {"fn": "spawn_temporary_helper_projectile", "params": {"family": "boss"}},
@@ -50,7 +50,7 @@ def test_only_canonical_temporary_helper_name_is_accepted_and_world_entities_sta
     assert any(x.get("fn") == "summon_combat_entity" and x.get("reason") == "unknown_fn" for x in dropped)
 
 
-def test_multishot_projectile_prompt_is_one_body_but_explicit_bundle_survives() -> None:
+def _contract_check_multishot_projectile_prompt_is_one_body_but_explicit_bundle_survives() -> None:
     shotgun = {
         "name": "Sixfold Scattergun",
         "category": "weapon",
@@ -71,7 +71,7 @@ def test_multishot_projectile_prompt_is_one_body_but_explicit_bundle_survives() 
     assert "cluster of six fused crystal shards" in bundle_prompt
 
 
-def test_child_and_item_role_guards_separate_runtime_multiplicity_and_inventory_scene() -> None:
+def _contract_check_child_and_item_role_guards_separate_runtime_multiplicity_and_inventory_scene() -> None:
     child = role_visual_prompt_guard("child", "three ember shards", {"attack": {"splitCount": 3}}).lower()
     assert "one child" in child and "runtime spawns" in child
 
@@ -95,7 +95,7 @@ def test_child_and_item_role_guards_separate_runtime_multiplicity_and_inventory_
     assert "no furnished room" in furniture_prompt
 
 
-def test_visual_director_rejects_noncanonical_response_keys(monkeypatch) -> None:
+def _contract_check_visual_director_rejects_noncanonical_response_keys(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
@@ -130,7 +130,7 @@ def test_visual_director_rejects_noncanonical_response_keys(monkeypatch) -> None
     assert "projectileAssetMode" in error
 
 
-def test_vfx_director_receives_compiled_runtime_truth_for_beam_and_children() -> None:
+def _contract_check_vfx_director_receives_compiled_runtime_truth_for_beam_and_children() -> None:
     card = _vfx_compact_child_for_director({
         "name": "Prismatic Thread",
         "attack": {
@@ -157,7 +157,7 @@ def test_vfx_director_receives_compiled_runtime_truth_for_beam_and_children() ->
     assert attack["beamWidthPx"] == 16
 
 
-def test_on_expire_children_are_non_recursive_in_csharp_owner() -> None:
+def _contract_check_on_expire_children_are_non_recursive_in_csharp_owner() -> None:
     root = Path(__file__).resolve().parents[2]
     source = (root / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
     child_policy = (root / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
@@ -170,7 +170,7 @@ def test_on_expire_children_are_non_recursive_in_csharp_owner() -> None:
     assert "child.SplitCount = 0" in child_policy
 
 
-def test_generated_ammo_and_authored_throwable_contract_remains_distinct() -> None:
+def _contract_check_generated_ammo_and_authored_throwable_contract_remains_distinct() -> None:
     ammo = compile_runtime_plan_to_genome_patch({"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "ammo", "damageClass": "ranged", "damage": 7, "maxStack": 999, "craftYield": 50, "ammoFor": "arrow"}},
         {"fn": "ammo_behavior", "params": {"ammoFor": "arrow"}},
@@ -183,3 +183,23 @@ def test_generated_ammo_and_authored_throwable_contract_remains_distinct() -> No
     assert throwable["kind"] == "consumable_weapon"
     assert throwable["runtimeFamily"] == "throw"
     assert throwable["projectileFamily"] == "poison_dart"
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v12_pre_livetest_manual_trace_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_active_planner_contract_is_honest_and_compact',
+            '_contract_check_only_canonical_temporary_helper_name_is_accepted_and_world_entities_stay_rejected',
+            '_contract_check_multishot_projectile_prompt_is_one_body_but_explicit_bundle_survives',
+            '_contract_check_child_and_item_role_guards_separate_runtime_multiplicity_and_inventory_scene',
+            '_contract_check_visual_director_rejects_noncanonical_response_keys',
+            '_contract_check_vfx_director_receives_compiled_runtime_truth_for_beam_and_children',
+            '_contract_check_on_expire_children_are_non_recursive_in_csharp_owner',
+            '_contract_check_generated_ammo_and_authored_throwable_contract_remains_distinct',
+        ),
+    )

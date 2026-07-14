@@ -19,6 +19,7 @@ def _cfg(**overrides):
         vae=r"C:\Games\sdcpp\models\ae.safetensors",
         llm=r"C:\Games\sdcpp\models\qwen.gguf",
         lora_dir="",
+        lora_file="",
         lora_prompt_tags="",
         host="127.0.0.1",
         port=7861,
@@ -98,7 +99,11 @@ def _check_backend_extracts_a1111_base64_response(tmp_path: Path) -> None:
 
 
 def _check_backend_adds_lora_model_dir_and_prompt_tags() -> None:
-    cfg = _cfg(lora_dir=r"C:\Games\sdcpp\loras", lora_prompt_tags="<lora:terraria_items:0.65>")
+    cfg = _cfg(
+        lora_dir=r"C:\Games\sdcpp\loras",
+        lora_file=r"C:\Games\sdcpp\loras\terraria_items.safetensors",
+        lora_prompt_tags="<lora:terraria_items:0.65>",
+    )
 
     cmd, shell = sdcpp_backend.build_server_command(cfg)
     payload = sdcpp_backend.server_payload(
@@ -117,7 +122,8 @@ def _check_backend_adds_lora_model_dir_and_prompt_tags() -> None:
     assert isinstance(cmd, list)
     assert "--lora-model-dir" in cmd
     assert r"C:\Games\sdcpp\loras" in cmd
-    assert payload["prompt"].endswith("<lora:terraria_items:0.65>")
+    assert payload["prompt"] == "a copper bow"
+    assert payload["lora"] == [{"path": "terraria_items.safetensors", "multiplier": 0.65, "is_high_noise": False}]
 
 
 def _check_image_pipeline_derives_sdcpp_lora_tag_from_selected_file_when_prompt_tags_blank() -> None:
@@ -135,6 +141,7 @@ def _check_image_pipeline_derives_sdcpp_lora_tag_from_selected_file_when_prompt_
 
         cfg = pipeline._sdcpp_config()
 
+        assert cfg.lora_file == r"C:\Games\sdcpp\models\pixel_art_style_z_image_turbo.safetensors"
         assert cfg.lora_prompt_tags == "<lora:pixel_art_style_z_image_turbo:0.70>"
     finally:
         pipeline.SDCPP_LORA_FILE = old_file
@@ -184,6 +191,14 @@ def _check_extra_args_split_strips_helper_quotes_for_argv_mode() -> None:
 
     assert tokens == ["--cache-mode", "dbcache", "--cache-option", "threshold=0.08,warmup=2"]
 
+def _check_backend_drops_non_finite_lora_multipliers() -> None:
+    clean, entries = sdcpp_backend.structured_server_loras(
+        "pixel item <lora:bad_nan:nan> <lora:bad_inf:inf>",
+    )
+    assert clean == "pixel item"
+    assert entries == []
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -201,7 +216,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_backend_respects_manual_equals_flags_for_dedicated_paths',
     '_check_backend_does_not_pass_inactive_lora_dir_without_tags',
     '_check_backend_appends_lora_tags_individually_without_duplicates',
-    '_check_extra_args_split_strips_helper_quotes_for_argv_mode'
+    '_check_extra_args_split_strips_helper_quotes_for_argv_mode',
+    '_check_backend_drops_non_finite_lora_multipliers'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

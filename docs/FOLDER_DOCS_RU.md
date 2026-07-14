@@ -1,6 +1,6 @@
 # docs
 
-Supplementary design/reference docs. Some files describe Python authoring/balance/TODO work, not the current C# tModLoader runtime.
+Supplementary design/reference docs. Они не владеют отдельными backlog: единственный project ToDo находится в корне версии.
 
 Current mod architecture source of truth is `../PROJECT_ARCHITECTURE_RU.md` plus C# under `../ModSources/InfiniCrafterLocal`.
 
@@ -10,6 +10,6 @@ Useful docs here:
 - `RUNTIME_AUTHORING_CURRENT_RU.md` — runtime authoring notes, may include historical sections.
 - `RUNTIME_VERTICAL_SLICES_RU.md` — обязательные правила расширения runtime без state-machine, semantic tables и скрытых владельцев.
 - `runtime_archetype_contract.md` — v0.4.239 runtimeArchetype/runtimeContract schema and promise-truth notes.
-- `TODO_ROADMAP_VERY_LATER_RU.md` — unified future-work roadmap; old split TODO docs are not canonical.
+- `../TODO_ROADMAP_VERY_LATER_RU.md` — sole unified future-work roadmap, intentionally kept at the version root.
 
 - `CONTRACT_SAFETY_STACK_RU.md` — strict boundaries, parity, Hypothesis, Ruff/Pyright and release gate ownership.

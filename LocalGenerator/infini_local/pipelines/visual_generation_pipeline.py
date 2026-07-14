@@ -11,11 +11,14 @@ from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.item_identity_tools import stable_hash
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
 from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
 from infini_local.pipelines.combine_genome_contract import is_llm_planner
 from infini_local.pipelines.combine_validation import _stringish
 from infini_local.pipelines.item_power_knowledge import tags_of
 from infini_local.pipelines.llm_transport import (
+    active_llm_provider,
+    apply_llm_common_options,
     llm_chat_json,
     llm_json_response_format,
     resolve_llm_model,
@@ -46,7 +49,7 @@ from infini_local.services.visual_asset_pipeline import (
     sanitize_visual_palette,
     strip_conflicting_sprite_prompt_bits,
 )
-from infini_local.storage.trace_runtime import log_event
+from infini_local.storage.trace_runtime import log_event, trace_event
 
 
 def anime_reference_opportunity(data: dict[str, Any]) -> str:
@@ -118,7 +121,7 @@ def _visual_director_backend_profile() -> tuple[str, str]:
     if image_backend_uses_semantic_prompt_contract():
         return (
             "modern flow image model (FLUX.2/Qwen-text-encoder style)",
-            "Write concise subject-first objective visual descriptions with concrete shape, materials, and palette. Avoid legacy Stable Diffusion tag soup.",
+            "Write one coherent 40-100 word subject-first description. Build the physical topology before style: explicit class and count, global silhouette and view, functional parts joined with relationship verbs, then materials, localized decoration and light, pixel-art finish, and background. Avoid legacy Stable Diffusion tag soup.",
         )
     return (
         "configured image backend",
@@ -168,7 +171,7 @@ def attach_visual(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca
     visual.setdefault("drawOffsetX", 0)
     visual.setdefault("drawOffsetY", 0)
     visual["negativePrompt"] = asset_negative_prompt("item")
-    authored_prompt = str(visual.get("imagePrompt") or "").strip()
+    authored_prompt = str(visual.get("imagePrompt") or visual.get("itemPrompt") or "").strip()
     if authored_prompt and is_llm_planner(data):
         visual["imagePrompt"] = sanitize_image_prompt_background(authored_prompt)
         debug["visualPromptSource"] = "planner_authored"
@@ -232,7 +235,14 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     content = ""
     model_name = ""
     transport_debug: dict[str, Any] = {}
+    message_mode = ""
     try:
+        history_state = planner_history_state(data)
+        live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
+        if history_state == "malformed" or (history_state == "absent" and live_planner):
+            raise ValueError(
+                "visual director requires valid Planner history for live LLM data; refusing standalone fallback"
+            )
         anime_opportunity = anime_reference_opportunity(data)
         anime_rule = (
             "This recipe has a rare optional anime-reference opportunity. You may decline it. "
@@ -249,14 +259,17 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "rules": [
                 "Return one JSON object matching the supplied schema; no markdown or analysis.",
                 "Do not change gameplay, delivery, runtime families, counts, timing, or stats.",
-                "The planner owns the visual fusion. Preserve its literal, attached, fused, disassembled, multi-part, or unusual topology; do not force or remove a parent object.",
+                "The planner's authored final-item topology is authoritative. Preserve its physical class, subject count, continuous bodies, attachments, and intentional separations exactly as authored.",
                 "Build role-separated assets. Item is the inventory/held object, projectile is one authored moving-body texture, impact is a momentary effect, child is one authored child body, and field is one authored persistent decal/rune/cloud body.",
                 "Runtime shotCount, spread, and splitCount do not authorize rewriting the authored visual topology. Keep explicit bundles or multi-part bodies when authored.",
                 "Use bakedAssets as the only asset-mode decision surface. Prompt text alone never requests a PNG.",
                 "Use particle_vfx for dust, sparks, smoke, glints, simple trails, and short bursts; use baked_sprite only for a distinct body, decal, rune, cloud, or child entity that runtime can consume.",
                 "Item icons and projectile bodies are isolated sprites on solid #ff00ff, not scenes, rooms, placement previews, characters, or UI.",
                 "Keep the authored fantasy visible with concrete shape, proportions, materials, and foreground colors; avoid generic weapon/orb/bolt collapse.",
-                "For itemIconPrompt, write one concrete itemSilhouetteContract for this exact generated object, without replacing it with a generic class label.",
+                "For itemIconPrompt, write one coherent natural-language paragraph in this order: physical class and count; global silhouette and one view; functional parts and how they connect using explicit relationship verbs; materials and base colors; compact decoration at an exact location; restrained local lighting; pixel-art style and background. Express topology as connected geometry, never as a loose list of nouns.",
+                "Decorative motifs remain localized surface or inset details inside the authored physical structure.",
+                "Anime homage and decorative interface motifs must remain localized as engraved, inset, or painted surface details on the item body; never author floating UI, HUD overlays, text, or detached glyph panels.",
+                "negativePrompt must not contradict allowed positive subject, material, color, or localized motif decisions; remove an invalid positive role motif rather than weakening the item/projectile no-UI guard.",
                 "Z-Image prompts are subject-first visual descriptions, not Stable Diffusion tag lists. No masterpiece/8K/meta labels.",
                 "Write concise VFX hints with no code and no numeric particle counts.",
                 anime_rule,
@@ -271,9 +284,9 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "fieldGuide": {
                 "styleGuide": "one shared authored art-direction sentence used by every role",
                 "palette": "foreground named colors only",
-                "itemSilhouetteContract": "exact proportions, readable parts, and near-miss silhouettes for the authored final item",
+                "itemSilhouetteContract": "one compact positive sentence stating global silhouette, part count, proportions, attachment points, and which bodies are continuous or intentionally separate",
                 "rolePrompts": "itemIconPrompt, projectileSpritePrompt, impactSpritePrompt, childSpritePrompt, fieldSpritePrompt",
-                "bakedAssets": "per-role delivery mode/reason only: none, particle_vfx, reuse_item_sprite, or baked_sprite; role prompts above are canonical",
+                "bakedAssets": "per-role delivery mode/reason only. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. Role prompts above are canonical",
                 "vfx": "concise vfxIntent/projectileVfx/impactVfx/childVfx/fieldVfx plus scale, rhythm, materials, and avoid notes",
                 "lists": "animationPlan, assetDependencies, qualityNotes, vfxMaterialHints must remain JSON arrays",
                 "negativePrompt": "one optional shared backend negative prompt; keep empty for Z-Image",
@@ -284,13 +297,33 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 f"optional; strength subtle or strong but never above {anime_opportunity}; "
                 "name one source and 1-3 concrete motifs"
             )
+        payload["agentHandoff"] = agent_handoff(
+            previous_speaker="item_planner" if history_state == "valid" else "pipeline_orchestrator",
+            current_speaker="visual_director_context",
+            next_speaker="visual_director",
+            cause_by="visual_asset_prompt_authoring",
+            artifact_source="item",
+        )
         model_name = resolve_llm_model()
+        visual_system = (
+            f"You direct pixel-art assets for {backend_name} in a Terraria-like generated-item mod. "
+            "The latest visual_director_context payload.item is the authoritative current item truth after validation and runtime repair; any earlier item_planner response is provenance only. "
+            "Write coherent subject-first visual descriptions, not legacy SD tag recipes. Establish physical class, count, silhouette, view, and connected functional parts before materials, decoration, light, style, and background. "
+            "Preserve authored subject, state, colors, materials, and topology. Use only authored glow, magic, energy, child motes, and material effects. Return one JSON object."
+        )
+        visual_user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        messages = [
+            stage_chat_message("system", "visual_director_contract", visual_system),
+            stage_chat_message("user", "visual_director_context", visual_user_content),
+        ]
+        message_mode = (
+            "authoritative_stage_dossier_v31"
+            if history_state == "valid"
+            else "legacy_authoritative_stage_dossier_v31"
+        )
         req = {
             "model": model_name,
-            "messages": [
-                {"role": "system", "content": f"You direct pixel-art assets for {backend_name} in a Terraria-like generated-item mod. Write concise final visual descriptions, not legacy SD tag recipes. Preserve authored subject, count, action, state, colors, and materials. Do not add unauthored glow, magic, energy, child motes, or material effects. Return one JSON object."},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
-            ],
+            "messages": messages,
             "temperature": env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.42, lo=0.0, hi=1.2),
             "max_tokens": visual_director_max_tokens(),
             "response_format": llm_json_response_format(
@@ -299,9 +332,41 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 strict=True,
             ),
         }
+        req = apply_llm_common_options(
+            req,
+            model_name=model_name,
+            default_max_tokens=visual_director_max_tokens(),
+        )
+        trace_event(
+            "prompt",
+            "LLM:visual_director",
+            "Visual director request",
+            {
+                "provider": active_llm_provider(),
+                "model": model_name,
+                "temperature": req.get("temperature"),
+                "maxTokens": req.get("max_tokens"),
+                "reasoning": req.get("reasoning"),
+                "reasoningEffort": req.get("reasoning_effort"),
+                "messageMode": message_mode,
+                "messages": [
+                    {"role": message.get("role"), "name": message.get("name"), "chars": len(str(message.get("content") or ""))}
+                    for message in req.get("messages") or []
+                    if isinstance(message, dict)
+                ],
+            },
+            prompt=req.get("messages"),
+        )
         raw = llm_chat_json(req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
         transport_debug = raw.get("_debug") if isinstance(raw, dict) and isinstance(raw.get("_debug"), dict) else {}
         content = raw["choices"][0]["message"]["content"]
+        trace_event(
+            "response",
+            "LLM:visual_director",
+            "Visual director response",
+            {"model": model_name, "chars": len(str(content)), "transport": transport_debug},
+            response=content,
+        )
         obj = parse_first_valid_llm_json(content)
         if not isinstance(obj, dict):
             raise ValueError("visual director returned a non-object JSON value")
@@ -330,7 +395,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             if kit.get(prompt_key):
                 cleaned = strip_conflicting_sprite_prompt_bits(kit[prompt_key])
                 cleaned = sanitize_projectile_family_prompt(data, role_hint, cleaned)
-                cleaned = role_visual_prompt_guard(role_hint, cleaned, data)
+                if role_hint != "item" or not image_backend_uses_semantic_prompt_contract():
+                    cleaned = role_visual_prompt_guard(role_hint, cleaned, data)
                 kit[prompt_key] = cleaned[:1400] if cleaned else ""
 
         for text_key in [
@@ -373,6 +439,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             working_debug.pop("visualDirectorBoundaryRepairs", None)
         working_debug["visualDirectorModel"] = model_name
         working_debug["visualDirectorStatus"] = "validated_and_applied"
+        working_debug["visualDirectorMessageMode"] = message_mode
         working_debug["visualDirectorContextChars"] = len(json.dumps(payload.get("item") or {}, ensure_ascii=False))
         if transport_debug:
             working_debug["visualDirectorTransport"] = transport_debug
@@ -461,5 +528,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             debug["visualDirectorModel"] = model_name
         if content:
             debug["visualDirectorRejectedRawOutput"] = content[:10000]
+        trace_event("error", "LLM:visual_director", "Visual director failed", {"model": model_name}, error=repr(e))
         log_event("warn", "visual director failed", {"error": repr(e), "trace": traceback.format_exc()})
     return data

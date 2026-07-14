@@ -7,21 +7,16 @@
 - `PROJECT_MAP_RU.md` — карта директорий и source-of-truth файлов.
 - `README_RU.md` — краткое описание runtime flow.
 - `BUILD_QOL_RU.md` — сборка, runtime dependencies, MP asset caveats.
-- `docs/` — дополнительные balance/runtime/TODO материалы, часть из них относится к Python authoring.
-- `CHATGPT_CHANGES_20260710_RU.md` — sound catalog v8 patch.
-- `CHATGPT_CHANGES_20260710_V9_RU.md` — gameplay authoring/runtime v9: exact channel beam, dead-field/dataflow fixes, provenance and classifier cleanup.
-- `CHATGPT_CHANGES_20260710_V10_RU.md` — maintainable runtime vertical slices, on_expire и balance modes.
-- `CHATGPT_CHANGES_20260710_V11_RU.md` — generic overhead_barrage, Daedalus/Starfury carrier separation и theme preservation.
+- `TODO_ROADMAP_VERY_LATER_RU.md` — единый будущий backlog в корне версии.
+- `docs/` — дополнительные канонические материалы:
+  - `docs/RUNTIME_AUTHORING_CURRENT_RU.md` — текущий Python authoring/runtime contract;
+  - `docs/CONTRACT_SAFETY_STACK_RU.md` — границы и проверочный стек;
+  - `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` — негативные author/image примеры;
+  - `docs/ZIMAGE_WEAPON_TOPOLOGY_RU.md` — model-authored positive item topology без code-owned geometry;
+
 
 Не считать архитектурой мода:
-- `.tml-build-cache/`, `.nuget/`, `build_logs/`;
-- `agent_reports/` — исторические отчёты;
+- `.tml-build-cache/`, `.nuget/`, `bin/`, `obj/`, `build_logs/`, `artifacts/`;
+- `agent_reports/` — одноразовые отчёты и результаты экспериментов;
+- `LocalGenerator/cache/` — runtime/test cache;
 - `LocalGenerator/` — Python generator boundary, не C# runtime.
-
-- `CHATGPT_CHANGES_20260710_V12_RU.md` — pre-livetest author/image patch and verification.
-- `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` — ten manual traces before live LLM/Image Gen testing.
-
-- `docs/ZIMAGE_WEAPON_TOPOLOGY_RU.md` — simple visual-only topology guard against duplicate weapon handles/guards/stocks without a VL judge.
-
-- `CHATGPT_CHANGES_20260710_V15_RU.md` — charge-release и true bounded sentry vertical slices; lifecycle details in `docs/CHARGE_RELEASE_SENTRY_RUNTIME_RU.md`.
-- `CHATGPT_CHANGES_20260711_V16_RU.md` — восстановление критичной семантики compact planner prompt: pierce, use timing, ammo, family-only knobs, explicit zero и sentry budget.

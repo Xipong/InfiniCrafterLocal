@@ -373,7 +373,9 @@ public sealed partial class GeneratedProjectile
         bool beamLike = IsBeamDelivery();
         bool executableBeamVisual = _spec.MovementCode == 15;
         bool thrustLike = IsThrustDelivery();
-        bool tetherLike = IsFlailDelivery() || IsYoyoDelivery();
+        bool tetherLike = IsFlailDelivery()
+            || IsYoyoDelivery()
+            || (_spec.MovementCode is 5 or 14 && _spec.PullStrength > 0f);
         bool whipLike = IsWhipDelivery();
         if (tetherLike && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers)
         {
@@ -382,9 +384,16 @@ public sealed partial class GeneratedProjectile
         }
         if (whipLike)
         {
-            Vector2 ws, we, wd;
-            WhipLine(out ws, out we, out wd);
-            DrawLine(px, ws - Main.screenPosition, we - Main.screenPosition, c * 0.70f, Math.Max(2f, width * 0.55f));
+            FillGeneratedWhipControlPoints(_whipControlPoints);
+            for (int i = 1; i < _whipControlPoints.Count; i++)
+            {
+                DrawLine(
+                    px,
+                    _whipControlPoints[i - 1] - Main.screenPosition,
+                    _whipControlPoints[i] - Main.screenPosition,
+                    c * 0.70f,
+                    Math.Max(2f, width * 0.55f));
+            }
         }
         bool executableSlashVisual = GeneratedRuntimeFamilyPolicy.Is(RuntimeFamily(), GeneratedRuntimeFamilyPolicy.Swing);
 

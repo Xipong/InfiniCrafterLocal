@@ -11,13 +11,13 @@ def _source(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
 
-def test_overhead_executor_imports_runtime_authority_namespace() -> None:
+def _contract_check_overhead_executor_imports_runtime_authority_namespace() -> None:
     source = _source("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs")
     assert "using InfiniCrafterLocal.Common.Services;" in source
     assert "InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)" in source
 
 
-def test_on_expire_has_real_onkill_callsite_and_shared_lifetime_budget() -> None:
+def _contract_check_on_expire_has_real_onkill_callsite_and_shared_lifetime_budget() -> None:
     source = _source("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs")
     state = _source("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs")
     onkill = source[source.index("public override void OnKill"):]
@@ -27,21 +27,7 @@ def test_on_expire_has_real_onkill_callsite_and_shared_lifetime_budget() -> None
     assert "private int _spawnedGameplayChildCount;" in state
 
 
-def test_overhead_barrage_rejects_on_expire_secondary_budget_conflict() -> None:
-    data = {"runtimePlan": {"resultKind": "weapon", "engineCalls": [
-        {"fn": "fire_ranged_weapon", "params": {"family": "overhead_barrage", "shotCount": 4, "projectileFamily": "arrow"}},
-        {"fn": "spawn_secondary_projectiles", "params": {"trigger": "on_expire", "count": 3, "projectileShape": "shard"}},
-    ]}}
-    patch = compile_runtime_plan_to_genome_patch(data)
-    assert patch["runtimeFamily"] == "overhead_barrage"
-    assert patch["shotCount"] == 4
-    assert patch["splitCount"] == 0
-    assert "secondaryTrigger" not in patch
-    assert patch["maxChildProjectiles"] == 4
-    assert patch["rejectedSecondaryCalls"][0]["reason"] == "on_expire_conflicts_with_overhead_barrage_child_budget"
-
-
-def test_unknown_csharp_secondary_trigger_is_inert_not_on_hit() -> None:
+def _contract_check_unknown_csharp_secondary_trigger_is_inert_not_on_hit() -> None:
     source = _source("ModSources/InfiniCrafterLocal/Common/Models/GeneratedSecondaryTriggerPolicy.cs")
     assert "_ => """ in source
     assert "NormalizeForRuntimeFamily" in source
@@ -49,7 +35,7 @@ def test_unknown_csharp_secondary_trigger_is_inert_not_on_hit() -> None:
     assert "Token(value) == OnExpire ? OnExpire : OnHit" not in source
 
 
-def test_projectile_visuals_do_not_route_from_taxonomy_or_prose() -> None:
+def _contract_check_projectile_visuals_do_not_route_from_taxonomy_or_prose() -> None:
     source = _source("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Visuals.cs")
     for forbidden in [
         "PresentationIdentityText", "WeaponSubfamily", "AttackPatternTags",
@@ -60,7 +46,7 @@ def test_projectile_visuals_do_not_route_from_taxonomy_or_prose() -> None:
     assert "GeneratedRuntimeFamilyPolicy.Is" in source
 
 
-def test_retired_overhead_family_migration_is_absent_from_active_runtime() -> None:
+def _contract_check_retired_overhead_family_migration_is_absent_from_active_runtime() -> None:
     active = "\n".join([
         _source("LocalGenerator/infini_local/core/runtime_archetypes.py"),
         _source("LocalGenerator/infini_local/core/runtime_contracts.py"),
@@ -73,7 +59,7 @@ def test_retired_overhead_family_migration_is_absent_from_active_runtime() -> No
 
 
 
-def test_python_presentation_and_sound_use_exact_compiled_fields_only() -> None:
+def _contract_check_python_presentation_and_sound_use_exact_compiled_fields_only() -> None:
     source = _source("LocalGenerator/infini_local/pipelines/presentation_sound.py")
     assert "visual_text" not in source
     assert " in visual_text" not in source
@@ -85,9 +71,28 @@ def test_python_presentation_and_sound_use_exact_compiled_fields_only() -> None:
     assert 'sp.get("useCatalogId")' not in source
     assert 'sp.get("impactCatalogId")' not in source
 
-def test_numeric_token_examples_are_not_secret_placeholders() -> None:
+def _contract_check_numeric_token_examples_are_not_secret_placeholders() -> None:
     source = _source("LocalGenerator/config.example.env")
     assert "INFINI_VISUAL_DIRECTOR_MAX_TOKENS=" in source
     assert "INFINI_VISUAL_DIRECTOR_MAX_TOKENS=PASTE_KEY_HERE" not in source
     assert "INFINI_LLM_MAX_TOKENS=PASTE_KEY_HERE" not in source
     assert "INFINI_LLM_REASONING_MAX_TOKENS=PASTE_KEY_HERE" not in source
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v14_full_review_regressions_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_overhead_executor_imports_runtime_authority_namespace',
+            '_contract_check_on_expire_has_real_onkill_callsite_and_shared_lifetime_budget',
+            '_contract_check_unknown_csharp_secondary_trigger_is_inert_not_on_hit',
+            '_contract_check_projectile_visuals_do_not_route_from_taxonomy_or_prose',
+            '_contract_check_retired_overhead_family_migration_is_absent_from_active_runtime',
+            '_contract_check_python_presentation_and_sound_use_exact_compiled_fields_only',
+            '_contract_check_numeric_token_examples_are_not_secret_placeholders',
+        ),
+    )

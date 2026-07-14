@@ -12,8 +12,10 @@ backend contract without importing the full HTTP server.
 from dataclasses import dataclass
 import base64
 import json
+import math
 import os
 from pathlib import Path, PureWindowsPath
+import re
 import shlex
 from typing import Any, Callable
 from urllib import request as urlrequest
@@ -42,6 +44,7 @@ class SdcppBackendConfig:
     zimage_prompt_contract: str
     zimage_positive_only: bool
     rocm_compat_root: str = ""
+    lora_file: str = ""
 
 
 def server_process_environment(
@@ -289,16 +292,16 @@ def lora_dir_from_file(path: str) -> str:
     parent = PureWindowsPath(raw).parent if "\\" in raw or ":" in raw else Path(raw).parent
     return "" if str(parent) in {"", "."} else str(parent)
 
-def lora_tag_from_file(path: str, weight: str = "0.65") -> str:
+def lora_tag_from_file(path: str, weight: str = "0.25") -> str:
     """Return stable-diffusion-webui/sd.cpp style LoRA prompt tag for a file path.
 
     sd.cpp discovers LoRA files through ``--lora-model-dir`` and enables a
     concrete LoRA by prompt tag.  The tag name is the file stem, e.g.
-    ``C:/loras/terraria_items.safetensors`` -> ``<lora:terraria_items:0.65>``.
+    ``C:/loras/terraria_items.safetensors`` -> ``<lora:terraria_items:0.25>``.
     """
     raw = str(path or "").strip()
     stem = (PureWindowsPath(raw).stem if "\\" in raw or ":" in raw else Path(raw).stem).strip()
-    w = str(weight or "0.65").strip() or "0.65"
+    w = str(weight or "0.25").strip() or "0.25"
     if not stem:
         return ""
     return f"<lora:{stem}:{w}>"
@@ -321,6 +324,37 @@ def append_lora_prompt_tags(prompt: str, lora_prompt_tags: str) -> str:
         return prompt
     return (prompt.rstrip() + " " + " ".join(missing)).strip()
 
+
+_LORA_PROMPT_TAG_RE = re.compile(r"<lora:([^:>]+):([^>]+)>")
+
+
+def structured_server_loras(prompt: str, lora_file: str = "") -> tuple[str, list[dict[str, Any]]]:
+    """Translate webui prompt tags into sd-server's secure structured API.
+
+    Current sd-server intentionally disables prompt-embedded LoRA parsing for HTTP
+    routes. The tags must therefore become the request ``lora`` array while the
+    text encoder receives a clean prompt. The selected file supplies the exact
+    relative filename expected by the server-side LoRA cache.
+    """
+    selected_raw = str(lora_file or "").strip()
+    selected_path = PureWindowsPath(selected_raw) if "\\" in selected_raw or ":" in selected_raw else Path(selected_raw)
+    selected_name = str(selected_path.name) if selected_raw else ""
+    selected_stem = str(selected_path.stem) if selected_raw else ""
+    entries: list[dict[str, Any]] = []
+    for match in _LORA_PROMPT_TAG_RE.finditer(str(prompt or "")):
+        name = match.group(1).strip()
+        try:
+            multiplier = float(match.group(2).strip())
+        except ValueError:
+            continue
+        if not math.isfinite(multiplier):
+            continue
+        path = selected_name if selected_name and name == selected_stem else name
+        entries.append({"path": path, "multiplier": multiplier, "is_high_noise": False})
+    clean_prompt = re.sub(r"\s+", " ", _LORA_PROMPT_TAG_RE.sub("", str(prompt or ""))).strip()
+    return clean_prompt, entries
+
+
 def server_payload(
     cfg: SdcppBackendConfig,
     prompt: str,
@@ -336,6 +370,7 @@ def server_payload(
     """Build txt2img payload for A1111, OpenAI-ish, or sd.cpp-ish wrappers."""
     style = (style or "auto").lower()
     prompt = append_lora_prompt_tags(prompt, cfg.lora_prompt_tags)
+    prompt, structured_loras = structured_server_loras(prompt, cfg.lora_file)
     neg = "" if positive_only else (negative or "")
     if style in {"a1111", "auto"}:
         payload: dict[str, Any] = {
@@ -353,9 +388,14 @@ def server_payload(
         if is_zimage:
             payload["zimage_prompt_contract"] = cfg.zimage_prompt_contract
             payload["zimage_positive_only_prompt"] = bool(positive_only)
+        if structured_loras:
+            payload["lora"] = structured_loras
         return payload
     if style == "openai":
-        return {"prompt": prompt, "n": 1, "size": f"{width}x{height}", "response_format": "b64_json"}
+        payload = {"prompt": prompt, "n": 1, "size": f"{width}x{height}", "response_format": "b64_json"}
+        if structured_loras:
+            payload["lora"] = structured_loras
+        return payload
     payload = {
         "prompt": prompt,
         "negative_prompt": neg,
@@ -373,6 +413,8 @@ def server_payload(
     if is_zimage:
         payload["zimage_prompt_contract"] = cfg.zimage_prompt_contract
         payload["zimage_positive_only_prompt"] = bool(positive_only)
+    if structured_loras:
+        payload["lora"] = structured_loras
     return payload
 
 

@@ -20,3 +20,12 @@ def test_ci_has_separate_python_strict_and_tml_jobs() -> None:
     assert "TML_BUILD_FAILED=true" in ci
     assert "external mod reference DLLs not found" in ci
     assert "InfiniExternalDepsRoot" in ci
+
+    csproj = (ROOT / "ModSources" / "InfiniCrafterLocal" / "InfiniCrafterLocal.csproj").read_text(encoding="utf-8")
+    assert "Tomat.Terraria.ModLoader.Sdk" in csproj
+    assert "InfiniExternalDepsRoot" in csproj
+    assert 'HintPath="$(InfiniParticleLibraryDll)"' in csproj
+    assert 'HintPath="$(InfiniLuminanceDll)"' in csproj
+    assert "tmp\\tml-deps-src" not in csproj
+    assert "INFINI_TML_DEPS_SRC" in csproj
+    assert "InfiniValidateExternalModReferences" in csproj

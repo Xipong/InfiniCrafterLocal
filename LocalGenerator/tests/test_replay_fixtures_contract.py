@@ -12,7 +12,7 @@ from infini_local.pipelines.combine_validation import validate_and_repair
 from infini_local.pipelines.item_power_knowledge import apply_item_knowledge
 from infini_local.pipelines.item_power_knowledge import canonicalize
 from infini_local.pipelines.item_power_knowledge import infer_item_card
-from infini_local.pipelines.llm_transport import llm_chat_json
+from infini_local.pipelines.llm_transport import _llm_replay_stage_from_payload, llm_chat_json
 from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
 from infini_local.storage.world_recipe_runtime import sanitize_recipe_for_delivery
 
@@ -132,8 +132,6 @@ def _check_llm_chat_json_raw_replay_intercepts_planner_without_network(monkeypat
 
 
 def _check_llm_replay_stage_prefers_planner_over_loose_name_repair_match() -> None:
-    from infini_local.pipelines.llm_transport import _llm_replay_stage_from_payload
-
     # Planner payloads often mention both "repair" and "name" (repairPolicy, display names).
     # That must not route the author hop to name_repair fixtures.
     req = {
@@ -161,7 +159,7 @@ def _check_llm_chat_json_raw_replay_directory_routes_multiple_llm_hops(monkeypat
     # and repair calls instead of only try_llm_plan. This stays out of production
     # unless INFINI_LLM_REPLAY_RAW is explicitly set.
     (tmp_path / "planner.txt").write_text('{"name":"Planner Replay","runtimePlan":{"engineCalls":[]}}', encoding="utf-8")
-    (tmp_path / "vfx_director.txt").write_text('{"visualKit":{"projectileSpritePrompt":"compact harpoon head","negativePrompt":""}}', encoding="utf-8")
+    (tmp_path / "visual_director.txt").write_text('{"visualKit":{"projectileSpritePrompt":"compact harpoon head","negativePrompt":""}}', encoding="utf-8")
     monkeypatch.setenv("INFINI_LLM_REPLAY_RAW", str(tmp_path))
 
     planner_req = {
@@ -179,6 +177,20 @@ def _check_llm_chat_json_raw_replay_directory_routes_multiple_llm_hops(monkeypat
 
     assert parse_first_valid_llm_json(_llm_replay_content(planner_req))["name"] == "Planner Replay"
     assert parse_first_valid_llm_json(_llm_replay_content(vfx_req))["visualKit"]["projectileSpritePrompt"] == "compact harpoon head"
+
+
+def _check_replay_stage_prefers_canonical_message_names_over_prose() -> None:
+    expected = {
+        "item_author_contract": "planner",
+        "runtime_repair_contract": "author_repair",
+        "genome_repair_contract": "genome_repair",
+        "name_repair_contract": "name_repair",
+        "visual_director_contract": "visual_director",
+        "vfx_director_contract": "vfx_director",
+    }
+    for name, stage in expected.items():
+        payload = {"messages": [{"role": "system", "name": name, "content": "opaque contract"}]}
+        assert _llm_replay_stage_from_payload(payload) == stage
 
 
 def _check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter() -> None:
@@ -209,6 +221,8 @@ def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line
     plan = json.loads((FIXTURES / "author_plan" / "rope_spear_author_plan.json").read_text(encoding="utf-8"))
     data = _validate_and_attach(plan, _spear_parent(), _rope_parent(), "test_replay_rope_spear")
     assert data["attack"]["genome"]["runtimeFamily"] == "returning"
+    assert data["attack"]["genome"]["pullStrength"] == 0.35
+    assert data["attack"]["genome"]["pullMode"] == "owner_to_target"
 
     projectile_prompt = data["visual"].get("projectileImagePrompt") or data["visual"].get("projectilePrompt", "")
     prompt = normalize_asset_prompt(data, "projectile", projectile_prompt, 48).lower()
@@ -297,6 +311,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_llm_chat_json_raw_replay_intercepts_planner_without_network',
     '_check_llm_replay_stage_prefers_planner_over_loose_name_repair_match',
     '_check_llm_chat_json_raw_replay_directory_routes_multiple_llm_hops',
+    '_check_replay_stage_prefers_canonical_message_names_over_prose',
     '_check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter',
     '_check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line',
     '_check_delivery_payload_replay_normalizes_object_debug_without_changing_gameplay',

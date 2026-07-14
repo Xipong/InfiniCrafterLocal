@@ -34,6 +34,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
     authored_weapon_damage,
     llm_category_without_router,
     llm_runtime_result_kind_policy,
+    runtime_plan_to_attack_genome_patch,
 )
 from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
 from infini_local.pipelines.combine_genome import _bounded_parent_potion_stats, _parent_tool_power, normalize_authored_attack_pattern, weapon_genome_for, weapon_numbers_from_genome
@@ -68,6 +69,7 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
     # - consumable_weapon: stackable thrown/shot item using GeneratedProjectile
     # - actual_ammo: Terraria ammo skin/stat mode via item.ammo, reduced custom runtime support
     runtime_stats = find_call(data, "set_item_stats") if LLM_RUNTIME_AUTHORING else {}
+    runtime_patch = runtime_plan_to_attack_genome_patch(data) if LLM_RUNTIME_AUTHORING and runtime_plan(data) else {}
     runtime_result_kind = str(runtime_stats.get("resultKind") or "").strip().lower().replace("-", "_")
     runtime_ammo_for = str(runtime_stats.get("ammoFor") or gp.get("ammoFor") or "").strip().lower()
     runtime_has_primary = bool(all_calls(data, "shoot_projectile")) if LLM_RUNTIME_AUTHORING else False
@@ -106,6 +108,9 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         slot = armor_slot_from_authoring(data, tags, runtime_stats)
         armor = armor_stats_for(tags, stage, slot)
         armor.update(data.get("armor") or {})
+        authored_armor_candidate = runtime_patch.get("armor")
+        authored_armor: dict[str, Any] = dict(authored_armor_candidate) if isinstance(authored_armor_candidate, dict) else {}
+        armor.update(authored_armor)
         if isinstance(runtime_stats, dict):
             if runtime_stats.get("armorSlot") not in (None, ""):
                 armor["slot"] = armor_slot_from_authoring(data, tags, runtime_stats)
@@ -137,6 +142,9 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         data["category"] = "accessory"
         acc = accessory_stats_for(tags, stage)
         acc.update(data.get("accessory") or {})
+        authored_accessory_candidate = runtime_patch.get("accessory")
+        authored_accessory: dict[str, Any] = dict(authored_accessory_candidate) if isinstance(authored_accessory_candidate, dict) else {}
+        acc.update(authored_accessory)
         acc["enabled"] = True
         acc, accessory_budget_report = apply_accessory_soft_budget(
             acc, stage, apply_clamps=should_apply_soft_normalization(),
@@ -253,7 +261,9 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "splitCount": max(0, min(8, int(float(genome.get("splitCount") or 0)))),
             "secondaryTrigger": str(genome.get("secondaryTrigger") or "on_hit"),
             "chainCount": max(0, min(6, int(float(genome.get("chainCount") or (2 if genome["onHit"] in {"chain", "lightning_arc"} else 0))))),
-            "bounceCount": 2 if genome["movement"] in {"bounce", "boomerang", "returning_glaive"} else 0,
+            "pullStrength": round(max(0.0, min(1.0, float(genome.get("pullStrength") or 0.0))), 3),
+            "pullMode": str(genome.get("pullMode") or "none"),
+            "bounceCount": 2 if genome["movement"] in {"bounce", "boomerang"} else 0,
             "genome": genome,
             "speed": round(float(genome.get("speed") or stage["speed"]), 2),
             "rangeTiles": round(max(4.0, min(120.0, float(genome.get("rangeTiles") or 35.0))), 2),

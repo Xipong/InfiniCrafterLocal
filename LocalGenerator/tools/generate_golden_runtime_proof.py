@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
-from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
-from infini_local.qa.runtime_proof import (
+# This proof is an offline deterministic gate. Do not inherit the operator's live
+# model/provider settings or silently switch off the runtime-authoring path.
+os.environ["INFINI_USE_LLM"] = "0"
+os.environ["INFINI_LLM_RUNTIME_AUTHORING"] = "1"
+os.environ["INFINI_LLM_RUNTIME_PLAN_REQUIRED"] = "1"
+os.environ["INFINI_LLM_RUNTIME_STRICT_VALIDATION"] = "1"
+os.environ["INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK"] = "1"
+os.environ["INFINI_BALANCE_MODE"] = "safety"
+
+from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES  # noqa: E402
+from infini_local.qa.runtime_proof import (  # noqa: E402
     build_gameplay_seam_report,
     build_runtime_proof_report,
     write_runtime_proof_artifacts,

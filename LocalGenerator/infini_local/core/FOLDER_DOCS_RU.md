@@ -17,6 +17,7 @@ Core contracts and policies.
 - `result_models.py` typed helper results: `RuntimeCompileResult`, `ClampRecord`, `RepairResult`, `BalanceReportModel`.
 - `contract_versions.py` provenance/version stamps, not automatic feature implementation.
 - `balance_mode.py` owns exact `report/safety/normalize` policy; `balance_policy.py` owns reference/envelope numbers; `balance_report.py` only reports authored/final/advice/clamps.
+- `llm_stage_messages.py` owns Attributed Chat History: finite ChatCompletion speaker names, canonical Planner `messages[]`, and Agent Handoff provenance (`source/cause/next speaker`).
 - `vfx_manifest.py` public VFX manifest assembly API.
 - `vfx_manifest_config.py` VFX env knobs, JSON library paths and raw recipe/name-bank data.
 - `vfx_director_context.py` optional LLM VFX Director context/tag/weak-hint packet helpers.
@@ -35,4 +36,4 @@ Risk: many callers still use dictionaries; verify field names and provenance bef
 
 - `runtime_secondary_policy.py` owns exact secondary lifecycle vocabulary (`on_hit`, `on_expire`).
 - `runtime_overhead_barrage_policy.py` owns bounded overhead-barrage defaults/limits; only exact `overhead_barrage` is accepted.
-- Do not merge these into a generic trigger/action/state engine; see `docs/RUNTIME_VERTICAL_SLICES_RU.md`.
+- Do not merge these into a generic trigger/action/state engine; see `../../../docs/RUNTIME_VERTICAL_SLICES_RU.md`.

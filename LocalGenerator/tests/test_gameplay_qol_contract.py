@@ -7,7 +7,7 @@ PLAYER = ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Players" / "In
 CONTRACTS = ROOT / "LocalGenerator" / "infini_local" / "core" / "contract_versions.py"
 
 
-def test_generated_item_has_low_noise_use_condition_and_alt_mobility_feedback():
+def _contract_check_generated_item_has_low_noise_use_condition_and_alt_mobility_feedback():
     src = ITEM.read_text(encoding="utf-8")
     assert "UseBlockedReason(Player player)" in src
     assert "ShowLocalUseFeedback" in src
@@ -18,7 +18,7 @@ def test_generated_item_has_low_noise_use_condition_and_alt_mobility_feedback():
     assert "return used;" in src
 
 
-def test_generated_tooltips_expose_compact_gameplay_qol_surface():
+def _contract_check_generated_tooltips_expose_compact_gameplay_qol_surface():
     src = ITEM.read_text(encoding="utf-8")
     assert "UseConditionSummary(Data?.Gameplay)" in src or "UseConditionSummary(gameplay)" in src
     assert "CompactGeneratedCombatSummary(Data)" in src or "CompactGeneratedCombatSummary(data)" in src
@@ -36,7 +36,7 @@ def test_generated_tooltips_expose_compact_gameplay_qol_surface():
         assert needle in src
 
 
-def test_infini_player_reports_mobility_failure_reason_and_cooldown():
+def _contract_check_infini_player_reports_mobility_failure_reason_and_cooldown():
     src = read_text_with_partial_bundles(PLAYER)
     assert "GeneratedMobilityCooldownTicks" in src
     assert "GeneratedMobilityCooldownSeconds" in src
@@ -50,7 +50,7 @@ def test_infini_player_reports_mobility_failure_reason_and_cooldown():
 
 
 
-def test_projectile_impact_mobility_respects_shared_cooldown_and_tooltip_surface():
+def _contract_check_projectile_impact_mobility_respects_shared_cooldown_and_tooltip_surface():
     projectile = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
     item = ITEM.read_text(encoding="utf-8")
     assert "TryRunImpactMobility" in projectile
@@ -59,3 +59,19 @@ def test_projectile_impact_mobility_respects_shared_cooldown_and_tooltip_surface
     assert "ImpactMobilitySummary" in item
     assert "blink_to_projectile_impact" in item
     assert "impact blink" in item
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_gameplay_qol_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_generated_item_has_low_noise_use_condition_and_alt_mobility_feedback',
+            '_contract_check_generated_tooltips_expose_compact_gameplay_qol_surface',
+            '_contract_check_infini_player_reports_mobility_failure_reason_and_cooldown',
+            '_contract_check_projectile_impact_mobility_respects_shared_cooldown_and_tooltip_surface',
+        ),
+    )

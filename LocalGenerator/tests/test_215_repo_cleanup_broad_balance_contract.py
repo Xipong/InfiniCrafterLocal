@@ -42,3 +42,9 @@ def test_broad_soft_balance_uplift_is_global_but_still_single_authority():
     assert clamped["lifetimeTicks"] == 540
     assert clamped["rangeTiles"] == 105.0
     assert clamped["homingStrength"] == 0.68
+
+    returning = apply_family_locks_to_genome(
+        {"runtimeFamily": "returning", "shotCount": 1, "pierce": 2, "lifetimeTicks": 25, "rangeTiles": 15, "speed": 12},
+        {}, {}, {}, {"powerBudget": 2.0},
+    )
+    assert returning["lifetimeTicks"] >= 60

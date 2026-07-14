@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -19,8 +20,17 @@ LOCAL_GENERATOR = ROOT / "LocalGenerator"
 if str(LOCAL_GENERATOR) not in sys.path:
     sys.path.insert(0, str(LOCAL_GENERATOR))
 
-from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
-from infini_local.qa.runtime_proof import build_gameplay_seam_report
+# The semantic baseline is an offline deterministic contract.  Live GUI/provider
+# settings must not alter the result merely because another test imported config.
+os.environ["INFINI_USE_LLM"] = "0"
+os.environ["INFINI_LLM_RUNTIME_AUTHORING"] = "1"
+os.environ["INFINI_LLM_RUNTIME_PLAN_REQUIRED"] = "1"
+os.environ["INFINI_LLM_RUNTIME_STRICT_VALIDATION"] = "1"
+os.environ["INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK"] = "1"
+os.environ["INFINI_BALANCE_MODE"] = "safety"
+
+from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES  # noqa: E402
+from infini_local.qa.runtime_proof import build_gameplay_seam_report  # noqa: E402
 
 DEFAULT_BASELINE = ROOT / "contracts" / "golden_runtime_semantics_v17.json"
 
@@ -33,6 +43,12 @@ def canonical_item(item: dict[str, Any]) -> dict[str, Any]:
     attack.pop("runtimeAuthoringProvenance", None)
     attack.pop("genome", None)
     attack.pop("patternSource", None)
+    # pullStrength=0 is the neutral default added in v0.4.49; it does not change
+    # any frozen v17 case. Non-zero authored pull remains visible to this gate.
+    if attack.get("pullStrength") in (0, 0.0, None):
+        attack.pop("pullStrength", None)
+    if attack.get("pullMode") in ("", "none", None):
+        attack.pop("pullMode", None)
     raw_gameplay = out.get("gameplay")
     gameplay: dict[str, Any] = raw_gameplay if isinstance(raw_gameplay, dict) else {}
     # v17 authored tool light into fields absent from the C# Gameplay DTO.  v18

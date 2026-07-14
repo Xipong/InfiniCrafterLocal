@@ -27,5 +27,4 @@ LocalGenerator/outputs/
 LocalGenerator/generated_assets/
 LocalGenerator/debug_output/
 LocalGenerator/prompt_traces/
-LocalGenerator/.wiki_guided_playthrough_cache/
 LocalGenerator/data/Runtime_dumps/

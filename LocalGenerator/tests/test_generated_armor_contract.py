@@ -14,7 +14,7 @@ PARENT_A = {"name": "Iron Helmet", "type": 90, "defense": 2, "value": 100}
 PARENT_B = {"name": "Cloud in a Bottle", "type": 53, "value": 100}
 
 
-def test_generated_armor_runtime_plan_preserves_full_armor_property_surface() -> None:
+def _contract_check_generated_armor_runtime_plan_preserves_full_armor_property_surface() -> None:
     armor_params = {
         "armorSlot": "head",
         "setKey": "cloudforged",
@@ -142,7 +142,7 @@ def test_generated_armor_runtime_plan_preserves_full_armor_property_surface() ->
         assert child["armor"].get(key) == value
 
 
-def test_csharp_generated_armor_proxy_surface_is_static_guarded() -> None:
+def _contract_check_csharp_generated_armor_proxy_surface_is_static_guarded() -> None:
     root = Path(__file__).resolve().parents[2]
     model = read_text_with_partial_bundles(root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.cs")
     item = (root / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
@@ -155,3 +155,17 @@ def test_csharp_generated_armor_proxy_surface_is_static_guarded() -> None:
     for needle in ["UpdateEquip", "IsArmorSet", "UpdateArmorSet", "ApplyGeneratedArmorEffects", "SetBonusGenericDamage", "SetBonusMinionSlots", "SentrySlots", "ManaCostReduction", "ArmorPenetration"]:
         assert needle in item
     assert "GeneratedArmorItemTypes.ItemTypeFor(data)" in player
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_generated_armor_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_generated_armor_runtime_plan_preserves_full_armor_property_surface',
+            '_contract_check_csharp_generated_armor_proxy_surface_is_static_guarded',
+        ),
+    )

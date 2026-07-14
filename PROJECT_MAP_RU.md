@@ -16,7 +16,8 @@
 ModSources/InfiniCrafterLocal/       active Terraria/tModLoader C# runtime
 LocalGenerator/                      Python LocalGenerator: LLM authoring, validation, assets, /combine
 LocalGenerator/tests/                contract/regression tests for Python and C# surface assumptions
-docs/                                supplemental design/TODO/reference docs, not always current runtime proof
+TODO_ROADMAP_VERY_LATER_RU.md        sole future-work backlog; not current runtime proof
+docs/                                supplemental design/reference docs, not always current runtime proof
 agent_reports/                       historical agent reports and web research; never source of truth
 .tml-build-cache/, .nuget/, obj/      build/dependency/generated cache; do not read as architecture
 build_logs/                          logs only
@@ -69,7 +70,7 @@ C# is not a generator, not a prompt interpreter, and not a fallback author.
 ## Agent traps
 
 - Do not summarize old `agent_reports/` as current behavior.
-- Do not treat `docs/TODO*` or “future-disabled” ideas as implemented runtime.
+- Do not treat `TODO_ROADMAP_VERY_LATER_RU.md` or “future-disabled” ideas as implemented runtime.
 - Do not claim “second model judge” exists unless a source file actually implements the call path.
 - Do not assume typed data flow is complete: typed result models exist, but many internal stages still carry `dict[str, Any]`; be careful with field names and provenance.
 - Do not turn visual or item names into mechanics. Explicit runtime contract only.
@@ -94,10 +95,11 @@ C# is not a generator, not a prompt interpreter, and not a fallback author.
 - If you change X, also check Y: use `AGENTS.md` and `PROJECT_ARCHITECTURE_RU.md` decision tables, not guesses.
 - Do not claim a second model-judge exists unless source implements it.
 
-## Current pre-livetest contract
+## Current author/image contract
 
-- `CHATGPT_CHANGES_20260710_V12_RU.md` — v12 patch facts and verification.
-- `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` — ten manual Author/Runtime/Image traces and residual live-test risks.
+- `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` — manual Author/Runtime/Image negative examples.
+- `docs/ZIMAGE_WEAPON_TOPOLOGY_RU.md` — current positive, model-authored item topology rules.
+- `LocalGenerator/infini_local/pipelines/visual_director_contract.py` and `visual_prompt_contracts.py` — source of truth for current delivery behavior.
 
 
 ## v15 charge/sentry owners

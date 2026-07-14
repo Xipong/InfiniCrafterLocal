@@ -134,7 +134,7 @@ STAGE_PROFILES = [
 LLM_REQUIRED_GENOME_FIELDS = [
     "runtimeFamily", "delivery", "movement", "effect", "onHit",
     "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles",
-    "lifetimeTicks", "rangeTiles", "reliability", "selfLockTicks", "missPunish",
+    "lifetimeTicks", "rangeTiles",
 ]
 
 LLM_OPTIONAL_GENOME_DEFAULTS = {
@@ -147,6 +147,7 @@ LLM_OPTIONAL_GENOME_DEFAULTS = {
     "speed": 8.0,
     "splitCount": 0,
     "chainCount": 0,
+    "pullStrength": 0.0,
     "trailLength": 0,
     "burstDustCap": 0,
 }
@@ -168,13 +169,11 @@ LLM_NUMERIC_GENOME_LIMITS = {
     "lifetimeTicks": (25.0, 900.0),
     "extraUpdates": (0.0, 3.0),
     "rangeTiles": (4.0, 120.0),
-    "reliability": (0.45, 1.25),
-    "selfLockTicks": (0.0, 120.0),
-    "missPunish": (0.0, 1.0),
     "spreadRadians": (0.0, 0.75),
     "speed": (3.0, 18.0),
     "splitCount": (0.0, 8.0),
     "chainCount": (0.0, 6.0),
+    "pullStrength": (0.0, 1.0),
     "trailLength": (0.0, 24.0),
     "burstDustCap": (0.0, 40.0),
 }

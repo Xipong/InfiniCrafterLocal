@@ -75,7 +75,8 @@ def _check_runtime_projectiles_use_single_hit_defaults_and_ignore_spawn_target_f
     combine = (ROOT / "infini_local" / "pipelines" / "combine_gameplay.py").read_text(encoding="utf-8")
     assert "_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce)" in projectile
     assert "_spec.Pierce <= 0 ? -1" not in projectile
-    assert "localNPCHitCooldown = _spec.ImmunityCooldown <= 0 ? 12" in projectile
+    assert "_spec.ImmunityCooldown <= 0 ? 12" in projectile
+    assert "whipLike" in projectile and "? -1" in projectile
     assert "_spawnIgnoreNpc" in projectile
     assert "CanHitNPC" in projectile
     assert "SpawnChild(origin, velocity, dmg, childSpec, Projectile.localAI[1] + 1f, target.whoAmI)" in projectile

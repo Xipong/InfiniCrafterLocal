@@ -256,17 +256,14 @@ def sprite_resample_filter(stage: str = "final") -> Any:
     if Image is None:
         return 0
     mode = (SPRITE_DOWNSCALE_FILTER or "box").lower()
-    profile = (SPRITE_PROCESSING_PROFILE or "master_soft").lower()
-    if profile in {"legacy", "legacy_nearest", "pixel_strict"} or mode == "nearest":
-        return Image.Resampling.NEAREST
     if mode in {"lanczos", "antialias"}:
         return Image.Resampling.LANCZOS
     if mode in {"bicubic"}:
         return Image.Resampling.BICUBIC
     if mode in {"bilinear"}:
         return Image.Resampling.BILINEAR
-    # BOX is a good default for fake pixel-art rendered at high resolution: it averages
-    # full-res blocks instead of randomly sampling one source pixel like NEAREST.
+    # BOX is the production default for fake pixel-art rendered at high resolution: it
+    # averages the source footprint into coherent small clusters without sharpening halos.
     return Image.Resampling.BOX
 
 def resize_rgba_premultiplied(img: Any, size: tuple[int, int], resample: Any) -> Any:
@@ -280,7 +277,7 @@ def resize_rgba_premultiplied(img: Any, size: tuple[int, int], resample: Any) ->
     if Image is None:
         return img
     img = img.convert("RGBA")
-    if not SPRITE_PREMULTIPLIED_RESIZE or resample == Image.Resampling.NEAREST:
+    if not SPRITE_PREMULTIPLIED_RESIZE:
         return img.resize(size, resample)
     r, g, b, a = img.split()
     # Premultiply in integer space.
@@ -321,8 +318,6 @@ def prepare_sprite_master(img: Any, sprite_id: str, target_size: int, role: str 
     """
     img = img.convert("RGBA")
     final_size = max(16, min(96, int(target_size or 32)))
-    if SPRITE_PROCESSING_PROFILE in {"legacy", "legacy_nearest"}:
-        return fit_to_canvas(img, final_size, role)
     spec_final = sprite_contract_for(role, final_size)
     effect_bbox = alpha_bbox_threshold(img, 1)
     core_bbox = alpha_bbox_threshold(img, int(spec_final.get("coreAlphaThreshold") or 1)) or effect_bbox
@@ -441,7 +436,7 @@ def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
     scale = min(scale_core, scale_effect)
     new_w = max(1, int(round(crop_w * scale)))
     new_h = max(1, int(round(crop_h * scale)))
-    resized = img.resize((new_w, new_h), Image.Resampling.NEAREST)
+    resized = resize_rgba_premultiplied(img, (new_w, new_h), sprite_resample_filter("fit"))
     final_size = max(16, min(96, int(target_size or 32)))
     canvas = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
     x = (final_size - new_w) // 2
@@ -671,18 +666,10 @@ def postprocess_sprite(path: str, sprite_id: str, target_size: int = 32, role: s
         bg_removed = scrub_transparent_rgb(bg_removed)
         save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres")
 
-        if SPRITE_PROCESSING_PROFILE in {"legacy", "legacy_nearest"}:
-            fitted = fit_to_canvas(bg_removed, target_size, role)
-            save_stage(fitted, sprite_id, "20_legacy_fit")
-            final = palette_cleanup(fitted)
-            final = cleanup_alpha(final)
-            final = neutralize_chroma_edge_colors(final)
-            final = cleanup_alpha(final)
-        else:
-            master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
-            save_stage(master, sprite_id, "20_master_norm")
-            final = bake_sprite_from_master(master, target_size, role)
-            save_stage(final, sprite_id, "30_baked_final")
+        master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
+        save_stage(master, sprite_id, "20_master_norm")
+        final = bake_sprite_from_master(master, target_size, role)
+        save_stage(final, sprite_id, "30_baked_final")
 
         out = SPRITE_DIR / f"{sprite_id}.png"
         final.save(out)

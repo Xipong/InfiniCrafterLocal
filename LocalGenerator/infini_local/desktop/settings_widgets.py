@@ -96,7 +96,13 @@ class ScrollFrame(ttk.Frame):
         self.vbar.pack(side="right", fill="y")
         self.inner.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        # Multiple tabs own independent ScrollFrames.  Global wheel delivery is needed
+        # for Entry/Combobox children, but every frame must keep its handler and only the
+        # visible frame under the pointer may consume the event.
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel, add="+")
+        self.canvas.bind_all("<Shift-MouseWheel>", self._on_mousewheel, add="+")
+        self.canvas.bind_all("<Button-4>", self._on_linux_mousewheel, add="+")
+        self.canvas.bind_all("<Button-5>", self._on_linux_mousewheel, add="+")
 
     def _on_frame_configure(self, _event=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -104,9 +110,34 @@ class ScrollFrame(ttk.Frame):
     def _on_canvas_configure(self, event):
         self.canvas.itemconfigure(self.inner_id, width=event.width)
 
+    def _pointer_is_inside(self) -> bool:
+        try:
+            if not self.winfo_ismapped():
+                return False
+            x = self.winfo_pointerx()
+            y = self.winfo_pointery()
+            left = self.winfo_rootx()
+            top = self.winfo_rooty()
+            return left <= x < left + self.winfo_width() and top <= y < top + self.winfo_height()
+        except (AttributeError, RuntimeError, TypeError):
+            return False
+
+    def _scroll_units(self, units: int):
+        if not self._pointer_is_inside() or units == 0:
+            return None
+        self.canvas.yview_scroll(units, "units")
+        return "break"
+
     def _on_mousewheel(self, event):
-        if self.winfo_toplevel().focus_get() is not None:
-            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        delta = int(getattr(event, "delta", 0) or 0)
+        if delta == 0:
+            return None
+        units = -int(delta / 120) if abs(delta) >= 120 else (-1 if delta > 0 else 1)
+        return self._scroll_units(units)
+
+    def _on_linux_mousewheel(self, event):
+        number = int(getattr(event, "num", 0) or 0)
+        return self._scroll_units(-1 if number == 4 else 1 if number == 5 else 0)
 
 
 __all__ = [

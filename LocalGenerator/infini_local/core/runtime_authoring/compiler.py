@@ -549,7 +549,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
 
     # Primary numeric mapping.
     for src, mapping in [
-        (shoot, {"rangeTiles": "rangeTiles", "lifetimeTicks": "lifetimeTicks", "shotCount": "shotCount", "spreadRadians": "spreadRadians", "pierce": "pierce", "extraUpdates": "extraUpdates", "homingStrength": "homingStrength", "beamWidthPx": "beamWidthPx", "beamChargeTicks": "beamChargeTicks", "chargeTicks": "chargeTicks", "chargePowerMultiplier": "chargePowerMultiplier", "sentryAttackIntervalTicks": "sentryAttackIntervalTicks", "sentryTargetRangeTiles": "sentryTargetRangeTiles", "sentryLifetimeTicks": "sentryLifetimeTicks", "secondaryLifetimeTicks": "secondaryLifetimeTicks", "immunityCooldown": "immunityCooldown", "useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "speed": "speed", "reliability": "reliability", "selfLockTicks": "selfLockTicks", "missPunish": "missPunish"}),
+        (shoot, {"rangeTiles": "rangeTiles", "lifetimeTicks": "lifetimeTicks", "shotCount": "shotCount", "spreadRadians": "spreadRadians", "pierce": "pierce", "extraUpdates": "extraUpdates", "homingStrength": "homingStrength", "beamWidthPx": "beamWidthPx", "beamChargeTicks": "beamChargeTicks", "chargeTicks": "chargeTicks", "chargePowerMultiplier": "chargePowerMultiplier", "sentryAttackIntervalTicks": "sentryAttackIntervalTicks", "sentryTargetRangeTiles": "sentryTargetRangeTiles", "sentryLifetimeTicks": "sentryLifetimeTicks", "secondaryLifetimeTicks": "secondaryLifetimeTicks", "immunityCooldown": "immunityCooldown", "useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "speed": "speed"}),
         (hit, {"aoeRadiusTiles": "aoeRadiusTiles", "chainCount": "chainCount", "count": "splitCount", "pullStrength": "pullStrength"}),
         (itemstats, {"useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "knockback": "knockback", "manaCost": "manaCost", "craftYield": "craftYield"}),
     ]:
@@ -558,6 +558,16 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
                 v = _clamp(src.get(k), outk)
                 if v is not None:
                     patch[outk] = _intish(outk, v)
+
+    pull_strength = float(patch.get("pullStrength") or 0.0)
+    pull_mode = _enum(hit.get("pullMode"), {"none", "target_to_owner", "owner_to_target", "target_to_projectile"}, "none") or "none"
+    if pull_strength > 0.0 and pull_mode != "none":
+        patch["pullMode"] = pull_mode
+    else:
+        if pull_strength > 0.0:
+            patch["pullDemotedReason"] = "pullStrength_requires_explicit_pullMode"
+            patch["pullStrength"] = 0.0
+        patch["pullMode"] = "none"
 
     if patch.get("runtimeFamily") == "overhead_barrage" and shoot.get("delayTicks") not in (None, ""):
         value = _clamp(shoot.get("delayTicks"), "delayTicks")
@@ -637,9 +647,6 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     patch.setdefault("aoeRadiusTiles", 0)
     patch.setdefault("useTimeTicks", int(_clamp(_first_non_empty(itemstats.get("useTimeTicks"), shoot.get("useTimeTicks")), "useTimeTicks", 24) or 24))
     patch.setdefault("useAnimationTicks", int(_clamp(_first_non_empty(itemstats.get("useAnimationTicks"), shoot.get("useAnimationTicks"), patch.get("useTimeTicks")), "useAnimationTicks", patch.get("useTimeTicks", 24)) or patch.get("useTimeTicks", 24)))
-    patch.setdefault("reliability", 1.0)
-    patch.setdefault("selfLockTicks", 0)
-    patch.setdefault("missPunish", 0)
     patch.setdefault("extraUpdates", 0)
     patch.setdefault("homingStrength", 0)
     if trail_calls:

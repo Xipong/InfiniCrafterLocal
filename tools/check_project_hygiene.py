@@ -12,8 +12,8 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-IGNORED_DOC_DIRS = {".git", ".hermes", "agent_reports", ".tml-build-cache", ".nuget", "build_logs", ".wiki_guided_playthrough_cache", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
-RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", "artifacts"}
+IGNORED_DOC_DIRS = {".git", ".hermes", "agent_reports", ".tml-build-cache", ".nuget", "build_logs", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
+RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", "artifacts", "build_logs"}
 PACKAGED_METADATA_DIRS = {".git", ".hermes"}
 FORBIDDEN_RELEASE_FILE_NAMES = {"Zone.Identifier", ".DS_Store", "Thumbs.db"}
 FORBIDDEN_RELEASE_SUFFIXES = (":Zone.Identifier",)
@@ -55,7 +55,7 @@ def _is_runtime_junk(rel: Path, p: Path) -> bool:
         return True
     if any(part == "cache" and rel.parts[:1] == ("LocalGenerator",) for part in rel.parts):
         return True
-    return p.name in RUNTIME_JUNK_NAMES or p.suffix == ".pyc"
+    return any(part in RUNTIME_JUNK_NAMES for part in rel.parts) or p.suffix == ".pyc"
 
 
 def _is_forbidden_release_metadata(rel: Path, p: Path) -> bool:

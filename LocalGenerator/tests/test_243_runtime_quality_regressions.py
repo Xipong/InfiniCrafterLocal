@@ -52,6 +52,7 @@ def _plan() -> dict:
     return {
         "name": "Workbench-on-a-Stick",
         "tooltip": "It is exactly what it looks like.",
+        "debug": {"planner": "llm"},
         "concept": {
             "fantasy": "A whole workbench bolted sideways to a wooden sword.",
             "mergeLogic": "The sword remains the handle; the complete workbench is the striking body.",
@@ -144,8 +145,9 @@ def _check_live_combine_spine_reaches_cache_without_visual_fields_in_attack(
 
     assert cached["data"] is result
     assert result["name"] == "Workbench-on-a-Stick"
-    assert "whole rectangular workbench" in result["visual"]["itemPrompt"].lower()
-    assert result["visual"]["vfxIntent"] == "Wood chips and sawdust on impact."
+    assert "whole rectangular workbench" in result["visual"]["imagePrompt"].lower()
+    assert "itemPrompt" not in result["visual"]
+    assert "vfxIntent" not in result["visual"]
     assert "vfxIntent" not in result["attack"]
     assert "vfxAvoid" not in result["attack"]
     pipeline = json.loads(result["debug"]["pipelineLog"])
@@ -301,6 +303,16 @@ def _check_prompt_compaction_keeps_authored_subject_and_final_guard() -> None:
     assert "jagged fragments" not in cleaned.lower()
 
 
+def _check_vfx_overlay_participates_in_projectile_draw_pipeline() -> None:
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedVfxOverlayProjectile.cs"
+    ).read_text(encoding="utf-8")
+    assert "Projectile.hide = false;" in source
+    assert "InfiniVfxRuntime.Draw(Projectile, _spec, _manifest" in source
+    assert "return false;" in source[source.index("public override bool PreDraw"):]
+
+
 def _check_default_backend_matches_shipped_base_profile() -> None:
     assert VISUAL_CONFIG.IMAGE_BACKEND == "sdcpp"
     assert VISUAL_CONFIG.IMAGE_BACKEND_CONFIG_ERROR == ""
@@ -319,6 +331,7 @@ def test_runtime_quality_regressions_coarse_contract(tmp_path: Path) -> None:
         _check_invalid_world_cache_is_quarantined_and_deindexed,
         _check_sdcpp_cleanup_escalates_and_closes_log,
         _check_prompt_compaction_keeps_authored_subject_and_final_guard,
+        _check_vfx_overlay_participates_in_projectile_draw_pipeline,
         _check_default_backend_matches_shipped_base_profile,
     ]
     for check in checks:

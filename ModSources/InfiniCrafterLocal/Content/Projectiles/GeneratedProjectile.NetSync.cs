@@ -104,7 +104,7 @@ public sealed partial class GeneratedProjectile
     private const int MissingRequestStateAgeTicks = 10 * 60;
     public const byte PacketSyncGeneratedProjectileVisual = InfiniNetPacketIds.SyncGeneratedProjectileVisual;
     public const byte PacketSyncGeneratedProjectileVfxEvent = InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent;
-    private const int ProjectileSyncVersion = 14;
+    private const int ProjectileSyncVersion = 18;
     private const int ProjectileVisualSyncVersion = 3;
     private const ushort SyncFlagMobility = 1 << 0;
     private const ushort SyncFlagRuntimeLight = 1 << 1;
@@ -598,6 +598,8 @@ public sealed partial class GeneratedProjectile
         writer.Write(_spec.SplitCount);
         writer.Write(ShortNet(_spec.SecondaryTrigger, 24));
         writer.Write(_spec.ChainCount);
+        writer.Write(_spec.PullStrength);
+        writer.Write(ShortNet(_spec.PullMode, 24));
         writer.Write(_spec.ImmunityCooldown);
         writer.Write(_spec.ProcMode);
         writer.Write(ShortNet(_spec.Pattern, 80));
@@ -678,6 +680,7 @@ public sealed partial class GeneratedProjectile
         writer.Write(Projectile.localAI[1]);
         writer.Write(Projectile.localAI[2]);
         writer.Write(_stuckToTile);
+        writer.Write(_returningPhase);
     }
 
     public override void ReceiveExtraAI(BinaryReader reader)
@@ -719,6 +722,8 @@ public sealed partial class GeneratedProjectile
             _spec.SplitCount = reader.ReadInt32();
             _spec.SecondaryTrigger = reader.ReadString();
             _spec.ChainCount = reader.ReadInt32();
+            _spec.PullStrength = reader.ReadSingle();
+            _spec.PullMode = reader.ReadString();
             _spec.ImmunityCooldown = reader.ReadInt32();
             _spec.ProcMode = reader.ReadInt32();
             _spec.Pattern = reader.ReadString();
@@ -806,6 +811,7 @@ public sealed partial class GeneratedProjectile
                 Projectile.localAI[1] = reader.ReadSingle();
                 Projectile.localAI[2] = reader.ReadSingle();
                 _stuckToTile = reader.ReadBoolean();
+                _returningPhase = reader.ReadBoolean();
             }
             catch (Exception ex)
             {
@@ -860,6 +866,11 @@ public sealed partial class GeneratedProjectile
     {
         _configured = false;
         _statsApplied = false;
+        _returningPhase = false;
+        _orbitInitialized = false;
+        _whipInitialized = false;
+        _whipBaseDirection = Vector2.Zero;
+        _whipControlPoints.Clear();
         _pendingNetworkSpecTicks = pendingSpecTicks;
         _spec = new AttackSpec { Enabled = false, DustSpawnDenom = 0, BurstDustCap = 0, RuntimePlanAuthored = true };
         _vfxManifest = new VfxManifestSpec();

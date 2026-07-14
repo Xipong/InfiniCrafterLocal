@@ -46,6 +46,7 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self.field_disabled_reasons: dict[str, str] = {}
         self.extra_arg_buttons: list[tk.Widget] = []
         self.sdcpp_debug_buttons: list[tk.Widget] = []
+        self.secret_entries: list[tk.Widget] = []
         self.show_secrets = tk.BooleanVar(value=False)
         self.radmin_enabled = tk.BooleanVar(value=(self.data.get("INFINI_HOST") == "0.0.0.0" or bool(self.data.get("INFINI_ASSET_PUBLIC_BASE_URL"))))
         self.status_var = tk.StringVar(value="Готово. Выбери pipeline preset, отдельно включи Radmin/LAN если нужен, нажми Save и Start.")
@@ -62,9 +63,23 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
     def _pipeline_preset_from_config(data: dict[str, str]) -> str:
         saved = str(data.get("INFINI_GUI_PIPELINE_PRESET", "") or "").strip()
         if saved in PRESETS:
-            return saved
+            saved_preset = PRESETS[saved]
+            if all(
+                str(data.get(key, DEFAULTS.get(key, ""))).strip() == str(value).strip()
+                for key, value in saved_preset.items()
+            ):
+                return saved
         provider = str(data.get("INFINI_LLM_PROVIDER", "") or "").strip().lower()
         backend = str(data.get("INFINI_IMAGE_BACKEND", "") or "").strip().lower()
+        extra_args = str(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "") or "").strip().lower()
+        steps = str(data.get("INFINI_SDCPP_STEPS", "") or "").strip()
+        if (
+            provider == "openai_compat"
+            and backend == "sdcpp"
+            and "diffusion=rocm0,vae=vulkan0,te=rocm0" in extra_args
+            and steps == "4"
+        ):
+            return "OpenAI-compatible + FLUX.2 Klein 4B hybrid"
         if provider == "local" and backend == "sdcpp":
             return "Локалка: LM Studio + local Z-Image/sd.cpp"
         if provider == "openrouter" and backend == "sdcpp":

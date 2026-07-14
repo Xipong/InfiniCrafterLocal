@@ -16,7 +16,7 @@ from infini_local.pipelines.presentation_sound import attach_presentation_and_so
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_sound_catalog_is_large_but_canonical_not_alias_driven() -> None:
+def _contract_check_sound_catalog_is_large_but_canonical_not_alias_driven() -> None:
     assert len(USE_SOUND_IDS) >= 55
     assert len(IMPACT_SOUND_IDS) >= 30
     assert len(ALL_SOUND_IDS) >= 85
@@ -30,7 +30,7 @@ def test_sound_catalog_is_large_but_canonical_not_alias_driven() -> None:
 
 
 
-def test_python_and_csharp_exact_catalogs_match_and_have_real_sound_diversity() -> None:
+def _contract_check_python_and_csharp_exact_catalogs_match_and_have_real_sound_diversity() -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Audio/InfiniSoundLibrary.cs").read_text(encoding="utf-8")
     pairs = re.findall(r'\["([a-z0-9_]+)"\]\s*=\s*SoundID\.(Item\d+)', source)
     assert {catalog_id for catalog_id, _ in pairs} == set(ALL_SOUND_IDS)
@@ -41,7 +41,7 @@ def test_python_and_csharp_exact_catalogs_match_and_have_real_sound_diversity() 
     assert "style.Pitch + authoredPitch + pitchJitter" in source
     assert "Math.Max(style.PitchVariance, authoredPitchVariance)" in source
 
-def test_llm_card_exposes_exact_sound_ids_and_controls() -> None:
+def _contract_check_llm_card_exposes_exact_sound_ids_and_controls() -> None:
     card = engine_runtime_capability_contract_for_llm({}, {}, {})
     sound = card["soundCatalog"]
     assert sound["catalogSource"] == "terraria_vanilla"
@@ -53,7 +53,7 @@ def test_llm_card_exposes_exact_sound_ids_and_controls() -> None:
     assert "no names/prose/taxonomy" in sound["selectionRule"]
 
 
-def test_compiler_preserves_exact_authored_audio_and_rejects_unknown_id() -> None:
+def _contract_check_compiler_preserves_exact_authored_audio_and_rejects_unknown_id() -> None:
     authored = {
         "runtimePlan": {
             "engineCalls": [
@@ -103,7 +103,7 @@ def test_compiler_preserves_exact_authored_audio_and_rejects_unknown_id() -> Non
     }
 
 
-def test_sound_fallback_ignores_name_tooltip_and_taxonomy_prose() -> None:
+def _contract_check_sound_fallback_ignores_name_tooltip_and_taxonomy_prose() -> None:
     base = {
         "name": "Completely Different Name",
         "tooltip": "laser shotgun zenith last prism explosion",
@@ -127,7 +127,7 @@ def test_sound_fallback_ignores_name_tooltip_and_taxonomy_prose() -> None:
     assert "soundProfile" not in normalized
 
 
-def test_csharp_call_sites_do_not_feed_taxonomy_into_sound_resolution() -> None:
+def _contract_check_csharp_call_sites_do_not_feed_taxonomy_into_sound_resolution() -> None:
     apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     impact = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
     helper = apply.split("private Terraria.Audio.SoundStyle UseSoundForCatalog", 1)[1]
@@ -143,7 +143,7 @@ def test_csharp_call_sites_do_not_feed_taxonomy_into_sound_resolution() -> None:
 
 
 
-def test_sound_contract_has_no_text_query_side_channel() -> None:
+def _contract_check_sound_contract_has_no_text_query_side_channel() -> None:
     python_sources = [
         ROOT / "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
         ROOT / "LocalGenerator/infini_local/core/runtime_authoring/semantics.py",
@@ -158,3 +158,22 @@ def test_sound_contract_has_no_text_query_side_channel() -> None:
     combined = "\n".join(path.read_text(encoding="utf-8") for path in [*python_sources, *csharp_sources])
     for forbidden in ["soundUseSearchQuery", "soundImpactSearchQuery", "SoundUseSearchQuery", "SoundImpactSearchQuery", "QueryText", "SoundProfileSpec", "soundProfile.v3"]:
         assert forbidden not in combined
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_exact_sound_catalog_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_sound_catalog_is_large_but_canonical_not_alias_driven',
+            '_contract_check_python_and_csharp_exact_catalogs_match_and_have_real_sound_diversity',
+            '_contract_check_llm_card_exposes_exact_sound_ids_and_controls',
+            '_contract_check_compiler_preserves_exact_authored_audio_and_rejects_unknown_id',
+            '_contract_check_sound_fallback_ignores_name_tooltip_and_taxonomy_prose',
+            '_contract_check_csharp_call_sites_do_not_feed_taxonomy_into_sound_resolution',
+            '_contract_check_sound_contract_has_no_text_query_side_channel',
+        ),
+    )

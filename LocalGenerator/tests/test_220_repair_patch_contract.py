@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.balance_report import build_balance_report
@@ -39,7 +41,7 @@ def _broken_weapon() -> dict:
     }
 
 
-def test_full_json_repair_is_reduced_to_runtime_patch_not_second_author(monkeypatch):
+def _contract_check_complete_item_response_is_rejected_by_strict_repair_patch_boundary(monkeypatch):
     data = _broken_weapon()
     assert runtime_plan_validation_report(data)["ok"] is False
 
@@ -63,32 +65,30 @@ def test_full_json_repair_is_reduced_to_runtime_patch_not_second_author(monkeypa
 
     def fake_llm_chat_json(req, timeout=10):
         content = req["messages"][-1]["content"]
-        assert "repairPatch" in content
+        assert "Return repairPatch only" in content
         assert "Runtime repair is not a second item author" in content
         return {"choices": [{"message": {"content": json.dumps(full_rewrite)}}]}
 
     _enable_runtime_repair(monkeypatch)
     monkeypatch.setattr(lap, "llm_chat_json", fake_llm_chat_json)
-    out = lap.repair_runtime_plan_if_needed(data, {}, {}, {}, {}, "r_patch_original")
+    with pytest.raises(lap.PlannerUnavailable, match="runtime repair exhausted"):
+        lap.repair_runtime_plan_if_needed(data, {}, {}, {}, {}, "r_patch_original")
 
-    assert runtime_plan_validation_report(out)["ok"] is True
-    assert out["name"] == "Original Patch Blade"
-    assert out["tooltip"] == "Original tooltip."
-    assert out["concept"]["fantasy"] == "original fantasy"
-    assert out["visual"]["itemPrompt"] == "original sprite"
-    assert out["tags"] == ["original"]
-    assert out["category"] == "weapon"
-    assert out["gameplay"]["kind"] == "weapon"
-    assert out["gameplay"]["damage"] == 12
-    assert "unexpectedFullRewriteField" not in out
-    patch_report = json.loads(out["debug"]["runtimePlanRepairPatchContract"])
-    assert patch_report["source"] == "full_json_reduced_to_patch"
-    assert "runtimePlan" in patch_report["acceptedTopLevel"]
-    assert "gameplay" in patch_report["rejectedTopLevel"]
-    assert "unexpectedFullRewriteField" in patch_report["rejectedTopLevel"]
+    assert runtime_plan_validation_report(data)["ok"] is False
+    assert data["name"] == "Original Patch Blade"
+    assert data["tooltip"] == "Original tooltip."
+    assert data["concept"]["fantasy"] == "original fantasy"
+    assert data["visual"]["itemPrompt"] == "original sprite"
+    assert data["tags"] == ["original"]
+    assert data["category"] == "weapon"
+    assert data["gameplay"]["kind"] == "weapon"
+    assert data["gameplay"]["damage"] == 12
+    assert "unexpectedFullRewriteField" not in data
+    assert data["debug"]["runtimeRepairPath"] == "targeted_runtime_repair_exhausted"
+    assert json.loads(data["debug"]["runtimePlanRepair"])[0]["gotPatch"] is True
 
 
-def test_explicit_repair_patch_can_adjust_narrow_gameplay_surface(monkeypatch):
+def _contract_check_explicit_repair_patch_can_adjust_narrow_gameplay_surface(monkeypatch):
     data = _broken_weapon()
     patch_response = {
         "repairPatch": {
@@ -101,7 +101,6 @@ def test_explicit_repair_patch_can_adjust_narrow_gameplay_surface(monkeypatch):
             },
             "visual": {"itemPrompt": "must not adopt"},
         },
-        "debug": {"repairDebugProbe": "ok"},
     }
 
     def fake_llm_chat_json(req, timeout=10):
@@ -122,7 +121,7 @@ def test_explicit_repair_patch_can_adjust_narrow_gameplay_surface(monkeypatch):
     assert "gameplay.evilProse" in patch_report["rejectedTopLevel"]
 
 
-def test_balance_report_surfaces_runtime_repair_patch_contract():
+def _contract_check_balance_report_surfaces_runtime_repair_patch_contract():
     data = {
         "category": "weapon",
         "gameplay": {"kind": "weapon", "damage": 14, "useTime": 26},
@@ -140,3 +139,18 @@ def test_balance_report_surfaces_runtime_repair_patch_contract():
     assert report["repair"]["patchContract"]["source"] == "repairPatch"
     contract_kinds = [row["kind"] for row in report["clamps"]["contract"]]
     assert "runtime_repair_patch_contract" in contract_kinds
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_220_repair_patch_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_complete_item_response_is_rejected_by_strict_repair_patch_boundary',
+            '_contract_check_explicit_repair_patch_can_adjust_narrow_gameplay_surface',
+            '_contract_check_balance_report_surfaces_runtime_repair_patch_contract',
+        ),
+    )

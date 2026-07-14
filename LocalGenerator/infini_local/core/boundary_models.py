@@ -271,6 +271,8 @@ class AttackSpecBoundary(StrictBoundaryModel):
     bounceCount: int = 0
     splitCount: int = 0
     chainCount: int = 0
+    pullStrength: float = 0.0
+    pullMode: Literal["none", "target_to_owner", "owner_to_target", "target_to_projectile"] = "none"
     immunityCooldown: int = 10
     trailLength: int = 4
     shotCount: int = 1
@@ -452,9 +454,15 @@ class VfxManifestBoundary(StrictBoundaryModel):
     debug: VfxDebugBoundary = Field(default_factory=VfxDebugBoundary)
 
 
-ATTACK_DEBUG_ONLY_FIELDS = frozenset({"genome", "engineMetrics", "patternSource", "runtimeAuthoringProvenance"})
-GAMEPLAY_DEBUG_ONLY_FIELDS = frozenset({"categoryIntent", "powerTransfer"})
+ATTACK_DEBUG_ONLY_FIELDS = frozenset({
+    "genome", "engineMetrics", "patternSource", "runtimeAuthoringProvenance",
+    "primary", "primaryAction", "mechanicClaims", "runtimeContract", "runtimeArchetype",
+})
+GAMEPLAY_DEBUG_ONLY_FIELDS = frozenset({"categoryIntent", "powerTransfer", "runtimeOutputKind", "actualAmmoMode", "unsupportedAmmoFor"})
 REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS = frozenset({"index", "rawFn", "originalFn", "sourceIndex", "params"})
+VFX_MANIFEST_DEBUG_ONLY_FIELDS = frozenset({"parentEffectProfile"})
+VFX_BUDGET_DEBUG_ONLY_FIELDS = frozenset({"renderQuality", "quality"})
+VFX_DEBUG_ONLY_FIELDS = frozenset({"composition", "effectLineage", "rerollSalt"})
 _RUNTIME_PLAN_INTERNAL_KEYS = frozenset({"_normalization"})
 _ENGINE_CALL_INTERNAL_KEYS = frozenset({"_index", "_rawFn", "_semanticFn"})
 
@@ -586,6 +594,13 @@ def canonical_visual_kit_view(value: Any, *, repairs: list[str] | None = None) -
         elif legacy_prompt and canonical_prompt and legacy_prompt != canonical_prompt:
             repair_log.append(f"bakedAssets.{role}.prompt:discarded_duplicate_of_{prompt_field}")
         spec.pop("prompt", None)
+        if role != "projectile" and str(spec.get("mode") or "") == "reuse_item_sprite":
+            baked.pop(role, None)
+            repair_log.append(f"bakedAssets.{role}:dropped_role_inapplicable_reuse_item_sprite")
+            continue
+        if role != "projectile" and "distinctFromItem" in spec:
+            spec.pop("distinctFromItem", None)
+            repair_log.append(f"bakedAssets.{role}.distinctFromItem:dropped_role_inapplicable")
         baked[role] = spec
     raw["bakedAssets"] = baked
 
@@ -612,9 +627,24 @@ def validate_visual_kit_boundary(value: Any) -> dict[str, Any]:
     return canonical_visual_kit_view(value)
 
 
-def validate_vfx_manifest_boundary(value: Any) -> dict[str, Any]:
-    parsed = VfxManifestBoundary.model_validate(value)
+def canonical_vfx_manifest_view(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise TypeError("vfxManifest must be a JSON object")
+    raw = copy.deepcopy(value)
+    for field in VFX_MANIFEST_DEBUG_ONLY_FIELDS:
+        raw.pop(field, None)
+    budget = raw.get("budget")
+    if isinstance(budget, dict):
+        raw["budget"] = {k: v for k, v in budget.items() if k not in VFX_BUDGET_DEBUG_ONLY_FIELDS}
+    debug = raw.get("debug")
+    if isinstance(debug, dict):
+        raw["debug"] = {k: v for k, v in debug.items() if k not in VFX_DEBUG_ONLY_FIELDS}
+    parsed = VfxManifestBoundary.model_validate(raw)
     return parsed.model_dump(exclude_none=True, by_alias=True)
+
+
+def validate_vfx_manifest_boundary(value: Any) -> dict[str, Any]:
+    return canonical_vfx_manifest_view(value)
 
 
 def validate_visual_authoring_boundaries(data: dict[str, Any]) -> dict[str, Any]:

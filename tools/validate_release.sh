@@ -64,7 +64,7 @@ run_step semantic_runtime_diff python tools/semantic_runtime_diff.py
 run_step runtime_impact python tools/runtime_impact_report.py --out artifacts/validation/runtime_impact_report.json
 run_step csharp_contracts python tools/check_csharp_contracts.py
 run_step project_hygiene python tools/check_project_hygiene.py
-run_step planner_prompt python tools/check_planner_prompt_usability.py --limit-chars 24000
+run_step planner_prompt python tools/check_planner_prompt_usability.py
 
 if command -v ruff >/dev/null 2>&1; then run_step ruff ruff check LocalGenerator/infini_local tools; else record_unavailable ruff "ruff is not installed"; fi
 if command -v pyright >/dev/null 2>&1; then run_step pyright pyright; else record_unavailable pyright "pyright is not installed"; fi

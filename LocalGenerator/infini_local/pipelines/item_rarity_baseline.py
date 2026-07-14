@@ -171,12 +171,18 @@ def rarity_tier_estimate(raw_rare: int | float, details: dict[str, Any] | None =
         return out
 
     if rare > 11:
-        # Custom mod rarities can be arbitrary runtime ids. Without class-name knowledge,
-        # derive a generic monotonic progression signal instead of falling back to weak vanilla rarity.
-        ordinal = max(1, rare - 11)
-        score = 340 + min(390, int((ordinal ** 0.74) * 55))
-        tier = "modded_high_unknown" if score < 500 else "superboss_unknown"
-        return {"rawRare": rare, "tierEstimate": tier, "tierScore": score, "confidence": 0.48, "role": "unknown_modded_numeric_rarity", "displayName": str(details.get("name") or "Unknown ModRarity"), "colorHex": details.get("colorHex"), "ordinal": ordinal}
+        # ModRarity numeric ids are registration/load-order ids, not progression ordinals.
+        # Without a recognized class name/color there is no defensible tier signal. Live
+        # damage/tool/armor/value facts can still carry the item in mechanic_signal_power.
+        return {
+            "rawRare": rare,
+            "tierEstimate": "unknown",
+            "tierScore": 0,
+            "confidence": 0.0,
+            "role": "unknown_modded_rarity",
+            "displayName": str(details.get("name") or "Unknown ModRarity"),
+            "colorHex": details.get("colorHex"),
+        }
 
     best_tier, best_score, best_name, best_hex = "trash", 1, "Unknown", "#FFFFFF"
     for threshold, tier, score, display, hex_color in RARITY_BASELINE_TABLE:
@@ -186,18 +192,20 @@ def rarity_tier_estimate(raw_rare: int | float, details: dict[str, Any] | None =
     return {"rawRare": rare, "tierEstimate": best_tier, "tierScore": best_score, "confidence": conf, "role": "vanilla_rarity_baseline", "displayName": best_name, "colorHex": best_hex}
 
 def rarity_role_weight(category: str, tags: set[str]) -> tuple[float, str]:
+    # Tags may contain display-name tokens; they cannot alter progression math.
+    _ = tags
     category = normalize_category(category)
-    if category == "weapon" or "weapon" in tags:
+    if category == "weapon":
         return 1.00, "weapon rarity transfers to combat power"
-    if category == "material" or "material" in tags or "bar" in tags or "fragment" in tags or "ore" in tags:
+    if category == "material":
         return MATERIAL_RARITY_MULT, "material rarity transfers to crafting-tier power"
-    if category == "tool" or "tool" in tags:
+    if category == "tool":
         return 0.92, "tool rarity transfers to utility/tool power"
-    if category == "armor" or "armor" in tags:
+    if category == "armor":
         return 0.90, "armor rarity transfers to defense-tier power"
-    if category == "accessory" or "accessory" in tags:
+    if category == "accessory":
         return 0.82, "accessory rarity transfers to passive potential"
-    if category in {"furniture", "placeable_station", "technology"} or "placeable" in tags or "block" in tags:
+    if category in {"furniture", "placeable_station", "technology"}:
         return 0.66, "placeable rarity transfers mostly to tier/novelty"
     if category in {"vanity", "pet", "light_pet", "mount"}:
         return 0.50, "cosmetic rarity transfers mostly to novelty"

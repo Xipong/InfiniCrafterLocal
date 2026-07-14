@@ -10,7 +10,7 @@ def _check_csharp_generated_item_data_keeps_runtime_api_and_debug_delivery_guard
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "public string RuntimeApiVersion" in source
     limits = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "InfiniRuntimeLimits.cs").read_text(encoding="utf-8")
-    assert "RuntimeApiCurrent = \"v0.4.48\"" in limits
+    assert "RuntimeApiCurrent = \"v0.4.51\"" in limits
     assert "RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in source
     assert "v0.4.23" not in source and "v0.4.30" not in source
     assert "RuntimeApiCurrent" in source

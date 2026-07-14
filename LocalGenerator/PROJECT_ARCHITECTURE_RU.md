@@ -23,6 +23,8 @@ LocalGenerator — Python-сторона InfiniCrafterLocal. Она приним
 - C# исполняет только явные bounded поля: `Gameplay`, `Attack`, `Accessory`, `Armor`, `VfxManifest`, `Visual`, exact sound catalog ids/volume/pitch/pitch variance, sprite paths, movement/effect/onHit codes.
 - Asset sync отдаёт только финальные `.png/.json` через `/get_asset`; raw/intermediate generation files не являются runtime API.
 - World recipe cache scoped by world id; generated parents/items/assets не смешиваются между мирами.
+- LLM V3.1 stages используют self-contained authoritative dossiers: `system` задаёт stage authority, последний validator/director packet содержит достаточную current truth, `name` служит trace/provider hint, а `agentHandoff` несёт source/cause/next-stage provenance. `_llmHistory` остаётся transient integrity/replay-fixture provenance и не сериализуется в downstream requests.
+- Один cache-miss item получает `LlmItemLease` и profile round-robin на весь normal multipass. `/responses`/`previous_response_id` — optional per-lease optimization; Chat fallback не меняет correctness. При provider/auth/quota/invalid-envelope failure тот же self-contained stage повторяется на следующем profile, response state сбрасывается, replacement profile закрепляется до конца item, а failed profile уходит на cooldown. Standalone разрешён только для explicit legacy/no-history data; malformed live provenance не маскируется standalone. Failed VFX repair уходит в procedural VFX recipe safety net, не меняя gameplay ownership.
 
 ## Maintainability rule for new runtime capabilities
 
@@ -50,7 +52,7 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 | Balance mode policy | `core/balance_mode.py` | exact `report/safety/normalize` selection only; no formulas |
 | Small runtime policies | `core/runtime_secondary_policy.py`, `core/runtime_overhead_barrage_policy.py`, `core/runtime_charge_release_policy.py`, `core/runtime_sentry_policy.py` | exact vocabulary/defaults/limits for their own vertical slices |
 | Secondary lowering | `core/runtime_authoring/secondary.py` | sole Python compile owner for `spawn_secondary_projectiles`, including exact `on_expire` |
-| LLM authoring | `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` | prompt payloads, response parsing, auth/transport/fallback, targeted repair |
+| LLM authoring | `core/llm_stage_messages.py`, `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` | transient Planner provenance gates, V3.1 stage dossiers, item leases/pool/failover, optional Responses state/cache transport, explicit legacy/no-history policy, prompt/response/auth ownership |
 | Runtime executor vocabulary | `core/runtime_executor_vocabulary.py` | единственный owner canonical movement/effect/onHit names и их C# opcodes; name-sets выводятся из keys |
 | Runtime family policy | `core/runtime_family_policy.py` | strict canonical executor-family enum и одна per-family profile-table для capability/presentation metadata; no natural-language aliases |
 | Sound catalog | `core/sound_catalog.py` | exact 92-role LLM vocabulary, Python/C# parity contract, bounded volume/pitch/variance controls and tiny compiled-mechanic fallbacks; no item-name/prose aliases |
@@ -121,7 +123,7 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 - `pipelines/visual_asset_plan.py` and `pipelines/visual_generation_pipeline.py` canonicalize visual decisions into `visualKit.bakedAssets`; old aliases are read and removed at the boundary.
 - `pipelines/visual_prompt_contracts.py` owns final role framing. Exact resultKind may shape inventory-icon composition but never selects gameplay.
 - `core/vfx_director_prompt.py` passes compiled runtime facts to the VFX Director.
-- `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` is the required negative-example map before extending these contracts.
+- `../docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` is the required negative-example map before extending these contracts.
 
 ## Charge-release + sentry v15
 

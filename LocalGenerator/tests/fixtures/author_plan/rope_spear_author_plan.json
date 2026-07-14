@@ -53,6 +53,7 @@
           "onHit": "none",
           "aoeRadiusTiles": 0,
           "pullStrength": 0.35,
+          "pullMode": "owner_to_target",
           "debuffHint": "rope tug"
         }
       },

@@ -61,6 +61,7 @@ def _check_llm_chat_json_switches_to_fallback_after_two_transport_failures(monke
     monkeypatch.setattr(lp, "LLM_PROVIDER", "local")
     monkeypatch.setattr(lp, "LMSTUDIO_URL", "http://primary.local:1234")
     monkeypatch.setattr(lp, "LMSTUDIO_MODEL", "primary-local")
+    monkeypatch.setattr(lp, "LLM_API_MODE", "chat_completions")
     monkeypatch.setattr(lp, "LLM_FALLBACK_PROVIDER", "local")
     monkeypatch.setattr(lp, "LLM_FALLBACK_MODEL", "backup-local")
     monkeypatch.setattr(lp, "LLM_FALLBACK_BASE_URL", "http://fallback.local:1234")

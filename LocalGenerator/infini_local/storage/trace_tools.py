@@ -52,7 +52,13 @@ def trace_message_summary(messages: list[dict[str, Any]] | None) -> list[dict[st
     out: list[dict[str, Any]] = []
     for i, m in enumerate(messages or []):
         content = str((m or {}).get("content") or "")
-        out.append({"index": i, "role": str((m or {}).get("role") or ""), "chars": len(content), "preview": content[:420]})
+        out.append({
+            "index": i,
+            "role": str((m or {}).get("role") or ""),
+            "name": str((m or {}).get("name") or ""),
+            "chars": len(content),
+            "preview": content[:420],
+        })
     return out
 
 

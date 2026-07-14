@@ -33,7 +33,7 @@ def _cfg(*, root: str) -> sdcpp_backend.SdcppBackendConfig:
     )
 
 
-def test_flux2_klein4b_hybrid_profile_matches_measured_winner() -> None:
+def _contract_check_flux2_klein4b_hybrid_profile_matches_measured_winner() -> None:
     profile = settings_schema.SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"]
     assert "--backend diffusion=rocm0,vae=vulkan0,te=rocm0" in profile
     assert "--params-backend te=cpu" in profile
@@ -53,7 +53,7 @@ def test_flux2_klein4b_hybrid_profile_matches_measured_winner() -> None:
     assert preset["INFINI_ZIMAGE_PROMPT_CONTRACT"] == "0"
 
 
-def test_rocm_compat_environment_is_scoped_to_sd_server_child() -> None:
+def _contract_check_rocm_compat_environment_is_scoped_to_sd_server_child() -> None:
     root = r"C:\Games\sdcpp-hybrid-gfx1030"
     base = {"PATH": r"C:\Windows\System32", "KEEP": "yes"}
     env = sdcpp_backend.server_process_environment(_cfg(root=root), base_env=base)
@@ -69,8 +69,23 @@ def test_rocm_compat_environment_is_scoped_to_sd_server_child() -> None:
     assert "ROCM_COMPAT_ROOT" not in base
 
 
-def test_no_rocm_root_returns_an_unmodified_environment_copy() -> None:
+def _contract_check_no_rocm_root_returns_an_unmodified_environment_copy() -> None:
     base = {"PATH": "base", "KEEP": "yes"}
     env = sdcpp_backend.server_process_environment(_cfg(root=""), base_env=base)
     assert env == base
     assert env is not base
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_flux_hybrid_profile_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_flux2_klein4b_hybrid_profile_matches_measured_winner',
+            '_contract_check_rocm_compat_environment_is_scoped_to_sd_server_child',
+            '_contract_check_no_rocm_root_returns_an_unmodified_environment_copy',
+        ),
+    )

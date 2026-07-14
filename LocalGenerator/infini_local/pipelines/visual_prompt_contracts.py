@@ -222,21 +222,6 @@ def _item_output_kind_visual_guard(data: dict[str, Any]) -> str:
     return ""
 
 
-def _item_weapon_topology_guard(data: dict[str, Any]) -> str:
-    """Prevent accidental image-model duplication without choosing the design.
-
-    The planner/Visual Director owns topology and part count. This guard only asks the
-    image backend not to invent mirrored or repeated structural parts that are absent
-    from the authored prompt and silhouette contract.
-    """
-    if _explicit_result_kind(data) not in {"weapon", "consumable_weapon"}:
-        return ""
-    return (
-        "preserve the planner-authored topology and part count; do not add mirrored or duplicated structural parts "
-        "that are absent from the authored item prompt or silhouette contract"
-    )
-
-
 def _compact_prompt_append(prompt: str, addition: str, *, limit: int = 1800) -> str:
     p = re.sub(r"\s+", " ", str(prompt or "").strip())
     add = re.sub(r"\s+", " ", str(addition or "").strip())
@@ -291,7 +276,7 @@ def _authored_item_silhouette_contract(data: dict[str, Any]) -> str:
         return ""
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
     kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    for source in (visual, kit):
+    for source in (kit, visual):
         for key in (
             "itemSilhouetteContract",
             "silhouetteContract",
@@ -335,7 +320,6 @@ def role_visual_prompt_guard(role: str, prompt: str, data: dict[str, Any]) -> st
             [
                 _authored_item_silhouette_contract(data),
                 _item_output_kind_visual_guard(data),
-                _item_weapon_topology_guard(data),
             ],
         )
         attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
@@ -589,6 +573,54 @@ def item_name_prompt_clause(role: str, data: dict[str, Any]) -> str:
     name = compact_visual_words(data.get("name") or "", 90)
     return f"generated item name: {name}; do not draw letters or labels" if name else ""
 
+
+def _semantic_item_prompt(
+    data: dict[str, Any],
+    authored_prompt: str,
+    shared_style: str,
+    palette_words: str,
+    *,
+    limit: int,
+) -> str:
+    """Build one model-authored, topology-first item prompt for Qwen flow models.
+
+    The validated Visual Director description and silhouette contract stay authoritative.
+    Python adds only backend framing (palette, pixel finish, margin, chroma background),
+    never a category-specific silhouette or object-name router.
+    """
+    visual_raw = data.get("visual")
+    visual: dict[str, Any] = visual_raw if isinstance(visual_raw, dict) else {}
+    item_prompt = str(visual.get("itemPrompt") or "").strip()
+    visual_kit_raw = data.get("visualKit")
+    visual_kit: dict[str, Any] = visual_kit_raw if isinstance(visual_kit_raw, dict) else {}
+    director_prompt = str(visual_kit.get("itemIconPrompt") or "").strip()
+    final_wrapper = str(visual.get("finalItemPrompt") or "").strip()
+    authored_input = str(authored_prompt or "").strip()
+    if director_prompt:
+        appearance = director_prompt
+    elif authored_input and authored_input != final_wrapper:
+        appearance = authored_input
+    else:
+        appearance = item_prompt or str(data.get("name") or "authored item")
+    appearance = _strip_item_role_guard_fragments(appearance)
+    appearance = zimage_pe_clean_text(strip_conflicting_sprite_prompt_bits(appearance)).strip(" ,.;")
+    silhouette = _authored_item_silhouette_contract(data).strip(" ,.;")
+    if silhouette and appearance.casefold() == silhouette.casefold():
+        appearance = ""
+
+    foreground = compact_visual_words(palette_words, 360).strip(" ,.;")
+    parts = [
+        silhouette,
+        appearance,
+        shared_style,
+        f"Foreground colors and materials use {foreground}" if foreground else "",
+        "Crisp Terraria-like hand-drawn pixel art with hard edges, readable clusters, a limited palette, and a clean silhouette",
+        "The complete item is fully visible, floating freely with empty magenta margin on every side",
+        "Flat #ff00ff magenta chroma-key background",
+    ]
+    return compact_zimage_asset_prompt(parts, "item", limit=limit)
+
+
 def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
     role = (role or "item").lower()
     size = max(16, min(96, int(target_size or 32)))
@@ -691,6 +723,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     constraints into the positive prompt and avoid relying on negative_prompt/CFG.
     """
     role = (role or "item").lower()
+    authored_input = str(prompt or "")
     prompt = sanitize_image_prompt_background(re.sub(r"\s+", " ", str(prompt or "")).strip())
     # Runtime shot/split counts do not rewrite authored visual topology. The role
     # contract already tells the image model that this file is one projectile texture;
@@ -720,11 +753,22 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         else:
             prompt = str(visual.get("imagePrompt") or data.get("name") or "generated item")
 
-    prompt = role_visual_prompt_guard(role, prompt, data)
+    semantic_contract = image_backend_uses_semantic_prompt_contract()
+    if not (semantic_contract and role == "item"):
+        prompt = role_visual_prompt_guard(role, prompt, data)
 
-    if image_backend_uses_semantic_prompt_contract():
+    if semantic_contract:
         # Modern Qwen-text-encoder flow models: feed one final objective visual
         # description, not a legacy Stable Diffusion comma-tag recipe.
+        semantic_limit = env_int("INFINI_ZIMAGE_PROMPT_LIMIT", 1800 if image_backend_is_zimage() else 2200)
+        if role == "item":
+            return _semantic_item_prompt(
+                data,
+                authored_input,
+                shared_style,
+                palette_words,
+                limit=semantic_limit,
+            )
         role_clause = family_prompt_clause(data, role, canvas) if role == "projectile" else role_contract_prompt_clause(role, canvas)
         semantic_parts = [
             zimage_role_description(role, canvas),
@@ -736,7 +780,6 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
             zimage_text_policy_sentence(data),
             zimage_positive_guard_clause(role, data),
         ]
-        semantic_limit = env_int("INFINI_ZIMAGE_PROMPT_LIMIT", 1800 if image_backend_is_zimage() else 2200)
         return compact_zimage_asset_prompt(semantic_parts, role, limit=semantic_limit)
 
     parts = [

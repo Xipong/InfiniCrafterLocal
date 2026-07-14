@@ -8,7 +8,7 @@
 
 ## 2026-07-10 — pre-livetest author/image contract v12
 
-- Runtime API Python/C# синхронизирован на `v0.4.48`; ProjectileSyncVersion остаётся 12.
+- Runtime API Python/C# синхронизирован на `v0.4.51`; ProjectileSyncVersion = 18.
 - Active helper call — `spawn_temporary_helper_projectile`; это bounded temporary projectile, не minion/sentry lifecycle. Удалённые function names отклоняются.
 - `on_expire` означает любой projectile kill; `shotCount` — simultaneous multishot, не timed burst.
 - Generated arrow/bullet ammo не обещает собственного generated AttackSpec; authored throwable/dart использует weapon/consumable_weapon + empty ammoFor.
@@ -19,6 +19,8 @@
 - VFX Director получает compiled runtime fields, а не восстанавливает механику по prose.
 - Десять ручных предлайфтестовых трейсов: `PRE_LIVETEST_MANUAL_TRACES_V12_RU.md`.
 - Sparse-output behavior не изменён.
+- Planner prompt test/release-usability budget равен `24 750` символам; текущий smoke payload остаётся ниже него, а запас зарезервирован под executable function cards и contract fields. Это не runtime limit: длинный dynamic parent context не блокируется и всё равно отправляется модели во время craft.
+- Planner payload использует `static-prefix-first`: полный executable API card, safety rules и required JSON shape идут byte-stable prefix; только `creativeVariance`, `itemA` и `itemB` образуют recipe-specific suffix. Профиль: `planner_prompt_static_prefix_v0.4.194`.
 
 ## 2026-07-10 — generic overhead barrage v11
 
@@ -36,7 +38,7 @@
 - `overhead_barrage` — отдельный finite vertical slice: собственный Python policy, marker/delay executor и bounded descending children. Никакой общей trigger/state-machine.
 - `state_meter` и `triggered_action` скрыты из active prompt, но старые/debug payloads остаются читаемыми и inert.
 - Удалены мёртвые name/prose projectile helpers. Gameplay routing по prose не добавлен.
-- Добавлен `docs/RUNTIME_VERTICAL_SLICES_RU.md` и contract tests, закрепляющие одного владельца на vocabulary/compiler/executor.
+- Добавлен `RUNTIME_VERTICAL_SLICES_RU.md` и contract tests, закрепляющие одного владельца на vocabulary/compiler/executor.
 - Balance разделён через маленький policy-owner `core/balance_mode.py`: `safety` default, `normalize` opt-in, `report` diagnostic. Формулы не переписаны и не перенесены в mode-owner.
 - Sparse-output behavior не изменён: explicit zero/default остаётся authored intent и сохраняет provenance.
 - Projectile protocol: `ProjectileSyncVersion = 13`.

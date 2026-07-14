@@ -15,7 +15,7 @@ def load_hygiene_tool():
     return module
 
 
-def test_python_exception_hygiene_baseline_is_visible_and_not_growing():
+def _contract_check_python_exception_hygiene_baseline_is_visible_and_not_growing():
     tool = load_hygiene_tool()
     stats = tool._count_python_exception_handlers(ROOT / "LocalGenerator" / "infini_local")
     assert stats["bare_except"] == tool.PYTHON_BARE_EXCEPT_BASELINE == 0
@@ -25,7 +25,7 @@ def test_python_exception_hygiene_baseline_is_visible_and_not_growing():
     assert tool.PYTHON_BROAD_EXCEPTION_BASELINE == 227
 
 
-def test_runtime_api_sync_guard_reads_python_and_csharp_contracts():
+def _contract_check_runtime_api_sync_guard_reads_python_and_csharp_contracts():
     tool = load_hygiene_tool()
     py_runtime_api = tool._version_literal(
         "LocalGenerator/infini_local/core/runtime_authoring/common.py",
@@ -37,4 +37,18 @@ def test_runtime_api_sync_guard_reads_python_and_csharp_contracts():
         r'RuntimeApiCurrent = "([^"]+)"',
         "C# runtime API",
     )
-    assert py_runtime_api == cs_runtime_api == "v0.4.48"
+    assert py_runtime_api == cs_runtime_api == "v0.4.51"
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_release_hygiene_exception_runtime_api_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_python_exception_hygiene_baseline_is_visible_and_not_growing',
+            '_contract_check_runtime_api_sync_guard_reads_python_and_csharp_contracts',
+        ),
+    )

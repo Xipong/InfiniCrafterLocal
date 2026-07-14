@@ -66,6 +66,7 @@ ONHIT_CODE: Final[dict[str, int]] = {
     "lightning_arc": 16,
     "lifesteal": 17,
     "overhead_barrage": 18,
+    "slow": 19,
 }
 
 MOVEMENTS: Final[frozenset[str]] = frozenset(MOVEMENT_CODE)

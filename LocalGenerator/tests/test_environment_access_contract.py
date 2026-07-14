@@ -38,7 +38,7 @@ def _raw_env_reads(path: Path) -> list[str]:
     return hits
 
 
-def test_infini_local_env_config_reads_go_through_env_utils() -> None:
+def _contract_check_infini_local_env_config_reads_go_through_env_utils() -> None:
     offenders: list[str] = []
     for path in sorted(INF.rglob("*.py")):
         if path in ALLOWED_RAW_ENV_FILES:
@@ -47,7 +47,7 @@ def test_infini_local_env_config_reads_go_through_env_utils() -> None:
     assert not offenders, "raw env config reads must use env_utils:\n" + "\n".join(offenders)
 
 
-def test_env_contract_scan_ignores_comments_and_os_environ_copy(tmp_path: Path) -> None:
+def _contract_check_env_contract_scan_ignores_comments_and_os_environ_copy(tmp_path: Path) -> None:
     probe = tmp_path / "probe.py"
     probe.write_text(
         '# os.environ.get("INFINI_COMMENT_ONLY")\n'
@@ -58,7 +58,7 @@ def test_env_contract_scan_ignores_comments_and_os_environ_copy(tmp_path: Path) 
     assert _raw_env_reads(probe) == []
 
 
-def test_bad_infini_env_values_fallback_instead_of_crashing() -> None:
+def _contract_check_bad_infini_env_values_fallback_instead_of_crashing() -> None:
     env = os.environ.copy()
     env.update({
         "PYTHONPATH": str(ROOT / "LocalGenerator"),
@@ -83,3 +83,18 @@ def test_bad_infini_env_values_fallback_instead_of_crashing() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip()
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_environment_access_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_infini_local_env_config_reads_go_through_env_utils',
+            '_contract_check_env_contract_scan_ignores_comments_and_os_environ_copy',
+            '_contract_check_bad_infini_env_values_fallback_instead_of_crashing',
+        ),
+    )

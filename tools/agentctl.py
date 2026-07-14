@@ -154,8 +154,20 @@ def _run_check(name: str, command: list[str]) -> dict[str, Any]:
     if command and command[0] in {"python", "python3"}:
         command[0] = sys.executable
     executable = command[0] if command and Path(command[0]).is_file() else shutil.which(command[0])
+    if executable is None and command:
+        sibling_names = [command[0]]
+        if not Path(command[0]).suffix:
+            sibling_names.extend([f"{command[0]}.exe", f"{command[0]}.cmd"])
+        for sibling_name in sibling_names:
+            sibling = Path(sys.executable).with_name(sibling_name)
+            if sibling.is_file():
+                command[0] = str(sibling)
+                executable = str(sibling)
+                break
     if executable is None:
         return {"name": name, "status": "unavailable", "command": command, "durationSeconds": 0.0, "reason": f"{command[0]} not installed"}
+    if name == "pyright" and "--pythonpath" not in command:
+        command.extend(["--pythonpath", sys.executable])
     # All manifest commands are repository-root relative. The pytest shard
     # runner creates its own isolated LocalGenerator working directories.
     cwd = ROOT

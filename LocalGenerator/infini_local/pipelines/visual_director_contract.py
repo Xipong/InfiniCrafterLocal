@@ -135,14 +135,25 @@ def visual_kit_response_schema() -> dict[str, Any]:
     baked_def = defs.get("BakedAssetBoundary") if isinstance(defs, dict) else None
     if isinstance(baked_def, dict) and isinstance(baked_def.get("properties"), dict):
         baked_def["properties"].pop("prompt", None)
+        effect_def = copy.deepcopy(baked_def)
+        effect_properties = effect_def.get("properties")
+        if isinstance(effect_properties, dict):
+            effect_properties.pop("distinctFromItem", None)
+            mode_schema = effect_properties.get("mode")
+            if isinstance(mode_schema, dict) and isinstance(mode_schema.get("enum"), list):
+                mode_schema["enum"] = [value for value in mode_schema["enum"] if value != "reuse_item_sprite"]
+        effect_def["title"] = "EffectBakedAssetBoundary"
+        defs["EffectBakedAssetBoundary"] = effect_def
     kit_properties = kit_schema.get("properties") if isinstance(kit_schema.get("properties"), dict) else {}
     if "bakedAssets" in kit_properties:
         kit_properties["bakedAssets"] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                role: {"$ref": "#/$defs/BakedAssetBoundary"}
-                for role in ("projectile", "impact", "child", "field")
+                "projectile": {"$ref": "#/$defs/BakedAssetBoundary"},
+                "impact": {"$ref": "#/$defs/EffectBakedAssetBoundary"},
+                "child": {"$ref": "#/$defs/EffectBakedAssetBoundary"},
+                "field": {"$ref": "#/$defs/EffectBakedAssetBoundary"},
             },
         }
     schema: dict[str, Any] = {
@@ -218,11 +229,22 @@ def visual_director_context(
         for key in existing_visual_keys
         if _nonempty(visual.get(key))
     }
+    final_canonical_raw = data.get("canonical")
+    final_canonical: dict[str, Any] = final_canonical_raw if isinstance(final_canonical_raw, dict) else {}
+    final_identity = {
+        key: _bounded_visual_value(final_canonical.get(key))
+        for key in ("category", "headNoun", "shapeAnchors", "visualAnchors", "hardTags", "softTags")
+        if _nonempty(final_canonical.get(key))
+    }
+    result_kind = runtime_plan.get("resultKind")
+    if _nonempty(result_kind):
+        final_identity = {"resultKind": _bounded_visual_value(result_kind), **final_identity}
 
     return {
         "name": data.get("name"),
         "tooltip": data.get("tooltip"),
         "category": data.get("category"),
+        "finalIdentity": final_identity,
         "concept": _bounded_visual_value(concept),
         "sourceRolePreservation": _bounded_visual_value(source_role_preservation),
         "plannerVisualIntent": _bounded_visual_value(planner_visual_intent),

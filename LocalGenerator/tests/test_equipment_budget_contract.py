@@ -7,7 +7,7 @@ def _stage() -> dict[str, object]:
     return {"powerBudget": 2.2, "rarity": 3, "parentGeneratedDepths": [1]}
 
 
-def test_accessory_total_budget_clamps_all_in_one_stats() -> None:
+def _contract_check_accessory_total_budget_clamps_all_in_one_stats() -> None:
     stats = {
         "enabled": True,
         "genericDamage": 0.35,
@@ -35,14 +35,14 @@ def test_accessory_total_budget_clamps_all_in_one_stats() -> None:
     assert final["genericDamage"] < stats["genericDamage"]
 
 
-def test_moderate_accessory_budget_is_unchanged() -> None:
+def _contract_check_moderate_accessory_budget_is_unchanged() -> None:
     stats = {"enabled": True, "movementSpeed": 0.12, "jumpSpeed": 0.08, "fallDamageImmune": True}
     final, report = apply_accessory_soft_budget(stats, _stage())
     assert final == stats
     assert report["clamps"] == []
 
 
-def test_armor_piece_and_set_bonus_have_separate_budget_reports() -> None:
+def _contract_check_armor_piece_and_set_bonus_have_separate_budget_reports() -> None:
     stats = {
         "enabled": True,
         "slot": "body",
@@ -62,3 +62,18 @@ def test_armor_piece_and_set_bonus_have_separate_budget_reports() -> None:
     assert "set_bonus_pressure" in report["reasons"]
     assert final["defense"] <= stats["defense"]
     assert final["setBonusGenericDamage"] < stats["setBonusGenericDamage"]
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_equipment_budget_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_accessory_total_budget_clamps_all_in_one_stats',
+            '_contract_check_moderate_accessory_budget_is_unchanged',
+            '_contract_check_armor_piece_and_set_bonus_have_separate_budget_reports',
+        ),
+    )

@@ -10,7 +10,7 @@ def read(rel: str) -> str:
     return read_text_with_partial_bundles(ROOT / rel)
 
 
-def test_mp_server_authoritative_craft_spends_real_server_inventory_slots():
+def _contract_check_mp_server_authoritative_craft_spends_real_server_inventory_slots():
     src = read("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.cs")
     assert "PacketCancelServerCraft = InfiniNetPacketIds.CancelServerCraft" in src
     assert "CancelServerCraft = 12" in read("ModSources/InfiniCrafterLocal/Common/InfiniNetPacketIds.cs")
@@ -27,7 +27,7 @@ def test_mp_server_authoritative_craft_spends_real_server_inventory_slots():
     assert "Generator.Prepare(itemA, itemB, player)" in request_body
 
 
-def test_client_timeout_cancels_host_request_without_local_refund_dup_path():
+def _contract_check_client_timeout_cancels_host_request_without_local_refund_dup_path():
     src = read("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.cs")
     timeout_block = src[src.index("if (_awaitingServerCommit)"):src.index("if (_request is null && _task is null)")]
     assert "SendRemoteServerCraftCancel(\"client_timeout\")" in timeout_block
@@ -35,7 +35,7 @@ def test_client_timeout_cancels_host_request_without_local_refund_dup_path():
     result_body = src[src.index("public void HandleCraftCommitResult"):src.index("private static void RunLocalCraftReveal")]
     assert "server is authoritative for ingredient ownership" in result_body
     assert "RefundIngredients();" not in result_body
-def test_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
+def _contract_check_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
     env_utils = read("LocalGenerator/infini_local/core/env_utils.py")
     assert "def env_int" in env_utils
     assert "def env_float" in env_utils
@@ -60,7 +60,7 @@ def test_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
     assert "env_bool" in visual and "env_float" in visual and "env_int" in visual
 
 
-def test_generated_json_compat_migration_code_is_removed_for_test_worlds_only():
+def _contract_check_generated_json_compat_migration_code_is_removed_for_test_worlds_only():
     src = read("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.cs")
     assert not (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Compat.cs").exists()
     for removed in [
@@ -77,7 +77,7 @@ def test_generated_json_compat_migration_code_is_removed_for_test_worlds_only():
     assert "Attack.RuntimeFamily = NormalizeRuntimeFamily(Attack.RuntimeFamily);" in src
 
 
-def test_ci_contains_pytest_and_real_tml_build_job():
+def _contract_check_ci_contains_pytest_and_real_tml_build_job():
     workflow = read(".github/workflows/ci.yml")
     assert "tools/run_pytest_shards.py" in workflow
     assert "tools/check_project_hygiene.py" in workflow
@@ -87,7 +87,25 @@ def test_ci_contains_pytest_and_real_tml_build_job():
     assert "InfiniCrafterLocal.csproj" in workflow
 
 
-def test_contract_stamp_mentions_218_hardening():
+def _contract_check_contract_stamp_mentions_218_hardening():
     from infini_local.core.contract_versions import build_contract_versions
     stamp = build_contract_versions(app_version="0.4.218", recipe_identity_version="r", runtime_api_version="v", visual_pipeline_profile="p")
     assert stamp["mpServerAuthorityEnvMigrationCiContract"] == "server_side_slot_spend_env_migration_ci_hardening_v0.4.218"
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_218_mp_env_migration_ci_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_mp_server_authoritative_craft_spends_real_server_inventory_slots',
+            '_contract_check_client_timeout_cancels_host_request_without_local_refund_dup_path',
+            '_contract_check_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs',
+            '_contract_check_generated_json_compat_migration_code_is_removed_for_test_worlds_only',
+            '_contract_check_ci_contains_pytest_and_real_tml_build_job',
+            '_contract_check_contract_stamp_mentions_218_hardening',
+        ),
+    )

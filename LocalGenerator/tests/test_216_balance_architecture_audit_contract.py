@@ -13,7 +13,7 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_llm_prompt_no_longer_receives_parent_relative_soft_balance_caps():
+def _contract_check_llm_prompt_no_longer_receives_parent_relative_soft_balance_caps():
     authoring = read(LOCAL / "infini_local" / "pipelines" / "llm_authoring_pipeline.py")
     prompt_owner = read(LOCAL / "infini_local" / "pipelines" / "llm_authoring_prompt.py")
     prompt_surface = authoring + prompt_owner
@@ -33,7 +33,7 @@ def test_llm_prompt_no_longer_receives_parent_relative_soft_balance_caps():
     assert "balanceArchitectureAuditContract" in contracts
 
 
-def test_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers():
+def _contract_check_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers():
     from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
     item_a = {"name": "Copper Shortsword", "damage": 5, "useTime": 13, "rare": 0, "value": 100}
@@ -47,3 +47,17 @@ def test_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers():
     assert "softDamageCapPerHit" not in text
     assert "sourceEnvelope" not in text
     assert "terrariaProgressionReference" not in text
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_216_balance_architecture_audit_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_llm_prompt_no_longer_receives_parent_relative_soft_balance_caps',
+            '_contract_check_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers',
+        ),
+    )

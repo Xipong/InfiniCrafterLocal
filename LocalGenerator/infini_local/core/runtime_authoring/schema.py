@@ -94,8 +94,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Low-level primary projectile/held executor; runtimeFamily required.",
         "params": {
             "delivery": "swing|thrust|shoot|cast|throw|summon", "movement": "straight|slow_homing|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|vortex_orb|blackhole_pull|proximity_missile|returning_glaive|expanding_wave; phase passes tiles",
-            "speed": "3..18", "rangeTiles": "4..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets", "extraUpdates": "0..3", "homingStrength": "0..1", "beamWidthPx": "2..96", "beamChargeTicks": "0..300", "chargeTicks": "1..300", "chargePowerMultiplier": "1..3", "immunityCooldown": "4..60",
-            "reliability": "0.45..1.25 metadata", "selfLockTicks": "0..120 metadata", "missPunish": "0..1 metadata",
+            "speed": "3..18", "rangeTiles": "4..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total NPC hits", "extraUpdates": "0..3", "homingStrength": "0..1", "beamWidthPx": "2..96", "beamChargeTicks": "0..300", "chargeTicks": "1..300", "chargePowerMultiplier": "1..3", "delayTicks": "0..300; overhead_barrage 0=immediate", "immunityCooldown": "4..60",
             "runtimeFamily": "swing|thrust|returning|flail|yoyo|whip|shoot|cast|beam|charge_release|overhead_barrage|throw|summon; sentry uses deploy_sentry",
             "weaponFamily": "exact optional", "projectileFamily": "visual form",
             "projectileShape": "visual body", "projectileMotion": "visual motion", "projectileTrail": "visual trail", "projectileImpact": "visual impact",
@@ -105,7 +104,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Melee family executor.",
         "params": {
             "family": "broadsword|sword|axe|hammer|shortsword|rapier|dagger|spear|lance|pike|trident|halberd|naginata|jousting_lance|boomerang|chakram|flail|mace|anchor|yoyo|whip",
-            "runtimeFamily": "omit; derived", "speed": "3..18", "rangeTiles": "2..80", "lifetimeTicks": "10..900", "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets", "useTimeTicks": "10..150",
+            "runtimeFamily": "omit; derived", "speed": "3..18", "rangeTiles": "2..80", "lifetimeTicks": "10..900", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "useTimeTicks": "10..150",
             "shotCount": "1..8 simultaneous emitted; not swing count", "spreadRadians": "0..0.75",
             "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
         },
@@ -114,7 +113,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Ranged executor; charge_release holds, overhead_barrage spawns above target.",
         "params": {
             "family": "bow|repeater|gun|shotgun|launcher|rocket_launcher|dart|blowgun|harpoon|charge_release|overhead_barrage", "ammoFor": "empty custom; arrow|bullet consume vanilla ammo",
-            "movement": "straight|gravity_arc|slow_homing|phase|proximity_missile|boomerang; phase passes tiles", "speed": "3..18", "rangeTiles": "10..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets", "delayTicks": "0..300; barrage 0=immediate",
+            "movement": "straight|gravity_arc|slow_homing|phase|proximity_missile|boomerang; phase passes tiles", "speed": "3..18", "rangeTiles": "10..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "delayTicks": "0..300; barrage 0=immediate",
             "projectileFamily": "visual form; launcher+empty=custom rocket", "chargeTicks": "1..300 charge_release hold", "chargePowerMultiplier": "1..3 max power", "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
         },
     },
@@ -122,7 +121,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Magic executor; beam channels, charge_release holds, overhead_barrage spawns above target.",
         "params": {
             "family": "staff|wand|rod|book|magic_gun|channelled_beam|charge_release|overhead_barrage|other exact family", "projectileFamily": "spear|bolt|beam|orb|etc",
-            "movement": "straight|slow_homing|gravity_arc|phase|accelerate|vortex_orb|blackhole_pull|expanding_wave", "speed": "3..18", "rangeTiles": "8..120", "chargePowerMultiplier": "1..3 charge_release", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets", "homingStrength": "0..1", "beamWidthPx": "2..96", "chargeTicks": "beam 0=full immediately; charge_release 1..300", "delayTicks": "0..300; barrage 0=immediate", "immunityCooldown": "4..60",
+            "movement": "straight|slow_homing|gravity_arc|phase|accelerate|vortex_orb|blackhole_pull|expanding_wave", "speed": "3..18", "rangeTiles": "8..120", "chargePowerMultiplier": "1..3 charge_release", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "homingStrength": "0..1", "beamWidthPx": "2..96", "chargeTicks": "beam 0=full immediately; charge_release 1..300", "delayTicks": "0..300; barrage 0=immediate", "immunityCooldown": "4..60",
             "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
         },
     },
@@ -131,7 +130,7 @@ ENGINE_FN_CATALOG_V2 = {
         "params": {"placement": "grounded|floating", "attackIntervalTicks": "12..180 ticks/volley", "targetRangeTiles": "8..60", "helperLifetimeTicks": "120..36000 root", "shotCount": "1..4 simultaneous/volley", "speed": "3..18", "spreadRadians": "0..0.75", "movement": "shot movement", "effect": "shot effect", "onHit": "none|non-child effect only", "projectileShape": "sentry body", "secondaryProjectileShape": "shot body", "secondaryLifetimeTicks": "5..180 shot lifetime; not sentry lifetime"},
     },
     "spawn_temporary_helper_projectile": {
-        "meaning": "Temporary bounded helper projectile. It is not a persistent Terraria minion or sentry: no buff lifecycle, minion slots, sentry slots, automatic resummon, or save persistence. Use it only when a short-lived orbiting/drifting helper is the authored mechanic. Whips use perform_melee_attack family=whip.",
+        "meaning": "Not a persistent Terraria minion or sentry; short orbit/drift only.",
         "params": {
             "family": "|".join(sorted(TEMPORARY_HELPER_FAMILIES)), "movement": "orbit|slow_homing|drift|straight", "speed": "3..18", "rangeTiles": "8..120 target/orbit radius", "lifetimeTicks": "25..900 ticks; 60=1s", "shotCount": "1..4 simultaneous helpers", "pierce": "0/1 one hit; 2..10 total hits", "projectileShape": "temporary helper body"
         },
@@ -142,7 +141,7 @@ ENGINE_FN_CATALOG_V2 = {
     },
     "apply_on_hit_effect": {
         "meaning": "Real on-hit gameplay: debuffs, bursts, chained hits, child-producing effects, pull/heal/lifesteal. Visual-only impact belongs in spawn_contact_particles.",
-        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "pullStrength": "0..1", "debuffHint": "short text or empty"},
+        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty"},
     },
     "spawn_contact_particles": {
         "meaning": "Pure VFX/dust, no damage. Use this for chips, sawdust, sparks, slime, smoke, glow.",
@@ -269,9 +268,9 @@ def accepted_engine_param_names(fn: str) -> frozenset[str]:
 NUMERIC_LIMITS = {
     "useTimeTicks": (10.0, 150.0), "useAnimationTicks": (6.0, 150.0), "knockback": (0.0, 12.0), "manaCost": (0.0, 80.0), "shotCount": (1.0, 8.0), "pierce": (-1.0, 10.0),
     "aoeRadiusTiles": (0.0, 10.0), "homingStrength": (0.0, 1.0), "lifetimeTicks": (25.0, 900.0),
-    "extraUpdates": (0.0, 3.0), "rangeTiles": (4.0, 120.0), "reliability": (0.45, 1.25),
-    "selfLockTicks": (0.0, 120.0), "missPunish": (0.0, 1.0), "spreadRadians": (0.0, 0.75),
-    "speed": (3.0, 18.0), "beamWidthPx": (2.0, 96.0), "beamChargeTicks": (0.0, 300.0), "chargeTicks": (1.0, 300.0), "chargePowerMultiplier": (1.0, 3.0), "delayTicks": (0.0, 300.0), "sentryAttackIntervalTicks": (12.0, 180.0), "sentryTargetRangeTiles": (8.0, 60.0), "sentryLifetimeTicks": (120.0, 36000.0), "immunityCooldown": (4.0, 60.0), "splitCount": (0.0, 8.0), "chainCount": (0.0, 6.0),
+    "extraUpdates": (0.0, 3.0), "rangeTiles": (4.0, 120.0),
+    "spreadRadians": (0.0, 0.75),
+    "speed": (3.0, 18.0), "beamWidthPx": (2.0, 96.0), "beamChargeTicks": (0.0, 300.0), "chargeTicks": (1.0, 300.0), "chargePowerMultiplier": (1.0, 3.0), "delayTicks": (0.0, 300.0), "sentryAttackIntervalTicks": (12.0, 180.0), "sentryTargetRangeTiles": (8.0, 60.0), "sentryLifetimeTicks": (120.0, 36000.0), "immunityCooldown": (4.0, 60.0), "splitCount": (0.0, 8.0), "chainCount": (0.0, 6.0), "pullStrength": (0.0, 1.0),
     "trailLength": (0.0, 24.0), "burstDustCap": (0.0, 40.0), "fieldRadiusTiles": (0.0, 6.0),
     "fieldLifetimeTicks": (0.0, 240.0), "secondaryDamageMultiplier": (0.0, 1.0),
     "secondarySpreadRadians": (0.0, 1.2), "secondaryLifetimeTicks": (5.0, 180.0), "sameTargetBias": (0.0, 1.0),

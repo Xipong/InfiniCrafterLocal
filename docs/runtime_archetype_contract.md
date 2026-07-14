@@ -31,10 +31,6 @@ Example shape:
     "usesHeldProjectile": false,
     "overrideKnobs": {
       "returnDelayTicks": 24,
-      "outboundPierce": 1,
-      "returnPierce": -1,
-      "localImmunityTicks": 12,
-      "trailProfile": "amber_slime",
       "futureDebugKnob": {"preserved": true}
     },
     "supportStatus": "executable",
@@ -46,7 +42,7 @@ Example shape:
 Supported/exposed families in this patch:
 
 - `custom_executor`: default/omitted path; current `runtimePlan.engineCalls` remain authoritative.
-- `boomerang`: executable bridge to current returning/boomerang fields: `delivery=throw`, `movement=boomerang`, `runtimeFamily=returning`, `weaponFamily=boomerang`, plus phase metadata and scorer-safe return-pierce notes.
+- `boomerang`: executable bridge to current returning/boomerang fields: `delivery=throw`, `movement=boomerang`, `runtimeFamily=returning`, `weaponFamily=boomerang`, plus the finite outbound/return phase model. Penetration is owned by the runtime executor, not decorative archetype knobs.
 - `yoyo`, `flail`, `whip`: mapped only to existing finite runtime family fields. No giant vanilla item table.
 - `held_swing`, `held_thrust`: explicit held/swing/thrust family metadata over current finite fields.
 - `apply_on_hit_effect(onHit=overhead_barrage)`: executable on-hit overhead-projectile primitive (`onHitCode=18`), bounded by child caps and budget pressure. Star/arrow/shard theme comes only from explicit projectile/effect fields; removed names are rejected.
@@ -56,13 +52,9 @@ Supported/exposed families in this patch:
 
 These are `RuntimeArchetypeSpec.family` values, not canonical `attack.runtimeFamily` executor values. For example, archetype `boomerang` compiles to `runtimeFamily=returning`; downstream runtime consumers only see the latter.
 
-These are `RuntimeArchetypeSpec.family` values, not canonical `attack.runtimeFamily` executor values. For example, archetype `boomerang` compiles to `runtimeFamily=returning`; downstream runtime consumers only see the latter.
-
 Known numeric knobs are clamped in Python/C#:
 
 - `returnDelayTicks`: 0..180
-- `outboundPierce`: -1..20
-- `returnPierce`: -1..50
 - `localImmunityTicks`: 0..60
 - `arcDegrees`: 10..220
 - `windupTicks`: 0..90
@@ -83,7 +75,7 @@ Example:
 ```json
 {
   "runtimeContract": {
-    "schema": "infini.runtime-contract.v1",
+    "schema": "infini.runtime-contract.v2",
     "primaryVerb": "returning boomerang throw",
     "controlStyle": "tap",
     "mustFeelLike": ["Enchanted Boomerang return", "high reward on return path"],
@@ -94,7 +86,11 @@ Example:
     "mechanicClaims": [
       {
         "claim": "returns to the thrower and can hit again on return",
-        "backing": "runtimeArchetype.family=boomerang",
+        "backing": "returning executor",
+        "backingRefs": [
+          {"source": "runtimeArchetype", "field": "family", "expected": "boomerang"},
+          {"source": "compiledAttack", "field": "runtimeFamily", "expected": "returning"}
+        ],
         "status": "executable"
       }
     ],
@@ -104,7 +100,7 @@ Example:
 }
 ```
 
-`runtimeContract` is not direct gameplay. It informs validation/debug/future sync and detects tooltip/fantasy lies. It cannot override `runtimePlan.engineCalls` unless the Python compiler explicitly maps that contract/archetype to supported finite fields.
+`runtimeContract` is not direct gameplay. It informs validation/debug/future sync and detects tooltip/fantasy lies. Free-text `backing` is descriptive only; `executable` requires exact `backingRefs` resolved against `engineCalls`, `runtimeArchetype`, or the compiled `AttackSpec`. It cannot override `runtimePlan.engineCalls` unless the Python compiler explicitly maps that contract/archetype to supported finite fields.
 
 ## Promise truth validator
 
@@ -112,8 +108,8 @@ Python now emits `debug.runtimePromiseTruth` and top-level `unsupportedPromises`
 
 Examples:
 
-- “returns to thrower” + `runtimeArchetype.family=boomerang` => `executable`.
-- “projectiles descend from above on hit” + `apply_on_hit_effect(onHit=overhead_barrage)` => `executable` bounded child projectiles; explicit `effect=star` keeps a star theme.
+- “returns to thrower” + resolved `{source: runtimeArchetype, field: family, expected: boomerang}` => `executable`.
+- “projectiles descend from above on hit” + resolved `engineCall` ref to `apply_on_hit_effect.onHit=overhead_barrage` => `executable` bounded child projectiles; explicit `effect=star` keeps a star theme.
 - “projectiles appear above the targeted area” without explicit `overhead_barrage` => `unsupported` unless clearly visual-only.
 - “channel beam” + explicit `runtimeArchetype.family=channel_beam` or `cast_magic_weapon(family=channelled_beam)` => executable held beam. Beam wording without that exact structured selection remains visual-only/unsupported and never selects gameplay.
 - “paired/dual sword” can be preserved as future `secondary_attack` intent. Broken dual-wield is not executed, but future finite support is allowed.
@@ -130,20 +126,16 @@ Visual generation may read `runtimeArchetype`/`runtimeContract` to avoid contrad
 - Unsupported paired sword can be drawn as one fused/split blade rather than broken dual-wield.
 - Explicit executable channel beam may drive a held-emitter/beam visual; beam-like prose without the exact runtime family must remain visual-only.
 
-## Save/load/net compatibility
+## Save/load/net contract
 
-C# `GeneratedItemData` now has data-only `RuntimeArchetypeSpec`, `RuntimeContractSpec`, and `MechanicClaimSpec` DTOs. `Normalize()` tolerates missing fields, clamps known knobs, and preserves unknown future knobs as JSON. Old generated recipes without these fields still load and execute through the existing runtime fields.
+C# `GeneratedItemData` has data-only `RuntimeArchetypeSpec`, `RuntimeContractSpec`, `MechanicClaimSpec`, and `MechanicBackingRefSpec` DTOs. `Normalize()` clamps known knobs; runtime contract schema is exactly `infini.runtime-contract.v2`. This private single-instance runtime does not migrate old generated contracts: recipes must match the current runtime API.
 
-Generated JSON preserves the archetype fields. Executable beam state also has an explicit projectile protocol (`ProjectileSyncVersion = 13`) for range, homing strength, beam width, charge duration and current scanned length; direction/position use normal projectile sync.
+Generated JSON preserves the archetype and machine backing fields. Projectile protocol is `ProjectileSyncVersion = 18`; it carries the current authored `AttackSpec`, including `pullMode`, plus dynamic return state. Direction/position still use normal projectile sync where applicable.
 
 ## Secondary trigger lifecycle
 
 `spawn_secondary_projectiles` accepts one exact trigger: `on_hit` or `on_expire`. The compiler rejects mixed trigger calls and rejects implicit dual child lifecycles. `on_expire` is implemented by a dedicated policy/compiler owner and a bounded C# kill-path; it is not a generic event/action framework.
 
-## Deferred TODOs
+## Remaining finite slices
 
-- Full PacketRegistry consumer for `runtimeContract.syncFields`.
-- Optional richer multi-beam/charge-release variants built from finite knobs, without item-name aliases.
-- Full held projectile swing overlay.
-- Feline bounce / sticky puddle / heat-jam executors as separate future finite slices. Overhead barrage is already executable under its exact canonical name.
-- True paired/offhand dual-wield as a finite supported executor, not broken visual/prose routing.
+Этот contract document больше не владеет отдельным backlog. Текущий статус выполненного и открытые PacketRegistry/multi-beam/held-overlay/feline/sticky/heat-jam/paired slices поглощены в корневой `../TODO_ROADMAP_VERY_LATER_RU.md`.

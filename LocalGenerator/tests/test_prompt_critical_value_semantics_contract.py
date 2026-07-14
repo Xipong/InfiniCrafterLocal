@@ -12,7 +12,7 @@ from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 PARENT = {"name": "Wooden Sword", "type": 24, "damage": 7, "useTime": 20, "useAnimation": 20}
 
 
-def test_critical_numeric_and_sentinel_semantics_survive_prompt_compaction() -> None:
+def _contract_check_critical_numeric_and_sentinel_semantics_survive_prompt_compaction() -> None:
     payload = build_llm_author_payload(PARENT, PARENT, {}, {}, "critical_semantics")
     contract = payload["engineRuntimeContract"]
     critical = contract["criticalValueSemantics"]
@@ -34,9 +34,23 @@ def test_critical_numeric_and_sentinel_semantics_survive_prompt_compaction() -> 
     assert "shot lifetime; not sentry lifetime" in functions["deploy_sentry"]["params"]["secondaryLifetimeTicks"]
 
 
-def test_prompt_does_not_advertise_dead_or_false_primary_controls() -> None:
+def _contract_check_prompt_does_not_advertise_dead_or_false_primary_controls() -> None:
     shoot = ENGINE_FN_CATALOG_V2["shoot_projectile"]["params"]
     ranged = ENGINE_FN_CATALOG_V2["fire_ranged_weapon"]["params"]
     assert "damageMultiplier" not in shoot
     assert "sentry" not in shoot["runtimeFamily"].split("|")
     assert "rocket" not in ranged["ammoFor"].split("|")
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_prompt_critical_value_semantics_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_critical_numeric_and_sentinel_semantics_survive_prompt_compaction',
+            '_contract_check_prompt_does_not_advertise_dead_or_false_primary_controls',
+        ),
+    )

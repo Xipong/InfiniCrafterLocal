@@ -43,6 +43,7 @@ ONHIT_ALIASES = {
     "fragment": "split", "fragments": "split", "shards": "split",
     "star": "starburst", "stars": "starburst",
     "heal": "lifesteal", "lifesteal": "lifesteal", "life_steal": "lifesteal",
+    "slow": "slow", "slowed": "slow",
 }
 
 DELIVERIES = frozenset({"none", "swing", "thrust", "spear", "shoot", "cast", "throw", "summon", "flail", "yoyo", "whip"})

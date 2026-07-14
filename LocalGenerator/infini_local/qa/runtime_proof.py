@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
@@ -161,6 +162,57 @@ def _mismatches_for_gameplay_expect(report: dict[str, Any], expect: dict[str, An
             mismatches.append(f"unexpected gameplay key {key!r}={gameplay.get(key)!r}")
 
     return mismatches
+
+
+def summarize_semantic_sample_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize live sample diversity without owning the live/network harness."""
+    families = Counter(str(row.get("runtimeFamily") or "") for row in rows if row.get("ok"))
+    movements = Counter(str(row.get("movement") or "") for row in rows if row.get("ok"))
+    onhits = Counter(str(row.get("onHit") or "") for row in rows if row.get("ok"))
+    unsupported: Counter[str] = Counter()
+    partial_cases: list[str] = []
+    for row in rows:
+        status = str(row.get("executionStatus") or "").strip().lower()
+        if status in {"partial", "unsupported"}:
+            partial_cases.append(str(row.get("caseId") or "case"))
+        for promise in row.get("unsupportedPromises") or []:
+            unsupported[str(promise)] += 1
+
+    failed_count = sum(1 for row in rows if not row.get("ok"))
+    reasons: list[str] = []
+    if failed_count:
+        reasons.append(f"combine_failed:{failed_count}")
+    if partial_cases:
+        reasons.append("partial_or_unsupported_execution:" + ",".join(partial_cases[:8]))
+    unsupported_total = sum(unsupported.values())
+    if unsupported_total:
+        reasons.append(f"unsupported_promises:{unsupported_total}")
+    if len(rows) >= 4:
+        if len({key for key in families if key}) < 2:
+            reasons.append("low_runtime_family_diversity")
+        if len({key for key in movements if key}) < 2:
+            reasons.append("low_movement_diversity")
+
+    semantic_gate = {
+        "ok": not reasons,
+        "reasons": reasons,
+        "partialCases": partial_cases,
+        "unsupportedTotal": unsupported_total,
+    }
+    return {
+        "ok": failed_count == 0 and semantic_gate["ok"],
+        "caseCount": len(rows),
+        "failedCount": failed_count,
+        "cases": rows,
+        "semanticGate": semantic_gate,
+        "diversity": {
+            "runtimeFamily": dict(families),
+            "movement": dict(movements),
+            "onHit": dict(onhits),
+            "unsupportedPromises": dict(unsupported),
+        },
+        "note": "Live LLM semantic sample with image backend off. Not Terraria gameplay proof; semanticGate enforces contract-honesty thresholds.",
+    }
 
 
 def _default_parents() -> tuple[dict[str, Any], dict[str, Any]]:

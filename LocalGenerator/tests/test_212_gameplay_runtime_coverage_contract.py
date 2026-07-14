@@ -12,7 +12,7 @@ def read(path: Path) -> str:
     return read_text_with_partial_bundles(path)
 
 
-def test_generated_tool_mining_speed_and_alt_light_are_executable():
+def _contract_check_generated_tool_mining_speed_and_alt_light_are_executable():
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
     authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "__init__.py")
     authoring_schema = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "schema.py")
@@ -28,7 +28,7 @@ def test_generated_tool_mining_speed_and_alt_light_are_executable():
     assert "ApplyGeneratedUtilityBuff(new GeneratedBuffSpec" in item
 
 
-def test_accessory_authoring_now_covers_runtime_supported_fields():
+def _contract_check_accessory_authoring_now_covers_runtime_supported_fields():
     authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "compiler.py")
     model = read(MOD / "Common" / "Models" / "GeneratedItemData.cs")
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
@@ -42,7 +42,7 @@ def test_accessory_authoring_now_covers_runtime_supported_fields():
     assert "GetArmorPenetration" in item
 
 
-def test_station_manual_ux_and_prefetch_are_bounded_not_autofill():
+def _contract_check_station_manual_ux_and_prefetch_are_bounded_not_autofill():
     ui = read(MOD / "Common" / "UI" / "InfiniCraftStationUISystem.cs")
     player = read(MOD / "Common" / "Players" / "InfiniCraftPlayer.cs")
     config = read(MOD / "Common" / "Config" / "InfiniGameplayQolConfig.cs")
@@ -55,3 +55,18 @@ def test_station_manual_ux_and_prefetch_are_bounded_not_autofill():
     assert "player?.armor" in player
     assert "player?.miscEquips" in player
     assert "2 => 30 * 60" in player
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_212_gameplay_runtime_coverage_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_generated_tool_mining_speed_and_alt_light_are_executable',
+            '_contract_check_accessory_authoring_now_covers_runtime_supported_fields',
+            '_contract_check_station_manual_ux_and_prefetch_are_bounded_not_autofill',
+        ),
+    )

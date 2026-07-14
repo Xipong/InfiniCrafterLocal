@@ -80,7 +80,7 @@ def _attach(plan: dict, a: dict, b: dict, key: str) -> dict:
     return attach_gameplay_and_attack(data, a, b, ca, cb)
 
 
-def test_final_attack_materializes_compiler_affordances_for_held_thrust() -> None:
+def _contract_check_final_attack_materializes_compiler_affordances_for_held_thrust() -> None:
     plan = {
         "name": "Rope Spear",
         "tooltip": "A compact rope-bound spear.",
@@ -129,7 +129,7 @@ def test_final_attack_materializes_compiler_affordances_for_held_thrust() -> Non
     assert data["gameplay"]["handPose"] == "two_hand"
 
 
-def test_returning_family_gets_pre_release_held_presentation() -> None:
+def _contract_check_returning_family_gets_pre_release_held_presentation() -> None:
     plan = {
         "name": "Rope Chakram",
         "tooltip": "A returning rope-bound blade.",
@@ -151,7 +151,7 @@ def test_returning_family_gets_pre_release_held_presentation() -> None:
     assert data["gameplay"]["handPose"] == "throwing"
 
 
-def test_csharp_projectile_owned_families_disable_vanilla_contact_damage() -> None:
+def _contract_check_csharp_projectile_owned_families_disable_vanilla_contact_damage() -> None:
     source = (
         Path(__file__).resolve().parents[2]
         / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs"
@@ -163,7 +163,7 @@ def test_csharp_projectile_owned_families_disable_vanilla_contact_damage() -> No
     assert "item.noUseGraphic = Attack.HideUseGraphic || projectileOwnedUse;" in source
 
 
-def test_csharp_movement_executor_owns_special_projectile_rotation() -> None:
+def _contract_check_csharp_movement_executor_owns_special_projectile_rotation() -> None:
     root = Path(__file__).resolve().parents[2]
     runtime = (
         root / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs"
@@ -179,7 +179,7 @@ def test_csharp_movement_executor_owns_special_projectile_rotation() -> None:
     assert "p.Projectile.rotation +=" in executors
 
 
-def test_remote_held_payload_sends_explicit_inactive_transition() -> None:
+def _contract_check_remote_held_payload_sends_explicit_inactive_transition() -> None:
     source = (
         Path(__file__).resolve().parents[2]
         / "ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemDrawLayer.cs"
@@ -194,7 +194,7 @@ def test_remote_held_payload_sends_explicit_inactive_transition() -> None:
     assert "if (!activeUse && !wasActive)" in source
 
 
-def test_csharp_held_draw_consumes_visibility_and_release_contract() -> None:
+def _contract_check_csharp_held_draw_consumes_visibility_and_release_contract() -> None:
     source = (
         Path(__file__).resolve().parents[2]
         / "ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemDrawLayer.cs"
@@ -209,7 +209,7 @@ def test_csharp_held_draw_consumes_visibility_and_release_contract() -> None:
     assert "ShouldDrawHeldSprite(data, player, remotePayload)" in source
 
 
-def test_generated_items_drive_composite_arm_pose_from_runtime_contract() -> None:
+def _contract_check_generated_items_drive_composite_arm_pose_from_runtime_contract() -> None:
     root = Path(__file__).resolve().parents[2]
     item_main = (
         root / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs"
@@ -231,7 +231,7 @@ def test_generated_items_drive_composite_arm_pose_from_runtime_contract() -> Non
     assert "ApplyOwnerArmPose(owner, dir, twoHanded: false);" in runtime
 
 
-def test_runtime_contract_maps_live_supported_statuses_and_engine_call_backing() -> None:
+def _contract_check_runtime_contract_maps_live_supported_statuses_and_engine_call_backing() -> None:
     data = {
         "runtimePlan": {
             "engineCalls": [
@@ -242,8 +242,18 @@ def test_runtime_contract_maps_live_supported_statuses_and_engine_call_backing()
         "runtimeContract": {
             "executionStatus": "stable",
             "mechanicClaims": [
-                {"claim": "throws the weapon", "backing": "shoot_projectile", "status": "supported"},
-                {"claim": "returns to the wielder", "backing": "runtimeArchetype/AttackSpec returning executor", "status": "active"},
+                {
+                    "claim": "throws the weapon",
+                    "backing": "shoot_projectile",
+                    "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "returning"}],
+                    "status": "supported",
+                },
+                {
+                    "claim": "returns to the wielder",
+                    "backing": "AttackSpec returning executor",
+                    "backingRefs": [{"source": "compiledAttack", "field": "runtimeFamily", "expected": "returning"}],
+                    "status": "active",
+                },
             ],
         },
     }
@@ -255,7 +265,7 @@ def test_runtime_contract_maps_live_supported_statuses_and_engine_call_backing()
     assert [claim["status"] for claim in data["runtimeContract"]["mechanicClaims"]] == ["executable", "executable"]
 
 
-def test_runtime_contract_does_not_trust_supported_label_without_backing() -> None:
+def _contract_check_runtime_contract_does_not_trust_supported_label_without_backing() -> None:
     data = {
         "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {}}]},
         "runtimeContract": {
@@ -269,10 +279,10 @@ def test_runtime_contract_does_not_trust_supported_label_without_backing() -> No
     report = validate_runtime_contract(data, {})
 
     assert report["executionStatus"] == "partial"
-    assert data["runtimeContract"]["mechanicClaims"][0]["status"] == "ambiguous"
+    assert data["runtimeContract"]["mechanicClaims"][0]["status"] == "partial"
 
 
-def test_runtime_promise_truth_detects_orbiting_and_homing_without_executors() -> None:
+def _contract_check_runtime_promise_truth_detects_orbiting_and_homing_without_executors() -> None:
     data = {
         "tooltip": "Summons three orbiting blades that seek enemies.",
         "concept": {"fantasy": "Three blades orbit the wielder and home into targets."},
@@ -290,7 +300,7 @@ def test_runtime_promise_truth_detects_orbiting_and_homing_without_executors() -
     assert "unsupported:projectile_homing" in report["unsupportedPromises"]
 
 
-def test_planner_promise_gate_blocks_gameplay_prose_but_allows_executable_homing() -> None:
+def _contract_check_planner_promise_gate_blocks_gameplay_prose_but_allows_executable_homing() -> None:
     bad = {
         "tooltip": "Summons orbiting blades that seek enemies.",
         "runtimePlan": {"engineCalls": [{"fn": "summon_behavior", "params": {"family": "minion"}}]},
@@ -312,7 +322,7 @@ def test_planner_promise_gate_blocks_gameplay_prose_but_allows_executable_homing
     assert good_gate["ok"] is True
 
 
-def test_try_llm_plan_reauthors_once_after_blocking_promise(monkeypatch) -> None:
+def _contract_check_try_llm_plan_reauthors_once_after_blocking_promise(monkeypatch) -> None:
     responses = [
         {
             "name": "False Orbit",
@@ -322,6 +332,14 @@ def test_try_llm_plan_reauthors_once_after_blocking_promise(monkeypatch) -> None
         {
             "name": "Honest Bolt",
             "tooltip": "Shoots a fast bolt.",
+            "runtimeContract": {
+                "schema": "infini.runtime-contract.v2",
+                "primaryVerb": "shoot a fast bolt",
+                "controlStyle": "tap",
+                "mechanicClaims": [{"claim": "shoots a fast bolt", "backing": "shoot_projectile", "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "shoot"}], "status": "executable"}],
+                "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
+                "executionStatus": "executable",
+            },
             "runtimePlan": {
                 "resultKind": "weapon",
                 "engineCalls": [
@@ -350,12 +368,78 @@ def test_try_llm_plan_reauthors_once_after_blocking_promise(monkeypatch) -> None
     assert result["name"] == "Honest Bolt"
     assert len(calls) == 2
     assert result["debug"]["plannerPromiseGate"]["ok"] is True
+    retry_packet = json.loads(calls[1]["messages"][-1]["content"])
+    backing_rules = retry_packet["backingRefRules"]
+    assert any("source must be exactly" in rule and "engineCall" in rule for rule in backing_rules)
+    assert any("zero-based absolute index into runtimePlan.engineCalls" in rule for rule in backing_rules)
+    assert any('"source":"engineCall"' in rule and '"callIndex":1' in rule for rule in backing_rules)
 
 
-def test_try_llm_plan_keeps_one_call_for_honest_plan(monkeypatch) -> None:
+def _contract_check_try_llm_plan_reauthors_again_when_first_feedback_creates_a_new_blocking_promise(monkeypatch) -> None:
+    responses = [
+        {
+            "name": "False Orbit",
+            "tooltip": "Summons orbiting blades.",
+            "runtimePlan": {"resultKind": "weapon", "engineCalls": [{"fn": "summon_behavior", "params": {"family": "minion"}}]},
+        },
+        {
+            "name": "False Orbit Again",
+            "tooltip": "Keeps orbiting blades around the player.",
+            "runtimePlan": {"resultKind": "weapon", "engineCalls": [{"fn": "summon_behavior", "params": {"family": "minion"}}]},
+        },
+        {
+            "name": "Honest Bolt",
+            "tooltip": "Shoots a fast bolt.",
+            "runtimeContract": {
+                "schema": "infini.runtime-contract.v2",
+                "primaryVerb": "shoot a fast bolt",
+                "controlStyle": "tap",
+                "mechanicClaims": [{"claim": "shoots a fast bolt", "backing": "shoot_projectile", "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "shoot"}], "status": "executable"}],
+                "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
+                "executionStatus": "executable",
+            },
+            "runtimePlan": {
+                "resultKind": "weapon",
+                "engineCalls": [
+                    {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
+                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "movement": "straight", "speed": 8, "lifetimeTicks": 60, "projectileShape": "bolt"}},
+                ],
+            },
+        },
+    ]
+    calls: list[dict] = []
+
+    def fake_chat(req: dict, timeout: int) -> dict:
+        calls.append(req)
+        return {"choices": [{"message": {"content": json.dumps(responses[len(calls) - 1])}}]}
+
+    monkeypatch.setattr(lap, "USE_LLM", True)
+    monkeypatch.setattr(lap, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(lap, "llm_chat_json", fake_chat)
+    monkeypatch.setattr(lap, "trace_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(lap, "log_event", lambda *args, **kwargs: None)
+    parent = {"name": "Wood", "internalName": "Wood", "sourceMod": "Terraria", "type": 9, "maxStack": 9999}
+
+    result = lap.try_llm_plan(parent, parent, {}, {}, "promise_retry_twice")
+
+    assert result is not None
+    assert result["name"] == "Honest Bolt"
+    assert len(calls) == 3
+    assert result["debug"]["plannerPromiseGate"]["ok"] is True
+
+
+def _contract_check_try_llm_plan_keeps_one_call_for_honest_plan(monkeypatch) -> None:
     response = {
         "name": "Honest Bolt",
         "tooltip": "Shoots a fast bolt.",
+        "runtimeContract": {
+            "schema": "infini.runtime-contract.v2",
+            "primaryVerb": "shoot a fast bolt",
+            "controlStyle": "tap",
+            "mechanicClaims": [{"claim": "shoots a fast bolt", "backing": "shoot_projectile", "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "shoot"}], "status": "executable"}],
+            "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
+            "executionStatus": "executable",
+        },
         "runtimePlan": {
             "resultKind": "weapon",
             "engineCalls": [
@@ -383,7 +467,59 @@ def test_try_llm_plan_keeps_one_call_for_honest_plan(monkeypatch) -> None:
     assert len(calls) == 1
 
 
-def test_csharp_item_bodied_projectile_falls_back_to_item_sprite() -> None:
+def _contract_check_try_llm_plan_does_not_runtime_reject_payload_above_test_budget(monkeypatch) -> None:
+    response = {
+        "name": "Oversized Context Bolt",
+        "tooltip": "Shoots a fast bolt.",
+        "runtimeContract": {
+            "schema": "infini.runtime-contract.v2",
+            "primaryVerb": "shoot a fast bolt",
+            "controlStyle": "tap",
+            "mechanicClaims": [{
+                "claim": "shoots a fast bolt",
+                "backing": "shoot_projectile",
+                "backingRefs": [{
+                    "source": "engineCall",
+                    "callIndex": 1,
+                    "fn": "shoot_projectile",
+                    "field": "runtimeFamily",
+                    "expected": "shoot",
+                }],
+                "status": "executable",
+            }],
+            "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
+            "executionStatus": "executable",
+        },
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "movement": "straight", "speed": 8, "lifetimeTicks": 60, "projectileShape": "bolt"}},
+            ],
+        },
+    }
+    calls: list[dict] = []
+
+    def fake_chat(req: dict, timeout: int) -> dict:
+        calls.append(req)
+        return {"choices": [{"message": {"content": json.dumps(response)}}]}
+
+    monkeypatch.setattr(lap, "USE_LLM", True)
+    monkeypatch.setattr(lap, "build_llm_author_payload", lambda *args, **kwargs: {"oversizedParentContext": "x" * 25_000})
+    monkeypatch.setattr(lap, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(lap, "llm_chat_json", fake_chat)
+    monkeypatch.setattr(lap, "trace_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(lap, "log_event", lambda *args, **kwargs: None)
+    parent = {"name": "Wood", "internalName": "Wood", "sourceMod": "Terraria", "type": 9, "maxStack": 9999}
+
+    result = lap.try_llm_plan(parent, parent, {}, {}, "oversized_runtime_context")
+
+    assert result is not None
+    assert len(calls) == 1
+    assert len(calls[0]["messages"][1]["content"]) > 24_750
+
+
+def _contract_check_csharp_item_bodied_projectile_falls_back_to_item_sprite() -> None:
     source = (
         Path(__file__).resolve().parents[2]
         / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Visuals.cs"
@@ -392,3 +528,31 @@ def test_csharp_item_bodied_projectile_falls_back_to_item_sprite() -> None:
     assert "private bool UsesItemSpriteAsProjectileByDefault()" in source
     assert "registryData.Visual?.SpritePath" in source
     assert "UsesItemSpriteAsProjectileByDefault()" in source
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_241_holistic_instability_bugfixes_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_final_attack_materializes_compiler_affordances_for_held_thrust',
+            '_contract_check_returning_family_gets_pre_release_held_presentation',
+            '_contract_check_csharp_projectile_owned_families_disable_vanilla_contact_damage',
+            '_contract_check_csharp_movement_executor_owns_special_projectile_rotation',
+            '_contract_check_remote_held_payload_sends_explicit_inactive_transition',
+            '_contract_check_csharp_held_draw_consumes_visibility_and_release_contract',
+            '_contract_check_generated_items_drive_composite_arm_pose_from_runtime_contract',
+            '_contract_check_runtime_contract_maps_live_supported_statuses_and_engine_call_backing',
+            '_contract_check_runtime_contract_does_not_trust_supported_label_without_backing',
+            '_contract_check_runtime_promise_truth_detects_orbiting_and_homing_without_executors',
+            '_contract_check_planner_promise_gate_blocks_gameplay_prose_but_allows_executable_homing',
+            '_contract_check_try_llm_plan_reauthors_once_after_blocking_promise',
+            '_contract_check_try_llm_plan_reauthors_again_when_first_feedback_creates_a_new_blocking_promise',
+            '_contract_check_try_llm_plan_keeps_one_call_for_honest_plan',
+            '_contract_check_try_llm_plan_does_not_runtime_reject_payload_above_test_budget',
+            '_contract_check_csharp_item_bodied_projectile_falls_back_to_item_sprite',
+        ),
+    )

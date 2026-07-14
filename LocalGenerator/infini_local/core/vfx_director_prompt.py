@@ -23,12 +23,20 @@ from infini_local.core.vfx_manifest_config import (
     load_json_file,
 )
 from infini_local.core.vfx_projectile_profile import effective_projectile_profile_of
+from infini_local.core.llm_stage_messages import agent_handoff, attributed_planner_messages, stage_chat_message
 
 
 # AGENT MAP: optional LLM VFX Director prompt/name-bank helpers.
 # Owns compact parent/child prompt payloads and debug-only effect name bank;
 # validation/manifest compilation stays in vfx_manifest/vfx_director_contract.
 # Public callers use infini_local.core.vfx_manifest.
+
+VFX_DIRECTOR_SYSTEM = (
+    "You are the VFX Director for a Terraria/tModLoader generated item. "
+    "The latest user vfxInputPacket is the authoritative current item truth after validation, runtime repair, and visual authoring; any earlier item_planner response is provenance only. "
+    "Return only one JSON object, with no markdown or reasoning. "
+    "Use only the listed VFX surface enums and ranges, author concrete slot parameters, and never invent code names, gameplay, or extra top-level keys."
+)
 
 def get_vfx_effect_name_bank() -> dict[str, Any]:
     """Load the tiny VFX naming bank for the debug endpoint/documentation only.
@@ -133,12 +141,12 @@ def _vfx_compact_item_for_director(item: dict[str, Any] | None) -> dict[str, Any
         "shootSpeed": item_field(item, "shootSpeed", 0),
         "nameTokens": tags_packet["nameTokens"],
         "runtimeAutoFeatures": tags_packet["runtimeAutoFeatures"],
-        "pythonDerivedTags": tags_packet["pythonDerivedTags"],
         "generatedAuthoredTags": tags_packet["generatedAuthoredTags"],
         "tagProvenance": tags_packet["tagProvenance"],
         "tagProvenanceNote": tags_packet["provenanceNote"],
-        # Deprecated compatibility field: keep it readable, but expose provenance above.
-        "tags": sorted(set(tags_packet["pythonDerivedTags"]) | set(tags_packet["generatedAuthoredTags"]))[:24],
+        # Read-only convenience view of actually authored generated tags.  Python no
+        # longer invents semantic tags from parent names/runtime facts.
+        "tags": list(tags_packet["generatedAuthoredTags"])[:24],
         "projectileProfile": effective_projectile_profile_of(item),
         "parentVfxSignals": item.get("parentVfxSignals") or fp.get("parentVfxSignals"),
         "generatedAttack": {
@@ -238,7 +246,6 @@ def build_vfx_director_prompt(parent_a: dict[str, Any] | None, parent_b: dict[st
         "provenanceContract": {
             "nameTokens": "tokens sent by C# GeneratorClient.NameTokens from internalName/displayName only",
             "runtimeAutoFeatures": "mechanical facts from C# AutoFeaturesFromItem / runtime fields",
-            "pythonDerivedTags": "transparent Python semantic expansion from nameTokens/runtime facts for Director context only",
             "generatedAuthoredTags": "only tags authored in generatedData for generated items",
             "tagProvenance": "per-tag source + matched text/fact; vanilla parents are not treated as hand-authored tagged items",
         },
@@ -305,20 +312,22 @@ def build_vfx_director_prompt(parent_a: dict[str, Any] | None, parent_b: dict[st
     }
 
 
-def build_vfx_director_continuation_payload(parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, child_item: dict[str, Any] | None = None, vfx_surface: dict[str, Any] | None = None, constraints: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Build only the final continuation instruction for the VFX pass.
-
-    Parent/item context comes from the preceding planner system/user/assistant
-    messages. This payload intentionally contains no vfxNameBank, no effectName,
-    no inspirationNames, and no example-like numeric slot.
-    """
+def build_vfx_director_handoff_payload(parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, child_item: dict[str, Any] | None = None, vfx_surface: dict[str, Any] | None = None, constraints: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build the rich self-contained authoritative v3.1 dossier for the VFX pass."""
     surface = vfx_surface or vfx_director_surface()
     constraints = constraints or {}
     required_shape = build_vfx_director_prompt(None, None, {}, surface, constraints).get("requiredJsonShape", {})
     vfx_input_packet = build_vfx_director_prompt(parent_a, parent_b, child_item or {}, surface, constraints).get("vfxInputPacket", {})
     return {
         "task": "Continue from the generated item and author only its runtime VFX manifest.",
-        "continuationMode": "Use the previous assistant item JSON plus VFX_INPUT_PACKET provenance.",
+        "continuationMode": "No Planner transcript is replayed. vfxInputPacket is the authoritative current accepted item truth.",
+        "agentHandoff": agent_handoff(
+            previous_speaker="item_planner",
+            current_speaker="pipeline_orchestrator",
+            next_speaker="vfx_director",
+            cause_by="vfx_manifest_authoring_stage",
+            artifact_source="vfxInputPacket.childItem",
+        ),
         "vfxInputPacket": vfx_input_packet,
         "rules": [
             "Return one JSON object; no markdown or reasoning.",
@@ -337,43 +346,26 @@ def build_vfx_director_continuation_payload(parent_a: dict[str, Any] | None = No
     }
 
 
-def _vfx_planner_continuation_from_item(child_item: dict[str, Any]) -> dict[str, Any] | None:
-    """Read hidden/debug planner-chat continuation data from the child item."""
+def _vfx_attributed_planner_history(child_item: dict[str, Any]) -> list[dict[str, str]] | None:
+    """Read the canonical transient attributed Planner history from the child item."""
     if not isinstance(child_item, dict):
         return None
-    cont = child_item.get("_llmContinuation")
-    if not isinstance(cont, dict):
-        debug = child_item.get("debug") if isinstance(child_item.get("debug"), dict) else {}
-        cont = debug.get("_llmContinuation") if isinstance(debug.get("_llmContinuation"), dict) else None
-    if not isinstance(cont, dict):
-        return None
-    system = str(cont.get("plannerSystemPrompt") or cont.get("systemPrompt") or "").strip()
-    user_content = str(cont.get("plannerUserContent") or "").strip()
-    if not user_content and isinstance(cont.get("plannerUserPayload"), dict):
-        user_content = json.dumps(cont.get("plannerUserPayload"), ensure_ascii=False, separators=(",", ":"))
-    assistant_content = str(cont.get("plannerAssistantContent") or "").strip()
-    if not assistant_content and isinstance(cont.get("plannerParsedChildJson"), dict):
-        assistant_content = json.dumps(cont.get("plannerParsedChildJson"), ensure_ascii=False, separators=(",", ":"))
-    if not system or not user_content or not assistant_content:
-        return None
-    return {
-        "system": system,
-        "user": user_content,
-        "assistant": assistant_content,
-    }
+    return attributed_planner_messages(child_item.get("_llmHistory"))
 
 
-def build_vfx_director_continuation_messages(child_item: dict[str, Any], parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, vfx_surface: dict[str, Any] | None = None, constraints: dict[str, Any] | None = None) -> list[dict[str, str]] | None:
-    """Build the full stateless messages[] for continuation VFX Director."""
-    cont = _vfx_planner_continuation_from_item(child_item)
-    if not cont:
+def build_vfx_director_handoff_messages(child_item: dict[str, Any], parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, vfx_surface: dict[str, Any] | None = None, constraints: dict[str, Any] | None = None) -> list[dict[str, str]] | None:
+    """Build system + authoritative VFX dossier after validating live provenance."""
+    history = _vfx_attributed_planner_history(child_item)
+    if not history:
         return None
-    instruction = build_vfx_director_continuation_payload(parent_a, parent_b, child_item, vfx_surface, constraints)
+    instruction = build_vfx_director_handoff_payload(parent_a, parent_b, child_item, vfx_surface, constraints)
     return [
-        {"role": "system", "content": cont["system"]},
-        {"role": "user", "content": cont["user"]},
-        {"role": "assistant", "content": cont["assistant"]},
-        {"role": "user", "content": json.dumps(instruction, ensure_ascii=False, separators=(",", ":"))},
+        stage_chat_message("system", "vfx_director_contract", VFX_DIRECTOR_SYSTEM),
+        stage_chat_message(
+            "user",
+            "pipeline_orchestrator",
+            json.dumps(instruction, ensure_ascii=False, separators=(",", ":")),
+        ),
     ]
 
 __all__ = [
@@ -383,7 +375,8 @@ __all__ = [
     "_vfx_compact_item_for_director",
     "_vfx_compact_child_for_director",
     "build_vfx_director_prompt",
-    "build_vfx_director_continuation_payload",
-    "_vfx_planner_continuation_from_item",
-    "build_vfx_director_continuation_messages",
+    "build_vfx_director_handoff_payload",
+    "VFX_DIRECTOR_SYSTEM",
+    "_vfx_attributed_planner_history",
+    "build_vfx_director_handoff_messages",
 ]

@@ -4,9 +4,20 @@ import json
 import re
 from typing import Any
 
-from infini_local.core.runtime_contracts import normalize_runtime_contract
+from infini_local.core.runtime_contracts import normalize_runtime_contract, resolve_mechanic_backing_refs
 
 PROMISE_TRUTH_SCHEMA = "infini.runtime-promise-truth.v1"
+
+_AMMO_RESOURCE_PATTERN = r"(?:ammo|ammunition|arrows?|bullets?|torches?|gel|stars?|rockets?|darts?)"
+_AMMO_SPECIFIC_RESOURCES: tuple[tuple[str, str], ...] = (
+    ("arrow", r"\barrows?\b"),
+    ("bullet", r"\bbullets?\b"),
+    ("torch", r"\btorches?\b"),
+    ("gel", r"\bgel\b"),
+    ("star", r"\bstars?\b"),
+    ("rocket", r"\brockets?\b"),
+    ("dart", r"\bdarts?\b"),
+)
 
 CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("return_to_thrower", re.compile(r"\b(return|returns|returning|boomerang|comes back)\b", re.I)),
@@ -14,7 +25,17 @@ CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("charge_release", re.compile(r"\b(charge|charged|release)\b", re.I)),
     ("sentry", re.compile(r"\b(sentry|turret|stationary helper|deployed helper)\b", re.I)),
     ("overhead_barrage", re.compile(r"\b(overhead\s+barrage|projectile\s+rain|rain(?:s|ing)?\s+(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)|(?:falling|descending)\s+(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)|(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)\s+(?:rain|fall|descend)(?:s|ing)?\s+(?:down\s+)?(?:from\s+(?:the\s+)?(?:sky|above)|over)|(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)\s+from\s+(?:the\s+)?(?:sky|above)|starfall)\b", re.I)),
-    ("sticky_puddle", re.compile(r"\b(sticky|puddle|slowing field|slow field)\b", re.I)),
+    (
+        "sticky_puddle",
+        re.compile(
+            r"\b(puddle|slowing field|slow field|sticky(?:\s+\w+){0,2}\s+(?:puddle|field|trail|residue|zone|cloud)|"
+            r"sticky\b.{0,80}\b(?:leav(?:e|es|ing)|creat(?:e|es|ing)|spawn(?:s|ing)?)\b.{0,60}"
+            r"\b(?:puddle|field|trail|residue|zone|cloud)|"
+            r"(?:leav(?:e|es|ing)|creat(?:e|es|ing)|spawn(?:s|ing)?)\b.{0,60}"
+            r"\b(?:puddle|field|trail|residue|zone|cloud)\b.{0,40}\bsticky)\b",
+            re.I,
+        ),
+    ),
     ("heat_jam", re.compile(r"\b(heat|overheat|jam|cooldown)\b", re.I)),
     ("lifesteal", re.compile(r"\b(lifesteal|life steal|drain life|heals? on hit)\b", re.I)),
     ("feline_bounce", re.compile(r"\b(feline|cats?|bouncing cats?|meowmere)\b", re.I)),
@@ -24,6 +45,7 @@ CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("projectile_homing", re.compile(r"\b(homing|homes?\s+(?:in\s+)?(?:on|into|toward)|seek(?:s|ing)?\s+(?:enemies|targets)|track(?:s|ing)?\s+(?:enemies|targets))\b", re.I)),
     ("burst", re.compile(r"\b(bursts?|explode|explosion|nova)\b", re.I)),
     ("burn_on_hit", re.compile(r"\b(burn|ignite|on-hit burn|sets? on fire)\b", re.I)),
+    ("ammo_consumption", re.compile(rf"\b(?:(?:consum(?:e|es|ing)|uses?|requires?|spends?)\b.{{0,48}}\b{_AMMO_RESOURCE_PATTERN}|no\s+{_AMMO_RESOURCE_PATTERN}\s+(?:is|are)\s+(?:consumed|used|required|spent)|{_AMMO_RESOURCE_PATTERN}\s+(?:is|are)\s+never\s+(?:consumed|used|required|spent)|(?:fires?|shoots?|attacks?)\s+without\s+{_AMMO_RESOURCE_PATTERN})\b", re.I)),
     ("alternating_phase", re.compile(r"\b(alternate|alternates|cycle|light.dark|dark.light|phase)\b", re.I)),
     ("temporary_platform", re.compile(r"\b(platforms?|walkable\s+(?:surface|platform)|temporary\s+work\s+surface|stand(?:s|ing)?\s+on\s+(?:it|them|the\s+platform))\b", re.I)),
     ("damaging_field", re.compile(r"\b(damaging\s+(?:field|zone|area)|lingering\s+(?:damage|hazard|field|zone)|damage[- ]over[- ]time\s+(?:field|zone)|hazardous\s+(?:field|zone))\b", re.I)),
@@ -115,7 +137,12 @@ def _claim_status(kind: str, source: str, text: str, data: dict[str, Any], patch
     if kind == "charge_release":
         if runtime_family == "charge_release" and bool(patch.get("channelUse")):
             return "executable", "AttackSpec.runtimeFamily=charge_release -> held charge/release executor"
-        return ("visual_only", "charge wording is visual-only") if visual_source else ("unsupported", "no charge-release executor")
+        if visual_source:
+            return "visual_only", "charge wording is visual-only"
+        has_state = any(str(c.get("fn") or "") in {"state_meter", "triggered_action"} for c in calls)
+        if bool(patch.get("channelUse")):
+            return "partial", "channel/charge feel exists but no full charge-release executor"
+        return ("partial", "state intent preserved") if has_state else ("unsupported", "no charge-release executor")
     if kind == "sentry":
         if runtime_family == "sentry":
             return "executable", "deploy_sentry -> bounded Terraria sentry executor"
@@ -156,11 +183,39 @@ def _claim_status(kind: str, source: str, text: str, data: dict[str, Any], patch
         return ("visual_only", "field wording is visual-only") if visual_source else ("unsupported", "current leave_trail_or_field contract is presentation-only and has no damage hitbox")
     if kind == "burn_on_hit":
         return ("executable", "apply_on_hit_effect.burn") if on_hit == "burn" else (("visual_only", "burn wording only") if visual_source else ("unsupported", "no burn onHit executor"))
-    if kind == "charge_release":
-        has_state = any(str(c.get("fn") or "") in {"state_meter", "triggered_action"} for c in calls)
-        if bool(patch.get("channelUse")):
-            return "partial", "channel/charge feel exists but no full charge-release executor"
-        return ("partial", "state intent preserved") if has_state else ("unsupported", "no charge-release executor")
+    if kind == "ammo_consumption":
+        if visual_source:
+            return "visual_only", "ammo consumption wording is visual-only"
+        ammo_for = str(patch.get("ammoFor") or "").strip().lower()
+        text_lower = text.lower()
+        negated = bool(
+            re.search(r"\b(?:does\s+not|doesn't|do\s+not|don't|never)\s+(?:consume|use|require|spend)s?\b", text_lower)
+            or re.search(rf"\b(?:consume|use|require|spend)s?\s+no\s+{_AMMO_RESOURCE_PATTERN}\b", text_lower)
+            or re.search(rf"\bno\s+{_AMMO_RESOURCE_PATTERN}\s+(?:is|are)\s+(?:consumed|used|required|spent)\b", text_lower)
+            or re.search(rf"\b{_AMMO_RESOURCE_PATTERN}\s+(?:is|are)\s+never\s+(?:consumed|used|required|spent)\b", text_lower)
+            or re.search(rf"\bwithout\s+(?:(?:consuming|using|requiring|spending)\s+)?{_AMMO_RESOURCE_PATTERN}\b", text_lower)
+        )
+        if negated:
+            denied_resources = {resource for resource, pattern in _AMMO_SPECIFIC_RESOURCES if re.search(pattern, text_lower)}
+            conflicts = ammo_for in denied_resources if denied_resources else ammo_for in {"arrow", "bullet"}
+            if conflicts:
+                denied = ",".join(sorted(denied_resources)) or "all ammo"
+                return "unsupported", f"public claim denies {denied} consumption but compiled ammoFor={ammo_for}"
+            denied = ",".join(sorted(denied_resources)) or "all ammo"
+            return "executable", f"compiled AttackSpec.ammoFor={ammo_for or 'empty'} does not consume denied resource {denied}"
+        if re.search(r"\barrows?\b", text_lower):
+            claimed_ammo = "arrow"
+        elif re.search(r"\bbullets?\b", text_lower):
+            claimed_ammo = "bullet"
+        elif re.search(r"\b(?:torches?|gel|stars?|rockets?|darts?)\b", text_lower):
+            claimed_ammo = "unsupported_custom_resource"
+        else:
+            claimed_ammo = "generic_ammo"
+        if claimed_ammo in {"arrow", "bullet"} and ammo_for == claimed_ammo:
+            return "executable", f"compiled AttackSpec.ammoFor={ammo_for}"
+        if claimed_ammo == "generic_ammo" and ammo_for in {"arrow", "bullet"}:
+            return "executable", f"compiled AttackSpec.ammoFor={ammo_for}"
+        return "unsupported", f"claimed ammo resource {claimed_ammo} has no matching executor (compiled ammoFor={ammo_for or 'empty'})"
     return "ambiguous", "unclassified promise"
 
 
@@ -192,7 +247,8 @@ def validate_runtime_promises(data: dict[str, Any], patch: dict[str, Any] | None
             unsupported.append("unsupported:" + claim["kind"])
         if claim["kind"] == "burst" and claim["status"] == "partial":
             warnings.append("burst_without_burstDustCap_or_impact_feedback")
-        if claim["status"] == "visual_only" and not str(claim.get("source", "")).startswith("visual."):
+        source = str(claim.get("source", ""))
+        if claim["status"] == "visual_only" and not (source.startswith("visual.") or source.startswith("runtimePlan.visualIntent")):
             warnings.append(f"{claim['kind']}_promise_downgraded_to_visual_only")
 
     contract_raw = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), dict) else {}
@@ -202,8 +258,14 @@ def validate_runtime_promises(data: dict[str, Any], patch: dict[str, Any] | None
             text = str(mechanic.get("claim") or "")
             matched = next((c for c in claims if c.get("source", "").startswith("runtimeContract.mechanicClaims") and c.get("claim") == text), None)
             if matched:
+                machine_backed, backing_failures = resolve_mechanic_backing_refs(data, patch, mechanic)
+                if matched["status"] == "executable" and not machine_backed:
+                    matched["status"] = "partial"
+                    matched["backing"] = "machine backingRefs missing or unresolved"
+                    warnings.append("machine_backing_refs_missing_or_unresolved")
+                    warnings.extend(backing_failures[:4])
                 mechanic["status"] = matched["status"]
-                mechanic["backing"] = mechanic.get("backing") or matched["backing"]
+                mechanic["backing"] = matched["backing"] if matched["status"] == "partial" else (mechanic.get("backing") or matched["backing"])
         statuses = {c.get("status") for c in claims}
         if any(s == "executable" for s in statuses) and any(s in {"unsupported", "partial"} for s in statuses):
             contract["executionStatus"] = "partial"

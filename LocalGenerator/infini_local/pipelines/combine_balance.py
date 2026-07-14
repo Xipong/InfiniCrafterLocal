@@ -76,6 +76,11 @@ def apply_family_locks_to_genome(g: dict[str, Any], a: dict[str, Any], b: dict[s
     g["aoeRadiusTiles"] = min(max(0.0, _num("aoeRadiusTiles", 0.0)), aoe_cap)
     g["rangeTiles"] = min(max(4.0, _num("rangeTiles", 35.0)), 105.0)
     g["homingStrength"] = min(max(0.0, _num("homingStrength", 0.0)), 0.68)
+    if str(g.get("runtimeFamily") or "").strip().lower() == "returning":
+        speed = min(max(3.0, _num("speed", 8.0)), 18.0)
+        outbound_ticks = int(math.ceil(float(g["rangeTiles"]) * 16.0 / speed))
+        round_trip_budget = min(540, max(45, outbound_ticks * 2 + 20))
+        g["lifetimeTicks"] = max(int(g["lifetimeTicks"]), round_trip_budget)
 
     if before != g:
         try:
@@ -98,32 +103,15 @@ def preservation_score(data: dict[str, Any], ca: dict[str, Any], cb: dict[str, A
     return round(hit / max(1, len(required)), 3)
 
 def item_power_score(item: dict[str, Any]) -> float:
+    """Return power from live Terraria facts only.
+
+    Names, fantasy tags and generated depth are identity/novelty context, not combat
+    evidence. A word such as ``zenith`` or ``lunar`` must never raise damage by itself.
+    Known ModRarity classes may still contribute through mechanic_signal_power because
+    those are concrete tModLoader metadata, not item-name guesses.
+    """
     signal = mechanic_signal_power(item)
-    score = float(signal.get("score") or 0)
-    depth = generation_depth(item)
-    tags = tags_of(item)
-    n = lower_name(item)
-    # Name tags are still hints, but no longer a rarity substitute.
-    if any(x in n for x in ["copper", "tin", "wood", "wooden"]): score -= 3
-    if any(x in n for x in ["demonite", "crimtane", "molten", "hellstone", "night"]): score += 8
-    if any(x in n for x in ["cobalt", "palladium", "mythril", "orichalcum", "adamantite", "titanium"]): score += 18
-    if any(x in n for x in ["hallowed", "chlorophyte", "terra", "true"]): score += 30
-    if any(x in n for x in ["lunar", "solar", "vortex", "nebula", "stardust", "zenith", "meowmere"]): score += 55
-    if tags & {"star", "lunar", "solar", "vortex", "nebula", "stardust"}: score += 8
-    if tags & {"magic", "mana"}: score += 4
-    if tags & {"shadow", "void", "night"}: score += 5
-    if tags & {"technology", "wire", "electric", "circuit"}: score += 4
-    if tags & {"dirt", "earth", "stone", "sand", "block"}: score += 1
-    if "material" in tags and item_num(item, "damage") == 0 and not str(signal.get("basis", "")).startswith("mechanics"):
-        # Materials are allowed to carry huge tier power (Calamity-like bars can outrank vanilla endgame weapons),
-        # but they transfer as crafting-tier power, not raw damage.
-        rb = signal.get("rarityBaseline") if isinstance(signal.get("rarityBaseline"), dict) else {}
-        if float(rb.get("convertedPower") or 0) >= 180:
-            score *= 1.0
-        else:
-            score *= 0.72
-    score += min(depth, 20) * RECURSIVE_POWER_GROWTH * 8.0
-    return max(0.0, score)
+    return max(0.0, float(signal.get("score") or 0))
 
 def tier_rank(tier: Any) -> int:
     t = str(tier or "unknown")
@@ -157,12 +145,11 @@ def universal_parent_relation(strong_card: dict[str, Any], weak_card: dict[str, 
     material_with_item = {s_cat, w_cat} & {"material"} and ({s_cat, w_cat} & {"weapon", "tool", "armor", "accessory"})
     high_pair = min(s_power, w_power) >= VANILLA_ENDGAME_POWER * 0.72
     high_material = max(s_power, w_power) >= VANILLA_ENDGAME_POWER and {s_cat, w_cat} & {"material"}
-    thematic = bool(tags & {"cosmic", "lunar", "solar", "vortex", "nebula", "stardust", "shadow", "void", "star", "fire", "ice", "frost", "electric", "technology", "plant", "earth"})
 
-    if material_with_item and high_material and (same_nonvanilla_source or thematic or min(s_power, w_power) >= TIER_DEFAULT_POWER.get("post_plantera", 185)):
+    if material_with_item and high_material and min(s_power, w_power) >= TIER_DEFAULT_POWER.get("post_plantera", 185):
         quality = "high_tier_material_with_credible_item"
         strength = 0.86
-    elif s_cat == "material" and w_cat == "material" and high_pair and (same_nonvanilla_source or thematic):
+    elif s_cat == "material" and w_cat == "material" and high_pair:
         quality = "high_tier_material_blend"
         strength = 0.84
     elif same_family and min(s_power, w_power) >= TIER_DEFAULT_POWER.get("hardmode_early", 105):
@@ -215,7 +202,6 @@ v2.7 distinction:
     weapon_catalyst = weak_cat == "weapon" and weak_is_vanilla_endgameish
     same_family = strong_cat == weak_cat
     material_with_item = {strong_cat, weak_cat} & {"material"} and ({strong_cat, weak_cat} & {"weapon", "tool", "armor", "accessory"})
-    thematic = bool(tags & {"cosmic", "lunar", "auric", "yharon", "devourer", "exodium", "miracle", "shadow", "void", "star", "draedon", "exo", "calamity"})
     recipe_relation = universal_parent_relation(strong_card, weak_card, tags)
     recipe_quality = str(recipe_relation.get("quality") or "")
 
@@ -241,7 +227,7 @@ v2.7 distinction:
         weak_factor = 0.08
     elif strong_is_high_modded and material_with_item:
         quality = "high_modded_material_transfers_through_item"
-        result_tier = strong_tier if weak_score >= VANILLA_ENDGAME_POWER * 0.55 or thematic else influenced_tier(strong_tier)
+        result_tier = strong_tier if weak_score >= VANILLA_ENDGAME_POWER * 0.55 else influenced_tier(strong_tier)
         multiplier = 0.80 if result_tier.endswith("_influenced") else 0.88
         weak_factor = 0.07
     elif recipe_quality in {"same_role_synergy", "same_mod_soft_synergy"} and strong_score >= TIER_DEFAULT_POWER.get("hardmode_early", 105):
@@ -254,7 +240,7 @@ v2.7 distinction:
         result_tier = influenced_tier(strong_tier) if strong_is_high_modded else strong_tier
         multiplier = 0.68 if strong_is_high_modded else 0.78
         weak_factor = 0.06
-    elif same_family or material_with_item or thematic:
+    elif same_family or material_with_item:
         quality = "strong_synergy"
         result_tier = strong_tier
         multiplier = 0.94
@@ -351,11 +337,10 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any], tags: set[str]) -> di
     scores = [max(item_power_score(a), knowledge_scores[0], rarity_scores[0]), max(item_power_score(b), knowledge_scores[1], rarity_scores[1])]
     transfer = recipe_power_transfer(cards, scores, tags)
     def _theme_only_parent(item: dict[str, Any]) -> bool:
-        tg = tags_of(item)
         return (
             item_num(item, "damage", 0) <= 0
             and item_num(item, "shoot", 0) <= 0
-            and (item_num(item, "createTile", -1) >= 0 or bool(tg & {"plant", "flower", "furniture", "placeable", "sunflower", "подсолн"}))
+            and item_num(item, "createTile", -1) >= 0
         )
     one_theme_parent = (_theme_only_parent(a) and item_num(b, "damage", 0) > 0) or (_theme_only_parent(b) and item_num(a, "damage", 0) > 0)
     catalyst = pair_catalyst_pressure(a, b)
@@ -363,12 +348,9 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any], tags: set[str]) -> di
     max_damage = max(damages)
     min_damage = min([d for d in damages if d > 0] or [0])
     second_damage = min_damage if max_damage != min_damage else (damages[0] if damages[0] else damages[1])
+    # Fantasy tags are excluded from power. Mechanical stats, known rarity metadata,
+    # value and category are the only progression evidence here.
     synergy = 0
-    if tags & {"star", "lunar", "solar", "vortex", "nebula", "stardust"}: synergy += 10
-    if tags & {"wire", "electric", "technology", "circuit"}: synergy += 6
-    if tags & {"night", "shadow", "void"}: synergy += 8
-    if tags & {"fire", "hellstone", "ice", "frost", "poison", "spore"}: synergy += 5
-    if tags & {"dirt", "earth", "stone", "sand", "block"}: synergy += 2
     derived = max(float(transfer.get("resultPowerScore") or 0), max(scores) * 0.42 + min(scores) * 0.10 + synergy) + synergy
     if one_theme_parent and max_damage <= 18:
         derived = min(derived, 48.0)

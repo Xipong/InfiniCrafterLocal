@@ -13,7 +13,7 @@ def read(path: Path) -> str:
     return read_text_with_partial_bundles(path)
 
 
-def test_balance_policy_has_one_source_of_truth_for_power_bands_and_envelopes():
+def _contract_check_balance_policy_has_one_source_of_truth_for_power_bands_and_envelopes():
     policy = read(LOCAL / "infini_local" / "core" / "balance_policy.py")
     report = read(LOCAL / "infini_local" / "core" / "balance_report.py")
     combine = read(LOCAL / "infini_local" / "pipelines" / "combine_pipeline.py")
@@ -30,7 +30,7 @@ def test_balance_policy_has_one_source_of_truth_for_power_bands_and_envelopes():
     assert "terrariaProgressionReference" not in combine
 
 
-def test_csharp_packet_ids_are_routed_through_one_packet_id_class():
+def _contract_check_csharp_packet_ids_are_routed_through_one_packet_id_class():
     packets = read(MOD / "Common" / "InfiniNetPacketIds.cs")
     mod = read(MOD / "InfiniCrafterLocal.cs")
     assert "public static class InfiniNetPacketIds" in packets
@@ -47,17 +47,32 @@ def test_csharp_packet_ids_are_routed_through_one_packet_id_class():
         assert not re.search(r"public\s+const\s+byte\s+Packet\w+\s*=\s*\d+\s*;", text), path
 
 
-def test_csharp_runtime_api_and_opcode_limits_have_one_source_of_truth():
+def _contract_check_csharp_runtime_api_and_opcode_limits_have_one_source_of_truth():
     limits = read(MOD / "Common" / "InfiniRuntimeLimits.cs")
     item_data = read(MOD / "Common" / "Models" / "GeneratedItemData.cs")
     projectile = read(MOD / "Content" / "Projectiles" / "GeneratedProjectile.cs")
 
     assert "public static class InfiniRuntimeLimits" in limits
-    assert 'RuntimeApiCurrent = "v0.4.48"' in limits
+    assert 'RuntimeApiCurrent = "v0.4.51"' in limits
     assert "MaxSupportedMovementCode = 18" in limits
     assert "private const string RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in item_data
     assert "private const int MaxSupportedMovementCode = InfiniRuntimeLimits.MaxSupportedMovementCode" in item_data
     assert "private const int MaxSupportedOnHitCode = InfiniRuntimeLimits.MaxSupportedOnHitCode" in projectile
-    assert 'private const string RuntimeApiCurrent = "v0.4.48"' not in item_data
+    assert 'private const string RuntimeApiCurrent = "' not in item_data
     assert "private const int MaxSupportedMovementCode = 18" not in item_data
     assert "private const int MaxSupportedMovementCode = 18" not in projectile
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_221_architecture_homogeneity_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_balance_policy_has_one_source_of_truth_for_power_bands_and_envelopes',
+            '_contract_check_csharp_packet_ids_are_routed_through_one_packet_id_class',
+            '_contract_check_csharp_runtime_api_and_opcode_limits_have_one_source_of_truth',
+        ),
+    )

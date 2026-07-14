@@ -60,7 +60,10 @@ public sealed class GeneratedVfxOverlayProjectile : ModProjectile
         Projectile.timeLeft = 30;
         Projectile.tileCollide = false;
         Projectile.ignoreWater = true;
-        Projectile.hide = true;
+        // Keep this carrier in Terraria's normal projectile draw list. The default body
+        // remains invisible (alpha=255 and PreDraw returns false), while PreDraw must run
+        // so the authored impact/kill renderer can actually reach the screen.
+        Projectile.hide = false;
         Projectile.alpha = 255;
         Projectile.netImportant = false;
     }

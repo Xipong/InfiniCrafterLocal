@@ -24,6 +24,11 @@ public static class InfiniRuntimeAuthority
         return IsLocalProjectileOwner(projectile);
     }
 
+    // NPC/world state belongs to the server in multiplayer. Keep it separate from
+    // owner-authoritative child spawns and local player input/actions.
+    public static bool ShouldRunNpcGameplay()
+        => IsSinglePlayer || IsServer;
+
     public static bool ShouldRunPlayerGameplay(Player player)
     {
         if (player is null || !player.active) return false;

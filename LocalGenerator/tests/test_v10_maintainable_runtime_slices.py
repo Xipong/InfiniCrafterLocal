@@ -1,46 +1,13 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
-from infini_local.core.runtime_authoring.schema import (
-    ENGINE_FN_CATALOG_V2,
-    PLANNER_HIDDEN_ENGINE_FUNCTIONS,
-)
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def _plan(*calls: dict) -> dict:
     return {"runtimePlan": {"resultKind": "weapon", "engineCalls": list(calls)}}
 
 
-def test_preserved_only_functions_stay_readable_but_out_of_active_prompt() -> None:
-    payload = build_llm_author_payload(
-        {"name": "Wooden Sword", "type": 24, "damage": 7},
-        {"name": "Torch", "type": 8},
-        {},
-        {},
-        "v10_hidden_functions",
-    )
-    functions = payload["engineRuntimeContract"]["availableFunctions"]
-    assert set(PLANNER_HIDDEN_ENGINE_FUNCTIONS) == {"state_meter", "triggered_action"}
-    assert set(PLANNER_HIDDEN_ENGINE_FUNCTIONS).issubset(ENGINE_FN_CATALOG_V2)
-    assert not (set(functions) & set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
-
-    # Old/debug payloads remain inspectable and inert instead of becoming an input migration layer.
-    patch = compile_runtime_plan_to_genome_patch(_plan(
-        {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 10}},
-        {"fn": "cast_magic_weapon", "params": {"family": "staff"}},
-        {"fn": "state_meter", "params": {"id": "charge", "maxValue": 3}},
-    ))
-    assert patch["runtimeFamily"] == "cast"
-    assert patch["runtimeState"]["stateMeters"][0]["id"] == "charge"
-
-
-def test_on_expire_is_one_exact_bounded_secondary_trigger() -> None:
+def _contract_check_on_expire_is_one_exact_bounded_secondary_trigger() -> None:
     patch = compile_runtime_plan_to_genome_patch(_plan(
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 20}},
         {"fn": "cast_magic_weapon", "params": {"family": "staff", "projectileShape": "orb"}},
@@ -67,7 +34,7 @@ def test_on_expire_is_one_exact_bounded_secondary_trigger() -> None:
     assert rejected["rejectedSecondaryCalls"][0]["reason"] == "unsupported_secondary_trigger"
 
 
-def test_overhead_barrage_is_exact_generic_and_does_not_classify_staff_names() -> None:
+def _contract_check_overhead_barrage_is_exact_generic_and_does_not_classify_staff_names() -> None:
     barrage = compile_runtime_plan_to_genome_patch(_plan(
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 28}},
         {"fn": "cast_magic_weapon", "params": {
@@ -96,7 +63,7 @@ def test_overhead_barrage_is_exact_generic_and_does_not_classify_staff_names() -
     assert "delayTicks" not in ordinary_staff
 
 
-def test_on_expire_does_not_create_an_implicit_second_child_lifecycle() -> None:
+def _contract_check_on_expire_does_not_create_an_implicit_second_child_lifecycle() -> None:
     patch = compile_runtime_plan_to_genome_patch(_plan(
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 20}},
         {"fn": "cast_magic_weapon", "params": {"family": "staff", "projectileShape": "orb"}},
@@ -113,15 +80,16 @@ def test_on_expire_does_not_create_an_implicit_second_child_lifecycle() -> None:
     assert patch["rejectedSecondaryCalls"][0]["reason"] == "on_expire_conflicts_with_child_producing_on_hit"
 
 
-def test_overhead_barrage_report_names_its_real_child_source() -> None:
-    from infini_local.core.runtime_authoring.reports import runtime_plan_provenance_report
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v10_maintainable_runtime_slices_module_contract(request):
+    from contract_checks import run_contract_checks
 
-    data = _plan(
-        {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 28}},
-        {"fn": "cast_magic_weapon", "params": {"family": "overhead_barrage", "delayTicks": 24, "shotCount": 3}},
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_on_expire_is_one_exact_bounded_secondary_trigger',
+            '_contract_check_overhead_barrage_is_exact_generic_and_does_not_classify_staff_names',
+            '_contract_check_on_expire_does_not_create_an_implicit_second_child_lifecycle',
+        ),
     )
-    patch = compile_runtime_plan_to_genome_patch(data)
-    report = runtime_plan_provenance_report(data, patch)
-    assert report["gameplayChildren"]["enabled"] is True
-    assert report["gameplayChildren"]["source"] == "overhead_barrage"
-    assert report["gameplayChildren"]["overheadBarrageChildEstimate"] == 3

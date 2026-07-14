@@ -8,6 +8,7 @@ from infini_local.core.boundary_models import validate_vfx_manifest_boundary
 
 from infini_local.core.effect_catalog import normalize_attack_pattern
 from infini_local.core.item_identity_tools import _stringish
+from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
 from infini_local.core.vfx_composition_primitives import (
     _vfx_arbitrate_slots,
     _vfx_available_roles,
@@ -37,7 +38,8 @@ from infini_local.core.vfx_runtime_slots import (
     _vfx_should_bake_slot,
 )
 from infini_local.core.vfx_director_prompt import (
-    build_vfx_director_continuation_messages,
+    VFX_DIRECTOR_SYSTEM,
+    build_vfx_director_handoff_messages,
     build_vfx_director_prompt,
 )
 from infini_local.core.vfx_director_contract import (
@@ -50,6 +52,7 @@ from infini_local.core.vfx_director_contract import (
     vfx_director_surface,
 )
 from infini_local.core.vfx_recipe_library import get_vfx_recipes
+from infini_local.storage.trace_runtime import log_event
 from infini_local.core.vfx_manifest_config import (
     VFX_LLM_DIRECTOR_ENABLED,
     VFX_LLM_DIRECTOR_MAX_SLOTS,
@@ -66,6 +69,14 @@ from infini_local.core.vfx_manifest_config import (
 )
 
 
+# PRODUCT POLICY: the LLM VFX Director is the preferred presentation author, but VFX
+# is not important enough to discard an otherwise valid LLM-authored item.  After one
+# bounded same-request VFX repair is exhausted, generation keeps the item and uses the
+# stable procedural recipe selector as a visual safety net.  This safety net never owns
+# gameplay.  Every transition into it must emit ``infini.vfx-fallback-trace.v1`` so a
+# bad Director response, lost history, legacy standalone failure, or compile failure is
+# visible in events.ndjson instead of being hidden behind a merely acceptable manifest.
+#
 # AGENT MAP: Python VFX manifest authoring/normalization contract.
 # Owns VFX manifest assembly. Config/data/env ownership lives in
 # vfx_manifest_config.py; optional LLM Director context helpers live in
@@ -80,6 +91,63 @@ from infini_local.core.vfx_manifest_config import (
 
 
 # VFX Director prompt/name-bank helpers live in vfx_director_prompt.py.
+
+VFX_FALLBACK_POLICY = "llm_vfx_optional_then_procedural_safety_net"
+
+
+def _log_vfx_fallback_policy(
+    data: dict[str, Any],
+    recipe_key_value: str,
+    *,
+    history_state: str,
+    request_mode: str,
+    failure_phase: str,
+    reason: str,
+) -> None:
+    """Emit one structured warning before the procedural VFX safety net takes over."""
+    debug_value = data.get("debug")
+    debug: dict[str, Any] = debug_value if isinstance(debug_value, dict) else {}
+    validation_fields = debug.get("vfxLlmDirectorRepairLastFields") or debug.get("vfxLlmDirectorValidationFields") or []
+    log_event("warn", "VFX Director fallback policy activated", {
+        "schema": "infini.vfx-fallback-trace.v1",
+        "policy": VFX_FALLBACK_POLICY,
+        "recipeKey": str(recipe_key_value or ""),
+        "itemId": str(data.get("id") or ""),
+        "itemName": str(data.get("name") or ""),
+        "historyState": str(history_state or "unknown"),
+        "requestMode": str(request_mode or "unknown"),
+        "failurePhase": str(failure_phase or "unknown"),
+        "reason": str(reason or "unknown"),
+        "validationFields": [str(field) for field in validation_fields],
+        "repairAttempts": int(debug.get("vfxLlmDirectorRepairAttempts") or 0),
+        "fallbackTarget": "procedural_vfx_recipe_selector",
+    })
+
+
+def _log_vfx_fallback_selected(data: dict[str, Any], recipe_key_value: str, manifest: dict[str, Any]) -> None:
+    """Record the concrete procedural manifest that masked the Director failure."""
+    debug_value = data.get("debug")
+    debug: dict[str, Any] = debug_value if isinstance(debug_value, dict) else {}
+    if str(debug.get("vfxPath") or "") != "deterministic_recipe_fallback":
+        return
+    manifest_debug_value = manifest.get("debug")
+    manifest_debug: dict[str, Any] = manifest_debug_value if isinstance(manifest_debug_value, dict) else {}
+    composition_value = manifest_debug.get("composition")
+    composition: dict[str, Any] = composition_value if isinstance(composition_value, dict) else {}
+    slots_value = manifest.get("slots")
+    slots: list[Any] = slots_value if isinstance(slots_value, list) else []
+    log_event("info", "VFX procedural safety net selected manifest", {
+        "schema": "infini.vfx-fallback-selected.v1",
+        "policy": VFX_FALLBACK_POLICY,
+        "recipeKey": str(recipe_key_value or ""),
+        "itemId": str(data.get("id") or ""),
+        "itemName": str(data.get("name") or ""),
+        "failureReason": str(debug.get("vfxLlmDirectorFinalFallbackReason") or debug.get("vfxLlmDirectorFallbackReason") or "unknown"),
+        "recipeId": str(manifest.get("recipeId") or "unknown"),
+        "slotCount": len(slots),
+        "compositionMode": str(composition.get("mode") or manifest_debug.get("reason") or "recipe_only"),
+    })
+
 
 def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], recipe_key_value: str, parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None) -> dict[str, Any] | None:
     report = _vfx_director_validation_report(raw)
@@ -237,11 +305,17 @@ def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], rec
 def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, Any] | None, child_item: dict[str, Any], recipe_key_value: str, llm_client: Any = None) -> dict[str, Any] | None:
     """Optional Gemma E4B VFX Director pass.
 
-    Primary mode is continuation of the original item-generation chat: because
-    OpenAI-compatible APIs are stateless, server.py stores the original planner
-    messages in the child item and this function explicitly resends them.
-    If that hidden continuation data is absent/invalid, we fall back to the old
-    standalone director request; if that fails too, the old procedural VFX pipeline runs.
+    Product policy: VFX is optional presentation, not the main authored gameplay feature.
+    Valid Planner provenance gates a self-contained V3.1 VFX dossier. ``VFX repair``
+    appends the invalid Director artifact plus exact validator feedback and asks for a
+    corrected manifest. ``VFX standalone`` is different: it is
+    a fresh two-message VFX request with compact parent/current-item cards, allowed only
+    for genuine legacy data whose Planner history never existed.  It is never a second
+    live-continuation attempt.
+
+    If the bounded repair fails, keep the valid item and invoke the stable procedural VFX
+    recipe selector as a cosmetic safety net.  This selector never owns gameplay.  The
+    exact failure phase/reason is emitted to events.ndjson before it takes over.
     """
     if not VFX_LLM_DIRECTOR_ENABLED or llm_client is None:
         return None
@@ -251,12 +325,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
         "slots": [2, max(2, VFX_LLM_DIRECTOR_MAX_SLOTS)],
     }
     surface = vfx_director_surface()
-    system = (
-        "You are a VFX director for a Terraria/tModLoader generated item. "
-        "Return ONLY one JSON object. No markdown. No reasoning. "
-        "Use only the listed VFX surface enums and ranges. Author concrete slot parameters; do not invent code names. "
-        "Do not output prose explanations or keys outside the provided JSON contract."
-    )
+    system = VFX_DIRECTOR_SYSTEM
     debug = child_item.setdefault("debug", {})
     try:
         input_packet = build_vfx_director_prompt(parent_a, parent_b, child_item, surface, constraints).get("vfxInputPacket", {})
@@ -266,9 +335,9 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
 
     def validate_or_repair(raw: Any, mode: str, base_messages: list[dict[str, str]] | None = None) -> dict[str, Any] | None:
         def _reason_key() -> str:
-            if mode == "planner_chat_continuation":
-                return "vfxLlmDirectorContinuationFallbackReason"
-            if mode == "standalone_fallback":
+            if mode == "authoritative_stage_dossier_v31":
+                return "vfxLlmDirectorHistoryFallbackReason"
+            if mode == "legacy_no_history_standalone":
                 return "vfxLlmDirectorStandaloneFallbackReason"
             return "vfxLlmDirectorUnknownModeFallbackReason"
 
@@ -303,10 +372,17 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
             debug["vfxLlmDirectorRepairAttempts"] = attempt
             debug["vfxLlmDirectorRepairFields"] = _vfx_director_error_fields(last_report)
             repair_payload = _vfx_director_repair_prompt(repair_raw, last_report, surface)
+            repair_payload["agentHandoff"] = agent_handoff(
+                previous_speaker="vfx_director",
+                current_speaker="vfx_validator",
+                next_speaker="vfx_director",
+                cause_by="vfx_contract_validation_failed",
+                artifact_source="vfx_director.manifest",
+            )
             if base_messages:
                 repair_messages = list(base_messages) + [
-                    {"role": "assistant", "content": json.dumps(repair_raw, ensure_ascii=False, separators=(",", ":"))},
-                    {"role": "user", "content": json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))},
+                    stage_chat_message("assistant", "vfx_director", json.dumps(repair_raw, ensure_ascii=False, separators=(",", ":"))),
+                    stage_chat_message("user", "vfx_validator", json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))),
                 ]
                 repair_raw = llm_client("", {}, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT, messages=repair_messages)
             else:
@@ -334,26 +410,67 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
         return None
 
     try:
-        messages = build_vfx_director_continuation_messages(child_item, parent_a, parent_b, surface, constraints)
+        history_state = planner_history_state(child_item)
+        live_planner = str((child_item.get("debug") or {}).get("planner") or "") == "llm_author_first"
+        messages = build_vfx_director_handoff_messages(child_item, parent_a, parent_b, surface, constraints)
         if messages:
-            raw = llm_client("", {}, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT, messages=messages)
-            manifest = validate_or_repair(raw, "planner_chat_continuation", base_messages=messages)
+            raw = llm_client(system, {}, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT, messages=messages)
+            manifest = validate_or_repair(raw, "authoritative_stage_dossier_v31", base_messages=messages)
             if isinstance(manifest, dict) and manifest.get("slots"):
-                debug["vfxLlmDirectorMode"] = "planner_chat_continuation"
-                debug["vfxLlmDirectorContinuationMessages"] = len(messages)
+                debug["vfxLlmDirectorMode"] = "authoritative_stage_dossier_v31"
+                debug["vfxLlmDirectorHistoryMessages"] = len(messages)
                 debug["vfxPath"] = "llm_director"
                 return manifest
-            debug["vfxLlmDirectorContinuationFallback"] = debug.get("vfxLlmDirectorContinuationFallbackReason") or "invalid_or_empty_output"
+            debug["vfxLlmDirectorHistoryFallback"] = debug.get("vfxLlmDirectorHistoryFallbackReason") or "invalid_or_empty_output"
+            debug["vfxLlmDirectorFinalFallbackReason"] = debug["vfxLlmDirectorHistoryFallback"]
+            debug["vfxLlmDirectorFallbackReason"] = debug["vfxLlmDirectorHistoryFallback"]
+            debug["vfxPath"] = "deterministic_recipe_fallback"
+            continuation_reason = str(debug["vfxLlmDirectorHistoryFallback"])
+            continuation_attempts = int(debug.get("vfxLlmDirectorRepairAttempts") or 0)
+            continuation_phase = (
+                "repair_exhausted"
+                if continuation_attempts > 0
+                else ("compile_failed" if "compile_failed" in continuation_reason else "initial_validation")
+            )
+            _log_vfx_fallback_policy(
+                child_item,
+                recipe_key_value,
+                history_state=history_state,
+                request_mode="authoritative_stage_dossier_v31",
+                failure_phase=continuation_phase,
+                reason=continuation_reason,
+            )
+            return None
+        if history_state == "malformed" or (history_state == "absent" and live_planner):
+            reason = (
+                "malformed_attributed_planner_history_fail_closed"
+                if history_state == "malformed"
+                else "missing_live_planner_history_fail_closed"
+            )
+            debug["vfxLlmDirectorHistoryFallbackReason"] = reason
+            debug["vfxLlmDirectorHistoryFallback"] = reason
+            debug["vfxLlmDirectorFinalFallbackReason"] = reason
+            debug["vfxLlmDirectorFallbackReason"] = reason
+            debug["vfxPath"] = "deterministic_recipe_fallback"
+            _log_vfx_fallback_policy(
+                child_item,
+                recipe_key_value,
+                history_state=history_state,
+                request_mode="not_called_history_gate",
+                failure_phase="history_gate",
+                reason=reason,
+            )
+            return None
         else:
-            debug["vfxLlmDirectorContinuationFallbackReason"] = "missing_planner_chat_history"
-            debug["vfxLlmDirectorContinuationFallback"] = "missing_planner_chat_history"
+            debug["vfxLlmDirectorHistoryFallbackReason"] = "missing_attributed_planner_history"
+            debug["vfxLlmDirectorHistoryFallback"] = "missing_attributed_planner_history"
 
-        # Standalone VFX Director fallback with compact exact parent/child cards.
+        # Explicit legacy/no-history VFX request with compact exact parent/child cards.
         payload = build_vfx_director_prompt(parent_a, parent_b, child_item, surface, constraints)
         raw = llm_client(system, payload, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT)
-        manifest = validate_or_repair(raw, "standalone_fallback", base_messages=None)
+        manifest = validate_or_repair(raw, "legacy_no_history_standalone", base_messages=None)
         if isinstance(manifest, dict) and manifest.get("slots"):
-            debug["vfxLlmDirectorMode"] = "standalone_fallback"
+            debug["vfxLlmDirectorMode"] = "legacy_no_history_standalone"
             debug["vfxPath"] = "llm_director"
             return manifest
         final_reason = debug.get("vfxLlmDirectorStandaloneFallbackReason") or "standalone_invalid_or_empty_output"
@@ -361,12 +478,34 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
         debug["vfxLlmDirectorFinalFallbackReason"] = final_reason
         debug["vfxLlmDirectorFallbackReason"] = final_reason
         debug["vfxPath"] = "deterministic_recipe_fallback"
+        standalone_attempts = int(debug.get("vfxLlmDirectorRepairAttempts") or 0)
+        standalone_phase = (
+            "standalone_repair_exhausted"
+            if standalone_attempts > 0
+            else ("standalone_compile_failed" if "compile_failed" in final_reason else "standalone_validation")
+        )
+        _log_vfx_fallback_policy(
+            child_item,
+            recipe_key_value,
+            history_state=history_state,
+            request_mode="legacy_no_history_standalone",
+            failure_phase=standalone_phase,
+            reason=str(final_reason),
+        )
         return None
     except Exception as e:
         debug["vfxLlmDirectorError"] = repr(e)
         debug["vfxLlmDirectorFinalFallbackReason"] = "exception"
         debug["vfxLlmDirectorFallbackReason"] = "exception"
         debug["vfxPath"] = "deterministic_recipe_fallback"
+        _log_vfx_fallback_policy(
+            child_item,
+            recipe_key_value,
+            history_state=locals().get("history_state", "unknown"),
+            request_mode="vfx_director_exception",
+            failure_phase="exception",
+            reason=repr(e),
+        )
         return None
 
 
@@ -383,13 +522,15 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
     """
     if not VFX_SELECTOR_ENABLED:
         return data
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    attack_value = data.get("attack")
+    attack: dict[str, Any] = attack_value if isinstance(attack_value, dict) else {}
     if not attack.get("enabled"):
         return data
     direct_manifest = _vfx_runtime_plan_direct_manifest(data, recipe_key_value, reroll_salt)
     if isinstance(direct_manifest, dict):
+        wire_manifest = validate_vfx_manifest_boundary(direct_manifest)
         data["vfxManifest"] = direct_manifest
-        attack["vfxManifestJson"] = json.dumps(direct_manifest, ensure_ascii=False, separators=(",", ":"))
+        attack["vfxManifestJson"] = json.dumps(wire_manifest, ensure_ascii=False, separators=(",", ":"))
         data["attack"] = attack
         data.setdefault("debug", {})["vfxManifest"] = json.dumps(direct_manifest, ensure_ascii=False)[:12000]
         data.setdefault("debug", {})["vfxPath"] = "runtime_plan_direct_empty" if not direct_manifest.get("slots") else "runtime_plan_direct"
@@ -400,8 +541,9 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         return _vfx_manifest_from_recipe(data, forced_recipe, recipe_key_value, reroll_salt, forced=True)
     director_manifest = try_llm_vfx_director(parent_a, parent_b, data, recipe_key_value, llm_director)
     if isinstance(director_manifest, dict) and director_manifest.get("slots"):
+        wire_manifest = validate_vfx_manifest_boundary(director_manifest)
         data["vfxManifest"] = director_manifest
-        attack["vfxManifestJson"] = json.dumps(director_manifest, ensure_ascii=False, separators=(",", ":"))
+        attack["vfxManifestJson"] = json.dumps(wire_manifest, ensure_ascii=False, separators=(",", ":"))
         data["attack"] = attack
         data.setdefault("debug", {})["vfxManifest"] = json.dumps(director_manifest, ensure_ascii=False)[:12000]
         data.setdefault("debug", {})["vfxLlmDirector"] = "used"
@@ -523,6 +665,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         data["vfxManifest"] = fallback
         attack["vfxManifestJson"] = json.dumps(fallback, ensure_ascii=False, separators=(",", ":"))
         data["attack"] = attack
+        _log_vfx_fallback_selected(data, recipe_key_value, fallback)
         return data
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[:max(1, VFX_SELECTOR_TOP)]
@@ -610,6 +753,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             "effectLineage": effect_lineage,
         }
     }
+    _log_vfx_fallback_selected(data, recipe_key_value, manifest)
     manifest = validate_vfx_manifest_boundary(manifest)
     data["vfxManifest"] = manifest
     attack["vfxManifestJson"] = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))

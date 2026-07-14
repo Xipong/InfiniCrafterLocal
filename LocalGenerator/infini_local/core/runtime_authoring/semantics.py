@@ -108,8 +108,8 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
     family = _norm_name(p.get("family") or p.get("weaponFamily") or p.get("projectileFamily") or p.get("archetype"))
     common = _semantic_param_copy(p, [
         "movement", "effect", "speed", "rangeTiles", "lifetimeTicks", "shotCount", "spreadRadians",
-        "pierce", "extraUpdates", "homingStrength", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "immunityCooldown", "useTimeTicks", "useAnimationTicks", "reliability",
-        "selfLockTicks", "missPunish", "projectileShape", "projectileMotion",
+        "pierce", "extraUpdates", "homingStrength", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "immunityCooldown", "useTimeTicks", "useAnimationTicks",
+        "projectileShape", "projectileMotion",
         "projectileTrail", "projectileImpact", "damageMultiplier", "runtimeFamily",
         "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance",
     ])

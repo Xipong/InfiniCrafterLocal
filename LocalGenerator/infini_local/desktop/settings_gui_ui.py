@@ -35,6 +35,8 @@ from infini_local.desktop.settings_gui_theme import (
 
 
 class SettingsGuiUiMixin:
+    secret_entries: list[tk.Widget]
+
     def _attach_static_help(self, widget, text):
         ToolTip(widget, text)
         widget.bind("<Enter>", lambda _e: self.status_var.set(text() if callable(text) else str(text)), add="+")
@@ -399,8 +401,6 @@ class SettingsGuiUiMixin:
         else:
             widget = ttk.Entry(frame, textvariable=var, width=width, show="*" if secret and not self.show_secrets.get() else "")
             if secret:
-                if not hasattr(self, "secret_entries"):
-                    self.secret_entries = []
                 self.secret_entries.append(widget)
         widget.pack(side="left", fill="x", expand=True, ipady=2)
         self._enable_edit_menu(widget)
@@ -525,6 +525,7 @@ class SettingsGuiUiMixin:
         self.row(server_card, "Port", "INFINI_PORT", width=16)
         self.row(server_card, "Craft HTTP timeout", "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS", width=16, hint="240 секунд: если крафт не готов, tModLoader попробует retry.")
         self.row(server_card, "Craft attempts", "INFINI_CRAFT_HTTP_ATTEMPTS", width=16)
+        self.row(server_card, "Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS", width=16, hint="Сколько секунд параллельный /combine ждёт текущий craft/cache вместо немедленного busy response. Для обычной игры: 210.")
 
         radmin_status = ("Local only", "green") if not self.radmin_enabled.get() else ("Radmin/LAN", "blue")
         radmin_card = self._card(
@@ -582,6 +583,20 @@ class SettingsGuiUiMixin:
         self.row(parent, "Compat base URL", "INFINI_OPENAI_COMPAT_BASE_URL")
         self.row(parent, "Compat API key", "INFINI_OPENAI_COMPAT_API_KEY", secret=True)
         self.row(parent, "Compat model", "INFINI_OPENAI_COMPAT_MODEL")
+        self.row(parent, "LLM 1 API mode", "INFINI_LLM_API_MODE", values=["auto", "responses", "chat_completions"], hint="auto сначала пробует /responses и запоминает поддержку; при отказе тот же self-contained packet идёт через /chat/completions.")
+        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
+        ttk.Label(parent, text="Distributed item pool (optional)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
+        ttk.Label(parent, text="Один новый предмет закрепляется за одним profile на весь Planner → Visual → VFX; следующие предметы распределяются round-robin.", style="Hint.TLabel").pack(anchor="w", padx=14, pady=(0, 6))
+        self.row(parent, "Provider failure cooldown", "INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS", hint="При отказе текущий stage идёт на следующий profile, а сломанный временно исключается из новых item leases.")
+        for slot in (2, 3, 4):
+            prefix = f"INFINI_LLM_POOL_{slot}"
+            ttk.Label(parent, text=f"LLM {slot}", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=14, pady=(7, 0))
+            self.row(parent, f"LLM {slot} enabled", f"{prefix}_ENABLED", values=["0", "1"])
+            self.row(parent, f"LLM {slot} provider", f"{prefix}_PROVIDER", values=["local", "openrouter", "openai_compat"])
+            self.row(parent, f"LLM {slot} base URL", f"{prefix}_BASE_URL", hint="Можно оставить пустым для стандартного OpenRouter URL или основного LM Studio URL.")
+            self.row(parent, f"LLM {slot} API key", f"{prefix}_API_KEY", secret=True)
+            self.row(parent, f"LLM {slot} model", f"{prefix}_MODEL", hint="Пустая модель не активируется даже при enabled=1.")
+            self.row(parent, f"LLM {slot} API mode", f"{prefix}_API_MODE", values=["auto", "responses", "chat_completions"])
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         ttk.Label(parent, text="Fallback LLM (optional)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.row(parent, "Fallback provider", "INFINI_LLM_FALLBACK_PROVIDER", values=["", "local", "openrouter", "openai_compat"], hint="Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.")
@@ -589,9 +604,11 @@ class SettingsGuiUiMixin:
         self.row(parent, "Fallback base URL", "INFINI_LLM_FALLBACK_BASE_URL", hint="Пусто = взять base URL от fallback provider по умолчанию/из основных полей.")
         self.row(parent, "Fallback API key", "INFINI_LLM_FALLBACK_API_KEY", secret=True, hint="Пусто = использовать основной ключ выбранного fallback provider.")
         self.row(parent, "Fallback after transport fails", "INFINI_LLM_FALLBACK_NETWORK_FAILS", width=16, hint="Сколько сетевых/timeout падений подряд терпеть на основной модели, прежде чем уходить на fallback. По умолчанию 2.")
+        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
+        ttk.Label(parent, text="Primary generation controls", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.row(parent, "Response format", "INFINI_LLM_RESPONSE_FORMAT", values=["auto", "json_schema", "json_object", "off"])
-        self.row(parent, "Planner temperature", "INFINI_LLM_TEMPERATURE", width=16, hint="LLM JSON planner temperature. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте.")
-        self.row(parent, "Visual temp", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="LLM Visual Director temperature for Z-Image prompts. Это не sd.cpp temperature; влияет на prompt/visual kit, а не на sampler.")
+        self.row(parent, "Planner temperature", "INFINI_LLM_TEMPERATURE", width=16, hint="Температура основной LLM, которая пишет gameplay/runtime contract. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте. Не относится к fallback-модели.")
+        self.row(parent, "Visual temp", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         ttk.Label(parent, text="Output / reasoning", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.row(parent, "Max answer tokens", "INFINI_LLM_MAX_TOKENS", width=16, hint="Для OpenRouter free/cheap reasoning-моделей обычно 9000-12000, иначе reasoning съедает бюджет и JSON не успевает выйти.")
@@ -639,14 +656,14 @@ class SettingsGuiUiMixin:
         ttk.Label(parent, text="LoRA для Z-Image/sd.cpp", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         lora_note = ttk.Label(
             parent,
-            text="   LoRA folder скрыт: GUI берёт папку из выбранного LoRA file и сам передаёт её как --lora-model-dir.",
+            text="   LoRA folder скрыт: GUI берёт папку из LoRA file, запускает sd.cpp с --lora-model-dir и передаёт LoRA через структурированный HTTP payload.",
             foreground="#666",
         )
         lora_note.pack(anchor="w", padx=10)
-        ToolTip(lora_note, "sd.cpp ищет LoRA по имени из <lora:name:weight> внутри папки --lora-model-dir. Поэтому для обычного GUI-сценария достаточно выбрать конкретный LoRA file.")
-        self.row(parent, "LoRA file", "INFINI_SDCPP_LORA_FILE", browse="lora_file", hint="Выбери конкретный *.safetensors/*.ckpt/*.pt/*.pth. GUI сам возьмёт родительскую папку для --lora-model-dir и добавит <lora:имя:weight>.")
-        self.row(parent, "LoRA weight", "INFINI_SDCPP_LORA_WEIGHT", width=16, hint="Вес для Use selected LoRA. Начинай с 0.45-0.65; выше сильнее навязывает стиль.")
-        self.text_row(parent, "LoRA prompt tags", "INFINI_SDCPP_LORA_PROMPT_TAGS", height=2, hint="Активные LoRA-теги, добавляются к каждому image prompt. Можно несколько: <lora:pixelart:0.65> <lora:terraria_items:0.45>. Если пусто, --lora-model-dir не добавляется.")
+        ToolTip(lora_note, "HTTP server sd.cpp намеренно не исполняет <lora:...> из текста prompt. InfiniCrafter преобразует выбранный файл и вес в безопасное поле lora[] запроса.")
+        self.row(parent, "LoRA file", "INFINI_SDCPP_LORA_FILE", browse="lora_file", hint="Выбери конкретный *.safetensors/*.ckpt/*.pt/*.pth. Имя файла и вес уйдут в структурированное поле lora[]; текстовый тег в модель не попадёт.")
+        self.row(parent, "LoRA weight", "INFINI_SDCPP_LORA_WEIGHT", width=16, hint="Для FLUX.2 pixel-art LoRA начинай с 0.20-0.30; 0.45+ заметно меняет форму и может ухудшать identity.")
+        self.text_row(parent, "LoRA prompt tags", "INFINI_SDCPP_LORA_PROMPT_TAGS", height=2, hint="Совместимый ввод <lora:name:weight>. Перед HTTP-вызовом теги удаляются из prompt и переводятся в lora[]; выбранный LoRA file задаёт точное имя файла.")
         self._build_lora_buttons(parent)
         self.row(parent, "sd.cpp URL", "INFINI_SDCPP_SERVER_URL")
         self.row(parent, "sd.cpp autostart", "INFINI_SDCPP_SERVER_AUTOSTART", values=["1", "0"])
@@ -665,6 +682,7 @@ class SettingsGuiUiMixin:
         self.row(parent, "sd seed", "INFINI_SDCPP_SEED", width=16, hint="-1 = случайный seed. Положительное число фиксирует результат для отладки.")
         self.row(parent, "Z-Image contract", "INFINI_ZIMAGE_PROMPT_CONTRACT", values=["auto", "1", "0"], hint="Обычно auto. Это внутренний маркер для Z-Image payload/prompt contract.")
         self.row(parent, "Positive-only prompt", "INFINI_ZIMAGE_POSITIVE_ONLY", values=["1", "0"], hint="Для Z-Image Turbo обычно 1: negative_prompt не используется, все запреты/техусловия в positive prompt.")
+        self.row(parent, "Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE", values=["1", "0"], hint="1 = не доставлять свежий craft без валидного item PNG. Основной product contract; выключать только для явной диагностики.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         self.row(parent, "Image API base", "INFINI_IMAGE_API_BASE_URL")
         self.row(parent, "Image API key", "INFINI_IMAGE_API_KEY", secret=True)

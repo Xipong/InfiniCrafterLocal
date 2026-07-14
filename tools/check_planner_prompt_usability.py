@@ -20,6 +20,7 @@ LOCAL_GENERATOR = ROOT / "LocalGenerator"
 sys.path.insert(0, str(LOCAL_GENERATOR))
 
 from infini_local.pipelines.llm_authoring_pipeline import build_llm_author_payload  # noqa: E402
+from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS  # noqa: E402
 from infini_local.core.runtime_authoring.schema import (  # noqa: E402
     ENGINE_FN_CATALOG_V2,
     PLANNER_HIDDEN_ENGINE_FUNCTIONS,
@@ -170,7 +171,7 @@ def run(limit_chars: int) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit-chars", type=int, default=24000)
+    ap.add_argument("--limit-chars", type=int, default=PLANNER_PROMPT_LIMIT_CHARS)
     args = ap.parse_args()
     result = run(args.limit_chars)
     print(json.dumps(result, ensure_ascii=False, indent=2))

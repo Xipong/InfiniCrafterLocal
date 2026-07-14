@@ -12,7 +12,7 @@ def _read(rel: str) -> str:
     return read_text_with_partial_bundles(MOD / rel)
 
 
-def test_generated_item_apply_uses_named_none_use_style_ids() -> None:
+def _contract_check_generated_item_apply_uses_named_none_use_style_ids() -> None:
     generated = _read("Common/Models/GeneratedItemData.cs")
     extractinator = _read("Content/Items/GeneratedExtractinatorMaterial.cs")
     assert "ItemUseStyleID.None" in generated
@@ -20,11 +20,12 @@ def test_generated_item_apply_uses_named_none_use_style_ids() -> None:
     assert not re.search(r"\b(?:item|Item)\.useStyle\s*=\s*0\s*;", generated + "\n" + extractinator)
 
 
-def test_generator_client_uses_named_terraria_id_sentinels_for_snapshots() -> None:
+def _contract_check_generator_client_uses_named_terraria_id_sentinels_for_snapshots() -> None:
     source = _read("Common/Services/GeneratorClient.cs")
     for required in [
         "ProjectileID.None",
         "ItemID.None",
+        "AmmoID.None",
         "TileID.Dirt",
         "WallID.None",
         "ItemRarityID.Orange",
@@ -45,7 +46,7 @@ def test_generator_client_uses_named_terraria_id_sentinels_for_snapshots() -> No
         assert not re.search(pattern, source), pattern
 
 
-def test_dump_tools_use_projectile_id_none_for_projectile_fields() -> None:
+def _contract_check_dump_tools_use_projectile_id_none_for_projectile_fields() -> None:
     dump_sources = _read("Common/Commands/InfiniDumpCommand.cs") + "\n" + _read("Common/Commands/InfiniDumpPictureCommand.cs")
     assert "ProjectileID.None" in dump_sources
     assert not re.search(r"\.shoot\s*>\s*0", dump_sources)
@@ -56,3 +57,18 @@ def test_dump_tools_use_projectile_id_none_for_projectile_fields() -> None:
     assert "#pragma warning disable" not in all_source
     assert "#nullable disable warnings" not in all_source
     assert "<NoWarn>" not in project
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_csharp_tml_analyzer_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_generated_item_apply_uses_named_none_use_style_ids',
+            '_contract_check_generator_client_uses_named_terraria_id_sentinels_for_snapshots',
+            '_contract_check_dump_tools_use_projectile_id_none_for_projectile_fields',
+        ),
+    )

@@ -21,7 +21,7 @@ def _compile(plan: dict, key: str) -> dict:
     return attack.get("genome") if isinstance(attack.get("genome"), dict) else attack
 
 
-def test_auxiliary_weapon_taxonomy_is_not_part_of_runtime_contract() -> None:
+def _contract_check_auxiliary_weapon_taxonomy_is_not_part_of_runtime_contract() -> None:
     plan = {
         "name": "Starfall Scattergun",
         "tooltip": "A shotgun that bursts into falling star pellets.",
@@ -56,7 +56,7 @@ def test_auxiliary_weapon_taxonomy_is_not_part_of_runtime_contract() -> None:
     assert genome["soundCatalogSource"] == "terraria_vanilla"
 
 
-def test_overhead_visual_role_uses_exact_runtime_fields_without_tags() -> None:
+def _contract_check_overhead_visual_role_uses_exact_runtime_fields_without_tags() -> None:
     plan = {
         "name": "Falling Star Saber",
         "tooltip": "A broadsword slash calls down bounded falling stars.",
@@ -78,7 +78,7 @@ def test_overhead_visual_role_uses_exact_runtime_fields_without_tags() -> None:
     assert "attackPatternTags" not in genome
 
 
-def test_runtime_color_is_exact_effect_derived_not_mode_or_visual_palette() -> None:
+def _contract_check_runtime_color_is_exact_effect_derived_not_mode_or_visual_palette() -> None:
     def payload(effect: str, primary: str = "") -> dict:
         return {
             "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {}}]},
@@ -91,7 +91,7 @@ def test_runtime_color_is_exact_effect_derived_not_mode_or_visual_palette() -> N
     assert presentation_sound.attach_presentation_and_sound(payload("electric", "cyan"))["attack"]["primaryColorName"] == "cyan"
     assert presentation_sound.attach_presentation_and_sound(payload("electric", "white_gold"))["attack"]["primaryColorName"] == "cyan"
 
-def test_csharp_contract_has_no_auxiliary_taxonomy_or_sound_text_router() -> None:
+def _contract_check_csharp_contract_has_no_auxiliary_taxonomy_or_sound_text_router() -> None:
     root = Path(__file__).resolve().parents[2]
     model = read_text_with_partial_bundles(root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.cs")
     sound = (root / "ModSources/InfiniCrafterLocal/Common/Audio/InfiniSoundLibrary.cs").read_text(encoding="utf-8")
@@ -106,3 +106,19 @@ def test_csharp_contract_has_no_auxiliary_taxonomy_or_sound_text_router() -> Non
     impact_method = projectile.split("private void PlayImpactSound", 1)[1].split("public override void OnKill", 1)[0]
     assert "WeaponFamily" not in impact_method
     assert "ProjectileFamily" not in impact_method
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_weapon_taxonomy_sound_pattern_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_auxiliary_weapon_taxonomy_is_not_part_of_runtime_contract',
+            '_contract_check_overhead_visual_role_uses_exact_runtime_fields_without_tags',
+            '_contract_check_runtime_color_is_exact_effect_derived_not_mode_or_visual_palette',
+            '_contract_check_csharp_contract_has_no_auxiliary_taxonomy_or_sound_text_router',
+        ),
+    )

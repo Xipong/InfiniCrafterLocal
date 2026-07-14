@@ -46,6 +46,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private bool _configured;
     private bool _statsApplied;
     private int _remainingBounces;
+    private bool _returningPhase;
+    private bool _orbitInitialized;
+    private float _orbitStartAngle;
+    private float _orbitStartRadius;
     private bool _procced;
     private bool _expireSecondariesSpawned;
     private int _spawnedGameplayChildCount;
@@ -61,6 +65,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private bool _chargeReleaseFired;
     private int _chargeTicksAccumulated;
     private int _sentryFireTimer;
+    private bool _whipInitialized;
+    private Vector2 _whipBaseDirection;
+    private readonly List<Vector2> _whipControlPoints = new(24);
     private readonly float[] _beamScanSamples = new float[3];
     private static readonly Dictionary<string, int> WarningLogTicks = new(StringComparer.Ordinal);
 

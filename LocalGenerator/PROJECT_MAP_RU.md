@@ -14,7 +14,7 @@ LocalGenerator/
   tests/          contract/regression tests
   tools/          diagnostics/replay/research helpers
   data/           compact reference/seed JSON; not a huge DB authority by itself
-  docs/           supplemental docs/TODO/reference; verify against source
+  docs/           supplemental reference docs; project backlog lives at ../TODO_ROADMAP_VERY_LATER_RU.md
 ```
 
 Do not use old folder docs or agent reports as proof. The active source files are listed in `PROJECT_ARCHITECTURE_RU.md`.

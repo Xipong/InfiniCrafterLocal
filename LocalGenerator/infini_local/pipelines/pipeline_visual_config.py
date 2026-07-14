@@ -42,7 +42,7 @@ SDCPP_VAE = env_str("INFINI_SDCPP_VAE", "")
 SDCPP_LLM = env_str("INFINI_SDCPP_LLM", "")
 SDCPP_LORA_DIR = env_str("INFINI_SDCPP_LORA_DIR", "")
 SDCPP_LORA_FILE = env_str("INFINI_SDCPP_LORA_FILE", "")
-SDCPP_LORA_WEIGHT = env_str("INFINI_SDCPP_LORA_WEIGHT", "0.65") or "0.65"
+SDCPP_LORA_WEIGHT = env_str("INFINI_SDCPP_LORA_WEIGHT", "0.25") or "0.25"
 SDCPP_LORA_PROMPT_TAGS = env_str("INFINI_SDCPP_LORA_PROMPT_TAGS", "")
 if SDCPP_LORA_FILE:
     _lora_path = Path(SDCPP_LORA_FILE)
@@ -194,9 +194,10 @@ MAX_COLORS = env_int("INFINI_MAX_COLORS", 32)
 # v0.4.55 master-first sprite pipeline.  AI still authors the art; code only performs
 # technical image processing: full-res key removal, premultiplied resize, canvas fit,
 # palette bake.
-SPRITE_PROCESSING_PROFILE = env_str("INFINI_SPRITE_PROCESSING_PROFILE", "master_soft").lower()
+SPRITE_PROCESSING_PROFILE = "master_soft"
 SPRITE_MASTER_CANVAS = env_int("INFINI_SPRITE_MASTER_CANVAS", 256, lo=64, hi=2048)
-SPRITE_DOWNSCALE_FILTER = env_str("INFINI_SPRITE_DOWNSCALE_FILTER", "box").lower()
+_sprite_downscale_filter = env_str("INFINI_SPRITE_DOWNSCALE_FILTER", "box").lower()
+SPRITE_DOWNSCALE_FILTER = _sprite_downscale_filter if _sprite_downscale_filter in {"box", "bilinear", "bicubic", "lanczos"} else "box"
 SPRITE_CHROMA_DEFRINGE = env_bool("INFINI_SPRITE_CHROMA_DEFRINGE", True)
 SPRITE_PREMULTIPLIED_RESIZE = env_bool("INFINI_SPRITE_PREMULTIPLIED_RESIZE", True)
 DENOISE_STRAY_PIXELS = env_bool("INFINI_DENOISE_STRAY_PIXELS", False)

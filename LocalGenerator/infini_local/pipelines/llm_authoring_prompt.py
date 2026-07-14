@@ -5,6 +5,13 @@ import math
 import re
 from typing import Any
 
+PLANNER_PROMPT_LIMIT_CHARS = 24_750
+MECHANIC_BACKING_REF_RULES: tuple[str, ...] = (
+    "backingRefs.source must be exactly compiledAttack, runtimeArchetype, or engineCall; never put an engine function name in source.",
+    "For source=engineCall, callIndex is the zero-based absolute index into runtimePlan.engineCalls (including set_item_stats); fn must exactly match engineCalls[callIndex].fn.",
+    'Example for the first projectile call after set_item_stats: {"source":"engineCall","callIndex":1,"fn":"shoot_projectile","field":"movement","expected":"boomerang"}.',
+)
+
 from infini_local.core.errors import PlannerUnavailable
 
 from infini_local.core.balance_mode import current_balance_mode, should_apply_soft_normalization
@@ -162,14 +169,19 @@ def runtime_plan_to_attack_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
     """Compile authored runtimePlan.engineCalls into executable AttackSpec-shaped keys once per craft."""
     if not LLM_RUNTIME_AUTHORING:
         return {}
-    cache = data.get("_runtimePlanCompileCache")
-    if isinstance(cache, dict) and isinstance(cache.get("patch"), dict):
-        return dict(cache.get("patch") or {})
     normalize_runtime_plan_inplace(data)
+    signature = json.dumps(runtime_plan(data), ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    cache = data.get("_runtimePlanCompileCache")
+    if (
+        isinstance(cache, dict)
+        and cache.get("signature") == signature
+        and isinstance(cache.get("patch"), dict)
+    ):
+        return dict(cache.get("patch") or {})
     result = compile_runtime_plan_to_genome_result(data)
     patch = result.get("patch") if isinstance(result, dict) else {}
     patch = patch if isinstance(patch, dict) else {}
-    data["_runtimePlanCompileCache"] = {"patch": dict(patch), "result": result}
+    data["_runtimePlanCompileCache"] = {"signature": signature, "patch": dict(patch), "result": result}
     debug = data.setdefault("debug", {})
     debug["runtimeApiVersion"] = ENGINE_RUNTIME_API_VERSION
     debug["runtimePlanCompiler"] = json.dumps(result.get("quality", {}), ensure_ascii=False)[:6000]
@@ -393,6 +405,7 @@ def planner_priority_header_for_llm() -> list[str]:
         "Author one playable result from both parents; do not merely describe visuals.",
         "Playable non-material/non-furniture: set_item_stats first, then one executable gameplay call.",
         "Promises need engineCalls/numbers/contracts; do not infer mechanics from names.",
+        "Simulate held sprite, emitted body, surface collision, NPC collision, return/expiry; write 4+ runtimeContract.playerViewTimeline steps. Thrust reuses item body. Resource consumption requires an exact call.",
         "Visual prose/VFX is presentation; raw parent fields are evidence.",
         "Placeable consumable usually means spent when placed; not potion/ammo/throwing unless authored.",
         "Keep weird ideas when bounded; unsupported/catastrophic output is rejected.",
@@ -459,7 +472,7 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
 
             "Preserve a complete weapon parent unless ammo/material resultKind and mergeLogic justify replacement.",
             "Generated ammo ammoFor=arrow/bullet has vanilla projectile identity only. For an authored dart/throwable attack use consumable_weapon or weapon, empty ammoFor, and shoot_projectile.",
-            "Gameplay/utility promises require an executable call and mechanicClaims backing=engineCall/runtimeArchetype; visual motifs stay visual_only. Never advertise unsupported mechanics in name, tooltip, concept or runtime intent.",
+            "Gameplay/utility promises require an executable call and mechanicClaims backingRefs that resolve exact fields; free-text backing is descriptive only. Visual motifs stay visual_only. Never advertise unsupported mechanics in name, tooltip, concept or runtime intent.",
             "VFX calls present effects; burst/AoE/sticky are gameplay. Player movement must use a mobility engineCall; low-level shoot_projectile needs explicit runtimeFamily.",
             "Ore visual execution is not added in this patch; generic oreSense remains report/debug-only.",
             "spawn_temporary_helper_projectile is short-lived projectile behavior, not a persistent minion/sentry lifecycle. summon_boss/spawn_npc/spawn_enemy are hard-rejected.",
@@ -650,23 +663,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         "task": "Combine itemA and itemB into one playable Terraria-like item. Return one JSON object.",
         "priorityHeader": planner_priority_header_for_llm(),
         "designGoal": "Derive a testable item from both parents. Prefer distinct behavior, but clean metamorphosis is fine.",
-        "creativeVariance": {
-            "recipeSalt": stable_hash(key, name_of(a), name_of(b), length=8),
-            "designLane": choose_from([
-                "clean metamorphosis with one crisp tradeoff",
-                "altered delivery/movement (arc, bounce, return, cast) if parents justify it",
-                "on-hit utility with modest direct damage",
-                "contact/timing interaction if the parents support it",
-                "ammo/projectile reinterpretation with a clear cost",
-                "returning/tether or utility twist instead of another straight shot",
-                "visual-material fusion with conservative stats",
-                "support/control twist rather than another straight damage stick"
-            ], "creative_lane", key, name_of(a), name_of(b)),
-            "rule": "Avoid cloning the strongest generated parent's name/runtimeFamily/onHit; do not default every weapon to straight+split."
-        },
         "balancePolicy": f"LLM authors numbers; balanceMode={current_balance_mode()}; report/safety preserve authored soft-balance values, normalize applies the legacy soft envelope; C# is final safety.",
         "engineRuntimeContract": engine_runtime_capability_contract_for_llm(a, b) if LLM_RUNTIME_AUTHORING else {},
         "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/directProjectile/effectiveProjectile/ammo/runtimeProbe/generatedParent + optional semantics notes", "rule": "raw fields are facts; semantics notes only clarify overloaded Terraria flags; absence is unknown, not a negative fact", "ammoRepresentativeLimit": 0},
+        "backingRefRules": list(MECHANIC_BACKING_REF_RULES),
         "authorRules": [
             "Return one JSON object with concept, resultKind, authored numbers, engineCalls and concise visual prompts.",
             "Use exactly one secondary trigger: on_hit or on_expire. on_expire means any projectile kill, not timeout-only. shotCount is simultaneous multishot, never a timed burst.",
@@ -682,8 +682,6 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "rangeTiles": [4, 120], "lifetimeTicks": [25, 900], "extraUpdates": [0, 3],
             "note": "Schema/engine sanity ranges only. Parent-relative balance is applied after authoring; no legacy attack.genome."
         },
-        "itemA": raw_parent_card_for_llm(a),
-        "itemB": raw_parent_card_for_llm(b),
         "requiredJsonShape": {
             "name": "short flavorful item name, no Infini/Generated/Hybrid/Combined",
             "tooltip": "short in-game tooltip",
@@ -692,8 +690,23 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
                 "mergeLogic": "one sentence: why these exact parents became this, based on raw parent fields",
                 "weirdTwist": "one sentence: memorable non-vanilla behavior or clean metamorphosis"
             },
-            "runtimeArchetype": "optional {schema:'infini.runtime-archetype.v1', source, family, phaseModel, overrideKnobs, supportStatus}; unknown knobs inert/preserved",
-            "runtimeContract": "optional {schema:'infini.runtime-contract.v1', primaryVerb, controlStyle, stateFields, syncFields, mechanicClaims:[{claim,backing,status}], unsupportedPromises, executionStatus}",
+            "runtimeArchetype": {
+                "schema": "infini.runtime-archetype.v1",
+                "source": "generated",
+                "family": "known finite family",
+                "overrideKnobs": {},
+            },
+            "runtimeContract": {
+                "schema": "infini.runtime-contract.v2",
+                "primaryVerb": "actual player action",
+                "controlStyle": "tap|hold-to-channel|passive|toggle|automatic",
+                "stateFields": [],
+                "syncFields": [],
+                "mechanicClaims": [{"claim": "every public gameplay claim from tooltip/concept", "backing": "human-readable summary only", "backingRefs": [{"source": "compiledAttack|runtimeArchetype|engineCall", "callIndex": "required only for engineCall", "fn": "exact fn for engineCall", "field": "exact machine field", "expected": "exact JSON scalar"}], "status": "executable only when all backingRefs resolve"}],
+                "playerViewTimeline": ["held/use", "outbound or active phase", "surface collision", "NPC collision", "return/expiry and what remains on screen"],
+                "unsupportedPromises": [],
+                "executionStatus": "executable"
+            },
             "runtimePlan": {
                 "resultKind": "weapon|ammo|consumable_weapon|tool|accessory|armor|potion|material|furniture|generic",
                 "sourceRolePreservation": {"itemA": "short", "itemB": "short"},
@@ -711,6 +724,25 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
                 "notes": "optional short visual note"
             }
         },
+        # Recipe-specific fields deliberately form one final suffix. Everything above
+        # stays byte-identical across crafts so provider prefix caching can retain the
+        # complete executable API card and required output contract.
+        "creativeVariance": {
+            "recipeSalt": stable_hash(key, name_of(a), name_of(b), length=8),
+            "designLane": choose_from([
+                "clean metamorphosis with one crisp tradeoff",
+                "altered delivery/movement (arc, bounce, return, cast) if parents justify it",
+                "on-hit utility with modest direct damage",
+                "contact/timing interaction if the parents support it",
+                "ammo/projectile reinterpretation with a clear cost",
+                "returning/tether or utility twist instead of another straight shot",
+                "visual-material fusion with conservative stats",
+                "support/control twist rather than another straight damage stick"
+            ], "creative_lane", key, name_of(a), name_of(b)),
+            "rule": "Avoid cloning the strongest generated parent's name/runtimeFamily/onHit; do not default every weapon to straight+split."
+        },
+        "itemA": raw_parent_card_for_llm(a),
+        "itemB": raw_parent_card_for_llm(b),
     }
 
 def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
@@ -719,7 +751,7 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: di
     contract = payload.get("engineRuntimeContract") if isinstance(payload.get("engineRuntimeContract"), dict) else {}
     functions = contract.get("availableFunctions") if isinstance(contract.get("availableFunctions"), dict) else {}
     return {
-        "ok": len(text) <= 24000 and bool(functions) and "requiredJsonShape" in payload,
+        "ok": len(text) <= PLANNER_PROMPT_LIMIT_CHARS and bool(functions) and "requiredJsonShape" in payload,
         "chars": len(text),
         "approxTokens": max(1, len(text) // 4),
         "contractStyle": contract.get("contractStyle"),

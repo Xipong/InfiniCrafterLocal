@@ -12,7 +12,7 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_progression_guide_is_human_reference_not_active_prompt_or_helper():
+def _contract_check_progression_guide_is_human_reference_not_active_prompt_or_helper():
     assert (ROOT / "docs" / "TERRARIA_WEAPONS_AND_PROGRESSION_FULL_GUIDE_RU.md").exists()
     assert not (LOCAL / "data" / "terraria_progression_reference.json").exists()
     assert not (LOCAL / "infini_local" / "core" / "progression_reference.py").exists()
@@ -39,7 +39,7 @@ def test_progression_guide_is_human_reference_not_active_prompt_or_helper():
     assert "code_owned_balance_envelope_no_active_guide_helper_v0.4.216" in contracts
 
 
-def test_balance_envelope_is_single_code_owned_layer_with_correct_cost_math():
+def _contract_check_balance_envelope_is_single_code_owned_layer_with_correct_cost_math():
     from infini_local.pipelines.combine_balance import (
         clamp_vanilla_like_weapon_damage,
         vanilla_like_weapon_envelope,
@@ -81,7 +81,7 @@ def test_balance_envelope_is_single_code_owned_layer_with_correct_cost_math():
     assert low == 2
 
 
-def test_non_weapon_parents_do_not_crash_balance_report() -> None:
+def _contract_check_non_weapon_parents_do_not_crash_balance_report() -> None:
     from infini_local.pipelines.combine_balance import stat_profile_for
     from infini_local.core.balance_report import build_balance_report
 
@@ -94,3 +94,18 @@ def test_non_weapon_parents_do_not_crash_balance_report() -> None:
     assert math.isfinite(float(stage.get("sourceFastestUseTime")))
     report = build_balance_report({"gameplay": {"kind": "accessory", "damage": 0}, "debug": {}}, stage)
     assert int(report["parents"]["fastestUseTime"]) >= 0
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_214_balance_single_authority_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_progression_guide_is_human_reference_not_active_prompt_or_helper',
+            '_contract_check_balance_envelope_is_single_code_owned_layer_with_correct_cost_math',
+            '_contract_check_non_weapon_parents_do_not_crash_balance_report',
+        ),
+    )

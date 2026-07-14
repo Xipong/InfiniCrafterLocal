@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MOD = ROOT / "ModSources" / "InfiniCrafterLocal"
 
 
-def test_generated_item_data_records_compact_applied_trace() -> None:
+def _contract_check_generated_item_data_records_compact_applied_trace() -> None:
     main = read_text_with_partial_bundles(MOD / "Common" / "Models" / "GeneratedItemData.cs")
     debug = (MOD / "Common" / "Models" / "GeneratedItemData.Debug.cs").read_text(encoding="utf-8")
 
@@ -20,7 +20,7 @@ def test_generated_item_data_records_compact_applied_trace() -> None:
     assert "Accessory.Endurance" in debug
 
 
-def test_csharp_god_file_split_phase1_markers_exist() -> None:
+def _contract_check_csharp_god_file_split_phase1_markers_exist() -> None:
     projectile_net = MOD / "Content" / "Projectiles" / "GeneratedProjectile.NetSync.cs"
     item_debug = MOD / "Common" / "Models" / "GeneratedItemData.Debug.cs"
     normalize = MOD / "Common" / "Models" / "GeneratedItemData.Normalize.cs"
@@ -36,3 +36,17 @@ def test_csharp_god_file_split_phase1_markers_exist() -> None:
     assert "Attack.RuntimeFamily = NormalizeRuntimeFamily(Attack.RuntimeFamily);" in normalize.read_text(encoding="utf-8")
     assert "NormalizeCraftRequestId" in craft_state.read_text(encoding="utf-8")
     assert "public sealed partial class InfiniCraftPlayer" in player
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_csharp_applied_trace_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_generated_item_data_records_compact_applied_trace',
+            '_contract_check_csharp_god_file_split_phase1_markers_exist',
+        ),
+    )

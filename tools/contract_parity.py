@@ -6,7 +6,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args, get_origin
 
 from pydantic_core import PydanticUndefined
 
@@ -90,6 +90,12 @@ def _class_properties(source: str, class_name: str) -> dict[str, dict[str, str]]
 
 
 def _python_type_name(annotation: Any) -> str:
+    if get_origin(annotation) is Literal:
+        values = get_args(annotation)
+        if values and all(isinstance(value, str) for value in values): return "string"
+        if values and all(isinstance(value, bool) for value in values): return "bool"
+        if values and all(isinstance(value, int) and not isinstance(value, bool) for value in values): return "int"
+        if values and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values): return "float"
     text = str(annotation)
     if text in {"<class 'str'>", "str"}: return "string"
     if text in {"<class 'int'>", "int"}: return "int"

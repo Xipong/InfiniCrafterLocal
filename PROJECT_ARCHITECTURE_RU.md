@@ -128,7 +128,7 @@ Multiplayer client path:
 | `GeneratedItemData.Debug.cs` | applied trace/debug JSON для анализа applied-vs-authored |
 
 Ключевые поля:
-- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.48`); пустые и старые версии не мигрируются внутри runtime.
+- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.51`); пустые и старые версии не мигрируются внутри runtime.
 - `RecipeMeta.WorldScoped/WorldId` отделяет generated registry по миру.
 - `RecipeMeta.AssetBaseUrl/AssetFiles` — транспортные поля, не authorship.
 - `Gameplay` — concrete Terraria item stats/utility behavior: kind, damage, use times, use style, buffs, alt use, tools, mobility, extractinator, conditions.
@@ -141,10 +141,10 @@ Multiplayer client path:
 ### Runtime limits (`Common/InfiniRuntimeLimits.cs`)
 
 ```text
-RuntimeApiCurrent = v0.4.48
+RuntimeApiCurrent = v0.4.51
 MaxSupportedMovementCode = 18
 MaxSupportedEffectCode = 15
-MaxSupportedOnHitCode = 18
+MaxSupportedOnHitCode = 19
 NetProseMaxChars = 0
 ```
 

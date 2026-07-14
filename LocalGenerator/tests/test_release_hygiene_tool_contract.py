@@ -15,7 +15,7 @@ def _load_hygiene_module():
     return module
 
 
-def test_release_metadata_patterns_are_rejected() -> None:
+def _contract_check_release_metadata_patterns_are_rejected() -> None:
     hygiene = _load_hygiene_module()
     assert hygiene._is_forbidden_release_metadata(Path("Zone.Identifier"), Path("Zone.Identifier"))
     assert hygiene._is_forbidden_release_metadata(Path("sprite.png:Zone.Identifier"), Path("sprite.png:Zone.Identifier"))
@@ -23,9 +23,24 @@ def test_release_metadata_patterns_are_rejected() -> None:
     assert hygiene._is_forbidden_release_metadata(Path("nested/Thumbs.db"), Path("Thumbs.db"))
 
 
-def test_strict_archive_runtime_junk_patterns_are_recognized() -> None:
+def _contract_check_strict_archive_runtime_junk_patterns_are_recognized() -> None:
     hygiene = _load_hygiene_module()
     assert hygiene._is_runtime_junk(Path("pkg/__pycache__/module.cpython-312.pyc"), Path("module.cpython-312.pyc"))
     assert hygiene._is_runtime_junk(Path("LocalGenerator/cache/world/recipe.json"), Path("recipe.json"))
+    assert hygiene._is_runtime_junk(Path("build_logs/tml-build.log"), Path("tml-build.log"))
     assert hygiene._is_runtime_junk(Path("LocalGenerator/tests/.pytest_cache/v/cache/nodeids"), Path("nodeids"))
     assert not hygiene._is_runtime_junk(Path("LocalGenerator/infini_local/web/server.py"), Path("server.py"))
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_release_hygiene_tool_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_release_metadata_patterns_are_rejected',
+            '_contract_check_strict_archive_runtime_junk_patterns_are_recognized',
+        ),
+    )

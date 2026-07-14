@@ -171,7 +171,9 @@ def _check_zimage_final_prompt_preserves_visual_director_subject_after_wrapper(m
 
     assert "two silver shurikens crossed slightly offset" in prompt
     assert "bright white edge glints" in prompt
-    assert "the main visual subject is two silver shurikens" in prompt
+    assert prompt.startswith("two silver shurikens")
+    assert "appearance:" not in prompt
+    assert "the complete item is fully visible" in prompt
 
 
 def _check_zimage_palette_filters_chroma_key_but_keeps_background_clause(monkeypatch) -> None:
@@ -189,7 +191,7 @@ def _check_zimage_palette_filters_chroma_key_but_keeps_background_clause(monkeyp
     lower = prompt.lower()
 
     assert "flat #ff00ff magenta chroma-key background" in lower
-    assert "color scheme and materials: sage green, pale gold, magenta crystal" in lower
+    assert "foreground colors and materials use sage green, pale gold, magenta crystal" in lower
     assert "color scheme and materials: sage green, magenta," not in lower
     assert "solid magenta background" not in lower
 
@@ -237,8 +239,8 @@ def _check_zimage_prompt_strips_inline_negative_blocks_and_sd_boilerplate(monkey
     assert "watermark" not in prompt
     assert "worst quality" not in prompt
     assert "small green crystal star with a brass socket" in prompt
-    assert "without letters, logos, or ui marks" in prompt
-
+    assert "without letters, logos, or ui marks" not in prompt
+    assert "the complete item is fully visible" in prompt
 
 
 
@@ -266,8 +268,9 @@ def _check_zimage_prompt_uses_simpler_canvas_language(monkeypatch) -> None:
     assert "32x32 to 64x64" not in prompt
     assert "thin safety margin" not in prompt
     assert "unlabeled visual sprite" not in prompt
-    assert "span most of the canvas along at least one axis" in prompt
-    assert "without letters, logos, or ui marks" in prompt
+    assert "the complete item is fully visible" in prompt
+    assert "with a thin safety border" not in prompt
+    assert "without letters, logos, or ui marks" not in prompt
 
 
 
@@ -320,10 +323,10 @@ def _check_role_hygiene_keeps_weapon_icon_from_placeable_scene(monkeypatch) -> N
     ).lower()
 
     assert "wooden chair silhouette" in prompt
-    assert "handheld or carriable usable item" in prompt
-    assert "not a placed tile" in prompt
-    assert "furniture placement preview" in prompt
-    assert "preserve authored literal, attached, fused, disassembled" in prompt
+    assert "the complete item is fully visible" in prompt
+    assert "handheld or carriable usable item" not in prompt
+    assert "furniture placement preview" not in prompt
+    assert "preserve authored literal, attached, fused, disassembled" not in prompt
 
 
 def _check_thrust_projectile_prompt_does_not_force_spear_category(monkeypatch) -> None:
@@ -349,7 +352,7 @@ def _check_thrust_projectile_prompt_does_not_force_spear_category(monkeypatch) -
     assert "moving hit object texture only" in prompt
 
 
-def _check_item_prompt_carries_generated_name_without_text_rendering(monkeypatch) -> None:
+def _check_item_prompt_does_not_append_generated_name_as_flux_meta_text(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "IMAGE_BACKEND", "sdcpp")
     monkeypatch.setattr(VISUAL, "SDCPP_MODEL", "z-image-turbo-Q6_K.gguf")
     monkeypatch.setattr(VISUAL, "SDCPP_SERVER_COMMAND_TEMPLATE", "")
@@ -365,10 +368,11 @@ def _check_item_prompt_carries_generated_name_without_text_rendering(monkeypatch
     }
     prompt = normalize_asset_prompt(data, "item", "single split-blade broadsword, gold front edge and black back edge", 48).lower()
 
-    assert "twilight's radiance" in prompt
-    assert "identity context" in prompt
-    assert "without drawn letters or labels" in prompt
-    assert "draw letters" not in prompt.replace("without drawn letters", "")
+    assert prompt.startswith("single split-blade broadsword")
+    assert "twilight's radiance" not in prompt
+    assert "identity context" not in prompt
+    assert "without drawn letters or labels" not in prompt
+    assert "draw letters" not in prompt
 
 
 def _check_split_blade_prompt_stays_authored_without_code_shape_router(monkeypatch) -> None:
@@ -417,9 +421,11 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
     )
     prompt = normalize_asset_prompt(data, "item", authored, 48).lower()
 
-    assert prompt.count("handheld or carriable usable item") == 1
-    assert prompt.count("furniture placement preview") == 1
-    assert "preserve authored literal, attached, fused, disassembled" in prompt
+    assert "wooden chair leg cudgel" in prompt
+    assert "the complete item is fully visible" in prompt
+    assert "handheld or carriable usable item" not in prompt
+    assert "furniture placement preview" not in prompt
+    assert "preserve authored literal, attached, fused, disassembled" not in prompt
 
     duplicated = (
         "A wooden chair leg cudgel, depict one handheld or carriable usable item object, "
@@ -430,9 +436,11 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
     )
     prompt = normalize_asset_prompt(data, "item", duplicated, 48).lower()
 
-    assert prompt.count("handheld or carriable usable item") == 1
-    assert prompt.count("furniture placement preview") == 1
-    assert prompt.count("preserve authored literal, attached, fused, disassembled") == 1
+    assert "wooden chair leg cudgel" in prompt
+    assert prompt.count("the complete item is fully visible") == 1
+    assert "handheld or carriable usable item" not in prompt
+    assert "furniture placement preview" not in prompt
+    assert "preserve authored literal, attached, fused, disassembled" not in prompt
 
 
 def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -> None:
@@ -450,7 +458,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
         "parents": ["Verdant Shadowblade", "Muramasa"],
         "visual": {
             "palette": ["charcoal black", "bone white"],
-            "itemSilhouetteContract": "Long slender slightly curved blade, blade length about three times the handle, visible tsuka grip and small guard; not a short knife, tantō, dagger, or utility blade.",
+            "itemSilhouetteContract": "Long slender slightly curved blade, blade length about three times the handle, with a visible tsuka grip and small guard.",
         },
     }
     prompt = normalize_asset_prompt(
@@ -461,9 +469,9 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
     ).lower()
     assert "long slender slightly curved blade" in prompt
     assert "visible tsuka" in prompt
-    assert "not a short knife" in prompt
+    assert "not a short knife" not in prompt
     assert prompt.index("long slender slightly curved blade") < prompt.index("a katana with a dark serrated")
-    assert prompt.count("handheld or carriable usable item") == 1
+    assert prompt.count("the complete item is fully visible") == 1
 
     no_contract = {
         "name": "Shadow-Wreathed Katana",
@@ -489,7 +497,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
         "runtimePlan": {"resultKind": "weapon"},
         "gameplay": {"kind": "weapon", "damageClass": "melee"},
         "visualKit": {
-            "itemSilhouetteContract": "Asymmetric crescent-hook blade with one continuous wrapped handle and no detached lower spur."
+            "itemSilhouetteContract": "Asymmetric crescent-hook blade whose lower edge joins one continuous wrapped handle."
         },
         "visual": {"palette": ["violet"]},
     }
@@ -500,7 +508,8 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
         48,
     ).lower()
     assert "asymmetric crescent-hook blade" in kit_prompt
-    assert "no detached lower spur" in kit_prompt
+    assert "whose lower edge joins one continuous wrapped handle" in kit_prompt
+    assert "no detached lower spur" not in kit_prompt
 
     source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_prompt_contracts.py").read_text(encoding="utf-8")
     guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def _authored_tether_context", 1)[0]
@@ -508,13 +517,6 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
     assert "_item_shape_contract_clauses" not in source
     assert "katana/tachi silhouette contract" not in source
     assert "Soul-Clockwork Repeater" not in guard_body
-
-
-def _check_visual_director_requests_shape_contract_without_weapon_taxonomy() -> None:
-    source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_generation_pipeline.py").read_text(encoding="utf-8")
-    assert "itemSilhouetteContract" in source
-    assert "exact proportions, readable parts, and near-miss silhouettes" in source
-    assert "without replacing it with a generic class label" in source
 
 
 def _check_starfall_projectile_and_child_prompts_are_semantic_role_contracts(monkeypatch) -> None:
@@ -618,11 +620,10 @@ def _run_coarse_contracts(tmp_path):
     '_check_role_hygiene_keeps_impact_effect_only',
     '_check_role_hygiene_keeps_weapon_icon_from_placeable_scene',
     '_check_thrust_projectile_prompt_does_not_force_spear_category',
-    '_check_item_prompt_carries_generated_name_without_text_rendering',
+    '_check_item_prompt_does_not_append_generated_name_as_flux_meta_text',
     '_check_split_blade_prompt_stays_authored_without_code_shape_router',
     '_check_item_prompt_deduplicates_handheld_guard_for_zimage',
     '_check_item_shape_contract_is_data_authored_not_code_taxonomy',
-    '_check_visual_director_requests_shape_contract_without_weapon_taxonomy',
     '_check_starfall_projectile_and_child_prompts_are_semantic_role_contracts',
     '_check_sword_projectile_prompt_allows_same_blade_silhouette_with_attack_framing',
     '_check_projectile_fantasy_context_is_runtime_family_aware'

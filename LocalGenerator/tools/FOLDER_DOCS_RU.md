@@ -1,5 +1,5 @@
 # LocalGenerator/tools
 
-Developer diagnostics/replay/research helpers.
+Repository-owned deterministic proof helpers.
 
-Tools may inspect recipes, scrape references, replay cases or dump reports. They are not runtime authority unless an active pipeline imports them. Verify call sites before treating tool behavior as architecture.
+Only tools referenced by tests or canonical runtime-proof documentation remain here. Ad-hoc live generation, server debug, sprite inspection and progression utilities live outside the versioned source tree in `../toolbox/` at the InfiniCrafterLocal workspace root.

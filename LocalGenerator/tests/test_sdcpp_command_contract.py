@@ -91,6 +91,7 @@ def _check_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
     from infini_local.services import sdcpp_backend
 
     assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "0.55") == "<lora:terraria_items:0.55>"
+    assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "") == "<lora:terraria_items:0.25>"
 
     cfg = sdcpp_backend.SdcppBackendConfig(
         default_command_template=visual_config.SDCPP_DEFAULT_COMMAND_TEMPLATE,
@@ -100,6 +101,7 @@ def _check_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
         vae="",
         llm="",
         lora_dir=r"C:\Games\sdcpp\loras",
+        lora_file=r"C:\Games\sdcpp\loras\terraria_items.safetensors",
         lora_prompt_tags="<lora:terraria_items:0.55>",
         host="127.0.0.1",
         port=7861,
@@ -126,8 +128,9 @@ def _check_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
         is_zimage=True,
         positive_only=True,
     )
-    assert payload["prompt"].endswith("<lora:terraria_items:0.55>")
-    assert payload["prompt"].count("<lora:terraria_items:0.55>") == 1
+    assert payload["prompt"] == "pixel art bow"
+    assert payload["lora"] == [{"path": "terraria_items.safetensors", "multiplier": 0.55, "is_high_noise": False}]
+    assert payload["prompt"].count("<lora:terraria_items:0.55>") == 0
 
 
 def _check_sdcpp_debug_snapshot_exposes_lora_file_fields() -> None:

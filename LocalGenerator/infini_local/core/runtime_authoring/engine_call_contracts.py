@@ -112,8 +112,8 @@ _INT_PARAMS = frozenset({
 # fields, so using the whole map as a float inventory would make strict raw
 # boundaries accept values such as chargeTicks=1.5.
 _FLOAT_PARAMS = frozenset({
-    "knockback", "aoeRadiusTiles", "homingStrength", "rangeTiles", "reliability",
-    "missPunish", "spreadRadians", "speed", "beamWidthPx", "chargePowerMultiplier",
+    "knockback", "aoeRadiusTiles", "homingStrength", "rangeTiles",
+    "spreadRadians", "speed", "beamWidthPx", "chargePowerMultiplier",
     "sentryTargetRangeTiles", "fieldRadiusTiles", "secondaryDamageMultiplier",
     "secondarySpreadRadians", "sameTargetBias", "lightStrength", "soundVolume",
     "soundPitch", "soundPitchVariance", "scale", "density", "alpha", "spread",

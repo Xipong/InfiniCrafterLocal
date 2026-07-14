@@ -49,7 +49,7 @@ def _plan(family: str = "overhead_barrage", *, projectile_family: str = "arrow",
     }
 
 
-def test_daedalus_like_ranged_authoring_keeps_delivery_and_theme_separate() -> None:
+def _contract_check_daedalus_like_ranged_authoring_keeps_delivery_and_theme_separate() -> None:
     data = _plan()
     patch = compile_runtime_plan_to_genome_patch(data)
 
@@ -66,7 +66,7 @@ def test_daedalus_like_ranged_authoring_keeps_delivery_and_theme_separate() -> N
     assert patch["maxChildDepth"] == 1
 
 
-def test_daedalus_like_ranged_authoring_survives_full_pipeline() -> None:
+def _contract_check_daedalus_like_ranged_authoring_survives_full_pipeline() -> None:
     child = final_normalize(
         validate_and_repair(_plan(), PARENT_BOW, PARENT_ARROW, {}, {}, "v11_daedalus_like")
     )
@@ -81,7 +81,7 @@ def test_daedalus_like_ranged_authoring_survives_full_pipeline() -> None:
     assert genome["delayTicks"] == 12
 
 
-def test_removed_family_token_and_names_do_not_select_gameplay() -> None:
+def _contract_check_removed_family_token_and_names_do_not_select_gameplay() -> None:
     unknown = compile_runtime_plan_to_genome_patch(_plan("unknown_delivery_family", projectile_family="ice_shard"))
     assert unknown["runtimeFamily"] == "shoot"
     assert unknown["projectileFamily"] == "ice_shard"
@@ -95,7 +95,7 @@ def test_removed_family_token_and_names_do_not_select_gameplay() -> None:
     assert patch["projectileFamily"] == "arrow"
 
 
-def test_overhead_barrage_provenance_marks_authored_projectile_identity() -> None:
+def _contract_check_overhead_barrage_provenance_marks_authored_projectile_identity() -> None:
     data = _plan()
     patch = compile_runtime_plan_to_genome_patch(data)
     report = runtime_plan_provenance_report(data, patch)
@@ -117,7 +117,7 @@ def test_overhead_barrage_provenance_marks_authored_projectile_identity() -> Non
     assert report["gameplayChildren"]["overheadBarrageChildEstimate"] == 4
 
 
-def test_promise_truth_validates_generic_overhead_wording_without_selecting_it() -> None:
+def _contract_check_promise_truth_validates_generic_overhead_wording_without_selecting_it() -> None:
     unsupported = _plan("bow")
     unsupported["tooltip"] = "Arrows rain from the sky over the aimed point."
     patch = compile_runtime_plan_to_genome_patch(unsupported)
@@ -135,7 +135,7 @@ def test_promise_truth_validates_generic_overhead_wording_without_selecting_it()
     )
 
 
-def test_csharp_executor_configures_geometry_without_forcing_star_theme() -> None:
+def _contract_check_csharp_executor_configures_geometry_without_forcing_star_theme() -> None:
     policy_path = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedOverheadBarragePolicy.cs"
     executor_path = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs"
     old_policy = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedDelayedStarfallPolicy.cs"
@@ -193,7 +193,7 @@ def _starfury_plan(*, family: str = "overhead_barrage") -> dict:
     }
 
 
-def test_starfury_like_swing_keeps_authored_star_theme_and_zero_delay() -> None:
+def _contract_check_starfury_like_swing_keeps_authored_star_theme_and_zero_delay() -> None:
     patch = compile_runtime_plan_to_genome_patch(_starfury_plan())
 
     assert patch["runtimeFamily"] == "overhead_barrage"
@@ -209,7 +209,7 @@ def test_starfury_like_swing_keeps_authored_star_theme_and_zero_delay() -> None:
     assert patch["soundImpactCatalogId"] == "impact_star"
 
 
-def test_starfury_like_star_theme_survives_full_pipeline() -> None:
+def _contract_check_starfury_like_star_theme_survives_full_pipeline() -> None:
     child = final_normalize(
         validate_and_repair(
             _starfury_plan(),
@@ -232,7 +232,7 @@ def test_starfury_like_star_theme_survives_full_pipeline() -> None:
     assert genome["delayTicks"] == 0
 
 
-def test_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_from_delivery() -> None:
+def _contract_check_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_from_delivery() -> None:
     family_policy = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedRuntimeFamilyPolicy.cs").read_text(encoding="utf-8")
     apply_source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     child_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
@@ -247,7 +247,29 @@ def test_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_fr
     assert "parent.ProjectileShape" in barrage_policy
 
 
-def test_llm_repair_prompt_advertises_only_canonical_overhead_name() -> None:
+def _contract_check_llm_repair_prompt_advertises_only_canonical_overhead_name() -> None:
     repair_source = (ROOT / "LocalGenerator/infini_local/pipelines/combine_genome.py").read_text(encoding="utf-8")
     assert "starburst|overhead_barrage|aura_pulse" in repair_source
     assert "starburst|starfall|aura_pulse" not in repair_source
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_v11_overhead_barrage_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_daedalus_like_ranged_authoring_keeps_delivery_and_theme_separate',
+            '_contract_check_daedalus_like_ranged_authoring_survives_full_pipeline',
+            '_contract_check_removed_family_token_and_names_do_not_select_gameplay',
+            '_contract_check_overhead_barrage_provenance_marks_authored_projectile_identity',
+            '_contract_check_promise_truth_validates_generic_overhead_wording_without_selecting_it',
+            '_contract_check_csharp_executor_configures_geometry_without_forcing_star_theme',
+            '_contract_check_starfury_like_swing_keeps_authored_star_theme_and_zero_delay',
+            '_contract_check_starfury_like_star_theme_survives_full_pipeline',
+            '_contract_check_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_from_delivery',
+            '_contract_check_llm_repair_prompt_advertises_only_canonical_overhead_name',
+        ),
+    )

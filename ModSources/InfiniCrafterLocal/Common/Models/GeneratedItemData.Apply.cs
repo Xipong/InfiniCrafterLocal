@@ -147,9 +147,11 @@ public sealed partial class GeneratedItemData
 
             if (thrustLike)
             {
-                // Vanilla spear affordance: the ModProjectile is a held/owner-checked
-                // thrust projection, not a free-flying bolt or sword swing.
-                item.useStyle = ItemUseStyleID.Shoot;
+                // Held-thrust geometry is projectile-owned, while Rapier vs Shoot style
+                // remains the explicit authored Terraria animation affordance.
+                item.useStyle = Attack.UseStyleCode > ItemUseStyleID.None
+                    ? Attack.UseStyleCode
+                    : ItemUseStyleID.Shoot;
                 item.noUseGraphic = true;
                 item.noMelee = true;
                 item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);

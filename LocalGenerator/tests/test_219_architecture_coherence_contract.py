@@ -10,7 +10,7 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_balance_report_helper_has_powerband_and_clamp_taxonomy():
+def _contract_check_balance_report_helper_has_powerband_and_clamp_taxonomy():
     from infini_local.core.balance_report import build_balance_report
 
     stage = {
@@ -48,8 +48,22 @@ def test_balance_report_helper_has_powerband_and_clamp_taxonomy():
     assert report["balanceMode"] == "safety"
 
 
-def test_generated_items_attach_single_balance_report_debug_block():
+def _contract_check_generated_items_attach_single_balance_report_debug_block():
     combine = read(ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "combine_gameplay.py")
     assert "attach_balance_report(data, stage)" in combine
     assert 'debug"]["statProfile"' in combine or 'debug\", {})[\"statProfile\"' in combine
     assert "sourceEnvelope" not in read(ROOT / "LocalGenerator" / "infini_local" / "pipelines" / "llm_authoring_pipeline.py")
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_219_architecture_coherence_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_balance_report_helper_has_powerband_and_clamp_taxonomy',
+            '_contract_check_generated_items_attach_single_balance_report_debug_block',
+        ),
+    )

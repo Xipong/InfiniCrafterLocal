@@ -185,12 +185,12 @@ def _run_coarse_contracts(tmp_path):
             _fn(**_kwargs)
 
 
-def test_author_preserving_validator_contract_coarse_contract(tmp_path):
+def _contract_check_author_preserving_validator_contract_coarse_contract(tmp_path):
     _run_coarse_contracts(tmp_path)
 
 
 
-def test_parent_projectile_reference_is_size_only_not_family_router(monkeypatch):
+def _contract_check_parent_projectile_reference_is_size_only_not_family_router(monkeypatch):
     from infini_local.pipelines import projectile_affordance as pa
 
     profiles = {
@@ -228,3 +228,17 @@ def test_parent_projectile_reference_is_size_only_not_family_router(monkeypatch)
     assert out2["projectileHeight"] == 28
     assert out2["projectileScale"] == 1.4
     assert "\"appliedToGenome\": true" in data2["debug"]["parentProjectileRef"]
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_author_preserving_validator_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_author_preserving_validator_contract_coarse_contract',
+            '_contract_check_parent_projectile_reference_is_size_only_not_family_router',
+        ),
+    )

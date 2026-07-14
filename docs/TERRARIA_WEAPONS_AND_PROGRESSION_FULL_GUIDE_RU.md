@@ -38,7 +38,7 @@
 - Сводки по классам: Melee / Ranged / Magic / Summoner.
 - Чеклисты перед каждым major gate: Skeletron, Wall of Flesh, Mechs, Plantera, Golem, Cultist, Moon Lord.
 - Раздел “LLM-safe rules”: что нельзя придумывать при генерации предметов/прогрессии.
-- ToDo-лист для будущего расширения документа, если нужен прям реально “Wiki mirror”.
+- Ссылка на единый корневой backlog для optional Wiki-like expansion документа.
 
 ---
 
@@ -1613,23 +1613,9 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 
 ---
 
-## 29. ToDo для будущего расширения
+## 29. Optional reference-guide expansion
 
-Если нужно довести документ до прям “локальной копии Wiki”, расширять так:
-
-1. Добавить полный sortable-like список всех melee weapons с exact damage/use time/knockback/crit/source.
-2. Добавить полный список всех ranged weapons и ammo interaction.
-3. Добавить полный список magic weapons с mana cost/use time/projectile notes.
-4. Добавить полный список summon weapons, sentries и whips с tag damage.
-5. Добавить exact HP всех боссов по Classic/Expert/Master, включая части/сегменты.
-6. Добавить exact drop rates для каждого boss/event enemy.
-7. Добавить full NPC happiness matrix.
-8. Добавить все Shimmer transmutations из 1.4.5.x.
-9. Добавить все potion recipes и food tiers.
-10. Добавить все armor set bonuses exact.
-11. Добавить all accessories exact effects и crafting trees.
-12. Добавить секцию mod-balancing budgets по стадиям.
-13. Добавить JSON/YAML schema для машинной валидации предметов.
+Документ не владеет отдельным ToDo. Опциональный план расширения до Wiki-like reference поглощён в корневой `../TODO_ROADMAP_VERY_LATER_RU.md`; выполнять его только по отдельному запросу пользователя.
 
 ---
 

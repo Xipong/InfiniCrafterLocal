@@ -61,6 +61,50 @@
         "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs"
       ]
     },
+    "pullStrength": {
+      "requiredStages": [
+        "pythonBoundary",
+        "pythonCompiler",
+        "pythonProjection",
+        "csharpDto",
+        "csharpNormalize",
+        "netWrite",
+        "netRead",
+        "executorRead"
+      ],
+      "compilerOwners": [
+        "LocalGenerator/infini_local/core/runtime_authoring/compiler.py"
+      ],
+      "projectionOwners": [
+        "LocalGenerator/infini_local/pipelines/combine_gameplay.py"
+      ],
+      "normalizePattern": "ClampFloat\\(Attack\\.PullStrength, 0f, 1f\\)",
+      "executorOwners": [
+        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs"
+      ]
+    },
+    "pullMode": {
+      "requiredStages": [
+        "pythonBoundary",
+        "pythonCompiler",
+        "pythonProjection",
+        "csharpDto",
+        "csharpNormalize",
+        "netWrite",
+        "netRead",
+        "executorRead"
+      ],
+      "compilerOwners": [
+        "LocalGenerator/infini_local/core/runtime_authoring/compiler.py"
+      ],
+      "projectionOwners": [
+        "LocalGenerator/infini_local/pipelines/combine_gameplay.py"
+      ],
+      "normalizePattern": "NormalizePullMode\\(Attack\\.PullMode, Attack\\.PullStrength\\)",
+      "executorOwners": [
+        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs"
+      ]
+    },
     "rangeTiles": {
       "requiredStages": [
         "pythonBoundary",

@@ -1,3 +1,3 @@
 # LocalGenerator/docs
 
-Supplemental docs/TODO/reference notes for Python generator work. Some describe future-disabled or planned capabilities. Verify active behavior against `infini_local/` source and tests before repeating claims.
+Supplemental reference notes for Python generator work. Единственный project backlog — `../../TODO_ROADMAP_VERY_LATER_RU.md`. Verify active behavior against `infini_local/` source and tests before repeating claims.

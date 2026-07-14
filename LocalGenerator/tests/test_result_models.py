@@ -7,7 +7,7 @@ from infini_local.core.balance_report import BALANCE_REPORT_SCHEMA_VERSION, buil
 from infini_local.core.result_types import BalanceReportModel, ClampRecord, RepairResult, RuntimeCompileResult
 
 
-def test_internal_result_records_round_trip_and_remain_immutable() -> None:
+def _contract_check_internal_result_records_round_trip_and_remain_immutable() -> None:
     clamp = ClampRecord(
         field="damage", raw=9999, final=60, kind="balance",
         reason="authored_damage_soft_envelope", source="set_item_stats",
@@ -38,7 +38,7 @@ def test_internal_result_records_round_trip_and_remain_immutable() -> None:
     assert failed.to_dict()["provenanceSource"] == "runtime_plan_provenance_report"
 
 
-def test_balance_report_model_round_trips_real_and_empty_reports() -> None:
+def _contract_check_balance_report_model_round_trips_real_and_empty_reports() -> None:
     data = {
         "gameplay": {"damage": 40, "useTime": 15, "rarity": "pre_boss"},
         "debug": {"statProfile": {"bucket": "pre_boss", "sourceMaxDamage": 30, "sourceFastestUseTime": 10}},
@@ -52,3 +52,17 @@ def test_balance_report_model_round_trips_real_and_empty_reports() -> None:
     empty = BalanceReportModel().to_dict()
     assert empty["schema"] == "infini.balance-report.v1"
     assert empty["clamps"] == {} and empty["repair"] == {}
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_result_models_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_internal_result_records_round_trip_and_remain_immutable',
+            '_contract_check_balance_report_model_round_trips_real_and_empty_reports',
+        ),
+    )

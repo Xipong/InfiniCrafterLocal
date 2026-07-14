@@ -25,7 +25,7 @@ def _assigned_names(path: Path) -> set[str]:
     return names
 
 
-def test_runtime_authoring_package_exposes_only_public_api() -> None:
+def _contract_check_runtime_authoring_package_exposes_only_public_api() -> None:
     package_path = PY_ROOT / "core" / "runtime_authoring" / "__init__.py"
     tree = ast.parse(_read(package_path))
     exported: set[str] = set()
@@ -62,7 +62,7 @@ def test_runtime_authoring_package_exposes_only_public_api() -> None:
                 assert node.module != "infini_local.core.runtime_authoring", path
 
 
-def test_runtime_family_policy_is_strict_and_capability_based() -> None:
+def _contract_check_runtime_family_policy_is_strict_and_capability_based() -> None:
     from infini_local.core.runtime_family_policy import (
         CANONICAL_RUNTIME_FAMILIES,
         canonical_runtime_family,
@@ -100,7 +100,7 @@ def test_runtime_family_policy_is_strict_and_capability_based() -> None:
     assert not is_item_bodied_projectile_family("flail")
 
 
-def test_onhit_codes_are_unique_and_heal_normalizes_to_lifesteal() -> None:
+def _contract_check_onhit_codes_are_unique_and_heal_normalizes_to_lifesteal() -> None:
     from infini_local.core.runtime_authoring.vocabulary import normalize_authoring_enum
     from infini_local.core.runtime_executor_vocabulary import ONHITS, ONHIT_CODE
 
@@ -109,7 +109,7 @@ def test_onhit_codes_are_unique_and_heal_normalizes_to_lifesteal() -> None:
     assert len(set(ONHIT_CODE.values())) == len(ONHIT_CODE)
 
 
-def test_executor_vocabulary_has_one_injective_owner() -> None:
+def _contract_check_executor_vocabulary_has_one_injective_owner() -> None:
     from infini_local.core.runtime_authoring.vocabulary import normalize_authoring_enum
     from infini_local.core.runtime_executor_vocabulary import (
         EFFECTS,
@@ -155,7 +155,7 @@ def test_executor_vocabulary_has_one_injective_owner() -> None:
                 assert not (canonical_names & {alias.name for alias in node.names}), path
 
 
-def test_authored_zero_is_not_replaced_by_attack_payload_defaults() -> None:
+def _contract_check_authored_zero_is_not_replaced_by_attack_payload_defaults() -> None:
     from infini_local.pipelines.combine_gameplay import _authored_float_or_default
 
     assert _authored_float_or_default({"radius": 0}, "radius", 24) == 0.0
@@ -163,7 +163,7 @@ def test_authored_zero_is_not_replaced_by_attack_payload_defaults() -> None:
     assert _authored_float_or_default({}, "radius", 24) == 24.0
 
 
-def test_runtime_presentation_policy_projects_canonical_families() -> None:
+def _contract_check_runtime_presentation_policy_projects_canonical_families() -> None:
     from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES, runtime_family_profile
     from infini_local.pipelines.runtime_presentation_policy import runtime_presentation_defaults
 
@@ -193,7 +193,7 @@ def test_runtime_presentation_policy_projects_canonical_families() -> None:
     assert not {name for name in _assigned_names(presentation_owner) if name.endswith("_FAMILIES")}
 
 
-def test_alias_vocabularies_have_one_authoring_boundary_owner() -> None:
+def _contract_check_alias_vocabularies_have_one_authoring_boundary_owner() -> None:
     vocabulary = PY_ROOT / "core" / "runtime_authoring" / "vocabulary.py"
     schema = PY_ROOT / "core" / "runtime_authoring" / "schema.py"
     pipeline_constants = PY_ROOT / "pipelines" / "pipeline_runtime_constants.py"
@@ -214,7 +214,7 @@ def test_alias_vocabularies_have_one_authoring_boundary_owner() -> None:
         assert "normalize_authoring_enum" in _read(consumer), consumer
 
 
-def test_visual_asset_plan_consumes_only_canonical_runtime_families() -> None:
+def _contract_check_visual_asset_plan_consumes_only_canonical_runtime_families() -> None:
     source = _read(PY_ROOT / "pipelines" / "visual_asset_plan.py")
     forbidden_alias_table = "PROJECTILE_FAMILY_" + "ALIASES"
     assert forbidden_alias_table not in source
@@ -223,7 +223,7 @@ def test_visual_asset_plan_consumes_only_canonical_runtime_families() -> None:
     assert "noncanonical_runtime_family" in source
 
 
-def test_genome_validation_rejects_noncanonical_runtime_family() -> None:
+def _contract_check_genome_validation_rejects_noncanonical_runtime_family() -> None:
     from infini_local.pipelines.combine_genome import genome_defects
 
     data = {
@@ -257,7 +257,7 @@ def test_genome_validation_rejects_noncanonical_runtime_family() -> None:
     assert "Legacy combat-genome compatibility" not in source
 
 
-def test_csharp_runtime_family_policy_is_the_only_family_vocab_owner() -> None:
+def _contract_check_csharp_runtime_family_policy_is_the_only_family_vocab_owner() -> None:
     policy_path = CS_ROOT / "Common" / "Models" / "GeneratedRuntimeFamilyPolicy.cs"
     policy = _read(policy_path)
     assert "internal static class GeneratedRuntimeFamilyPolicy" in policy
@@ -316,7 +316,7 @@ def test_csharp_runtime_family_policy_is_the_only_family_vocab_owner() -> None:
         assert literal_pattern.search(_read(path)) is None, path
 
 
-def test_csharp_held_render_role_has_no_keyword_router() -> None:
+def _contract_check_csharp_held_render_role_has_no_keyword_router() -> None:
     policy = _read(CS_ROOT / "Common" / "Models" / "GeneratedRuntimeFamilyPolicy.cs")
     source = _read(CS_ROOT / "Common" / "Players" / "GeneratedHeldItemDrawLayer.cs")
 
@@ -329,3 +329,26 @@ def test_csharp_held_render_role_has_no_keyword_router() -> None:
     assert "BuildHeldRoleText" not in source
     assert "ItemUseStyleID.Shoot" in source
     assert "Gameplay?.HandPose" in source
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_runtime_family_taxonomy_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_runtime_authoring_package_exposes_only_public_api',
+            '_contract_check_runtime_family_policy_is_strict_and_capability_based',
+            '_contract_check_onhit_codes_are_unique_and_heal_normalizes_to_lifesteal',
+            '_contract_check_executor_vocabulary_has_one_injective_owner',
+            '_contract_check_authored_zero_is_not_replaced_by_attack_payload_defaults',
+            '_contract_check_runtime_presentation_policy_projects_canonical_families',
+            '_contract_check_alias_vocabularies_have_one_authoring_boundary_owner',
+            '_contract_check_visual_asset_plan_consumes_only_canonical_runtime_families',
+            '_contract_check_genome_validation_rejects_noncanonical_runtime_family',
+            '_contract_check_csharp_runtime_family_policy_is_the_only_family_vocab_owner',
+            '_contract_check_csharp_held_render_role_has_no_keyword_router',
+        ),
+    )

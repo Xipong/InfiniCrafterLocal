@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib.abc
+import importlib.util
 from pathlib import Path
 import re
 import sys
@@ -25,6 +27,43 @@ SETTINGS_ENV_SOURCE = Path(settings_env.__file__).read_text(encoding="utf-8")
 SETTINGS_SDCPP_ARGS_SOURCE = Path(settings_sdcpp_args.__file__).read_text(encoding="utf-8")
 
 
+class _BlockTkinter(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname: str, path=None, target=None):  # type: ignore[override]
+        if fullname == "tkinter" or fullname.startswith("tkinter."):
+            raise ModuleNotFoundError("No module named 'tkinter'")
+        return None
+
+
+def _check_settings_gui_imports_without_tkinter_installed() -> None:
+    """Headless Python installs must import GUI helpers without tkinter/_tkinter."""
+    module_path = GUI_PATH
+    spec = importlib.util.spec_from_file_location("_infini_settings_gui_headless_probe", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+
+    saved_tk_modules = {key: value for key, value in sys.modules.items() if key == "tkinter" or key.startswith("tkinter.")}
+    saved_compat = {key: value for key, value in sys.modules.items() if key.endswith("desktop.tk_compat")}
+    blocker = _BlockTkinter()
+    try:
+        for key in [*saved_tk_modules, *saved_compat]:
+            sys.modules.pop(key, None)
+        sys.meta_path.insert(0, blocker)
+        spec.loader.exec_module(module)
+    finally:
+        if blocker in sys.meta_path:
+            sys.meta_path.remove(blocker)
+        for key in list(sys.modules):
+            if key == "tkinter" or key.startswith("tkinter.") or key.endswith("desktop.tk_compat"):
+                sys.modules.pop(key, None)
+        sys.modules.update(saved_tk_modules)
+        sys.modules.update(saved_compat)
+
+    assert module.tk_compat.TKINTER_AVAILABLE is False
+    assert "self.secret_entries: list[tk.Widget] = []" in GUI_PATH.read_text(encoding="utf-8")
+    assert isinstance(module.tk.Tk(), module.tk.Widget)
+    assert isinstance(module.ttk.Entry(), module.ttk.Widget)
+
+
 def _check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env() -> None:
     assert 'self.row(parent, "LoRA folder"' not in GUI_SOURCE
     assert "LoRA folder скрыт" in GUI_SOURCE
@@ -44,11 +83,18 @@ def _check_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
 
 def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
     visible_rows = set(re.findall(r"self\.(?:row|text_row)\([^)]*?[\"'](INFINI_[A-Z0-9_]+)[\"']", GUI_SOURCE, flags=re.S))
+    dynamic_pool_rows = {
+        f"INFINI_LLM_POOL_{slot}_{suffix}"
+        for slot in (2, 3, 4)
+        for suffix in ("ENABLED", "PROVIDER", "BASE_URL", "API_KEY", "MODEL", "API_MODE")
+    }
     intentionally_hidden = {
         "INFINI_GUI_PIPELINE_PRESET",  # top-level preset combobox, not a normal row
         "INFINI_SDCPP_LORA_DIR",  # derived from the selected LoRA file
     }
-    assert set(settings_schema.FIELD_ORDER) - intentionally_hidden == visible_rows
+    assert set(settings_schema.FIELD_ORDER) - intentionally_hidden - dynamic_pool_rows == visible_rows
+    assert "for slot in (2, 3, 4):" in GUI_SOURCE
+    assert all(f'_{suffix}"' in GUI_SOURCE for suffix in ("ENABLED", "PROVIDER", "BASE_URL", "API_KEY", "MODEL", "API_MODE"))
     assert all(profile in GUI_SOURCE for profile in settings_schema.SDCPP_EXTRA_PROFILES)
 
 
@@ -118,13 +164,23 @@ def _check_gui_trace_fetch_uses_health_identity_and_longer_timeout() -> None:
 
 def _check_pipeline_preset_is_saved_and_restored_from_config() -> None:
     key = "INFINI_GUI_PIPELINE_PRESET"
+    compat_flux = "OpenAI-compatible + FLUX.2 Klein 4B hybrid"
     assert key in settings_schema.FIELD_ORDER
     assert key in settings_schema.DEFAULTS
+    assert compat_flux in settings_schema.PRESETS
+    assert settings_schema.PRESETS[compat_flux]["INFINI_LLM_PROVIDER"] == "openai_compat"
+    assert settings_schema.PRESETS[compat_flux]["INFINI_LLM_REASONING_MODE"] == "prompt_light"
+    assert "diffusion=rocm0,vae=vulkan0,te=rocm0" in settings_schema.PRESETS[compat_flux]["INFINI_SDCPP_SERVER_EXTRA_ARGS"]
+    assert settings_schema.PRESETS[compat_flux]["INFINI_SDCPP_STEPS"] == "4"
+    assert settings_schema.PRESETS[compat_flux]["INFINI_ZIMAGE_PROMPT_CONTRACT"] == "0"
     assert settings_gui.SettingsGui._pipeline_preset_from_config({
         key: "OpenRouter + local Z-Image/sd.cpp",
-        "INFINI_LLM_PROVIDER": "local",
-        "INFINI_IMAGE_BACKEND": "off",
-    }) == "OpenRouter + local Z-Image/sd.cpp"
+        "INFINI_LLM_PROVIDER": "openai_compat",
+        "INFINI_IMAGE_BACKEND": "sdcpp",
+        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": settings_schema.SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
+        "INFINI_SDCPP_STEPS": "4",
+    }) == compat_flux
     assert settings_gui.SettingsGui._pipeline_preset_from_config({
         "INFINI_LLM_PROVIDER": "openrouter",
         "INFINI_IMAGE_BACKEND": "sdcpp",
@@ -167,9 +223,23 @@ def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
     assert "INFINI_VISUAL_DIRECTOR_TEMPERATURE" in settings_schema.FIELD_ORDER
     assert settings_schema.DEFAULTS["INFINI_LLM_TEMPERATURE"] == "0.38"
     assert settings_schema.DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"] == "0.42"
-    assert "Planner temperature" in GUI_SOURCE
-    assert "Visual temp" in GUI_SOURCE
+    fallback_heading = GUI_SOURCE.index('text="Fallback LLM (optional)"')
+    fallback_last_row = GUI_SOURCE.index('"Fallback after transport fails"', fallback_heading)
+    primary_heading = GUI_SOURCE.index('text="Primary generation controls"')
+    planner_row = GUI_SOURCE.index('"Planner temperature"', primary_heading)
+    visual_row = GUI_SOURCE.index('"Visual temp"', primary_heading)
+    output_heading = GUI_SOURCE.index('text="Output / reasoning"', visual_row)
+    assert fallback_heading < fallback_last_row < primary_heading < planner_row < visual_row < output_heading
     assert "Это не sd.cpp temperature" in GUI_SOURCE
+
+
+def _check_gui_exposes_critical_delivery_and_busy_wait_controls() -> None:
+    assert "INFINI_COMBINE_BUSY_WAIT_SECONDS" in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS["INFINI_COMBINE_BUSY_WAIT_SECONDS"] == "210"
+    assert '"Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS"' in GUI_SOURCE
+    assert "INFINI_VISUAL_REQUIRE_ITEM_SPRITE" in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS["INFINI_VISUAL_REQUIRE_ITEM_SPRITE"] == "1"
+    assert '"Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE"' in GUI_SOURCE
 
 
 def _check_gui_env_file_io_lives_in_settings_env() -> None:
@@ -181,6 +251,13 @@ def _check_gui_env_file_io_lives_in_settings_env() -> None:
     assert callable(settings_env.parse_env)
     assert callable(settings_env.write_env)
 
+def _check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy() -> None:
+    tag = settings_gui.SettingsGui._lora_tag_from_file(r"C:\\Models\\pixel_art.safetensors", "")
+    assert tag == "<lora:pixel_art:0.25>"
+    assert "активная LoRA — через <lora:name:weight> в prompt" not in GUI_SOURCE
+    assert "структурированный HTTP payload" in GUI_SOURCE
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -189,6 +266,7 @@ def _run_coarse_contracts(tmp_path):
     import pytest as _pytest
 
     for _name in [
+    '_check_settings_gui_imports_without_tkinter_installed',
     '_check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env',
     '_check_sdcpp_option_help_is_visible_and_has_expanded_flags',
     '_check_schema_fields_and_image_profiles_are_reachable_from_gui',
@@ -202,7 +280,9 @@ def _run_coarse_contracts(tmp_path):
     '_check_radmin_gui_has_auto_url_and_friend_guide_controls',
     '_check_radmin_gui_friend_guide_says_clients_do_not_need_localgenerator_for_ready_items',
     '_check_gui_exposes_llm_temperatures_not_zimage_temperature',
-    '_check_gui_env_file_io_lives_in_settings_env'
+    '_check_gui_exposes_critical_delivery_and_busy_wait_controls',
+    '_check_gui_env_file_io_lives_in_settings_env',
+    '_check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

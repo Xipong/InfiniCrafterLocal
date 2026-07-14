@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
-RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v1"
+RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v2"
 CONTROL_STYLES = {"", "tap", "hold-to-channel", "right-click-alt", "combo", "passive", "on-hit-trigger"}
 EXECUTION_STATUSES = {"", "executable", "partial", "visual_only", "unsupported"}
 EXECUTABLE_STATUS_ALIASES = {"active", "supported", "stable", "applied", "implemented", "complete", "completed"}
@@ -31,8 +30,34 @@ def _list_text(value: Any, *, max_items: int = 16, max_len: int = 80) -> list[st
     return list(dict.fromkeys(x for x in out if x))[:max_items]
 
 
-def normalize_mechanic_claim(raw: Any) -> dict[str, str]:
-    obj = raw if isinstance(raw, dict) else {"claim": raw}
+def _backing_expected(value: Any) -> Any:
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    return _text(value, 120)
+
+
+def normalize_backing_ref(raw: Any) -> dict[str, Any]:
+    obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    source = str(obj.get("source") or "").strip()
+    if source not in {"compiledAttack", "runtimeArchetype", "engineCall"}:
+        return {}
+    ref: dict[str, Any] = {
+        "source": source,
+        "field": _text(obj.get("field"), 64),
+        "expected": _backing_expected(obj.get("expected")),
+    }
+    if source == "engineCall":
+        call_index_raw = obj.get("callIndex")
+        try:
+            ref["callIndex"] = int(call_index_raw) if call_index_raw is not None else -1
+        except (TypeError, ValueError, OverflowError):
+            ref["callIndex"] = -1
+        ref["fn"] = _text(obj.get("fn"), 64).lower()
+    return ref if ref["field"] else {}
+
+
+def normalize_mechanic_claim(raw: Any) -> dict[str, Any]:
+    obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {"claim": raw}
     status = _norm(obj.get("status")).replace("-", "_")
     if status in EXECUTABLE_STATUS_ALIASES:
         status = "executable"
@@ -40,15 +65,73 @@ def normalize_mechanic_claim(raw: Any) -> dict[str, str]:
         status = "unsupported"
     if status not in {"", "executable", "partial", "visual_only", "unsupported", "ambiguous"}:
         status = ""
+    refs_candidate = obj.get("backingRefs")
+    refs_raw: list[Any] = refs_candidate if isinstance(refs_candidate, list) else []
+    refs = [normalize_backing_ref(ref) for ref in refs_raw]
+    refs = [ref for ref in refs if ref]
     return {
         "claim": _text(obj.get("claim"), 220),
         "backing": _text(obj.get("backing"), 160),
+        "backingRefs": refs[:12],
         "status": status,
     }
 
 
+def _backing_values_match(actual: Any, expected: Any) -> bool:
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return type(actual) is type(expected) and actual == expected
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        return abs(float(actual) - float(expected)) <= 1e-6
+    return actual == expected
+
+
+def resolve_mechanic_backing_refs(
+    data: dict[str, Any],
+    patch: dict[str, Any],
+    claim: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    refs_candidate = claim.get("backingRefs")
+    refs_raw: list[Any] = refs_candidate if isinstance(refs_candidate, list) else []
+    refs = [normalize_backing_ref(ref) for ref in refs_raw]
+    refs = [ref for ref in refs if ref]
+    if not refs:
+        return False, ["missing_backing_refs"]
+
+    runtime_plan_candidate = data.get("runtimePlan")
+    runtime_plan: dict[str, Any] = dict(runtime_plan_candidate) if isinstance(runtime_plan_candidate, dict) else {}
+    calls_candidate = runtime_plan.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    archetype_candidate = data.get("runtimeArchetype")
+    archetype: dict[str, Any] = dict(archetype_candidate) if isinstance(archetype_candidate, dict) else {}
+    failures: list[str] = []
+    for index, ref in enumerate(refs):
+        source = ref["source"]
+        field = ref["field"]
+        actual: Any = None
+        present = False
+        if source == "compiledAttack":
+            present = field in patch
+            actual = patch.get(field)
+        elif source == "runtimeArchetype":
+            present = field in archetype
+            actual = archetype.get(field)
+        elif source == "engineCall":
+            call_index_raw = ref.get("callIndex", -1)
+            call_index = int(call_index_raw) if isinstance(call_index_raw, (int, str)) else -1
+            if 0 <= call_index < len(calls) and isinstance(calls[call_index], dict):
+                call: dict[str, Any] = calls[call_index]
+                fn = str(call.get("fn") or "").strip().lower()
+                params = call.get("params") if isinstance(call.get("params"), dict) else call
+                if fn == str(ref.get("fn") or "") and isinstance(params, dict):
+                    present = field in params
+                    actual = params.get(field)
+        if not present or not _backing_values_match(actual, ref.get("expected")):
+            failures.append(f"ref[{index}]_unresolved:{source}.{field}")
+    return not failures, failures
+
+
 def normalize_runtime_contract(raw: Any) -> dict[str, Any]:
-    obj = raw if isinstance(raw, dict) else {}
+    obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
     control = _norm(obj.get("controlStyle"))
     if control not in CONTROL_STYLES:
         control = ""
@@ -61,11 +144,12 @@ def normalize_runtime_contract(raw: Any) -> dict[str, Any]:
         execution = "unsupported"
     if execution not in EXECUTION_STATUSES:
         execution = ""
-    claims_raw = obj.get("mechanicClaims") if isinstance(obj.get("mechanicClaims"), list) else []
+    claims_candidate = obj.get("mechanicClaims")
+    claims_raw: list[Any] = claims_candidate if isinstance(claims_candidate, list) else []
     claims = [normalize_mechanic_claim(x) for x in claims_raw]
     claims = [x for x in claims if x.get("claim")]
     return {
-        "schema": _text(obj.get("schema"), 64) or RUNTIME_CONTRACT_SCHEMA,
+        "schema": RUNTIME_CONTRACT_SCHEMA,
         "primaryVerb": _text(obj.get("primaryVerb"), 120),
         "controlStyle": control,
         "mustFeelLike": _list_text(obj.get("mustFeelLike"), max_items=8, max_len=80),
@@ -73,6 +157,7 @@ def normalize_runtime_contract(raw: Any) -> dict[str, Any]:
         "stateFields": _list_text(obj.get("stateFields"), max_items=16, max_len=48),
         "syncFields": _list_text(obj.get("syncFields"), max_items=16, max_len=48),
         "visualStateFields": _list_text(obj.get("visualStateFields"), max_items=16, max_len=48),
+        "playerViewTimeline": _list_text(obj.get("playerViewTimeline"), max_items=8, max_len=180),
         "mechanicClaims": claims[:16],
         "unsupportedPromises": _list_text(obj.get("unsupportedPromises"), max_items=24, max_len=120),
         "executionStatus": execution,
@@ -126,36 +211,26 @@ def validate_runtime_contract(data: dict[str, Any], patch: dict[str, Any] | None
     if family in {"secondary_attack", "unsupported"}:
         unsupported.append(f"unsupported:{family}")
 
-    runtime_plan_raw = data.get("runtimePlan")
-    runtime_plan: dict[str, Any] = runtime_plan_raw if isinstance(runtime_plan_raw, dict) else {}
-    engine_calls_raw = runtime_plan.get("engineCalls")
-    engine_calls: list[Any] = engine_calls_raw if isinstance(engine_calls_raw, list) else []
-    authored_call_names = {
-        str(call.get("fn") or "").strip().lower()
-        for call in engine_calls
-        if isinstance(call, dict) and str(call.get("fn") or "").strip()
-    }
 
     # Mechanic claims are debug/truth contracts. They do not create gameplay.
+    # Free-text `backing` is descriptive only; executable status requires exact
+    # machine-resolvable backingRefs.
     for claim in contract.get("mechanicClaims") or []:
         backing = str(claim.get("backing") or "").lower()
         status = str(claim.get("status") or "")
-        backing_identifiers = set(re.findall(r"[a-z][a-z0-9_]*", backing))
-        call_backed = bool(authored_call_names & backing_identifiers)
-        runtime_backed = "runtimearchetype" in backing or "attackspec" in backing
+        machine_backed, backing_failures = resolve_mechanic_backing_refs(data, patch, claim)
+        has_refs = bool(claim.get("backingRefs"))
         if status == "visual_only" or "visual_only" in backing:
             claim["status"] = "visual_only"
         elif status == "unsupported" or "unsupported" in backing:
             claim["status"] = "unsupported"
             unsupported.append("unsupported:" + (claim.get("claim") or "mechanic")[:48])
-        elif "runtimearchetype.family=boomerang" in backing and family == "boomerang":
+        elif machine_backed:
             claim["status"] = "executable"
-        elif call_backed:
-            claim["status"] = "executable"
-        elif "enginecall" in backing or runtime_backed:
-            claim["status"] = status or "partial"
-        elif status == "executable":
-            claim["status"] = "partial" if backing.strip() else "ambiguous"
+        elif has_refs or status == "executable":
+            claim["status"] = "partial"
+            warnings.append("machine_backing_refs_missing_or_unresolved")
+            warnings.extend(backing_failures[:4])
         elif not status:
             claim["status"] = "ambiguous"
 

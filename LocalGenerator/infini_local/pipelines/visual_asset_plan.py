@@ -7,6 +7,7 @@ from infini_local.core.runtime_family_policy import (
     canonical_runtime_family,
     is_canonical_runtime_family,
     is_item_bodied_projectile_family,
+    uses_held_projectile_family,
 )
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
@@ -103,23 +104,42 @@ def visual_asset_runtime_gate(data: dict[str, Any], role: str, authored_mode: st
     if role == "projectile" and mode == "baked_sprite":
         role_spec = _role_baked_asset_spec(data, "projectile")
         distinct_from_item = bool(role_spec.get("distinctFromItem"))
-        if is_item_bodied_projectile_family(runtime_family) and not distinct_from_item:
-            return "reuse_item_sprite", "item_bodied_runtime_reuses_item_sprite"
+        held_item_body = is_item_bodied_projectile_family(runtime_family) and uses_held_projectile_family(runtime_family)
+        if is_item_bodied_projectile_family(runtime_family) and (held_item_body or not distinct_from_item):
+            reason = "held_item_bodied_runtime_reuses_item_sprite" if held_item_body else "item_bodied_runtime_reuses_item_sprite"
+            return "reuse_item_sprite", reason
         # Plain broadsword/swing keeps its single generated item sprite for inventory
         # and held drawing. A separate projectile PNG is only useful for a distinct body.
         # PNG is only useful for emitted/held projectile executors.
         if runtime_family == "swing" and delivery == "swing" and not hide_graphic:
             return "particle_vfx", "melee_swing_uses_item_sprite_no_projectile_asset"
 
+    if role == "child" and mode == "baked_sprite":
+        child_manifest_raw = data.get("vfxManifest")
+        child_manifest: dict[str, Any] = child_manifest_raw if isinstance(child_manifest_raw, dict) else {}
+        child_slots_raw = child_manifest.get("slots")
+        child_slots: list[Any] = child_slots_raw if isinstance(child_slots_raw, list) else []
+        has_child_vfx_slot = any(
+            isinstance(slot, dict) and (
+                str(slot.get("textureRole") or "").strip().lower() == "child"
+                or str(slot.get("particleRole") or "").strip().lower() == "child"
+            )
+            for slot in child_slots
+        )
+        if int(attack.get("maxChildProjectiles") or 0) <= 0 and not has_child_vfx_slot:
+            return "none", "no_compiled_child_runtime_or_vfx_slot"
+
     if role == "field" and mode == "baked_sprite":
-        manifest = data.get("vfxManifest") if isinstance(data.get("vfxManifest"), dict) else {}
-        slots = manifest.get("slots") if isinstance(manifest.get("slots"), list) else []
+        field_manifest_raw = data.get("vfxManifest")
+        field_manifest: dict[str, Any] = field_manifest_raw if isinstance(field_manifest_raw, dict) else {}
+        field_slots_raw = field_manifest.get("slots")
+        field_slots: list[Any] = field_slots_raw if isinstance(field_slots_raw, list) else []
         has_field_slot = any(
             isinstance(slot, dict) and any(
                 "field" in str(slot.get(k) or "").lower()
                 for k in ("rendererKind", "renderer", "textureRole", "particleRole", "channel", "stage")
             )
-            for slot in slots
+            for slot in field_slots
         )
         field_radius = float(attack.get("vfxFieldRadiusTiles") or attack.get("fieldRadiusTiles") or attack.get("fieldRadius") or 0)
         field_lifetime = float(attack.get("vfxFieldLifetimeTicks") or attack.get("fieldLifetimeTicks") or 0)
@@ -131,7 +151,8 @@ def visual_asset_runtime_gate(data: dict[str, Any], role: str, authored_mode: st
 def apply_visual_asset_runtime_gates(data: dict[str, Any], kit: dict[str, Any]) -> None:
     if not isinstance(kit, dict):
         return
-    baked = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
+    baked_value = kit.get("bakedAssets")
+    baked: dict[str, Any] = baked_value if isinstance(baked_value, dict) else {}
     debug = data.setdefault("debug", {})
     authored_modes = {
         role: _asset_mode_from_value(spec.get("mode"))
@@ -144,12 +165,15 @@ def apply_visual_asset_runtime_gates(data: dict[str, Any], kit: dict[str, Any]) 
     canonical: dict[str, dict[str, Any]] = {}
     reports: list[dict[str, str]] = []
     for role in ["projectile", "impact", "child", "field"]:
-        spec = baked.get(role) if isinstance(baked.get(role), dict) else {}
+        spec_value = baked.get(role)
+        spec: dict[str, Any] = spec_value if isinstance(spec_value, dict) else {}
         authored = _asset_mode_from_value(spec.get("mode"))
         final, reason = visual_asset_runtime_gate(data, role, authored)
         if final:
-            row = dict(spec)
+            row: dict[str, Any] = dict(spec)
             row["mode"] = final
+            if final != "baked_sprite":
+                row.pop("distinctFromItem", None)
             canonical[role] = row
         if reason:
             reports.append({"role": role, "authoredMode": authored, "finalMode": final, "reason": reason})
@@ -178,6 +202,23 @@ def finalize_visual_asset_runtime_gates(data: dict[str, Any]) -> dict[str, Any]:
     if kit:
         apply_visual_asset_runtime_gates(data, kit)
     return data
+
+
+def _runtime_gate_reason(data: dict[str, Any], role: str) -> str:
+    debug_raw = data.get("debug")
+    debug: dict[str, Any] = debug_raw if isinstance(debug_raw, dict) else {}
+    raw = debug.get("visualAssetRuntimeGates", "")
+    try:
+        reports = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return ""
+    if not isinstance(reports, list):
+        return ""
+    for report in reports:
+        if isinstance(report, dict) and str(report.get("role") or "") == role:
+            return str(report.get("reason") or "")
+    return ""
+
 
 def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
     kit = _visual_kit(data)
@@ -211,8 +252,13 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
             if allow and mode == "baked_sprite":
                 plan.append(entry)
             else:
-                entry["status"] = "skipped_not_authored_baked" if allow else "skipped_disabled_by_settings"
-                entry["skipReason"] = f"{role} prompt is not demand; explicit baked_sprite mode required" if allow else f"{role} baked images disabled by settings"
+                gate_reason = _runtime_gate_reason(data, role)
+                if allow and gate_reason.startswith("no_compiled_"):
+                    entry["status"] = "skipped_runtime_unused"
+                    entry["skipReason"] = gate_reason
+                else:
+                    entry["status"] = "skipped_not_authored_baked" if allow else "skipped_disabled_by_settings"
+                    entry["skipReason"] = f"{role} prompt is not demand; explicit baked_sprite mode required" if allow else f"{role} baked images disabled by settings"
                 plan.append(entry)
     return plan
 

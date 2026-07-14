@@ -94,26 +94,6 @@ B) Prompt/semantic repair — если golden/compiler/gameplay seam ok, но li
 C) Visual quality — если runtime ok, а спрайты/prompts слабые.
 Terraria smoke — заполнить checklist выше на live mod.
 
-
-## Full combine generation (authored golden plans)
-
-```bash
-cd LocalGenerator
-PYTHONPATH=. python tools/generate_golden_runtime_items.py --out ../agent_reports/runtime_proof_items
-```
-
-This runs the real `combine()` path with LLM replay fixtures (no live network, image backend off) and writes full `GeneratedItemData` JSON per golden case.
-
-Artifacts:
-
-- `agent_reports/runtime_proof_items/<caseId>.full.json`
-- `agent_reports/runtime_proof_items/summary.json`
-
-Caught by this layer:
-
-- LLM replay stage misroute: planner payloads containing both `repair` and `name` were classified as `name_repair`, dropping `runtimePlan` before compile.
-
-
 ## B slice started: promise/semantic honesty
 
 - `runtime_promise_truth.py`: `onHit=starfall` is now treated as executable promise truth, not blanket unsupported.

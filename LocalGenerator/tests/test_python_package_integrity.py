@@ -6,7 +6,7 @@ import pkgutil
 from pathlib import Path
 
 
-def test_infini_local_import_graph_is_acyclic() -> None:
+def _contract_check_infini_local_import_graph_is_acyclic() -> None:
     package_dir = Path(__file__).resolve().parents[1] / "infini_local"
     modules = {
         ".".join(path.relative_to(package_dir.parent).with_suffix("").parts): path
@@ -40,7 +40,7 @@ def test_infini_local_import_graph_is_acyclic() -> None:
         visit(module, ())
 
 
-def test_module_exports_are_static_not_globals_driven() -> None:
+def _contract_check_module_exports_are_static_not_globals_driven() -> None:
     package_dir = Path(__file__).resolve().parents[1] / "infini_local"
     offenders: list[str] = []
     for path in package_dir.rglob("*.py"):
@@ -60,7 +60,7 @@ def test_module_exports_are_static_not_globals_driven() -> None:
     assert offenders == []
 
 
-def test_declared_module_exports_exist_at_runtime() -> None:
+def _contract_check_declared_module_exports_exist_at_runtime() -> None:
     import infini_local
 
     missing: dict[str, list[str]] = {}
@@ -70,3 +70,18 @@ def test_declared_module_exports_exist_at_runtime() -> None:
         if absent:
             missing[info.name] = absent
     assert missing == {}
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_python_package_integrity_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_infini_local_import_graph_is_acyclic',
+            '_contract_check_module_exports_are_static_not_globals_driven',
+            '_contract_check_declared_module_exports_exist_at_runtime',
+        ),
+    )

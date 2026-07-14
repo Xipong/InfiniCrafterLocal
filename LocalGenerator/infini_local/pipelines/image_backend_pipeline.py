@@ -353,6 +353,16 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
     if not ensure_sdcpp_server():
         log_event("warn", "stable-diffusion.cpp server is not available; image asset generation will fail/retry", {"serverUrl": SDCPP_SERVER_URL, "autostart": SDCPP_SERVER_AUTOSTART})
         return []
+    if _effective_sdcpp_lora_prompt_tags():
+        try:
+            catalog = http_json_get(SDCPP_SERVER_URL.rstrip("/") + "/sdapi/v1/loras", timeout=5)
+            trace_event("step", "SDCPP:lora", "refreshed sd.cpp LoRA cache", {
+                "spriteId": sprite_id,
+                "available": len(catalog) if isinstance(catalog, list) else None,
+            })
+        except Exception as exc:
+            log_event("warn", "stable-diffusion.cpp LoRA cache refresh failed", {"spriteId": sprite_id, "error": repr(exc)})
+            return []
     out: list[str] = []
     variants = max(1, int(GENERATE_VARIANTS))
     width = SDCPP_WIDTH
@@ -651,6 +661,7 @@ def _sdcpp_config() -> sdcpp_backend.SdcppBackendConfig:
         vae=SDCPP_VAE,
         llm=SDCPP_LLM,
         lora_dir=_effective_sdcpp_lora_dir(),
+        lora_file=SDCPP_LORA_FILE,
         lora_prompt_tags=_effective_sdcpp_lora_prompt_tags(),
         host=SDCPP_SERVER_HOST,
         port=SDCPP_SERVER_PORT,

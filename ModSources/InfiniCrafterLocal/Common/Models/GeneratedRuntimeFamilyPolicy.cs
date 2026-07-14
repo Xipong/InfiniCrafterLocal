@@ -78,12 +78,27 @@ internal static class GeneratedRuntimeFamilyPolicy
 
     public static bool IsProjectileOwned(string? value) => Profile(value).ProjectileOwned;
 
+    public static bool HasCompatibleMovement(AttackSpec? spec)
+    {
+        if (spec is null) return false;
+        string family = Normalize(spec.RuntimeFamily);
+        int movement = spec.MovementCode;
+        if (family == Returning && movement is not (5 or 14)) return false;
+        if (family == Flail && movement != 16) return false;
+        if (family == Yoyo && movement != 17) return false;
+        if (family == Whip && movement != 18) return false;
+        if (movement == 16 && family != Flail) return false;
+        if (movement == 17 && family != Yoyo) return false;
+        if (movement == 18 && family != Whip) return false;
+        return true;
+    }
+
     public static bool HasValidExecutorContract(AttackSpec? spec)
     {
         if (spec is null) return false;
         string family = Normalize(spec.RuntimeFamily);
         string delivery = (spec.Delivery ?? "").Trim().ToLowerInvariant();
-        if (family == None) return false;
+        if (family == None || !HasCompatibleMovement(spec)) return false;
         if (family == ChargeRelease)
             return delivery is "shoot" or "cast" or "throw";
         if (family == Sentry)

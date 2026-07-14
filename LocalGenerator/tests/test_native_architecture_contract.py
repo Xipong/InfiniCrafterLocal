@@ -26,7 +26,7 @@ def _source_files() -> list[Path]:
     return [p for p in files if "__pycache__" not in p.parts]
 
 
-def test_native_source_has_no_wildcard_imports_or_migration_terms() -> None:
+def _contract_check_native_source_has_no_wildcard_imports_or_migration_terms() -> None:
     failures: list[str] = []
     for path in _source_files():
         text = path.read_text(encoding="utf-8")
@@ -40,7 +40,7 @@ def test_native_source_has_no_wildcard_imports_or_migration_terms() -> None:
     assert failures == []
 
 
-def test_native_source_has_no_legacy_named_modules() -> None:
+def _contract_check_native_source_has_no_legacy_named_modules() -> None:
     offenders = [
         p.relative_to(ROOT).as_posix()
         for p in (LOCAL / "infini_local").rglob("*_legacy_*.py")
@@ -56,7 +56,7 @@ def test_native_source_has_no_legacy_named_modules() -> None:
     assert [path.relative_to(ROOT).as_posix() for path in retired if path.exists()] == []
 
 
-def test_runtime_authoring_public_api_is_package_owned() -> None:
+def _contract_check_runtime_authoring_public_api_is_package_owned() -> None:
     assert not (LOCAL / "infini_local" / "core" / "runtime_authoring.py").exists()
     pkg = LOCAL / "infini_local" / "core" / "runtime_authoring"
     for name in ["__init__.py", "schema.py", "common.py", "semantics.py", "normalize.py", "structural.py", "compiler.py", "reports.py"]:
@@ -70,7 +70,7 @@ def test_runtime_authoring_public_api_is_package_owned() -> None:
         assert "ENGINE_RUNTIME_API_VERSION =" not in (pkg / sibling).read_text(encoding="utf-8")
 
 
-def test_web_server_is_native_entrypoint_without_cross_domain_api_barrel() -> None:
+def _contract_check_web_server_is_native_entrypoint_without_cross_domain_api_barrel() -> None:
     assert not (LOCAL / "infini_local" / "web" / "_".join(["server", "legacy", "facade.py"])).exists()
     assert not (LOCAL / "infini_local" / "web" / "server_services.py").exists()
     assert not (LOCAL / "infini_local" / "web" / "api.py").exists()
@@ -86,7 +86,7 @@ def test_web_server_is_native_entrypoint_without_cross_domain_api_barrel() -> No
     assert "from infini_local.web.server import main" in launcher
 
 
-def test_canonical_owner_apis_import() -> None:
+def _contract_check_canonical_owner_apis_import() -> None:
     from infini_local.core import runtime_authoring
     from infini_local.pipelines.combine_validation import validate_and_repair
     from infini_local.pipelines.final_normalize import final_normalize
@@ -110,7 +110,7 @@ def _top_level_defined_names(path: Path) -> set[str]:
     return names
 
 
-def test_web_server_does_not_redeclare_pipeline_owned_state_or_normalizers() -> None:
+def _contract_check_web_server_does_not_redeclare_pipeline_owned_state_or_normalizers() -> None:
     server_path = LOCAL / "infini_local" / "web" / "server.py"
     visual_owner = LOCAL / "infini_local" / "pipelines" / "pipeline_visual_config.py"
     runtime_owner = LOCAL / "infini_local" / "pipelines" / "pipeline_runtime_constants.py"
@@ -124,10 +124,29 @@ def test_web_server_does_not_redeclare_pipeline_owned_state_or_normalizers() -> 
     assert "_sdcpp_config" not in server_names
 
 
-def test_repo_docs_do_not_pin_one_agent_absolute_workspace_path() -> None:
+def _contract_check_repo_docs_do_not_pin_one_agent_absolute_workspace_path() -> None:
     offenders: list[str] = []
     for path in [ROOT / "docs" / "PROJECT_MAINTAINABILITY_RU.md"]:
         text = path.read_text(encoding="utf-8")
         if "/home/xipong" in text or "/tmp/icl_refactor" in text:
             offenders.append(path.relative_to(ROOT).as_posix())
     assert offenders == []
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_native_architecture_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_native_source_has_no_wildcard_imports_or_migration_terms',
+            '_contract_check_native_source_has_no_legacy_named_modules',
+            '_contract_check_runtime_authoring_public_api_is_package_owned',
+            '_contract_check_web_server_is_native_entrypoint_without_cross_domain_api_barrel',
+            '_contract_check_canonical_owner_apis_import',
+            '_contract_check_web_server_does_not_redeclare_pipeline_owned_state_or_normalizers',
+            '_contract_check_repo_docs_do_not_pin_one_agent_absolute_workspace_path',
+        ),
+    )

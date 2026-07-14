@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from infini_local.pipelines import visual_generation_pipeline
 from infini_local.pipelines import visual_asset_plan as ASSET_PLAN
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.visual_director_contract import visual_kit_response_schema
 from infini_local.pipelines.visual_generation_pipeline import apply_visual_director
 import infini_local.pipelines.visual_sprite_generation as SPRITES
 VISUAL = visual_generation_pipeline
@@ -130,6 +131,17 @@ def _check_item_bodied_projectiles_reuse_item_sprite_unless_distinct(monkeypatch
     }
     distinct = next(x for x in build_visual_asset_plan(transformed) if x["role"] == "projectile")
 
+    held_thrust = _base_item()
+    held_thrust["attack"].update({"runtimeFamily": "thrust", "delivery": "thrust", "hideUseGraphic": True})
+    held_thrust["visualKit"]["bakedAssets"] = {
+        "projectile": {
+            "mode": "baked_sprite",
+            "prompt": "motion-blurred view of the same dagger",
+            "distinctFromItem": True,
+        }
+    }
+    held = next(x for x in build_visual_asset_plan(held_thrust) if x["role"] == "projectile")
+
     sword_shot = _base_item()
     sword_shot["attack"].update({"runtimeFamily": "shoot", "delivery": "shoot", "weaponFamily": "sword"})
     sword_shot["visualKit"]["bakedAssets"] = {
@@ -141,6 +153,8 @@ def _check_item_bodied_projectiles_reuse_item_sprite_unless_distinct(monkeypatch
     assert reused["assetMode"] == "reuse_item_sprite"
     assert distinct.get("status") != "reuses_item_sprite"
     assert distinct["assetMode"] == "baked_sprite"
+    assert held["status"] == "reuses_item_sprite"
+    assert held["assetMode"] == "reuse_item_sprite"
     assert emitted["assetMode"] == "baked_sprite"
 
     invalid = _base_item()
@@ -151,6 +165,30 @@ def _check_item_bodied_projectiles_reuse_item_sprite_unless_distinct(monkeypatch
     invalid_slot = next(x for x in build_visual_asset_plan(invalid) if x["role"] == "projectile")
     assert invalid_slot["assetMode"] != "reuse_item_sprite"
     assert "noncanonical_runtime_family" in invalid.get("debug", {}).get("visualAssetRuntimeGates", "")
+
+
+def _check_child_asset_requires_compiled_child_runtime_or_vfx_consumer(monkeypatch) -> None:
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
+    data = _base_item()
+    data["visualKit"]["bakedAssets"]["child"] = {
+        "mode": "baked_sprite",
+        "prompt": "small green fragment",
+    }
+    data["attack"].update({"maxChildProjectiles": 0, "splitCount": 0})
+
+    unused = next(x for x in build_visual_asset_plan(data) if x["role"] == "child")
+    assert unused["assetMode"] == "none"
+    assert unused["status"] == "skipped_runtime_unused"
+
+    used_data = _base_item()
+    used_data["visualKit"]["bakedAssets"]["child"] = {
+        "mode": "baked_sprite",
+        "prompt": "small green fragment",
+    }
+    used_data["attack"].update({"maxChildProjectiles": 3, "splitCount": 3})
+    used = next(x for x in build_visual_asset_plan(used_data) if x["role"] == "child")
+    assert used["assetMode"] == "baked_sprite"
+    assert used.get("status") != "skipped_runtime_unused"
 
 
 def _check_visual_director_preserves_distinct_projectile_contract(monkeypatch) -> None:
@@ -280,6 +318,21 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
     assert "black-red soul stitching" in item_prompt
 
 
+def _contract_check_visual_director_schema_exposes_projectile_only_baked_asset_fields_by_role() -> None:
+    schema = visual_kit_response_schema()
+    baked = schema["properties"]["visualKit"]["properties"]["bakedAssets"]["properties"]
+    defs = schema["$defs"]
+
+    projectile = defs[baked["projectile"]["$ref"].rsplit("/", 1)[-1]]
+    effect = defs[baked["impact"]["$ref"].rsplit("/", 1)[-1]]
+
+    assert "distinctFromItem" in projectile["properties"]
+    assert "reuse_item_sprite" in projectile["properties"]["mode"]["enum"]
+    assert "distinctFromItem" not in effect["properties"]
+    assert "reuse_item_sprite" not in effect["properties"]["mode"]["enum"]
+    assert baked["impact"] == baked["child"] == baked["field"]
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -294,6 +347,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback',
     '_check_nested_baked_assets_can_request_projectile_sprite',
     '_check_item_bodied_projectiles_reuse_item_sprite_unless_distinct',
+    '_check_child_asset_requires_compiled_child_runtime_or_vfx_consumer',
     '_check_visual_director_preserves_distinct_projectile_contract',
     '_check_reuse_item_sprite_slot_never_calls_image_backend',
     '_check_anime_reference_opportunity_is_rare_deterministic_and_bounded'
@@ -313,5 +367,19 @@ def _run_coarse_contracts(tmp_path):
             _fn(**_kwargs)
 
 
-def test_visual_asset_modes_contract_coarse_contract(tmp_path):
+def _contract_check_visual_asset_modes_contract_coarse_contract(tmp_path):
     _run_coarse_contracts(tmp_path)
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
+def test_visual_asset_modes_contract_module_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_visual_director_schema_exposes_projectile_only_baked_asset_fields_by_role',
+            '_contract_check_visual_asset_modes_contract_coarse_contract',
+        ),
+    )

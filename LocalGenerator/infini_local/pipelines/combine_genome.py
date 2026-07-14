@@ -8,6 +8,7 @@ from infini_local.core.runtime_executor_vocabulary import EFFECT_CODE, MOVEMENT_
 from infini_local.core.effect_catalog import resolve_attack_pattern
 from infini_local.core.item_identity_tools import item_num
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.core.runtime_authoring.reports import infer_attack_pattern_from_runtime
 from infini_local.core.runtime_authoring.schema import _runtime_family_affordances
@@ -68,7 +69,7 @@ def proposed_attack_genome(data: dict[str, Any]) -> dict[str, Any]:
     # runtimePlan compiler is authoritative. Flat attack fields fill only numeric/presentation gaps;
     # deprecated prose/script fields are intentionally not copied into executable genome.
     merged = dict(genome)
-    for k in ["attackPattern", "pattern", "movement", "effect", "onHit", "shotCount", "spreadRadians", "pierce", "aoeRadiusTiles", "homingStrength", "lifetimeTicks", "extraUpdates", "rangeTiles", "reliability", "selfLockTicks", "missPunish", "useTimeTicks", "useAnimationTicks", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks", "immunityCooldown", "secondaryTrigger", "runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "ammoKind", "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource", "soundVolume", "soundPitch", "soundPitchVariance"]:
+    for k in ["attackPattern", "pattern", "movement", "effect", "onHit", "shotCount", "spreadRadians", "pierce", "aoeRadiusTiles", "homingStrength", "lifetimeTicks", "extraUpdates", "rangeTiles", "useTimeTicks", "useAnimationTicks", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks", "immunityCooldown", "secondaryTrigger", "pullStrength", "pullMode", "runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "ammoKind", "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource", "soundVolume", "soundPitch", "soundPitchVariance"]:
         if k in attack and k not in merged:
             merged[k] = attack[k]
     if LLM_RUNTIME_AUTHORING and runtime_plan(data):
@@ -95,6 +96,7 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         ("movement", MOVEMENT_CODE),
         ("effect", EFFECT_CODE),
         ("onHit", ONHIT_CODE),
+        ("pullMode", {"none", "target_to_owner", "owner_to_target", "target_to_projectile"}),
     ]
     for field, allowed in enum_checks:
         if field not in proposed or proposed.get(field) in (None, ""):
@@ -109,11 +111,21 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         if not ok:
             defects.append(f"unsupported attack.genome.{field}={proposed.get(field)!r}")
 
+    try:
+        pull_strength = float(proposed.get("pullStrength") or 0.0)
+    except (TypeError, ValueError, OverflowError):
+        pull_strength = 0.0
+    pull_mode = str(proposed.get("pullMode") or "none").strip().lower()
+    if pull_strength > 0.0 and pull_mode == "none":
+        defects.append("attack.genome.pullStrength>0 requires pullMode=target_to_owner|owner_to_target|target_to_projectile")
+    if pull_strength <= 0.0 and pull_mode != "none":
+        defects.append("attack.genome.pullMode requires pullStrength>0")
+
     # Required numeric fields must be parseable numbers. Out-of-range numbers are later
     # hard-clamped for engine safety; non-numeric values require LLM repair.
     for field in [
         "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks",
-        "rangeTiles", "reliability", "selfLockTicks", "missPunish",
+        "rangeTiles",
     ]:
         if field not in proposed or proposed.get(field) in (None, ""):
             continue
@@ -124,8 +136,29 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         except Exception:
             defects.append(f"non-numeric attack.genome.{field}={proposed.get(field)!r}")
 
-    return defects
+    # Families with dedicated Terraria lifecycle executors must be paired with their
+    # exact movement opcode. Otherwise the item affordance says flail/yoyo/whip while
+    # the projectile silently executes as an unrelated free shot.
+    family = _normalize_authored_enum_value(proposed.get("runtimeFamily"), "runtimeFamily")
+    movement = _normalize_authored_enum_value(proposed.get("movement"), "movement")
+    required_movement = {
+        "flail": "flail_tether",
+        "yoyo": "yoyo_hover",
+        "whip": "whip_lash",
+    }
+    if family == "returning" and movement not in {"boomerang", "returning_glaive"}:
+        defects.append(f"runtimeFamily=returning requires movement=boomerang|returning_glaive, got {movement or '<empty>'}")
+    elif family in required_movement and movement != required_movement[family]:
+        defects.append(f"runtimeFamily={family} requires movement={required_movement[family]}, got {movement or '<empty>'}")
+    movement_owner = {
+        "flail_tether": "flail",
+        "yoyo_hover": "yoyo",
+        "whip_lash": "whip",
+    }
+    if movement in movement_owner and family != movement_owner[movement]:
+        defects.append(f"movement={movement} requires runtimeFamily={movement_owner[movement]}, got {family or '<empty>'}")
 
+    return defects
 def merge_genome_repair(data: dict[str, Any], patch: dict[str, Any]) -> None:
     """Merge a repair response into data.attack.genome.
 
@@ -154,22 +187,31 @@ def merge_genome_repair(data: dict[str, Any], patch: dict[str, Any]) -> None:
     attack["enabled"] = True
 
 def try_llm_genome_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str, defects: list[str], attempt: int) -> dict[str, Any] | None:
-    """Ask the same LLM to fill only missing/malformed combat genome fields.
-
-    This is not a deterministic fallback and not a second critic model. It is the same
-    planner being asked to choose concrete mechanics it omitted. If it fails, gameplay
-    craft refunds instead of code inventing the missing knobs.
-    """
+    """Repair combat genome from one rich authoritative v3.1 stage dossier."""
     try:
+        history_state = planner_history_state(data)
+        live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
+        if history_state == "malformed" or (history_state == "absent" and live_planner):
+            data.setdefault("debug", {})["genomeRepairHistoryStatus"] = (
+                "malformed_fail_closed" if history_state == "malformed" else "missing_live_planner_history_fail_closed"
+            )
+            return None
         model_name = resolve_llm_model()
         existing = proposed_attack_genome(data)
         user = {
             "task": "Repair only missing/malformed attack.genome fields. Return JSON only.",
+            "agentHandoff": agent_handoff(
+                previous_speaker="item_planner",
+                current_speaker="genome_validator",
+                next_speaker="genome_repairer",
+                cause_by="genome_validation",
+                artifact_source="currentItem",
+            ),
             "important": [
                 "Keep name, tooltip, category, parents, and visual concept.",
                 "Pick concrete mechanics now; code will not invent them.",
                 "Use weapon-family fields and executable numbers, not prose tags.",
-                "Strong ideas need costs: slower useTime, selfLock, missPunish, low reliability, no AoE, or low shotCount.",
+                "Strong ideas must pay through executable fields: slower useTime, finite range/lifetime, lower pierce/shotCount, or no AoE/homing.",
             ],
             "defects": defects,
             "attempt": attempt,
@@ -180,10 +222,6 @@ def try_llm_genome_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "tags": data.get("tags"),
                 "attackGenomeCurrent": existing,
             },
-            "parents": [
-                llm_parent_card(a, ca),
-                llm_parent_card(b, cb),
-            ],
             "allowed": {
                 "delivery": ["swing", "thrust", "spear", "stab", "rapier", "shortsword", "shoot", "bow", "gun", "launcher", "cast", "staff", "wand", "book", "throw", "boomerang", "summon", "minion", "sentry"],
                 "movement": "straight|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|returning_glaive|expanding_wave|flail_tether|yoyo_hover|whip_lash",
@@ -217,23 +255,35 @@ def try_llm_genome_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 }
             }
         }
+        user["parents"] = [
+            llm_parent_card(a, ca),
+            llm_parent_card(b, cb),
+        ]
         system = (
-            "Repair incomplete combat genomes for this Terraria-like item generator. "
-            "Return JSON only. Fill missing/malformed fields with concrete values. "
-            "You are the same planner, not a validator or fallback."
+            "You are the Genome Repairer for this Terraria-like item generator. "
+            "The latest genome_validator currentItem is the authoritative current combat truth; any earlier item_planner response is provenance only. "
+            "Return JSON only and fill only missing/malformed fields with concrete executable values."
+        )
+        user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
+        messages = [
+            stage_chat_message("system", "genome_repair_contract", system),
+            stage_chat_message("user", "genome_validator", user_content),
+        ]
+        message_mode = (
+            "authoritative_stage_dossier_v31"
+            if history_state == "valid"
+            else "legacy_authoritative_stage_dossier_v31"
         )
         req = {
             "model": model_name,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-            ],
+            "messages": messages,
             "temperature": 0.15,
             "max_tokens": 900,
             "response_format": llm_json_response_format("infini_genome_repair"),
         }
         raw = llm_chat_json(req, timeout=16)
         content = raw["choices"][0]["message"]["content"]
+        data.setdefault("debug", {})["genomeRepairMessageMode"] = message_mode
         return parse_first_valid_llm_json(content)
     except Exception as e:
         log_event("warn", "LLM genome repair failed", {"error": repr(e), "attempt": attempt})
@@ -328,7 +378,7 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     }
     for field in [
         "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks",
-        "rangeTiles", "reliability", "selfLockTicks", "missPunish",
+        "rangeTiles",
     ]:
         val = _hard_clamp_authored_number(proposed.get(field), field, debug)
         if field in {"useTimeTicks", "shotCount", "pierce", "lifetimeTicks"}:
@@ -348,6 +398,11 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         else:
             val = round(float(val), 3)
         g[field] = val
+
+    pull_mode = _normalize_authored_enum_value(proposed.get("pullMode") or "none", "pullMode")
+    if pull_mode not in {"none", "target_to_owner", "owner_to_target", "target_to_projectile"}:
+        raise PlannerUnavailable(f"LLM planner returned unsupported attack.genome.pullMode={pull_mode!r}; craft failed and ingredients must be refunded")
+    g["pullMode"] = pull_mode
 
     # Preserve only authored presentation strings. Prose/script-like behavior fields are not executable.
     for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "secondaryProjectileShape", "secondaryMaterial", "weaponFamily", "projectileFamily", "ammoKind", "runtimeFamily", "projectileSizePolicy", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource"]:
@@ -400,12 +455,6 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     # them after the authored genome has been sanitized so the final AttackSpec cannot
     # lose noMelee/noUseGraphic/channel semantics at a later projection boundary.
     g.update(_runtime_family_affordances(runtime_family, g.get("weaponFamily") or "", g.get("delivery") or ""))
-    g.setdefault("channelUse", False)
-
-    # Runtime-family affordances are executor safety, not creative authoring. Reapply
-    # them after the authored genome has been sanitized so the final AttackSpec cannot
-    # lose noMelee/noUseGraphic/channel semantics at a later projection boundary.
-    g.update(_runtime_family_affordances(runtime_family, g.get("weaponFamily") or ""))
     g.setdefault("channelUse", False)
 
     # Server-side family locks keep only catastrophic/progression limits; they should not author the item.
@@ -508,9 +557,6 @@ def weapon_genome_for(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]
     lifetime = int(clamp_float(proposed.get("lifetimeTicks"), 25, 900, max(70.0 + power * 20.0, min(240.0, inherited_lifetime or 90.0))))
     extra_updates = int(clamp_float(proposed.get("extraUpdates"), 0, 3, min(2.0, inherited_extra)))
     range_tiles = clamp_float(proposed.get("rangeTiles"), 4, 120, 65.0 if delivery in {"shoot", "cast"} else 12.0)
-    reliability = clamp_float(proposed.get("reliability"), 0.45, 1.25, 0.95 if delivery in {"shoot", "cast"} else 0.82)
-    self_lock = clamp_float(proposed.get("selfLockTicks"), 0, 120, max(0.0, base_use - 40.0) * 0.35)
-    miss_punish = clamp_float(proposed.get("missPunish"), 0.0, 1.0, 0.55 if base_use >= 70 else 0.15)
 
     genome = {
         "delivery": delivery,
@@ -520,7 +566,6 @@ def weapon_genome_for(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]
         "shotCount": shot_count, "spreadRadians": round(spread, 3),
         "pierce": pierce, "aoeRadiusTiles": round(aoe_tiles, 3), "homingStrength": round(homing, 3),
         "lifetimeTicks": lifetime, "extraUpdates": extra_updates, "rangeTiles": round(range_tiles, 2),
-        "reliability": round(reliability, 3), "selfLockTicks": round(self_lock, 2), "missPunish": round(miss_punish, 3),
         "useTimeTicks": int(round(base_use)),
         "parentProfiles": profiles,
     }

@@ -53,7 +53,7 @@ Run-Step "semantic_runtime_diff" "python" @("tools/semantic_runtime_diff.py")
 Run-Step "runtime_impact" "python" @("tools/runtime_impact_report.py", "--out", "artifacts/validation/runtime_impact_report.json")
 Run-Step "csharp_contracts" "python" @("tools/check_csharp_contracts.py")
 Run-Step "project_hygiene" "python" @("tools/check_project_hygiene.py")
-Run-Step "planner_prompt" "python" @("tools/check_planner_prompt_usability.py", "--limit-chars", "24000")
+Run-Step "planner_prompt" "python" @("tools/check_planner_prompt_usability.py")
 if (Get-Command ruff -ErrorAction SilentlyContinue) { Run-Step "ruff" "ruff" @("check", "LocalGenerator/infini_local", "tools") } else { Add-Unavailable "ruff" "ruff is not installed" }
 if (Get-Command pyright -ErrorAction SilentlyContinue) { Run-Step "pyright" "pyright" @() } else { Add-Unavailable "pyright" "pyright is not installed" }
 if ($SkipBuild) { Add-Unavailable "tml_build" "build explicitly skipped" }

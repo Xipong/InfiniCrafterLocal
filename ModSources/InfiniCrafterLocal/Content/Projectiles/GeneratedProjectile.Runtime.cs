@@ -60,12 +60,19 @@ public sealed partial class GeneratedProjectile
         }
         _statsApplied = false;
         _remainingBounces = InitialBounceBudget(_spec);
+        _returningPhase = false;
+        _orbitInitialized = false;
+        _orbitStartAngle = 0f;
+        _orbitStartRadius = 0f;
         _stuckToTile = false;
         _impactMobilityUsed = false;
         _lastImpactSoundLocalTick = -9999;
         _chargeReleaseFired = false;
         _chargeTicksAccumulated = 0;
         _sentryFireTimer = 0;
+        _whipInitialized = false;
+        _whipBaseDirection = Vector2.Zero;
+        _whipControlPoints.Clear();
         _visualSyncRebroadcastsSent = 0;
         ApplyConfiguredStats();
     }
@@ -90,6 +97,11 @@ public sealed partial class GeneratedProjectile
         Projectile.usesLocalNPCImmunity = true;
         Projectile.localNPCHitCooldown = 10;
         _statsApplied = false;
+        _returningPhase = false;
+        _orbitInitialized = false;
+        _whipInitialized = false;
+        _whipBaseDirection = Vector2.Zero;
+        _whipControlPoints.Clear();
         _stuckToTile = false;
         _impactMobilityUsed = false;
     }
@@ -318,67 +330,135 @@ public sealed partial class GeneratedProjectile
     private bool ApplyFlailTetherAI()
     {
         Player owner = Main.player[Projectile.owner];
-        if (!owner.active || owner.dead) { Projectile.Kill(); return false; }
+        if (!owner.active || owner.dead || owner.noItems || owner.CCed || Projectile.Distance(owner.Center) > 900f)
+        {
+            Projectile.Kill();
+            return false;
+        }
         Vector2 toOwner = owner.MountedCenter - Projectile.Center;
         ApplyOwnerArmPose(owner, -toOwner, twoHanded: false);
+        owner.heldProj = Projectile.whoAmI;
+        owner.itemTime = Math.Max(owner.itemTime, 2);
+        owner.itemAnimation = Math.Max(owner.itemAnimation, 2);
         float maxRange = Math.Clamp(Math.Max(6f, _spec.Speed * Math.Max(8f, _spec.Lifetime) * 0.18f), 80f, 520f);
-        if (Projectile.localAI[0] > Math.Max(12, _spec.Lifetime * 0.45f) || toOwner.Length() > maxRange)
+        if (!_returningPhase && !owner.channel && Projectile.localAI[0] > 3f)
+            BeginReturningPhase();
+        if (!_returningPhase && (Projectile.localAI[0] > Math.Max(12, _spec.Lifetime * 0.45f) || toOwner.Length() > maxRange))
+            BeginReturningPhase();
+
+        if (_returningPhase)
         {
-            Projectile.velocity = Vector2.Lerp(Projectile.velocity, toOwner.SafeNormalize(Vector2.Zero) * Math.Max(8f, _spec.Speed), 0.13f);
+            Projectile.tileCollide = false;
+            Projectile.velocity = Vector2.Lerp(Projectile.velocity, toOwner.SafeNormalize(Vector2.Zero) * Math.Max(8f, _spec.Speed), 0.18f);
+            if (Projectile.localAI[0] > 8f && toOwner.Length() < 24f) Projectile.Kill();
         }
         else
         {
             Projectile.velocity *= 0.982f;
+            Projectile.tileCollide = _spec.TileCollide;
         }
-        if (Projectile.localAI[0] > 8f && toOwner.Length() < 24f) Projectile.Kill();
         Projectile.rotation += 0.34f * Math.Sign(Projectile.velocity.X == 0f ? owner.direction : Projectile.velocity.X);
-        Projectile.tileCollide = true;
         return true;
     }
 
     private bool ApplyYoyoHoverAI()
     {
         Player owner = Main.player[Projectile.owner];
-        if (!owner.active || owner.dead)
+        if (!owner.active || owner.dead || owner.noItems || owner.CCed)
         {
             Projectile.Kill();
             return false;
         }
         ApplyOwnerArmPose(owner, Projectile.Center - owner.MountedCenter, twoHanded: false);
-        if (!owner.channel && Projectile.localAI[0] > 18f)
+        owner.heldProj = Projectile.whoAmI;
+        owner.itemTime = Math.Max(owner.itemTime, 2);
+        owner.itemAnimation = Math.Max(owner.itemAnimation, 2);
+        int activeLifetime = Math.Max(60, _spec.Lifetime);
+        if (!_returningPhase && ((!owner.channel && Projectile.localAI[0] > 3f) || Projectile.localAI[0] >= activeLifetime))
+            BeginReturningPhase();
+        if (_returningPhase)
         {
             Vector2 home = owner.MountedCenter - Projectile.Center;
             Projectile.velocity = Vector2.Lerp(Projectile.velocity, home.SafeNormalize(Vector2.Zero) * Math.Max(9f, _spec.Speed), 0.18f);
+            Projectile.Center += Projectile.velocity;
             if (home.Length() < 24f) Projectile.Kill();
             return true;
         }
 
-        Vector2 aim = Main.MouseWorld - owner.MountedCenter;
-        if (Projectile.owner != Main.myPlayer || aim.LengthSquared() < 16f)
-            aim = Projectile.velocity.LengthSquared() > 0.01f ? Projectile.velocity : new Vector2(owner.direction, 0f);
         float maxRange = Math.Clamp(Math.Max(6f, _spec.Speed * Math.Max(8f, _spec.Lifetime) * 0.18f), 96f, 420f);
-        Vector2 target = owner.MountedCenter + aim.SafeNormalize(Vector2.UnitX * owner.direction) * maxRange * 0.72f;
-        Projectile.Center = Vector2.Lerp(Projectile.Center, target, 0.12f);
-        Projectile.velocity = (target - Projectile.Center) * 0.18f;
+        Vector2 target;
+        if (Projectile.owner == Main.myPlayer)
+        {
+            Vector2 aim = Main.MouseWorld - owner.MountedCenter;
+            float targetDistance = Math.Min(aim.Length(), maxRange);
+            target = owner.MountedCenter + aim.SafeNormalize(Vector2.UnitX * owner.direction) * targetDistance;
+            Vector2 previousTarget = new(Projectile.ai[0], Projectile.ai[1]);
+            if (Vector2.DistanceSquared(previousTarget, target) > 16f || (int)Projectile.localAI[0] % 12 == 0)
+            {
+                Projectile.ai[0] = target.X;
+                Projectile.ai[1] = target.Y;
+                Projectile.netUpdate = true;
+            }
+        }
+        else
+        {
+            target = new Vector2(Projectile.ai[0], Projectile.ai[1]);
+            if (Vector2.DistanceSquared(target, owner.MountedCenter) > maxRange * maxRange * 2.25f)
+                target = Projectile.Center;
+        }
+        Vector2 toTarget = target - Projectile.Center;
+        float topSpeed = Math.Clamp(Math.Max(9f, _spec.Speed), 9f, 18f);
+        Vector2 desiredVelocity = toTarget.LengthSquared() < 4f
+            ? Vector2.Zero
+            : toTarget.SafeNormalize(Vector2.Zero) * Math.Min(topSpeed, toTarget.Length());
+        Projectile.velocity = Vector2.Lerp(Projectile.velocity, desiredVelocity, 0.24f);
+        Vector2 allowedMove = Collision.TileCollision(Projectile.position, Projectile.velocity, Projectile.width, Projectile.height);
+        Projectile.Center += allowedMove;
+        if (allowedMove != Projectile.velocity)
+            Projectile.velocity = allowedMove * 0.35f;
         Projectile.rotation += 0.42f;
         Projectile.timeLeft = 2;
         Projectile.tileCollide = false;
-        owner.heldProj = Projectile.whoAmI;
         return true;
+    }
+
+    private void FillGeneratedWhipControlPoints(List<Vector2> points)
+    {
+        points.Clear();
+        if (Projectile.owner < 0 || Projectile.owner >= Main.maxPlayers)
+            return;
+        Player owner = Main.player[Projectile.owner];
+        if (!_whipInitialized)
+        {
+            _whipBaseDirection = Projectile.velocity.SafeNormalize(Vector2.UnitX * (owner.direction == 0 ? 1 : owner.direction));
+            _whipInitialized = true;
+        }
+        float animationMax = Math.Max(1f, owner.itemAnimationMax > 0 ? owner.itemAnimationMax : Math.Max(1, _spec.Lifetime));
+        float progress = 1f - Math.Clamp(owner.itemAnimation, 0f, animationMax) / animationMax;
+        progress = MathHelper.Clamp(progress, 0f, 1f);
+        float extension = (float)Math.Sin(progress * MathHelper.Pi);
+        float sweep = MathHelper.Lerp(-0.72f, 0.72f, progress) * owner.direction * owner.gravDir;
+        Vector2 direction = _whipBaseDirection.RotatedBy(sweep).SafeNormalize(Vector2.UnitX * owner.direction);
+        Vector2 perpendicular = direction.RotatedBy(MathHelper.PiOver2);
+        float authoredReach = Math.Clamp(_spec.RangeTiles * 16f * 0.45f, 58f, 320f);
+        float tipDistance = authoredReach * extension;
+        int segments = Math.Clamp((int)Math.Round(authoredReach / 16f), 10, 24);
+        Vector2 start = owner.MountedCenter;
+        for (int i = 0; i <= segments; i++)
+        {
+            float amount = i / (float)segments;
+            float bend = (float)Math.Sin(amount * MathHelper.Pi) * (float)Math.Sin(progress * MathHelper.TwoPi) * authoredReach * 0.12f;
+            points.Add(start + direction * tipDistance * amount + perpendicular * bend);
+        }
     }
 
     private void WhipLine(out Vector2 start, out Vector2 end, out Vector2 dir)
     {
+        FillGeneratedWhipControlPoints(_whipControlPoints);
         Player owner = Main.player[Projectile.owner];
-        dir = Projectile.velocity.SafeNormalize(new Vector2(owner.direction == 0 ? 1 : owner.direction, 0f));
-        float animMax = Math.Max(1f, owner.itemAnimationMax > 0 ? owner.itemAnimationMax : Math.Max(1, _spec.Lifetime));
-        float progress = 1f - Math.Clamp(owner.itemAnimation, 0f, animMax) / animMax;
-        float sweep = MathHelper.Lerp(-0.62f, 0.62f, MathHelper.Clamp(progress, 0f, 1f));
-        if (owner.direction < 0) sweep = -sweep;
-        dir = dir.RotatedBy(sweep);
-        float reach = Math.Clamp(Math.Max(6f, _spec.Speed * Math.Max(8f, _spec.Lifetime) * 0.18f), 58f, 260f);
-        start = owner.MountedCenter + dir * 12f;
-        end = owner.MountedCenter + dir * reach;
+        start = _whipControlPoints.Count > 0 ? _whipControlPoints[0] : owner.MountedCenter;
+        end = _whipControlPoints.Count > 1 ? _whipControlPoints[^1] : start;
+        dir = (end - start).SafeNormalize(_whipBaseDirection.SafeNormalize(Vector2.UnitX * owner.direction));
     }
 
     private bool ApplyWhipLashAI()
@@ -390,8 +470,9 @@ public sealed partial class GeneratedProjectile
         ApplyOwnerArmPose(owner, dir, twoHanded: false);
         owner.ChangeDir(dir.X >= 0f ? 1 : -1);
         owner.heldProj = Projectile.whoAmI;
+        owner.MatchItemTimeToItemAnimation();
         Projectile.velocity = dir;
-        Projectile.Center = (start + end) * 0.5f;
+        Projectile.Center = end;
         Projectile.rotation = SideOnGeneratedSpriteRotation(dir);
         Projectile.timeLeft = 2;
         Projectile.tileCollide = false;
@@ -496,7 +577,13 @@ public sealed partial class GeneratedProjectile
         return true;
     }
 
-    public override bool ShouldUpdatePosition() => !IsBeamDelivery() && !IsOverheadBarrageDelivery();
+    public override bool ShouldUpdatePosition()
+        => !IsBeamDelivery()
+            && !IsOverheadBarrageDelivery()
+            && !IsThrustDelivery()
+            && !IsYoyoDelivery()
+            && !IsWhipDelivery()
+            && !IsChargeReleaseDelivery();
 
     private static void SanitizeRuntimeSize(AttackSpec spec)
     {
@@ -558,14 +645,19 @@ public sealed partial class GeneratedProjectile
         // Pierce semantics are total hit budget for generated runtime projectiles:
         // -1 = explicit infinite/persistent, 0/1 = one hit. Older builds treated 0 as
         // infinite, which made many generated shots poke the same target 2-3 times.
-        Projectile.penetrate = (heldLike || overheadBarrage || sentryLike) ? -1 : (_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce));
+        bool returningMovement = movement is 5 or 14;
+        Projectile.penetrate = (heldLike || overheadBarrage || sentryLike || returningMovement)
+            ? -1
+            : (_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce));
         Projectile.timeLeft = heldLike ? 2 : sentryLike ? _spec.SentryLifetimeTicks : overheadBarrage ? Math.Max(20, _spec.DelayTicks + 30) : Math.Max(20, _spec.Lifetime);
         Projectile.extraUpdates = (heldLike || overheadBarrage || sentryLike) ? 0 : Math.Clamp(_spec.ExtraUpdates, 0, 3);
         Projectile.ownerHitCheck = _spec.OwnerHitCheck;
         if (!_stuckToTile)
-            Projectile.tileCollide = !heldLike && !overheadBarrage && !sentryLike && !flailLike && _spec.TileCollide && movement != 8 && movement != 12 && movement != 16 && movement != 17 && movement != 18;
+            Projectile.tileCollide = !heldLike && !overheadBarrage && !sentryLike && _spec.TileCollide && movement != 8 && movement != 12 && movement != 17 && movement != 18;
         Projectile.usesLocalNPCImmunity = true;
-        Projectile.localNPCHitCooldown = _spec.ImmunityCooldown <= 0 ? 12 : Math.Clamp(_spec.ImmunityCooldown, 4, 60);
+        Projectile.localNPCHitCooldown = whipLike
+            ? -1 // one hit per NPC for this lash, matching Terraria whip lifetime semantics
+            : (_spec.ImmunityCooldown <= 0 ? 12 : Math.Clamp(_spec.ImmunityCooldown, 4, 60));
         _spec.MaxChildProjectiles = Math.Clamp(_spec.MaxChildProjectiles <= 0 ? 0 : _spec.MaxChildProjectiles, 0, 48);
         _spec.MaxChildDepth = Math.Clamp(_spec.MaxChildDepth, 0, 3);
         _spec.SecondaryTrigger = GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily(_spec.SecondaryTrigger, _spec.RuntimeFamily);
@@ -655,7 +747,6 @@ public sealed partial class GeneratedProjectile
         return movement switch
         {
             6 => 3,  // bounce
-            14 => 1, // returning_glaive/chakram-style glance
             _ => 0,
         };
     }
@@ -667,8 +758,23 @@ public sealed partial class GeneratedProjectile
         return authored > 0 ? authored : DefaultBounceBudgetForMovement(spec.MovementCode);
     }
 
+    private void BeginReturningPhase(Vector2? reboundVelocity = null)
+    {
+        if (_returningPhase) return;
+        _returningPhase = true;
+        Projectile.tileCollide = false;
+        if (reboundVelocity is Vector2 rebound)
+            Projectile.velocity = rebound;
+        Projectile.netUpdate = true;
+    }
+
     public override bool OnTileCollide(Vector2 oldVelocity)
     {
+        if (_spec.MovementCode is 5 or 14 || IsFlailDelivery())
+        {
+            BeginReturningPhase(-oldVelocity * 0.25f);
+            return false;
+        }
         if (_remainingBounces <= 0)
             return true;
 
@@ -720,12 +826,33 @@ public sealed partial class GeneratedProjectile
         Projectile.velocity = Projectile.velocity.RotatedBy((float)Math.Sin(Projectile.localAI[0] * 0.18f) * 0.045f);
     }
 
+    private float ReturningOutboundTicks()
+    {
+        float speed = Math.Max(3f, Math.Max(_spec.Speed, Projectile.velocity.Length()));
+        return Math.Clamp(ConfiguredRangePixels(384f) / speed, 12f, 90f);
+    }
+
     private void BoomerangReturn()
     {
+        if (Projectile.owner < 0 || Projectile.owner >= Main.maxPlayers)
+        {
+            Projectile.Kill();
+            return;
+        }
         Player owner = Main.player[Projectile.owner];
-        if (Projectile.localAI[0] < 24f) return;
-        Vector2 desired = Projectile.DirectionTo(owner.Center) * Math.Max(8f, Projectile.velocity.Length());
-        Projectile.velocity = Vector2.Lerp(Projectile.velocity, desired, 0.08f);
+        if (!owner.active || owner.dead)
+        {
+            Projectile.Kill();
+            return;
+        }
+        float returnStart = _spec.MovementCode == 14 ? ReturningOutboundTicks() : 24f;
+        if (!_returningPhase && Projectile.localAI[0] >= returnStart)
+            BeginReturningPhase();
+        if (!_returningPhase) return;
+        Projectile.tileCollide = false;
+        float returnSpeed = Math.Max(10f, Math.Max(_spec.Speed * 1.15f, Projectile.velocity.Length()));
+        Vector2 desired = Projectile.DirectionTo(owner.Center) * returnSpeed;
+        Projectile.velocity = Vector2.Lerp(Projectile.velocity, desired, 0.18f);
         if (Projectile.Distance(owner.Center) < 32f) Projectile.Kill();
     }
 
@@ -748,8 +875,35 @@ public sealed partial class GeneratedProjectile
 
     private void Orbitish()
     {
-        Projectile.velocity = Projectile.velocity.RotatedBy(0.045f);
-        Projectile.velocity *= 0.995f;
+        if (Projectile.owner < 0 || Projectile.owner >= Main.maxPlayers)
+        {
+            Projectile.Kill();
+            return;
+        }
+        Player owner = Main.player[Projectile.owner];
+        if (!owner.active || owner.dead)
+        {
+            Projectile.Kill();
+            return;
+        }
+        Vector2 fromOwner = Projectile.Center - owner.MountedCenter;
+        if (!_orbitInitialized)
+        {
+            Vector2 seed = fromOwner.LengthSquared() > 4f
+                ? fromOwner
+                : Projectile.velocity.SafeNormalize(Vector2.UnitX * owner.direction) * 24f;
+            _orbitStartAngle = seed.ToRotation();
+            _orbitStartRadius = Math.Clamp(seed.Length(), 18f, 72f);
+            _orbitInitialized = true;
+        }
+        float desiredRadius = Math.Clamp(_spec.RangeTiles * 16f, 48f, 288f);
+        float expand = MathHelper.Clamp(Projectile.localAI[0] / 30f, 0f, 1f);
+        float radius = MathHelper.Lerp(_orbitStartRadius, desiredRadius, expand);
+        float direction = Projectile.identity % 2 == 0 ? 1f : -1f;
+        float angle = _orbitStartAngle + Projectile.localAI[0] * 0.045f * direction;
+        Vector2 target = owner.MountedCenter + angle.ToRotationVector2() * radius;
+        Projectile.velocity = target - Projectile.Center;
+        Projectile.tileCollide = false;
     }
 
     private void SpiralOut()
@@ -769,16 +923,22 @@ public sealed partial class GeneratedProjectile
     {
         Projectile.tileCollide = false;
         Projectile.velocity *= 0.992f;
-        float range = 260f + _spec.PowerBudget * 70f;
+        float strength = Math.Clamp(_spec.PullStrength, 0f, 1f);
+        if (strength <= 0f || _spec.PullMode != "target_to_projectile" || !InfiniRuntimeAuthority.ShouldRunNpcGameplay()) return;
+        float range = ConfiguredRangePixels(260f);
+        float acceleration = MathHelper.Lerp(0.04f, 0.22f, strength);
         for (int i = 0; i < Main.maxNPCs; i++)
         {
             NPC npc = Main.npc[i];
-            if (!npc.CanBeChasedBy(Projectile)) continue;
+            if (!npc.CanBeChasedBy(Projectile) || npc.knockBackResist <= 0f) continue;
             float dist = Vector2.Distance(npc.Center, Projectile.Center);
             if (dist < range)
             {
-                Vector2 pull = npc.DirectionTo(Projectile.Center) * (0.05f + _spec.PowerBudget * 0.018f) * (1f - dist / range);
+                float resistance = Math.Clamp(npc.knockBackResist, 0.1f, 1f);
+                Vector2 pull = npc.DirectionTo(Projectile.Center) * acceleration * resistance * (1f - dist / range);
                 npc.velocity += pull;
+                if ((int)Projectile.localAI[0] % 6 == 0)
+                    npc.netUpdate = true;
             }
         }
     }
@@ -799,7 +959,7 @@ public sealed partial class GeneratedProjectile
     private void ReturningGlaive()
     {
         Projectile.rotation += 0.18f * Projectile.direction;
-        if (Projectile.localAI[0] > 42f) BoomerangReturn();
+        BoomerangReturn();
     }
 
     private void ExpandingWave()
