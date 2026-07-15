@@ -183,7 +183,7 @@ public sealed partial class GeneratedProjectile
             MaxChildProjectiles = Math.Max(4, _spec.MaxChildProjectiles / 2),
             MaxChildDepth = Math.Max(0, _spec.MaxChildDepth - 1),
             DustSpawnDenom = Math.Max(3, _spec.DustSpawnDenom + 1),
-            BurstDustCap = Math.Max(6, _spec.BurstDustCap / 2),
+            BurstDustCap = _spec.BurstDustCap <= 0 ? 0 : Math.Max(1, _spec.BurstDustCap / 2),
             VisualMode = _spec.VisualMode,
             TrailStyle = _spec.TrailStyle,
             ImpactStyle = _spec.ImpactStyle,
@@ -593,7 +593,7 @@ public sealed partial class GeneratedProjectile
         spec.ProjectileScale = Math.Clamp(spec.ProjectileScale <= 0f ? 1f : spec.ProjectileScale, 0.35f, 2.25f);
         spec.HitboxScale = Math.Clamp(spec.HitboxScale <= 0f ? 1f : spec.HitboxScale, 0.5f, 2.5f);
         spec.ExplosionRadius = Math.Clamp(spec.ExplosionRadius, 0, 128);
-        spec.ImpactVfxRadiusPx = Math.Clamp(spec.ImpactVfxRadiusPx <= 0 ? spec.ExplosionRadius : spec.ImpactVfxRadiusPx, 0, 192);
+        spec.ImpactVfxRadiusPx = Math.Clamp(spec.ImpactVfxRadiusPx, 0, 192);
         spec.AoeDamageRadiusPx = Math.Clamp(spec.AoeDamageRadiusPx, 0, 160);
         spec.ContactForgivenessPx = Math.Clamp(spec.ContactForgivenessPx, 0, 32);
         spec.RuntimeLightStrength = Math.Clamp(spec.RuntimeLightStrength, 0f, 2f);

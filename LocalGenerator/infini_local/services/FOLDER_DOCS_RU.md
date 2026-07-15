@@ -2,7 +2,8 @@
 
 Service helpers for endpoints/assets/visual/runtime integration.
 
-- `combine_endpoint.py` wraps `/combine` request/response behavior.
+- `combine_endpoint.py` wraps `/combine` request/response behavior and rejects non-object/non-finite delivery payloads before HTTP serialization.
+- `sdcpp_service.py` owns lazy, thread-safe optional backend process startup and cleanup registration.
 - `asset_sync_service.py` selects safe final asset filenames and `/get_asset` query behavior.
 - `visual_asset_pipeline.py`, `sdcpp_service.py`, `sdcpp_backend.py` visual/backend services.
 - `runtime_dump_service.py`, `network_info_service.py` diagnostics/support.

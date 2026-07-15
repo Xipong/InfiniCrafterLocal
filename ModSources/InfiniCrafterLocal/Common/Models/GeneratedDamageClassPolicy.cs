@@ -24,7 +24,7 @@ public static class GeneratedDamageClassPolicy
             "magic" => DamageClass.Magic,
             "summon" => DamageClass.Summon,
             "summon_melee_speed" => DamageClass.SummonMeleeSpeed,
-            "throwing" or "rogue" => ResolveModded(value) ?? DamageClass.Ranged,
+            "throwing" or "rogue" => ResolveModded(value) ?? DamageClass.Generic,
             "generic" or "" => DamageClass.Generic,
             _ => ResolveModded(value) ?? DamageClass.Generic,
         };

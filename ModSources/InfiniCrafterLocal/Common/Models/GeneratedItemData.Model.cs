@@ -437,19 +437,10 @@ public sealed class GameplaySpec
     public int HoldoutOffsetX { get; set; } = 0;
     public int HoldoutOffsetY { get; set; } = 0;
 
-    // Authored affordance/future-feel fields from runtimePlan.use_affordance.
-    // Current C# gameplay only executes the concrete fields above (scale/offset/reuse/turn/channel).
-    // These fields are preserved for debug/future draw polish and must not change
-    // damage, resultKind, delivery, or runtimeFamily by themselves.
-    public string UseFantasy { get; set; } = "";
+    // Authored use/draw affordance fields with concrete runtime consumers.
     public string HeldVisibility { get; set; } = "";
     public string ReleaseTiming { get; set; } = "";
     public string HandPose { get; set; } = "";
-    public string SpawnStyle { get; set; } = "";
-    public string RotationMode { get; set; } = "";
-    public string TrailMode { get; set; } = "";
-    public string ProjectileSizePolicy { get; set; } = "";
-    public bool DrawDuringUse { get; set; } = false;
     public int InitialOffsetPx { get; set; } = 0;
 
     public int HealLife { get; set; } = 0;

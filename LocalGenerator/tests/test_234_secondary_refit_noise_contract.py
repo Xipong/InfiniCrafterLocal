@@ -174,36 +174,20 @@ def _zero_cap_genome(on_hit: str, on_hit_code: int) -> dict:
     }
 
 
-def _contract_check_burst_onhit_zero_cap_gets_minimum_visual_feedback() -> None:
-    from infini_local.core.runtime_effect_policy import onhit_uses_burst_dust_feedback
-
-    assert onhit_uses_burst_dust_feedback("burst", 1)
-    assert onhit_uses_burst_dust_feedback("aura_pulse", 10)
-    assert onhit_uses_burst_dust_feedback("lifesteal", 17)
-    assert not onhit_uses_burst_dust_feedback("burn", 4)
-
-    for on_hit, code in [("burst", 1), ("aura_pulse", 10), ("lifesteal", 17)]:
+def _contract_check_burst_onhit_zero_cap_stays_zero() -> None:
+    for on_hit, code in [("burst", 1), ("aura_pulse", 10), ("lifesteal", 17), ("burn", 4)]:
         sanitized = sanitize_genome_engine(_zero_cap_genome(on_hit, code), {"powerBudget": 1.0})
-        assert sanitized["burstDustCap"] >= 4
-        assert "burst_onhit_requires_nonzero_burstDustCap" in sanitized.get("engineSanityRepairs", [])
-
-    burn = sanitize_genome_engine(_zero_cap_genome("burn", 4), {"powerBudget": 1.0})
-    assert burn["burstDustCap"] == 0
-    assert "burst_onhit_requires_nonzero_burstDustCap" not in burn.get("engineSanityRepairs", [])
+        assert sanitized["burstDustCap"] == 0
+        assert "burst_onhit_requires_nonzero_burstDustCap" not in sanitized.get("engineSanityRepairs", [])
 
 
-def _contract_check_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers() -> None:
+def _contract_check_burst_visual_feedback_has_no_hidden_policy_owner() -> None:
     root = Path(__file__).resolve().parents[1]
     engine_metrics = (root / "infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
-    assert "onhit_uses_burst_dust_feedback(onhit_key, onhit_code)" in engine_metrics
-    for rel in ["infini_local/web/server.py", "infini_local/pipelines/engine_pressure_metrics.py"]:
-        text = (root / rel).read_text(encoding="utf-8")
-        assert 'onhit_key in {"burst", "aura_pulse"}' not in text
-        assert "onhit_code in {1, 10}" not in text
-
-    csharp = (Path(__file__).resolve().parents[2] / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.Visuals.cs").read_text(encoding="utf-8")
-    assert "private static bool OnHitUsesBurstDustFallback(int onHitCode)" in csharp
-    assert "OnHitUsesBurstDustFallback(_spec.OnHitCode)" in csharp
+    assert "onhit_uses_burst_dust_feedback" not in engine_metrics
+    csharp = (Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Visuals.cs").read_text(encoding="utf-8")
+    assert "OnHitUsesBurstDustFallback" not in csharp
+    assert "count = Math.Clamp(count, 0, authoredCap)" in csharp
 
 
 # One collected item per contract module; individual checks keep source order and tracebacks.
@@ -221,7 +205,7 @@ def test_234_secondary_refit_noise_contract_module_contract(request):
             '_contract_check_refit_helper_can_salvage_too_small_item_sprite',
             '_contract_check_item_sprite_generation_runs_refit_before_accepting_too_small_sprite',
             '_contract_check_single_variant_sprite_score_is_not_hardcoded_half',
-            '_contract_check_burst_onhit_zero_cap_gets_minimum_visual_feedback',
-            '_contract_check_burst_onhit_policy_is_not_scattered_as_ad_hoc_magic_numbers',
+            '_contract_check_burst_onhit_zero_cap_stays_zero',
+            '_contract_check_burst_visual_feedback_has_no_hidden_policy_owner',
         ),
     )

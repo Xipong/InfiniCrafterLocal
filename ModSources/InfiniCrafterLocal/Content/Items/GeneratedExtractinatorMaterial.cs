@@ -22,7 +22,7 @@ namespace InfiniCrafterLocal.Content.Items;
 /// </summary>
 public sealed class GeneratedExtractinatorMaterial : ModItem
 {
-    private const int NetPayloadVersion = 1;
+    private const int NetPayloadVersion = 2;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
@@ -138,8 +138,8 @@ public sealed class GeneratedExtractinatorMaterial : ModItem
     public override void NetSend(BinaryWriter writer)
     {
         writer.Write(NetPayloadVersion);
-        try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()); }
-        catch { writer.Write(GeneratedItemData.Placeholder().ToNetworkJson()); }
+        try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
+        catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
     }
 
     public override void NetReceive(BinaryReader reader)
@@ -149,9 +149,17 @@ public sealed class GeneratedExtractinatorMaterial : ModItem
             int version = reader.ReadInt32();
             if (version != NetPayloadVersion)
                 throw new InvalidDataException($"Unsupported GeneratedExtractinatorMaterial net payload version {version}");
-            SetData(GeneratedItemData.FromJson(reader.ReadString()) ?? GeneratedItemData.Placeholder(), ensureAssets: true, registerLocal: true);
+            var reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
+            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+            GeneratedItemData resolved = reference;
+            if (!string.IsNullOrWhiteSpace(reference.Id)
+                && registry is not null
+                && registry.TryGet(reference.Id, out var canonical)
+                && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+                resolved = canonical;
+            SetData(resolved, ensureAssets: false, registerLocal: false);
         }
-        catch { try { SetData(GeneratedItemData.Placeholder(), ensureAssets: true, registerLocal: true); } catch { } }
+        catch { try { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false); } catch { } }
     }
 
     public override bool CanStack(Item source)

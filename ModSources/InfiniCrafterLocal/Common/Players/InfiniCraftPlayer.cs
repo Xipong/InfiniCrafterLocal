@@ -66,6 +66,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _registrySyncRetryTicks;
     private int _registrySyncRetryStep;
     private int _generatedBuffTicks;
+    private readonly List<ActiveGeneratedUtilityBuff> _activeGeneratedUtilityBuffs = new();
     private float _generatedMiningSpeedMultiplier = 1f;
     private float _generatedLightStrength;
     private string _generatedLightColorName = "";
@@ -75,6 +76,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _generatedManaRegen;
     private int _generatedLifeRegen;
     private int _generatedMobilityCooldownTicks;
+    private float _generatedAmmoSaveChance;
     private string _lastGeneratedMobilityFailureMessage = "";
     private int _heldItemPresentationSyncTick;
     private string _heldItemPresentationSyncKey = "";
@@ -99,6 +101,29 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public int GeneratedMobilityCooldownTicks => Math.Max(0, _generatedMobilityCooldownTicks);
     public int GeneratedMobilityCooldownSeconds => Math.Max(0, (int)Math.Ceiling(GeneratedMobilityCooldownTicks / 60f));
     public string LastGeneratedMobilityFailureMessage => string.IsNullOrWhiteSpace(_lastGeneratedMobilityFailureMessage) ? "Generated mobility failed" : _lastGeneratedMobilityFailureMessage;
+
+    public override void ResetEffects()
+    {
+        // Equipment hooks run again every tick. Keep the generated chance exact
+        // and rebuild it from the currently equipped authored items instead of
+        // converting it to one of Terraria's coarse 20%/25% flags.
+        _generatedAmmoSaveChance = 0f;
+    }
+
+    public void AddGeneratedAmmoSaveChance(float chance)
+    {
+        chance = Math.Clamp(chance, 0f, 0.9999f);
+        if (chance <= 0f)
+            return;
+        _generatedAmmoSaveChance = 1f - ((1f - _generatedAmmoSaveChance) * (1f - chance));
+    }
+
+    public override bool CanConsumeAmmo(Item weapon, Item ammo)
+    {
+        if (_generatedAmmoSaveChance <= 0f)
+            return true;
+        return Main.rand.NextFloat() >= _generatedAmmoSaveChance;
+    }
 
 
     public string CraftLabel => string.IsNullOrWhiteSpace(_label) ? "InfiniCraft" : _label;

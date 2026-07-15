@@ -22,6 +22,7 @@ class SdcppServerState:
     process: subprocess.Popen | None = None
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     cleanup_registered: bool = False
+    signal_handlers_registered: bool = False
     previous_signal_handlers: dict[int, Any] = field(default_factory=dict, repr=False)
     last_command: str = ""
     last_log_file: str = ""
@@ -115,37 +116,41 @@ def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason:
 
 
 def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupProcess) -> None:
-    if state.cleanup_registered:
-        return
-    state.cleanup_registered = True
-    atexit.register(lambda: cleanup_process("atexit"))
+    with state.lock:
+        if not state.cleanup_registered:
+            state.cleanup_registered = True
+            atexit.register(lambda: cleanup_process("atexit"))
 
-    # Python only permits signal registration on the main thread. Tests and embedded
-    # hosts may import the visual pipeline elsewhere; atexit remains enough there.
-    if threading.current_thread() is not threading.main_thread():
-        return
+        # Python only permits signal registration on the main thread. A worker
+        # may install atexit first; a later main-thread autostart must still get
+        # its signal handlers, hence the separate registration flag.
+        if state.signal_handlers_registered or threading.current_thread() is not threading.main_thread():
+            return
 
-    for sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)):
-        if sig is None:
-            continue
-        try:
-            previous = signal.getsignal(sig)
-            state.previous_signal_handlers[int(sig)] = previous
+        registered_any = False
+        for sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)):
+            if sig is None:
+                continue
+            try:
+                previous = signal.getsignal(sig)
+                state.previous_signal_handlers[int(sig)] = previous
 
-            def _handler(signum, frame, previous=previous):
-                cleanup_process(f"signal:{signum}")
-                if callable(previous):
-                    previous(signum, frame)
-                    return
-                if previous == signal.SIG_IGN:
-                    return
-                if signum == getattr(signal, "SIGINT", None):
-                    raise KeyboardInterrupt
-                raise SystemExit(128 + int(signum))
+                def _handler(signum, frame, previous=previous):
+                    cleanup_process(f"signal:{signum}")
+                    if callable(previous):
+                        previous(signum, frame)
+                        return
+                    if previous == signal.SIG_IGN:
+                        return
+                    if signum == getattr(signal, "SIGINT", None):
+                        raise KeyboardInterrupt
+                    raise SystemExit(128 + int(signum))
 
-            signal.signal(sig, _handler)
-        except (ValueError, OSError, RuntimeError):
-            pass
+                signal.signal(sig, _handler)
+                registered_any = True
+            except (ValueError, OSError, RuntimeError):
+                pass
+        state.signal_handlers_registered = registered_any
 
 
 def debug_snapshot(
@@ -240,6 +245,7 @@ def ensure_server(
             return True
         if not server_autostart:
             return False
+        install_cleanup_handlers(state, cleanup_process)
         # If old child died or became unhealthy, forget/cleanup it before restarting.
         if state.process is not None:
             try:
@@ -256,11 +262,12 @@ def ensure_server(
         log_path = Path(server_log_file) if server_log_file else (cache_dir / "sdcpp_server.log")
         state.last_log_file = str(log_path)
         log_event("info", "starting stable-diffusion.cpp persistent server", {"cmd": state.last_command, "shell": shell, "url": server_url, "showConsole": show_console, "logFile": state.last_log_file})
+        log_handle = None
+        spawned_process: subprocess.Popen | None = None
         try:
             creationflags = 0
             stdout_target = None
             stderr_target = None
-            log_handle = None
             if os.name == "nt" and show_console:
                 # Let sd-server own a visible console. This prevents stdout PIPE deadlocks and gives the user live logs.
                 creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
@@ -276,7 +283,7 @@ def ensure_server(
             start_new_session = os.name != "nt"
             if os.name == "nt" and not show_console:
                 creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-            state.process = subprocess.Popen(
+            spawned_process = subprocess.Popen(
                 cmd,
                 shell=shell,
                 cwd=str(root),
@@ -287,12 +294,27 @@ def ensure_server(
                 creationflags=creationflags,
                 start_new_session=start_new_session,
             )
-            setattr(state.process, "_infini_process_group", bool(start_new_session or creationflags & getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)))
+            state.process = spawned_process
+            setattr(spawned_process, "_infini_process_group", bool(start_new_session or creationflags & getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)))
             # The Popen object does not keep this handle alive reliably across implementations if it is GC'd.
             # Store it as a private attribute so logs keep flowing while the process lives.
             if log_handle is not None:
-                setattr(state.process, "_infini_log_handle", log_handle)
+                setattr(spawned_process, "_infini_log_handle", log_handle)
         except Exception as e:
+            state.process = None
+            if spawned_process is not None:
+                try:
+                    _terminate_process_tree(spawned_process, hard=True)
+                    spawned_process.wait(timeout=3)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                finally:
+                    _close_process_log_handle(spawned_process)
+            if log_handle is not None and not log_handle.closed:
+                try:
+                    log_handle.close()
+                except (OSError, ValueError):
+                    pass
             state.last_start_error = repr(e)
             log_event("warn", "failed to start stable-diffusion.cpp server", {"error": state.last_start_error, "cmd": state.last_command, "logFile": state.last_log_file})
             return False

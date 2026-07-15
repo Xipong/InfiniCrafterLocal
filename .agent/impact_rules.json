@@ -7,12 +7,23 @@
         "LocalGenerator/infini_local/core/runtime_authoring/**",
         "LocalGenerator/infini_local/core/boundary_models.py",
         "LocalGenerator/infini_local/pipelines/combine_gameplay.py",
-        "LocalGenerator/infini_local/pipelines/llm_authoring_*.py"
+        "LocalGenerator/infini_local/pipelines/llm_authoring_*.py",
+        "LocalGenerator/infini_local/storage/world_storage.py",
+        "LocalGenerator/infini_local/core/strict_json.py",
+        "LocalGenerator/infini_local/core/json_debug.py",
+        "LocalGenerator/infini_local/core/runtime_promise_truth.py",
+        "LocalGenerator/infini_local/pipelines/generation_debug.py",
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/services/combine_endpoint.py",
+        "LocalGenerator/infini_local/services/sdcpp_service.py",
+        "LocalGenerator/infini_local/web/server_handler.py",
+        "LocalGenerator/infini_local/web/server_utility_routes.py"
       ],
       "checks": [
         "pytest",
         "schema_check",
         "contract_parity",
+        "delivery_contract",
         "mutation_gate",
         "semantic_runtime_diff",
         "planner_prompt",
@@ -23,7 +34,10 @@
         "docs/CONTRACT_SAFETY_STACK_RU.md",
         "LocalGenerator/infini_local/core/runtime_authoring/schema.py",
         "LocalGenerator/infini_local/core/boundary_models.py",
-        "contracts/field_lifecycle.json"
+        "contracts/field_lifecycle.json",
+        "LocalGenerator/infini_local/qa/csharp_delivery_contract.py",
+        "LocalGenerator/infini_local/core/strict_json.py",
+        "LocalGenerator/infini_local/core/json_debug.py"
       ]
     },
     {
@@ -37,6 +51,7 @@
       "checks": [
         "pytest",
         "contract_parity",
+        "delivery_contract",
         "mutation_gate",
         "semantic_runtime_diff",
         "csharp_contracts"
@@ -47,7 +62,8 @@
         "docs/CONTRACT_SAFETY_STACK_RU.md",
         "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs",
         "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs",
-        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs"
+        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
+        "LocalGenerator/infini_local/qa/csharp_delivery_contract.py"
       ]
     },
     {
@@ -97,6 +113,7 @@
       "checks": [
         "pytest",
         "compileall",
+        "delivery_contract",
         "project_hygiene",
         "ruff",
         "pyright"
@@ -104,7 +121,8 @@
       "context": [
         "AGENTS.md",
         ".agent/manifest.json",
-        ".agent/impact_rules.json"
+        ".agent/impact_rules.json",
+        "LocalGenerator/infini_local/qa/csharp_delivery_contract.py"
       ]
     },
     {

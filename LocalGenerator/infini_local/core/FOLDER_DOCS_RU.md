@@ -14,6 +14,8 @@ Core contracts and policies.
 - `runtime_authoring/semantics.py` owns finite Terraria-family lowering, parent-backed onHit preservation, semantic tags/audio helpers.
 - `runtime_authoring/compiler.py` owns explicit runtimePlan → game-facing field compilation.
 - `runtime_authoring/reports.py` owns validation, provenance, compiled contract and result wrapper.
+- `strict_json.py` owns finite, duplicate-free machine JSON parsing/serialization for HTTP, durable caches, and gates.
+- `json_debug.py` owns bounded, always-parseable diagnostic JSON and circular/non-finite value sanitization.
 - `result_models.py` typed helper results: `RuntimeCompileResult`, `ClampRecord`, `RepairResult`, `BalanceReportModel`.
 - `contract_versions.py` provenance/version stamps, not automatic feature implementation.
 - `balance_mode.py` owns exact `report/safety/normalize` policy; `balance_policy.py` owns reference/envelope numbers; `balance_report.py` only reports authored/final/advice/clamps.
@@ -29,7 +31,7 @@ Core contracts and policies.
 - `vfx_composition_parent.py` parent VFX inheritance and generated-parent effect profiling.
 - `vfx_runtime_slots.py` slot compilation, baked command tapes, procedural support layers, runtimePlan direct manifest and authored-cue conversion.
 - `vfx_lint_timeline.py` debug-only VFX effect-stack summaries, linter helpers and timeline previews.
-- `effect_catalog.py`, `runtime_effect_policy.py` VFX/effect/audio contracts.
+- `effect_catalog.py` owns the finite VFX/effect/audio vocabulary; executable gameplay remains in runtime authoring contracts.
 - `env_utils.py`, `config_bootstrap.py`, `paths.py` env/config/path support.
 
 Risk: many callers still use dictionaries; verify field names and provenance before changing contracts.

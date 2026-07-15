@@ -59,6 +59,7 @@ run_step compileall python -m compileall -q LocalGenerator/infini_local tools
 run_step schema_check python tools/export_contract_schemas.py --check
 run_step config_registry python tools/config_registry.py --check
 run_step contract_parity python tools/contract_parity.py --quiet --out artifacts/validation/contract_parity_report.json
+run_step delivery_contract python tools/check_delivery_contract.py --quiet --out artifacts/validation/delivery_contract_report.json
 run_step mutation_gate python tools/mutation_contract_gate.py
 run_step semantic_runtime_diff python tools/semantic_runtime_diff.py
 run_step runtime_impact python tools/runtime_impact_report.py --out artifacts/validation/runtime_impact_report.json

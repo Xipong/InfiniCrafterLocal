@@ -164,6 +164,9 @@ def test_charge_compiler_owned_fields_survive_final_projection(charge_ticks: int
                 {"fn": "fire_ranged_weapon", "params": {
                     "family": "charge_release", "chargeTicks": charge_ticks,
                     "chargePowerMultiplier": multiplier,
+                    "movement": "straight", "speed": 10.0, "rangeTiles": 55.0,
+                    "lifetimeTicks": 120, "shotCount": 1,
+                    "spreadRadians": 0.0, "pierce": 1,
                 }},
             ]},
         },
@@ -177,6 +180,9 @@ def test_charge_compiler_owned_fields_survive_final_projection(charge_ticks: int
         "fn": "fire_ranged_weapon", "params": {
             "family": "charge_release", "chargeTicks": charge_ticks,
             "chargePowerMultiplier": multiplier,
+            "movement": "straight", "speed": 10.0, "rangeTiles": 55.0,
+            "lifetimeTicks": 120, "shotCount": 1,
+            "spreadRadians": 0.0, "pierce": 1,
         },
     }]}})
     assert attack["chargePowerMultiplier"] == expected["chargePowerMultiplier"]
@@ -207,7 +213,8 @@ def test_sentry_compiler_owned_fields_survive_final_projection(
                 {"fn": "deploy_sentry", "params": {
                     "placement": "grounded", "attackIntervalTicks": interval,
                     "targetRangeTiles": target_range, "helperLifetimeTicks": lifetime,
-                    "shotCount": volley,
+                    "movement": "straight", "speed": 9.0,
+                    "shotCount": volley, "spreadRadians": 0.0, "pierce": 1,
                 }},
             ]},
         },
@@ -221,7 +228,8 @@ def test_sentry_compiler_owned_fields_survive_final_projection(
         "fn": "deploy_sentry", "params": {
             "placement": "grounded", "attackIntervalTicks": interval,
             "targetRangeTiles": target_range, "helperLifetimeTicks": lifetime,
-            "shotCount": volley,
+            "movement": "straight", "speed": 9.0,
+            "shotCount": volley, "spreadRadians": 0.0, "pierce": 1,
         },
     }]}})
     assert attack["sentryTargetRangeTiles"] == round(float(expected["sentryTargetRangeTiles"]), 2)

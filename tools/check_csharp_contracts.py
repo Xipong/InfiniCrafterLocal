@@ -329,7 +329,7 @@ def check_model_property_references() -> None:
             err(f"GeneratedItem.cs: UpdateArmorSet uses missing ArmorSpec.{prop}")
 
     # Explicit runtime fields that must exist after recent patches.
-    for required_prop in ["GeneratedBuff", "AltGeneratedBuff", "HoldGeneratedBuff", "MobilityMode", "AltMobilityMode", "ExtractinatorOutputItemType", "HoldLightStrength", "RuntimeState", "RejectedEngineCalls", "ConsumeChancePercent", "ChannelUse", "UseFantasy", "HeldVisibility", "ReleaseTiming", "HandPose", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy", "DrawDuringUse", "InitialOffsetPx"]:
+    for required_prop in ["GeneratedBuff", "AltGeneratedBuff", "HoldGeneratedBuff", "MobilityMode", "AltMobilityMode", "ExtractinatorOutputItemType", "HoldLightStrength", "RuntimeState", "RejectedEngineCalls", "ConsumeChancePercent", "ChannelUse", "HeldVisibility", "ReleaseTiming", "HandPose", "InitialOffsetPx"]:
         if required_prop not in gameplay:
             err(f"GameplaySpec missing `{required_prop}`")
     for required_prop in ["DamageClass", "RuntimeLightStrength", "MobilityMode", "AoeDamageRadiusPx", "ImpactVfxRadiusPx", "ContactForgivenessPx", "SoundUseCatalogId", "SoundImpactCatalogId", "SoundPitchVariance", "ChargeTicks", "ChargePowerMultiplier", "SentryPlacement", "SentryAttackIntervalTicks", "SentryTargetRangeTiles", "SentryLifetimeTicks", "SecondaryLifetimeTicks"]:
@@ -364,9 +364,9 @@ def check_generated_item_data_authoring_preservation_contract() -> None:
         err("GeneratedItemData.cs: StripBulkForTransport must clear ExtensionData before network/player-save payloads")
     if "public string ToLocalCacheJson()" not in model or "return ToJson();" not in model:
         err("GeneratedItemData.cs: missing explicit full local cache JSON contract")
-    for future_prop in ["UseFantasy", "HeldVisibility", "ReleaseTiming", "HandPose", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy", "DrawDuringUse", "InitialOffsetPx"]:
+    for future_prop in ["HeldVisibility", "ReleaseTiming", "HandPose", "InitialOffsetPx"]:
         if future_prop not in model:
-            err(f"GeneratedItemData.cs: missing preserved runtime-affordance future field GameplaySpec.{future_prop}")
+            err(f"GeneratedItemData.cs: missing executable runtime-affordance field GameplaySpec.{future_prop}")
 
 
 
@@ -599,7 +599,8 @@ def check_generated_armor_contract() -> None:
         "player.maxMinions += a.MinionSlots",
         "player.maxTurrets += a.SentrySlots",
         "player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction)",
-        "player.ammoCost75 = true",
+        "AddGeneratedAmmoSaveChance(a.AmmoSaveChance)",
+        "AddGeneratedAmmoSaveChance(a.SetBonusAmmoSaveChance)",
         "player.aggro += a.Aggro",
         "player.endurance += a.Endurance",
         "player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration",

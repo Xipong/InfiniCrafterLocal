@@ -310,25 +310,17 @@ def _check_local_cache_preserves_python_authoring_extensions_but_network_strips_
     assert "network/player-save payloads still strip this extension bag" in model
 
 
-def _check_runtime_affordance_future_fields_are_preserved_not_executed() -> None:
+def _check_runtime_affordance_exposes_only_fields_with_runtime_consumers() -> None:
     model = _read(MODEL_PATH)
-    for field in [
-        "UseFantasy",
-        "HeldVisibility",
-        "ReleaseTiming",
-        "HandPose",
-        "SpawnStyle",
-        "RotationMode",
-        "TrailMode",
-        "ProjectileSizePolicy",
-        "DrawDuringUse",
-        "InitialOffsetPx",
-    ]:
-        assert f"public {'bool' if field == 'DrawDuringUse' else 'int' if field == 'InitialOffsetPx' else 'string'} {field}" in model
-    assert "Current C# gameplay only executes the concrete fields above" in model
-    assert "must not change" in model
+    for field in ["HeldVisibility", "ReleaseTiming", "HandPose", "InitialOffsetPx"]:
+        expected_type = "int" if field == "InitialOffsetPx" else "string"
+        assert f"public {expected_type} {field}" in model
+    for dead in ["UseFantasy", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy", "DrawDuringUse"]:
+        assert f"public string {dead}" not in model
+        assert f"public bool {dead}" not in model
+    assert "Authored use/draw affordance fields with concrete runtime consumers." in model
     assert "Gameplay.InitialOffsetPx = ClampInt(Gameplay.InitialOffsetPx, -64, 64);" in model
-    for field in ["UseFantasy", "HeldVisibility", "ReleaseTiming", "HandPose", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy"]:
+    for field in ["HeldVisibility", "ReleaseTiming", "HandPose"]:
         assert f"Gameplay.{field} = SafeText(Gameplay.{field}, 32);" in model
 
 def _check_local_registry_cache_is_full_not_network_payload() -> None:
@@ -369,7 +361,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_projectile_runtime_state_reset_is_single_helper_not_three_near_duplicate_blocks',
     '_check_csharp_client_does_not_cache_poll_after_structured_fatal_combine_failure',
     '_check_local_cache_preserves_python_authoring_extensions_but_network_strips_them',
-    '_check_runtime_affordance_future_fields_are_preserved_not_executed',
+    '_check_runtime_affordance_exposes_only_fields_with_runtime_consumers',
     '_check_local_registry_cache_is_full_not_network_payload'
     ]:
         _fn = globals()[_name]

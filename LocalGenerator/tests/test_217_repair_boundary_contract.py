@@ -56,6 +56,7 @@ def _contract_check_structural_runtime_shape_repair_is_code_only_for_exact_contr
                         "movement": "straight",
                         "speed": "12.5",
                         "shotCount": "3 shots",
+                        "spreadRadians": "0",
                         "pierce": "2",
                         "homingStrength": "0.35",
                         "rangeTiles": "66 tiles",
@@ -129,7 +130,7 @@ def _contract_check_runtime_repair_patch_preserves_identity_fields(monkeypatch):
         "runtimePlan": {
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 10, "shotCount": 1, "pierce": 0, "lifetimeTicks": 90}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 10, "rangeTiles": 45, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "lifetimeTicks": 90}},
             ]
         },
     }}

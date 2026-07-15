@@ -57,7 +57,7 @@ REPLAY_HARNESS_CONTRACT_VERSION = "generation_case_replay_audit_v0.4.226"
 ALT_FORK_CHERRYPICK_CONTRACT_VERSION = "best_of_alt_config_signals_trace_replay_v0.4.226"
 RUNTIME_ARCHETYPE_SCHEMA_VERSION = "infini.runtime-archetype.v1"
 RUNTIME_CONTRACT_SCHEMA_VERSION = "infini.runtime-contract.v2"
-RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION = "runtime_promise_truth_validator_v0.4.237"
+RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION = "runtime_promise_truth_validator_v0.4.240"
 RECIPE_HEALTH_SCHEMA_VERSION = "infini.recipe-health.v1"
 CONTRACT_STAMP_SCHEMA_VERSION = "infini.contract-stamp.v1"
 

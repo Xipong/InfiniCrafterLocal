@@ -48,8 +48,6 @@ def apply_family_locks_to_genome(g: dict[str, Any], a: dict[str, Any], b: dict[s
             "reason": "python_runtime_safety_corridor_disabled; C# hard clamps remain active",
         }
         return g
-    power = max(0.5, float(stage.get("powerBudget") or 1.0))
-
     def _num(key: str, default: float) -> float:
         try:
             v = float(g.get(key) if g.get(key) not in (None, "") else default)
@@ -57,37 +55,24 @@ def apply_family_locks_to_genome(g: dict[str, Any], a: dict[str, Any], b: dict[s
         except Exception:
             return default
 
-    # Universal power/performance corridor. No parent-name exceptions, no semantic rewrites.
-    g["shotCount"] = min(max(1, int(round(_num("shotCount", 1)))), 6)
+    # The runtime plan already passed the canonical field bounds. This layer only
+    # enforces the same absolute engine corridor; it must not rebalance authored values
+    # from parent power, progression stage, infinite-pierce combinations, or family names.
+    g["shotCount"] = min(max(1, int(round(_num("shotCount", 1)))), 8)
     raw_pierce = int(round(_num("pierce", 0)))
-    if raw_pierce == -1:
-        g["pierce"] = -1
-        g["shotCount"] = min(int(g.get("shotCount") or 1), 2)
-        g["lifetimeTicks"] = min(max(25, int(round(_num("lifetimeTicks", 90)))), 300)
-        g["extraUpdates"] = min(max(0, int(round(_num("extraUpdates", 0)))), 1)
-    else:
-        g["pierce"] = min(max(0, raw_pierce), 8)
-        g["lifetimeTicks"] = min(max(25, int(round(_num("lifetimeTicks", 90)))), 540)
-        g["extraUpdates"] = min(max(0, int(round(_num("extraUpdates", 0)))), 2)
-
-    # AoE is allowed when authored, including magical/aura-style effects. The cap is a
-    # broad technical/progression envelope, not a source-family permission check.
-    aoe_cap = 2.0 + min(3.25, power * 0.58)
-    g["aoeRadiusTiles"] = min(max(0.0, _num("aoeRadiusTiles", 0.0)), aoe_cap)
-    g["rangeTiles"] = min(max(4.0, _num("rangeTiles", 35.0)), 105.0)
-    g["homingStrength"] = min(max(0.0, _num("homingStrength", 0.0)), 0.68)
-    if str(g.get("runtimeFamily") or "").strip().lower() == "returning":
-        speed = min(max(3.0, _num("speed", 8.0)), 18.0)
-        outbound_ticks = int(math.ceil(float(g["rangeTiles"]) * 16.0 / speed))
-        round_trip_budget = min(540, max(45, outbound_ticks * 2 + 20))
-        g["lifetimeTicks"] = max(int(g["lifetimeTicks"]), round_trip_budget)
+    g["pierce"] = -1 if raw_pierce == -1 else min(max(0, raw_pierce), 10)
+    g["lifetimeTicks"] = min(max(25, int(round(_num("lifetimeTicks", 90)))), 900)
+    g["extraUpdates"] = min(max(0, int(round(_num("extraUpdates", 0)))), 3)
+    g["aoeRadiusTiles"] = min(max(0.0, _num("aoeRadiusTiles", 0.0)), 10.0)
+    g["rangeTiles"] = min(max(4.0, _num("rangeTiles", 35.0)), 120.0)
+    g["homingStrength"] = min(max(0.0, _num("homingStrength", 0.0)), 1.0)
 
     if before != g:
         try:
             data.setdefault("debug", {})["runtimeSafetyClamps"] = json.dumps({
                 "before": {k: before.get(k) for k in ["shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks", "rangeTiles", "extraUpdates", "homingStrength"]},
                 "after": {k: g.get(k) for k in ["shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks", "rangeTiles", "extraUpdates", "homingStrength"]},
-                "basis": "universal numeric safety corridor; no item-family semantic routing",
+                "basis": "absolute schema/runtime bounds only; authored values preserved",
                 "mode": balance_mode,
             }, ensure_ascii=False)
         except Exception:

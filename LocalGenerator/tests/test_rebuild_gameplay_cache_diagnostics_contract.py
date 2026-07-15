@@ -46,10 +46,11 @@ def _contract_check_generated_swing_onhit_executes_bounded_authored_codes():
     assert "small lifesteal" in item
 
     projectile = read(MOD / "Content" / "Projectiles" / "GeneratedProjectile.cs")
-    assert "private int DebuffDuration" in projectile
-    assert "Math.Clamp(authored, 30, 600)" in projectile
-    assert "target.AddBuff(BuffID.OnFire, DebuffDuration(240))" in projectile
-    assert "target.AddBuff(BuffID.Electrified, DebuffDuration(140))" in projectile
+    assert "private void ApplyValidatedDebuff" in projectile
+    assert "fallbackTicks" not in projectile
+    assert "Math.Clamp(duration, 30, 600)" in projectile
+    assert "ApplyValidatedDebuff(target, BuffID.OnFire)" in projectile
+    assert "ApplyValidatedDebuff(target, BuffID.Electrified)" in projectile
 
 
 def _contract_check_rebuild_qol_config_localization_and_contract_stamp():

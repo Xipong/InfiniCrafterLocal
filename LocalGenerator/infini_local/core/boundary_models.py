@@ -184,15 +184,9 @@ class GameplaySpecBoundary(StrictBoundaryModel):
     useTurn: bool = False
     holdoutOffsetX: int = 0
     holdoutOffsetY: int = 0
-    useFantasy: str = ''
     heldVisibility: str = ''
     releaseTiming: str = ''
     handPose: str = ''
-    spawnStyle: str = ''
-    rotationMode: str = ''
-    trailMode: str = ''
-    projectileSizePolicy: str = ''
-    drawDuringUse: bool = False
     initialOffsetPx: int = 0
     healLife: int = 0
     healMana: int = 0
@@ -458,6 +452,11 @@ ATTACK_DEBUG_ONLY_FIELDS = frozenset({
     "genome", "engineMetrics", "patternSource", "runtimeAuthoringProvenance",
     "primary", "primaryAction", "mechanicClaims", "runtimeContract", "runtimeArchetype",
 })
+# Historical cache/replay payloads can contain two redundant top-level AttackSpec
+# fields.  Damage is owned by GameplaySpec and generated-executor activation is
+# owned by AttackSpec.enabled; neither field exists on the strict C# DTO.
+ATTACK_LEGACY_NON_WIRE_FIELDS = frozenset({"damage", "useProjectile"})
+ATTACK_NON_WIRE_FIELDS = ATTACK_DEBUG_ONLY_FIELDS | ATTACK_LEGACY_NON_WIRE_FIELDS
 GAMEPLAY_DEBUG_ONLY_FIELDS = frozenset({"categoryIntent", "powerTransfer", "runtimeOutputKind", "actualAmmoMode", "unsupportedAmmoFor"})
 REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS = frozenset({"index", "rawFn", "originalFn", "sourceIndex", "params"})
 VFX_MANIFEST_DEBUG_ONLY_FIELDS = frozenset({"parentEffectProfile"})
@@ -698,7 +697,7 @@ def executable_wire_view(data: dict[str, Any]) -> dict[str, Any]:
             for row in rejected
         ]
     return {
-        "attack": {k: v for k, v in attack.items() if k not in ATTACK_DEBUG_ONLY_FIELDS},
+        "attack": {k: v for k, v in attack.items() if k not in ATTACK_NON_WIRE_FIELDS},
         "gameplay": gameplay_wire,
     }
 
@@ -755,7 +754,8 @@ __all__ = [
     "StrictBoundaryModel", "EngineCallBoundary", "RuntimePlanBoundary",
     "BuffEntryBoundary", "GeneratedBuffBoundary", "RuntimeStateBoundary",
     "VisualKitBoundary", "VfxManifestBoundary", "GameplaySpecBoundary", "AttackSpecBoundary",
-    "ATTACK_DEBUG_ONLY_FIELDS", "GAMEPLAY_DEBUG_ONLY_FIELDS", "REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS",
+    "ATTACK_DEBUG_ONLY_FIELDS", "ATTACK_LEGACY_NON_WIRE_FIELDS", "ATTACK_NON_WIRE_FIELDS",
+    "GAMEPLAY_DEBUG_ONLY_FIELDS", "REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS",
     "runtime_plan_boundary_report", "canonical_visual_kit_view", "validate_visual_kit_boundary",
     "validate_vfx_manifest_boundary", "validate_visual_authoring_boundaries",
     "validate_executable_item_boundary", "executable_wire_view",

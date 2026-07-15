@@ -20,10 +20,8 @@ internal static class GeneratedOverheadBarragePolicy
         child.OnHit = "none";
         child.OnHitCode = 0;
         child.TileCollide = parent.TileCollide;
-        child.Speed = Math.Clamp(parent.Speed > 0f ? parent.Speed : 11f, 4f, 20f);
-        child.Lifetime = parent.SecondaryLifetimeTicks > 0
-            ? parent.SecondaryLifetimeTicks
-            : Math.Min(120, Math.Max(45, parent.Lifetime / 2));
+        child.Speed = Math.Clamp(parent.Speed, 4f, 20f);
+        child.Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180);
 
         child.ProjectileFamily = string.IsNullOrWhiteSpace(parent.ProjectileFamily)
             ? "projectile"
@@ -48,13 +46,9 @@ internal static class GeneratedOverheadBarragePolicy
     {
         int safeCount = Math.Max(1, count);
         float t = safeCount <= 1 ? 0f : index / (float)(safeCount - 1) - 0.5f;
-        float spread = safeCount <= 1
-            ? 0f
-            : MathHelper.Clamp(authoredSpreadRadians <= 0f ? 0.44f : authoredSpreadRadians, 0.12f, 1.2f);
-        Vector2 origin = targetCenter + new Vector2(
-            t * spread * 96f + Main.rand.NextFloat(-18f, 18f),
-            -220f - Main.rand.NextFloat(0f, 90f));
-        Vector2 aim = targetCenter + Main.rand.NextVector2Circular(36f, 18f);
+        float spread = safeCount <= 1 ? 0f : MathHelper.Clamp(authoredSpreadRadians, 0f, 1.2f);
+        Vector2 origin = targetCenter + new Vector2(t * spread * 96f, -220f);
+        Vector2 aim = targetCenter;
         Vector2 velocity = (aim - origin).SafeNormalize(Vector2.UnitY) * Math.Clamp(speed, 4f, 20f);
         return (origin, velocity);
     }

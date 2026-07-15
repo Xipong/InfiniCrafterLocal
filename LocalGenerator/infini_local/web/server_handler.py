@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import ipaddress
-import json
 import socket
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Callable
 from urllib.parse import urlparse
+
+from infini_local.core import strict_json
+
+
+class _InvalidJsonRequest(ValueError):
+    """A client-controlled request framing or JSON parse failure."""
 
 
 MAX_JSON_BODY_BYTES = 2 * 1024 * 1024
@@ -99,6 +105,10 @@ def build_handler(
                     self.json_error(403, "loopback_only", "This endpoint is only available on loopback")
                     return
 
+                if request_path != "/combine" and not request_path.startswith("/debug/vfx"):
+                    self.send_error(404)
+                    return
+
                 length = self._content_length_bytes()
                 payload = self._read_json_payload(length)
 
@@ -142,7 +152,7 @@ def build_handler(
                 if is_client_disconnect(e):
                     return
                 self.json_error(408, "request_timeout", str(e))
-            except ValueError as e:
+            except _InvalidJsonRequest as e:
                 if is_client_disconnect(e):
                     return
                 self.json_error(400, "invalid_json", str(e))
@@ -176,10 +186,10 @@ def build_handler(
             try:
                 length = int(raw_length)
             except (TypeError, ValueError) as e:
-                raise ValueError("invalid Content-Length") from e
+                raise _InvalidJsonRequest("invalid Content-Length") from e
 
             if length < 0:
-                raise ValueError("negative Content-Length")
+                raise _InvalidJsonRequest("negative Content-Length")
             if length > MAX_JSON_BODY_BYTES:
                 raise OverflowError(f"content body too large: {length} > {MAX_JSON_BODY_BYTES}")
             return length
@@ -197,22 +207,31 @@ def build_handler(
                 connection.settimeout(JSON_BODY_READ_TIMEOUT_SECONDS)
 
             try:
-                body = self.rfile.read(length)
+                chunks: list[bytes] = []
+                remaining = length
+                while remaining:
+                    chunk = self.rfile.read(remaining)
+                    if not chunk:
+                        raise _InvalidJsonRequest(
+                            f"request body ended early: expected {length} bytes, received {length - remaining}"
+                        )
+                    chunks.append(chunk)
+                    remaining -= len(chunk)
+                body = b"".join(chunks)
             except socket.timeout as e:
                 raise TimeoutError("request body read timeout") from e
             finally:
                 if connection is not None and hasattr(connection, "settimeout"):
                     connection.settimeout(previous_timeout)
 
-            body_text = body.decode("utf-8")
             try:
-                return json.loads(body_text or "{}")
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                raise ValueError("invalid JSON body") from e
+                return strict_json.loads_object(body)
+            except (UnicodeError, ValueError, TypeError) as e:
+                raise _InvalidJsonRequest("invalid JSON body") from e
 
         def _json_combine_failure(self, reason: str, error: BaseException) -> None:
             attached = getattr(error, "_infini_failure_snapshot", None)
-            failure = dict(attached) if isinstance(attached, dict) else last_combine_failure_summary()
+            failure = deepcopy(attached) if isinstance(attached, dict) else deepcopy(last_combine_failure_summary())
             status, code, retryable, friendly = combine_failure_http_response(error, failure)
             log_event("warn", f"craft failed: {reason}", {
                 "path": self.path,
@@ -228,7 +247,7 @@ def build_handler(
             self.json_status(200, obj)
 
         def json_status(self, status: int, obj: Any) -> None:
-            data = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            data = strict_json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             try:
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

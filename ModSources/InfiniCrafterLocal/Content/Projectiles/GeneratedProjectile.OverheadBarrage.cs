@@ -33,7 +33,7 @@ public sealed partial class GeneratedProjectile
             SpawnOverheadBarrage(
                 Projectile.Center,
                 count,
-                _spec.SecondaryDamageMultiplier <= 0f ? 0.55f : _spec.SecondaryDamageMultiplier);
+                _spec.SecondaryDamageMultiplier);
         }
         Projectile.Kill();
         return false;

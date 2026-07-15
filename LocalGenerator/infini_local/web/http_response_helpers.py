@@ -51,6 +51,7 @@ def _combine_failure_http_response(error: BaseException | str, failure: dict[str
         "engine-call validation",
         "lacks set_item_stats",
         "invalid runtime",
+        "unsupported gameplay promises",
         "schema",
         "validation",
         "json",

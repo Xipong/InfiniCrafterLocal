@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from infini_local.core.balance_policy import power_band_for_bucket
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.balance_mode import current_balance_mode
 from infini_local.core.result_models import BalanceReportModel
 
@@ -52,8 +53,7 @@ def json_list(value: Any) -> list[Any]:
 
 
 def compact_json(value: Any, max_chars: int = 6000) -> str:
-    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
-    return text[:max_chars]
+    return bounded_json_dumps(value, max_chars=max_chars)
 
 
 

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from infini_local.core.runtime_effect_policy import onhit_uses_burst_dust_feedback
-
 
 # AGENT MAP: pure engine-pressure/balance sanity helpers used by the
 # runtime-authoring pipeline and the HTTP boundary. These estimate/clamp technical
@@ -152,37 +150,17 @@ def estimate_engine_metrics(genome: dict[str, Any], stage: dict[str, Any] | None
 
 
 def sanitize_genome_engine(genome: dict[str, Any], stage: dict[str, Any]) -> dict[str, Any]:
-    """Clamp only engine-pressure outliers. Does not judge creativity or similarity."""
+    """Attach pressure diagnostics without silently redesigning an authored genome.
+
+    Canonical runtime-plan validation owns rejection and absolute bounds. A late helper
+    must not lower shot count, lifetime, update rate, or create dust because a derived
+    pressure score or progression budget dislikes the model's explicit choice.
+    """
     g = dict(genome)
-    power = max(0.5, float(stage.get("powerBudget") or 1.0))
-    max_active = 22.0 + power * 8.0
-    max_sync = 26.0 + power * 8.0
 
-    # First pass: technical pressure only. Preserve long-lived identity (orbit/boomerang/field)
-    # unless the entity budget is actually unsafe; prefer trimming multiplicity/extraUpdates
-    # before shortening lifetime. This keeps the validator from becoming a deterministic designer.
-    for _ in range(5):
-        metrics = estimate_engine_metrics(g, stage)
-        if metrics["activeProjectileEstimate"] <= max_active and metrics["networkSyncPressureEstimate"] <= max_sync:
-            break
-        if str(g.get("runtimeFamily") or "").strip().lower() == "beam" and _child_spawn_estimate(g) > 0 and int(float(g.get("immunityCooldown") or 12)) < 60:
-            old_cooldown = max(4, int(float(g.get("immunityCooldown") or 12)))
-            g["immunityCooldown"] = min(60, max(old_cooldown + 2, int(round(old_cooldown * 1.35))))
-            g.setdefault("engineSanityRepairs", []).append(f"beam_child_pressure_immunityCooldown:{old_cooldown}->{g['immunityCooldown']}")
-        elif int(g.get("shotCount") or 1) > 1:
-            g["shotCount"] = max(1, int(g.get("shotCount") or 1) - 1)
-        elif int(g.get("extraUpdates") or 0) > 0:
-            g["extraUpdates"] = max(0, int(g.get("extraUpdates") or 0) - 1)
-        elif float(g.get("lifetimeTicks") or 90) > 45:
-            long_lived = str(g.get("movement") or "") in {"orbit", "boomerang", "returning_glaive", "drift", "vortex_orb", "blackhole_pull", "expanding_wave"}
-            floor = 80 if long_lived else 35
-            g["lifetimeTicks"] = max(floor, int(float(g.get("lifetimeTicks") or 90) * (0.88 if long_lived else 0.80)))
-        else:
-            break
-
-    metrics = estimate_engine_metrics(g, stage)
-    # Derived runtime knobs for C# projectile implementation. In v0.4.3 child projectiles
-    # are only allocated when the LLM explicitly authored a secondary-projectile/on-hit child plan.
+    # Child recursion caps are executor bookkeeping derived only from explicit child
+    # mechanics. They constrain recursive fan-out without changing the authored count,
+    # damage, spread, lifetime, or trigger of the first-generation children.
     child_estimate = int(max(0, round(_child_spawn_estimate(g))))
     runtime_family = str(g.get("runtimeFamily") or "").strip().lower()
     child_requested = runtime_family == "sentry" or child_estimate > 0 or int(float(g.get("splitCount") or 0)) > 0
@@ -191,47 +169,20 @@ def sanitize_genome_engine(genome: dict[str, Any], stage: dict[str, Any]) -> dic
         exact_cap = authored_cap if authored_cap > 0 else max(1, child_estimate)
         cap_limit = 48 if runtime_family == "sentry" else 36
         g["maxChildProjectiles"] = int(max(1, min(cap_limit, exact_cap)))
-        g["maxChildDepth"] = 1
+        g["maxChildDepth"] = int(max(1, min(1, float(g.get("maxChildDepth") or 1))))
     else:
         g["maxChildProjectiles"] = 0
         g["maxChildDepth"] = 0
 
-    # Dust in Terraria is controlled by actual emission frequency/scale/alpha calls.
-    # Preserve explicit 0 from runtimePlan: 0 means no ambient dust.
-    target_dust_per_second = 120.0 + power * 24.0
-    if g.get("dustSpawnDenom") is None:
-        denom = int(max(2, min(20, 3 + max(0.0, metrics["activeProjectileEstimate"] - 8.0) / 3.0)))
-        g["dustSpawnDenom"] = denom
-        for _ in range(4):
-            metrics = estimate_engine_metrics(g, stage)
-            if metrics["dustPerSecondEstimate"] <= target_dust_per_second or int(g["dustSpawnDenom"]) >= 20:
-                break
-            g["dustSpawnDenom"] = int(g["dustSpawnDenom"]) + 2
-    else:
+    # Explicit zero is meaningful. Missing visual emission fields are neutral rather
+    # than an invitation for code to add visual feedback on the LLM's behalf.
+    for field, upper in (("dustSpawnDenom", 20), ("burstDustCap", 40)):
         try:
-            g["dustSpawnDenom"] = int(max(0, min(20, float(g.get("dustSpawnDenom")))))
-        except Exception:
-            g["dustSpawnDenom"] = 0
-    metrics = estimate_engine_metrics(g, stage)
+            g[field] = int(max(0, min(upper, float(g.get(field) or 0))))
+        except (TypeError, ValueError, OverflowError):
+            g[field] = 0
 
-    # Burst dust is visual feedback, not damage. Preserve authored 0 for ambient/no-hit
-    # dust, but a concrete burst-style on-hit executor needs at least a tiny visual cap.
-    if g.get("burstDustCap") is None:
-        g["burstDustCap"] = int(max(0, min(28, 6 + power * 2)))
-    else:
-        try:
-            g["burstDustCap"] = int(max(0, min(28, float(g.get("burstDustCap")))))
-        except Exception:
-            g["burstDustCap"] = 0
-    onhit_key = str(g.get("onHit") or "").strip().lower()
-    try:
-        onhit_code = int(float(g.get("onHitCode") or 0))
-    except Exception:
-        onhit_code = 0
-    if int(g.get("burstDustCap") or 0) <= 0 and onhit_uses_burst_dust_feedback(onhit_key, onhit_code):
-        g["burstDustCap"] = int(max(4, min(24, 6 + power * 2)))
-        g.setdefault("engineSanityRepairs", []).append("burst_onhit_requires_nonzero_burstDustCap")
-    g["engineMetrics"] = metrics
+    g["engineMetrics"] = estimate_engine_metrics(g, stage)
     return g
 
 

@@ -56,7 +56,7 @@ def _contract_check_complete_item_response_is_rejected_by_strict_repair_patch_bo
         "runtimePlan": {
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 12, "useTimeTicks": 28, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "useTimeTicks": 28, "shotCount": 1}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "useTimeTicks": 28, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
             ]
         },
         "unexpectedFullRewriteField": {"should": "drop"},
@@ -96,7 +96,7 @@ def _contract_check_explicit_repair_patch_can_adjust_narrow_gameplay_surface(mon
             "runtimePlan": {
                 "engineCalls": [
                     {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 14, "useTimeTicks": 26, "maxStack": 1}},
-                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "useTimeTicks": 26, "shotCount": 1}},
+                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "useTimeTicks": 26, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
                 ]
             },
             "visual": {"itemPrompt": "must not adopt"},

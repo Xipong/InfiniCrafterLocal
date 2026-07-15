@@ -366,7 +366,8 @@ def _check_local_player_actions_do_not_run_on_server_or_remote_clients() -> None
     assert "if (IsServer) return false" in body
     assert "return IsLocalPlayer(player.whoAmI)" in body
     assert "bool runLocalAction = InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)" in item
-    assert "runLocalAction && gp?.GeneratedBuff" in item
+    assert "bool runPlayerGameplay = InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player)" in item
+    assert "runPlayerGameplay && gp?.GeneratedBuff" in item
     assert "runLocalAction && gp is not null" in item
     assert "ShouldRunLocalPlayerAction(Player)" in player
 

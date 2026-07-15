@@ -117,7 +117,7 @@ def _check_csharp_runtime_surface_contains_overhead_barrage_onhit_opcode() -> No
 def _check_csharp_swing_runtime_executes_overhead_barrage_onhit_opcode() -> None:
     item = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedItem.cs").read_text(encoding="utf-8")
     start = item.index("private static void ApplyGeneratedSwingOnHitEffects")
-    end = item.index("private static int SwingDebuffTime", start)
+    end = item.index("private static void HealGeneratedSwingOwner", start)
     swing_onhit = item[start:end]
     assert "case 18:" in swing_onhit
     assert "SpawnGeneratedSwingOverheadBarrage" in swing_onhit

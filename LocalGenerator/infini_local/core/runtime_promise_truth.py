@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.runtime_contracts import normalize_runtime_contract, resolve_mechanic_backing_refs
 
 PROMISE_TRUTH_SCHEMA = "infini.runtime-promise-truth.v1"
@@ -20,10 +21,10 @@ _AMMO_SPECIFIC_RESOURCES: tuple[tuple[str, str], ...] = (
 )
 
 CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("return_to_thrower", re.compile(r"\b(return|returns|returning|boomerang|comes back)\b", re.I)),
-    ("channel_beam", re.compile(r"\b(channel|channeled|channelled|beam|laser|ray)\b", re.I)),
-    ("charge_release", re.compile(r"\b(charge|charged|release)\b", re.I)),
-    ("sentry", re.compile(r"\b(sentry|turret|stationary helper|deployed helper)\b", re.I)),
+    ("return_to_thrower", re.compile(r"\b(?:boomerang(?:s|ing)?|returns?\s+to\s+(?:the\s+)?(?:thrower|wielder|player|owner)|comes?\s+back\s+to\s+(?:the\s+)?(?:thrower|wielder|player|owner)|flies?\s+back\s+to\s+(?:the\s+)?(?:thrower|wielder|player|owner))\b", re.I)),
+    ("channel_beam", re.compile(r"\b(?:(?:channels?|channeled|channelled)\s+(?:a\s+)?(?:beam|laser|ray)|continuous\s+(?:beam|laser|ray)|(?:hold|held|holding)\b.{0,36}\b(?:beam|laser|ray))\b", re.I)),
+    ("charge_release", re.compile(r"\b(?:(?:charge|charges|charging|charged)\b.{0,48}\b(?:shot|attack|weapon|power|projectile)|release(?:s|d|ing)?\s+(?:the\s+)?(?:charged|stored)\s+(?:shot|attack|power|projectile))\b", re.I)),
+    ("sentry", re.compile(r"\b(?:(?:deploys?|places?|summons?|creates?)\b.{0,40}\b(?:sentry|turret|stationary helper|deployed helper)|(?:sentry|turret)\b.{0,36}\b(?:fires?|shoots?|attacks?|targets?))\b", re.I)),
     ("overhead_barrage", re.compile(r"\b(overhead\s+barrage|projectile\s+rain|rain(?:s|ing)?\s+(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)|(?:falling|descending)\s+(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)|(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)\s+(?:rain|fall|descend)(?:s|ing)?\s+(?:down\s+)?(?:from\s+(?:the\s+)?(?:sky|above)|over)|(?:arrows?|projectiles?|shards?|spears?|meteors?|stars?)\s+from\s+(?:the\s+)?(?:sky|above)|starfall)\b", re.I)),
     (
         "sticky_puddle",
@@ -36,20 +37,32 @@ CLAIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
             re.I,
         ),
     ),
-    ("heat_jam", re.compile(r"\b(heat|overheat|jam|cooldown)\b", re.I)),
+    (
+        "heat_jam",
+        re.compile(
+            r"\b(?:overheat(?:s|ing|ed)?|"
+            r"(?:weapon|gun|launcher|bow|staff|mechanism)\s+jam(?:s|med|ming)?|"
+            r"jam(?:s|med|ming)?\s+(?:after|when|if|at|until)|jam\s+(?:chance|meter)|"
+            r"heat\s+(?:meter|gauge|build(?:up)?|buildup|accumulation|vents?|venting|cooldown)|"
+            r"(?:builds?|accumulates?|gains?)\s+heat|(?:must|needs?|has)\s+(?:to\s+)?cool\s+down)\b",
+            re.I,
+        ),
+    ),
     ("lifesteal", re.compile(r"\b(lifesteal|life steal|drain life|heals? on hit)\b", re.I)),
-    ("feline_bounce", re.compile(r"\b(feline|cats?|bouncing cats?|meowmere)\b", re.I)),
-    ("projectile_bounce", re.compile(r"\b(bounc(?:e|es|ing|y)|rebound(?:s|ing)?)\b", re.I)),
-    ("paired_dual", re.compile(r"\b(paired|dual|twin|offhand|two swords|second sword)\b", re.I)),
+    ("feline_bounce", re.compile(r"\b(?:meowmere|bouncing\s+cats?|cats?\b.{0,32}\b(?:bounce|bounces|bouncing|rebound)|feline\b.{0,32}\b(?:bounce|bounces|bouncing|rebound))\b", re.I)),
+    ("projectile_bounce", re.compile(r"\b(?:(?:projectile|shot|blade|orb|bolt|disc|weapon)\b.{0,36}\b(?:bounce|bounces|bouncing|rebound|rebounds)|(?:bounce|bounces|bouncing|rebound|rebounds)\s+(?:off|between|from)\s+(?:walls?|enemies|targets?|terrain))\b", re.I)),
+    ("paired_dual", re.compile(r"\b(?:dual[- ]wield(?:s|ed|ing)?|offhand\s+(?:attack|strike|weapon)|two\s+(?:swords?|weapons?|blades?)\b.{0,36}\b(?:attack|strike|swing|alternate)|second\s+(?:sword|weapon|blade)\b.{0,28}\b(?:attacks?|strikes?|swings?))\b", re.I)),
     ("orbiting_companion", re.compile(r"\b(orbit(?:s|ing)?|circl(?:e|es|ing)\s+(?:around|the wielder|the player))\b", re.I)),
     ("projectile_homing", re.compile(r"\b(homing|homes?\s+(?:in\s+)?(?:on|into|toward)|seek(?:s|ing)?\s+(?:enemies|targets)|track(?:s|ing)?\s+(?:enemies|targets))\b", re.I)),
-    ("burst", re.compile(r"\b(bursts?|explode|explosion|nova)\b", re.I)),
-    ("burn_on_hit", re.compile(r"\b(burn|ignite|on-hit burn|sets? on fire)\b", re.I)),
+    ("burst", re.compile(r"\b(?:(?:projectile|shot|bolt|orb|weapon)\b.{0,40}\b(?:bursts?|explodes?|explosion|nova)|(?:on\s+hit|on\s+impact|when\s+striking)\b.{0,40}\b(?:bursts?|explodes?|explosion|nova)|bursts?\s+(?:on\s+)?(?:hit|impact|contact)|(?:damage|damaging)\s+(?:burst|explosion|nova))\b", re.I)),
+    ("burn_on_hit", re.compile(r"\b(?:(?:burns?|ignites?)\s+(?:enemies|targets?|foes)|sets?\s+(?:enemies|targets?|foes|them)\s+on\s+fire|(?:on[- ]hit|on\s+impact)\s+(?:burn|burning|ignite)|burn(?:ing)?\s+damage)\b", re.I)),
     ("ammo_consumption", re.compile(rf"\b(?:(?:consum(?:e|es|ing)|uses?|requires?|spends?)\b.{{0,48}}\b{_AMMO_RESOURCE_PATTERN}|no\s+{_AMMO_RESOURCE_PATTERN}\s+(?:is|are)\s+(?:consumed|used|required|spent)|{_AMMO_RESOURCE_PATTERN}\s+(?:is|are)\s+never\s+(?:consumed|used|required|spent)|(?:fires?|shoots?|attacks?)\s+without\s+{_AMMO_RESOURCE_PATTERN})\b", re.I)),
-    ("alternating_phase", re.compile(r"\b(alternate|alternates|cycle|light.dark|dark.light|phase)\b", re.I)),
-    ("temporary_platform", re.compile(r"\b(platforms?|walkable\s+(?:surface|platform)|temporary\s+work\s+surface|stand(?:s|ing)?\s+on\s+(?:it|them|the\s+platform))\b", re.I)),
+    ("alternating_phase", re.compile(r"\b(?:(?:alternates?|cycles?|switches?)\s+between\s+(?:light\s+and\s+dark|dark\s+and\s+light|two\s+phases)|phase\s+(?:changes?|cycles?|alternates?))\b", re.I)),
+    ("temporary_platform", re.compile(r"\b(?:(?:creates?|spawns?|places?|leaves?)\b.{0,48}\b(?:temporary\s+)?(?:platforms?|walkable\s+surface|work\s+surface)|(?:player|wielder|allies)\s+can\s+(?:stand|walk)\s+on\s+(?:it|them|the\s+platform))\b", re.I)),
     ("damaging_field", re.compile(r"\b(damaging\s+(?:field|zone|area)|lingering\s+(?:damage|hazard|field|zone)|damage[- ]over[- ]time\s+(?:field|zone)|hazardous\s+(?:field|zone))\b", re.I)),
 ]
+
+_PROMISE_TRUTH_OWNED_MARKERS = frozenset(f"unsupported:{kind}" for kind, _ in CLAIM_PATTERNS)
 
 
 def _text(value: Any) -> str:
@@ -273,12 +286,22 @@ def validate_runtime_promises(data: dict[str, Any], patch: dict[str, Any] | None
             contract["executionStatus"] = "unsupported"
         elif statuses and statuses <= {"visual_only"}:
             contract["executionStatus"] = "visual_only"
+        elif any(s in {"partial", "ambiguous"} for s in statuses):
+            contract["executionStatus"] = "partial"
         elif any(s == "executable" for s in statuses):
             contract["executionStatus"] = "executable"
         data["runtimeContract"] = contract
 
-    if unsupported:
-        _append_unique_list(data, "unsupportedPromises", list(dict.fromkeys(unsupported)))
+    existing_promises = data.get("unsupportedPromises") if isinstance(data.get("unsupportedPromises"), list) else []
+    preserved_promises = [
+        str(value) for value in existing_promises
+        if value and str(value) not in _PROMISE_TRUTH_OWNED_MARKERS
+    ]
+    merged_promises = list(dict.fromkeys([*preserved_promises, *unsupported]))[:32]
+    if merged_promises:
+        data["unsupportedPromises"] = merged_promises
+    else:
+        data.pop("unsupportedPromises", None)
     debug = data.setdefault("debug", {}) if isinstance(data.get("debug"), dict) else data.setdefault("debug", {})
     report = {
         "schema": PROMISE_TRUTH_SCHEMA,
@@ -287,5 +310,5 @@ def validate_runtime_promises(data: dict[str, Any], patch: dict[str, Any] | None
         "unsupportedPromises": list(dict.fromkeys(unsupported))[:24],
         "note": "Promise truth validates consistency only; it never creates gameplay from prose, tooltip, or visual prompts.",
     }
-    debug["runtimePromiseTruth"] = json.dumps(report, ensure_ascii=False)[:8000]
+    debug["runtimePromiseTruth"] = bounded_json_dumps(report, max_chars=8000)
     return report

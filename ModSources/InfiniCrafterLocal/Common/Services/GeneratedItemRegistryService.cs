@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -435,17 +436,34 @@ public sealed class GeneratedItemRegistryService : IDisposable
 
     private void PersistOne(GeneratedItemData data)
     {
+        string tempPath = "";
         try
         {
             Directory.CreateDirectory(StoreRoot);
             string safe = SafeFileName(data.Id);
             if (string.IsNullOrWhiteSpace(safe)) return;
             string path = Path.Combine(StoreRoot, safe + ".json");
+            tempPath = Path.Combine(StoreRoot, $".{safe}.{Guid.NewGuid():N}.tmp");
             // Local disk cache is not a network packet: keep the full item/debug/prompt
             // contract so tooltips and /infinidumppicture remain useful after restart.
-            File.WriteAllText(path, data.ToLocalCacheJson());
+            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                writer.Write(data.ToLocalCacheJson());
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
+            }
+            File.Move(tempPath, path, overwrite: true);
+            tempPath = "";
         }
         catch { }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(tempPath))
+            {
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+            }
+        }
     }
 
     private static string SafeFileName(string raw)

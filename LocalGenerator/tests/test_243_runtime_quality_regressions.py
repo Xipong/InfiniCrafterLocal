@@ -84,6 +84,9 @@ def _plan() -> dict:
                         "speed": 8,
                         "rangeTiles": 3,
                         "lifetimeTicks": 24,
+                        "shotCount": 1,
+                        "spreadRadians": 0,
+                        "pierce": 1,
                         "projectileShape": "workbench bolted to a wooden sword",
                     },
                 },
@@ -195,7 +198,7 @@ def _check_image_backend_never_silently_becomes_procedural(monkeypatch: pytest.M
         assert cache_report["backendConfigChecked"] is False
 
 
-def _check_invalid_world_cache_is_quarantined_and_deindexed(tmp_path: Path) -> None:
+def _check_invalid_world_cache_is_quarantined_without_secondary_index_state(tmp_path: Path) -> None:
     payload = {
         "id": "g_bad_cache",
         "name": "Broken cached item",
@@ -230,10 +233,8 @@ def _check_invalid_world_cache_is_quarantined_and_deindexed(tmp_path: Path) -> N
     assert reason["details"]["field"] == "attack.futureField"
 
     root = world_storage.world_recipe_dir(tmp_path, "world-bad")
-    index = json.loads((root / "index.json").read_text(encoding="utf-8"))
-    health = json.loads((root / "health.json").read_text(encoding="utf-8"))
-    assert "r_bad" not in index.get("recipes", {})
-    assert "r_bad" not in health.get("recipes", {})
+    assert not (root / "index.json").exists()
+    assert not (root / "health.json").exists()
 
     malformed = world_storage.world_recipe_file(tmp_path, "world-bad", "r_malformed")
     malformed.parent.mkdir(parents=True, exist_ok=True)
@@ -328,7 +329,7 @@ def test_runtime_quality_regressions_coarse_contract(tmp_path: Path) -> None:
     checks = [
         _check_live_combine_spine_reaches_cache_without_visual_fields_in_attack,
         _check_image_backend_never_silently_becomes_procedural,
-        _check_invalid_world_cache_is_quarantined_and_deindexed,
+        _check_invalid_world_cache_is_quarantined_without_secondary_index_state,
         _check_sdcpp_cleanup_escalates_and_closes_log,
         _check_prompt_compaction_keeps_authored_subject_and_final_guard,
         _check_vfx_overlay_participates_in_projectile_draw_pipeline,

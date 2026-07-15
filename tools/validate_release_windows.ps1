@@ -48,6 +48,7 @@ Run-Step "compileall" "python" @("-m", "compileall", "-q", "LocalGenerator/infin
 Run-Step "schema_check" "python" @("tools/export_contract_schemas.py", "--check")
 Run-Step "config_registry" "python" @("tools/config_registry.py", "--check")
 Run-Step "contract_parity" "python" @("tools/contract_parity.py", "--quiet", "--out", "artifacts/validation/contract_parity_report.json")
+Run-Step "delivery_contract" "python" @("tools/check_delivery_contract.py", "--quiet", "--out", "artifacts/validation/delivery_contract_report.json")
 Run-Step "mutation_gate" "python" @("tools/mutation_contract_gate.py")
 Run-Step "semantic_runtime_diff" "python" @("tools/semantic_runtime_diff.py")
 Run-Step "runtime_impact" "python" @("tools/runtime_impact_report.py", "--out", "artifacts/validation/runtime_impact_report.json")

@@ -86,9 +86,9 @@ def _contract_check_report_disables_python_runtime_corridor_but_safety_keeps_it(
 
     monkeypatch.setenv("INFINI_BALANCE_MODE", "safety")
     safety = apply_family_locks_to_genome(dict(raw), {}, {}, {}, {"powerBudget": 1})
-    assert safety["shotCount"] == 6
-    assert safety["rangeTiles"] == 105.0
-    assert safety["extraUpdates"] == 2
+    assert safety["shotCount"] == 8
+    assert safety["rangeTiles"] == 120.0
+    assert safety["extraUpdates"] == 3
 
 
 def _contract_check_equipment_budget_can_report_without_mutating() -> None:

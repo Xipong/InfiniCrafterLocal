@@ -9,7 +9,7 @@ def _contract_check_authored_runtime_fields_have_precise_provenance() -> None:
         "runtimePlan": {
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 21, "useTimeTicks": 17}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "cast", "delivery": "cast", "movement": "straight", "shotCount": 3, "speed": 11, "pierce": 2, "rangeTiles": 44, "lifetimeTicks": 120}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "cast", "delivery": "cast", "movement": "straight", "shotCount": 3, "spreadRadians": 0.2, "speed": 11, "pierce": 2, "rangeTiles": 44, "lifetimeTicks": 120}},
                 {"fn": "spawn_secondary_projectiles", "params": {"trigger": "on_hit", "count": 2, "maxChildProjectiles": 4}},
                 {"fn": "apply_on_hit_effect", "params": {"onHit": "burst", "aoeRadiusTiles": 3}},
                 {"fn": "spawn_contact_particles", "params": {"effect": "star", "burstDustCap": 20}},
@@ -65,8 +65,8 @@ def _contract_check_defaults_are_distinguishable_from_authored_fields() -> None:
 
     assert sources["damage"] == "set_item_stats"
     assert sources["useTimeTicks"] == "set_item_stats"
-    assert sources["shotCount"] == "runtime_compiler_default"
-    assert provenance["authoredFields"]["shotCount"] is False
+    assert "shotCount" not in sources
+    assert provenance["authoredFields"].get("shotCount") is not True
     assert sources["speed"] == "shoot_projectile"
 
 

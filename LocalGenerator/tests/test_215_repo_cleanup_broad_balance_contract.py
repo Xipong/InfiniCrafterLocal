@@ -37,14 +37,14 @@ def test_broad_soft_balance_uplift_is_global_but_still_single_authority():
     data = {}
     genome = {"shotCount": 8, "pierce": 12, "lifetimeTicks": 700, "aoeRadiusTiles": 9, "rangeTiles": 140, "homingStrength": 1.0}
     clamped = apply_family_locks_to_genome(genome, {}, {}, data, {"powerBudget": 5.0})
-    assert clamped["shotCount"] == 6
-    assert clamped["pierce"] == 8
-    assert clamped["lifetimeTicks"] == 540
-    assert clamped["rangeTiles"] == 105.0
-    assert clamped["homingStrength"] == 0.68
+    assert clamped["shotCount"] == 8
+    assert clamped["pierce"] == 10
+    assert clamped["lifetimeTicks"] == 700
+    assert clamped["rangeTiles"] == 120.0
+    assert clamped["homingStrength"] == 1.0
 
     returning = apply_family_locks_to_genome(
         {"runtimeFamily": "returning", "shotCount": 1, "pierce": 2, "lifetimeTicks": 25, "rangeTiles": 15, "speed": 12},
         {}, {}, {}, {"powerBudget": 2.0},
     )
-    assert returning["lifetimeTicks"] >= 60
+    assert returning["lifetimeTicks"] == 25

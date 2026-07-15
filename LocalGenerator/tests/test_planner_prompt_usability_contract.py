@@ -139,7 +139,7 @@ def _check_minimal_llm_accessory_and_extractinator_plans_survive_validation() ->
         "category": "accessory",
         "runtimePlan": {"resultKind": "accessory", "engineCalls": [
             {"fn": "set_item_stats", "params": {"resultKind": "accessory", "rarity": 2}},
-            {"fn": "accessory_effect", "params": {"archetype": "mobility", "movementSpeed": 0.12, "jumpSpeed": 0.8, "lightStrength": 0.25, "lightColorName": "blue"}},
+            {"fn": "accessory_effect", "params": {"archetype": "mobility", "stats": {"movementSpeed": 0.12, "jumpSpeed": 0.8, "lightStrength": 0.25, "lightColorName": "blue"}}},
         ]},
     })
     assert accessory["category"] == "accessory"

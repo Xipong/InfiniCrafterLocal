@@ -133,6 +133,21 @@ public sealed partial class InfiniCraftPlayer
         ClampGeneratedBuffState();
     }
 
+    private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
+    {
+        _ = reader.ReadByte();
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadString();
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
+    }
+
     private void ClampGeneratedBuffState()
     {
         _generatedBuffTicks = Math.Clamp(_generatedBuffTicks, 0, 21600);
@@ -221,9 +236,16 @@ public sealed partial class InfiniCraftPlayer
         Player player = Main.player[playerId];
         if (player is null || !player.active) return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        modPlayer.ReadGeneratedBuffState(reader);
         if (Main.netMode == NetmodeID.Server)
+        {
+            // Clients may request a resync by sending their predicted snapshot,
+            // but none of its numbers are authoritative. Consume the packet and
+            // rebroadcast the server-owned state built from canonical item data.
+            DiscardGeneratedBuffState(reader);
             modPlayer.SendGeneratedBuffState(-1, whoAmI);
+            return;
+        }
+        modPlayer.ReadGeneratedBuffState(reader);
     }
 
 

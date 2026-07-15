@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 class ServerUtilityRoutes:
@@ -118,7 +118,7 @@ class ServerUtilityRoutes:
             handler.json(self.last_combine_failure_payload())
             return True
         if request_path == "/debug/recipe_health":
-            handler.json({"recipeStorage": "world_recipes_files_only", "health": self.debug_recipe_health()[:100]})
+            handler.json({"recipeStorage": "authoritative_world_recipe_files", "health": self.debug_recipe_health()[:100]})
             return True
         if request_path == "/debug/contracts":
             handler.json(self.debug_contracts())
@@ -127,7 +127,7 @@ class ServerUtilityRoutes:
             handler.json(self.debug_latest_recipe_dump(path))
             return True
         if request_path == "/debug/recipes":
-            handler.json({"recipeStorage": "world_recipes_files_only", "recipes": self.debug_recipes()[:50]})
+            handler.json({"recipeStorage": "authoritative_world_recipe_files", "recipes": self.debug_recipes()[:50]})
             return True
         if request_path == "/debug/worlds":
             handler.json({"worldRecipesDir": str(self.world_recipes_dir), "worlds": self.debug_worlds()})
@@ -373,26 +373,57 @@ class ServerUtilityRoutes:
             "debug": dummy.get("debug"),
         })
 
+    def _world_recipe_records(self, world_dir: Path) -> list[dict[str, Any]]:
+        """Build debug-only derived rows from authoritative ``recipes/*.json`` files."""
+        manifest = self.read_json_file(world_dir / "manifest.json") or {}
+        recipes_dir = world_dir / "recipes"
+        if not recipes_dir.is_dir():
+            return []
+        records: list[dict[str, Any]] = []
+        for recipe_path in recipes_dir.glob("*.json"):
+            recipe = self.read_json_file(recipe_path)
+            if not isinstance(recipe, dict):
+                continue
+            recipe_meta = recipe.get("recipeMeta") if isinstance(recipe.get("recipeMeta"), dict) else {}
+            health = recipe.get("recipeHealth") if isinstance(recipe.get("recipeHealth"), dict) else {}
+            health_parents = health.get("parents") if isinstance(health.get("parents"), dict) else {}
+            try:
+                updated_at = recipe_path.stat().st_mtime
+            except OSError:
+                updated_at = 0.0
+            records.append({
+                "path": recipe_path,
+                "recipe": recipe,
+                "health": health,
+                "key": str(recipe_meta.get("recipeKey") or recipe.get("recipeKey") or recipe_path.stem),
+                "parentA": str(recipe_meta.get("parentA") or health_parents.get("a") or recipe.get("parentA") or ""),
+                "parentB": str(recipe_meta.get("parentB") or health_parents.get("b") or recipe.get("parentB") or ""),
+                "worldId": str(manifest.get("worldId") or recipe_meta.get("worldId") or ""),
+                "worldName": str(manifest.get("worldName") or recipe_meta.get("worldName") or ""),
+                "updatedAt": float(updated_at),
+            })
+        records.sort(key=lambda row: (row["updatedAt"], row["key"]))
+        return records
+
     def debug_recipes(self) -> list[dict[str, Any]]:
         recipes: list[dict[str, Any]] = []
         if self.world_recipes_dir.exists():
             for world_dir in sorted(self.world_recipes_dir.iterdir()):
                 if not world_dir.is_dir():
                     continue
-                manifest = self.read_json_file(world_dir / "manifest.json") or {}
-                index = self.read_json_file(world_dir / "index.json") or {}
-                for key, entry in list((index.get("recipes") or {}).items())[-50:]:
+                for record in self._world_recipe_records(world_dir)[-50:]:
+                    recipe = record["recipe"]
                     recipes.append({
-                        "worldId": manifest.get("worldId", ""),
-                        "worldName": manifest.get("worldName", ""),
-                        "createdAt": entry.get("updatedAt", None),
-                        "a": entry.get("parentA", ""),
-                        "b": entry.get("parentB", ""),
-                        "result": entry.get("resultName", ""),
-                        "key": key,
-                        "file": str(world_dir / entry.get("file", "")),
+                        "worldId": record["worldId"],
+                        "worldName": record["worldName"],
+                        "createdAt": record["updatedAt"],
+                        "a": record["parentA"],
+                        "b": record["parentB"],
+                        "result": recipe.get("name", ""),
+                        "key": record["key"],
+                        "file": str(record["path"]),
                     })
-        recipes.sort(key=lambda r: r.get("createdAt") or 0, reverse=True)
+        recipes.sort(key=lambda row: row.get("createdAt") or 0, reverse=True)
         return recipes
 
     def debug_recipe_health(self) -> list[dict[str, Any]]:
@@ -401,25 +432,24 @@ class ServerUtilityRoutes:
             for world_dir in sorted(self.world_recipes_dir.iterdir()):
                 if not world_dir.is_dir():
                     continue
-                manifest = self.read_json_file(world_dir / "manifest.json") or {}
-                health_index = self.read_json_file(world_dir / "health.json") or {}
-                for key, health in (health_index.get("recipes") or {}).items():
-                    if not isinstance(health, dict):
+                for record in self._world_recipe_records(world_dir):
+                    health = record["health"]
+                    if not isinstance(health, dict) or not health:
                         continue
                     rows.append({
-                        "worldId": manifest.get("worldId", health_index.get("worldId", "")),
-                        "worldName": manifest.get("worldName", health_index.get("worldName", "")),
-                        "key": key,
+                        "worldId": record["worldId"],
+                        "worldName": record["worldName"],
+                        "key": record["key"],
                         "ok": bool(health.get("ok")),
                         "status": health.get("status", "unknown"),
-                        "result": health.get("resultName", ""),
+                        "result": health.get("resultName") or record["recipe"].get("name", ""),
                         "runtime": health.get("runtime", {}),
                         "visual": health.get("visual", {}),
                         "warnings": health.get("warnings", []),
                         "problems": health.get("problems", []),
-                        "updatedAt": health.get("updatedAt", None),
+                        "updatedAt": record["updatedAt"],
                     })
-        rows.sort(key=lambda r: r.get("updatedAt") or 0, reverse=True)
+        rows.sort(key=lambda row: row.get("updatedAt") or 0, reverse=True)
         return rows
 
     def _latest_recipe_file(self) -> Path | None:
@@ -429,23 +459,10 @@ class ServerUtilityRoutes:
             for world_dir in sorted(self.world_recipes_dir.iterdir()):
                 if not world_dir.is_dir():
                     continue
-                index = self.read_json_file(world_dir / "index.json") or {}
-                for entry in (index.get("recipes") or {}).values():
-                    if not isinstance(entry, dict):
-                        continue
-                    file_name = str(entry.get("file") or "")
-                    if not file_name:
-                        continue
-                    path = world_dir / file_name
-                    stamp = float(entry.get("updatedAt") or 0)
-                    try:
-                        if stamp <= 0 and path.exists():
-                            stamp = path.stat().st_mtime
-                    except Exception:
-                        pass
-                    if stamp > best_time and path.exists():
-                        best_time = stamp
-                        best_path = path
+                for record in self._world_recipe_records(world_dir):
+                    if record["updatedAt"] > best_time:
+                        best_time = record["updatedAt"]
+                        best_path = record["path"]
         return best_path
 
     def debug_latest_recipe_dump(self, path: str = "") -> dict[str, Any]:
@@ -458,13 +475,18 @@ class ServerUtilityRoutes:
         visual = recipe.get("visual") if isinstance(recipe.get("visual"), dict) else {}
         debug = recipe.get("debug") if isinstance(recipe.get("debug"), dict) else {}
         health = recipe.get("recipeHealth") if isinstance(recipe.get("recipeHealth"), dict) else {}
+        recipe_meta = recipe.get("recipeMeta") if isinstance(recipe.get("recipeMeta"), dict) else {}
+        health_parents = health.get("parents") if isinstance(health.get("parents"), dict) else {}
         return {
             "ok": True,
             "version": self.app_version,
             "file": str(recipe_path),
-            "recipeKey": recipe.get("recipeKey", ""),
+            "recipeKey": recipe_meta.get("recipeKey") or recipe.get("recipeKey", ""),
             "name": recipe.get("name", ""),
-            "parents": [recipe.get("parentA", ""), recipe.get("parentB", "")],
+            "parents": [
+                recipe_meta.get("parentA") or health_parents.get("a") or recipe.get("parentA", ""),
+                recipe_meta.get("parentB") or health_parents.get("b") or recipe.get("parentB", ""),
+            ],
             "category": recipe.get("category", ""),
             "runtime": {
                 "resultKind": (recipe.get("runtimePlan") or {}).get("resultKind") if isinstance(recipe.get("runtimePlan"), dict) else gameplay.get("runtimeOutputKind", ""),
@@ -483,7 +505,7 @@ class ServerUtilityRoutes:
                 "projectile": attack.get("projectileSpriteUrl", ""),
                 "impactStatus": attack.get("impactSpriteStatus", ""),
                 "impact": attack.get("impactSpriteUrl", ""),
-                "assetFiles": (recipe.get("recipeMeta") or {}).get("assetFiles", []) if isinstance(recipe.get("recipeMeta"), dict) else [],
+                "assetFiles": recipe_meta.get("assetFiles", []),
             },
             "health": health,
             "contractVersions": recipe.get("contractVersions", {}),
@@ -493,22 +515,17 @@ class ServerUtilityRoutes:
 
     def debug_contracts(self) -> dict[str, Any]:
         latest: dict[str, Any] = {}
+        candidates: list[dict[str, Any]] = []
         if self.world_recipes_dir.exists():
-            for world_dir in sorted(self.world_recipes_dir.iterdir(), reverse=True):
-                if not world_dir.is_dir():
-                    continue
-                index = self.read_json_file(world_dir / "index.json") or {}
-                for entry in reversed(list((index.get("recipes") or {}).values())):
-                    if not isinstance(entry, dict):
-                        continue
-                    recipe_path = world_dir / str(entry.get("file") or "")
-                    recipe = self.read_json_file(recipe_path) or {}
-                    cv = recipe.get("contractVersions") if isinstance(recipe.get("contractVersions"), dict) else {}
-                    if cv:
-                        latest = cv
-                        break
-                if latest:
-                    break
+            for world_dir in sorted(self.world_recipes_dir.iterdir()):
+                if world_dir.is_dir():
+                    candidates.extend(self._world_recipe_records(world_dir))
+        for record in sorted(candidates, key=lambda row: row["updatedAt"], reverse=True):
+            recipe = record["recipe"]
+            contract_versions = recipe.get("contractVersions") if isinstance(recipe.get("contractVersions"), dict) else {}
+            if contract_versions:
+                latest = contract_versions
+                break
         return {
             "ok": True,
             "version": self.app_version,
@@ -520,21 +537,25 @@ class ServerUtilityRoutes:
     def debug_worlds(self) -> list[dict[str, Any]]:
         worlds: list[dict[str, Any]] = []
         if self.world_recipes_dir.exists():
-            for p in sorted(self.world_recipes_dir.iterdir()):
-                if not p.is_dir():
+            for world_dir in sorted(self.world_recipes_dir.iterdir()):
+                if not world_dir.is_dir():
                     continue
-                manifest = self.read_json_file(p / "manifest.json") or {}
-                index = self.read_json_file(p / "index.json") or {}
-                health_index = self.read_json_file(p / "health.json") or {}
-                recipes = index.get("recipes", {})
+                manifest = self.read_json_file(world_dir / "manifest.json") or {}
+                records = self._world_recipe_records(world_dir)
+                health_counts: dict[str, int] = {}
+                for record in records:
+                    health = record["health"]
+                    status = str(health.get("status") or "unknown") if isinstance(health, dict) else "unknown"
+                    health_counts[status] = health_counts.get(status, 0) + 1
+                latest_recipe_time = max((record["updatedAt"] for record in records), default=0.0)
                 worlds.append({
-                    "dir": p.name,
-                    "path": str(p),
+                    "dir": world_dir.name,
+                    "path": str(world_dir),
                     "worldId": manifest.get("worldId", ""),
                     "worldName": manifest.get("worldName", ""),
-                    "recipeCount": len(recipes) if isinstance(recipes, dict) else 0,
-                    "healthCounts": health_index.get("counts", {}) if isinstance(health_index, dict) else {},
-                    "updatedAt": manifest.get("updatedAt", None),
+                    "recipeCount": len(records),
+                    "healthCounts": health_counts,
+                    "updatedAt": latest_recipe_time or manifest.get("updatedAt", None),
                 })
         return worlds
 
@@ -561,13 +582,22 @@ class ServerUtilityRoutes:
         handler.wfile.write(p.read_bytes())
 
     def sprite_file(self, handler: Any, path: str) -> None:
-        name = path.rsplit("/", 1)[-1].split("?", 1)[0]
-        p = self.sprite_dir / name
-        if p.exists() and p.suffix.lower() == ".png":
+        name = unquote(urlparse(path).path.rsplit("/", 1)[-1])
+        if not name or name in {".", ".."} or "/" in name or "\\" in name:
+            handler.send_error(404)
+            return
+        root = self.sprite_dir.resolve()
+        candidate = (root / name).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            handler.send_error(404)
+            return
+        if candidate.is_file() and candidate.suffix.lower() == ".png":
             handler.send_response(200)
             handler.send_header("Content-Type", "image/png")
-            handler.send_header("Content-Length", str(p.stat().st_size))
+            handler.send_header("Content-Length", str(candidate.stat().st_size))
             handler.end_headers()
-            handler.wfile.write(p.read_bytes())
+            handler.wfile.write(candidate.read_bytes())
             return
         handler.send_error(404)

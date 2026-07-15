@@ -272,7 +272,7 @@ def _contract_check_starfury_style_affordance_survives_actual_genome_sanitizer()
             "resultKind": "weapon",
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 34, "useTimeTicks": 22}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "overhead_barrage", "delivery": "swing", "movement": "phase", "weaponFamily": "broadsword", "projectileFamily": "star", "shotCount": 1, "rangeTiles": 50}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "overhead_barrage", "delivery": "swing", "movement": "phase", "weaponFamily": "broadsword", "projectileFamily": "star", "speed": 10, "shotCount": 1, "spreadRadians": 0, "pierce": 1, "rangeTiles": 50, "lifetimeTicks": 90}},
             ],
         },
     }

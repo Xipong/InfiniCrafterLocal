@@ -349,7 +349,7 @@ def _contract_check_utility_engine_calls_override_unsupported_runtime_archetype_
         "runtimeArchetype": {"family": "unsupported"},
         "runtimePlan": {"engineCalls": [
             {"fn": "set_item_stats", "params": {"resultKind": "accessory", "rarity": 2}},
-            {"fn": "accessory_effect", "params": {"archetype": "mobility", "movementSpeed": 0.15}},
+            {"fn": "accessory_effect", "params": {"archetype": "mobility", "stats": {"movementSpeed": 0.15}}},
         ]},
     }
     result = compile_runtime_plan_to_genome_result(data)

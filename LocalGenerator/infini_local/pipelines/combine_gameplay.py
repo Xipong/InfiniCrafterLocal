@@ -69,7 +69,8 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
     # - consumable_weapon: stackable thrown/shot item using GeneratedProjectile
     # - actual_ammo: Terraria ammo skin/stat mode via item.ammo, reduced custom runtime support
     runtime_stats = find_call(data, "set_item_stats") if LLM_RUNTIME_AUTHORING else {}
-    runtime_patch = runtime_plan_to_attack_genome_patch(data) if LLM_RUNTIME_AUTHORING and runtime_plan(data) else {}
+    runtime_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data))
+    runtime_patch = runtime_plan_to_attack_genome_patch(data) if runtime_authored else {}
     runtime_result_kind = str(runtime_stats.get("resultKind") or "").strip().lower().replace("-", "_")
     runtime_ammo_for = str(runtime_stats.get("ammoFor") or gp.get("ammoFor") or "").strip().lower()
     runtime_has_primary = bool(all_calls(data, "shoot_projectile")) if LLM_RUNTIME_AUTHORING else False
@@ -86,27 +87,58 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         gp["runtimeOutputKind"] = "consumable_weapon"
         gp["consumable"] = True
         try:
-            authored_stack = int(float(runtime_stats.get("maxStack") or gp.get("maxStack") or 99))
+            authored_stack = int(float(runtime_stats.get("maxStack")))
         except Exception:
-            authored_stack = 99
+            authored_stack = 1
         try:
-            authored_yield = int(float(runtime_stats.get("craftYield") or gp.get("craftYield") or min(50, authored_stack)))
+            authored_yield = int(float(runtime_stats.get("craftYield")))
         except Exception:
-            authored_yield = min(50, authored_stack)
-        gp["maxStack"] = max(25, min(999, authored_stack))
-        gp["craftYield"] = max(25, min(int(gp["maxStack"]), authored_yield))
+            authored_yield = 1
+        gp["maxStack"] = max(1, min(999, authored_stack))
+        gp["craftYield"] = max(1, min(int(gp["maxStack"]), authored_yield))
     elif runtime_actual_ammo:
         gp["runtimeOutputKind"] = "actual_ammo"
         gp["actualAmmoMode"] = "vanilla_projectile_basic; generated split/onHit runtime is not used by bow/gun ammo yet"
 
     explicit_non_weapon = kind in NON_WEAPON_CATEGORIES and kind != "generic"
-    is_weapon = (kind in COMBAT_CATEGORIES) or (not explicit_non_weapon and ("weapon" in tags or max_parent_damage > 0))
+    is_weapon = (kind in COMBAT_CATEGORIES) if runtime_authored else (
+        (kind in COMBAT_CATEGORIES) or (not explicit_non_weapon and ("weapon" in tags or max_parent_damage > 0))
+    )
     size = size_profile_for(str(data.get("name", "generated item")), tags, "weapon" if is_weapon else kind, stage)
 
-    if kind == "armor" or data.get("category") == "armor":
+    if runtime_actual_ammo:
+        data["category"] = "ammo"
+        ammo_for = "arrow" if runtime_ammo_for in {"arrow", "arrows"} else "bullet"
+        gp.update({
+            "kind": "ammo",
+            "runtimeOutputKind": "actual_ammo",
+            "actualAmmoMode": "vanilla_projectile_basic; generated split/onHit runtime is not used by bow/gun ammo yet",
+            "stage": stage_name,
+            "powerBudget": stage["powerBudget"],
+            "damageClass": str(gp.get("damageClass") or "generic"),
+            "damage": authored_int(gp, "damage", 0, 0, 9999),
+            "knockback": round(authored_num(gp, "knockback", 0.0, 0.0, 12.0), 2),
+            "useTime": 10,
+            "useAnimation": 10,
+            "useStyle": 0,
+            "autoReuse": False,
+            "consumable": True,
+            "manaCost": 0,
+            "rarity": authored_int(gp, "rarity", 0, -1, 12),
+            "value": authored_int(gp, "value", 0, 0, 999999999),
+            "maxStack": authored_int(gp, "maxStack", 1, 1, 9999),
+            "craftYield": authored_int(gp, "craftYield", 1, 1, 9999),
+            "ammoFor": ammo_for,
+            "width": authored_int(gp, "width", 20, 8, 64),
+            "height": authored_int(gp, "height", 20, 8, 64),
+            "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55),
+        })
+        attack.update({"enabled": False})
+        data.setdefault("accessory", {"enabled": False})
+    elif kind == "armor" or data.get("category") == "armor":
         data["category"] = "armor"
-        slot = armor_slot_from_authoring(data, tags, runtime_stats)
-        armor = armor_stats_for(tags, stage, slot)
+        slot = armor_slot_from_authoring(data, set(), runtime_stats) if runtime_authored else armor_slot_from_authoring(data, tags, runtime_stats)
+        armor = {} if runtime_authored else armor_stats_for(tags, stage, slot)
         armor.update(data.get("armor") or {})
         authored_armor_candidate = runtime_patch.get("armor")
         authored_armor: dict[str, Any] = dict(authored_armor_candidate) if isinstance(authored_armor_candidate, dict) else {}
@@ -125,56 +157,55 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         armor["slot"] = armor.get("slot") if armor.get("slot") in {"head", "body", "legs"} else slot
         armor, armor_budget_report = apply_armor_soft_budget(
             armor, stage, str(armor.get("slot") or slot),
-            apply_clamps=should_apply_soft_normalization(),
+            apply_clamps=should_apply_soft_normalization() and not runtime_authored,
         )
         data.setdefault("debug", {})["armorBudgetReport"] = json.dumps(armor_budget_report, ensure_ascii=False)
         data["armor"] = armor
         gp.update({
             "kind": "armor", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0,
             "knockback": 0, "useTime": 10, "useAnimation": 10, "useStyle": 0, "autoReuse": False,
-            "consumable": False, "manaCost": 0, "rarity": max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(8, int(stage["rarity"]))),
-            "value": max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.72)),
-            "maxStack": 1, "width": 24, "height": 24, "itemScale": 1.0
+            "consumable": False, "manaCost": 0,
+            "rarity": authored_int(gp, "rarity", 0 if runtime_authored else max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(8, int(stage["rarity"])),), -1, 12),
+            "value": authored_int(gp, "value", 0 if runtime_authored else max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.72)), 0, 999999999),
+            "maxStack": 1, "width": 24, "height": 24, "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
         attack.update({"enabled": False})
         data.setdefault("debug", {})["armorGeneration"] = json.dumps({"slot": armor.get("slot"), "setKey": armor.get("setKey", ""), "rule": "Generated armor uses dedicated Head/Body/Legs proxy ModItem types; C# writes Item.defense and UpdateEquip modifiers."}, ensure_ascii=False)
     elif kind == "accessory" or data.get("category") == "accessory":
         data["category"] = "accessory"
-        acc = accessory_stats_for(tags, stage)
+        acc = {} if runtime_authored else accessory_stats_for(tags, stage)
         acc.update(data.get("accessory") or {})
         authored_accessory_candidate = runtime_patch.get("accessory")
         authored_accessory: dict[str, Any] = dict(authored_accessory_candidate) if isinstance(authored_accessory_candidate, dict) else {}
         acc.update(authored_accessory)
         acc["enabled"] = True
         acc, accessory_budget_report = apply_accessory_soft_budget(
-            acc, stage, apply_clamps=should_apply_soft_normalization(),
+            acc, stage, apply_clamps=should_apply_soft_normalization() and not runtime_authored,
         )
         data.setdefault("debug", {})["accessoryBudgetReport"] = json.dumps(accessory_budget_report, ensure_ascii=False)
         data["accessory"] = acc
         gp.update({
             "kind": "accessory", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0,
             "knockback": 0, "useTime": 10, "useAnimation": 10, "useStyle": 0, "autoReuse": False,
-            "consumable": False, "manaCost": 0, "rarity": max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(8, int(stage["rarity"]))),
-            "value": max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.65)),
-            "maxStack": 1, "width": 24, "height": 24, "itemScale": 1.0
+            "consumable": False, "manaCost": 0,
+            "rarity": authored_int(gp, "rarity", 0 if runtime_authored else max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(8, int(stage["rarity"])),), -1, 12),
+            "value": authored_int(gp, "value", 0 if runtime_authored else max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.65)), 0, 999999999),
+            "maxStack": 1, "width": 24, "height": 24, "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
         attack.update({"enabled": False})
     elif is_weapon:
         # Terraria summon weapons are still combat items. Internal category stays "weapon"
         # so GeneratedItem keeps attack handling, while gameplay.damageClass carries summon.
         data["category"] = "weapon"
-        requested_dc = str(gp.get("damageClass") or "").lower()
-        if kind == "summon" or requested_dc == "summon":
+        requested_dc = str(gp.get("damageClass") or "").strip()
+        if runtime_authored:
+            damage_class = requested_dc or ("summon" if kind == "summon" else "generic")
+        elif kind == "summon" or requested_dc.lower() == "summon":
             damage_class = "summon"
-        elif requested_dc in {"melee", "ranged", "magic", "generic", "modded"}:
-            damage_class = requested_dc if requested_dc != "modded" else "generic"
+        elif requested_dc.lower() in {"melee", "melee_no_speed", "ranged", "magic", "summon", "summon_melee_speed", "generic"}:
+            damage_class = requested_dc.lower()
         else:
-            # Last-resort raw fallback only: use the highest-damage parent class if present.
-            parent_candidates = sorted(
-                [a, b],
-                key=lambda it: int(item_num(it, "damage", 0)),
-                reverse=True,
-            )
+            parent_candidates = sorted([a, b], key=lambda it: int(item_num(it, "damage", 0)), reverse=True)
             parent_dc = str(item_field(parent_candidates[0], "damageClass", "") or "").lower() if parent_candidates else ""
             damage_class = parent_dc if parent_dc in {"melee", "ranged", "magic", "summon", "generic"} else "generic"
         genome = weapon_genome_for(data, a, b, tags, stage, damage_class)
@@ -184,7 +215,8 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         pattern, pattern_source = normalize_authored_attack_pattern(genome, attack, damage_class, allow_fallback=not runtime_authored)
         genome["attackPattern"] = pattern
         genome["attackPatternSource"] = pattern_source
-        genome = apply_parent_projectile_affordance(genome, a, b, tags, data, damage_class)
+        if not runtime_authored:
+            genome = apply_parent_projectile_affordance(genome, a, b, tags, data, damage_class)
         delivery = str(genome.get("delivery") or delivery)
         runtime_family = str(genome.get("runtimeFamily") or "none")
 
@@ -202,18 +234,18 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "useTime": authored_int(gp, "useTime", int(numbers["useTime"]), 6, 150),
             "useAnimation": authored_int(gp, "useAnimation", int(float(genome.get("useAnimationTicks") or numbers["useAnimation"])), 6, 150),
             "useStyle": authored_int(gp, "useStyle", use_style, 0, 5),
-            "autoReuse": bool(gp.get("autoReuse", stage["derivedPower"] > 12 and int(numbers["useTime"]) <= 45)),
+            "autoReuse": bool(gp.get("autoReuse", False if runtime_authored else stage["derivedPower"] > 12 and int(numbers["useTime"]) <= 45)),
             "manaCost": authored_int(gp, "manaCost", int(stage["mana"]) if damage_class == "magic" else 0, 0, 80),
-            "rarity": authored_int(gp, "rarity", max(int(a.get("rare") or 0), int(b.get("rare") or 0), int(stage["rarity"])), -1, 12),
-            "value": authored_int(gp, "value", max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 150, int(stage["value"])), 0, max(100, int(stage["value"] * 3 + 5000))),
+            "rarity": authored_int(gp, "rarity", 0 if runtime_authored else max(int(a.get("rare") or 0), int(b.get("rare") or 0), int(stage["rarity"])), -1, 12),
+            "value": authored_int(gp, "value", 0 if runtime_authored else max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 150, int(stage["value"])), 0, 999999999),
             "consumable": bool(gp.get("consumable", False)) if gp.get("runtimeOutputKind") == "consumable_weapon" else False,
             "maxStack": authored_int(gp, "maxStack", 50 if gp.get("runtimeOutputKind") == "consumable_weapon" else 1, 1, 999) if gp.get("runtimeOutputKind") == "consumable_weapon" else 1,
             "craftYield": authored_int(gp, "craftYield", 50 if gp.get("runtimeOutputKind") == "consumable_weapon" else 1, 1, 999),
-            "width": authored_int(gp, "width", 28 + size["oversized"] * 4, 10, 96),
-            "height": authored_int(gp, "height", 28 + size["oversized"] * 4, 10, 96),
-            "itemScale": size["itemScale"],
-            "holdoutOffsetX": size["holdoutOffsetX"],
-            "holdoutOffsetY": size["holdoutOffsetY"],
+            "width": authored_int(gp, "width", 24 if runtime_authored else 28 + size["oversized"] * 4, 10, 96),
+            "height": authored_int(gp, "height", 24 if runtime_authored else 28 + size["oversized"] * 4, 10, 96),
+            "itemScale": authored_num(gp, "itemScale", 1.0 if runtime_authored else size["itemScale"], 0.55, 1.55),
+            "holdoutOffsetX": authored_int(gp, "holdoutOffsetX", 0 if runtime_authored else size["holdoutOffsetX"], -256, 256),
+            "holdoutOffsetY": authored_int(gp, "holdoutOffsetY", 0 if runtime_authored else size["holdoutOffsetY"], -256, 256),
         })
         if not str(gp.get("heldVisibility") or "").strip():
             gp["heldVisibility"] = presentation_defaults["heldVisibility"]
@@ -221,18 +253,16 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             gp["releaseTiming"] = presentation_defaults["releaseTiming"]
         if not str(gp.get("handPose") or "").strip():
             gp["handPose"] = presentation_defaults["handPose"]
-        if gp.get("drawDuringUse") in (None, ""):
-            gp["drawDuringUse"] = gp["heldVisibility"] == "show_item"
         aoe_damage_radius_px = int(float(genome.get("aoeRadiusTiles") or 0) * 16)
         impact_vfx_radius_px = int(_authored_float_or_default(
             genome,
             "impactVfxRadiusPx",
-            max(size.get("explosionRadius", 0), aoe_damage_radius_px),
+            0 if runtime_authored else max(size.get("explosionRadius", 0), aoe_damage_radius_px),
         ))
         contact_forgiveness_px = int(_authored_float_or_default(
             genome,
             "contactForgivenessPx",
-            min(14, max(0, aoe_damage_radius_px // 6)) if str(genome.get("onHit") or "") in {"burst", "starburst", "aura_pulse"} else 0,
+            0 if runtime_authored else (min(14, max(0, aoe_damage_radius_px // 6)) if str(genome.get("onHit") or "") in {"burst", "starburst", "aura_pulse"} else 0),
         ))
         attack.update({
             "enabled": True,
@@ -286,8 +316,8 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "projectileWidth": int(float(genome.get("projectileWidth") or size["projectileWidth"])),
             "projectileHeight": int(float(genome.get("projectileHeight") or size["projectileHeight"])),
             "projectileScale": float(genome.get("projectileScale") or size["projectileScale"]),
-            "hitboxScale": max(size["hitboxScale"], 1.0 + min(1.25, float(genome.get("aoeRadiusTiles") or 0) * 0.10)),
-            "explosionRadius": max(size["explosionRadius"], impact_vfx_radius_px),
+            "hitboxScale": float(genome.get("hitboxScale") if genome.get("hitboxScale") is not None else (1.0 if runtime_authored else size["hitboxScale"])),
+            "explosionRadius": int(genome.get("explosionRadius") or 0) if runtime_authored else max(size["explosionRadius"], impact_vfx_radius_px),
             "impactVfxRadiusPx": max(0, min(192, impact_vfx_radius_px)),
             "aoeDamageRadiusPx": max(0, min(160, aoe_damage_radius_px)),
             "contactForgivenessPx": max(0, min(32, contact_forgiveness_px)),
@@ -305,7 +335,10 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "debuffTime": int(float(genome.get("debuffTime") or 0)),
             "secondaryMaterial": str(genome.get("secondaryMaterial") or ""),
             "secondaryProjectileShape": str(genome.get("secondaryProjectileShape") or ""),
-            "secondaryLifetimeTicks": max(5, min(180, int(float(genome.get("secondaryLifetimeTicks") or 24)))),
+            "secondaryDamageMultiplier": round(max(0.0, min(1.0, float(genome.get("secondaryDamageMultiplier") if genome.get("secondaryDamageMultiplier") is not None else 0.0))), 3),
+            "secondarySpreadRadians": round(max(0.0, min(1.2, float(genome.get("secondarySpreadRadians") if genome.get("secondarySpreadRadians") is not None else 0.0))), 3),
+            "secondaryLifetimeTicks": max(5, min(180, int(float(genome.get("secondaryLifetimeTicks") if genome.get("secondaryLifetimeTicks") is not None else 5)))),
+            "sameTargetBias": round(max(0.0, min(1.0, float(genome.get("sameTargetBias") if genome.get("sameTargetBias") is not None else 0.0))), 3),
             "engineMetrics": genome.get("engineMetrics") or estimate_engine_metrics(genome, stage),
             "projectileShape": genome.get("projectileShape") or attack.get("projectileShape") or (data.get("projectileGenome") if isinstance(data.get("projectileGenome"), dict) else {}).get("shape", ""),
             "projectileMotion": genome.get("projectileMotion") or attack.get("projectileMotion") or (data.get("projectileGenome") if isinstance(data.get("projectileGenome"), dict) else {}).get("motionFeel", ""),
@@ -328,25 +361,23 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
     elif kind == "tool":
         data["category"] = "tool"
         tool_power = max(35, min(230, int(28 + stage["derivedPower"] * 4 + max_parent_damage * 1.2)))
-        authored_pick = int(float(gp.get("pickPower") or 0) or 0) if gp.get("pickPower") not in (None, "") else 0
-        authored_axe = int(float(gp.get("axePower") or 0) or 0) if gp.get("axePower") not in (None, "") else 0
-        authored_hammer = int(float(gp.get("hammerPower") or 0) or 0) if gp.get("hammerPower") not in (None, "") else 0
-        runtime_tool_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data) and max(authored_pick, authored_axe, authored_hammer) > 0)
+        authored_pick = int(float(gp.get("pickPower") or 0)) if gp.get("pickPower") not in (None, "") else 0
+        authored_axe = int(float(gp.get("axePower") or 0)) if gp.get("axePower") not in (None, "") else 0
+        authored_hammer = int(float(gp.get("hammerPower") or 0)) if gp.get("hammerPower") not in (None, "") else 0
         parent_pick_signal = "pickaxe" in tags or "drill" in tags or _parent_tool_power(a, "pickPower", "pick") > 0 or _parent_tool_power(b, "pickPower", "pick") > 0
         parent_axe_signal = "axe" in tags or "chainsaw" in tags or _parent_tool_power(a, "axePower", "axe") > 0 or _parent_tool_power(b, "axePower", "axe") > 0
         parent_hammer_signal = "hammer" in tags or _parent_tool_power(a, "hammerPower", "hammer") > 0 or _parent_tool_power(b, "hammerPower", "hammer") > 0
-        # Runtime-authored tool_capability is executable intent. Parent tool signals remain
-        # the only source for non-runtime deterministic inference so weapons do not gain
-        # tile-edit powers by parent tags alone.
-        pick_signal = parent_pick_signal or (runtime_tool_authored and authored_pick > 0)
-        axe_signal = parent_axe_signal or (runtime_tool_authored and authored_axe > 0)
-        hammer_signal = parent_hammer_signal or (runtime_tool_authored and authored_hammer > 0)
         inferred_pick = tool_power if parent_pick_signal else 0
         inferred_axe = max(8, tool_power // 5) if parent_axe_signal else 0
         inferred_hammer = max(20, min(120, tool_power)) if parent_hammer_signal else 0
-        pick = authored_int(gp, "pickPower", inferred_pick, 0, 230) if pick_signal else 0
-        axe = authored_int(gp, "axePower", inferred_axe, 0, 50) if axe_signal else 0
-        hammer = authored_int(gp, "hammerPower", inferred_hammer, 0, 120) if hammer_signal else 0
+        if runtime_authored:
+            pick = max(0, min(1000, authored_pick))
+            axe = max(0, min(200, authored_axe))
+            hammer = max(0, min(1000, authored_hammer))
+        else:
+            pick = authored_int(gp, "pickPower", inferred_pick, 0, 230) if parent_pick_signal else 0
+            axe = authored_int(gp, "axePower", inferred_axe, 0, 50) if parent_axe_signal else 0
+            hammer = authored_int(gp, "hammerPower", inferred_hammer, 0, 120) if parent_hammer_signal else 0
         genome = (attack.get("genome") if isinstance(attack.get("genome"), dict) else {}) or {}
         # emit_light on a non-projectile tool is executable held-item light.
         # Keep it in the existing Gameplay.HoldLight* contract instead of
@@ -367,17 +398,17 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "final": {"pickPower": pick, "axePower": axe, "hammerPower": hammer},
             "rule": "tool tile-edit powers come from parent tool signals or explicit runtimePlan tool_capability; weapons/projectiles do not invent them",
         }, ensure_ascii=False)
-        damage_class = "melee"
+        damage_class = str(gp.get("damageClass") or ("generic" if runtime_authored else "melee"))
         gp.update({
             "kind": "tool", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": damage_class,
-            "damage": max(4, int(max_parent_damage * 0.75 + max(1, int(stage.get("derivedDamage") or max_parent_damage or 4)) * 0.25)),
-            "knockback": round(2.0 + min(stage["powerBudget"], 3.0) * 0.35, 2),
-            "useTime": authored_int(gp, "useTime", max(12, int(stage["useTime"] + 2)), 10, 150),
-            "useAnimation": authored_int(gp, "useAnimation", max(12, int(stage["useTime"] + 2)), 10, 150),
-            "useStyle": 1, "autoReuse": True, "manaCost": 0,
-            "rarity": max(int(a.get("rare") or 0), int(b.get("rare") or 0), int(stage["rarity"])),
-            "value": max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.85)),
-            "maxStack": 1, "width": 28, "height": 28, "itemScale": size["itemScale"],
+            "damage": authored_int(gp, "damage", 0 if runtime_authored else max(4, int(max_parent_damage * 0.75 + max(1, int(stage.get("derivedDamage") or max_parent_damage or 4)) * 0.25)), 0, 9999),
+            "knockback": round(authored_num(gp, "knockback", 0.0 if runtime_authored else 2.0 + min(stage["powerBudget"], 3.0) * 0.35, 0.0, 12.0), 2),
+            "useTime": authored_int(gp, "useTime", 20 if runtime_authored else max(12, int(stage["useTime"] + 2)), 10, 150),
+            "useAnimation": authored_int(gp, "useAnimation", 20 if runtime_authored else max(12, int(stage["useTime"] + 2)), 6, 150),
+            "useStyle": 1, "autoReuse": bool(gp.get("autoReuse", False if runtime_authored else True)), "manaCost": 0,
+            "rarity": authored_int(gp, "rarity", 0 if runtime_authored else max(int(a.get("rare") or 0), int(b.get("rare") or 0), int(stage["rarity"])), -1, 12),
+            "value": authored_int(gp, "value", 0 if runtime_authored else max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.85)), 0, 999999999),
+            "maxStack": 1, "width": 28, "height": 28, "itemScale": authored_num(gp, "itemScale", 1.0 if runtime_authored else size["itemScale"], 0.55, 1.55),
             "pickPower": pick, "axePower": axe, "hammerPower": hammer,
         })
         if mining_speed not in (None, ""):
@@ -394,33 +425,27 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             gp["holdLightColorName"] = str(light_color)
         attack.update({"enabled": False})
         data.setdefault("accessory", {"enabled": False})
-    elif kind == "potion" or "potion" in tags or "consumable" in tags:
+    elif kind == "potion" or (not runtime_authored and ("potion" in tags or "consumable" in tags)):
         data["category"] = "potion"
-        potion_profile = _bounded_parent_potion_stats(a, b)
-        heal_life = authored_int(gp, "healLife", int(potion_profile.get("healLife") or 0), 0, 200)
-        heal_mana = authored_int(gp, "healMana", int(potion_profile.get("healMana") or 0), 0, 200)
-        buff_code = authored_int(gp, "buffCode", int(potion_profile.get("buffCode") or 0), 0, 1024)
+        potion_profile = {} if runtime_authored else _bounded_parent_potion_stats(a, b)
+        heal_life = authored_int(gp, "healLife", int(potion_profile.get("healLife") or 0), 0, 500)
+        heal_mana = authored_int(gp, "healMana", int(potion_profile.get("healMana") or 0), 0, 500)
+        buff_code = authored_int(gp, "buffCode", int(potion_profile.get("buffCode") or 0), 0, 2147483647)
         buff_time = authored_int(gp, "buffTime", int(potion_profile.get("buffTime") or 0), 0, 60 * 60 * 6)
-        if buff_code > 0 and buff_time <= 0:
-            buff_time = max(60 * 10, int(potion_profile.get("buffTime") or 60 * 30))
-        extra_buffs = gp.get("extraBuffs") if isinstance(gp.get("extraBuffs"), list) else potion_profile.get("extraBuffs", [])
+        extra_buffs = gp.get("extraBuffs") if isinstance(gp.get("extraBuffs"), list) else ([] if runtime_authored else potion_profile.get("extraBuffs", []))
         if not isinstance(extra_buffs, list):
             extra_buffs = []
-        if buff_code > 0 and not any(isinstance(b, dict) and int(float(b.get("buffCode") or b.get("buffType") or 0)) == buff_code for b in extra_buffs):
+        if buff_code > 0 and buff_time > 0 and not any(isinstance(entry, dict) and int(float(entry.get("buffCode") or entry.get("buffType") or 0)) == buff_code for entry in extra_buffs):
             extra_buffs = [{"buffCode": buff_code, "buffTime": buff_time}] + list(extra_buffs)
-        if heal_life <= 0 and heal_mana <= 0 and buff_code <= 0:
-            # Generic consumable fallback: mild regeneration, not semantic source inference.
-            buff_code = 2
-            buff_time = 60 * 20
-            potion_profile.setdefault("debug", {})["fallback"] = "generic_regeneration_no_parent_potion_channels"
         data.setdefault("debug", {})["potionMerge"] = json.dumps(potion_profile.get("debug", {}), ensure_ascii=False)
         gp.update({
             "kind": "potion", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0, "useStyle": 2,
             "consumable": True,
             "maxStack": authored_int(gp, "maxStack", 30, 1, 999),
-            "rarity": min(3, max(1, int(stage["rarity"]))), "value": max(80, int(stage["value"] * 0.18)),
-            "useTime": authored_int(gp, "useTime", 17, 10, 60), "useAnimation": authored_int(gp, "useAnimation", 17, 10, 60),
-            "width": 20, "height": 26, "healLife": heal_life, "healMana": heal_mana, "buffCode": buff_code, "buffTime": buff_time, "extraBuffs": extra_buffs[:4], "itemScale": 1.0
+            "rarity": authored_int(gp, "rarity", 0 if runtime_authored else min(3, max(1, int(stage["rarity"]))), -1, 12),
+            "value": authored_int(gp, "value", 0 if runtime_authored else max(80, int(stage["value"] * 0.18)), 0, 999999999),
+            "useTime": authored_int(gp, "useTime", 17, 10, 60), "useAnimation": authored_int(gp, "useAnimation", 17, 6, 60),
+            "width": authored_int(gp, "width", 20, 8, 64), "height": authored_int(gp, "height", 26, 8, 64), "healLife": heal_life, "healMana": heal_mana, "buffCode": buff_code, "buffTime": buff_time, "extraBuffs": extra_buffs[:4], "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
         attack.update({"enabled": False})
         data.setdefault("accessory", {"enabled": False})
@@ -431,10 +456,10 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
         size = size_profile_for(str(data.get("name", "generated item")), tags, generic_kind, stage)
         gp.update({
             "kind": generic_kind, "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0, "useStyle": 1,
-            "maxStack": 99 if generic_kind in ["material", "generic", "ammo"] else 1,
-            "rarity": max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(4, int(stage["rarity"]))),
-            "value": max(int(a.get("value") or 0), int(b.get("value") or 0)) + 50,
-            "width": 24, "height": 24, "itemScale": size["itemScale"]
+            "maxStack": authored_int(gp, "maxStack", 1 if runtime_authored else (99 if generic_kind in ["material", "generic", "ammo"] else 1), 1, 9999),
+            "rarity": authored_int(gp, "rarity", 0 if runtime_authored else max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(4, int(stage["rarity"]))), -1, 12),
+            "value": authored_int(gp, "value", 0 if runtime_authored else max(int(a.get("value") or 0), int(b.get("value") or 0)) + 50, 0, 999999999),
+            "width": 24, "height": 24, "itemScale": authored_num(gp, "itemScale", 1.0 if runtime_authored else size["itemScale"], 0.55, 1.55)
         })
         attack.update({"enabled": False})
         data.setdefault("accessory", {"enabled": False})

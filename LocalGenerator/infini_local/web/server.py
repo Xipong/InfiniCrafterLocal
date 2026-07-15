@@ -441,7 +441,7 @@ def _health_payload() -> dict[str, Any]:
         "lastCombineFailure": generation_debug.last_combine_failure_summary(),
         "worldRecipesDir": str(WORLD_RECIPES_DIR),
         "recipeCacheScope": "world",
-        "recipeStorage": "world_recipes_files",
+        "recipeStorage": "authoritative_world_recipe_files",
         "requiresWorldId": True,
         "recipeIdentityVersion": RECIPE_IDENTITY_VERSION,
         "assetSync": {"endpoint": "/get_asset", "publicBaseUrl": ASSET_PUBLIC_BASE_URL, "spriteDir": str(SPRITE_DIR)},

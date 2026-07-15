@@ -4,6 +4,7 @@ import json
 import math
 from typing import Any
 
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.boundary_models import validate_vfx_manifest_boundary
 
 from infini_local.core.effect_catalog import normalize_attack_pattern
@@ -329,7 +330,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
     debug = child_item.setdefault("debug", {})
     try:
         input_packet = build_vfx_director_prompt(parent_a, parent_b, child_item, surface, constraints).get("vfxInputPacket", {})
-        debug["vfxLlmDirectorInputPacket"] = json.dumps(input_packet, ensure_ascii=False)[:12000]
+        debug["vfxLlmDirectorInputPacket"] = bounded_json_dumps(input_packet, max_chars=12000)
     except Exception:
         pass
 
@@ -363,7 +364,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
 
         if VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS <= 0:
             _set_mode_fallback("invalid_director_output_repair_disabled")
-            debug["vfxLlmDirectorValidationReport"] = json.dumps(report, ensure_ascii=False)[:6000]
+            debug["vfxLlmDirectorValidationReport"] = bounded_json_dumps(report, max_chars=6000)
             return None
 
         repair_raw: Any = raw
@@ -406,7 +407,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
 
         debug["vfxLlmDirectorRepairStatus"] = "failed"
         _set_mode_fallback("invalid_after_repair")
-        debug["vfxLlmDirectorValidationReport"] = json.dumps(last_report, ensure_ascii=False)[:6000]
+        debug["vfxLlmDirectorValidationReport"] = bounded_json_dumps(last_report, max_chars=6000)
         return None
 
     try:
@@ -532,7 +533,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         data["vfxManifest"] = direct_manifest
         attack["vfxManifestJson"] = json.dumps(wire_manifest, ensure_ascii=False, separators=(",", ":"))
         data["attack"] = attack
-        data.setdefault("debug", {})["vfxManifest"] = json.dumps(direct_manifest, ensure_ascii=False)[:12000]
+        data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(direct_manifest, max_chars=12000)
         data.setdefault("debug", {})["vfxPath"] = "runtime_plan_direct_empty" if not direct_manifest.get("slots") else "runtime_plan_direct"
         return data
     force_recipe_id = str((data.get("recipeMeta") or {}).get("vfxForcedRecipeId") or (data.get("debug") or {}).get("vfxForcedRecipeId") or "").strip()
@@ -545,7 +546,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         data["vfxManifest"] = director_manifest
         attack["vfxManifestJson"] = json.dumps(wire_manifest, ensure_ascii=False, separators=(",", ":"))
         data["attack"] = attack
-        data.setdefault("debug", {})["vfxManifest"] = json.dumps(director_manifest, ensure_ascii=False)[:12000]
+        data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(director_manifest, max_chars=12000)
         data.setdefault("debug", {})["vfxLlmDirector"] = "used"
         data.setdefault("debug", {})["vfxPath"] = "llm_director"
         return data
@@ -758,7 +759,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
     data["vfxManifest"] = manifest
     attack["vfxManifestJson"] = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))
     data["attack"] = attack
-    data.setdefault("debug", {})["vfxManifest"] = json.dumps(manifest, ensure_ascii=False)[:12000]
+    data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(manifest, max_chars=12000)
     return data
 
 
@@ -831,7 +832,7 @@ def _vfx_manifest_from_recipe(data: dict[str, Any], recipe: dict[str, Any], reci
     data["vfxManifest"] = manifest
     attack["vfxManifestJson"] = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))
     data["attack"] = attack
-    data.setdefault("debug", {})["vfxManifest"] = json.dumps(manifest, ensure_ascii=False)[:12000]
+    data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(manifest, max_chars=12000)
     return data
 
 

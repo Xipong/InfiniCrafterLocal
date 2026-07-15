@@ -14,7 +14,7 @@ def _compile(engine_calls):
 def _check_golden_magic_mirror_boots_authors_mobility_and_accessory():
     patch = _compile([
         {"fn": "mobility_effect", "params": {"mode": "blink_to_cursor", "rangeTiles": 32, "cooldownTicks": 900}},
-        {"fn": "accessory_effect", "params": {"archetype": "mobility", "movementSpeed": 0.12, "fallDamageImmune": True}},
+        {"fn": "accessory_effect", "params": {"archetype": "mobility", "stats": {"movementSpeed": 0.12, "fallDamageImmune": True}}},
     ])
     assert patch["mobilityMode"] == "blink_to_cursor"
     assert patch["accessory"]["enabled"] is True

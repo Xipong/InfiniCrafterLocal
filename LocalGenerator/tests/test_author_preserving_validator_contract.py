@@ -64,14 +64,14 @@ def _check_secondary_children_preserve_simple_debuff_intent() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damage": 12, "useTimeTicks": 24}},
         {"fn": "shoot_projectile", "params": {"delivery": "shoot", "movement": "straight"}},
-        {"fn": "apply_on_hit_effect", "params": {"onHit": "frostburn"}},
+        {"fn": "apply_on_hit_effect", "params": {"onHit": "frostburn", "debuffTime": 150}},
         {"fn": "spawn_secondary_projectiles", "params": {"trigger": "on_hit", "count": 2, "damageMultiplier": 0.25}},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(data)
-    assert patch["onHit"] == "split"
+    assert patch["onHit"] == "frostburn"
+    assert patch["debuffTime"] == 150
+    assert patch["secondaryTrigger"] == "on_hit"
     assert patch["splitCount"] == 2
-    assert patch["debuffHint"] == "frostburn"
-    assert patch["secondaryPreservedDebuffOnHit"] == "frostburn"
 
 
 def _check_secondary_children_do_not_replace_lifesteal_identity() -> None:
@@ -83,9 +83,9 @@ def _check_secondary_children_do_not_replace_lifesteal_identity() -> None:
     ]}}
     patch = compile_runtime_plan_to_genome_patch(data)
     assert patch["onHit"] == "lifesteal"
-    assert patch["splitCount"] == 0
-    assert patch["maxChildProjectiles"] == 0
-    assert patch["secondarySuppressedByPrimaryOnHit"] == "lifesteal"
+    assert patch["secondaryTrigger"] == "on_hit"
+    assert patch["splitCount"] == 3
+    assert patch["secondaryDamageMultiplier"] == 0.25
 
 
 

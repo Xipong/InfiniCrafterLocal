@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
+import threading
 
+import pytest
+
+from infini_local.qa.csharp_delivery_contract import load_csharp_contract_graph
 from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
 from infini_local.qa.runtime_proof import build_gameplay_seam_report
 from infini_local.storage import world_storage
 
 
 ROOT = Path(__file__).resolve().parents[2]
+CSHARP_DELIVERY_CONTRACT = load_csharp_contract_graph()
 
 
 def _check_safe_file_part_is_stable_and_boring() -> None:
@@ -61,89 +65,30 @@ def _check_deliverable_recipe_payload_rejects_placeholders_and_fallbacks() -> No
 
 
 def _csharp_auto_property_fields(class_name: str) -> frozenset[str]:
-    sources = "\n".join(
-        path.read_text(encoding="utf-8-sig")
-        for path in (ROOT / "ModSources/InfiniCrafterLocal").rglob("*.cs")
-    )
-    marker = re.search(rf"public\s+(?:sealed\s+)?(?:partial\s+)?class\s+{re.escape(class_name)}\b", sources)
-    assert marker is not None, class_name
-    start = sources.index("{", marker.end())
-    depth = 0
-    end = start
-    for end in range(start, len(sources)):
-        depth += int(sources[end] == "{") - int(sources[end] == "}")
-        if depth == 0:
-            break
-    body = sources[start : end + 1]
-    return frozenset(
-        name[:1].lower() + name[1:]
-        for name in re.findall(
-            r"public\s+(?!static\b|void\b)[A-Za-z_]\w*(?:<[A-Za-z0-9_.,?\[\] \t]+>)?[\[\]?]*[ \t]+(\w+)\s*\{\s*get;\s*set;\s*\}",
-            body,
-        )
-    )
+    return CSHARP_DELIVERY_CONTRACT.json_fields(class_name)
 
 
 def _strict_csharp_unmapped_paths(payload: dict) -> list[str]:
-    classes: dict[str, dict] = {}
-    for path in (ROOT / "ModSources/InfiniCrafterLocal").rglob("*.cs"):
-        source = path.read_text(encoding="utf-8-sig")
-        for marker in re.finditer(r"public\s+(?:(?:sealed|partial)\s+)*class\s+(\w+)", source):
-            class_name = marker.group(1)
-            start = source.index("{", marker.end())
-            depth = 0
-            end = start
-            for end in range(start, len(source)):
-                depth += int(source[end] == "{") - int(source[end] == "}")
-                if depth == 0:
-                    break
-            body = source[start : end + 1]
-            contract = classes.setdefault(class_name, {"properties": {}, "extension": False})
-            contract["extension"] = contract["extension"] or "[JsonExtensionData]" in body
-            for property_match in re.finditer(
-                r"public\s+(?!sealed\b|static\b|void\b)([A-Za-z_]\w*(?:<[A-Za-z0-9_.,?\[\] \t]+>)?[\[\]?]*)[ \t]+(\w+)\s*\{\s*get;\s*set;\s*\}",
-                body,
-            ):
-                property_type, property_name = property_match.groups()
-                contract["properties"][property_name.lower()] = re.sub(r"\s+", "", property_type)
+    return CSHARP_DELIVERY_CONTRACT.validate(payload)
 
-    primitives = {
-        "string", "int", "long", "float", "double", "decimal", "bool",
-        "byte", "short", "uint", "ulong", "ushort", "JsonElement", "object",
-    }
-    unmapped: list[str] = []
 
-    def visit(value, type_name: str, json_path: str) -> None:
-        type_name = type_name.rstrip("?")
-        if type_name.endswith("[]"):
-            if isinstance(value, list):
-                for index, item in enumerate(value):
-                    visit(item, type_name[:-2], f"{json_path}[{index}]")
-            return
-        for prefix in ("List<", "IReadOnlyList<", "IEnumerable<"):
-            if type_name.startswith(prefix) and type_name.endswith(">"):
-                if isinstance(value, list):
-                    for index, item in enumerate(value):
-                        visit(item, type_name[len(prefix) : -1], f"{json_path}[{index}]")
-                return
-        if type_name.startswith(("Dictionary<", "IDictionary<")) or type_name in primitives or value is None:
-            return
-        contract = classes.get(type_name)
-        if contract is not None and not isinstance(value, dict):
-            unmapped.append(f"{json_path} -> expected {type_name} object")
-            return
-        if contract is None:
-            return
-        for key, item in value.items():
-            child_type = contract["properties"].get(key.lower())
-            if child_type is None:
-                if not contract["extension"]:
-                    unmapped.append(f"{json_path}.{key} -> {type_name}")
-                continue
-            visit(item, child_type, f"{json_path}.{key}")
-
-    visit(payload, "GeneratedItemData", "$")
-    return unmapped
+def _wire_probe_value(class_name: str, field_name: str):
+    contract = CSHARP_DELIVERY_CONTRACT.class_contract(class_name)
+    assert contract is not None
+    prop = contract.property_for_json_name(field_name)
+    assert prop is not None
+    type_name = prop.type_name
+    if type_name.endswith("[]") or type_name.startswith(("List<", "IReadOnlyList<", "IEnumerable<")):
+        return []
+    if type_name.startswith(("Dictionary<", "IDictionary<", "IReadOnlyDictionary<")):
+        return {}
+    if type_name in {"bool", "Boolean"}:
+        return True
+    if type_name in {"byte", "sbyte", "short", "ushort", "int", "uint", "long", "ulong"}:
+        return 1
+    if type_name in {"float", "double", "decimal", "Half", "Single", "Double", "Decimal"}:
+        return 1.0
+    return f"wire:{field_name}"
 
 
 def _check_golden_delivery_has_no_unmapped_nested_csharp_fields() -> None:
@@ -173,24 +118,24 @@ def _check_delivery_matches_strict_nested_csharp_specs() -> None:
     vfx_debug_fields = contracts["VfxDebugSpec"]
     payload = {
         "visual": {
-            **{field: f"wire:{field}" for field in visual_fields},
+            **{field: _wire_probe_value("VisualSpec", field) for field in visual_fields},
             "itemPrompt": "one authored item prompt",
             "itemSilhouetteContract": "one connected body",
             "styleGuide": "pixel art",
             "vfxIntent": "sawdust",
         },
         "generatedParentSummary": {
-            **{field: f"wire:{field}" for field in summary_fields},
+            **{field: _wire_probe_value("GeneratedParentSummarySpec", field) for field in summary_fields},
             "customAttackEnabled": True,
             "vanillaItemHitboxDamage": False,
         },
         "itemKnowledge": {
             "enabled": True,
-            "parents": [{**{field: f"wire:{field}" for field in parent_fields}, "recipeFrame": {}, "signals": {}}],
-            "resultCard": {**{field: f"wire:{field}" for field in parent_fields}, "signals": {}},
+            "parents": [{**{field: _wire_probe_value("ParentItemCardSpec", field) for field in parent_fields}, "recipeFrame": {}, "signals": {}}],
+            "resultCard": {**{field: _wire_probe_value("ParentItemCardSpec", field) for field in parent_fields}, "signals": {}},
         },
         "recipeMeta": {
-            **{field: f"wire:{field}" for field in recipe_meta_fields},
+            **{field: _wire_probe_value("RecipeMetaSpec", field) for field in recipe_meta_fields},
             "assetSync": {},
             "contractVersions": {},
             "parentA": "A",
@@ -201,12 +146,12 @@ def _check_delivery_matches_strict_nested_csharp_specs() -> None:
         },
         "vfxManifest": {
             "budget": {
-                **{field: f"wire:{field}" for field in vfx_budget_fields},
+                **{field: _wire_probe_value("VfxQualityBudgetSpec", field) for field in vfx_budget_fields},
                 "quality": "high",
                 "renderQuality": "high",
             },
             "debug": {
-                **{field: f"wire:{field}" for field in vfx_debug_fields},
+                **{field: _wire_probe_value("VfxDebugSpec", field) for field in vfx_debug_fields},
                 "composition": {},
                 "effectLineage": [],
                 "rerollSalt": "salt",
@@ -237,7 +182,7 @@ def _check_delivery_rejects_scalar_for_csharp_object_contract() -> None:
     }
 
     assert _strict_csharp_unmapped_paths(payload) == [
-        "$.runtimeArchetype -> expected RuntimeArchetypeSpec object"
+        "$.runtimeArchetype: expected object, got string"
     ]
     delivered = world_storage.sanitize_recipe_for_delivery(payload)
     assert "runtimeArchetype" not in delivered
@@ -258,7 +203,9 @@ def _check_delivery_rejects_scalar_for_csharp_object_contract() -> None:
         },
     }
     assert _strict_csharp_unmapped_paths(object_payload) == [
-        "$.runtimeArchetype.futureNestedKey -> RuntimeArchetypeSpec"
+        "$.runtimeArchetype.aiType: expected string, got integer",
+        "$.runtimeArchetype.supportNotes: expected array, got string",
+        "$.runtimeArchetype.futureNestedKey: unknown field for RuntimeArchetypeSpec",
     ]
     projected = world_storage.sanitize_recipe_for_delivery(object_payload)
     assert projected["runtimeArchetype"] == {
@@ -272,7 +219,149 @@ def _check_delivery_rejects_scalar_for_csharp_object_contract() -> None:
     assert "futureNestedKey" in object_payload["runtimeArchetype"]
 
 
-def _check_world_recipe_health_index_tracks_runtime_assets_and_contracts(tmp_path: Path) -> None:
+def _check_concurrent_world_cache_writes_preserve_every_recipe_without_aggregate_rewrites(tmp_path: Path) -> None:
+    count = 8
+    barrier = threading.Barrier(count)
+    errors: list[BaseException] = []
+    errors_lock = threading.Lock()
+
+    def writer(index: int) -> None:
+        try:
+            barrier.wait(timeout=3)
+            world_storage.write_world_recipe_cache(
+                tmp_path,
+                "9.9.9",
+                f"recipe-{index}",
+                "shared-world",
+                {
+                    "id": f"generated-{index}",
+                    "name": f"Generated {index}",
+                    "sourceMode": "generated",
+                    "gameplay": {"kind": "utility", "runtimeOutputKind": "utility"},
+                    "visual": {"spriteStatus": "generated"},
+                },
+                parent_a_name="A",
+                parent_b_name="B",
+                world_name="Shared World",
+            )
+        except BaseException as error:
+            with errors_lock:
+                errors.append(error)
+
+    threads = [threading.Thread(target=writer, args=(index,)) for index in range(count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=8)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert errors == []
+    root = world_storage.world_recipe_dir(tmp_path, "shared-world")
+    recipe_files = sorted((root / "recipes").glob("*.json"))
+    manifest = world_storage.read_json_file(root / "manifest.json")
+    assert len(recipe_files) == count
+    assert isinstance(manifest, dict)
+    assert manifest["schema"] == "infini-world-recipes-v2"
+    assert not (root / "index.json").exists()
+    assert not (root / "health.json").exists()
+    assert list(root.rglob("*.tmp")) == []
+
+
+
+
+def _check_distinct_recipes_in_one_world_write_in_parallel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    world_storage.write_world_manifest(tmp_path, "9.9.9", "parallel-world", "Parallel World")
+    original_atomic_write_json = world_storage.atomic_write_json
+    recipe_barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+    errors_lock = threading.Lock()
+
+    def synchronized_atomic_write_json(path: Path, payload: dict) -> None:
+        if path.parent.name == "recipes":
+            recipe_barrier.wait(timeout=3)
+        original_atomic_write_json(path, payload)
+
+    monkeypatch.setattr(world_storage, "atomic_write_json", synchronized_atomic_write_json)
+
+    def writer(key: str) -> None:
+        try:
+            world_storage.write_world_recipe_cache(
+                tmp_path,
+                "9.9.9",
+                key,
+                "parallel-world",
+                {"id": key, "name": key, "sourceMode": "generated"},
+                world_name="Parallel World",
+            )
+        except BaseException as error:
+            with errors_lock:
+                errors.append(error)
+
+    threads = [threading.Thread(target=writer, args=(key,)) for key in ("recipe-a", "recipe-b")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=6)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert errors == []
+    assert world_storage.world_recipe_file(tmp_path, "parallel-world", "recipe-a").exists()
+    assert world_storage.world_recipe_file(tmp_path, "parallel-world", "recipe-b").exists()
+
+
+def _check_recipe_write_path_only_replaces_the_changed_recipe_after_manifest_creation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    writes: list[str] = []
+    original_atomic_write_json = world_storage.atomic_write_json
+
+    def tracked_atomic_write_json(path: Path, payload: dict) -> None:
+        writes.append(path.relative_to(tmp_path).as_posix())
+        original_atomic_write_json(path, payload)
+
+    monkeypatch.setattr(world_storage, "atomic_write_json", tracked_atomic_write_json)
+
+    for key in ("recipe-a", "recipe-b"):
+        world_storage.write_world_recipe_cache(
+            tmp_path,
+            "9.9.9",
+            key,
+            "single-authority-world",
+            {"id": key, "name": key, "sourceMode": "generated"},
+            parent_a_name="A",
+            parent_b_name="B",
+            world_name="Single Authority",
+        )
+
+    before_read = list(writes)
+    loaded = world_storage.read_world_recipe_cache(
+        tmp_path,
+        "9.9.9",
+        "recipe-v-test",
+        "recipe-a",
+        "single-authority-world",
+        "Single Authority",
+    )
+
+    assert loaded is not None
+    assert writes == before_read
+    assert writes == [
+        "world_single-authority-world/manifest.json",
+        "world_single-authority-world/recipes/recipe-a.json",
+        "world_single-authority-world/recipes/recipe-b.json",
+    ]
+
+
+def _check_world_storage_rejects_nonfinite_and_duplicate_json(tmp_path: Path) -> None:
+    target = tmp_path / "strict.json"
+    with pytest.raises(ValueError):
+        world_storage.atomic_write_json(target, {"value": float("nan")})
+    assert target.exists() is False
+    assert list(tmp_path.glob("*.tmp")) == []
+
+    target.write_text('{"value":1,"value":2}', encoding="utf-8")
+    assert world_storage.read_json_file(target) is None
+
+
+def _check_world_recipe_file_embeds_runtime_assets_health_and_contracts(tmp_path: Path) -> None:
     data = {
         "id": "g_health",
         "name": "Health Blade",
@@ -310,12 +399,12 @@ def _check_world_recipe_health_index_tracks_runtime_assets_and_contracts(tmp_pat
     )
     root = world_storage.world_recipe_dir(tmp_path, "world-health")
     stored = json.loads(world_storage.world_recipe_file(tmp_path, "world-health", "r_health").read_text(encoding="utf-8"))
-    health_index = json.loads((root / "health.json").read_text(encoding="utf-8"))
-    world_index = json.loads((root / "index.json").read_text(encoding="utf-8"))
     assert stored["recipeHealth"]["status"] == "healthy"
-    assert health_index["counts"]["healthy"] == 1
-    assert health_index["recipes"]["r_health"]["runtime"]["delivery"] == "thrust"
-    assert world_index["recipes"]["r_health"]["health"]["ok"] is True
+    assert stored["recipeHealth"]["runtime"]["delivery"] == "thrust"
+    assert stored["recipeHealth"]["ok"] is True
+    assert stored["recipeMeta"]["storage"] == "world_recipe_file_authority"
+    assert not (root / "index.json").exists()
+    assert not (root / "health.json").exists()
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -331,7 +420,11 @@ def _run_coarse_contracts(tmp_path):
     '_check_golden_delivery_has_no_unmapped_nested_csharp_fields',
     '_check_delivery_matches_strict_nested_csharp_specs',
     '_check_delivery_rejects_scalar_for_csharp_object_contract',
-    '_check_world_recipe_health_index_tracks_runtime_assets_and_contracts'
+    '_check_concurrent_world_cache_writes_preserve_every_recipe_without_aggregate_rewrites',
+    '_check_distinct_recipes_in_one_world_write_in_parallel',
+    '_check_recipe_write_path_only_replaces_the_changed_recipe_after_manifest_creation',
+    '_check_world_storage_rejects_nonfinite_and_duplicate_json',
+    '_check_world_recipe_file_embeds_runtime_assets_health_and_contracts'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

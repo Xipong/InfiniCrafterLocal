@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-import json
+import os
 import re
+import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
+from infini_local.core import strict_json
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.boundary_models import (
-    ATTACK_DEBUG_ONLY_FIELDS,
+    ATTACK_NON_WIRE_FIELDS,
     GAMEPLAY_DEBUG_ONLY_FIELDS,
     REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS,
 )
@@ -113,6 +117,32 @@ VFX_DEBUG_DELIVERY_FIELDS = frozenset({
 
 
 
+_STORAGE_LOCKS_GUARD = threading.Lock()
+_STORAGE_LOCKS: dict[str, threading.RLock] = {}
+
+
+def _storage_lock(path: Path) -> threading.RLock:
+    key = str(path.resolve())
+    with _STORAGE_LOCKS_GUARD:
+        return _STORAGE_LOCKS.setdefault(key, threading.RLock())
+
+
+def _fsync_parent_directory(path: Path) -> None:
+    """Best-effort durability for an atomic rename without affecting Windows support."""
+    flags = os.O_RDONLY | int(getattr(os, "O_DIRECTORY", 0))
+    try:
+        fd = os.open(path, flags)
+    except (OSError, ValueError):
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+
 # AGENT MAP: world-scoped recipe storage.
 # Generated recipes/items are keyed by recipe/world context. Preserve world scoping
 # and avoid cache paths that let generated parents leak between Terraria worlds.
@@ -133,19 +163,31 @@ def world_recipe_file(world_recipes_dir: Path, world_id: Any, recipe_key_value: 
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Atomically replace one JSON file after flushing a unique sibling temp."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(strict_json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+        _fsync_parent_directory(path.parent)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def read_json_file(path: Path) -> dict[str, Any] | None:
     try:
         if not path.exists():
             return None
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-        return data if isinstance(data, dict) else None
-    except Exception:
+        return strict_json.loads_object(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, ValueError, TypeError):
         return None
 
 
@@ -157,7 +199,7 @@ def _maybe_json_obj(value: Any) -> dict[str, Any]:
         text = value.strip()
         if text.startswith("{") and text.endswith("}"):
             try:
-                parsed = json.loads(text)
+                parsed = strict_json.loads(text)
                 return parsed if isinstance(parsed, dict) else {}
             except Exception:
                 return {}
@@ -171,7 +213,7 @@ def _maybe_json_list(value: Any) -> list[Any]:
         text = value.strip()
         if text.startswith("[") and text.endswith("]"):
             try:
-                parsed = json.loads(text)
+                parsed = strict_json.loads(text)
                 return parsed if isinstance(parsed, list) else []
             except Exception:
                 return []
@@ -298,14 +340,9 @@ def build_recipe_health(
             "pureVfx": bool(pure_vfx.get("enabled")),
         },
         "runtimeAffordance": {
-            "useFantasy": str(affordance.get("useFantasy") or ""),
             "heldVisibility": str(affordance.get("heldVisibility") or ""),
             "releaseTiming": str(affordance.get("releaseTiming") or ""),
             "handPose": str(affordance.get("handPose") or ""),
-            "spawnStyle": str(affordance.get("spawnStyle") or ""),
-            "rotationMode": str(affordance.get("rotationMode") or ""),
-            "trailMode": str(affordance.get("trailMode") or ""),
-            "drawDuringUse": bool(affordance.get("drawDuringUse", False)),
             "initialOffsetPx": int(affordance.get("initialOffsetPx") or 0) if str(affordance.get("initialOffsetPx") or "").lstrip("-").isdigit() else 0,
         },
         "visual": {
@@ -347,132 +384,32 @@ def attach_recipe_health(
     return data
 
 
-def _compact_health_for_index(health: dict[str, Any]) -> dict[str, Any]:
-    runtime = health.get("runtime") if isinstance(health.get("runtime"), dict) else {}
-    visual = health.get("visual") if isinstance(health.get("visual"), dict) else {}
-    slots = visual.get("slots") if isinstance(visual.get("slots"), dict) else {}
-    return {
-        "schema": health.get("schema", "infini.recipe-health.v1"),
-        "ok": bool(health.get("ok")),
-        "status": str(health.get("status") or "unknown"),
-        "resultId": str(health.get("resultId") or ""),
-        "resultName": str(health.get("resultName") or ""),
-        "runtime": {
-            "resultKind": str(runtime.get("resultKind") or ""),
-            "delivery": str(runtime.get("delivery") or ""),
-            "runtimeFamily": str(runtime.get("runtimeFamily") or ""),
-            "damagePath": str(runtime.get("damagePath") or ""),
-            "hasRealChildren": bool(runtime.get("hasRealChildren")),
-            "pureVfx": bool(runtime.get("pureVfx")),
-        },
-        "runtimeAffordance": {
-            k: v for k, v in (health.get("runtimeAffordance") if isinstance(health.get("runtimeAffordance"), dict) else {}).items()
-            if k in {"useFantasy", "heldVisibility", "releaseTiming", "handPose", "spawnStyle", "rotationMode", "trailMode", "drawDuringUse", "initialOffsetPx"} and v not in (None, "")
-        },
-        "visual": {
-            role: {
-                "required": bool((slot or {}).get("required")),
-                "usable": bool((slot or {}).get("usable")),
-                "status": str((slot or {}).get("status") or ""),
-                "assetMode": str((slot or {}).get("assetMode") or ""),
-            }
-            for role, slot in slots.items()
-            if role in {"item", "projectile", "impact", "child", "field"}
-        },
-        "warnings": list(health.get("warnings") or [])[:8],
-        "problems": list(health.get("problems") or [])[:8],
-        "updatedAt": health.get("updatedAt", time.time()),
-    }
-
-
-def update_world_health_index(
-    world_recipes_dir: Path,
-    *,
-    world_id: Any,
-    world_name: Any = None,
-    recipe_key_value: str,
-    health: dict[str, Any],
-    app_version: str,
-) -> None:
-    root = world_recipe_dir(world_recipes_dir, world_id)
-    path = root / "health.json"
-    index = read_json_file(path) or {
-        "schema": "infini-world-recipe-health-index-v1",
-        "worldId": str(world_id),
-        "worldName": str(world_name or ""),
-        "recipes": {},
-    }
-    index["schema"] = "infini-world-recipe-health-index-v1"
-    index["worldId"] = str(world_id)
-    if world_name:
-        index["worldName"] = str(world_name)
-    index["appVersion"] = str(app_version)
-    recipes = index.setdefault("recipes", {})
-    recipes[recipe_key_value] = _compact_health_for_index(health)
-    counts: dict[str, int] = {}
-    for row in recipes.values():
-        if isinstance(row, dict):
-            status = str(row.get("status") or "unknown")
-            counts[status] = counts.get(status, 0) + 1
-    index["counts"] = counts
-    index["updatedAt"] = time.time()
-    atomic_write_json(path, index)
-
-
 def write_world_manifest(world_recipes_dir: Path, app_version: str, world_id: Any, world_name: Any = None) -> None:
+    """Create/update small world metadata only when stable metadata actually changes."""
     root = world_recipe_dir(world_recipes_dir, world_id)
     root.mkdir(parents=True, exist_ok=True)
     manifest_path = root / "manifest.json"
-    old = read_json_file(manifest_path) or {}
-    payload = {
-        "schema": "infini-world-recipes-v1",
-        "worldId": str(world_id),
-        "worldName": str(world_name or old.get("worldName") or ""),
-        "worldScoped": True,
-        "recipesDir": "recipes",
-        "updatedAt": time.time(),
-        "createdAt": old.get("createdAt", time.time()),
-        "appVersion": str(app_version),
-    }
-    atomic_write_json(manifest_path, payload)
-
-
-def update_world_recipe_index(
-    world_recipes_dir: Path,
-    recipe_key_value: str,
-    data: dict[str, Any],
-    *,
-    world_id: Any,
-    parent_a_name: str = "",
-    parent_b_name: str = "",
-    world_name: Any = None,
-) -> None:
-    root = world_recipe_dir(world_recipes_dir, world_id)
-    index_path = root / "index.json"
-    index = read_json_file(index_path) or {
-        "schema": "infini-world-recipe-index-v1",
-        "worldId": str(world_id),
-        "worldName": str(world_name or ""),
-        "recipes": {},
-    }
-    index["schema"] = "infini-world-recipe-index-v1"
-    index["worldId"] = str(world_id)
-    if world_name:
-        index["worldName"] = str(world_name)
-    recipe_entry = {
-        "file": f"recipes/{safe_file_part(recipe_key_value, 'recipe')}.json",
-        "updatedAt": time.time(),
-        "resultId": data.get("id", ""),
-        "resultName": data.get("name", ""),
-        "parentA": parent_a_name or data.get("recipeMeta", {}).get("parentA", ""),
-        "parentB": parent_b_name or data.get("recipeMeta", {}).get("parentB", ""),
-    }
-    health = data.get("recipeHealth") if isinstance(data.get("recipeHealth"), dict) else {}
-    if health:
-        recipe_entry["health"] = _compact_health_for_index(health)
-    index.setdefault("recipes", {})[recipe_key_value] = recipe_entry
-    index["updatedAt"] = time.time()
-    atomic_write_json(index_path, index)
+    with _storage_lock(manifest_path):
+        old = read_json_file(manifest_path) or {}
+        stable = {
+            "schema": "infini-world-recipes-v2",
+            "worldId": str(world_id),
+            "worldName": str(world_name or old.get("worldName") or ""),
+            "worldScoped": True,
+            "recipesDir": "recipes",
+            "recipeAuthority": "recipe_files",
+            "derivedViews": "scan_on_demand",
+            "appVersion": str(app_version),
+        }
+        if old and all(old.get(key) == value for key, value in stable.items()):
+            return
+        now = time.time()
+        payload = {
+            **stable,
+            "createdAt": old.get("createdAt", now),
+            "updatedAt": now,
+        }
+        atomic_write_json(manifest_path, payload)
 
 
 def strip_runtime_only_fields(data: dict[str, Any]) -> dict[str, Any]:
@@ -498,7 +435,7 @@ def delivery_safe_debug(debug: Any) -> dict[str, str]:
             elif isinstance(v, (str, int, float, bool)):
                 text = str(v)
             else:
-                text = json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+                text = bounded_json_dumps(v, max_chars=2000)
         except Exception:
             text = repr(v)
         out[key] = text[:2000]
@@ -554,7 +491,7 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
     gameplay = out.get("gameplay") if isinstance(out.get("gameplay"), dict) else None
     visual = out.get("visual") if isinstance(out.get("visual"), dict) else None
     if attack is not None:
-        out["attack"] = {k: v for k, v in attack.items() if k not in ATTACK_DEBUG_ONLY_FIELDS}
+        out["attack"] = {k: v for k, v in attack.items() if k not in ATTACK_NON_WIRE_FIELDS}
     if gameplay is not None:
         clean_gameplay = {k: v for k, v in gameplay.items() if k not in GAMEPLAY_DEBUG_ONLY_FIELDS}
         rejected = clean_gameplay.get("rejectedEngineCalls")
@@ -617,6 +554,7 @@ def write_world_recipe_cache(
     parent_b_name: str = "",
     world_name: Any = None,
 ) -> None:
+    """Commit one authoritative recipe file; no aggregate index is rewritten."""
     write_world_manifest(world_recipes_dir, app_version, world_id, world_name)
     payload = sanitize_recipe_for_delivery(data)
     payload.setdefault("recipeMeta", {})
@@ -625,31 +563,19 @@ def write_world_recipe_cache(
         "worldId": str(world_id),
         "worldName": str(world_name or payload.get("recipeMeta", {}).get("worldName", "")),
         "recipeKey": recipe_key_value,
-        "storage": "world_recipes_file",
+        "storage": "world_recipe_file_authority",
         "parentA": parent_a_name or payload.get("recipeMeta", {}).get("parentA", ""),
         "parentB": parent_b_name or payload.get("recipeMeta", {}).get("parentB", ""),
     })
     if not isinstance(payload.get("recipeHealth"), dict):
-        attach_recipe_health(payload, app_version=app_version, contract_versions=payload.get("contractVersions") if isinstance(payload.get("contractVersions"), dict) else None)
-    atomic_write_json(world_recipe_file(world_recipes_dir, world_id, recipe_key_value), payload)
-    update_world_recipe_index(
-        world_recipes_dir,
-        recipe_key_value,
-        payload,
-        world_id=world_id,
-        parent_a_name=parent_a_name,
-        parent_b_name=parent_b_name,
-        world_name=world_name,
-    )
-    if isinstance(payload.get("recipeHealth"), dict):
-        update_world_health_index(
-            world_recipes_dir,
-            world_id=world_id,
-            world_name=world_name,
-            recipe_key_value=recipe_key_value,
-            health=payload["recipeHealth"],
+        attach_recipe_health(
+            payload,
             app_version=app_version,
+            contract_versions=payload.get("contractVersions") if isinstance(payload.get("contractVersions"), dict) else None,
         )
+    recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
+    with _storage_lock(recipe_path):
+        atomic_write_json(recipe_path, payload)
 
 
 
@@ -661,54 +587,36 @@ def quarantine_world_recipe_cache(
     reason: str,
     details: dict[str, Any] | None = None,
 ) -> str:
-    """Move a broken cache entry aside so it cannot poison every future craft.
-
-    The original payload is preserved for debugging under ``invalid/``. Index entries
-    are removed because the active cache no longer contains a deliverable recipe.
-    """
+    """Move one broken authoritative recipe aside so future crafts can regenerate it."""
     source = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
-    if not source.exists():
-        return ""
-    invalid_dir = world_recipe_dir(world_recipes_dir, world_id) / "invalid"
-    invalid_dir.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d_%H%M%S")
-    reason_part = safe_file_part(reason, "invalid", 48)
-    destination = invalid_dir / f"{safe_file_part(recipe_key_value, 'recipe')}_{stamp}_{reason_part}.json"
-    counter = 1
-    while destination.exists():
-        destination = invalid_dir / f"{safe_file_part(recipe_key_value, 'recipe')}_{stamp}_{reason_part}_{counter}.json"
-        counter += 1
-    source.replace(destination)
-    atomic_write_json(
-        destination.with_suffix(".reason.json"),
-        {
-            "schema": "infini-invalid-recipe-cache-v1",
-            "worldId": str(world_id),
-            "recipeKey": str(recipe_key_value),
-            "reason": str(reason),
-            "quarantinedAt": time.time(),
-            "payloadFile": destination.name,
-            "details": details or {},
-        },
-    )
-
-    for index_name in ("index.json", "health.json"):
-        index_path = world_recipe_dir(world_recipes_dir, world_id) / index_name
-        index = read_json_file(index_path)
-        if not isinstance(index, dict):
-            continue
-        recipes = index.get("recipes")
-        if isinstance(recipes, dict) and recipes.pop(recipe_key_value, None) is not None:
-            index["updatedAt"] = time.time()
-            if index_name == "health.json":
-                counts: dict[str, int] = {}
-                for row in recipes.values():
-                    if isinstance(row, dict):
-                        status = str(row.get("status") or "unknown")
-                        counts[status] = counts.get(status, 0) + 1
-                index["counts"] = counts
-            atomic_write_json(index_path, index)
-    return str(destination)
+    with _storage_lock(source):
+        if not source.exists():
+            return ""
+        invalid_dir = world_recipe_dir(world_recipes_dir, world_id) / "invalid"
+        invalid_dir.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        reason_part = safe_file_part(reason, "invalid", 48)
+        destination = invalid_dir / f"{safe_file_part(recipe_key_value, 'recipe')}_{stamp}_{reason_part}.json"
+        counter = 1
+        while destination.exists():
+            destination = invalid_dir / f"{safe_file_part(recipe_key_value, 'recipe')}_{stamp}_{reason_part}_{counter}.json"
+            counter += 1
+        source.replace(destination)
+        _fsync_parent_directory(source.parent)
+        _fsync_parent_directory(destination.parent)
+        atomic_write_json(
+            destination.with_suffix(".reason.json"),
+            {
+                "schema": "infini-invalid-recipe-cache-v1",
+                "worldId": str(world_id),
+                "recipeKey": str(recipe_key_value),
+                "reason": str(reason),
+                "quarantinedAt": time.time(),
+                "payloadFile": destination.name,
+                "details": details or {},
+            },
+        )
+        return str(destination)
 
 def read_world_recipe_cache(
     world_recipes_dir: Path,
@@ -719,32 +627,33 @@ def read_world_recipe_cache(
     world_name: Any = None,
 ) -> dict[str, Any] | None:
     recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
-    data = read_json_file(recipe_path)
-    if not data:
-        # A syntactically broken/empty cache file otherwise survives forever and is
-        # reparsed on every craft. Preserve it under invalid/ for diagnosis, then let
-        # the caller regenerate from the original parents.
-        if recipe_path.exists():
-            try:
-                quarantine_world_recipe_cache(
-                    world_recipes_dir,
-                    world_id=world_id,
-                    recipe_key_value=recipe_key_value,
-                    reason="json_unreadable_or_empty",
-                    details={"sourcePath": str(recipe_path)},
-                )
-            except (OSError, ValueError, TypeError):
-                pass
-        return None
-    data.pop("_llmHistory", None)
-    write_world_manifest(world_recipes_dir, app_version, world_id, world_name)
-    data.setdefault("debug", {})["cacheHit"] = "world_file"
-    data.setdefault("debug", {})["cacheScope"] = "world"
-    data.setdefault("debug", {}).setdefault("recipeIdentityVersion", recipe_identity_version)
-    data.setdefault("recipeMeta", {})["worldScoped"] = True
-    data.setdefault("recipeMeta", {})["worldId"] = str(world_id)
-    data.setdefault("recipeMeta", {})["storage"] = "world_recipes_file"
-    return sanitize_recipe_for_delivery(data)
+    with _storage_lock(recipe_path):
+        data = read_json_file(recipe_path)
+        if not data:
+            # A syntactically broken/empty cache file otherwise survives forever and is
+            # reparsed on every craft. Preserve it under invalid/ for diagnosis, then let
+            # the caller regenerate from the original parents.
+            if recipe_path.exists():
+                try:
+                    quarantine_world_recipe_cache(
+                        world_recipes_dir,
+                        world_id=world_id,
+                        recipe_key_value=recipe_key_value,
+                        reason="json_unreadable_or_empty",
+                        details={"sourcePath": str(recipe_path)},
+                    )
+                except (OSError, ValueError, TypeError):
+                    pass
+            return None
+        data.pop("_llmHistory", None)
+        data.setdefault("debug", {})["cacheHit"] = "world_file"
+        data.setdefault("debug", {})["cacheScope"] = "world"
+        data.setdefault("debug", {}).setdefault("recipeIdentityVersion", recipe_identity_version)
+        data.setdefault("recipeMeta", {})["worldScoped"] = True
+        data.setdefault("recipeMeta", {})["worldId"] = str(world_id)
+        data.setdefault("recipeMeta", {})["storage"] = "world_recipe_file_authority"
+        return sanitize_recipe_for_delivery(data)
+
 
 
 def is_deliverable_recipe_payload(data: Any) -> bool:

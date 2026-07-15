@@ -19,6 +19,42 @@ namespace InfiniCrafterLocal.Common.Players;
 
 public sealed partial class InfiniCraftPlayer
 {
+    private sealed class ActiveGeneratedUtilityBuff
+    {
+        public int Ticks;
+        public float MiningSpeedMultiplier = 1f;
+        public float EmitLightStrength;
+        public string LightColorName = "";
+        public int OreSenseRadiusTiles;
+        public float MovementSpeed;
+        public float JumpBoost;
+        public int ManaRegen;
+        public int LifeRegen;
+
+        public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
+        {
+            Ticks = Math.Clamp(buff.DurationTicks, 1, 21600),
+            MiningSpeedMultiplier = Math.Clamp(buff.MiningSpeedMultiplier, 0.25f, 4f),
+            EmitLightStrength = Math.Clamp(buff.EmitLightStrength, 0f, 1.5f),
+            LightColorName = buff.LightColorName ?? "",
+            OreSenseRadiusTiles = Math.Clamp(buff.OreSenseRadiusTiles, 0, 60),
+            MovementSpeed = Math.Clamp(buff.MovementSpeed, -0.5f, 2f),
+            JumpBoost = Math.Clamp(buff.JumpBoost, 0f, 8f),
+            ManaRegen = Math.Clamp(buff.ManaRegen, 0, 120),
+            LifeRegen = Math.Clamp(buff.LifeRegen, 0, 120),
+        };
+
+        public bool SameEffect(ActiveGeneratedUtilityBuff other)
+            => Math.Abs(MiningSpeedMultiplier - other.MiningSpeedMultiplier) < 0.0001f
+            && Math.Abs(EmitLightStrength - other.EmitLightStrength) < 0.0001f
+            && string.Equals(LightColorName, other.LightColorName, StringComparison.OrdinalIgnoreCase)
+            && OreSenseRadiusTiles == other.OreSenseRadiusTiles
+            && Math.Abs(MovementSpeed - other.MovementSpeed) < 0.0001f
+            && Math.Abs(JumpBoost - other.JumpBoost) < 0.0001f
+            && ManaRegen == other.ManaRegen
+            && LifeRegen == other.LifeRegen;
+    }
+
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
     {
         _lastGeneratedMobilityFailureMessage = "";
@@ -33,7 +69,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void StartGeneratedMobilityCooldown(int cooldownTicks)
     {
-        _generatedMobilityCooldownTicks = Math.Clamp(cooldownTicks <= 0 ? 60 : cooldownTicks, 1, 36000);
+        _generatedMobilityCooldownTicks = Math.Clamp(cooldownTicks, 0, 36000);
     }
 
 
@@ -42,16 +78,67 @@ public sealed partial class InfiniCraftPlayer
         if (buff is null) return;
         buff.Normalize();
         if (!buff.HasAnyEffect) return;
-        _generatedBuffTicks = Math.Max(_generatedBuffTicks, Math.Clamp(buff.DurationTicks, 1, 21600));
-        _generatedMiningSpeedMultiplier = Math.Max(_generatedMiningSpeedMultiplier, Math.Clamp(buff.MiningSpeedMultiplier, 0.25f, 4f));
-        _generatedLightStrength = Math.Max(_generatedLightStrength, Math.Clamp(buff.EmitLightStrength, 0f, 1.5f));
-        if (!string.IsNullOrWhiteSpace(buff.LightColorName))
-            _generatedLightColorName = buff.LightColorName;
-        _generatedOreSenseRadiusTiles = Math.Max(_generatedOreSenseRadiusTiles, Math.Clamp(buff.OreSenseRadiusTiles, 0, 60));
-        _generatedMovementSpeed = Math.Max(_generatedMovementSpeed, Math.Clamp(buff.MovementSpeed, -0.5f, 2f));
-        _generatedJumpBoost = Math.Max(_generatedJumpBoost, Math.Clamp(buff.JumpBoost, 0f, 8f));
-        _generatedManaRegen = Math.Max(_generatedManaRegen, Math.Clamp(buff.ManaRegen, 0, 120));
-        _generatedLifeRegen = Math.Max(_generatedLifeRegen, Math.Clamp(buff.LifeRegen, 0, 120));
+        var incoming = ActiveGeneratedUtilityBuff.From(buff);
+        var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
+        if (existing is not null)
+            existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
+        else
+        {
+            // Bound pathological repeated authoring while preserving independent
+            // durations for distinct explicit effects. HoldItem refreshes an equal
+            // entry instead of allocating one entry per tick.
+            if (_activeGeneratedUtilityBuffs.Count >= 32)
+            {
+                var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
+                _activeGeneratedUtilityBuffs.Remove(shortest);
+            }
+            _activeGeneratedUtilityBuffs.Add(incoming);
+        }
+        RebuildGeneratedUtilityBuffAggregate();
+    }
+
+    private void RebuildGeneratedUtilityBuffAggregate()
+    {
+        _generatedBuffTicks = 0;
+        _generatedMiningSpeedMultiplier = 1f;
+        _generatedLightStrength = 0f;
+        _generatedLightColorName = "";
+        _generatedOreSenseRadiusTiles = 0;
+        _generatedMovementSpeed = 0f;
+        _generatedJumpBoost = 0f;
+        _generatedManaRegen = 0;
+        _generatedLifeRegen = 0;
+
+        foreach (var active in _activeGeneratedUtilityBuffs)
+        {
+            if (active.Ticks <= 0)
+                continue;
+            _generatedBuffTicks = Math.Max(_generatedBuffTicks, active.Ticks);
+            _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier * active.MiningSpeedMultiplier, 0.25f, 4f);
+            if (active.EmitLightStrength >= _generatedLightStrength)
+            {
+                _generatedLightStrength = active.EmitLightStrength;
+                _generatedLightColorName = active.LightColorName;
+            }
+            _generatedOreSenseRadiusTiles = Math.Max(_generatedOreSenseRadiusTiles, active.OreSenseRadiusTiles);
+            _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed + active.MovementSpeed, -0.5f, 2f);
+            _generatedJumpBoost = Math.Clamp(_generatedJumpBoost + active.JumpBoost, 0f, 8f);
+            _generatedManaRegen = Math.Clamp(_generatedManaRegen + active.ManaRegen, 0, 120);
+            _generatedLifeRegen = Math.Clamp(_generatedLifeRegen + active.LifeRegen, 0, 120);
+        }
+    }
+
+    private void ResetGeneratedUtilityBuffAggregate()
+    {
+        _generatedBuffTicks = 0;
+        _generatedMiningSpeedMultiplier = 1f;
+        _generatedLightStrength = 0f;
+        _generatedLightColorName = "";
+        _generatedOreSenseRadiusTiles = 0;
+        _generatedMovementSpeed = 0f;
+        _generatedJumpBoost = 0f;
+        _generatedManaRegen = 0;
+        _generatedLifeRegen = 0;
     }
 
 
@@ -148,7 +235,12 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = "Mobility is waiting for local control";
             return false;
         }
-        int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles <= 0 ? 18 : gameplay.MobilityRangeTiles, 1, 80);
+        if (gameplay.MobilityRangeTiles <= 0)
+        {
+            _lastGeneratedMobilityFailureMessage = "Missing authored blink range";
+            return false;
+        }
+        int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 80);
         Vector2 target = Main.MouseWorld;
         Vector2 delta = target - Player.Center;
         float max = rangeTiles * 16f;
@@ -194,9 +286,31 @@ public sealed partial class InfiniCraftPlayer
     {
         if (_generatedMobilityCooldownTicks > 0)
             _generatedMobilityCooldownTicks--;
+
+        if (InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
+        {
+            for (int index = _activeGeneratedUtilityBuffs.Count - 1; index >= 0; index--)
+            {
+                var active = _activeGeneratedUtilityBuffs[index];
+                active.Ticks--;
+                if (active.Ticks <= 0)
+                    _activeGeneratedUtilityBuffs.RemoveAt(index);
+            }
+            RebuildGeneratedUtilityBuffAggregate();
+        }
+        else if (_generatedBuffTicks > 0)
+        {
+            // Remote clients receive the server aggregate rather than the private
+            // per-effect list. Locally count that snapshot down for presentation.
+            _generatedBuffTicks--;
+        }
+
         if (_generatedBuffTicks <= 0)
+        {
+            if (_activeGeneratedUtilityBuffs.Count == 0)
+                ResetGeneratedUtilityBuffAggregate();
             return;
-        _generatedBuffTicks--;
+        }
         if (_generatedMiningSpeedMultiplier > 0.001f && Math.Abs(_generatedMiningSpeedMultiplier - 1f) > 0.001f)
             Player.pickSpeed /= Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
         if (_generatedMovementSpeed != 0f)
@@ -219,17 +333,6 @@ public sealed partial class InfiniCraftPlayer
             Color c = RuntimeColorPolicy.Resolve(_generatedLightColorName, Color.White);
             float strength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
             Lighting.AddLight(Player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
-        }
-        if (_generatedBuffTicks <= 0)
-        {
-            _generatedMiningSpeedMultiplier = 1f;
-            _generatedLightStrength = 0f;
-            _generatedLightColorName = "";
-            _generatedOreSenseRadiusTiles = 0;
-            _generatedMovementSpeed = 0f;
-            _generatedJumpBoost = 0f;
-            _generatedManaRegen = 0;
-            _generatedLifeRegen = 0;
         }
     }
 

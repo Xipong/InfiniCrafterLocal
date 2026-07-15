@@ -1,4 +1,4 @@
-# v0.4.174 — Recipe Health + contract stamps
+# Recipe Health + contract stamps
 
 Этот патч не чинит старые рецепты и не меняет авторство ЛЛМ. Он добавляет диагностический слой вокруг новых рецептов, чтобы быстро отличать:
 
@@ -16,15 +16,18 @@
 
 ## Что пишется в мир
 
-В `LocalGenerator/cache/world_recipes/world_<id>/` теперь есть:
+В `LocalGenerator/cache/world_recipes/world_<id>/` используются:
 
-- `index.json` — как раньше, но recipe entry содержит компактное `health`;
-- `health.json` — отдельный health-index по всем рецептам мира.
+- `manifest.json` — маленькая мета мира; переписывается только при изменении имени мира, версии приложения или формата хранения;
+- `recipes/<recipe_key>.json` — единственный authoritative-файл предмета, внутри которого уже лежат `contractVersions`, `recipeHealth`, родители и world metadata;
+- `invalid/` — карантин нечитаемых или отвергнутых recipe-файлов с отдельной причиной.
+
+Монолитные `index.json` и `health.json` больше не создаются. Debug-представления строятся по `recipes/*.json` только при запросе debug endpoint, поэтому обычный крафт после создания manifest атомарно заменяет только файл самого изменённого рецепта.
 
 ## Debug endpoints
 
-- `/debug/recipe_health` — последние health строки по мирам;
-- `/debug/contracts` — последние contract stamps из сохранённых рецептов;
+- `/debug/recipe_health` — последние health строки, производные от authoritative recipe-файлов;
+- `/debug/contracts` — последние contract stamps, найденные сканированием сохранённых рецептов;
 - `/debug/worlds` — теперь показывает `healthCounts`.
 
 ## tModLoader grey zones

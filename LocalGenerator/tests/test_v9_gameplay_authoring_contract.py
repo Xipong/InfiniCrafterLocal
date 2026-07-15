@@ -74,7 +74,13 @@ def _contract_check_exact_channelled_beam_reaches_final_attack_without_prose_inf
                     "fn": "cast_magic_weapon",
                     "params": {
                         "family": "channelled_beam",
+                        "movement": "phase",
+                        "speed": 8.0,
                         "rangeTiles": 62,
+                        "lifetimeTicks": 90,
+                        "shotCount": 1,
+                        "spreadRadians": 0.0,
+                        "pierce": -1,
                         "beamWidthPx": 19,
                         "chargeTicks": 45,
                         "immunityCooldown": 8,
