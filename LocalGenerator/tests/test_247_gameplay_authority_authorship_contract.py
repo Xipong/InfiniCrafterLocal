@@ -12,8 +12,15 @@ from infini_local.core.runtime_authoring import (
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.item_power_knowledge import canonicalize
 from infini_local.pipelines.llm_authoring_prompt import normalize_runtime_authoring_fields
+from infini_local.pipelines.llm_authoring_pipeline import (
+    _project_fail_closed_promise_surface,
+    _public_clause_matches_claim,
+    planner_runtime_promise_gate,
+    validate_final_runtime_promise_boundary,
+)
 from infini_local.pipelines.combine_genome import genome_defects
 from infini_local.pipelines.engine_pressure_metrics import estimate_engine_metrics
+from infini_local.core.runtime_contracts import resolve_mechanic_backing_refs
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.boundary_models import runtime_plan_boundary_report
 from infini_local.core.runtime_authoring.schema import accepted_engine_param_names
@@ -93,6 +100,119 @@ def _contract_check_llm_output_without_runtime_plan_never_falls_back_to_semantic
             "gameplay": {"kind": "generic"},
         })
 
+    incomplete_public_contract = {
+        "name": "Structured Result",
+        "category": "weapon",
+        "tooltip": "Launches one authored projectile; grants an unrelated public bonus.",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 20, "useTimeTicks": 24}},
+                _primary("cast", "cast", "straight", 60),
+            ],
+        },
+        "runtimeContract": {
+            "playerViewTimeline": ["press use", "projectile spawns", "projectile travels", "projectile expires"],
+            "mechanicClaims": [{
+                "claim": "Launches one authored projectile.",
+                "status": "executable",
+                "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "shotCount", "expected": 1}],
+            }],
+        },
+    }
+    promise_gate = planner_runtime_promise_gate(incomplete_public_contract, enforce_public_contract=True)
+    assert promise_gate["ok"] is False
+    assert any(row.get("kind") == "tooltip_clause_missing_mechanic_claim" for row in promise_gate["blockingClaims"])
+    assert _public_clause_matches_claim(
+        "Hold to channel starlight, then release to teleport to cursor within 45 tiles.",
+        "Hold to charge starlight; release teleports to the cursor within 45 tiles.",
+    ) is True
+    assert _public_clause_matches_claim("Does not consume arrows.", "Consumes arrows.") is False
+    assert _public_clause_matches_claim("Teleports up to 45 tiles.", "Teleports up to 40 tiles.") is False
+    assert _public_clause_matches_claim("Grants an unrelated public bonus.", "Launches one authored projectile.") is False
+
+    lowered_alias_contract = {
+        "name": "Stationary Helper",
+        "category": "weapon",
+        "tooltip": "Deploys a stationary helper.",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "summon", "damage": 12, "useTimeTicks": 30}},
+                {"fn": "deploy_sentry", "params": {"placement": "grounded", "attackIntervalTicks": 60, "targetRangeTiles": 10, "helperLifetimeTicks": 600, "shotCount": 1, "speed": 3, "spreadRadians": 0, "pierce": 1, "movement": "straight", "projectileShape": "helper"}},
+            ],
+        },
+        "runtimeContract": {
+            "playerViewTimeline": ["press use", "helper appears", "helper attacks", "helper expires"],
+            "mechanicClaims": [{
+                "claim": "Deploys a stationary helper.",
+                "status": "executable",
+                "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "deploy_sentry", "field": "helperLifetimeTicks", "expected": 600}],
+            }],
+        },
+    }
+    assert planner_runtime_promise_gate(lowered_alias_contract, enforce_public_contract=True)["ok"] is True
+
+    unrelated_active_ref = {
+        "name": "False Proof",
+        "category": "weapon",
+        "tooltip": "Can be placed as a temporary crafting tile that lasts 30 seconds.",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 12, "useTimeTicks": 20}},
+                {"fn": "set_alt_use_mode", "params": {"mode": "generated_buff", "generatedBuff": {"durationTicks": 1800, "emitLightStrength": 0.5}}},
+            ],
+        },
+        "runtimeContract": {
+            "playerViewTimeline": ["press alt", "buff starts", "light is visible", "buff expires"],
+            "mechanicClaims": [{
+                "claim": "Can be placed as a temporary crafting tile that lasts 30 seconds.",
+                "status": "executable",
+                "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "set_alt_use_mode", "field": "mode", "expected": "generated_buff"}],
+            }],
+        },
+    }
+    irrelevant_gate = planner_runtime_promise_gate(unrelated_active_ref, enforce_public_contract=True)
+    assert irrelevant_gate["ok"] is False
+    assert any(row.get("kind") == "mechanic_claim_backing_irrelevant" for row in irrelevant_gate["blockingClaims"])
+
+    mixed_surface = deepcopy(unrelated_active_ref)
+    mixed_surface["tooltip"] = "Deals 12 melee damage; Can be placed as a temporary crafting tile that lasts 30 seconds."
+    mixed_surface["runtimeContract"]["mechanicClaims"].insert(0, {
+        "claim": "Deals 12 melee damage.",
+        "status": "executable",
+        "backingRefs": [{"source": "engineCall", "callIndex": 0, "fn": "set_item_stats", "field": "damage", "expected": 12}],
+    })
+    mixed_surface["runtimeContract"]["syncFields"] = ["fictionalMeter"]
+    projected, projection = _project_fail_closed_promise_surface(mixed_surface)
+    assert projection["accepted"] is True
+    assert projection["mode"] == "fail_closed_delete_only"
+    assert projection["removedSyncFields"] == ["fictionalMeter"]
+    assert projected["runtimeContract"]["syncFields"] == []
+    assert len(projection["removedClaims"]) == 1
+    assert projected["tooltip"] == "Deals 12 melee damage"
+    assert [claim["claim"] for claim in projected["runtimeContract"]["mechanicClaims"]] == ["Deals 12 melee damage."]
+    assert planner_runtime_promise_gate(projected, enforce_public_contract=True)["ok"] is True
+
+    final_candidate = deepcopy(projected)
+    final_candidate["runtimeContract"]["executionStatus"] = "partial"
+    final_candidate["runtimeContract"]["mechanicClaims"].append({
+        "claim": "Wooden carpenter silhouette.",
+        "status": "visual_only",
+        "backingRefs": [],
+    })
+    final_candidate["tooltip"] += "; Wooden carpenter silhouette."
+    final_report = validate_final_runtime_promise_boundary(final_candidate)
+    assert final_report["ok"] is True
+    assert final_candidate["runtimeContract"]["executionStatus"] == "executable"
+
+    rejected_projection, rejected_report = _project_fail_closed_promise_surface(unrelated_active_ref)
+    assert rejected_report["accepted"] is False
+    assert rejected_projection["runtimeContract"]["mechanicClaims"] == []
+    with pytest.raises(PlannerUnavailable):
+        validate_final_runtime_promise_boundary(unrelated_active_ref)
+
 
 def _contract_check_parent_tags_and_damage_do_not_reclassify_explicit_generic() -> None:
     data = _attach(
@@ -144,6 +264,33 @@ def _contract_check_compiler_never_inherits_parent_burn_or_default_debuff_durati
     assert report["ok"] is False
     assert any("debuffTime" in error for error in report["errors"])
 
+    child_effect_without_count = {
+        "category": "weapon",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 20, "useTimeTicks": 25}},
+                _primary("shoot", "shoot", "straight", 60),
+                {"fn": "apply_on_hit_effect", "params": {
+                    "onHit": "starburst",
+                    "secondaryDamageMultiplier": 0.5,
+                    "secondaryLifetimeTicks": 20,
+                }},
+            ],
+        },
+    }
+    child_report = runtime_plan_validation_report(child_effect_without_count)
+    assert child_report["ok"] is False
+    assert any("onHit=starburst" in error and "count" in error for error in child_report["errors"])
+
+    machine_backed, failures = resolve_mechanic_backing_refs(
+        child_effect_without_count,
+        compile_runtime_plan_to_genome_patch(child_effect_without_count),
+        {"backingRefs": [{"source": "engineCall", "callIndex": 2, "fn": "apply_on_hit_effect", "field": "onHit", "expected": "starburst"}]},
+    )
+    assert machine_backed is False
+    assert any("inactive_compiled_field" in failure for failure in failures)
+
 
 def _contract_check_generated_buffs_require_authored_duration_and_zero_consume_is_preserved() -> None:
     missing_duration = {
@@ -189,6 +336,21 @@ def _contract_check_generated_buffs_require_authored_duration_and_zero_consume_i
         },
     }
     assert compile_runtime_plan_to_genome_patch(zero)["consumeChancePercent"] == 0
+
+    potion_light = _attach({
+        "category": "potion",
+        "runtimePlan": {
+            "resultKind": "potion",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "potion", "maxStack": 30, "consumable": True, "healLife": 150}},
+                {"fn": "emit_light", "params": {"strength": 0.6, "color": "cyan", "durationTicks": 600}},
+            ],
+        },
+    })
+    use_buff = potion_light["gameplay"]["generatedBuff"]
+    assert use_buff["durationTicks"] == 600
+    assert use_buff["emitLightStrength"] == 0.6
+    assert use_buff["lightColorName"] == "cyan"
 
 
 def _contract_check_nested_accessory_and_armor_stats_are_the_only_equipment_authority() -> None:

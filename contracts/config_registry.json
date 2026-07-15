@@ -2625,7 +2625,7 @@
             "expression": "env_int(\"INFINI_LLM_TIMEOUT\", 95, lo=1, hi=3600)"
           },
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 577,
+          "line": 804,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -2806,7 +2806,7 @@
         {
           "default": 0.38,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 136,
+          "line": 346,
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -2831,7 +2831,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 145,
+          "line": 355,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2839,7 +2839,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 188,
+          "line": 403,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2847,7 +2847,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 577,
+          "line": 804,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -6221,7 +6221,7 @@
         {
           "default": 2200,
           "file": "LocalGenerator/infini_local/pipelines/sprite_postprocess.py",
-          "line": 623,
+          "line": 664,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -6244,7 +6244,7 @@
   ],
   "errors": [],
   "fieldCount": 244,
-  "fingerprint": "8415dd1fff64bd5255e76ec12e6b8d46081355141c8193bcd6dccdc3fa901e64",
+  "fingerprint": "5c516db77e774ef4bfa2175ee144738b3ce56ec978e6855766723bd97f3cc61a",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

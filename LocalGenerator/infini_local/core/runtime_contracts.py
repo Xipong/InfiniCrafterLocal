@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v2"
@@ -85,6 +86,87 @@ def _backing_values_match(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
+_EVIDENCE_GENERIC_TOKENS = {
+    "action", "apply", "behavior", "call", "effect", "engine", "field", "get", "item",
+    "mode", "param", "runtime", "set", "stat", "stats", "use", "value",
+}
+_EVIDENCE_CLAIM_STOPWORDS = {
+    "a", "an", "and", "as", "at", "be", "by", "can", "for", "from", "in", "into",
+    "is", "it", "of", "on", "or", "that", "the", "then", "this", "to", "up", "while",
+    "with", "within", "you", "your",
+}
+
+
+def _evidence_tokens(value: Any) -> set[str]:
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value or ""))
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9]*", text.replace("_", " ").replace("-", " ").lower())
+    return {word[:-1] if len(word) > 4 and word.endswith("s") else word for word in words}
+
+
+def _evidence_token_matches(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    if min(len(left), len(right)) >= 5 and (left in right or right in left):
+        return True
+    prefix = 0
+    for a, b in zip(left, right):
+        if a != b:
+            break
+        prefix += 1
+    return prefix >= 5
+
+
+def mechanic_claim_backing_relevant(claim: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Check that machine refs are lexical evidence for the claim they purport to prove.
+
+    This is deliberately executor-agnostic: identifiers, enum values, booleans, and
+    numbers supply evidence. It prevents an active but unrelated field (for example an
+    alt-use mode) from proving arbitrary prose without introducing item-name routing.
+    """
+    claim_text = str(claim.get("claim") or "")
+    claim_tokens = _evidence_tokens(claim_text) - _EVIDENCE_CLAIM_STOPWORDS
+    claim_numbers = {float(value.rstrip("%")) for value in re.findall(r"\d+(?:\.\d+)?%?", claim_text)}
+    refs_candidate = claim.get("backingRefs")
+    refs_raw: list[Any] = refs_candidate if isinstance(refs_candidate, list) else []
+    refs = [normalize_backing_ref(ref) for ref in refs_raw]
+    refs = [ref for ref in refs if ref]
+    if not refs:
+        return False, ["missing_backing_refs"]
+
+    score = 0
+    evidence_numbers: set[float] = set()
+    evidence_tokens: set[str] = set()
+    for ref in refs:
+        field = str(ref.get("field") or "")
+        field_tokens = _evidence_tokens(field) - _EVIDENCE_GENERIC_TOKENS
+        expected_tokens = _evidence_tokens(ref.get("expected")) - _EVIDENCE_GENERIC_TOKENS
+        fn_tokens = _evidence_tokens(ref.get("fn")) - _EVIDENCE_GENERIC_TOKENS
+        for token in field_tokens:
+            if any(_evidence_token_matches(token, claim_token) for claim_token in claim_tokens):
+                score += 2
+                evidence_tokens.add(token)
+        for token in expected_tokens:
+            if any(_evidence_token_matches(token, claim_token) for claim_token in claim_tokens):
+                score += 1
+                evidence_tokens.add(token)
+        for token in fn_tokens:
+            if any(_evidence_token_matches(token, claim_token) for claim_token in claim_tokens):
+                score += 2
+                evidence_tokens.add(token)
+        expected = ref.get("expected")
+        if isinstance(expected, (int, float)) and not isinstance(expected, bool):
+            numeric = float(expected)
+            evidence_numbers.add(numeric)
+            if field.lower().endswith("ticks"):
+                evidence_numbers.add(numeric / 60.0)
+
+    if claim_numbers and not claim_numbers.issubset(evidence_numbers):
+        return False, ["claim_numbers_not_proven_by_backing_refs"]
+    if score < 2:
+        return False, ["claim_text_not_relevant_to_backing_refs"]
+    return True, []
+
+
 def resolve_mechanic_backing_refs(
     data: dict[str, Any],
     patch: dict[str, Any],
@@ -120,11 +202,23 @@ def resolve_mechanic_backing_refs(
             call_index = int(call_index_raw) if isinstance(call_index_raw, (int, str)) else -1
             if 0 <= call_index < len(calls) and isinstance(calls[call_index], dict):
                 call: dict[str, Any] = calls[call_index]
-                fn = str(call.get("fn") or "").strip().lower()
+                fn_candidates = {
+                    str(call.get(key) or "").strip().lower()
+                    for key in ("fn", "_rawFn")
+                    if str(call.get(key) or "").strip()
+                }
                 params = call.get("params") if isinstance(call.get("params"), dict) else call
-                if fn == str(ref.get("fn") or "") and isinstance(params, dict):
+                if str(ref.get("fn") or "") in fn_candidates and isinstance(params, dict):
                     present = field in params
                     actual = params.get(field)
+                    if (
+                        present
+                        and _backing_values_match(actual, ref.get("expected"))
+                        and field in patch
+                        and not _backing_values_match(patch.get(field), ref.get("expected"))
+                    ):
+                        failures.append(f"ref[{index}]_inactive_compiled_field:{field}")
+                        continue
         if not present or not _backing_values_match(actual, ref.get("expected")):
             failures.append(f"ref[{index}]_unresolved:{source}.{field}")
     return not failures, failures
@@ -239,9 +333,9 @@ def validate_runtime_contract(data: dict[str, Any], patch: dict[str, Any] | None
         if unsupported:
             runtime_executable = runtime_family not in {"", "none", "unsupported"}
             contract["executionStatus"] = "partial" if runtime_executable or any(s == "executable" for s in statuses) else "unsupported"
-        elif statuses and statuses <= {"executable"}:
+        elif statuses and statuses <= {"executable", "visual_only"} and "executable" in statuses:
             contract["executionStatus"] = "executable"
-        elif statuses and "visual_only" in statuses:
+        elif statuses == {"visual_only"}:
             contract["executionStatus"] = "visual_only"
         elif statuses:
             contract["executionStatus"] = "partial"

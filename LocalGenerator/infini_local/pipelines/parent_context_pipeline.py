@@ -325,7 +325,11 @@ def source_weapon_profile(item: dict[str, Any]) -> dict[str, Any]:
     ai_style = 0
     minion = False
     sentry = False
-    if proj and not proj.get("unavailable"):
+    uses_external_ammo = item_num(item, "useAmmo", 0) > 0
+    # For ammo-consuming items, Item.shoot is only the fallback projectile type; the
+    # consumed ammo owns the real projectile behavior. Preserve the raw profile for
+    # author context, but do not price its lifetime/pierce as parent power.
+    if proj and not proj.get("unavailable") and not uses_external_ammo:
         penetrate = int(proj_num(proj, "penetrate", 1))
         tile_collide = proj_bool(proj, "tileCollide")
         disposable_throwable = item_bool(item, "consumable") and item_num(item, "maxStack", 1) > 1 and tile_collide and damage <= 20

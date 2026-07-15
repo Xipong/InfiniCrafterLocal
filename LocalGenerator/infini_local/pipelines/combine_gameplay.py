@@ -444,6 +444,19 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             extra_buffs = []
         if buff_code > 0 and buff_time > 0 and not any(isinstance(entry, dict) and int(float(entry.get("buffCode") or entry.get("buffType") or 0)) == buff_code for entry in extra_buffs):
             extra_buffs = [{"buffCode": buff_code, "buffTime": buff_time}] + list(extra_buffs)
+        generated_use_buff = dict(runtime_patch.get("generatedBuff") or {}) if isinstance(runtime_patch.get("generatedBuff"), dict) else {}
+        light_calls = all_calls(data, "emit_light") if runtime_authored else []
+        if light_calls:
+            strengths = [authored_num(call, "strength", 0.0, 0.0, 1.5) for call in light_calls]
+            durations = [authored_int(call, "durationTicks", 0, 0, 60 * 60 * 6) for call in light_calls]
+            strength = max(strengths or [0.0])
+            duration = max(durations or [0])
+            if strength > 0 and duration > 0:
+                generated_use_buff["durationTicks"] = max(int(generated_use_buff.get("durationTicks") or 0), duration)
+                generated_use_buff["emitLightStrength"] = max(float(generated_use_buff.get("emitLightStrength") or 0.0), strength)
+                color = next((str(call.get("lightColorName") or call.get("color") or "").strip() for call in light_calls if str(call.get("lightColorName") or call.get("color") or "").strip()), "")
+                if color:
+                    generated_use_buff["lightColorName"] = color[:32]
         data.setdefault("debug", {})["potionMerge"] = json.dumps(potion_profile.get("debug", {}), ensure_ascii=False)
         gp.update({
             "kind": "potion", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0, "useStyle": 2,
@@ -454,6 +467,10 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
             "useTime": authored_int(gp, "useTime", 17, 10, 60), "useAnimation": authored_int(gp, "useAnimation", 17, 6, 60),
             "width": authored_int(gp, "width", 20, 8, 64), "height": authored_int(gp, "height", 26, 8, 64), "healLife": heal_life, "healMana": heal_mana, "buffCode": buff_code, "buffTime": buff_time, "extraBuffs": extra_buffs[:4], "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
+        if generated_use_buff:
+            gp["generatedBuff"] = generated_use_buff
+        else:
+            gp.pop("generatedBuff", None)
         attack.update({"enabled": False})
         data.setdefault("accessory", {"enabled": False})
     else:

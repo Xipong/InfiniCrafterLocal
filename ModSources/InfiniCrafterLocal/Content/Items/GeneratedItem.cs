@@ -287,7 +287,7 @@ public partial class GeneratedItem : ModItem
         if (requiredAnchors.Length > 0)
             tooltips.Add(new TooltipLine(Mod, "InfiniAnchors", "Anchors: " + string.Join(", ", requiredAnchors)) { OverrideColor = Color.Silver });
         if (!string.IsNullOrWhiteSpace(visual.SpriteStatus))
-            tooltips.Add(new TooltipLine(Mod, "InfiniSpriteStatus", $"Sprite: {visual.SpriteStatus} score {visual.VisualJudgeScore:0.00}") { OverrideColor = Color.DarkGray });
+            tooltips.Add(new TooltipLine(Mod, "InfiniSpriteStatus", $"Sprite: {visual.SpriteStatus} technical {visual.SpriteTechnicalScore:0.00}; semantic {visual.SemanticReviewStatus}") { OverrideColor = Color.DarkGray });
         if (extraBuffs.Length > 1)
             tooltips.Add(new TooltipLine(Mod, "InfiniExtraBuffs", $"Use buffs: {extraBuffs.Length} channels") { OverrideColor = Color.LightGreen });
         if (!string.IsNullOrWhiteSpace(gameplay.MobilityMode))
@@ -1414,10 +1414,10 @@ public partial class GeneratedItem : ModItem
         if (!VisualSoulAuraEligible(data)) return 0f;
         float authored = data?.Visual?.VisualSoulGlow ?? 0f;
         if (authored > 0f) return Math.Clamp(authored, 0f, 1f);
-        float judge = Math.Clamp(data?.Visual?.VisualJudgeScore ?? 0f, 0f, 1f);
+        float technical = Math.Clamp(data?.Visual?.SpriteTechnicalScore ?? 0f, 0f, 1f);
         bool hasSprite = !string.IsNullOrWhiteSpace(data?.Visual?.SpritePath);
         bool vfx = data?.VfxManifest is not null && data.VfxManifest.HasSlots;
-        return Math.Clamp((hasSprite ? 0.10f : 0f) + judge * 0.18f + (vfx ? 0.12f : 0f), 0f, 0.55f);
+        return Math.Clamp((hasSprite ? 0.10f : 0f) + technical * 0.18f + (vfx ? 0.12f : 0f), 0f, 0.55f);
     }
 
     private static float VisualSoulPulse(GeneratedItemData? data)

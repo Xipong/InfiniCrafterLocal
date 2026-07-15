@@ -29,7 +29,7 @@ def _check_visual_delivery_gate_accepts_existing_generated_item_sprite(monkeypat
     monkeypatch.setattr(VISUAL, "VISUAL_REQUIRE_ZIMAGE_BACKEND", False)
     sprite = tmp_path / "ok.png"
     sprite.write_bytes(b"\x89PNG\r\n\x1a\n")
-    data = {"id": "ok_sprite", "visual": {"spriteStatus": "generated", "spritePath": str(sprite), "visualJudgeScore": 0.9}, "attack": {}, "debug": {}}
+    data = {"id": "ok_sprite", "visual": {"spriteStatus": "generated", "spritePath": str(sprite), "spriteTechnicalScore": 0.9, "semanticReviewStatus": "not_performed"}, "attack": {}, "debug": {}}
 
     out = VISUAL.assert_visual_delivery_ready(data)
 
@@ -37,6 +37,9 @@ def _check_visual_delivery_gate_accepts_existing_generated_item_sprite(monkeypat
     report = json.loads(data["debug"]["visualDeliveryReport"])
     assert report["ok"] is True
     assert report["slots"][0]["usable"] is True
+    assert report["slots"][0]["technicalScore"] == 0.9
+    assert "score" not in report["slots"][0]
+    assert report["semanticReviewStatus"] == "not_performed"
 
 
 def _check_visual_delivery_gate_accepts_existing_warn_invalid_item_sprite(monkeypatch, tmp_path):

@@ -58,6 +58,40 @@ def _plan() -> dict:
             "mergeLogic": "The sword remains the handle; the complete workbench is the striking body.",
             "weirdTwist": "Hits throw three bounded wooden splinter projectiles.",
         },
+        "runtimeArchetype": {
+            "schema": "infini.runtime-archetype.v1",
+            "source": "generated",
+            "family": "broadsword",
+            "overrideKnobs": {},
+        },
+        "runtimeContract": {
+            "schema": "infini.runtime-contract.v2",
+            "primaryVerb": "swing",
+            "controlStyle": "tap",
+            "stateFields": [],
+            "syncFields": [],
+            "mechanicClaims": [
+                {
+                    "claim": "It is exactly what it looks like.",
+                    "status": "visual_only",
+                    "backingRefs": [],
+                },
+                {
+                    "claim": "Hits throw exactly 3 bounded wooden splinter projectiles.",
+                    "status": "executable",
+                    "backingRefs": [{
+                        "source": "engineCall",
+                        "callIndex": 2,
+                        "fn": "spawn_secondary_projectiles",
+                        "field": "count",
+                        "expected": 3,
+                    }],
+                },
+            ],
+            "playerViewTimeline": ["held", "swung", "NPC hit", "three splinters spawn", "splinters expire"],
+            "unsupportedPromises": [],
+            "executionStatus": "executable",
+        },
         "runtimePlan": {
             "resultKind": "weapon",
             "sourceRolePreservation": {

@@ -7,9 +7,10 @@ from typing import Any
 
 PLANNER_PROMPT_LIMIT_CHARS = 24_750
 MECHANIC_BACKING_REF_RULES: tuple[str, ...] = (
-    "backingRefs.source must be exactly compiledAttack, runtimeArchetype, or engineCall; never put an engine function name in source.",
-    "For source=engineCall, callIndex is the zero-based absolute index into runtimePlan.engineCalls (including set_item_stats); fn must exactly match engineCalls[callIndex].fn.",
+    "backingRefs.source must be exactly compiledAttack, runtimeArchetype, or engineCall.",
+    "For source=engineCall, callIndex is the zero-based absolute index into runtimePlan.engineCalls; fn must match that call.",
     'Example for the first projectile call after set_item_stats: {"source":"engineCall","callIndex":1,"fn":"shoot_projectile","field":"movement","expected":"boomerang"}.',
+    "Every tooltip clause needs a matching mechanicClaim. An executable claim must quote a non-generic identifier, enum value, or exact number from its backingRefs; mark pure visual prose visual_only.",
 )
 
 from infini_local.core.json_debug import bounded_json_dumps
@@ -477,11 +478,11 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
 
             "Preserve a complete weapon parent unless ammo/material resultKind and mergeLogic justify replacement.",
             "Generated ammo ammoFor=arrow/bullet has vanilla projectile identity only. For an authored dart/throwable attack use consumable_weapon or weapon, empty ammoFor, and shoot_projectile.",
-            "Gameplay/utility promises require an executable call and mechanicClaims backingRefs that resolve exact fields; free-text backing is descriptive only. Visual motifs stay visual_only. Never advertise unsupported mechanics in name, tooltip, concept or runtime intent.",
+            "Public gameplay prose needs exact executable backingRefs; visual-only motifs stay out of tooltip gameplay promises.",
             "VFX calls present effects; burst/AoE/sticky are gameplay. Player movement must use a mobility engineCall; low-level shoot_projectile needs explicit runtimeFamily.",
             "Ore visual execution is not added in this patch; generic oreSense remains report/debug-only.",
             "spawn_temporary_helper_projectile is short-lived projectile behavior, not a persistent minion/sentry lifecycle. summon_boss/spawn_npc/spawn_enemy are hard-rejected.",
-            "Overhead barrage is delivery geometry: on-hit uses apply_on_hit_effect; ranged/magic on-use uses the family call; Starfury-style melee-on-use uses shoot_projectile(runtimeFamily=overhead_barrage,delivery=swing,weaponFamily=broadsword). Authored projectile family/shape/effect keeps the star, arrow, meteor, ice or other theme.",
+            "Overhead barrage: on-hit uses apply_on_hit_effect; ranged/magic on-use uses its family call; Starfury-style melee-on-use uses shoot_projectile(runtimeFamily=overhead_barrage,delivery=swing).",
 
         ],
         "validatorLimits": {
@@ -702,6 +703,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "Preserve a generated-parent anchor, then add one bounded tradeoff, timing, delivery or utility twist.",
             "Tether/returning sprite is one moving body with only a short local attachment; never a full-canvas rope. Image prompts: item=inventory/held; projectile=moving hit body (same sword/blade/boomerang OK); impact=momentary hit; child=damaging child/mote.",
             "Utility/player movement needs its exact executable call such as tool_capability, mobility_effect or apply_player_effect_on_use; otherwise keep it VFX-only. Use custom_executor for normal/utility engineCalls; never family=unsupported when executable calls exist.",
+            "Do not default to weapon: when parent raw facts expose a non-combat affordance, resultKind must preserve at least one non-combat affordance unless mergeLogic identifies the exact executable transformation that replaces it.",
             "No markdown, analysis, legacy attackPattern, or attack.genome.",
         ],
         "validatorRanges": {

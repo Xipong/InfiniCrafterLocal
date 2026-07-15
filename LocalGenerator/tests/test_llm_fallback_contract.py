@@ -85,6 +85,32 @@ def _check_llm_chat_json_switches_to_fallback_after_two_transport_failures(monke
         ("http://fallback.local:1234/v1/chat/completions", "backup-local"),
     ]
 
+def _check_llm_chat_json_retries_transient_http_without_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(lp, "LLM_PROVIDER", "local")
+    monkeypatch.setattr(lp, "LMSTUDIO_URL", "http://single.local:1234")
+    monkeypatch.setattr(lp, "LMSTUDIO_MODEL", "single-model")
+    monkeypatch.setattr(lp, "LLM_API_MODE", "chat_completions")
+    monkeypatch.setattr(lp, "LLM_FALLBACK_MODEL", "")
+    monkeypatch.setattr(lp, "LLM_FALLBACK_NETWORK_FAILS", 2)
+    monkeypatch.setattr(lp, "_RESOLVED_LLM_MODELS", {})
+    monkeypatch.setattr(lp.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    def fake_http_json(url, payload, timeout=10, headers=None):
+        calls.append((url, payload.get("model")))
+        if len(calls) == 1:
+            raise _http_error(url, 503, "temporarily unavailable")
+        return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr(lp, "http_json", fake_http_json)
+    out = lp.llm_chat_json({"messages": [], "model": "ignored"}, timeout=1)
+    assert out["choices"][0]["message"]["content"] == "{}"
+    assert calls == [
+        ("http://single.local:1234/v1/chat/completions", "single-model"),
+        ("http://single.local:1234/v1/chat/completions", "single-model"),
+    ]
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -95,7 +121,8 @@ def _run_coarse_contracts(tmp_path):
     for _name in [
     '_check_gui_exposes_fallback_model_fields',
     '_check_llm_chat_json_switches_to_fallback_on_budget_error',
-    '_check_llm_chat_json_switches_to_fallback_after_two_transport_failures'
+    '_check_llm_chat_json_switches_to_fallback_after_two_transport_failures',
+    '_check_llm_chat_json_retries_transient_http_without_fallback'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

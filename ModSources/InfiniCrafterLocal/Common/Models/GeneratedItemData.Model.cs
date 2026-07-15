@@ -818,7 +818,8 @@ public sealed class VisualSpec
     public string SpriteRawPath { get; set; } = "";
     public string SpriteUrl { get; set; } = "";
     public float PreservationScore { get; set; } = 0f;
-    public float VisualJudgeScore { get; set; } = 0f;
+    public float SpriteTechnicalScore { get; set; } = 0f;
+    public string SemanticReviewStatus { get; set; } = "not_performed";
     public int PreferredCanvasSize { get; set; } = 32;
     public float InventoryScale { get; set; } = 1f;
     public float WorldScale { get; set; } = 1f;

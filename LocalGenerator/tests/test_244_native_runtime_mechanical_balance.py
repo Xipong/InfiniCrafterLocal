@@ -315,6 +315,49 @@ def _contract_check_returning_hit_starts_return_without_disabling_return_path_da
     assert "MovementCode is 5 or 14" not in can_hit
 
 
+def _contract_check_parent_progression_ignores_ammo_placeholder_and_persistent_root_spawn_stats() -> None:
+    technical_root = {
+        "type": 10,
+        "penetrate": -1,
+        "maxPenetrate": -1,
+        "timeLeft": 3600,
+        "extraUpdates": 0,
+        "tileCollide": False,
+        "ownerHitCheck": False,
+        "usesLocalNPCImmunity": False,
+        "usesIDStaticNPCImmunity": False,
+        "aiStyle": 6,
+        "friendly": True,
+        "fromLiveWireRaw": True,
+    }
+    weak_material = {"name": "Weak Catalyst", "sourceMod": "Terraria", "damage": 0, "rare": 0, "value": 100, "maxStack": 999, "material": True}
+    ammo_user = {
+        "name": "Rapid Ammo User", "sourceMod": "Terraria", "damage": 6, "damageClass": "ranged",
+        "useTime": 8, "useAnimation": 8, "shoot": 10, "shootSpeed": 7, "useAmmo": 1,
+        "rare": 2, "value": 350000, "maxStack": 1, "noMelee": True,
+        "directProjectileRaw": technical_root,
+    }
+    disposable = {
+        "name": "Stacked Throwable", "sourceMod": "Terraria", "damage": 60, "damageClass": "ranged",
+        "useTime": 45, "useAnimation": 45, "shoot": 30, "shootSpeed": 5.5,
+        "rare": 0, "value": 75, "maxStack": 999, "consumable": True,
+        "directProjectileRaw": {**technical_root, "tileCollide": True, "aiStyle": 16},
+    }
+    persistent_root = {
+        "name": "Persistent Root Spawner", "sourceMod": "Terraria", "damage": 8, "damageClass": "summon",
+        "useTime": 28, "useAnimation": 28, "shoot": 266, "shootSpeed": 10,
+        "rare": 4, "value": 100000, "maxStack": 1,
+        "directProjectileRaw": {**technical_root, "tileCollide": True, "aiStyle": 26, "minion": True, "timeLeft": 18000},
+    }
+    rank = {name: index for index, name in enumerate(("wood", "early", "pre_boss", "pre_hardmode_late", "hardmode_early", "mech", "plantera", "lunar", "endgame"))}
+    ammo_stage = stat_profile_for(ammo_user, weak_material, {"weapon", "ranged", "ammo"})
+    disposable_stage = stat_profile_for(disposable, weak_material, {"weapon", "ranged", "consumable"})
+    persistent_stage = stat_profile_for(persistent_root, weak_material, {"weapon", "summon", "minion"})
+    assert rank[ammo_stage["name"]] <= rank["pre_boss"]
+    assert rank[disposable_stage["name"]] <= rank["pre_boss"]
+    assert rank[persistent_stage["name"]] <= rank["pre_hardmode_late"]
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_244_native_runtime_mechanical_balance_module_contract(request):
     from contract_checks import run_contract_checks
@@ -337,5 +380,6 @@ def test_244_native_runtime_mechanical_balance_module_contract(request):
             '_contract_check_starfury_style_affordance_survives_actual_genome_sanitizer',
             '_contract_check_csharp_native_family_guards_are_behavioral_not_prose',
             '_contract_check_returning_hit_starts_return_without_disabling_return_path_damage',
+            '_contract_check_parent_progression_ignores_ammo_placeholder_and_persistent_root_spawn_stats',
         ),
     )

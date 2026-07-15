@@ -180,6 +180,19 @@ def _check_nearest_downscale_is_not_a_supported_runtime_or_gui_path(monkeypatch)
     assert "pixel_strict" not in gui
 
 
+def _check_item_topology_rejects_multiple_disconnected_significant_bodies(tmp_path) -> None:
+    path = tmp_path / "disconnected_item.png"
+    img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((5, 12, 20, 35), fill=(190, 90, 30, 255))
+    draw.rectangle((28, 12, 43, 35), fill=(70, 150, 220, 255))
+    img.save(path)
+
+    validation = validate_processed_sprite(str(path), "item")
+    assert validation["ok"] is False
+    assert any(str(reason).startswith("multiple_disconnected_item_bodies") for reason in validation["reasons"])
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -196,7 +209,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_sprite_keyer_removes_disconnected_nested_pink_frame',
     '_check_technical_score_describes_final_validation_not_raw_candidate',
     '_check_postprocess_failure_preserves_the_original_asset_path',
-    '_check_nearest_downscale_is_not_a_supported_runtime_or_gui_path'
+    '_check_nearest_downscale_is_not_a_supported_runtime_or_gui_path',
+    '_check_item_topology_rejects_multiple_disconnected_significant_bodies',
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

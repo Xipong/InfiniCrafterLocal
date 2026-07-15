@@ -128,18 +128,17 @@ def is_currency_ammo_item(item: dict[str, Any], tags: set[str] | None = None) ->
 
 
 def is_low_tier_consumable_projectile_item(item: dict[str, Any], tags: set[str] | None = None) -> bool:
-    """Stackable starter projectiles are real raw facts, but poor progression anchors.
+    """Stackable projectile consumables are poor progression anchors.
 
-    Shuriken/throwing-knife/low dart-like parents can have excellent theoretical DPS
-    when priced as free weapons.  In Terraria they are stackable consumables, so their
-    raw projectile profile should still reach the LLM, but their inferred tier signal
-    must not become hardmode just because useTime is low and pierce exists.
+    Their direct damage is real and remains available to the authored result, but item
+    use cadence plus a technical projectile lifetime/pierce snapshot must not price a
+    disposable stack as a reusable late-game weapon.
     """
     tags = set(tags or tags_of(item))
     return bool(
         item_bool(item, "consumable")
         and item_num(item, "maxStack", 1) > 1
-        and 0 < item_num(item, "damage", 0) <= 25
+        and item_num(item, "damage", 0) > 0
         and item_num(item, "shoot", 0) > 0
         and item_num(item, "useAmmo", 0) <= 0
         and not item_bool(item, "channel")
@@ -176,6 +175,8 @@ def mechanic_signal_power(item: dict[str, Any]) -> dict[str, Any]:
     value = item_num(item, "value")
     tags = tags_of(item)
     category = parent_primary_category(item)
+    rarity = rarity_baseline_signal(item, tags, category)
+    rarity_signal = float(rarity.get("convertedPower") or 0.0)
 
     behavior = source_weapon_profile(item)
     behavior_signal = 0.0
@@ -192,8 +193,22 @@ def mechanic_signal_power(item: dict[str, Any]) -> dict[str, Any]:
             # source, not a full weapon parent. Preserve the signal, but cap stage pressure.
             behavior_signal = min(behavior_signal, dmg * 0.45 + 14.0)
         if consumable_projectile_anchor:
-            # Stackable starter projectiles are consumables, not reusable hardmode weapons.
+            # Stackable projectiles are consumed inventory, not reusable roots.
             behavior_signal = min(behavior_signal, dmg * 2.4 + 18.0)
+        if item_num(item, "useAmmo", 0) > 0:
+            # Ammo supplies the real projectile body; Item.shoot fallback metadata may
+            # describe a technical placeholder and cannot buy progression by itself.
+            behavior_signal = min(behavior_signal, max(36.0, rarity_signal * 1.6, dmg * 2.5 + 12.0))
+        if bool(behavior.get("minion")) or bool(behavior.get("sentry")):
+            # Staff useTime is spawn cadence, not the persistent root's hit cadence.
+            behavior_signal = min(behavior_signal, max(42.0, rarity_signal * 1.15, dmg * 2.5 + 12.0))
+        if bool(behavior.get("ownerHitCheck")) or (
+            float(behavior.get("piercePotential") or 0) >= 8.0
+            and float(behavior.get("lifetime") or 0) >= 1800.0
+        ):
+            # Held/returning roots expose technical lifetime and infinite penetrate;
+            # those fields describe lifecycle, not unconstrained simultaneous DPS.
+            behavior_signal = min(behavior_signal, max(42.0, rarity_signal * 1.4, dmg * 3.0 + 10.0))
 
     # Practical power, not raw projectile theory. Avoid per-item exception tables here;
     # consumable/stack penalties are handled by generic economy fields and stage caps.
@@ -215,8 +230,6 @@ def mechanic_signal_power(item: dict[str, Any]) -> dict[str, Any]:
     magic_signal = mana * 2.2 if dmg > 0 else 0.0
     value_signal = min(90.0, (value ** 0.5) * 0.14) if value > 0 else 0.0
 
-    rarity = rarity_baseline_signal(item, tags, category)
-    rarity_signal = float(rarity.get("convertedPower") or 0.0)
     generic_mod_signal = generic_modded_progression_signal(item, tags, category, rarity)
     generic_mod_score = float(generic_mod_signal.get("score") or 0.0)
 

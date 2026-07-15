@@ -29,6 +29,12 @@ from infini_local.core.boundary_models import runtime_plan_boundary_report
 
 from infini_local.core.runtime_authoring.structural import structural_repair_runtime_plan_inplace
 from infini_local.core.runtime_promise_truth import validate_runtime_promises
+from infini_local.core.runtime_contracts import (
+    mechanic_claim_backing_relevant,
+    normalize_runtime_contract,
+    resolve_mechanic_backing_refs,
+    validate_runtime_contract,
+)
 from infini_local.pipelines.combine_genome_contract import combat_genome_required_for
 from infini_local.pipelines.llm_authoring_prompt import (
     MECHANIC_BACKING_REF_RULES,
@@ -59,7 +65,62 @@ from infini_local.storage.trace_runtime import _trace_message_summary, log_event
 # that rewrites identity or routes mechanics from prose.
 
 
-def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
+# Generic lexical binding between public tooltip clauses and machine-backed claims.
+# This intentionally has no item/mechanic vocabulary: polarity and authored numbers
+# must agree, while harmless wording variation (for example channel/charge) may pass.
+_PUBLIC_CLAUSE_STOPWORDS = {
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "into", "is", "it",
+    "near", "of", "on", "or", "point", "that", "the", "then", "this", "to", "up",
+    "while", "with", "within", "you", "your",
+}
+_PUBLIC_NEGATIONS = {"no", "not", "never", "neither", "nor", "without"}
+
+
+def _normalized_public_clause(value: Any) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w%+.-]+", " ", str(value or "").lower(), flags=re.UNICODE)).strip(" .-")
+
+
+def _public_word_stem(word: str) -> str:
+    if len(word) > 5 and word.endswith("ing"):
+        word = word[:-3]
+    elif len(word) > 4 and word.endswith("ed"):
+        word = word[:-2]
+    elif len(word) > 4 and word.endswith("es"):
+        word = word[:-1]
+    elif len(word) > 3 and word.endswith("s"):
+        word = word[:-1]
+    return word
+
+
+def _public_clause_matches_claim(clause: Any, claim: Any) -> bool:
+    clause_text = _normalized_public_clause(clause)
+    claim_text = _normalized_public_clause(claim)
+    if not clause_text or not claim_text:
+        return False
+    if clause_text == claim_text:
+        return True
+    clause_words = set(re.findall(r"[\w%+.-]+", clause_text, flags=re.UNICODE))
+    claim_words = set(re.findall(r"[\w%+.-]+", claim_text, flags=re.UNICODE))
+    if bool(clause_words & _PUBLIC_NEGATIONS) != bool(claim_words & _PUBLIC_NEGATIONS):
+        return False
+    clause_numbers = set(re.findall(r"\d+(?:\.\d+)?%?", clause_text))
+    claim_numbers = set(re.findall(r"\d+(?:\.\d+)?%?", claim_text))
+    if not clause_numbers.issubset(claim_numbers):
+        return False
+    clause_content = {_public_word_stem(word) for word in clause_words - _PUBLIC_CLAUSE_STOPWORDS - _PUBLIC_NEGATIONS}
+    claim_content = {_public_word_stem(word) for word in claim_words - _PUBLIC_CLAUSE_STOPWORDS - _PUBLIC_NEGATIONS}
+    if not clause_content:
+        return False
+    overlap = len(clause_content & claim_content)
+    minimum_overlap = 1 if len(clause_content) == 1 else 2
+    return overlap >= minimum_overlap and (overlap / len(clause_content)) >= 0.60
+
+
+def planner_runtime_promise_gate(
+    plan: dict[str, Any],
+    *,
+    enforce_public_contract: bool = False,
+) -> dict[str, Any]:
     """Reject public gameplay promises that have no executable runtime backing.
 
     Visual-only wording remains legal inside visual fields.  The probe is copied because
@@ -74,10 +135,65 @@ def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
         if claim.get("status") in {"unsupported", "partial"}
         and not str(claim.get("source") or "").startswith(("visual.", "runtimePlan.visualIntent"))
     ]
-    runtime = runtime_plan(plan)
+    has_runtime_contract = enforce_public_contract and isinstance(probe.get("runtimeContract"), dict)
+    contract_report = validate_runtime_contract(probe, patch) if has_runtime_contract else {"contract": normalize_runtime_contract(probe.get("runtimeContract")), "unsupportedPromises": []}
+    contract = dict(contract_report.get("contract") or {})
+    for unsupported_contract in contract_report.get("unsupportedPromises") or []:
+        blocking.append({
+            "kind": "runtime_contract_unsupported",
+            "source": "runtimeContract",
+            "status": "unsupported",
+            "backing": str(unsupported_contract)[:180],
+        })
+    mechanic_claims = list(contract.get("mechanicClaims") or [])
+    executable_machine_claims = 0
+    if has_runtime_contract and str(contract.get("executionStatus") or "") in {"partial", "unsupported"}:
+        blocking.append({
+            "kind": "contract_execution_status",
+            "source": "runtimeContract.executionStatus",
+            "status": str(contract.get("executionStatus") or "unsupported"),
+            "backing": "final aggregate contract must be executable or visual_only",
+        })
+    if has_runtime_contract:
+        for claim_index, mechanic in enumerate(mechanic_claims):
+            if str(mechanic.get("status") or "") in {"visual_only", "unsupported"}:
+                continue
+            machine_backed, failures = resolve_mechanic_backing_refs(probe, patch, mechanic)
+            if not machine_backed:
+                blocking.append({
+                    "kind": "mechanic_claim_backing_unresolved",
+                    "source": f"runtimeContract.mechanicClaims[{claim_index}]",
+                    "status": "unsupported",
+                    "backing": ",".join(failures[:4]) or "none",
+                })
+                continue
+            relevant, relevance_failures = mechanic_claim_backing_relevant(mechanic)
+            if not relevant:
+                blocking.append({
+                    "kind": "mechanic_claim_backing_irrelevant",
+                    "source": f"runtimeContract.mechanicClaims[{claim_index}]",
+                    "status": "unsupported",
+                    "backing": ",".join(relevance_failures[:4]) or "none",
+                })
+                continue
+            executable_machine_claims += 1
+
+    tooltip_clauses = [
+        _normalized_public_clause(part)
+        for part in re.split(r"[;\n]+|(?<=[.!?])\s+", str(probe.get("tooltip") or ""))
+        if has_runtime_contract and _normalized_public_clause(part)
+    ]
+    for clause in tooltip_clauses:
+        if not any(_public_clause_matches_claim(clause, mechanic.get("claim")) for mechanic in mechanic_claims):
+            blocking.append({
+                "kind": "tooltip_clause_missing_mechanic_claim",
+                "source": "tooltip",
+                "status": "unsupported",
+                "backing": "runtimeContract.mechanicClaims must cover each tooltip clause with matching polarity and numbers",
+                "clause": clause[:180],
+            })
+    runtime = runtime_plan(probe)
     result_kind = str(runtime.get("resultKind") or "").strip().lower()
-    contract_raw = plan.get("runtimeContract")
-    contract: dict[str, Any] = contract_raw if isinstance(contract_raw, dict) else {}
     claims_raw = contract.get("mechanicClaims")
     claims: list[Any] = claims_raw if isinstance(claims_raw, list) else []
     timeline_raw = contract.get("playerViewTimeline")
@@ -85,6 +201,8 @@ def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
     if result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion"}:
         if not claims:
             blocking.append({"kind": "missing_mechanic_claims", "source": "runtimeContract", "status": "unsupported", "backing": "none"})
+        if has_runtime_contract and executable_machine_claims <= 0:
+            blocking.append({"kind": "missing_executable_mechanic_claim", "source": "runtimeContract", "status": "unsupported", "backing": "no resolved relevant backingRefs"})
         if len([step for step in timeline if str(step).strip()]) < 4:
             blocking.append({"kind": "missing_player_view_timeline", "source": "runtimeContract", "status": "unsupported", "backing": "none"})
     calls_raw = runtime.get("engineCalls")
@@ -103,6 +221,98 @@ def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, Any]:
+    """Re-resolve the authored promise contract against the final executable view."""
+    patch = runtime_plan_to_attack_genome_patch(copy.deepcopy(data))
+    contract_report = validate_runtime_contract(data, patch)
+    gate = planner_runtime_promise_gate(data, enforce_public_contract=True)
+    status = str(contract_report.get("executionStatus") or "")
+    if status in {"partial", "unsupported"}:
+        gate.setdefault("blockingClaims", []).append({
+            "kind": "contract_execution_status",
+            "source": "runtimeContract.executionStatus",
+            "status": status,
+            "backing": "final runtime contract validation",
+        })
+        gate["ok"] = False
+    data.setdefault("debug", {})
+    if isinstance(data.get("debug"), dict):
+        data["debug"]["finalRuntimePromiseGate"] = bounded_json_dumps(gate, max_chars=8000)
+    if not gate.get("ok"):
+        kinds = sorted({str(row.get("kind") or "unsupported") for row in gate.get("blockingClaims") or []})
+        raise PlannerUnavailable("final runtime promise boundary rejected: " + ", ".join(kinds))
+    return gate
+
+
+def _project_fail_closed_promise_surface(plan: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Delete unproved public claims and rebuild tooltip from model-authored survivors.
+
+    The projection never invents prose or mechanics. It is attempted only after model
+    re-authoring is exhausted and is accepted only if the normal strict gate passes.
+    """
+    projected = copy.deepcopy(plan)
+    patch = runtime_plan_to_attack_genome_patch(copy.deepcopy(projected))
+    initial_contract_report = validate_runtime_contract(projected, patch)
+    contract = dict(initial_contract_report.get("contract") or {})
+    unsupported_sync_fields = {
+        str(value).split("unsupported:sync:", 1)[1]
+        for value in initial_contract_report.get("unsupportedPromises") or []
+        if str(value).startswith("unsupported:sync:")
+    }
+    sync_fields = [str(value) for value in contract.get("syncFields") or []]
+    removed_sync_fields = [value for value in sync_fields if value in unsupported_sync_fields]
+    if removed_sync_fields:
+        contract["syncFields"] = [value for value in sync_fields if value not in unsupported_sync_fields]
+        projected["runtimeContract"] = contract
+        stale_unsupported = {f"unsupported:sync:{value}" for value in removed_sync_fields}
+        if isinstance(projected.get("unsupportedPromises"), list):
+            projected["unsupportedPromises"] = [value for value in projected["unsupportedPromises"] if str(value) not in stale_unsupported]
+        contract = dict(validate_runtime_contract(projected, patch).get("contract") or {})
+    kept: list[dict[str, Any]] = []
+    removed: list[dict[str, Any]] = []
+    executable_count = 0
+    for index, claim in enumerate(contract.get("mechanicClaims") or []):
+        status = str(claim.get("status") or "")
+        if status == "visual_only":
+            kept.append(claim)
+            continue
+        if status in {"partial", "unsupported", "ambiguous"}:
+            removed.append({"index": index, "reason": f"status:{status or 'unknown'}", "claim": claim.get("claim")})
+            continue
+        resolved, failures = resolve_mechanic_backing_refs(projected, patch, claim)
+        if not resolved:
+            removed.append({"index": index, "reason": ",".join(failures[:4]) or "unresolved", "claim": claim.get("claim")})
+            continue
+        relevant, relevance_failures = mechanic_claim_backing_relevant(claim)
+        if not relevant:
+            removed.append({"index": index, "reason": ",".join(relevance_failures[:4]) or "irrelevant", "claim": claim.get("claim")})
+            continue
+        kept_claim = dict(claim)
+        kept_claim["status"] = "executable"
+        kept.append(kept_claim)
+        executable_count += 1
+
+    contract["mechanicClaims"] = kept
+    contract["executionStatus"] = "executable" if executable_count else ("visual_only" if kept else "unsupported")
+    projected["runtimeContract"] = contract
+    projected["tooltip"] = "; ".join(str(claim.get("claim") or "").strip().rstrip(".;") for claim in kept if str(claim.get("claim") or "").strip())
+    projection = {
+        "schema": "infini.promise-surface-projection.v1",
+        "mode": "fail_closed_delete_only",
+        "removedClaims": removed,
+        "removedSyncFields": removed_sync_fields,
+        "keptClaimCount": len(kept),
+        "executableClaimCount": executable_count,
+    }
+    projected.setdefault("debug", {})
+    if isinstance(projected.get("debug"), dict):
+        projected["debug"]["plannerPromiseProjection"] = projection
+    gate = planner_runtime_promise_gate(projected, enforce_public_contract=True)
+    result_kind = str(runtime_plan(projected).get("resultKind") or "").strip().lower()
+    requires_executable = result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion"}
+    projection["accepted"] = bool(gate.get("ok")) and (executable_count > 0 or not requires_executable)
+    projection["postProjectionGate"] = gate
+    return projected, projection
 
 
 def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any] | None:
@@ -148,7 +358,7 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         trace_event("response", "LLM:author_plan", "Planner response", {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": transport_debug}, response=content)
         parsed_child_json = parse_first_valid_llm_json(content)
         obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
-        promise_gate = planner_runtime_promise_gate(obj)
+        promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True)
         retry_messages = list(req["messages"])
         max_reauthors = 2
         for reauthor_attempt in range(1, max_reauthors + 1):
@@ -168,7 +378,12 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
                 "blockingClaims": promise_gate["blockingClaims"],
                 "backingRefRules": list(MECHANIC_BACKING_REF_RULES),
                 "requirements": [
-                    "Every gameplay promise in public prose must be backed by a concrete engineCall/runtime executor.",
+                    "Treat every blocking claim as proof that the previous behavior is not executable. Delete that entire behavior from tooltip, concept, state intent, claims, and calls; do not preserve it by renaming fields or changing numbers.",
+                    "Choose a different behavior only from concrete engineCalls in the supplied API card. A parent role may survive purely as visual identity when it has no gameplay executor.",
+                    "projectileShape/projectileImpact/projectileTrail, note strings, runtimeArchetype.family, and visual fields describe presentation or taxonomy; they are not gameplay executors.",
+                    "Every gameplay promise in public prose must be backed by a concrete engineCall/runtime executor whose backingRefs resolve exactly after compilation.",
+                    "backingRefs.expected must be the exact JSON value of the referenced field; never summarize a nested object as a prose string.",
+                    "Rebuild tooltip clauses and mechanicClaims from the final engineCalls. Every executable claim must literally include a non-generic field/enum token or exact number from its backingRefs; mark pure identity or visual prose visual_only.",
                     "A purely visual motif may stay only in visual/visualIntent and must not claim gameplay behavior.",
                     "Playable results must keep at least 4 non-empty playerViewTimeline steps in runtimeContract.",
                     "Return one complete replacement item JSON, not a patch.",
@@ -195,7 +410,19 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
             content = retry_content
             parsed_child_json = parse_first_valid_llm_json(retry_content)
             obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
-            promise_gate = planner_runtime_promise_gate(obj)
+            promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True)
+        if not promise_gate["ok"]:
+            projected, projection = _project_fail_closed_promise_surface(obj)
+            trace_event("repair", "LLM:author_plan_promise_projection", "Fail-closed promise surface projection", {
+                "provider": active_llm_provider(),
+                "model": model_name,
+                "removedClaimCount": len(projection.get("removedClaims") or []),
+                "keptClaimCount": projection.get("keptClaimCount"),
+                "accepted": projection.get("accepted"),
+            }, response=projection)
+            if projection.get("accepted"):
+                obj = projected
+                promise_gate = dict(projection.get("postProjectionGate") or {})
         if not promise_gate["ok"]:
             kinds = sorted({str(x.get("kind") or "unsupported") for x in promise_gate["blockingClaims"]})
             raise PlannerUnavailable(

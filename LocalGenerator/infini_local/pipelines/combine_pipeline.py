@@ -33,7 +33,11 @@ from infini_local.pipelines.item_power_knowledge import (
     recipe_meta,
     tags_of,
 )
-from infini_local.pipelines.llm_authoring_pipeline import call_llm_vfx_director, try_llm_plan
+from infini_local.pipelines.llm_authoring_pipeline import (
+    call_llm_vfx_director,
+    try_llm_plan,
+    validate_final_runtime_promise_boundary,
+)
 from infini_local.pipelines.llm_transport import begin_llm_item_lease, end_llm_item_lease
 from infini_local.pipelines.pipeline_visual_config import (
     VISUAL_PIPELINE_PROFILE,
@@ -309,6 +313,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("11a_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="final_pre_boundary")
         step("11b_strict_executable_boundary", validate_executable_item_boundary, data)
         data = step("12_final_normalize", final_normalize, data)
+        step("12a_final_runtime_promise_boundary", validate_final_runtime_promise_boundary, data)
         step("12b_strict_executable_boundary", validate_executable_item_boundary, data)
         data = step("12c_strict_visual_authoring_boundaries", _validate_and_project_visual_authoring_boundaries, data)
         data.setdefault("recipeMeta", {})["worldScoped"] = True

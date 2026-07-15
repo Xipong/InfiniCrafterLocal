@@ -64,7 +64,7 @@ def _workbench() -> dict:
 def _carpentry_plan(*, weird_twist: str = "Splinters become bounded secondary projectiles.") -> dict:
     return {
         "name": "Carpentry Blade",
-        "tooltip": "A rough wooden blade that throws splinters on impact.",
+        "tooltip": "A rough wooden blade that throws 3 secondary splinter projectiles on impact.",
         "concept": {
             "fantasy": "A wooden sword reinforced with the structural essence of a workbench.",
             "mergeLogic": "The sword supplies the attack and the workbench supplies wood and joinery.",
@@ -74,7 +74,18 @@ def _carpentry_plan(*, weird_twist: str = "Splinters become bounded secondary pr
             "schema": "infini.runtime-contract.v2",
             "primaryVerb": "swing and release three bounded splinters",
             "controlStyle": "tap",
-            "mechanicClaims": [{"claim": "three bounded splinters on hit", "backing": "spawn_secondary_projectiles count=3", "status": "executable"}],
+            "mechanicClaims": [{
+                "claim": "A rough wooden blade that throws 3 secondary splinter projectiles on impact.",
+                "backing": "spawn_secondary_projectiles count=3",
+                "backingRefs": [{
+                    "source": "engineCall",
+                    "callIndex": 2,
+                    "fn": "spawn_secondary_projectiles",
+                    "field": "count",
+                    "expected": 3,
+                }],
+                "status": "executable",
+            }],
             "playerViewTimeline": ["blade held", "blade swings", "surface collision has no persistent field", "NPC hit releases three splinters", "splinters expire"],
             "executionStatus": "executable",
         },
@@ -395,6 +406,11 @@ def _contract_check_promise_retry_preserves_visual_slime_and_repeats_shape_rules
         weird_twist="The slime coating provides a slight, purely visual sheen to the weapon."
     )
     valid["tooltip"] = "A wooden sword coated in hardened slime."
+    valid["runtimeContract"]["mechanicClaims"].append({
+        "claim": valid["tooltip"],
+        "backing": "visual_only: material coating",
+        "status": "visual_only",
+    })
     valid["concept"]["fantasy"] = (
         "A basic wooden sword permanently coated in a thick, sticky layer of slime."
     )

@@ -67,8 +67,10 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
     non-visual craft. Optional projectile/impact/child/field slots are reported but
     do not block unless they are marked required by the asset plan/manifest.
     """
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    visual_raw = data.get("visual")
+    attack_raw = data.get("attack")
+    visual: dict[str, Any] = dict(visual_raw) if isinstance(visual_raw, dict) else {}
+    attack: dict[str, Any] = dict(attack_raw) if isinstance(attack_raw, dict) else {}
     problems: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
 
@@ -123,7 +125,7 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
         "path": item_path,
         "exists": _asset_path_exists(item_path),
         "usable": item_ok,
-        "score": visual.get("visualJudgeScore"),
+        "technicalScore": visual.get("spriteTechnicalScore"),
     }]
     for role, prefix in [
         ("projectile", "projectile"),
@@ -159,7 +161,7 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
             "path": path,
             "exists": exists,
             "usable": usable,
-            "score": attack.get(f"{prefix}SpriteScore"),
+            "technicalScore": attack.get(f"{prefix}SpriteScore"),
             "assetMode": authored_asset_mode(data, role),
         })
 
@@ -174,6 +176,7 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
         "zImageBackendActive": image_backend_is_zimage(),
         "strictAiAuthorship": bool(VISUAL_STRICT_AI_AUTHORSHIP),
         "proceduralFallbackAllowed": bool(VISUAL_ALLOW_PROCEDURAL_FALLBACK),
+        "semanticReviewStatus": str(visual.get("semanticReviewStatus") or "not_performed"),
         "problems": problems,
         "warnings": warnings,
         "slots": slots,

@@ -491,6 +491,38 @@ def edge_touch_ratio(alpha: Any) -> float:
     right = sum(1 for y in range(h) if alpha.getpixel((w - 1, y)) > 0)
     return (top + bottom + left + right) / max(1, (w * 2 + h * 2))
 
+def significant_alpha_component_areas(alpha: Any, *, alpha_threshold: int = 32) -> list[int]:
+    """Return 8-connected visible component areas, largest first.
+
+    This is role geometry only: it never inspects names, prompts, colors, or item types.
+    Eight-way connectivity preserves diagonal pixel-art joins while still exposing a
+    detached second body that would animate as a broken inventory sprite.
+    """
+    if Image is None:
+        return []
+    w, h = alpha.size
+    pixels = alpha.load()
+    visible = {(x, y) for y in range(h) for x in range(w) if int(pixels[x, y]) > alpha_threshold}
+    areas: list[int] = []
+    while visible:
+        seed = visible.pop()
+        stack = [seed]
+        area = 0
+        while stack:
+            x, y = stack.pop()
+            area += 1
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    neighbor = (x + dx, y + dy)
+                    if neighbor in visible:
+                        visible.remove(neighbor)
+                        stack.append(neighbor)
+        areas.append(area)
+    return sorted(areas, reverse=True)
+
+
 def validate_processed_sprite(path: str, role: str = "item") -> dict[str, Any]:
     """Technical validation only. No art taste, no tier judging, no VLM."""
     if Image is None:
@@ -508,6 +540,13 @@ def validate_processed_sprite(path: str, role: str = "item") -> dict[str, Any]:
     core_bbox = bb.get("core_bbox")
     core_long = int(bb.get("core_long_axis") or 0)
     effect_long = int(bb.get("effect_long_axis") or 0)
+    component_areas = significant_alpha_component_areas(alpha)
+    visible_component_area = sum(component_areas)
+    significant_components = [area for area in component_areas if area >= max(6, int(visible_component_area * 0.08))]
+    bb["alphaComponentAreas"] = component_areas[:12]
+    bb["significantAlphaComponents"] = len(significant_components)
+    if role == "item" and len(significant_components) > 1:
+        reasons.append(f"multiple_disconnected_item_bodies:{len(significant_components)}")
     if not effect_bbox or not core_bbox:
         reasons.append("empty_alpha_bbox")
     else:
@@ -578,6 +617,7 @@ def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
         "almost_no_transparency_after_bg_removal",
         "too_few_opaque_pixels",
         "very_dense_opaque_area",
+        "multiple_disconnected_item_bodies",
         "pillow_unavailable_required",
     )
     return any(any(tok in reason for tok in fatal_tokens) for reason in reasons)
@@ -597,6 +637,7 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         ("almost_no_transparency_after_bg_removal", "keep the background perfectly flat magenta with a cleanly separated object"),
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
         ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the magenta key"),
+        ("multiple_disconnected_item_bodies", "join every significant part into one continuous item body; detached glows may only be tiny accents"),
         ("empty_alpha_bbox", "draw exactly one visible asset, not an empty image"),
     ]
     for raw, msg in mapping:

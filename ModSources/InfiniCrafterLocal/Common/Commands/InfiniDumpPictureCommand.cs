@@ -179,7 +179,7 @@ public sealed class InfiniDumpPictureCommand : ModCommand
                 VisualMode = data.Attack?.VisualMode ?? "",
             };
 
-            AddAsset(entry, copied, assetDir, safeId, "item_final", data.Visual?.SpritePath, data.Visual?.SpriteStatus, data.Visual?.PreferredCanvasSize ?? 0, data.Visual?.VisualJudgeScore ?? 0f, data.Visual?.ImagePrompt);
+            AddAsset(entry, copied, assetDir, safeId, "item_final", data.Visual?.SpritePath, data.Visual?.SpriteStatus, data.Visual?.PreferredCanvasSize ?? 0, data.Visual?.SpriteTechnicalScore ?? 0f, data.Visual?.ImagePrompt);
             AddAsset(entry, copied, assetDir, safeId, "item_raw", data.Visual?.SpriteRawPath, "raw", data.Visual?.PreferredCanvasSize ?? 0, 0f, data.Visual?.ImagePrompt);
             AddAsset(entry, copied, assetDir, safeId, "projectile", data.Attack?.ProjectileSpritePath, data.Attack?.ProjectileSpriteStatus, EffectiveProjectileCanvas(data), data.Attack?.ProjectileSpriteScore ?? 0f, data.Attack?.ProjectileSpritePrompt);
             AddAsset(entry, copied, assetDir, safeId, "impact", data.Attack?.ImpactSpritePath, data.Attack?.ImpactSpriteStatus, 0, data.Attack?.ImpactSpriteScore ?? 0f, data.Attack?.ImpactSpritePrompt);

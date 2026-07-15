@@ -411,18 +411,25 @@ def _contract_check_planner_promise_gate_does_not_treat_material_heat_as_heat_ja
             "schema": "infini.runtime-contract.v2",
             "primaryVerb": "shoot a straight bolt",
             "controlStyle": "tap",
-            "mechanicClaims": [{
-                "claim": "shoots a straight bolt",
-                "backing": "shoot_projectile",
-                "backingRefs": [{
-                    "source": "engineCall",
-                    "callIndex": 1,
-                    "fn": "shoot_projectile",
-                    "field": "runtimeFamily",
-                    "expected": "shoot",
-                }],
-                "status": "executable",
-            }],
+            "mechanicClaims": [
+                {
+                    "claim": "A heat-forged bolt with a polished steel tip.",
+                    "backing": "visual_only: material description",
+                    "status": "visual_only",
+                },
+                {
+                    "claim": "shoots a straight bolt",
+                    "backing": "shoot_projectile",
+                    "backingRefs": [{
+                        "source": "engineCall",
+                        "callIndex": 1,
+                        "fn": "shoot_projectile",
+                        "field": "runtimeFamily",
+                        "expected": "shoot",
+                    }],
+                    "status": "executable",
+                },
+            ],
             "playerViewTimeline": ["held", "fired", "travels", "hits", "expires"],
             "executionStatus": "executable",
         },

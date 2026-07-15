@@ -812,6 +812,8 @@ def _llm_error_text(exc: Exception) -> str:
     return " | ".join(p for p in parts if p).lower()
 
 def _is_transport_error(exc: Exception) -> bool:
+    if isinstance(exc, urlerror.HTTPError) and exc.code in {408, 425, 429, 500, 502, 503, 504}:
+        return True
     if isinstance(exc, (urlerror.URLError, TimeoutError, ConnectionError)):
         return True
     text = _llm_error_text(exc)
@@ -1229,7 +1231,28 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         return _llm_json_single_context(payload, timeout, primary)
     except Exception as first_error:
         if not fallback:
-            raise
+            if not _is_transport_error(first_error):
+                raise
+            last_error = first_error
+            total_attempts = max(2, int(LLM_FALLBACK_NETWORK_FAILS or 2))
+            for attempt in range(2, total_attempts + 1):
+                delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
+                log_event("warn", "retrying transient LLM failure without fallback", {
+                    "attempt": attempt,
+                    "maxAttempts": total_attempts,
+                    "delaySeconds": delay,
+                    "provider": active_llm_provider(primary),
+                    "model": primary.get("model"),
+                    "status": getattr(last_error, "code", None),
+                })
+                time.sleep(delay)
+                try:
+                    return _llm_json_single_context(payload, timeout, primary)
+                except Exception as retry_error:
+                    last_error = retry_error
+                    if not _is_transport_error(retry_error):
+                        raise
+            raise last_error
         if _is_budget_or_auth_failure(first_error):
             log_event("warn", "LLM primary failed; switching to fallback", {"reason": "budget_or_auth", "primaryProvider": active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
             _switch_lease_to_legacy_fallback(lease, fallback)

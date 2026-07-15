@@ -41,7 +41,7 @@ def _check_low_tier_consumable_projectile_power_is_capped() -> None:
     src = SERVER.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8") + ITEM_POWER_KNOWLEDGE.read_text(encoding="utf-8")
     assert "is_low_tier_consumable_projectile_item" in src
     assert "+consumable_projectile_cap" in src
-    assert "Stackable starter projectiles are consumables, not reusable hardmode weapons" in src
+    assert "Stackable projectiles are consumed inventory, not reusable roots" in src
 
 
 def _check_projectile_prompt_for_linear_family_is_horizontal_side_view() -> None:

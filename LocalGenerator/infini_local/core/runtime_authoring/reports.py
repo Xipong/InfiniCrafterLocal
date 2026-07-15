@@ -208,6 +208,13 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             "vortex_spawn", "radial_beams", "lightning_arc", "overhead_barrage",
         }
         if onhit in child_projectile_onhits:
+            authored_child_count = (
+                _num(hit.get("chainCount"), 0) or _num(hit.get("count"), 0) or 0
+                if onhit in {"chain", "lightning_arc"}
+                else _num(hit.get("count"), 0) or 0
+            )
+            if authored_child_count <= 0:
+                errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit count > 0")
             child_multiplier = _num(hit.get("secondaryDamageMultiplier"), 0) or 0
             if child_multiplier <= 0:
                 errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit secondaryDamageMultiplier > 0")
@@ -293,7 +300,15 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         if heal <= 0 and buff_type <= 0 and not use_calls:
             errors.append("potion result lacks an explicit executable use effect")
     contract_validation = validate_runtime_contract(data, compile_runtime_plan_to_genome_patch(data) if rp else {})
-    warnings.extend(contract_validation.get("warnings") or [])
+    contract_warnings = list(contract_validation.get("warnings") or [])
+    warnings.extend(contract_warnings)
+    errors.extend(
+        warning
+        for warning in contract_warnings
+        if warning == "machine_backing_refs_missing_or_unresolved"
+        or "_inactive_compiled_field:" in warning
+        or "_unresolved:" in warning
+    )
     return {
         "api": ENGINE_RUNTIME_API_VERSION,
         "ok": not errors,

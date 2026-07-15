@@ -40,6 +40,8 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     assert any("source must be exactly" in rule and "engineCall" in rule for rule in backing_rules)
     assert any("zero-based absolute index into runtimePlan.engineCalls" in rule for rule in backing_rules)
     assert any('"source":"engineCall"' in rule and '"callIndex":1' in rule for rule in backing_rules)
+    assert any("tooltip clause" in rule.lower() and "non-generic identifier" in rule.lower() and "visual_only" in rule.lower() for rule in backing_rules)
+    assert any("non-combat" in rule.lower() and "resultkind" in rule.lower() for rule in payload["authorRules"])
     assert payload["priorityHeader"][0].startswith("Author one playable result")
     assert any("set_item_stats" in line and "first" in line for line in payload["priorityHeader"])
     assert "runtimePlan" in payload["requiredJsonShape"]

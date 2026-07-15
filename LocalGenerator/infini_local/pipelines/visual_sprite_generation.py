@@ -203,8 +203,9 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
                 visual["spritePath"] = str(Path(final_path).resolve())
                 visual["spriteRawPath"] = str(Path(raw_best).resolve())
                 visual["spriteStatus"] = sprite_status_from_raw_path(raw_best, IMAGE_BACKEND, invalid=not bool(validation.get("ok")))
-                visual["visualJudgeScore"] = round(last_score, 3)
                 visual["spriteTechnicalScore"] = round(last_score, 3)
+                visual["semanticReviewStatus"] = "not_performed"
+                visual.pop("visualJudgeScore", None)
                 visual["spriteCandidateScore"] = round(float(score), 3)
                 visual["spriteUrl"] = f"/sprite/{Path(final_path).name}"
                 attach_visual_soul_from_sprite(data, final_path, validation=validation, score=last_score)
@@ -231,7 +232,9 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
             visual["spritePath"] = str(Path(final).resolve())
             visual["spriteRawPath"] = str(Path(fallback).resolve())
             visual["spriteStatus"] = "fallback_after_failed_generation"
-            visual["visualJudgeScore"] = 0.0
+            visual["spriteTechnicalScore"] = 0.0
+            visual["semanticReviewStatus"] = "not_performed"
+            visual.pop("visualJudgeScore", None)
             visual["spriteUrl"] = f"/sprite/{Path(final).name}"
             attach_visual_soul_from_sprite(data, final, validation={"ok": True, "source": "procedural_fallback"}, score=0.0)
             return data
@@ -241,7 +244,9 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     visual["spritePath"] = ""
     visual["spriteRawPath"] = ""
     visual["spriteUrl"] = ""
-    visual["visualJudgeScore"] = round(last_score, 3)
+    visual["spriteTechnicalScore"] = round(last_score, 3)
+    visual["semanticReviewStatus"] = "not_performed"
+    visual.pop("visualJudgeScore", None)
     return data
 
 def _validation_reasons(validation: dict[str, Any] | None) -> list[str]:
@@ -470,7 +475,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         if role == "item":
             slot["status"] = visual.get("spriteStatus", "")
             slot["path"] = visual.get("spritePath", "")
-            slot["score"] = visual.get("visualJudgeScore", 0)
+            slot["technicalScore"] = visual.get("spriteTechnicalScore", 0)
+            slot.pop("score", None)
             continue
         if role not in {"projectile", "impact", "child", "field"}:
             continue
@@ -479,7 +485,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         if asset_mode != "baked_sprite" or status.startswith("skipped_"):
             slot["path"] = ""
             slot["url"] = ""
-            slot["score"] = 0.0
+            slot["technicalScore"] = 0.0
+            slot.pop("score", None)
             continue
         prompt = str(slot.get("prompt") or "")
         canvas = int(slot.get("canvas") or 32)
@@ -494,7 +501,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         slot["status"] = status
         slot["path"] = path
         slot["url"] = url
-        slot["score"] = score
+        slot["technicalScore"] = score
+        slot.pop("score", None)
         key = role.capitalize()
         usable_path = bool(path) and status not in {"failed", "prompt_only", "placeholder"}
         if role == "projectile":
