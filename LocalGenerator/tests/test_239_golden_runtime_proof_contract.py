@@ -113,6 +113,7 @@ def _contract_check_generate_golden_runtime_proof_cli_writes_summary(tmp_path) -
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
     summary_path = out / "summary.json"

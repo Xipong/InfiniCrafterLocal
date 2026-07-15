@@ -11,6 +11,22 @@ RUNTIME_SELFTEST_REPORT="${INFINI_AGENT_SELFTEST_REPORT:-}"
 PROJECT="$ROOT/ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
 EXTERNAL_DEPS_ROOT="${INFINI_TML_DEPS_SRC:-}"
 
+# Keep every release step on one dependency-complete interpreter. The Python
+# dispatcher supplies sys.executable; direct shell callers may activate a venv
+# or set INFINI_PYTHON explicitly.
+if [[ -n "${INFINI_PYTHON:-}" ]]; then
+  PYTHON_BIN="$INFINI_PYTHON"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python)"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python3)"
+else
+  echo "[FAIL] no Python interpreter is available"
+  exit 2
+fi
+if [[ "$PYTHON_BIN" != */* ]]; then PYTHON_BIN="$(command -v "$PYTHON_BIN" || true)"; fi
+if [[ -z "$PYTHON_BIN" || ! -x "$PYTHON_BIN" ]]; then echo "[FAIL] invalid Python interpreter: ${INFINI_PYTHON:-<empty>}"; exit 2; fi
+
 while (($#)); do
   case "$1" in
     --require-build) REQUIRE_BUILD=1 ;;
@@ -24,6 +40,13 @@ while (($#)); do
   esac
   shift
 done
+
+MISSING_FULL_DEPS="$("$PYTHON_BIN" -c 'import importlib.util; deps={"pytest":"pytest","pydantic":"pydantic","pydantic_core":"pydantic_core","Pillow":"PIL","Hypothesis":"hypothesis"}; print(",".join(label for label,name in deps.items() if importlib.util.find_spec(name) is None))')"
+if [[ -n "$MISSING_FULL_DEPS" ]]; then
+  echo "[UNAVAILABLE] full release dependencies are missing: $MISSING_FULL_DEPS"
+  echo "[HINT] $PYTHON_BIN tools/validate_sandbox.py"
+  exit 2
+fi
 
 mkdir -p "$ART"
 : > "$STATUS"
@@ -54,20 +77,32 @@ run_step() {
   echo "[${status^^}] $name (${duration}s)"
 }
 
-run_step pytest python tools/run_pytest_shards.py --shards 4 --json-out artifacts/validation/pytest_shards.json
-run_step compileall python -m compileall -q LocalGenerator/infini_local tools
-run_step schema_check python tools/export_contract_schemas.py --check
-run_step config_registry python tools/config_registry.py --check
-run_step contract_parity python tools/contract_parity.py --quiet --out artifacts/validation/contract_parity_report.json
-run_step mutation_gate python tools/mutation_contract_gate.py
-run_step semantic_runtime_diff python tools/semantic_runtime_diff.py
-run_step runtime_impact python tools/runtime_impact_report.py --out artifacts/validation/runtime_impact_report.json
-run_step csharp_contracts python tools/check_csharp_contracts.py
-run_step project_hygiene python tools/check_project_hygiene.py
-run_step planner_prompt python tools/check_planner_prompt_usability.py
+run_step pytest "$PYTHON_BIN" tools/run_pytest_shards.py --shards 4 --timeout-seconds 60 --json-out artifacts/validation/pytest_shards.json
+run_step compileall "$PYTHON_BIN" -m compileall -q LocalGenerator/infini_local tools
+run_step schema_check "$PYTHON_BIN" tools/export_contract_schemas.py --check
+run_step config_registry "$PYTHON_BIN" tools/config_registry.py --check
+run_step contract_parity "$PYTHON_BIN" tools/contract_parity.py --quiet --out artifacts/validation/contract_parity_report.json
+run_step mutation_gate "$PYTHON_BIN" tools/mutation_contract_gate.py
+run_step semantic_runtime_diff "$PYTHON_BIN" tools/semantic_runtime_diff.py
+run_step runtime_impact "$PYTHON_BIN" tools/runtime_impact_report.py --out artifacts/validation/runtime_impact_report.json
+run_step csharp_contracts "$PYTHON_BIN" tools/check_csharp_contracts.py
+run_step project_hygiene "$PYTHON_BIN" tools/check_project_hygiene.py
+run_step planner_prompt "$PYTHON_BIN" tools/check_planner_prompt_usability.py
 
-if command -v ruff >/dev/null 2>&1; then run_step ruff ruff check LocalGenerator/infini_local tools; else record_unavailable ruff "ruff is not installed"; fi
-if command -v pyright >/dev/null 2>&1; then run_step pyright pyright; else record_unavailable pyright "pyright is not installed"; fi
+if "$PYTHON_BIN" -c 'import ruff' >/dev/null 2>&1; then
+  run_step ruff "$PYTHON_BIN" -m ruff check LocalGenerator/infini_local tools
+elif command -v ruff >/dev/null 2>&1; then
+  run_step ruff "$(command -v ruff)" check LocalGenerator/infini_local tools
+else
+  record_unavailable ruff "ruff is not installed for the selected Python or on PATH"
+fi
+if "$PYTHON_BIN" -c 'import pyright' >/dev/null 2>&1; then
+  run_step pyright "$PYTHON_BIN" -m pyright --pythonpath "$PYTHON_BIN"
+elif command -v pyright >/dev/null 2>&1; then
+  run_step pyright "$(command -v pyright)" --pythonpath "$PYTHON_BIN"
+else
+  record_unavailable pyright "pyright is not installed for the selected Python or on PATH"
+fi
 
 if [[ $SKIP_BUILD -eq 1 ]]; then
   record_unavailable tml_build "build explicitly skipped"
@@ -82,12 +117,12 @@ else
 fi
 
 if [[ -n "$RUNTIME_SELFTEST_REPORT" && -f "$RUNTIME_SELFTEST_REPORT" ]]; then
-  run_step tml_runtime_selftest python tools/check_tml_selftest_report.py "$RUNTIME_SELFTEST_REPORT"
+  run_step tml_runtime_selftest "$PYTHON_BIN" tools/check_tml_selftest_report.py "$RUNTIME_SELFTEST_REPORT"
 else
   record_unavailable tml_runtime_selftest "real tModLoader runtime self-test report is unavailable; run tML with INFINI_AGENT_SELFTEST=1"
 fi
 
-render=(python tools/render_validation_report.py --status-file "$STATUS" --out "$REPORT")
+render=("$PYTHON_BIN" tools/render_validation_report.py --status-file "$STATUS" --out "$REPORT")
 if [[ $REQUIRE_BUILD -eq 1 ]]; then render+=(--require-build); fi
 if [[ $REQUIRE_RUNTIME_SELFTEST -eq 1 ]]; then render+=(--require-runtime-selftest); fi
 "${render[@]}"

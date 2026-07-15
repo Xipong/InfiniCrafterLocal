@@ -211,13 +211,12 @@ def _check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter() ->
     assert data["sourceMode"] == "generated"
 
 
-def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line() -> None:
+def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line(monkeypatch) -> None:
     # Real Rope Spear author plan from trace: old projectilePrompt contained
     # "thin taught rope line back to the player". The image prompt must scrub
     # only the full-canvas/off-canvas tether instruction, while preserving a
     # short local rope/chain detail if it helps the projectile silhouette.
-    import os
-    os.environ.pop("INFINI_LLM_REPLAY_RAW", None)
+    monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     plan = json.loads((FIXTURES / "author_plan" / "rope_spear_author_plan.json").read_text(encoding="utf-8"))
     data = _validate_and_attach(plan, _spear_parent(), _rope_parent(), "test_replay_rope_spear")
     assert data["attack"]["genome"]["runtimeFamily"] == "returning"

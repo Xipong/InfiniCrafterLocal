@@ -3855,6 +3855,22 @@
       "visibility": "internal"
     },
     {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PYTHON",
+      "owners": [
+        "tools/validate_release.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
       "declarations": [
         {
           "default": true,
@@ -6738,8 +6754,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 253,
-  "fingerprint": "c0fc54bf42d751a55b2ba3ffe4f7ce00f8d80f12c442d0b4fc3c81bde1f661ac",
+  "fieldCount": 254,
+  "fingerprint": "0d0384472f75236386ce1ad580eb457bd6f95f21e717a09dd90c4d8001ff3815",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

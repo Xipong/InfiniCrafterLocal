@@ -37,6 +37,7 @@ def _run_tool(relative: str) -> tuple[int, str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     return proc.returncode, proc.stdout
 
@@ -403,6 +404,7 @@ def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> 
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
+            timeout=30,
         )
         assert proc.returncode == 0, proc.stdout
         payload = json.loads(proc.stdout)
@@ -441,6 +443,7 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert doctor.returncode == 0, doctor.stdout
     revision = json.loads(doctor.stdout)["gitBaseline"]
@@ -463,6 +466,7 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 0, proc.stdout
     assert json.loads(proc.stdout)["ok"] is True
@@ -477,6 +481,7 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 1
     assert "baseRevision mismatch" in proc.stdout
@@ -520,6 +525,7 @@ def _contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machin
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 0, proc.stdout
     assert json.loads(proc.stdout)["ok"] is True
@@ -546,6 +552,7 @@ def _contract_check_semantic_tools_run_without_preconfigured_pythonpath() -> Non
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
+            timeout=30,
         )
         assert proc.returncode == 0, proc.stdout
         assert json.loads(proc.stdout)["ok"] is True

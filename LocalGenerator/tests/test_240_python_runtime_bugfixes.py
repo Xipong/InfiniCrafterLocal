@@ -198,6 +198,7 @@ def _contract_check_sdcpp_readiness_rejects_http_404(monkeypatch: pytest.MonkeyP
 def _contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() -> None:
     env = os.environ.copy()
     env.update({
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
         "INFINI_SDCPP_WIDTH": "-5",
         "INFINI_SDCPP_HEIGHT": "99999",
         "INFINI_SDCPP_STEPS": "0",
@@ -209,7 +210,7 @@ def _contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() ->
         "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; "
         "print(json.dumps([v.SDCPP_WIDTH,v.SDCPP_HEIGHT,v.SDCPP_STEPS,v.SDCPP_CFG,v.SDCPP_SERVER_PORT,i.SDCPP_WIDTH,i.SDCPP_HEIGHT]))"
     )
-    result = subprocess.run([sys.executable, "-c", code], env=env, text=True, capture_output=True, check=True)
+    result = subprocess.run([sys.executable, "-c", code], env=env, text=True, capture_output=True, check=True, timeout=30)
     assert json.loads(result.stdout.strip()) == [64, 2048, 1, 0.0, 65535, 64, 2048]
 
 

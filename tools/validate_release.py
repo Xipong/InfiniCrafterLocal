@@ -11,11 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
+    os.environ.setdefault("INFINI_PYTHON", sys.executable)
     if os.name == "nt":
         script = ROOT / "tools" / "validate_release_windows.ps1"
         proc = subprocess.run(
             ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script), *sys.argv[1:]],
             cwd=ROOT,
+            env=os.environ,
             check=False,
         )
         return proc.returncode

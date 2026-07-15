@@ -121,6 +121,21 @@ Full definition / plan hydration requirements:
 - debug counters expose `inFlight`, `cacheHit`, `cacheMiss`, `retry`, and `duplicateSuppressed` for definitions and assets.
 
 
+## Restricted/dependency-poor sandbox: first command
+
+Run this before pytest in ChatGPT/web sandboxes or unknown containers:
+
+```bash
+python tools/validate_sandbox.py
+```
+
+- The tool uses only the Python standard library, never loads operator config, never starts LLM/image/server backends, and bounds every child check.
+- Read its JSON. If `fullSuiteAvailable=false`, **do not run full pytest or release validation in that environment**. Missing pytest/Pydantic/Pillow/Hypothesis is an environment limitation, not a product failure.
+- `ok=true` with `coverage="portable-static"` proves syntax/JSON, config-registry drift, C# static contracts, project hygiene, bounded test subprocesses, and absence of import-time test env mutation only.
+- Portable success is never release readiness: `releaseReady` remains false. Run `python tools/validate_release.py` in the dependency-complete project environment for full pytest/parity/mutation/runtime gates.
+- Do not retry dependency failures, install packages from the network without permission, or replace unavailable dynamic gates with invented output.
+
+
 ## Contract safety stack (v18)
 
 - Raw LLM calls валидируются до repair через `core/runtime_authoring/engine_call_contracts.py`; compiled/wire JSON — через `core/boundary_models.py`.

@@ -185,6 +185,7 @@ def _check_prompt_usability_cli_runs_the_same_contract() -> None:
         text=True,
         capture_output=True,
         check=True,
+        timeout=30,
     )
     report = json.loads(proc.stdout)
     assert report["ok"], report

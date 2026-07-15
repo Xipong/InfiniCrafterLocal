@@ -13,6 +13,7 @@ def _check_static_csharp_compile_surface_scanner_passes():
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        timeout=30,
     )
     assert result.returncode == 0, result.stdout
 
@@ -24,6 +25,7 @@ def _check_optional_real_tml_build_helper_is_present_and_skips_without_target():
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        timeout=30,
     )
     assert result.returncode == 0, result.stdout
     assert "[SKIP]" in result.stdout or "[run]" in result.stdout

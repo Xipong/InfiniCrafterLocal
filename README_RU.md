@@ -34,6 +34,16 @@ C# не должен угадывать gameplay из имени/tooltip/prompt/
 
 MP asset sync note: Steam не проксирует HTTP. Для LAN/Radmin/hosted MP host должен рекламировать base URL, который клиенты реально открывают; клиенту не нужно руками открывать `/get_asset`, мод сам тянет final assets через `/get_asset`.
 
+## Передача в ChatGPT / урезанный sandbox
+
+Первой командой запускай:
+
+```bash
+python tools/validate_sandbox.py
+```
+
+Этот gate работает только на стандартной библиотеке и не запускает LLM, image backend, серверы или full pytest. Если JSON показывает `fullSuiteAvailable=false`, не пытайся запускать pytest/release stack в этом sandbox: недостающие pytest/Pydantic/Pillow/Hypothesis проверяются в dependency-complete окружении. `coverage=portable-static` не означает release readiness.
+
 ## Важное для агентов
 
 Если нужно менять/понимать модовую архитектуру — начинай с C# файлов в `ModSources/InfiniCrafterLocal`, а не с устаревших кратких md-заглушек. Не трогай build/cache директории как архитектуру.

@@ -1,20 +1,7 @@
 from __future__ import annotations
 
-import os
-import shutil
 import sys
-import tempfile
 from pathlib import Path
-
-# Keep this import-time config local to the test process.
-TMP_CACHE = Path(tempfile.gettempdir()) / "infini_sprite_keyer_contract_cache"
-if TMP_CACHE.exists():
-    shutil.rmtree(TMP_CACHE)
-os.environ.setdefault("INFINI_USE_LLM", "0")
-os.environ.setdefault("INFINI_IMAGE_BACKEND", "off")
-os.environ["INFINI_CACHE_DIR"] = str(TMP_CACHE)
-os.environ["INFINI_BG_REMOVE_MODE"] = "sprite_keyer"
-os.environ["INFINI_SPRITE_PROCESSING_PROFILE"] = "master_soft"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -34,10 +21,8 @@ def _rgba_pixels(image: Image.Image) -> list[tuple[int, int, int, int]]:
     return [tuple(raw[i:i + 4]) for i in range(0, len(raw), 4)]
 
 
-def _check_sprite_keyer_removes_magenta_without_eating_white_shape() -> None:
-    TMP_CACHE.mkdir(parents=True, exist_ok=True)
-
-    raw_path = TMP_CACHE / "raw_magenta_white_square.png"
+def _check_sprite_keyer_removes_magenta_without_eating_white_shape(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw_magenta_white_square.png"
     img = Image.new("RGBA", (64, 64), (255, 0, 255, 255))
     draw = ImageDraw.Draw(img)
     draw.rectangle((16, 16, 47, 47), fill=(250, 250, 250, 255))
@@ -59,10 +44,8 @@ def _check_sprite_keyer_removes_magenta_without_eating_white_shape() -> None:
     assert white_visible >= 500
 
 
-def _check_sprite_keyer_samples_uniform_shifted_zimage_pink_background() -> None:
-    TMP_CACHE.mkdir(parents=True, exist_ok=True)
-
-    raw_path = TMP_CACHE / "raw_shifted_pink_coin_stack.png"
+def _check_sprite_keyer_samples_uniform_shifted_zimage_pink_background(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw_shifted_pink_coin_stack.png"
     img = Image.new("RGBA", (64, 64), (202, 6, 140, 255))
     draw = ImageDraw.Draw(img)
     draw.ellipse((20, 16, 45, 40), fill=(230, 230, 220, 255), outline=(50, 50, 50, 255), width=2)
@@ -79,9 +62,8 @@ def _check_sprite_keyer_samples_uniform_shifted_zimage_pink_background() -> None
     assert pink_visible == 0
 
 
-def _check_validation_rejects_opaque_inner_poster_card_as_fatal_background_failure() -> None:
-    TMP_CACHE.mkdir(parents=True, exist_ok=True)
-    path = TMP_CACHE / "bad_inner_white_card.png"
+def _check_validation_rejects_opaque_inner_poster_card_as_fatal_background_failure(tmp_path: Path) -> None:
+    path = tmp_path / "bad_inner_white_card.png"
     img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     draw.rectangle((2, 2, 45, 45), fill=(250, 250, 250, 255))
@@ -94,9 +76,8 @@ def _check_validation_rejects_opaque_inner_poster_card_as_fatal_background_failu
     assert sprite_validation_fatal(validation), validation
 
 
-def _check_sprite_keyer_removes_enclosed_sampled_magenta_holes() -> None:
-    TMP_CACHE.mkdir(parents=True, exist_ok=True)
-    raw_path = TMP_CACHE / "raw_enclosed_magenta_hole.png"
+def _check_sprite_keyer_removes_enclosed_sampled_magenta_holes(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw_enclosed_magenta_hole.png"
     img = Image.new("RGBA", (128, 128), (229, 84, 210, 255))
     draw = ImageDraw.Draw(img)
     # Simulate a curved bow/string enclosing a key-colored interior pocket.
@@ -114,9 +95,8 @@ def _check_sprite_keyer_removes_enclosed_sampled_magenta_holes() -> None:
     assert key_visible == 0
 
 
-def _check_sprite_keyer_removes_inner_white_poster_card_when_foreground_exists() -> None:
-    TMP_CACHE.mkdir(parents=True, exist_ok=True)
-    raw_path = TMP_CACHE / "raw_inner_white_poster_card.png"
+def _check_sprite_keyer_removes_inner_white_poster_card_when_foreground_exists(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw_inner_white_poster_card.png"
     img = Image.new("RGBA", (128, 128), (229, 84, 210, 255))
     draw = ImageDraw.Draw(img)
     draw.rectangle((18, 18, 110, 110), fill=(250, 250, 250, 255))
@@ -135,9 +115,8 @@ def _check_sprite_keyer_removes_inner_white_poster_card_when_foreground_exists()
     assert white_visible < 20
 
 
-def _check_sprite_keyer_removes_disconnected_nested_pink_frame() -> None:
-    TMP_CACHE.mkdir(parents=True, exist_ok=True)
-    raw_path = TMP_CACHE / "raw_nested_white_and_pink_card.png"
+def _check_sprite_keyer_removes_disconnected_nested_pink_frame(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw_nested_white_and_pink_card.png"
     img = Image.new("RGBA", (128, 128), (255, 255, 255, 255))
     draw = ImageDraw.Draw(img)
     draw.rectangle((10, 10, 117, 117), fill=(229, 79, 200, 255))
