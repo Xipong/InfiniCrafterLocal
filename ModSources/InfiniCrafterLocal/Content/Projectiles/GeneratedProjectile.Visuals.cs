@@ -205,13 +205,15 @@ public sealed partial class GeneratedProjectile
 
     private void SpawnDust(int effect)
     {
+        if (Main.netMode == NetmodeID.Server || !AuthoredParticlesActive()) return;
         if (_spec.DustSpawnDenom <= 0) return;
         int denom = Math.Clamp(_spec.DustSpawnDenom <= 0 ? 3 : _spec.DustSpawnDenom, 2, 12);
         if (!Main.rand.NextBool(denom)) return;
-        int dust = DustForEffect(effect);
+        int dust = DustForAuthoredParticle(effect);
         if (dust < 0) return;
         Dust d = Dust.NewDustDirect(Projectile.position, Projectile.width, Projectile.height, dust, Projectile.velocity.X * 0.1f, Projectile.velocity.Y * 0.1f);
         d.noGravity = effect is 1 or 3 or 7 or 12 or 13 or 14;
+        d.scale *= AuthoredParticleScale();
     }
 
     private bool AllowsVanillaMotionPolish()
@@ -238,6 +240,7 @@ public sealed partial class GeneratedProjectile
     private void EmitVanillaMotionPolish()
     {
         if (Main.netMode == NetmodeID.Server || Main.dedServ) return;
+        if (_spec.DustSpawnDenom > 0 && !AuthoredParticlesActive()) return;
         if (Projectile.localAI[0] < 2f) return;
         if (Projectile.velocity.LengthSquared() <= 36f && !AllowsVanillaMotionPolish()) return;
         if (!Main.rand.NextBool(VanillaMotionPolishDenominator())) return;
@@ -286,9 +289,66 @@ public sealed partial class GeneratedProjectile
         _ => DustID.Smoke
     };
 
+    private float RuntimeAgeTicks()
+        => Projectile.localAI[0] / Math.Max(1f, Projectile.extraUpdates + 1f);
+
+    private bool AuthoredParticlesActive()
+        => _spec.VfxParticleDurationTicks <= 0 || RuntimeAgeTicks() <= _spec.VfxParticleDurationTicks;
+
+    private float AuthoredParticleScale()
+        => _spec.VfxParticleScale > 0f ? Math.Clamp(_spec.VfxParticleScale, 0.1f, 2f) : 1f;
+
+    private int DustForAuthoredParticle(int effect)
+    {
+        if (effect != 0 || string.IsNullOrWhiteSpace(_spec.VfxMaterial))
+            return DustForEffect(effect);
+        return _spec.VfxMaterial.Trim().ToLowerInvariant() switch
+        {
+            "metal" => DustID.Iron,
+            "stone" => DustID.Stone,
+            "wood" => DustID.WoodFurniture,
+            "slime" => DustID.t_Slime,
+            "fire" => DustID.Torch,
+            "frost" => DustID.Ice,
+            "shadow" => DustID.Shadowflame,
+            "magic" => DustID.MagicMirror,
+            _ => DustForEffect(effect),
+        };
+    }
+
+    private void EmitAuthoredVisualField()
+    {
+        if (Main.netMode == NetmodeID.Server || Main.dedServ) return;
+        int lifetime = Math.Clamp(_spec.VfxFieldLifetimeTicks, 0, 240);
+        float radiusTiles = Math.Clamp(_spec.VfxFieldRadiusTiles, 0f, 6f);
+        int tickRate = Math.Clamp(_spec.VfxFieldTickRate, 0, 60);
+        if (lifetime <= 0 || radiusTiles <= 0f || tickRate <= 0) return;
+        float age = RuntimeAgeTicks();
+        if (age > lifetime) return;
+        int maxUpdates = Math.Max(1, Projectile.extraUpdates + 1);
+        if ((int)Projectile.localAI[0] % maxUpdates != 0) return;
+        int wholeAge = Math.Max(0, (int)Math.Floor(age));
+        if (wholeAge % tickRate != 0) return;
+
+        float radiusPx = radiusTiles * 16f;
+        int count = Math.Clamp((int)Math.Ceiling(radiusTiles * 2f), 4, 12);
+        int dust = DustForAuthoredParticle(_spec.EffectCode);
+        if (dust < 0) dust = DustID.Smoke;
+        float phase = (Projectile.identity * 0.37f + wholeAge * 0.09f) % MathHelper.TwoPi;
+        for (int i = 0; i < count; i++)
+        {
+            float angle = phase + MathHelper.TwoPi * i / count;
+            Vector2 offset = angle.ToRotationVector2() * radiusPx;
+            Dust d = Dust.NewDustPerfect(Projectile.Center + offset, dust, angle.ToRotationVector2() * 0.18f, 120);
+            d.noGravity = true;
+            d.scale *= AuthoredParticleScale();
+        }
+    }
+
     private void BurstDust(int effect, int count, float speed)
     {
-        int dust = DustForEffect(effect);
+        if (Main.netMode == NetmodeID.Server || !AuthoredParticlesActive()) return;
+        int dust = DustForAuthoredParticle(effect);
         if (dust < 0) return;
         int authoredCap = Math.Clamp(_spec.BurstDustCap, 0, 40);
         count = Math.Clamp(count, 0, authoredCap);
@@ -296,6 +356,7 @@ public sealed partial class GeneratedProjectile
         {
             Dust d = Dust.NewDustDirect(Projectile.position, Projectile.width, Projectile.height, dust, Main.rand.NextFloat(-speed, speed), Main.rand.NextFloat(-speed, speed));
             d.noGravity = true;
+            d.scale *= AuthoredParticleScale();
         }
     }
 
@@ -326,7 +387,9 @@ public sealed partial class GeneratedProjectile
 
     private bool AllowsPresentationLight()
     {
-        return _spec.RuntimeLightStrength > 0.001f || _spec.EffectCode is 1 or 3 or 4 or 5 or 7 or 12 or 13 or 14;
+        if (_spec.RuntimeLightStrength > 0.001f)
+            return _spec.RuntimeLightDurationTicks <= 0 || RuntimeAgeTicks() <= _spec.RuntimeLightDurationTicks;
+        return _spec.EffectCode is 1 or 3 or 4 or 5 or 7 or 12 or 13 or 14;
     }
 
 
@@ -337,7 +400,9 @@ public sealed partial class GeneratedProjectile
         float lightMul = InfiniVfxClientOptions.PresentationLightMultiplier;
         if (lightMul <= 0f) return;
         Color c = RuntimeColorPolicy.Resolve(_spec.PrimaryColorName, PresentationColor());
-        float baseStrength = _spec.RuntimeLightStrength > 0.001f
+        bool authoredActive = _spec.RuntimeLightStrength > 0.001f
+            && (_spec.RuntimeLightDurationTicks <= 0 || RuntimeAgeTicks() <= _spec.RuntimeLightDurationTicks);
+        float baseStrength = authoredActive
             ? Math.Clamp(_spec.RuntimeLightStrength, 0.04f, 0.75f)
             : Math.Clamp(0.08f + _spec.ProjectileScale * 0.04f + _spec.PowerBudget * 0.015f, 0.04f, 0.32f);
         float strength = baseStrength * lightMul;

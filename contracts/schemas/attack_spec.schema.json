@@ -404,6 +404,11 @@
       "title": "Runtimefamily",
       "type": "string"
     },
+    "runtimeLightDurationTicks": {
+      "default": 0,
+      "title": "Runtimelightdurationticks",
+      "type": "integer"
+    },
     "runtimeLightStrength": {
       "default": 0,
       "title": "Runtimelightstrength",
@@ -559,10 +564,40 @@
       "title": "Usestylecode",
       "type": "integer"
     },
+    "vfxFieldLifetimeTicks": {
+      "default": 0,
+      "title": "Vfxfieldlifetimeticks",
+      "type": "integer"
+    },
+    "vfxFieldRadiusTiles": {
+      "default": 0,
+      "title": "Vfxfieldradiustiles",
+      "type": "number"
+    },
+    "vfxFieldTickRate": {
+      "default": 0,
+      "title": "Vfxfieldtickrate",
+      "type": "integer"
+    },
     "vfxManifestJson": {
       "default": "",
       "title": "Vfxmanifestjson",
       "type": "string"
+    },
+    "vfxMaterial": {
+      "default": "",
+      "title": "Vfxmaterial",
+      "type": "string"
+    },
+    "vfxParticleDurationTicks": {
+      "default": 0,
+      "title": "Vfxparticledurationticks",
+      "type": "integer"
+    },
+    "vfxParticleScale": {
+      "default": 0,
+      "title": "Vfxparticlescale",
+      "type": "number"
     },
     "visualAnimationPlan": {
       "default": "",

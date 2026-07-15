@@ -449,13 +449,19 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         ("secondaryLifetimeTicks", 5, 180, True),
         ("sameTargetBias", 0, 1, False),
         ("runtimeLightStrength", 0, 1.5, False),
+        ("runtimeLightDurationTicks", 0, 240, True),
+        ("vfxParticleScale", 0, 2, False),
+        ("vfxParticleDurationTicks", 0, 80, True),
+        ("vfxFieldLifetimeTicks", 0, 240, True),
+        ("vfxFieldRadiusTiles", 0, 6, False),
+        ("vfxFieldTickRate", 0, 60, True),
         ("impactVfxRadiusPx", 0, 192, True),
         ("contactForgivenessPx", 0, 32, True),
     ]:
         if proposed.get(field) not in (None, ""):
             value = clamp_float(proposed.get(field), lo, hi, lo)
             g[field] = int(round(value)) if integer else round(value, 3)
-    for field in ("primaryColorName", "runtimeLightColorName", "secondaryMaterial"):
+    for field in ("primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial"):
         if proposed.get(field) not in (None, ""):
             g[field] = str(proposed.get(field))[:120]
 

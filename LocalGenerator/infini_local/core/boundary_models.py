@@ -245,6 +245,8 @@ class EquipmentStatsBoundary(StrictBoundaryModel):
     aggro: int = Field(default=0, ge=-400, le=400)
     endurance: float = Field(default=0, ge=0, le=0.2)
     armorPenetration: float = Field(default=0, ge=0, le=40)
+    whipRange: float = Field(default=0, ge=0, le=1.5)
+    summonTagDamage: float = Field(default=0, ge=0, le=0.75)
     lightStrength: float = Field(default=0, ge=0, le=1.5)
     lightColorName: str = ""
 
@@ -261,8 +263,6 @@ class ArmorSpecBoundary(EquipmentStatsBoundary):
     setKey: str = ""
     archetype: str = "hybrid"
     defense: int = Field(default=0, ge=0, le=80)
-    whipRange: float = Field(default=0, ge=0, le=1.5)
-    summonTagDamage: float = Field(default=0, ge=0, le=0.75)
     setBonusText: str = ""
     setBonusGenericDamage: float = Field(default=0, ge=0, le=0.4)
     setBonusMeleeDamage: float = Field(default=0, ge=0, le=0.4)
@@ -352,11 +352,18 @@ class AttackSpecBoundary(StrictBoundaryModel):
     maxChildDepth: int = 1
     dustSpawnDenom: int = 3
     burstDustCap: int = 20
+    vfxParticleScale: float = 0
+    vfxMaterial: str = ''
+    vfxParticleDurationTicks: int = 0
+    vfxFieldLifetimeTicks: int = 0
+    vfxFieldRadiusTiles: float = 0
+    vfxFieldTickRate: int = 0
     visualMode: str = 'projectile'
     trailStyle: str = 'dust'
     impactStyle: str = 'small_flash'
     primaryColorName: str = 'white'
     runtimeLightStrength: float = 0
+    runtimeLightDurationTicks: int = 0
     mobilityMode: str = ''
     mobilityRangeTiles: int = 0
     mobilityCooldownTicks: int = 0

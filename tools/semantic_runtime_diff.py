@@ -50,6 +50,17 @@ def canonical_item(item: dict[str, Any]) -> dict[str, Any]:
         attack.pop("pullStrength", None)
     if attack.get("pullMode") in ("", "none", None):
         attack.pop("pullMode", None)
+    for neutral_field in (
+        "runtimeLightDurationTicks",
+        "vfxParticleScale",
+        "vfxMaterial",
+        "vfxParticleDurationTicks",
+        "vfxFieldLifetimeTicks",
+        "vfxFieldRadiusTiles",
+        "vfxFieldTickRate",
+    ):
+        if attack.get(neutral_field) in (0, 0.0, "", None):
+            attack.pop(neutral_field, None)
     raw_gameplay = out.get("gameplay")
     gameplay: dict[str, Any] = raw_gameplay if isinstance(raw_gameplay, dict) else {}
     # v17 authored tool light into fields absent from the C# Gameplay DTO.  v18

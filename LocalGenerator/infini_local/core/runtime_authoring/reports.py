@@ -17,6 +17,20 @@ from infini_local.core.runtime_contracts import validate_runtime_contract
 from infini_local.core.boundary_models import runtime_plan_boundary_report
 from infini_local.core.runtime_promise_truth import validate_runtime_promises
 
+
+def _generated_buff_has_executable_effect(buff: dict[str, Any]) -> bool:
+    mining = _num(buff.get("miningSpeedMultiplier"), 1.0)
+    return bool(
+        (mining is not None and abs(mining - 1.0) > 0.001)
+        or (_num(buff.get("emitLightStrength"), 0) or 0) > 0
+        or (_num(buff.get("oreSenseRadiusTiles"), 0) or 0) > 0
+        or abs(_num(buff.get("movementSpeed"), 0) or 0) > 0.001
+        or (_num(buff.get("jumpBoost"), 0) or 0) > 0
+        or (_num(buff.get("manaRegen"), 0) or 0) > 0
+        or (_num(buff.get("lifeRegen"), 0) or 0) > 0
+    )
+
+
 def runtime_plan_quality_report(data: dict[str, Any]) -> dict[str, Any]:
     rp = runtime_plan(data)
     calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
@@ -106,6 +120,11 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
                     errors.append(f"combat runtimeFamily={compiled_family} requires explicit {field}")
             if compiled_family == "overhead_barrage" and (_num(compiled_patch.get("secondaryDamageMultiplier"), 0) or 0) <= 0:
                 errors.append("combat runtimeFamily=overhead_barrage requires secondaryDamageMultiplier > 0")
+            if compiled_family == "overhead_barrage":
+                base_damage = _num(find_call(rp, "set_item_stats").get("damage"), 0) or 0
+                child_multiplier = _num(compiled_patch.get("secondaryDamageMultiplier"), 0) or 0
+                if base_damage > 0 and child_multiplier > 0 and int(base_damage * child_multiplier) < 1:
+                    errors.append("combat runtimeFamily=overhead_barrage rounds to zero damage; increase damage or secondaryDamageMultiplier")
             single_runtime_families = set(HELD_PROJECTILE_RUNTIME_FAMILIES) - {"charge_release"}
             single_runtime_shots = _num(compiled_patch.get("shotCount"), None)
             if compiled_family in single_runtime_families and single_runtime_shots is not None and single_runtime_shots != 1:
@@ -136,10 +155,33 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             warnings.append("secondary projectile count exceeds executable adapter range; runtime will clamp")
         if not trigger:
             warnings.append("secondary projectile trigger is unsupported; use exact on_hit or on_expire")
+        base_damage = _num(find_call(rp, "set_item_stats").get("damage"), 0) or 0
+        child_multiplier = _num(secondary.get("damageMultiplier"), 0) or 0
+        if combatish and count > 0 and base_damage > 0 and child_multiplier > 0 and int(base_damage * child_multiplier) < 1:
+            errors.append("spawn_secondary_projectiles rounds to zero damage; increase damage or damageMultiplier")
+    particle_materials = {
+        _norm_name(call.get("material"))
+        for call in all_calls(rp, "spawn_contact_particles")
+        if (_num(call.get("amount"), 0) or 0) > 0 and _norm_name(call.get("material")) not in {"", "none"}
+    }
+    if len(particle_materials) > 1:
+        errors.append("spawn_contact_particles requires one exact material per runtime plan")
+    for particle_call in all_calls(rp, "spawn_contact_particles"):
+        material = _norm_name(particle_call.get("material"))
+        effect_name = _norm_name(particle_call.get("effect"))
+        if (_num(particle_call.get("amount"), 0) or 0) > 0 and material not in {"", "none"} and effect_name not in {"", "none", "dust"}:
+            errors.append("spawn_contact_particles material is executable only with effect=none|dust")
     stats = find_call(rp, "set_item_stats")
     result_kind = _norm_name(stats.get("resultKind"))
     max_stack = _num(stats.get("maxStack"), 0) or 0
     craft_yield = _num(stats.get("craftYield"), 0) or 0
+    has_primary = bool(all_calls(rp, "shoot_projectile"))
+    if result_kind in {"weapon", "consumable_weapon"} and not has_primary:
+        errors.append(f"{result_kind} result requires a primary executable action")
+    if result_kind == "accessory" and not all_calls(rp, "accessory_effect"):
+        errors.append("accessory result requires accessory_effect")
+    if result_kind == "armor" and not all_calls(rp, "armor_effect"):
+        errors.append("armor result requires armor_effect")
     if result_kind in {"ammo", "consumable_weapon"}:
         if max_stack <= 0 or craft_yield <= 0:
             errors.append(f"{result_kind} result requires explicit positive maxStack and craftYield")
@@ -166,10 +208,14 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             "vortex_spawn", "radial_beams", "lightning_arc", "overhead_barrage",
         }
         if onhit in child_projectile_onhits:
-            if (_num(hit.get("secondaryDamageMultiplier"), 0) or 0) <= 0:
+            child_multiplier = _num(hit.get("secondaryDamageMultiplier"), 0) or 0
+            if child_multiplier <= 0:
                 errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit secondaryDamageMultiplier > 0")
             if (_num(hit.get("secondaryLifetimeTicks"), 0) or 0) <= 0:
                 errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit secondaryLifetimeTicks")
+            base_damage = _num(stats.get("damage"), 0) or 0
+            if base_damage > 0 and child_multiplier > 0 and int(base_damage * child_multiplier) < 1:
+                errors.append(f"apply_on_hit_effect onHit={onhit} rounds to zero damage; increase damage or secondaryDamageMultiplier")
 
     for use_effect in all_calls(rp, "apply_player_effect_on_use"):
         raw_buffs = use_effect.get("buffs") if isinstance(use_effect.get("buffs"), list) else []
@@ -181,6 +227,8 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         generated = use_effect.get("generatedBuff") if isinstance(use_effect.get("generatedBuff"), dict) else {}
         if generated and (_num(generated.get("durationTicks") or use_effect.get("durationTicks"), 0) or 0) <= 0:
             errors.append("apply_player_effect_on_use generatedBuff requires explicit durationTicks")
+        if generated and not _generated_buff_has_executable_effect(generated):
+            errors.append("apply_player_effect_on_use generatedBuff requires at least one executable effect")
 
     for alt in all_calls(rp, "set_alt_use_mode"):
         mode = _norm_name(alt.get("mode"))
@@ -189,18 +237,35 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         duration = _num(generated.get("durationTicks") or alt.get("durationTicks"), 0) or 0
         if (generated or mode == "light") and duration <= 0:
             errors.append(f"set_alt_use_mode mode={mode or 'unknown'} requires explicit durationTicks")
+        if mode == "generated_buff" and (not generated or not _generated_buff_has_executable_effect(generated)):
+            errors.append("set_alt_use_mode mode=generated_buff requires an executable generatedBuff effect")
+        if mode == "light":
+            light_calls = all_calls(rp, "emit_light")
+            light_strength = max((_num(call.get("strength"), 0) or 0) for call in light_calls) if light_calls else 0
+            if light_strength <= 0:
+                errors.append("set_alt_use_mode mode=light requires positive emit_light strength")
+        if mode == "mobility" and mobility_mode not in {"recall_home", "blink_to_cursor"}:
+            errors.append("set_alt_use_mode mode=mobility requires explicit mobilityMode=recall_home|blink_to_cursor")
         if mode == "mobility" and mobility_mode == "blink_to_cursor" and (_num(alt.get("rangeTiles"), 0) or 0) <= 0:
             errors.append("set_alt_use_mode blink_to_cursor requires explicit positive rangeTiles")
 
     for mobility in all_calls(rp, "mobility_effect"):
         mode = _norm_name(mobility.get("mode"))
+        if mode not in {"recall_home", "blink_to_cursor", "blink_to_projectile_impact"}:
+            errors.append("mobility_effect requires an explicit supported mobility mode")
         if mode in {"blink_to_cursor", "blink_to_projectile_impact"} and (_num(mobility.get("rangeTiles"), 0) or 0) <= 0:
             errors.append(f"mobility_effect mode={mode} requires explicit positive rangeTiles")
 
     for hold in all_calls(rp, "hold_item_effect"):
         generated = hold.get("generatedBuff") if isinstance(hold.get("generatedBuff"), dict) else {}
-        if generated and (_num(generated.get("durationTicks"), 0) or 0) <= 0:
-            errors.append("hold_item_effect generatedBuff requires explicit durationTicks")
+        if generated:
+            hold_duration = _num(generated.get("durationTicks"), 0) or 0
+            if hold_duration <= 0:
+                errors.append("hold_item_effect generatedBuff requires explicit durationTicks")
+            elif hold_duration < 2:
+                errors.append("hold_item_effect generatedBuff durationTicks must be at least 2 ticks so the next effect phase can execute it")
+            if not _generated_buff_has_executable_effect(generated):
+                errors.append("hold_item_effect generatedBuff requires at least one executable effect")
 
     if result_kind == "tool":
         tool = find_call(rp, "tool_capability")
@@ -245,7 +310,7 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
     rp = data_or_plan if isinstance(data_or_plan.get("engineCalls"), list) else runtime_plan(data_or_plan)
     authored: dict[str, str] = {}
     authored_by_fn: dict[str, list[str]] = {}
-    maps: dict[str, dict[str, str]] = {
+    maps: dict[str, dict[str, str | tuple[str, ...]]] = {
         "set_item_stats": {
             "resultKind": "resultKind",
             "damageClass": "damageClass",
@@ -335,13 +400,20 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "burstDustCap": "burstDustCap",
             "vfxParticleScale": "vfxParticleScale",
             "vfxMaterial": "vfxMaterial",
+            "vfxParticleDurationTicks": "durationTicks",
             "primaryColorName": "primaryColorName",
         },
         "leave_trail_or_field": {
             "trailLength": "trailLength",
             "vfxFieldLifetimeTicks": "fieldLifetimeTicks",
             "vfxFieldRadiusTiles": ("fieldRadiusTiles", "fieldRadius"),
+            "vfxFieldTickRate": "tickRate",
             "fieldRadius": ("fieldRadiusTiles", "fieldRadius"),
+        },
+        "emit_light": {
+            "runtimeLightStrength": "strength",
+            "runtimeLightDurationTicks": "durationTicks",
+            "runtimeLightColorName": ("lightColorName", "color"),
         },
         "visual_effect_cue": {"vfxCues": "cue", "vfxCueCount": "cue"},
         "state_meter": {"runtimeState": "kind"},

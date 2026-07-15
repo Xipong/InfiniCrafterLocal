@@ -440,7 +440,8 @@ public sealed partial class GeneratedProjectile
         float sweep = MathHelper.Lerp(-0.72f, 0.72f, progress) * owner.direction * owner.gravDir;
         Vector2 direction = _whipBaseDirection.RotatedBy(sweep).SafeNormalize(Vector2.UnitX * owner.direction);
         Vector2 perpendicular = direction.RotatedBy(MathHelper.PiOver2);
-        float authoredReach = Math.Clamp(_spec.RangeTiles * 16f * 0.45f, 58f, 320f);
+        float playerRangeMultiplier = Math.Clamp(owner.whipRangeMultiplier, 0.25f, 2.5f);
+        float authoredReach = Math.Clamp(_spec.RangeTiles * 16f * 0.45f * playerRangeMultiplier, 58f, 640f);
         float tipDistance = authoredReach * extension;
         int segments = Math.Clamp((int)Math.Round(authoredReach / 16f), 10, 24);
         Vector2 start = owner.MountedCenter;
@@ -523,7 +524,9 @@ public sealed partial class GeneratedProjectile
             return true;
         int cadenceTicks = Math.Clamp(owner.HeldItem.useTime, 6, 120);
         int activeTick = Math.Max(1, (int)Projectile.localAI[0]);
-        return activeTick != 1 && activeTick % cadenceTicks != 0
+        // Vanilla/tML already charged Item.mana before Shoot created this holdout.
+        // Charge only subsequent channel cadences instead of billing tick one twice.
+        return activeTick % cadenceTicks != 0
             || owner.CheckMana(manaCost, true, false);
     }
 
@@ -652,8 +655,15 @@ public sealed partial class GeneratedProjectile
         Projectile.penetrate = (heldLike || overheadBarrage || sentryLike || returningMovement)
             ? -1
             : (_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce));
-        Projectile.timeLeft = heldLike ? 2 : sentryLike ? _spec.SentryLifetimeTicks : overheadBarrage ? Math.Max(20, _spec.DelayTicks + 30) : Math.Max(20, _spec.Lifetime);
         Projectile.extraUpdates = (heldLike || overheadBarrage || sentryLike) ? 0 : Math.Clamp(_spec.ExtraUpdates, 0, 3);
+        int lifetimeUpdates = Projectile.extraUpdates + 1;
+        Projectile.timeLeft = heldLike
+            ? 2
+            : sentryLike
+                ? _spec.SentryLifetimeTicks
+                : overheadBarrage
+                    ? Math.Max(20, _spec.DelayTicks + 30)
+                    : Math.Max(20 * lifetimeUpdates, _spec.Lifetime * lifetimeUpdates);
         Projectile.ownerHitCheck = _spec.OwnerHitCheck;
         if (!_stuckToTile)
             Projectile.tileCollide = !heldLike && !overheadBarrage && !sentryLike && _spec.TileCollide && movement != 8 && movement != 12 && movement != 17 && movement != 18;
@@ -735,6 +745,7 @@ public sealed partial class GeneratedProjectile
 
         InfiniVfxRuntime.OnTick(Projectile, _spec, _vfxManifest, ref _vfxState);
         SpawnDust(effect);
+        EmitAuthoredVisualField();
         EmitVanillaMotionPolish();
         AddPresentationLight();
         if (!beamLike && !chargeReleaseLike && !sentryLike && !overheadBarrage && !thrustLike && !movementOwnsRotation)

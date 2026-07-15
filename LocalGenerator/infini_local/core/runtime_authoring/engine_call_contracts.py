@@ -138,6 +138,7 @@ _OBJECT_PARAMS: dict[tuple[str, str], Any] = {
 
 # Semantic enums whose unknown values must never silently become executable.
 _ENUM_PARAMS: dict[tuple[str, str] | str, tuple[str, ...]] = {
+    ("spawn_contact_particles", "material"): ("none", "wood", "metal", "stone", "magic", "fire", "slime", "frost", "shadow"),
     "delivery": ("swing", "thrust", "shoot", "cast", "throw", "summon"),
     "runtimeFamily": (
         "swing", "thrust", "returning", "flail", "yoyo", "whip", "shoot", "cast",

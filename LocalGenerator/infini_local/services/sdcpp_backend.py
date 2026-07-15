@@ -232,11 +232,22 @@ def server_is_alive(server_url: str, health_paths: list[str], timeout: int = 2) 
             url = server_url.rstrip("/") + (path if path.startswith("/") else "/" + path)
             req = urlrequest.Request(url, headers={"Accept": "application/json,*/*"}, method="GET")
             with urlrequest.urlopen(req, timeout=timeout) as resp:
-                return 200 <= int(getattr(resp, "status", 200)) < 300
+                if not 200 <= int(getattr(resp, "status", 200)) < 300:
+                    continue
+                body = resp.read(16384).decode("utf-8", errors="ignore")
+                normalized_path = "/" + path.strip("/").lower()
+                if normalized_path == "/sdapi/v1/sd-models":
+                    try:
+                        return isinstance(json.loads(body), list)
+                    except (TypeError, ValueError):
+                        continue
+                signature = body.lower()
+                if any(token in signature for token in ("stable-diffusion", "stable diffusion", "sd.cpp", "sdapi", "txt2img")):
+                    return True
         except urlerror.HTTPError as e:
             try:
                 if 200 <= int(getattr(e, "code", 0)) < 300:
-                    return True
+                    continue
             except Exception:
                 pass
             continue

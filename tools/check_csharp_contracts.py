@@ -328,7 +328,7 @@ def check_model_property_references() -> None:
     for required_prop in ["Enabled", "LightStrength", "LightColorName", "MovementSpeed", "JumpSpeed", "MinionSlots", "SentrySlots", "ManaCostReduction", "AmmoSaveChance", "Aggro", "Endurance", "ArmorPenetration"]:
         if required_prop not in accessory:
             err(f"AccessorySpec missing `{required_prop}`")
-    for required_prop in ["Enabled", "Slot", "SetKey", "Archetype", "Defense", "MaxLife", "MaxMana", "LifeRegen", "ManaRegen", "MovementSpeed", "MaxRunSpeed", "JumpSpeed", "GenericDamage", "MeleeDamage", "RangedDamage", "MagicDamage", "SummonDamage", "GenericCrit", "AttackSpeed", "Knockback", "FallDamageImmune", "LavaImmune", "WaterWalk", "MinionSlots", "SentrySlots", "ManaCostReduction", "AmmoSaveChance", "Aggro", "Endurance", "ArmorPenetration", "WhipRange", "SummonTagDamage", "LightStrength", "LightColorName", "SetBonusText", "SetBonusGenericDamage", "SetBonusMeleeDamage", "SetBonusRangedDamage", "SetBonusMagicDamage", "SetBonusSummonDamage", "SetBonusGenericCrit", "SetBonusMovementSpeed", "SetBonusLifeRegen", "SetBonusManaRegen", "SetBonusMinionSlots", "SetBonusSentrySlots", "SetBonusManaCostReduction", "SetBonusAmmoSaveChance", "SetBonusAggro", "SetBonusEndurance", "SetBonusArmorPenetration"]:
+    for required_prop in ["Enabled", "Slot", "SetKey", "Archetype", "Defense", "MaxLife", "MaxMana", "LifeRegen", "ManaRegen", "MovementSpeed", "MaxRunSpeed", "JumpSpeed", "GenericDamage", "MeleeDamage", "RangedDamage", "MagicDamage", "SummonDamage", "GenericCrit", "AttackSpeed", "Knockback", "FallDamageImmune", "LavaImmune", "WaterWalk", "MinionSlots", "SentrySlots", "ManaCostReduction", "AmmoSaveChance", "Aggro", "Endurance", "ArmorPenetration", "LightStrength", "LightColorName", "SetBonusText", "SetBonusGenericDamage", "SetBonusMeleeDamage", "SetBonusRangedDamage", "SetBonusMagicDamage", "SetBonusSummonDamage", "SetBonusGenericCrit", "SetBonusMovementSpeed", "SetBonusLifeRegen", "SetBonusManaRegen", "SetBonusMinionSlots", "SetBonusSentrySlots", "SetBonusManaCostReduction", "SetBonusAmmoSaveChance", "SetBonusAggro", "SetBonusEndurance", "SetBonusArmorPenetration"]:
         if required_prop not in armor:
             err(f"ArmorSpec missing `{required_prop}`")
     for required_prop in ["ExecutionStatus", "StateMeters", "TriggeredActions"]:
@@ -619,7 +619,7 @@ def check_network_read_write_shape() -> None:
     if "writer.Write(ProjectileSyncVersion)" not in projectile or "reader.ReadInt32()" not in projectile:
         err("GeneratedProjectile.cs: versioned SendExtraAI/ReceiveExtraAI shape is incomplete")
     for needle in [
-        "private const int ProjectileSyncVersion = 18",
+        "private const int ProjectileSyncVersion = 19",
         "writer.Write(_spec.RangeTiles)",
         "writer.Write(_spec.HomingStrength)",
         "writer.Write(_spec.BeamWidthPx)",

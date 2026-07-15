@@ -16,6 +16,7 @@ from infini_local.pipelines.combine_genome import genome_defects
 from infini_local.pipelines.engine_pressure_metrics import estimate_engine_metrics
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.boundary_models import runtime_plan_boundary_report
+from infini_local.core.runtime_authoring.schema import accepted_engine_param_names
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -158,6 +159,25 @@ def _contract_check_generated_buffs_require_authored_duration_and_zero_consume_i
     assert report["ok"] is False
     assert any("durationTicks" in error for error in report["errors"])
     assert "generatedBuff" not in compile_runtime_plan_to_genome_patch(missing_duration)
+
+    one_tick_hold = {
+        "runtimePlan": {
+            "resultKind": "generic",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+                {"fn": "hold_item_effect", "params": {"generatedBuff": {"durationTicks": 1, "movementSpeed": 0.15}}},
+            ],
+        },
+    }
+    hold_report = runtime_plan_validation_report(one_tick_hold)
+    assert hold_report["ok"] is False
+    assert any("at least 2 ticks" in error for error in hold_report["errors"])
+
+    duration_only = deepcopy(missing_duration)
+    duration_only["runtimePlan"]["engineCalls"][-1]["params"]["generatedBuff"] = {"durationTicks": 60}
+    duration_only_report = runtime_plan_validation_report(duration_only)
+    assert duration_only_report["ok"] is False
+    assert any("executable effect" in error for error in duration_only_report["errors"])
 
     zero = {
         "runtimePlan": {
@@ -340,6 +360,9 @@ def _contract_check_csharp_runtime_preserves_exact_equipment_network_and_buff_au
     assert "GeneratedItem.UseBlockedReason(Player, gp)" in multiplayer
     assert "Math.Clamp(gp.UseTime, 6, 150)" in multiplayer
     assert "Player.itemAnimation <= 0 && Player.itemTime <= 0" in multiplayer
+    alt_capability = item[item.index("private static bool HasExecutableAltUse"):item.index("private string AltUseSummary")]
+    assert 'mobilityMode == "recall_home"' in alt_capability
+    assert 'mobilityMode == "blink_to_cursor" && gp.AltMobilityRangeTiles > 0' in alt_capability
     assert "ProcessPendingGeneratedUseIntent();" in craft_state
     assert "if (Main.netMode == NetmodeID.Server)\n                return true;" in item
     assert "ApplyGeneratedUtilityBuffEffects();" in craft_state
@@ -354,6 +377,16 @@ def _contract_check_csharp_runtime_preserves_exact_equipment_network_and_buff_au
     assert "player.Heal(heal);" in item
     assert "owner.Heal(heal);" in projectile_impact
     assert "damageDone / 4" not in projectile_impact
+    debuff_body = projectile_impact[
+        projectile_impact.index("private void ApplyValidatedDebuff"):
+        projectile_impact.index("private void ApplyAuthoredPull")
+    ]
+    heal_body = projectile_impact[
+        projectile_impact.index("private void HealOwner"):
+        projectile_impact.index("private int RemainingGameplayChildBudget")
+    ]
+    assert "ShouldRunNpcGameplay()" in debuff_body
+    assert "ShouldRunLocalPlayerAction(owner)" in heal_body
 
     assert "FileMode.CreateNew" in registry
     assert "stream.Flush(flushToDisk: true)" in registry
@@ -681,6 +714,13 @@ def _contract_check_family_specific_numbers_are_authored_not_defaulted() -> None
     assert authored_hit_patch["secondaryDamageMultiplier"] == 0.23
     assert authored_hit_patch["secondaryLifetimeTicks"] == 131
 
+    zero_damage_child = deepcopy(authored_hit_children)
+    zero_damage_child["runtimePlan"]["engineCalls"][0]["params"]["damage"] = 1
+    zero_damage_child["runtimePlan"]["engineCalls"][-1]["params"]["secondaryDamageMultiplier"] = 0.23
+    zero_child_report = runtime_plan_validation_report(zero_damage_child)
+    assert zero_child_report["ok"] is False
+    assert any("rounds to zero damage" in error for error in zero_child_report["errors"])
+
     overhead_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedOverheadBarragePolicy.cs").read_text(encoding="utf-8")
     overhead_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs").read_text(encoding="utf-8")
     impact_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
@@ -698,18 +738,36 @@ def _contract_check_family_specific_numbers_are_authored_not_defaulted() -> None
     assert "Math.Max(1, Projectile.originalDamage)" not in charge_runtime
     assert "Math.Max(1, Projectile.damage)" not in projectile_runtime
     assert "Math.Max(1, Projectile.damage)" not in sentry_runtime
+    beam_mana = projectile_runtime[projectile_runtime.index("private bool CanPayChannelBeamMana"):projectile_runtime.index("private bool ApplyChannelBeamAI")]
+    assert "activeTick != 1" not in beam_mana
+    assert "activeTick % cadenceTicks != 0" in beam_mana
 
 
 def _contract_check_csharp_timing_bounds_and_axe_display_are_consistent() -> None:
     normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
     apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     item = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
+    projectile = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
     assert "Gameplay.UseTime = ClampInt(Gameplay.UseTime, 10, 3600);" in normalize
     assert "Gameplay.UseAnimation = ClampInt(Gameplay.UseAnimation, 6, 3600);" in normalize
     assert "item.useAnimation = Math.Max(6, Gameplay.UseAnimation);" in apply
+    assert "int lifetimeUpdates = Projectile.extraUpdates + 1;" in projectile
+    assert "_spec.Lifetime * lifetimeUpdates" in projectile
     assert "data.Gameplay.AxePower * 5" in item
 
 def _contract_check_blink_mobility_requires_authored_range_instead_of_runtime_defaults() -> None:
+    primary_missing_mode = runtime_plan_validation_report({
+        "runtimePlan": {
+            "resultKind": "generic",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+                {"fn": "mobility_effect", "params": {"rangeTiles": 10, "cooldownTicks": 30}},
+            ],
+        },
+    })
+    assert primary_missing_mode["ok"] is False
+    assert any("mobility mode" in error for error in primary_missing_mode["errors"])
+
     primary = runtime_plan_validation_report({
         "runtimePlan": {
             "resultKind": "generic",
@@ -733,6 +791,43 @@ def _contract_check_blink_mobility_requires_authored_range_instead_of_runtime_de
     })
     assert alt["ok"] is False
     assert any("rangeTiles" in error for error in alt["errors"])
+
+    alt_missing_mode = runtime_plan_validation_report({
+        "runtimePlan": {
+            "resultKind": "generic",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+                {"fn": "set_alt_use_mode", "params": {"mode": "mobility", "rangeTiles": 10, "cooldownTicks": 30}},
+            ],
+        },
+    })
+    assert alt_missing_mode["ok"] is False
+    assert any("mobilityMode" in error for error in alt_missing_mode["errors"])
+
+    alt_empty_buff = runtime_plan_validation_report({
+        "runtimePlan": {
+            "resultKind": "generic",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+                {"fn": "set_alt_use_mode", "params": {"mode": "generated_buff", "generatedBuff": {"durationTicks": 60}}},
+            ],
+        },
+    })
+    assert alt_empty_buff["ok"] is False
+    assert any("executable generatedBuff effect" in error for error in alt_empty_buff["errors"])
+
+    alt_dark_light = runtime_plan_validation_report({
+        "runtimePlan": {
+            "resultKind": "generic",
+            "engineCalls": [
+                {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+                {"fn": "set_alt_use_mode", "params": {"mode": "light", "durationTicks": 60}},
+                {"fn": "emit_light", "params": {"strength": 0, "color": "blue"}},
+            ],
+        },
+    })
+    assert alt_dark_light["ok"] is False
+    assert any("positive emit_light strength" in error for error in alt_dark_light["errors"])
 
 
 def _contract_check_composite_projectile_pressure_requires_llm_repair() -> None:
@@ -761,6 +856,57 @@ def _contract_check_composite_projectile_pressure_requires_llm_repair() -> None:
     assert any("composite projectile pressure" in defect for defect in charge_defects)
 
 
+def _contract_check_active_engine_cards_execute_authored_visual_and_summon_fields() -> None:
+    assert "durationTicks" in accepted_engine_param_names("emit_light")
+    assert "durationTicks" in accepted_engine_param_names("spawn_contact_particles")
+    assert {"fieldLifetimeTicks", "fieldRadiusTiles", "tickRate"} <= accepted_engine_param_names("leave_trail_or_field")
+    from infini_local.core.runtime_authoring.engine_call_contracts import validate_engine_call_params
+
+    for fn in ("accessory_effect", "armor_effect"):
+        parsed, errors = validate_engine_call_params(fn, {"stats": {"whipRange": 0.2, "summonTagDamage": 0.15}})
+        assert not errors
+        assert parsed and parsed["stats"] == {"whipRange": 0.2, "summonTagDamage": 0.15}
+
+    visual_plan = {"runtimePlan": {"resultKind": "weapon", "engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 12, "useTimeTicks": 20, "useAnimationTicks": 20}},
+        {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 8, "rangeTiles": 30, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 1}},
+        {"fn": "emit_light", "params": {"strength": 0.7, "color": "blue", "durationTicks": 41}},
+        {"fn": "spawn_contact_particles", "params": {"effect": "electric", "amount": 8, "scale": 1.2, "durationTicks": 23}},
+        {"fn": "leave_trail_or_field", "params": {"trailLength": 6, "fieldLifetimeTicks": 80, "fieldRadiusTiles": 3.5, "tickRate": 9, "visualOnly": True}},
+    ]}}
+    patch = compile_runtime_plan_to_genome_patch(visual_plan)
+    assert patch["runtimeLightDurationTicks"] == 41
+    assert patch["vfxParticleDurationTicks"] == 23
+    assert patch["vfxFieldLifetimeTicks"] == 80
+    assert patch["vfxFieldRadiusTiles"] == 3.5
+    assert patch["vfxFieldTickRate"] == 9
+    item = _attach({"category": "weapon", **visual_plan})
+    assert item["attack"]["runtimeLightDurationTicks"] == 41
+    assert item["attack"]["vfxParticleDurationTicks"] == 23
+    assert item["attack"]["vfxFieldLifetimeTicks"] == 80
+    assert item["attack"]["vfxFieldRadiusTiles"] == 3.5
+    assert item["attack"]["vfxFieldTickRate"] == 9
+
+    projectile_visuals = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Visuals.cs").read_text(encoding="utf-8")
+    projectile_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
+    generated_item = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
+    net_sync = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs").read_text(encoding="utf-8")
+    tag_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Common/Players/GeneratedWhipTagGlobalNPC.cs").read_text(encoding="utf-8")
+    assert "RuntimeLightDurationTicks" in projectile_visuals
+    assert "VfxParticleDurationTicks" in projectile_visuals
+    assert "EmitAuthoredVisualField" in projectile_visuals
+    for field in (
+        "VfxParticleScale", "VfxMaterial", "VfxParticleDurationTicks",
+        "VfxFieldLifetimeTicks", "VfxFieldRadiusTiles", "VfxFieldTickRate",
+        "RuntimeLightDurationTicks",
+    ):
+        assert f"writer.Write(_spec.{field})" in net_sync or f"ShortNet(_spec.{field}" in net_sync
+        assert f"_spec.{field} = reader." in net_sync
+    assert "owner.whipRangeMultiplier" in projectile_runtime
+    assert "AddGeneratedSummonTagDamage" in generated_item
+    assert "ModifyHitByProjectile" in tag_runtime
+
+
 def test_gameplay_authority_authorship_contract(request):
     from contract_checks import run_contract_checks
 
@@ -787,5 +933,6 @@ def test_gameplay_authority_authorship_contract(request):
             "_contract_check_csharp_timing_bounds_and_axe_display_are_consistent",
             "_contract_check_blink_mobility_requires_authored_range_instead_of_runtime_defaults",
             "_contract_check_composite_projectile_pressure_requires_llm_repair",
+            "_contract_check_active_engine_cards_execute_authored_visual_and_summon_fields",
         ),
     )

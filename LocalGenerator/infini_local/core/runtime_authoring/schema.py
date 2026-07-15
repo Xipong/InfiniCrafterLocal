@@ -144,12 +144,12 @@ ENGINE_FN_CATALOG_V2 = {
         "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "secondaryDamageMultiplier": ">0..1 required for damaging child-producing onHit", "secondaryLifetimeTicks": "5..180 required for overhead_barrage children", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty", "debuffTime": "30..600 required for buff-applying onHit"},
     },
     "spawn_contact_particles": {
-        "meaning": "Pure VFX/dust, no damage. Use this for chips, sawdust, sparks, slime, smoke, glow.",
-        "params": {"effect": "none|dust|electric|slime|star|flame|frost|leaf|shadow|poison|blood|honey|sand|lunar|heal|holy|smoke", "amount": "0..40", "scale": "0..2", "durationTicks": "1..80", "material": "wood|metal|stone|magic|fire|slime|etc"},
+        "meaning": "Pure VFX/dust; no damage.",
+        "params": {"effect": "none|dust|electric|slime|star|flame|frost|leaf|shadow|poison|blood|honey|sand|lunar|heal|holy|smoke", "amount": "0 off; 1..40", "scale": "0.15..2", "durationTicks": "1..80", "material": "none|wood|metal|stone|magic|fire|slime|frost|shadow; only with effect none/dust"},
     },
     "leave_trail_or_field": {
-        "meaning": "Visual-only trail/line/residue. Does not create damage/projectiles/hitbox in the current runtime.",
-        "params": {"trailLength": "0..24", "fieldLifetimeTicks": "0..240 visual only", "fieldRadiusTiles": "0..6 visual only", "tickRate": "0..60 visual only", "visualOnly": "true only; false rejected"},
+        "meaning": "Visual-only trail or bounded dust field; no gameplay.",
+        "params": {"trailLength": "0..24", "fieldLifetimeTicks": "0..240", "fieldRadiusTiles": "0..6", "tickRate": "1..60", "visualOnly": "true only"},
     },
     "visual_effect_cue": {
         "meaning": "Frozen VFX/audio slot; presentation only, no gameplay.",
@@ -164,7 +164,7 @@ ENGINE_FN_CATALOG_V2 = {
         "params": {"pickPower": "0..1000", "axePower": "0..200 internal Item.axe units", "hammerPower": "0..1000", "miningSpeedScale": "0.25..2 executable held-tool mining speed multiplier"},
     },
     "emit_light": {
-        "meaning": "Executable runtime light cue on held/projectile/effect contexts. It is not a baked image request and not damage.",
+        "meaning": "Executable held/projectile/effect light.",
         "params": {"strength": "0..1", "color": "named color", "durationTicks": "1..240"},
     },
     "mobility_effect": {
@@ -192,7 +192,7 @@ ENGINE_FN_CATALOG_V2 = {
         "params": {"mode": "mobility|generated_buff|light|none", "mobilityMode": "recall_home|blink_to_cursor", "rangeTiles": "0..80", "cooldownTicks": "0..3600", "safeTileOnly": "true", "generatedBuff": "same shape as apply_player_effect_on_use.generatedBuff", "durationTicks": "1..21600"},
     },
     "hold_item_effect": {
-        "meaning": "Held-item utility: light or short generated buff refreshed while held.",
+        "meaning": "Held-item utility: light or generated buff refreshed while held; generatedBuff.durationTicks must be at least 2.",
         "params": {"lightStrength": "0..1.5", "lightColorName": "white|gray|brown|tan|red|orange|yellow|gold|green|cyan|blue|purple|pink", "generatedBuff": "generated buff object"},
     },
 
@@ -269,7 +269,7 @@ NUMERIC_LIMITS = {
     "spreadRadians": (0.0, 0.75),
     "speed": (3.0, 18.0), "beamWidthPx": (2.0, 96.0), "beamChargeTicks": (0.0, 300.0), "chargeTicks": (1.0, 300.0), "chargePowerMultiplier": (1.0, 3.0), "delayTicks": (0.0, 300.0), "sentryAttackIntervalTicks": (12.0, 180.0), "sentryTargetRangeTiles": (8.0, 60.0), "sentryLifetimeTicks": (120.0, 36000.0), "immunityCooldown": (4.0, 60.0), "splitCount": (0.0, 8.0), "chainCount": (0.0, 6.0), "pullStrength": (0.0, 1.0),
     "trailLength": (0.0, 24.0), "burstDustCap": (0.0, 40.0), "fieldRadiusTiles": (0.0, 6.0),
-    "fieldLifetimeTicks": (0.0, 240.0), "secondaryDamageMultiplier": (0.0, 1.0),
+    "fieldLifetimeTicks": (0.0, 240.0), "tickRate": (1.0, 60.0), "secondaryDamageMultiplier": (0.0, 1.0),
     "secondarySpreadRadians": (0.0, 1.2), "secondaryLifetimeTicks": (5.0, 180.0), "sameTargetBias": (0.0, 1.0),
     "craftYield": (1.0, 999.0),
     "healLife": (0.0, 500.0), "healMana": (0.0, 500.0), "buffType": (0.0, 2147483647.0), "buffTime": (0.0, 21600.0),
@@ -284,7 +284,7 @@ NUMERIC_LIMITS = {
     "decayPerSecond": (0.0, 20.0), "modeCount": (0.0, 8.0), "requiredValue": (0.0, 20.0), "spendValue": (0.0, 20.0),
 }
 
-INT_FIELDS = {"useTimeTicks", "useAnimationTicks", "manaCost", "lifetimeTicks", "beamChargeTicks", "chargeTicks", "delayTicks", "sentryAttackIntervalTicks", "sentryLifetimeTicks", "immunityCooldown", "shotCount", "pierce", "extraUpdates", "splitCount", "chainCount", "trailLength", "burstDustCap", "fieldLifetimeTicks", "craftYield", "healLife", "healMana", "buffType", "buffTime", "pickPower", "axePower", "hammerPower", "durationTicks", "cooldownTicks", "resultType", "stack", "minLife", "minMana", "consumeChancePercent", "maxValue", "initialValue", "gainOnUse", "gainOnHit", "gainOnKill", "spendOnUse", "spendOnAltUse", "modeCount", "requiredValue", "spendValue"}
+INT_FIELDS = {"useTimeTicks", "useAnimationTicks", "manaCost", "lifetimeTicks", "beamChargeTicks", "chargeTicks", "delayTicks", "sentryAttackIntervalTicks", "sentryLifetimeTicks", "immunityCooldown", "shotCount", "pierce", "extraUpdates", "splitCount", "chainCount", "trailLength", "burstDustCap", "fieldLifetimeTicks", "tickRate", "craftYield", "healLife", "healMana", "buffType", "buffTime", "pickPower", "axePower", "hammerPower", "durationTicks", "cooldownTicks", "resultType", "stack", "minLife", "minMana", "consumeChancePercent", "maxValue", "initialValue", "gainOnUse", "gainOnHit", "gainOnKill", "spendOnUse", "spendOnAltUse", "modeCount", "requiredValue", "spendValue"}
 
 
 __all__ = [

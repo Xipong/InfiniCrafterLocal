@@ -96,6 +96,10 @@ def handle_combine_request(
                 "cacheRecoveryAllowed": False,
             })
             return
+        trace_event("warn", "HTTP:/combine", "world recipe cache lookup failed; continuing with fresh generation", {
+            "error": repr(cache_error),
+            "cacheRecoveryAllowed": True,
+        })
         cached = None
         cache_key = ""
     if cached:

@@ -33,7 +33,10 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         return {}
     shoots = all_calls(rp, "shoot_projectile")
     hits = all_calls(rp, "apply_on_hit_effect")
-    particle_calls = all_calls(rp, "spawn_contact_particles")
+    particle_calls = [
+        call for call in all_calls(rp, "spawn_contact_particles")
+        if (_num(call.get("amount"), 0) or 0) > 0
+    ]
     secondary_calls = all_calls(rp, "spawn_secondary_projectiles")
     trail_calls = all_calls(rp, "leave_trail_or_field")
     use_effect_calls = all_calls(rp, "apply_player_effect_on_use")
@@ -112,6 +115,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     particle_effects: list[str] = []
     particle_amount = 0.0
     particle_scale = 0.0
+    particle_duration = 0.0
     particle_materials: list[str] = []
     for pc in particle_calls:
         eff = _enum(pc.get("effect"), EFFECTS, None)
@@ -119,8 +123,10 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             particle_effects.append(eff)
         particle_amount += _num(pc.get("amount"), 0) or 0
         particle_scale = max(particle_scale, _num(pc.get("scale"), 0) or 0)
-        if pc.get("material") not in (None, ""):
-            particle_materials.append(str(pc.get("material"))[:40])
+        particle_duration = max(particle_duration, _clamp(pc.get("durationTicks"), "durationTicks", 0) or 0)
+        material = _norm_name(pc.get("material"))
+        if material not in {"", "none"}:
+            particle_materials.append(material)
     effect = _enum(_first_non_empty(*particle_effects, shoot.get("effect")), EFFECTS, None)
     if particle_calls and not particle_effects:
         effect = "none"
@@ -129,8 +135,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     if particle_calls:
         patch["burstDustCap"] = int(round(max(0, min(NUMERIC_LIMITS["burstDustCap"][1], particle_amount))))
         # v0.4.13: C# distinguishes effect=none from mundane dust via DustSpawnDenom.
-        # effectCode 0 is shared by none/dust for old compatibility, so denom=0 means literally no ambient dust.
-        if particle_amount <= 0 or effect in {None, "none"}:
+        # effectCode 0 is shared by none/dust; exact material is the only other
+        # explicit route that may enable dust for that code.
+        if particle_amount <= 0 or (effect in {None, "none"} and not particle_materials):
             patch["dustSpawnDenom"] = 0
             patch["burstDustCap"] = 0
         else:
@@ -138,9 +145,11 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             patch["dustSpawnDenom"] = int(max(2, min(12, round(10 - min(8, particle_amount / 5.0)))))
         if particle_scale:
             patch["vfxParticleScale"] = max(0.0, min(2.0, round(particle_scale, 3)))
+        if particle_duration:
+            patch["vfxParticleDurationTicks"] = int(round(min(80, particle_duration)))
         if particle_materials:
-            # Human/debug lineage only; C# can ignore this safely.
-            patch["vfxMaterial"] = ", ".join(dict.fromkeys(particle_materials))[:80]
+            # Finite visual material lineage; C# resolves it only to a dust family.
+            patch["vfxMaterial"] = particle_materials[0]
 
     # Trails/fields are visual-only in this runtime. Do not let field prose become gameplay.
     rejected_trails: list[dict[str, Any]] = []
@@ -152,12 +161,16 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         vals = [v for v in vals if v is not None]
         if vals:
             patch["trailLength"] = _intish("trailLength", max(vals))
-        # Preserve visual field dimensions for debug/VFX only under non-runtime keys.
-        for field, out_field in [("fieldLifetimeTicks", "vfxFieldLifetimeTicks"), ("fieldRadiusTiles", "vfxFieldRadiusTiles")]:
+        for field, out_field in [
+            ("fieldLifetimeTicks", "vfxFieldLifetimeTicks"),
+            ("fieldRadiusTiles", "vfxFieldRadiusTiles"),
+            ("tickRate", "vfxFieldTickRate"),
+        ]:
             raw_vals = [_clamp(t.get(field), field) for t in trail_calls if t.get(field) not in (None, "")]
-            raw_vals = [v for v in raw_vals if v is not None]
+            raw_vals = [value for value in raw_vals if value is not None]
             if raw_vals:
-                patch[out_field] = _intish(field, max(raw_vals))
+                value = max(raw_vals)
+                patch[out_field] = _intish(field, value) if field != "fieldRadiusTiles" else round(float(value), 3)
         if rejected_trails:
             patch["rejectedTrailCalls"] = rejected_trails[:8]
 
@@ -255,6 +268,10 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         strengths = [s for s in strengths if s is not None]
         if strengths:
             patch["runtimeLightStrength"] = round(max(strengths), 3)
+        durations = [_clamp(c.get("durationTicks"), "durationTicks", 0) for c in light_calls if c.get("durationTicks") not in (None, "")]
+        durations = [duration for duration in durations if duration is not None]
+        if durations:
+            patch["runtimeLightDurationTicks"] = int(round(min(240, max(durations))))
         colors = [
             str(c.get("lightColorName") or c.get("color") or "").strip()
             for c in light_calls
@@ -433,6 +450,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             ("sentrySlots", "sentrySlots", 0, 2, True), ("manaCostReduction", "manaCostReduction", 0, 0.4, False),
             ("ammoSaveChance", "ammoSaveChance", 0, 0.5, False), ("aggro", "aggro", -400, 400, True),
             ("endurance", "endurance", 0, 0.2, False), ("armorPenetration", "armorPenetration", 0, 40, False),
+            ("whipRange", "whipRange", 0, 1.5, False), ("summonTagDamage", "summonTagDamage", 0, 0.75, False),
             ("lightStrength", "lightStrength", 0, 1.5, False),
         ]
         for src, out, lo, hi, integer in equipment_fields:
@@ -477,8 +495,8 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             ("sentrySlots", "sentrySlots", 0, 2, True), ("manaCostReduction", "manaCostReduction", 0, 0.4, False),
             ("ammoSaveChance", "ammoSaveChance", 0, 0.5, False), ("aggro", "aggro", -400, 400, True),
             ("endurance", "endurance", 0, 0.2, False), ("armorPenetration", "armorPenetration", 0, 40, False),
-            ("lightStrength", "lightStrength", 0, 1.5, False), ("whipRange", "whipRange", 0, 1.5, False),
-            ("summonTagDamage", "summonTagDamage", 0, 0.75, False),
+            ("whipRange", "whipRange", 0, 1.5, False), ("summonTagDamage", "summonTagDamage", 0, 0.75, False),
+            ("lightStrength", "lightStrength", 0, 1.5, False),
         ]
         for src, out, lo, hi, integer in armor_equipment_fields:
             raw = stats.get(src)

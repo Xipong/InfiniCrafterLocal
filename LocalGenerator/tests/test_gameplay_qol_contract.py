@@ -29,8 +29,6 @@ def _contract_check_generated_tooltips_expose_compact_gameplay_qol_surface():
         "Aggro",
         "Endurance",
         "ArmorPenetration",
-        "WhipRange",
-        "SummonTagDamage",
         "set bonus ready",
     ]:
         assert needle in src

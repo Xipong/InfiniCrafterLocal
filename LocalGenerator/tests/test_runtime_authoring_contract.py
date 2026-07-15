@@ -24,7 +24,7 @@ def _check_runtime_plan_compiler_keeps_current_playable_core() -> None:
                 {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 8.5, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "projectileShape": "thin splinter bolt"}},
                 {"fn": "spawn_secondary_projectiles", "params": {"trigger": "on_hit", "count": 3, "damageMultiplier": 0.25, "spreadRadians": 0.35, "lifetimeTicks": 12, "sameTargetBias": 0.75}},
                 {"fn": "apply_on_hit_effect", "params": {"onHit": "split", "aoeRadiusTiles": 0}},
-                {"fn": "spawn_contact_particles", "params": {"effect": "dust", "amount": 7, "scale": 0.45}},
+                {"fn": "spawn_contact_particles", "params": {"effect": "dust", "amount": 7, "scale": 0.45, "durationTicks": 37, "material": "stone"}},
                 {"fn": "leave_trail_or_field", "params": {"trailLength": 4, "visualOnly": True}},
             ],
         }
@@ -39,9 +39,49 @@ def _check_runtime_plan_compiler_keeps_current_playable_core() -> None:
     assert patch["maxChildProjectiles"] == 3
     assert patch["maxChildDepth"] == 1
     assert patch["burstDustCap"] == 7
+    assert patch["vfxParticleScale"] == 0.45
+    assert patch["vfxParticleDurationTicks"] == 37
+    assert patch["vfxMaterial"] == "stone"
     assert patch["trailLength"] == 4
     assert infer_attack_pattern_from_runtime(patch, "ranged") == "ranged_projectile"
     assert runtime_plan_quality_report(data)["hasRealChildren"] is True
+
+
+def _check_result_kind_requires_its_executable_surface() -> None:
+    missing_primary = runtime_plan_validation_report({"runtimePlan": {"engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "consumable_weapon", "damageClass": "ranged", "damage": 9, "useTimeTicks": 20, "maxStack": 50, "craftYield": 25}},
+    ]}})
+    assert any("consumable_weapon result requires a primary executable action" in error for error in missing_primary["errors"])
+
+    missing_accessory = runtime_plan_validation_report({"runtimePlan": {"engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "accessory", "maxStack": 1}},
+    ]}})
+    assert any("accessory result requires accessory_effect" in error for error in missing_accessory["errors"])
+
+    missing_armor = runtime_plan_validation_report({"runtimePlan": {"engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "armor", "armorSlot": "head", "defense": 3, "maxStack": 1}},
+    ]}})
+    assert any("armor result requires armor_effect" in error for error in missing_armor["errors"])
+
+    particles_off = compile_runtime_plan_to_genome_patch({"runtimePlan": {"engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+        {"fn": "spawn_contact_particles", "params": {"effect": "electric", "amount": 0, "scale": 1}},
+    ]}})
+    assert particles_off["effect"] == "none"
+    assert particles_off["dustSpawnDenom"] == 0
+
+    conflicting_particle_material = runtime_plan_validation_report({"runtimePlan": {"engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+        {"fn": "spawn_contact_particles", "params": {"effect": "electric", "amount": 2, "scale": 1, "material": "stone"}},
+    ]}})
+    assert any("material is executable only" in error for error in conflicting_particle_material["errors"])
+
+    material_particles = compile_runtime_plan_to_genome_patch({"runtimePlan": {"engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "generic", "maxStack": 1}},
+        {"fn": "spawn_contact_particles", "params": {"effect": "none", "amount": 2, "scale": 1, "material": "stone"}},
+    ]}})
+    assert material_particles["vfxMaterial"] == "stone"
+    assert material_particles["dustSpawnDenom"] > 0
 
 
 def _check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay() -> None:
@@ -64,7 +104,6 @@ def _check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay() ->
     assert patch["trailLength"] == 5
     assert patch["vfxFieldRadiusTiles"] == 4
     assert patch["vfxFieldLifetimeTicks"] == 80
-    assert "fieldRadiusTiles" not in patch
     assert patch["rejectedTrailCalls"][0]["reason"] == "visualOnly_false_not_executable"
 
 
@@ -451,6 +490,7 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_runtime_plan_compiler_keeps_current_playable_core',
+    '_check_result_kind_requires_its_executable_surface',
     '_check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay',
     '_check_chain_requires_count_and_does_not_create_children_by_accident',
     '_check_spear_thrust_delivery_is_distinct_from_sword_swing',

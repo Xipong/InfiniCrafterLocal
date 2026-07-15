@@ -210,7 +210,7 @@ def _contract_check_no_wiki_weapon_alias_router_and_csharp_beam_contract_is_exac
     assert "ownedProjectileCounts" not in active_guard
     assert "Collision.LaserScan" in projectile_source
     assert "effective_hit_cadence_ticks" in (ROOT / "LocalGenerator/infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
-    assert "ProjectileSyncVersion = 18" in net_source
+    assert "ProjectileSyncVersion = 19" in net_source
     for field in ("RangeTiles", "HomingStrength", "BeamWidthPx", "BeamChargeTicks"):
         assert f"public" in model_source and field in model_source
         assert f"_spec.{field}" in net_source

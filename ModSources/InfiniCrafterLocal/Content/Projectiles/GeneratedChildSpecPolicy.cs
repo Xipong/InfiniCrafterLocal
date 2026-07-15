@@ -54,6 +54,10 @@ internal static class GeneratedChildSpecPolicy
         child.ExplosionRadius = 0;
         child.BurstDustCap = 0;
         child.DustSpawnDenom = 0;
+        child.VfxParticleDurationTicks = 0;
+        child.VfxFieldLifetimeTicks = 0;
+        child.VfxFieldRadiusTiles = 0f;
+        child.VfxFieldTickRate = 0;
     }
 
     public static void ConfigureSentryShot(AttackSpec shot, AttackSpec parent)
@@ -86,6 +90,9 @@ internal static class GeneratedChildSpecPolicy
         shot.ChildSpriteStatus = "";
         shot.ChildSpritePrompt = "";
         shot.VfxManifestJson = "";
+        shot.VfxFieldLifetimeTicks = 0;
+        shot.VfxFieldRadiusTiles = 0f;
+        shot.VfxFieldTickRate = 0;
     }
 
     public static void ConfigureChargeReleasedShot(AttackSpec released, AttackSpec parent)

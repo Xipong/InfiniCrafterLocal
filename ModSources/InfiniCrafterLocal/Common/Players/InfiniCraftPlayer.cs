@@ -84,6 +84,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private Vector2 _pendingGeneratedUseTarget;
     private int _pendingGeneratedUseTicks;
     private float _generatedAmmoSaveChance;
+    private float _generatedSummonTagDamage;
     private string _lastGeneratedMobilityFailureMessage = "";
     private int _heldItemPresentationSyncTick;
     private string _heldItemPresentationSyncKey = "";
@@ -108,6 +109,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public int GeneratedMobilityCooldownTicks => Math.Max(0, _generatedMobilityCooldownTicks);
     public int GeneratedMobilityCooldownSeconds => Math.Max(0, (int)Math.Ceiling(GeneratedMobilityCooldownTicks / 60f));
     public string LastGeneratedMobilityFailureMessage => string.IsNullOrWhiteSpace(_lastGeneratedMobilityFailureMessage) ? "Generated mobility failed" : _lastGeneratedMobilityFailureMessage;
+    public float GeneratedSummonTagDamage => Math.Max(0f, _generatedSummonTagDamage);
 
     public override void ResetEffects()
     {
@@ -115,6 +117,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
         // and rebuild it from the currently equipped authored items instead of
         // converting it to one of Terraria's coarse 20%/25% flags.
         _generatedAmmoSaveChance = 0f;
+        _generatedSummonTagDamage = 0f;
     }
 
     public void AddGeneratedAmmoSaveChance(float chance)
@@ -123,6 +126,13 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
         if (chance <= 0f)
             return;
         _generatedAmmoSaveChance = 1f - ((1f - _generatedAmmoSaveChance) * (1f - chance));
+    }
+
+    public void AddGeneratedSummonTagDamage(float bonus)
+    {
+        if (bonus <= 0f)
+            return;
+        _generatedSummonTagDamage = Math.Clamp(_generatedSummonTagDamage + bonus, 0f, 3f);
     }
 
     public override bool CanConsumeAmmo(Item weapon, Item ammo)

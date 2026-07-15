@@ -161,13 +161,16 @@ def _contract_check_engine_call_boundary_rejects_wrong_types_and_unambiguous_unk
     })
     assert open_projectile_identity["ok"] is True, open_projectile_identity
 
-    open_material_identity = runtime_plan_boundary_report({
+    closed_material_identity = runtime_plan_boundary_report({
         "runtimePlan": {"engineCalls": [{
             "fn": "spawn_contact_particles",
             "params": {"effect": "dust", "material": "voidglass"},
         }]}
     })
-    assert open_material_identity["ok"] is True, open_material_identity
+    # material now selects an exact C# dust executor; arbitrary prose must fail
+    # rather than silently route through a keyword/default fallback.
+    assert closed_material_identity["ok"] is False, closed_material_identity
+    assert any("material" in error for error in closed_material_identity["errors"])
 
     narrow_trigger = runtime_plan_boundary_report({
         "runtimePlan": {"engineCalls": [{

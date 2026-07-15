@@ -14,7 +14,7 @@ PARENT_A = {"name": "Iron Helmet", "type": 90, "defense": 2, "value": 100}
 PARENT_B = {"name": "Cloud in a Bottle", "type": 53, "value": 100}
 
 
-def _contract_check_generated_armor_runtime_plan_preserves_full_armor_property_surface() -> None:
+def _contract_check_generated_armor_runtime_plan_preserves_executable_armor_property_surface() -> None:
     armor_params = {
         "armorSlot": "head",
         "setKey": "cloudforged",
@@ -127,7 +127,7 @@ def _contract_check_csharp_generated_armor_proxy_surface_is_static_guarded() -> 
         assert needle in proxy
     for needle in ["public ArmorSpec Armor", "item.defense = Math.Max(0, Armor.Defense)", "NormalizeArmorSlot"]:
         assert needle in model
-    for needle in ["UpdateEquip", "IsArmorSet", "UpdateArmorSet", "ApplyGeneratedArmorEffects", "SetBonusGenericDamage", "SetBonusMinionSlots", "SentrySlots", "ManaCostReduction", "ArmorPenetration"]:
+    for needle in ["UpdateEquip", "IsArmorSet", "UpdateArmorSet", "ApplyGeneratedArmorEffects", "SetBonusGenericDamage", "SetBonusMinionSlots", "SentrySlots", "ManaCostReduction", "ArmorPenetration", "whipRangeMultiplier", "AddGeneratedSummonTagDamage"]:
         assert needle in item
     assert "GeneratedArmorItemTypes.ItemTypeFor(data)" in player
 
@@ -140,7 +140,7 @@ def test_generated_armor_contract_module_contract(request):
         globals(),
         request,
         (
-            '_contract_check_generated_armor_runtime_plan_preserves_full_armor_property_surface',
+            '_contract_check_generated_armor_runtime_plan_preserves_executable_armor_property_surface',
             '_contract_check_csharp_generated_armor_proxy_surface_is_static_guarded',
         ),
     )

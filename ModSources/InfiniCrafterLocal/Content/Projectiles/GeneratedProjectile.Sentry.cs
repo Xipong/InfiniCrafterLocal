@@ -41,10 +41,7 @@ public sealed partial class GeneratedProjectile
 
         int count = RuntimeChildCount(Math.Clamp(_spec.ShotCount, 1, 4));
         if (count <= 0)
-        {
-            Projectile.Kill();
-            return false;
-        }
+            return true;
         float spread = Math.Clamp(_spec.SpreadRadians, 0f, 0.75f);
         Vector2 baseDirection = (target.Center - Projectile.Center).SafeNormalize(Vector2.UnitX);
         AttackSpec shot = SentryShotSpec();

@@ -169,6 +169,8 @@ public sealed partial class GeneratedProjectile
         PlayImpactSound();
         TryRunImpactMobility(target.Center);
         ApplyAuthoredPull(target);
+        if (IsWhipDelivery())
+            target.GetGlobalNPC<GeneratedWhipTagGlobalNPC>().Mark(Projectile.owner);
         if (_spec.MovementCode is 5 or 14)
         {
             // Vanilla aiStyle 3 changes to return on the first outbound hit,
@@ -214,6 +216,8 @@ public sealed partial class GeneratedProjectile
 
     private void ApplyValidatedDebuff(NPC target, int buffType)
     {
+        if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay())
+            return;
         int duration = _spec.DebuffTime;
         if (duration <= 0 || buffType <= 0 || buffType >= BuffLoader.BuffCount)
             return;
@@ -278,6 +282,10 @@ public sealed partial class GeneratedProjectile
         if (Projectile.owner < 0 || Projectile.owner >= Main.maxPlayers) return;
         Player owner = Main.player[Projectile.owner];
         if (!owner.active || owner.dead) return;
+        // Player healing follows the same owner-local authority as vanilla-style
+        // projectile child spawns. Running this on both the owner and server can
+        // apply one authored lifesteal proc twice in multiplayer.
+        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)) return;
         int heal = Math.Clamp(Math.Max(1, damageDone / 5), 1, 4);
         if (owner.statLife >= owner.statLifeMax2) return;
         owner.Heal(heal);
@@ -285,7 +293,18 @@ public sealed partial class GeneratedProjectile
 
 
     private int RemainingGameplayChildBudget()
-        => Math.Max(0, Math.Max(0, _spec.MaxChildProjectiles) - _spawnedGameplayChildCount);
+    {
+        int cap = Math.Max(0, _spec.MaxChildProjectiles);
+        if (IsSentryDelivery())
+        {
+            // Sentries own repeated authored volleys for their whole lifetime.
+            // Their cap is concurrent pressure, not a one-time lifetime allowance;
+            // expired shots must free slots for later volleys.
+            float rootId = Projectile.localAI[2] > 0f ? Projectile.localAI[2] : Projectile.identity + 1f;
+            return Math.Max(0, cap - CountOwnedGeneratedProjectiles(rootId));
+        }
+        return Math.Max(0, cap - _spawnedGameplayChildCount);
+    }
 
     private int RuntimeChildCount(int requested)
     {

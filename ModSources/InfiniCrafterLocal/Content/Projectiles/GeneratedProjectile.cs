@@ -86,6 +86,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
             && !string.IsNullOrWhiteSpace(generatedItemId)
             && string.Equals(_generatedItemId, generatedItemId.Trim(), StringComparison.Ordinal);
 
+    internal bool IsGeneratedWhipTagSource => _configured && IsWhipDelivery();
+
     private static void RequestProjectileAssetCatchupIfMissing(string? spritePath, string? generatedItemId = null)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient || !HasPngPath(spritePath))

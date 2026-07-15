@@ -242,12 +242,16 @@ def _contract_check_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp
     assert "GeneratedRuntimeFamilyPolicy.HasValidExecutorContract(_spec)" in runtime
 
 
-def _contract_check_sentry_expires_when_lifetime_shot_budget_is_consumed() -> None:
+def _contract_check_sentry_reuses_concurrent_shot_budget_until_authored_lifetime_expires() -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8")
     block = source.split("int count = RuntimeChildCount", 1)[1].split("float spread", 1)[0]
+    impact = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
     policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
-    assert "Projectile.Kill();" in block
-    assert 'shot.ProjectileFamily = "";' in policy
+    budget = impact.split("private int RemainingGameplayChildBudget", 1)[1].split("private bool CanRunChildEffect", 1)[0]
+    assert "Projectile.Kill();" not in block
+    assert "return true;" in block
+    assert "IsSentryDelivery()" in budget
+    assert "CountOwnedGeneratedProjectiles(rootId)" in budget
     assert "sentry_shot" not in source
     assert "sentry_shot" not in policy
 
@@ -289,7 +293,7 @@ def test_v15_charge_release_sentry_contract_module_contract(request):
             '_contract_check_sentry_survives_full_gameplay_projection_with_live_child_budget',
             '_contract_check_charge_release_sound_occurs_on_release_not_item_press',
             '_contract_check_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp',
-            '_contract_check_sentry_expires_when_lifetime_shot_budget_is_consumed',
+            '_contract_check_sentry_reuses_concurrent_shot_budget_until_authored_lifetime_expires',
             '_contract_check_child_image_prompt_is_generic_secondary_body_not_forced_mote',
         ),
     )

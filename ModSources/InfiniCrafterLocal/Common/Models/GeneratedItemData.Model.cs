@@ -554,6 +554,8 @@ public sealed class AccessorySpec
     public int Aggro { get; set; } = 0;
     public float Endurance { get; set; } = 0f;
     public float ArmorPenetration { get; set; } = 0f;
+    public float WhipRange { get; set; } = 0f;
+    public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
     public bool HasAnyEffect => Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
@@ -562,7 +564,7 @@ public sealed class AccessorySpec
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f
         || FallDamageImmune || LavaImmune || WaterWalk || MinionSlots != 0 || SentrySlots != 0
         || ManaCostReduction != 0f || AmmoSaveChance != 0f || Aggro != 0 || Endurance != 0f || ArmorPenetration != 0f
-        || LightStrength != 0f;
+        || WhipRange != 0f || SummonTagDamage != 0f || LightStrength != 0f;
 }
 
 public sealed class ArmorSpec
@@ -597,8 +599,8 @@ public sealed class ArmorSpec
     public int Aggro { get; set; } = 0;
     public float Endurance { get; set; } = 0f;
     public float ArmorPenetration { get; set; } = 0f;
-    public float WhipRange { get; set; } = 0f; // future/debug; C# currently preserves but does not execute a custom whip range hook
-    public float SummonTagDamage { get; set; } = 0f; // future/debug; generated whips/minions do not execute tag damage yet
+    public float WhipRange { get; set; } = 0f;
+    public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
 
@@ -713,6 +715,12 @@ public sealed class AttackSpec
     public int MaxChildDepth { get; set; } = 1;
     public int DustSpawnDenom { get; set; } = 3;
     public int BurstDustCap { get; set; } = 20;
+    public float VfxParticleScale { get; set; } = 0f;
+    public string VfxMaterial { get; set; } = "";
+    public int VfxParticleDurationTicks { get; set; } = 0;
+    public int VfxFieldLifetimeTicks { get; set; } = 0;
+    public float VfxFieldRadiusTiles { get; set; } = 0f;
+    public int VfxFieldTickRate { get; set; } = 0;
     public Dictionary<string, float> EngineMetrics { get; set; } = new();
 
     // Presentation/audio layer. LLM may author exact catalog ids and bounded controls; server derives only safe fallbacks.
@@ -721,6 +729,7 @@ public sealed class AttackSpec
     public string ImpactStyle { get; set; } = "small_flash";
     public string PrimaryColorName { get; set; } = "white";
     public float RuntimeLightStrength { get; set; } = 0f;
+    public int RuntimeLightDurationTicks { get; set; } = 0;
     public string MobilityMode { get; set; } = "";
     public int MobilityRangeTiles { get; set; } = 0;
     public int MobilityCooldownTicks { get; set; } = 0;

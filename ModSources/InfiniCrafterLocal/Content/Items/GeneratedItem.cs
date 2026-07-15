@@ -377,8 +377,8 @@ public partial class GeneratedItem : ModItem
         if (a.Aggro != 0) parts.Add($"{a.Aggro:+#;-#;0} aggro");
         if (a.Endurance != 0f) parts.Add($"+{a.Endurance * 100f:0}% DR");
         if (a.ArmorPenetration != 0f) parts.Add($"+{a.ArmorPenetration:0.#} armor pen");
-        if (a.WhipRange != 0f) parts.Add($"whip range {a.WhipRange * 100f:0}% future");
-        if (a.SummonTagDamage != 0f) parts.Add($"tag dmg {a.SummonTagDamage * 100f:0}% future");
+        if (a.WhipRange != 0f) parts.Add($"+{a.WhipRange * 100f:0}% whip range");
+        if (a.SummonTagDamage != 0f) parts.Add($"+{a.SummonTagDamage * 100f:0}% generated whip tag damage");
         if (a.FallDamageImmune) parts.Add("fall immunity");
         if (a.LavaImmune) parts.Add("lava immunity");
         if (a.WaterWalk) parts.Add("water walk");
@@ -417,6 +417,8 @@ public partial class GeneratedItem : ModItem
         if (a.Aggro != 0) parts.Add($"{a.Aggro:+#;-#;0} aggro");
         if (a.Endurance != 0f) parts.Add($"+{a.Endurance * 100f:0}% DR");
         if (a.ArmorPenetration != 0f) parts.Add($"+{a.ArmorPenetration:0.#} armor pen");
+        if (a.WhipRange != 0f) parts.Add($"+{a.WhipRange * 100f:0}% whip range");
+        if (a.SummonTagDamage != 0f) parts.Add($"+{a.SummonTagDamage * 100f:0}% generated whip tag damage");
         if (a.FallDamageImmune) parts.Add("fall immunity");
         if (a.LavaImmune) parts.Add("lava immunity");
         if (a.WaterWalk) parts.Add("water walk");
@@ -436,7 +438,11 @@ public partial class GeneratedItem : ModItem
         string mode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(mode) || mode == "none") return false;
         if (mode == "mobility")
-            return !string.IsNullOrWhiteSpace(gp.AltMobilityMode) || gp.AltMobilityRangeTiles > 0;
+        {
+            string mobilityMode = (gp.AltMobilityMode ?? "").Trim().ToLowerInvariant();
+            return mobilityMode == "recall_home"
+                || (mobilityMode == "blink_to_cursor" && gp.AltMobilityRangeTiles > 0);
+        }
         if (mode == "generated_buff")
             return gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect;
         if (mode == "light")
@@ -804,7 +810,10 @@ public partial class GeneratedItem : ModItem
         player.maxTurrets += a.SentrySlots;
         if (a.ManaCostReduction > 0f)
             player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
-        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
+        var generatedPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        generatedPlayer.AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
+        generatedPlayer.AddGeneratedSummonTagDamage(a.SummonTagDamage);
+        player.whipRangeMultiplier += a.WhipRange;
         player.aggro += a.Aggro;
         player.endurance += a.Endurance;
         player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
@@ -893,7 +902,10 @@ public partial class GeneratedItem : ModItem
         player.maxTurrets += a.SentrySlots;
         if (a.ManaCostReduction > 0f)
             player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
-        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
+        var generatedPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        generatedPlayer.AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
+        generatedPlayer.AddGeneratedSummonTagDamage(a.SummonTagDamage);
+        player.whipRangeMultiplier += a.WhipRange;
         player.aggro += a.Aggro;
         player.endurance += a.Endurance;
         player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;

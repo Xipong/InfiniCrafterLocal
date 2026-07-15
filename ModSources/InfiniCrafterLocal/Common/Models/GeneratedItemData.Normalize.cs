@@ -350,6 +350,8 @@ public sealed partial class GeneratedItemData
         Accessory.Aggro = ClampInt(Accessory.Aggro, -2000, 2000);
         Accessory.Endurance = ClampFloat(Accessory.Endurance, 0f, 0.35f);
         Accessory.ArmorPenetration = ClampFloat(Accessory.ArmorPenetration, 0f, 80f);
+        Accessory.WhipRange = ClampFloat(Accessory.WhipRange, 0f, 1.5f);
+        Accessory.SummonTagDamage = ClampFloat(Accessory.SummonTagDamage, 0f, 0.75f);
         Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
         Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName);
         Accessory.Archetype = SafeText(Accessory.Archetype, 32);
@@ -448,7 +450,14 @@ public sealed partial class GeneratedItemData
         Attack.MaxChildDepth = ClampInt(Attack.MaxChildDepth, 0, 16);
         Attack.DustSpawnDenom = Attack.DustSpawnDenom <= 0 ? 0 : ClampInt(Attack.DustSpawnDenom, 2, 240);
         Attack.BurstDustCap = ClampInt(Attack.BurstDustCap, 0, 2000);
+        Attack.VfxParticleScale = ClampFloat(Attack.VfxParticleScale, 0f, 2f);
+        Attack.VfxMaterial = SafeText(Attack.VfxMaterial, 80);
+        Attack.VfxParticleDurationTicks = ClampInt(Attack.VfxParticleDurationTicks, 0, 80);
+        Attack.VfxFieldLifetimeTicks = ClampInt(Attack.VfxFieldLifetimeTicks, 0, 240);
+        Attack.VfxFieldRadiusTiles = ClampFloat(Attack.VfxFieldRadiusTiles, 0f, 6f);
+        Attack.VfxFieldTickRate = ClampInt(Attack.VfxFieldTickRate, 0, 60);
         Attack.RuntimeLightStrength = ClampFloat(Attack.RuntimeLightStrength, 0f, 2f);
+        Attack.RuntimeLightDurationTicks = ClampInt(Attack.RuntimeLightDurationTicks, 0, 240);
         Attack.MobilityMode = SafeText(Attack.MobilityMode, 32);
         Attack.MobilityRangeTiles = ClampInt(Attack.MobilityRangeTiles, 0, 80);
         Attack.MobilityCooldownTicks = ClampInt(Attack.MobilityCooldownTicks, 0, 36000);

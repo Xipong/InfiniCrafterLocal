@@ -260,6 +260,43 @@ def _contract_check_sdcpp_readiness_rejects_http_404(monkeypatch: pytest.MonkeyP
     assert sdcpp_backend.server_is_alive("http://127.0.0.1:7861", ["/health"], timeout=1) is False
 
 
+def _contract_check_sdcpp_readiness_rejects_unrelated_http_200(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Response(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(sdcpp_backend.urlrequest, "urlopen", lambda *_args, **_kwargs: Response(b'{"status":"ok"}'))
+    assert sdcpp_backend.server_is_alive("http://127.0.0.1:7861", ["/", "/health"], timeout=1) is False
+    monkeypatch.setattr(sdcpp_backend.urlrequest, "urlopen", lambda *_args, **_kwargs: Response(b'[{"model_name":"flux"}]'))
+    assert sdcpp_backend.server_is_alive("http://127.0.0.1:7861", ["/sdapi/v1/sd-models"], timeout=1) is True
+
+
+def _contract_check_cache_lookup_failure_is_visible_before_fresh_generation() -> None:
+    events: list[tuple] = []
+    delivered: list[dict] = []
+
+    def broken_cache(_payload):
+        raise OSError("cache unavailable")
+
+    combine_endpoint.handle_combine_request(
+        {},
+        app_version="test",
+        combine_cache_lookup=broken_cache,
+        sanitize_recipe_for_delivery=lambda value: value,
+        combine=lambda _payload: {"ok": True},
+        trace_event=lambda *args: events.append(args),
+        json=delivered.append,
+        json_status=lambda *_args: None,
+    )
+    assert delivered == [{"ok": True}]
+    assert any(event[:3] == ("warn", "HTTP:/combine", "world recipe cache lookup failed; continuing with fresh generation") for event in events)
+
+
 def _contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() -> None:
     env = os.environ.copy()
     env.update({
@@ -485,6 +522,8 @@ def test_240_python_runtime_bugfixes_module_contract(request):
             '_contract_check_failure_summary_error_does_not_mask_original_combine_exception',
             '_contract_check_server_main_clamps_invalid_port_before_binding',
             '_contract_check_sdcpp_readiness_rejects_http_404',
+            '_contract_check_sdcpp_readiness_rejects_unrelated_http_200',
+            '_contract_check_cache_lookup_failure_is_visible_before_fresh_generation',
             '_contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend',
             '_contract_check_visual_config_import_does_not_replace_process_signal_handlers',
             '_contract_check_sdcpp_cleanup_registration_is_lazy_and_worker_safe',
