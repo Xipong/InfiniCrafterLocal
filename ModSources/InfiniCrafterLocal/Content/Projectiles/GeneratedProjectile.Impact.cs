@@ -74,11 +74,9 @@ public sealed partial class GeneratedProjectile
 
     private int ProjectileHitboxRadiusBonus()
     {
-        if (_spec.ContactForgivenessPx > 0)
-            return Math.Clamp(_spec.ContactForgivenessPx, 0, 32);
-        if (_spec.AoeDamageRadiusPx > 0)
-            return Math.Clamp(_spec.AoeDamageRadiusPx / 4, 0, 32);
-        return 0;
+        return _spec.ContactForgivenessPx > 0
+            ? Math.Clamp(_spec.ContactForgivenessPx, 0, 32)
+            : 0;
     }
 
     public override void ModifyDamageHitbox(ref Rectangle hitbox)
@@ -106,7 +104,9 @@ public sealed partial class GeneratedProjectile
         Player owner = Main.player[Projectile.owner];
         if (owner is null || !owner.active || owner.dead) return;
 
-        int rangeTiles = Math.Clamp(_spec.MobilityRangeTiles <= 0 ? 24 : _spec.MobilityRangeTiles, 1, 80);
+        if (_spec.MobilityRangeTiles <= 0)
+            return;
+        int rangeTiles = Math.Clamp(_spec.MobilityRangeTiles, 1, 80);
         Vector2 target = impactCenter;
         Vector2 delta = target - owner.Center;
         float max = rangeTiles * 16f;
@@ -187,31 +187,37 @@ public sealed partial class GeneratedProjectile
                 if (GeneratedSecondaryTriggerPolicy.Is(_spec.SecondaryTrigger, GeneratedSecondaryTriggerPolicy.OnHit))
                     SplitProjectiles(target, _spec.SplitCount);
                 break;
-            case 3: ChainProjectiles(target, _spec.ChainCount); target.AddBuff(BuffID.Electrified, DebuffDuration(90)); break;
-            case 4: target.AddBuff(BuffID.OnFire, DebuffDuration(240)); break;
-            case 5: target.AddBuff(BuffID.Frostburn, DebuffDuration(180)); break;
-            case 6: target.AddBuff(BuffID.Poisoned, DebuffDuration(240)); break;
-            case 7: target.AddBuff(BuffID.ShadowFlame, DebuffDuration(180)); break;
+            case 3: ChainProjectiles(target, _spec.ChainCount); ApplyValidatedDebuff(target, BuffID.Electrified); break;
+            case 4: ApplyValidatedDebuff(target, BuffID.OnFire); break;
+            case 5: ApplyValidatedDebuff(target, BuffID.Frostburn); break;
+            case 6: ApplyValidatedDebuff(target, BuffID.Poisoned); break;
+            case 7: ApplyValidatedDebuff(target, BuffID.ShadowFlame); break;
             case 8: RadialBurst(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
-            case 9: target.AddBuff(BuffID.Bleeding, DebuffDuration(180)); break;
+            case 9: ApplyValidatedDebuff(target, BuffID.Bleeding); break;
             case 10: AuraPulse(target.Center); break;
-            case 11: if (_spec.SplitCount > 0) SporeCloud(target.Center, target.whoAmI); if (_spec.SecondaryDamageMultiplier > 0f) target.AddBuff(BuffID.Poisoned, DebuffDuration(180)); break;
+            case 11: if (_spec.SplitCount > 0) SporeCloud(target.Center, target.whoAmI); if (_spec.SecondaryDamageMultiplier > 0f) ApplyValidatedDebuff(target, BuffID.Poisoned); break;
             case 12: if (_spec.SplitCount > 0) MiniMissiles(target.Center, target.whoAmI); break;
             case 13: if (_spec.SplitCount > 0) VortexSpawn(target.Center, target.whoAmI); break;
             case 14: BlackholePull(); break;
             case 15: if (_spec.SplitCount > 0) RadialBurst(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
-            case 16: if (_spec.ChainCount > 0) ChainProjectiles(target, _spec.ChainCount); target.AddBuff(BuffID.Electrified, DebuffDuration(140)); break;
+            case 16: if (_spec.ChainCount > 0) ChainProjectiles(target, _spec.ChainCount); ApplyValidatedDebuff(target, BuffID.Electrified); break;
             case 17: HealOwner(damageDone); BurstDust(effect, 8, 1.2f); break;
             case 18: if (_spec.SplitCount > 0) SpawnOverheadBarrage(target.Center, _spec.SplitCount, _spec.SecondaryDamageMultiplier, target.whoAmI); break;
-            case 19: target.AddBuff(BuffID.Slow, DebuffDuration(180)); break;
+            case 19: ApplyValidatedDebuff(target, BuffID.Slow); break;
         }
+
+        if (GeneratedSecondaryTriggerPolicy.Is(_spec.SecondaryTrigger, GeneratedSecondaryTriggerPolicy.OnHit)
+            && _spec.SplitCount > 0
+            && onHit is not (2 or 8 or 11 or 12 or 13 or 15 or 18))
+            SplitProjectiles(target, _spec.SplitCount);
     }
 
-    private int DebuffDuration(int fallbackTicks)
+    private void ApplyValidatedDebuff(NPC target, int buffType)
     {
-        int authored = _spec.DebuffTime;
-        if (authored <= 0) return fallbackTicks;
-        return Math.Clamp(authored, 30, 600);
+        int duration = _spec.DebuffTime;
+        if (duration <= 0 || buffType <= 0 || buffType >= BuffLoader.BuffCount)
+            return;
+        target.AddBuff(buffType, Math.Clamp(duration, 30, 600));
     }
 
     private void ApplyAuthoredPull(NPC target)
@@ -272,10 +278,9 @@ public sealed partial class GeneratedProjectile
         if (Projectile.owner < 0 || Projectile.owner >= Main.maxPlayers) return;
         Player owner = Main.player[Projectile.owner];
         if (!owner.active || owner.dead) return;
-        int heal = Math.Clamp(Math.Max(1, damageDone / 4), 1, 4);
+        int heal = Math.Clamp(Math.Max(1, damageDone / 5), 1, 4);
         if (owner.statLife >= owner.statLifeMax2) return;
-        owner.statLife = Math.Min(owner.statLifeMax2, owner.statLife + heal);
-        owner.HealEffect(heal);
+        owner.Heal(heal);
     }
 
 
@@ -297,6 +302,8 @@ public sealed partial class GeneratedProjectile
         if (rootOnly && depth > 0.001f)
             return false;
         if (Math.Max(0, _spec.MaxChildProjectiles) <= 0)
+            return false;
+        if (_spec.SecondaryDamageMultiplier <= 0f)
             return false;
         // SpawnChild receives depth + 1. If current depth already reached the authored
         // root cap, a child would be rejected anyway; keep all on-hit families on the
@@ -346,6 +353,7 @@ public sealed partial class GeneratedProjectile
         count = RuntimeChildCount(count);
         if (count <= 0) return;
         AttackSpec childSpec = ChildSpec(0, 0, 0.65f);
+        childSpec.Lifetime = _spec.SecondaryLifetimeTicks;
         NPC? last = firstTarget;
         for (int chain = 0; chain < count; chain++)
         {
@@ -383,7 +391,7 @@ public sealed partial class GeneratedProjectile
 
         AttackSpec childSpec = ChildSpec(2, 0, 0.62f);
         GeneratedOverheadBarragePolicy.ConfigureChild(childSpec, _spec);
-        int damage = Math.Max(1, (int)(Projectile.damage * Math.Max(0.12f, damageMult <= 0f ? 0.42f : damageMult)));
+        int damage = Math.Max(0, (int)(Projectile.damage * Math.Clamp(damageMult, 0f, 1f)));
         for (int i = 0; i < count; i++)
         {
             (Vector2 origin, Vector2 velocity) = GeneratedOverheadBarragePolicy.Sample(
@@ -398,7 +406,7 @@ public sealed partial class GeneratedProjectile
 
     private void AuraPulse(Vector2 center)
     {
-        int radius = _spec.AoeDamageRadiusPx > 0 ? _spec.AoeDamageRadiusPx : _spec.ImpactVfxRadiusPx;
+        int radius = _spec.AoeDamageRadiusPx;
         if (radius <= 0)
         {
             BurstDust(_spec.EffectCode, Math.Min(_spec.BurstDustCap, 8), 1.0f);
@@ -561,7 +569,7 @@ public sealed partial class GeneratedProjectile
         childSpec.Lifetime = _spec.SecondaryLifetimeTicks;
         childSpec.MaxChildProjectiles = 0;
         childSpec.MaxChildDepth = 0;
-        int damage = Math.Max(1, (int)(Projectile.damage * Math.Max(0.05f, _spec.SecondaryDamageMultiplier)));
+        int damage = Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier));
         Vector2 baseDirection = Projectile.velocity.SafeNormalize(Vector2.UnitX * Projectile.direction);
         float speed = Math.Max(4f, Projectile.velocity.Length() * 0.78f);
         float spread = Math.Clamp(_spec.SecondarySpreadRadians, 0f, 2.2f);
@@ -592,7 +600,7 @@ public sealed partial class GeneratedProjectile
         SpawnPersistentVfxOverlay("kill", Projectile.Center, Math.Max(12, VfxEventLifetime("kill")), Projectile.velocity);
         TryRunImpactMobility(Projectile.Center);
         if (timeLeft > 0) PlayImpactSound();
-        int visualRadius = _spec.ImpactVfxRadiusPx > 0 ? _spec.ImpactVfxRadiusPx : _spec.ExplosionRadius;
+        int visualRadius = _spec.ImpactVfxRadiusPx;
         int damageRadius = _spec.AoeDamageRadiusPx;
         int burstCount = visualRadius > 0 ? 24 : 0;
         BurstDust(effect, burstCount, visualRadius > 0 ? 2.8f : 1.4f);

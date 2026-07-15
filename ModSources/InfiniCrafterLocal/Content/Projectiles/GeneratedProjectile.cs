@@ -62,6 +62,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _lastImpactSoundLocalTick = -9999;
     private float _beamLengthPx;
     private int _beamBaseDamage;
+    private bool _beamBaseDamageInitialized;
     private bool _chargeReleaseFired;
     private int _chargeTicksAccumulated;
     private int _sentryFireTimer;

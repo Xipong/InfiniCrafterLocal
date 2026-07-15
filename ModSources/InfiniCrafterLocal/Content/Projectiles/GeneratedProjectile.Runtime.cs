@@ -183,7 +183,7 @@ public sealed partial class GeneratedProjectile
             MaxChildProjectiles = Math.Max(4, _spec.MaxChildProjectiles / 2),
             MaxChildDepth = Math.Max(0, _spec.MaxChildDepth - 1),
             DustSpawnDenom = Math.Max(3, _spec.DustSpawnDenom + 1),
-            BurstDustCap = Math.Max(6, _spec.BurstDustCap / 2),
+            BurstDustCap = _spec.BurstDustCap <= 0 ? 0 : Math.Max(1, _spec.BurstDustCap / 2),
             VisualMode = _spec.VisualMode,
             TrailStyle = _spec.TrailStyle,
             ImpactStyle = _spec.ImpactStyle,
@@ -549,10 +549,13 @@ public sealed partial class GeneratedProjectile
 
         Projectile.velocity = direction;
         float chargeRatio = BeamChargeRatio();
-        if (_beamBaseDamage <= 0)
-            _beamBaseDamage = Math.Max(1, Projectile.damage);
+        if (!_beamBaseDamageInitialized)
+        {
+            _beamBaseDamage = Math.Max(0, Projectile.damage);
+            _beamBaseDamageInitialized = true;
+        }
         Projectile.friendly = chargeRatio >= 0.08f;
-        Projectile.damage = Math.Max(1, (int)Math.Round(_beamBaseDamage * MathHelper.Lerp(0.35f, 1f, chargeRatio)));
+        Projectile.damage = Math.Max(0, (int)Math.Round(_beamBaseDamage * MathHelper.Lerp(0.35f, 1f, chargeRatio)));
         Vector2 beamStart = owner.MountedCenter + direction * 18f;
         float scannedLength = ScanBeamLength(beamStart, direction);
         float previousLength = _beamLengthPx;
@@ -593,7 +596,7 @@ public sealed partial class GeneratedProjectile
         spec.ProjectileScale = Math.Clamp(spec.ProjectileScale <= 0f ? 1f : spec.ProjectileScale, 0.35f, 2.25f);
         spec.HitboxScale = Math.Clamp(spec.HitboxScale <= 0f ? 1f : spec.HitboxScale, 0.5f, 2.5f);
         spec.ExplosionRadius = Math.Clamp(spec.ExplosionRadius, 0, 128);
-        spec.ImpactVfxRadiusPx = Math.Clamp(spec.ImpactVfxRadiusPx <= 0 ? spec.ExplosionRadius : spec.ImpactVfxRadiusPx, 0, 192);
+        spec.ImpactVfxRadiusPx = Math.Clamp(spec.ImpactVfxRadiusPx, 0, 192);
         spec.AoeDamageRadiusPx = Math.Clamp(spec.AoeDamageRadiusPx, 0, 160);
         spec.ContactForgivenessPx = Math.Clamp(spec.ContactForgivenessPx, 0, 32);
         spec.RuntimeLightStrength = Math.Clamp(spec.RuntimeLightStrength, 0f, 2f);
@@ -663,7 +666,7 @@ public sealed partial class GeneratedProjectile
         _spec.SecondaryTrigger = GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily(_spec.SecondaryTrigger, _spec.RuntimeFamily);
         _spec.SecondarySpreadRadians = Math.Clamp(_spec.SecondarySpreadRadians, 0f, 2.2f);
         _spec.SecondaryDamageMultiplier = Math.Clamp(_spec.SecondaryDamageMultiplier, 0f, 1.0f);
-        _spec.SecondaryLifetimeTicks = Math.Clamp(_spec.SecondaryLifetimeTicks <= 0 ? 24 : _spec.SecondaryLifetimeTicks, 4, 120);
+        _spec.SecondaryLifetimeTicks = Math.Clamp(_spec.SecondaryLifetimeTicks, 5, 180);
         _spec.SameTargetBias = Math.Clamp(_spec.SameTargetBias, 0f, 1f);
         _spec.DustSpawnDenom = _spec.DustSpawnDenom <= 0 ? 0 : Math.Clamp(_spec.DustSpawnDenom, 2, 12);
         _spec.BurstDustCap = _spec.BurstDustCap <= 0 ? 0 : Math.Clamp(_spec.BurstDustCap, 0, 40);

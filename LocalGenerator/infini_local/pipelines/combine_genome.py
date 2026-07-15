@@ -19,10 +19,9 @@ from infini_local.core.runtime_authoring.vocabulary import (
 )
 from infini_local.pipelines.engine_pressure_metrics import (
     behavior_cost_multiplier,
-
     effective_hit_cadence_ticks,
-
     clamp_float,
+    estimate_engine_metrics,
     sanitize_genome_engine,
 )
 from infini_local.pipelines.pipeline_runtime_constants import (
@@ -125,7 +124,7 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
     # hard-clamped for engine safety; non-numeric values require LLM repair.
     for field in [
         "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks",
-        "rangeTiles",
+        "rangeTiles", "spreadRadians", "speed",
     ]:
         if field not in proposed or proposed.get(field) in (None, ""):
             continue
@@ -135,6 +134,25 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
                 raise ValueError("not finite")
         except Exception:
             defects.append(f"non-numeric attack.genome.{field}={proposed.get(field)!r}")
+
+    # Reject unsafe combinations instead of silently rewriting authored numbers.
+    # Legal individual maxima can still multiply into a projectile/network flood.
+    try:
+        stage_value = data.get("gameplay")
+        stage: dict[str, Any] = stage_value if isinstance(stage_value, dict) else {}
+        power = max(0.5, min(8.0, float(proposed.get("powerBudget") or stage.get("powerBudget") or 1.0)))
+        metrics = estimate_engine_metrics(proposed, stage)
+        max_active = 22.0 + power * 8.0
+        max_sync = 26.0 + power * 8.0
+        if metrics["activeProjectileEstimate"] > max_active or metrics["networkSyncPressureEstimate"] > max_sync:
+            defects.append(
+                "composite projectile pressure exceeds runtime safety envelope: "
+                f"active={metrics['activeProjectileEstimate']}>{round(max_active, 3)} or "
+                f"sync={metrics['networkSyncPressureEstimate']}>{round(max_sync, 3)}; "
+                "author lower shotCount/extraUpdates/lifetime or slower useTimeTicks"
+            )
+    except (TypeError, ValueError, OverflowError):
+        defects.append("composite projectile pressure could not be evaluated from authored numbers")
 
     # Families with dedicated Terraria lifecycle executors must be paired with their
     # exact movement opcode. Otherwise the item affordance says flail/yoyo/whip while
@@ -378,7 +396,7 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     }
     for field in [
         "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks",
-        "rangeTiles",
+        "rangeTiles", "spreadRadians", "speed",
     ]:
         val = _hard_clamp_authored_number(proposed.get(field), field, debug)
         if field in {"useTimeTicks", "shotCount", "pierce", "lifetimeTicks"}:
@@ -405,7 +423,7 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     g["pullMode"] = pull_mode
 
     # Preserve only authored presentation strings. Prose/script-like behavior fields are not executable.
-    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "secondaryProjectileShape", "secondaryMaterial", "weaponFamily", "projectileFamily", "ammoKind", "runtimeFamily", "projectileSizePolicy", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource"]:
+    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "secondaryProjectileShape", "secondaryMaterial", "weaponFamily", "projectileFamily", "ammoKind", "runtimeFamily", "soundUseCatalogId", "soundImpactCatalogId", "soundCatalogSource"]:
         if field in proposed and proposed.get(field) not in (None, ""):
             g[field] = str(proposed.get(field))[:260]
     if proposed.get("useAnimationTicks") not in (None, ""):
@@ -420,6 +438,26 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         g["secondaryTrigger"] = str(proposed.get("secondaryTrigger"))[:24]
     if proposed.get("immunityCooldown") not in (None, ""):
         g["immunityCooldown"] = int(round(clamp_float(proposed.get("immunityCooldown"), 0, 60, 0)))
+
+    # Preserve exact compiler-owned fields through the last Python projection.
+    # These values already came from typed engineCalls; replacing them with DTO
+    # defaults here would silently re-author the item after validation.
+    for field, lo, hi, integer in [
+        ("debuffTime", 0, 600, True),
+        ("secondaryDamageMultiplier", 0, 1, False),
+        ("secondarySpreadRadians", 0, 1.2, False),
+        ("secondaryLifetimeTicks", 5, 180, True),
+        ("sameTargetBias", 0, 1, False),
+        ("runtimeLightStrength", 0, 1.5, False),
+        ("impactVfxRadiusPx", 0, 192, True),
+        ("contactForgivenessPx", 0, 32, True),
+    ]:
+        if proposed.get(field) not in (None, ""):
+            value = clamp_float(proposed.get(field), lo, hi, lo)
+            g[field] = int(round(value)) if integer else round(value, 3)
+    for field in ("primaryColorName", "runtimeLightColorName", "secondaryMaterial"):
+        if proposed.get(field) not in (None, ""):
+            g[field] = str(proposed.get(field))[:120]
 
     # Family-specific compiler output. These values already come from exact engine
     # calls and finite policies; this projection must preserve them rather than

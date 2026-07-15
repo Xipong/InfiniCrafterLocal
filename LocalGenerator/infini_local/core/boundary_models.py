@@ -184,15 +184,9 @@ class GameplaySpecBoundary(StrictBoundaryModel):
     useTurn: bool = False
     holdoutOffsetX: int = 0
     holdoutOffsetY: int = 0
-    useFantasy: str = ''
     heldVisibility: str = ''
     releaseTiming: str = ''
     handPose: str = ''
-    spawnStyle: str = ''
-    rotationMode: str = ''
-    trailMode: str = ''
-    projectileSizePolicy: str = ''
-    drawDuringUse: bool = False
     initialOffsetPx: int = 0
     healLife: int = 0
     healMana: int = 0
@@ -217,13 +211,75 @@ class GameplaySpecBoundary(StrictBoundaryModel):
     holdGeneratedBuff: GeneratedBuffBoundary = Field(default_factory=GeneratedBuffBoundary)
     holdLightStrength: float = 0
     holdLightColorName: str = ''
-    extractinatorOutputItemType: int = 0
-    extractinatorOutputStack: int = 0
+
     useConditionMode: str = ''
     useConditionMinLife: int = 0
     useConditionMinMana: int = 0
     runtimeState: RuntimeStateBoundary = Field(default_factory=RuntimeStateBoundary)
     rejectedEngineCalls: list[RejectedEngineCallBoundary] = Field(default_factory=list)
+
+
+class EquipmentStatsBoundary(StrictBoundaryModel):
+    maxLife: int = Field(default=0, ge=0, le=100)
+    maxMana: int = Field(default=0, ge=0, le=100)
+    lifeRegen: int = Field(default=0, ge=0, le=20)
+    manaRegen: int = Field(default=0, ge=0, le=20)
+    movementSpeed: float = Field(default=0, ge=0, le=1.0)
+    maxRunSpeed: float = Field(default=0, ge=0, le=2.0)
+    jumpSpeed: float = Field(default=0, ge=0, le=4.0)
+    genericDamage: float = Field(default=0, ge=0, le=0.4)
+    meleeDamage: float = Field(default=0, ge=0, le=0.4)
+    rangedDamage: float = Field(default=0, ge=0, le=0.4)
+    magicDamage: float = Field(default=0, ge=0, le=0.4)
+    summonDamage: float = Field(default=0, ge=0, le=0.4)
+    genericCrit: float = Field(default=0, ge=0, le=20)
+    attackSpeed: float = Field(default=0, ge=0, le=0.4)
+    knockback: float = Field(default=0, ge=0, le=2.0)
+    fallDamageImmune: bool = False
+    lavaImmune: bool = False
+    waterWalk: bool = False
+    minionSlots: int = Field(default=0, ge=0, le=2)
+    sentrySlots: int = Field(default=0, ge=0, le=2)
+    manaCostReduction: float = Field(default=0, ge=0, le=0.4)
+    ammoSaveChance: float = Field(default=0, ge=0, le=0.5)
+    aggro: int = Field(default=0, ge=-400, le=400)
+    endurance: float = Field(default=0, ge=0, le=0.2)
+    armorPenetration: float = Field(default=0, ge=0, le=40)
+    lightStrength: float = Field(default=0, ge=0, le=1.5)
+    lightColorName: str = ""
+
+
+class AccessorySpecBoundary(EquipmentStatsBoundary):
+    enabled: bool = False
+    archetype: str = "generic"
+    defense: int = Field(default=0, ge=0, le=20)
+
+
+class ArmorSpecBoundary(EquipmentStatsBoundary):
+    enabled: bool = False
+    slot: str = "body"
+    setKey: str = ""
+    archetype: str = "hybrid"
+    defense: int = Field(default=0, ge=0, le=80)
+    whipRange: float = Field(default=0, ge=0, le=1.5)
+    summonTagDamage: float = Field(default=0, ge=0, le=0.75)
+    setBonusText: str = ""
+    setBonusGenericDamage: float = Field(default=0, ge=0, le=0.4)
+    setBonusMeleeDamage: float = Field(default=0, ge=0, le=0.4)
+    setBonusRangedDamage: float = Field(default=0, ge=0, le=0.4)
+    setBonusMagicDamage: float = Field(default=0, ge=0, le=0.4)
+    setBonusSummonDamage: float = Field(default=0, ge=0, le=0.4)
+    setBonusGenericCrit: float = Field(default=0, ge=0, le=20)
+    setBonusMovementSpeed: float = Field(default=0, ge=0, le=1.0)
+    setBonusLifeRegen: int = Field(default=0, ge=0, le=20)
+    setBonusManaRegen: int = Field(default=0, ge=0, le=20)
+    setBonusMinionSlots: int = Field(default=0, ge=0, le=2)
+    setBonusSentrySlots: int = Field(default=0, ge=0, le=2)
+    setBonusManaCostReduction: float = Field(default=0, ge=0, le=0.4)
+    setBonusAmmoSaveChance: float = Field(default=0, ge=0, le=0.5)
+    setBonusAggro: int = Field(default=0, ge=-400, le=400)
+    setBonusEndurance: float = Field(default=0, ge=0, le=0.2)
+    setBonusArmorPenetration: float = Field(default=0, ge=0, le=40)
 
 
 class AttackSpecBoundary(StrictBoundaryModel):
@@ -458,6 +514,11 @@ ATTACK_DEBUG_ONLY_FIELDS = frozenset({
     "genome", "engineMetrics", "patternSource", "runtimeAuthoringProvenance",
     "primary", "primaryAction", "mechanicClaims", "runtimeContract", "runtimeArchetype",
 })
+# Historical cache/replay payloads can contain two redundant top-level AttackSpec
+# fields.  Damage is owned by GameplaySpec and generated-executor activation is
+# owned by AttackSpec.enabled; neither field exists on the strict C# DTO.
+ATTACK_LEGACY_NON_WIRE_FIELDS = frozenset({"damage", "useProjectile"})
+ATTACK_NON_WIRE_FIELDS = ATTACK_DEBUG_ONLY_FIELDS | ATTACK_LEGACY_NON_WIRE_FIELDS
 GAMEPLAY_DEBUG_ONLY_FIELDS = frozenset({"categoryIntent", "powerTransfer", "runtimeOutputKind", "actualAmmoMode", "unsupportedAmmoFor"})
 REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS = frozenset({"index", "rawFn", "originalFn", "sourceIndex", "params"})
 VFX_MANIFEST_DEBUG_ONLY_FIELDS = frozenset({"parentEffectProfile"})
@@ -697,10 +758,15 @@ def executable_wire_view(data: dict[str, Any]) -> dict[str, Any]:
             if isinstance(row, dict) else row
             for row in rejected
         ]
-    return {
-        "attack": {k: v for k, v in attack.items() if k not in ATTACK_DEBUG_ONLY_FIELDS},
+    view: dict[str, Any] = {
+        "attack": {k: v for k, v in attack.items() if k not in ATTACK_NON_WIRE_FIELDS},
         "gameplay": gameplay_wire,
     }
+    if "accessory" in data:
+        view["accessory"] = copy.deepcopy(data.get("accessory"))
+    if "armor" in data:
+        view["armor"] = copy.deepcopy(data.get("armor"))
+    return view
 
 
 _ATTACK_ALWAYS_REQUIRED = frozenset({
@@ -741,6 +807,8 @@ def validate_executable_item_boundary(data: dict[str, Any]) -> dict[str, Any]:
     raw_gameplay = view["gameplay"]
     parsed_attack = AttackSpecBoundary.model_validate(raw_attack)
     parsed_gameplay = GameplaySpecBoundary.model_validate(raw_gameplay)
+    parsed_accessory = AccessorySpecBoundary.model_validate(view.get("accessory", {}))
+    parsed_armor = ArmorSpecBoundary.model_validate(view.get("armor", {}))
     if bool(parsed_attack.enabled):
         required_attack = _ATTACK_ALWAYS_REQUIRED | _ATTACK_FAMILY_REQUIRED.get(parsed_attack.runtimeFamily, frozenset())
         _require_authored_fields(raw_attack, required_attack, "AttackSpec")
@@ -748,14 +816,24 @@ def validate_executable_item_boundary(data: dict[str, Any]) -> dict[str, Any]:
         _require_authored_fields(raw_attack, frozenset({"enabled"}), "AttackSpec")
     required_gameplay = _GAMEPLAY_ALWAYS_REQUIRED | _GAMEPLAY_KIND_REQUIRED.get(parsed_gameplay.kind, frozenset())
     _require_authored_fields(raw_gameplay, required_gameplay, "GameplaySpec")
-    return {"attack": parsed_attack.model_dump(), "gameplay": parsed_gameplay.model_dump()}
+    if isinstance(view.get("accessory"), dict) and view["accessory"]:
+        _require_authored_fields(view["accessory"], frozenset({"enabled"}), "AccessorySpec")
+    if isinstance(view.get("armor"), dict) and view["armor"]:
+        _require_authored_fields(view["armor"], frozenset({"enabled"}), "ArmorSpec")
+    return {
+        "attack": parsed_attack.model_dump(),
+        "gameplay": parsed_gameplay.model_dump(),
+        "accessory": parsed_accessory.model_dump(),
+        "armor": parsed_armor.model_dump(),
+    }
 
 
 __all__ = [
     "StrictBoundaryModel", "EngineCallBoundary", "RuntimePlanBoundary",
     "BuffEntryBoundary", "GeneratedBuffBoundary", "RuntimeStateBoundary",
-    "VisualKitBoundary", "VfxManifestBoundary", "GameplaySpecBoundary", "AttackSpecBoundary",
-    "ATTACK_DEBUG_ONLY_FIELDS", "GAMEPLAY_DEBUG_ONLY_FIELDS", "REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS",
+    "VisualKitBoundary", "VfxManifestBoundary", "GameplaySpecBoundary", "AccessorySpecBoundary", "ArmorSpecBoundary", "AttackSpecBoundary",
+    "ATTACK_DEBUG_ONLY_FIELDS", "ATTACK_LEGACY_NON_WIRE_FIELDS", "ATTACK_NON_WIRE_FIELDS",
+    "GAMEPLAY_DEBUG_ONLY_FIELDS", "REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS",
     "runtime_plan_boundary_report", "canonical_visual_kit_view", "validate_visual_kit_boundary",
     "validate_vfx_manifest_boundary", "validate_visual_authoring_boundaries",
     "validate_executable_item_boundary", "executable_wire_view",

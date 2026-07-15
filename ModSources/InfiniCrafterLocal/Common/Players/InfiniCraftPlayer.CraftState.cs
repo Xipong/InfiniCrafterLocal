@@ -215,9 +215,15 @@ public sealed partial class InfiniCraftPlayer
     }
 
 
+    public override void PostUpdateEquips()
+    {
+        ApplyGeneratedUtilityBuffEffects();
+    }
+
     public override void PostUpdate()
     {
         TickCraftAudioGuard();
+        ProcessPendingGeneratedUseIntent();
         TickGeneratedUtilityBuff();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();

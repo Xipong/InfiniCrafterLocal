@@ -286,24 +286,12 @@ public sealed partial class GeneratedProjectile
         _ => DustID.Smoke
     };
 
-    private const int OnHitBurst = 1;
-    private const int OnHitAuraPulse = 10;
-    private const int OnHitLifesteal = 17;
-
-    private static bool OnHitUsesBurstDustFallback(int onHitCode)
-    {
-        return onHitCode is OnHitBurst or OnHitAuraPulse or OnHitLifesteal;
-    }
-
     private void BurstDust(int effect, int count, float speed)
     {
         int dust = DustForEffect(effect);
         if (dust < 0) return;
         int authoredCap = Math.Clamp(_spec.BurstDustCap, 0, 40);
-        int effectiveCap = authoredCap;
-        if (effectiveCap <= 0 && count > 0 && OnHitUsesBurstDustFallback(_spec.OnHitCode))
-            effectiveCap = Math.Clamp(count, 1, 24);
-        count = Math.Clamp(count, 0, effectiveCap);
+        count = Math.Clamp(count, 0, authoredCap);
         for (int i = 0; i < count; i++)
         {
             Dust d = Dust.NewDustDirect(Projectile.position, Projectile.width, Projectile.height, dust, Main.rand.NextFloat(-speed, speed), Main.rand.NextFloat(-speed, speed));

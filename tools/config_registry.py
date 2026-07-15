@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / "LocalGenerator"
 OUT = ROOT / "contracts" / "config_registry.json"
 NAME_RE = re.compile(r"\bINFINI_[A-Z0-9_]+\b")
+CSHARP_ENV_RE = re.compile(r"(?:System\.)?Environment\.GetEnvironmentVariable\(\s*\"(INFINI_[A-Z0-9_]+)\"")
 EXAMPLE_RE = re.compile(r"^\s*#?\s*(INFINI_[A-Z0-9_]+)\s*=\s*(.*)$")
 SECRET_PARTS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
 ENV_FUNCTIONS = {
@@ -72,8 +73,6 @@ def _extract_python() -> tuple[list[Declaration], dict[str, set[str]]]:
     for path in _python_sources():
         source = path.read_text(encoding="utf-8-sig", errors="replace")
         rel = _rel(path)
-        for name in NAME_RE.findall(source):
-            references[name].add(rel)
         try:
             tree = ast.parse(source, filename=rel)
         except SyntaxError:
@@ -92,6 +91,45 @@ def _extract_python() -> tuple[list[Declaration], dict[str, set[str]]]:
             return _literal(node, source)
 
         for node in ast.walk(tree):
+            env_name: Any = None
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                owner = node.func.value
+                if isinstance(owner, ast.Name) and owner.id == "os" and node.func.attr == "getenv" and node.args:
+                    env_name = resolved(node.args[0])
+                elif (
+                    isinstance(owner, ast.Attribute)
+                    and isinstance(owner.value, ast.Name)
+                    and owner.value.id == "os"
+                    and owner.attr == "environ"
+                    and node.func.attr in {"get", "pop", "setdefault"}
+                    and node.args
+                ):
+                    env_name = resolved(node.args[0])
+                elif (
+                    isinstance(owner, ast.Attribute)
+                    and isinstance(owner.value, ast.Name)
+                    and owner.value.id == "os"
+                    and owner.attr == "environ"
+                    and node.func.attr == "update"
+                    and node.args
+                    and isinstance(node.args[0], ast.Dict)
+                ):
+                    for key in node.args[0].keys:
+                        value = resolved(key)
+                        if isinstance(value, str) and value.startswith("INFINI_"):
+                            references[value].add(rel)
+            elif (
+                isinstance(node, ast.Subscript)
+                and isinstance(node.value, ast.Attribute)
+                and isinstance(node.value.value, ast.Name)
+                and node.value.value.id == "os"
+                and node.value.attr == "environ"
+            ):
+                env_name = resolved(node.slice)
+            if isinstance(env_name, str) and env_name.startswith("INFINI_"):
+                references[env_name].add(rel)
+
+        for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             fn = node.func.id if isinstance(node.func, ast.Name) else node.func.attr if isinstance(node.func, ast.Attribute) else ""
@@ -102,6 +140,7 @@ def _extract_python() -> tuple[list[Declaration], dict[str, set[str]]]:
                     for env_name in names:
                         if isinstance(env_name, str) and env_name.startswith("INFINI_"):
                             declarations.append(Declaration(env_name, "string", default, None, None, rel, int(getattr(node, "lineno", 0))))
+                            references[env_name].add(rel)
                 continue
             if fn not in ENV_FUNCTIONS or not node.args:
                 continue
@@ -121,13 +160,14 @@ def _extract_python() -> tuple[list[Declaration], dict[str, set[str]]]:
                     line=int(getattr(node, "lineno", 0)),
                 )
             )
+            references[env_name].add(rel)
     return declarations, references
 
 
 def _extract_csharp_refs(references: dict[str, set[str]]) -> None:
     for path in (ROOT / "ModSources").rglob("*.cs"):
         source = path.read_text(encoding="utf-8-sig", errors="replace")
-        for name in NAME_RE.findall(source):
+        for name in CSHARP_ENV_RE.findall(source):
             references[name].add(_rel(path))
 
 

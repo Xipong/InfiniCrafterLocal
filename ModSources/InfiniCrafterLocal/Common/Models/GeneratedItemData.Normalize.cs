@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Terraria.ID;
+using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Models;
 
@@ -62,9 +63,8 @@ public sealed partial class GeneratedItemData
         var outList = new List<BuffEntrySpec>();
         void Add(int code, int time)
         {
-            code = ClampInt(code, 0, 1024);
             time = ClampInt(time, 0, 21600);
-            if (code <= InfiniTerrariaSentinels.NoBuffType || time <= 0) return;
+            if (code <= InfiniTerrariaSentinels.NoBuffType || code >= BuffLoader.BuffCount || time <= 0) return;
             int idx = outList.FindIndex(x => x.BuffCode == code);
             if (idx >= 0)
             {
@@ -149,7 +149,7 @@ public sealed partial class GeneratedItemData
             "helmet" or "helm" or "hat" or "hood" or "mask" or "head" => "head",
             "chest" or "chestplate" or "breastplate" or "body" or "shirt" or "robe" or "torso" => "body",
             "legs" or "leggings" or "greaves" or "pants" or "boots" or "leg" => "legs",
-            _ => string.IsNullOrWhiteSpace(s) ? "body" : s
+            _ => ""
         };
     }
 
@@ -224,27 +224,24 @@ public sealed partial class GeneratedItemData
         // recursively grow into huge 128-256px objects from generated-parent chains.
         Gameplay.Width = ClampInt(Gameplay.Width, 8, 64);
         Gameplay.Height = ClampInt(Gameplay.Height, 8, 64);
-        Gameplay.UseTime = ClampInt(Gameplay.UseTime, 1, 3600);
-        Gameplay.UseAnimation = ClampInt(Gameplay.UseAnimation, 1, 3600);
+        Gameplay.UseTime = ClampInt(Gameplay.UseTime, 10, 3600);
+        Gameplay.UseAnimation = ClampInt(Gameplay.UseAnimation, 6, 3600);
         Gameplay.MaxStack = ClampInt(Gameplay.MaxStack, 1, 9999);
         Gameplay.CraftYield = ClampInt(Gameplay.CraftYield, 1, 9999);
         Gameplay.ItemScale = ClampFloat(Gameplay.ItemScale, 0.55f, 1.55f);
         Gameplay.HoldoutOffsetX = ClampInt(Gameplay.HoldoutOffsetX, -256, 256);
         Gameplay.HoldoutOffsetY = ClampInt(Gameplay.HoldoutOffsetY, -256, 256);
-        Gameplay.UseFantasy = SafeText(Gameplay.UseFantasy, 32);
         Gameplay.HeldVisibility = SafeText(Gameplay.HeldVisibility, 32);
         Gameplay.ReleaseTiming = SafeText(Gameplay.ReleaseTiming, 32);
         Gameplay.HandPose = SafeText(Gameplay.HandPose, 32);
-        Gameplay.SpawnStyle = SafeText(Gameplay.SpawnStyle, 32);
-        Gameplay.RotationMode = SafeText(Gameplay.RotationMode, 32);
-        Gameplay.TrailMode = SafeText(Gameplay.TrailMode, 32);
-        Gameplay.ProjectileSizePolicy = SafeText(Gameplay.ProjectileSizePolicy, 32);
         Gameplay.InitialOffsetPx = ClampInt(Gameplay.InitialOffsetPx, -64, 64);
         Gameplay.ConsumeChancePercent = ClampInt(Gameplay.ConsumeChancePercent <= 0 ? Gameplay.ConsumeChancePercent : Gameplay.ConsumeChancePercent, 0, 100);
         Gameplay.ManaCost = ClampInt(Gameplay.ManaCost, 0, 9999);
         Gameplay.HealLife = ClampInt(Gameplay.HealLife, 0, 500);
         Gameplay.HealMana = ClampInt(Gameplay.HealMana, 0, 500);
-        Gameplay.BuffCode = ClampInt(Gameplay.BuffCode, InfiniTerrariaSentinels.NoBuffType, 1024);
+        Gameplay.BuffCode = Gameplay.BuffCode > InfiniTerrariaSentinels.NoBuffType && Gameplay.BuffCode < BuffLoader.BuffCount
+            ? Gameplay.BuffCode
+            : InfiniTerrariaSentinels.NoBuffType;
         Gameplay.BuffTime = ClampInt(Gameplay.BuffTime, 0, 21600);
         Gameplay.ExtraBuffs = NormalizeExtraBuffs(Gameplay.ExtraBuffs, Gameplay.BuffCode, Gameplay.BuffTime);
         Gameplay.GeneratedBuff ??= new GeneratedBuffSpec();
@@ -254,9 +251,9 @@ public sealed partial class GeneratedItemData
             Gameplay.BuffCode = Gameplay.ExtraBuffs[0].BuffCode;
             Gameplay.BuffTime = Gameplay.ExtraBuffs[0].BuffTime;
         }
-        Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 230);
-        Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 50);
-        Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 120);
+        Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 1000);
+        Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 200);
+        Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 1000);
         Gameplay.MobilityMode = SafeText(Gameplay.MobilityMode, 32);
         Gameplay.MobilityRangeTiles = ClampInt(Gameplay.MobilityRangeTiles, 0, 80);
         Gameplay.MobilityCooldownTicks = ClampInt(Gameplay.MobilityCooldownTicks, 0, 36000);
@@ -272,9 +269,9 @@ public sealed partial class GeneratedItemData
         Gameplay.AltGeneratedBuff.Normalize();
         Gameplay.HoldGeneratedBuff ??= new GeneratedBuffSpec();
         Gameplay.HoldGeneratedBuff.Normalize();
-        Gameplay.ExtractinatorOutputItemType = ClampInt(Gameplay.ExtractinatorOutputItemType, 0, 9999);
-        Gameplay.ExtractinatorOutputStack = ClampInt(Gameplay.ExtractinatorOutputStack, 0, 999);
-        Gameplay.UseConditionMode = SafeText(Gameplay.UseConditionMode, 32);
+        Gameplay.UseConditionMode = SafeText(Gameplay.UseConditionMode, 32).Trim().ToLowerInvariant();
+        if (Gameplay.UseConditionMode is not ("" or "none" or "grounded" or "not_wet" or "life_above" or "mana_above"))
+            Gameplay.UseConditionMode = "";
         Gameplay.UseConditionMinLife = ClampInt(Gameplay.UseConditionMinLife, 0, 5000);
         Gameplay.UseConditionMinMana = ClampInt(Gameplay.UseConditionMinMana, 0, 5000);
         Gameplay.RuntimeState ??= new RuntimeStateSpec();
@@ -427,8 +424,6 @@ public sealed partial class GeneratedItemData
         Attack.ImpactVfxRadiusPx = ClampInt(Attack.ImpactVfxRadiusPx, 0, 192);
         Attack.AoeDamageRadiusPx = ClampInt(Attack.AoeDamageRadiusPx, 0, 160);
         Attack.ContactForgivenessPx = ClampInt(Attack.ContactForgivenessPx, 0, 32);
-        if (Attack.ImpactVfxRadiusPx <= 0 && Attack.ExplosionRadius > 0)
-            Attack.ImpactVfxRadiusPx = Attack.ExplosionRadius;
         Attack.ExtraUpdates = ClampInt(Attack.ExtraUpdates, 0, 240);
         Attack.BounceCount = ClampInt(Attack.BounceCount, 0, 128);
         Attack.SplitCount = ClampInt(Attack.SplitCount, 0, 128);

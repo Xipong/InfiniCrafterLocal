@@ -53,8 +53,6 @@ public sealed class InfiniItemCommand : ModCommand
         GeneratedItemData? data = null;
         if (item.ModItem is GeneratedItem generated)
             data = generated.Data;
-        else if (item.ModItem is GeneratedExtractinatorMaterial extractinator)
-            data = extractinator.Data;
 
         if (data is null)
         {

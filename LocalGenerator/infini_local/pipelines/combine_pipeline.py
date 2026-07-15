@@ -256,7 +256,6 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     cb = canonicalize(b)
     pipeline_log: list[dict[str, Any]] = []
     data: dict[str, Any] | None = None
-    generation_debug.clear_combine_failure("new_combine_started")
     llm_lease = None
     llm_lease_token = None
     if USE_LLM:
@@ -334,7 +333,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         generation_debug.clear_combine_failure("fresh_combine_success")
         return data
     except Exception as e:
-        if not generation_debug.last_combine_failure_summary():
+        if not isinstance(getattr(e, "_infini_failure_snapshot", None), dict):
             generation_debug.record_combine_failure("unknown", e, payload, data, pipeline_log)
         raise
     finally:

@@ -17,10 +17,10 @@ def _check_generated_item_runtime_size_clamps_are_terraria_sized() -> None:
     assert "Gameplay.ItemScale = ClampFloat(Gameplay.ItemScale, 0.55f, 1.55f)" in src
     assert "Gameplay.HealLife = ClampInt(Gameplay.HealLife, 0, 500)" in src
     assert "Gameplay.HealMana = ClampInt(Gameplay.HealMana, 0, 500)" in src
-    assert "Gameplay.BuffCode = ClampInt(Gameplay.BuffCode, InfiniTerrariaSentinels.NoBuffType, 1024)" in src
-    assert "Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 230)" in src
-    assert "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 50)" in src
-    assert "Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 120)" in src
+    assert "Gameplay.BuffCode < BuffLoader.BuffCount" in src
+    assert "Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 1000)" in src
+    assert "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 200)" in src
+    assert "Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 1000)" in src
     assert "Visual.InventoryScale = ClampFloat(Visual.InventoryScale, 0.55f, 1.55f)" in src
     assert "Visual.WorldScale = ClampFloat(Visual.WorldScale, 0.55f, 1.75f)" in src
     assert "Attack.ProjectileWidth = ClampInt(Attack.ProjectileWidth, 4, 96)" in src
@@ -51,7 +51,7 @@ def _check_world_draw_anchors_scaled_sprite_bottom_and_clamps_visual_scales() ->
 def _check_melee_explosion_radius_no_longer_becomes_half_radius_hidden_reach() -> None:
     src = ITEM.read_text(encoding="utf-8")
     assert "MeleeHitboxRadiusBonus" in src
-    assert "attack.ContactForgivenessPx" in src and "attack.AoeDamageRadiusPx / 6" in src
+    assert "attack.ContactForgivenessPx" in src and "attack.AoeDamageRadiusPx / 6" not in src
     assert "ExplosionRadius / 2" not in src
 
 
@@ -62,7 +62,7 @@ def _check_projectile_runtime_size_is_sanitized_before_apply_and_hitbox_radius_i
     assert "ResizeProjectilePreserveCenter(Math.Clamp(_spec.ProjectileWidth, 8, 96)" in src
     assert "Projectile.scale = Math.Clamp(_spec.ProjectileScale, 0.45f, 2.25f)" in src
     assert "ProjectileHitboxRadiusBonus" in src
-    assert "_spec.ContactForgivenessPx" in src and "_spec.AoeDamageRadiusPx / 4" in src
+    assert "_spec.ContactForgivenessPx" in src and "_spec.AoeDamageRadiusPx / 4" not in src
     assert "ExplosionRadius / 2" not in src
 
 # Coarse test bundle: the checks below used to be separate pytest items.

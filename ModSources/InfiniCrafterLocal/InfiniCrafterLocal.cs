@@ -58,6 +58,11 @@ public sealed class InfiniCrafterLocalMod : Mod
             InfiniCraftPlayer.HandleGeneratedUtilityBuffSyncPacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.RequestGeneratedAltUse)
+        {
+            InfiniCraftPlayer.HandleGeneratedAltUseRequestPacket(reader, whoAmI);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.NotifyGeneratedItem || packetType == InfiniNetPacketIds.RequestGeneratedRegistry || packetType == InfiniNetPacketIds.RequestGeneratedRegistryForceAssets || packetType == InfiniNetPacketIds.RequestGeneratedItemById)
         {
             GeneratedItems?.HandlePacket(packetType, reader, whoAmI);
@@ -86,17 +91,15 @@ public sealed class InfiniCrafterLocalMod : Mod
         if (args is null || args.Length <= 0) return null;
         string command = args[0]?.ToString() ?? "";
         if (string.Equals(command, "IsGeneratedItem", System.StringComparison.OrdinalIgnoreCase))
-            return args.Length > 1 && args[1] is Terraria.Item item && (item.ModItem is Content.Items.GeneratedItem || item.ModItem is Content.Items.GeneratedExtractinatorMaterial);
+            return args.Length > 1 && args[1] is Terraria.Item item && item.ModItem is Content.Items.GeneratedItem;
         if (string.Equals(command, "TryGetGeneratedItemData", System.StringComparison.OrdinalIgnoreCase))
             return args.Length > 1 && args[1] is Terraria.Item item2
                 ? item2.ModItem is Content.Items.GeneratedItem gi ? gi.Data
-                : item2.ModItem is Content.Items.GeneratedExtractinatorMaterial gem ? gem.Data
                 : null
                 : null;
         if (string.Equals(command, "GetGeneratedSummary", System.StringComparison.OrdinalIgnoreCase))
             return args.Length > 1 && args[1] is Terraria.Item item3
                 ? item3.ModItem is Content.Items.GeneratedItem gi2 ? gi2.Data.GeneratedParentSummary
-                : item3.ModItem is Content.Items.GeneratedExtractinatorMaterial gem2 ? gem2.Data.GeneratedParentSummary
                 : null
                 : null;
         if (string.Equals(command, "RegisterGeneratedParentHint", System.StringComparison.OrdinalIgnoreCase))

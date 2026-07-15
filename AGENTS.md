@@ -50,7 +50,7 @@ Do not pin hand-counted source/test totals here: use the live tree when a count 
 - Data contract: `Common/Models/GeneratedItemData*.cs`, `Common/Models/VfxManifestSpec.cs`.
 - Generator boundary/assets/registry: `Common/Services/GeneratorClient.cs`, `GeneratedItemRegistryService.cs`, `GeneratedAssetSyncService.cs`, `RuntimeSpriteCache.cs`.
 - Craft/MP/player state: `Common/Players/InfiniCraftPlayer*.cs`, `GeneratedHeldItemDrawLayer.cs`.
-- Runtime item/projectile: `Content/Items/GeneratedItem.cs`, `GeneratedArmorItems.cs`, `GeneratedExtractinatorMaterial.cs`, `Content/Projectiles/GeneratedProjectile*.cs`.
+- Runtime item/projectile: `Content/Items/GeneratedItem.cs`, `GeneratedArmorItems.cs`, `Content/Projectiles/GeneratedProjectile*.cs`.
 - VFX/audio: `Common/VFX/*`, `Common/Audio/*`.
 
 ### Python LocalGenerator
@@ -119,6 +119,21 @@ Full definition / plan hydration requirements:
 - cached after success;
 - never repeated per projectile, per hit, or per VFX event;
 - debug counters expose `inFlight`, `cacheHit`, `cacheMiss`, `retry`, and `duplicateSuppressed` for definitions and assets.
+
+
+## Restricted/dependency-poor sandbox: first command
+
+Run this before pytest in ChatGPT/web sandboxes or unknown containers:
+
+```bash
+python tools/validate_sandbox.py
+```
+
+- The tool uses only the Python standard library, never loads operator config, never starts LLM/image/server backends, and bounds every child check.
+- Read its JSON. If `fullSuiteAvailable=false`, **do not run full pytest or release validation in that environment**. Missing pytest/Pydantic/Pillow/Hypothesis is an environment limitation, not a product failure.
+- `ok=true` with `coverage="portable-static"` proves syntax/JSON, config-registry drift, C# static contracts, project hygiene, bounded subprocesses/no import-time environment mutation in `test_*.py`, plus the exact allowlisted import-time sandbox bootstrap in `tests/conftest.py` only.
+- Portable success is never release readiness: `releaseReady` remains false. Run `python tools/validate_release.py` in the dependency-complete project environment for full pytest/parity/mutation/runtime gates.
+- Do not retry dependency failures, install packages from the network without permission, or replace unavailable dynamic gates with invented output.
 
 
 ## Contract safety stack (v18)

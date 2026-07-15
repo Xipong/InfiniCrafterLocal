@@ -290,7 +290,7 @@ Responsibilities:
 | Файл | Роль |
 |---|---|
 | `GeneratedArmorItems.cs` | dedicated head/body/legs proxy classes inheriting `GeneratedItem` so Terraria armor slots work |
-| `GeneratedExtractinatorMaterial.cs` | material proxy that supports `ExtractinatorUse` and generated data serialization |
+
 | `InfiniCore.cs` | station key item |
 
 ## Generated projectile runtime

@@ -823,6 +823,16 @@ def _is_budget_or_auth_failure(exc: Exception) -> bool:
     text = _llm_error_text(exc)
     return any(tok in text for tok in ["insufficient", "quota", "credit", "billing", "payment", "out of credits", "rate limit", "unauthorized", "api key", "余额", "balance", "no money"])
 
+
+# Only endpoint/request-shape incompatibility may downgrade Responses to Chat on
+# the same profile. Timeouts, malformed responses and 5xx failures belong to the
+# lease/pool failover owner; hiding them here would bypass provider isolation.
+_RESPONSES_CHAT_COMPATIBILITY_STATUSES = frozenset({400, 404, 405, 415, 422, 501})
+
+
+def _responses_chat_fallback_allowed(exc: Exception) -> bool:
+    return isinstance(exc, urlerror.HTTPError) and exc.code in _RESPONSES_CHAT_COMPATIBILITY_STATUSES
+
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     out = _clean_llm_payload(payload)
     model_name = resolve_llm_model(context)
@@ -1010,6 +1020,12 @@ def _record_llm_stage(payload: dict[str, Any]) -> str:
 
 def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
     stage = _record_llm_stage(payload)
+    # Raw replay is an explicit offline seam.  Resolve it before choosing
+    # Responses vs Chat so auto/responses profiles can never make a network
+    # call merely because replay used to live inside the Chat-only helper.
+    replay = _llm_replay_json_response(payload)
+    if replay is not None:
+        return replay
     mode = _normalized_api_mode(context.get("api_mode"))
     capability_key = _llm_context_key(context)
     lease = _CURRENT_LLM_ITEM_LEASE.get()
@@ -1025,17 +1041,18 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
             log_event("info", "LLM usage", {"stage": stage, **(result.get("_debug") or {})})
             return result
         except Exception as error:
-            if _is_budget_or_auth_failure(error):
+            if _is_budget_or_auth_failure(error) or not _responses_chat_fallback_allowed(error):
                 raise
             had_working_chain = bool(lease is not None and lease.context is context and lease.previous_response_id)
             _RESPONSES_CAPABILITY[capability_key] = True if had_working_chain else False
             if lease is not None and lease.context is context:
                 lease.responses_disabled = True
                 lease.previous_response_id = ""
-            log_event("warn", "LLM Responses unavailable; retrying same stage through stateless Chat Completions", {
+            log_event("warn", "LLM Responses incompatible; retrying same stage through stateless Chat Completions", {
                 "stage": stage,
                 "profileId": context.get("profile_id"),
                 "provider": active_llm_provider(context),
+                "status": getattr(error, "code", None),
                 "error": repr(error),
             })
     result = _llm_chat_json_single_context(payload, timeout, context)
@@ -1055,9 +1072,6 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
 def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
     ensure_llm_auth_configured(context)
     payload = _clean_llm_payload(payload)
-    replay = _llm_replay_json_response(payload)
-    if replay is not None:
-        return replay
     payload = _payload_for_context(payload, context)
     url = llm_chat_completions_url(context)
     candidates: list[tuple[str, dict[str, Any]]] = [("original", payload)]

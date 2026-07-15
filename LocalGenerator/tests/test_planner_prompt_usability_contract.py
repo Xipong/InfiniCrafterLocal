@@ -139,7 +139,7 @@ def _check_minimal_llm_accessory_and_extractinator_plans_survive_validation() ->
         "category": "accessory",
         "runtimePlan": {"resultKind": "accessory", "engineCalls": [
             {"fn": "set_item_stats", "params": {"resultKind": "accessory", "rarity": 2}},
-            {"fn": "accessory_effect", "params": {"archetype": "mobility", "movementSpeed": 0.12, "jumpSpeed": 0.8, "lightStrength": 0.25, "lightColorName": "blue"}},
+            {"fn": "accessory_effect", "params": {"archetype": "mobility", "stats": {"movementSpeed": 0.12, "jumpSpeed": 0.8, "lightStrength": 0.25, "lightColorName": "blue"}}},
         ]},
     })
     assert accessory["category"] == "accessory"
@@ -153,12 +153,10 @@ def _check_minimal_llm_accessory_and_extractinator_plans_survive_validation() ->
         "category": "material",
         "runtimePlan": {"resultKind": "material", "engineCalls": [
             {"fn": "set_item_stats", "params": {"resultKind": "material", "maxStack": 999, "craftYield": 25}},
-            {"fn": "extractinator_output", "params": {"resultType": 75, "stack": 2}},
         ]},
     })
     assert material["category"] == "material"
-    assert material["gameplay"]["extractinatorOutputItemType"] == 75
-    assert material["gameplay"]["extractinatorOutputStack"] == 2
+    assert "extractinatorOutputItemType" not in material["gameplay"]
 
 
 def _check_forbidden_boss_npc_mob_calls_are_rejected_without_killing_valid_item_parts() -> None:
@@ -185,6 +183,7 @@ def _check_prompt_usability_cli_runs_the_same_contract() -> None:
         text=True,
         capture_output=True,
         check=True,
+        timeout=30,
     )
     report = json.loads(proc.stdout)
     assert report["ok"], report

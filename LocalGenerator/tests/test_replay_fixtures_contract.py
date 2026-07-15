@@ -12,6 +12,7 @@ from infini_local.pipelines.combine_validation import validate_and_repair
 from infini_local.pipelines.item_power_knowledge import apply_item_knowledge
 from infini_local.pipelines.item_power_knowledge import canonicalize
 from infini_local.pipelines.item_power_knowledge import infer_item_card
+from infini_local.pipelines import llm_transport as transport
 from infini_local.pipelines.llm_transport import _llm_replay_stage_from_payload, llm_chat_json
 from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
 from infini_local.storage.world_recipe_runtime import sanitize_recipe_for_delivery
@@ -117,6 +118,18 @@ def _check_llm_chat_json_raw_replay_intercepts_planner_without_network(monkeypat
     replay = tmp_path / "planner.txt"
     replay.write_text(raw_text, encoding="utf-8")
     monkeypatch.setenv("INFINI_LLM_REPLAY_RAW", str(replay))
+    monkeypatch.setattr(transport, "LLM_POOL_PROFILES", ())
+    monkeypatch.setattr(transport, "LLM_PROVIDER", "openai_compat")
+    monkeypatch.setattr(transport, "OPENAI_COMPAT_BASE_URL", "https://must-not-run.example/v1")
+    monkeypatch.setattr(transport, "OPENAI_COMPAT_API_KEY", "")
+    monkeypatch.setattr(transport, "OPENAI_COMPAT_MODEL", "replay-model")
+    monkeypatch.setattr(transport, "LLM_API_MODE", "responses")
+    transport._reset_llm_pool_runtime_for_tests()
+
+    def fail_network(*_args, **_kwargs):
+        raise AssertionError("raw replay must resolve before auth or Responses HTTP")
+
+    monkeypatch.setattr(transport, "http_json", fail_network)
 
     req = {
         "model": "fake",
@@ -211,13 +224,12 @@ def _check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter() ->
     assert data["sourceMode"] == "generated"
 
 
-def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line() -> None:
+def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line(monkeypatch) -> None:
     # Real Rope Spear author plan from trace: old projectilePrompt contained
     # "thin taught rope line back to the player". The image prompt must scrub
     # only the full-canvas/off-canvas tether instruction, while preserving a
     # short local rope/chain detail if it helps the projectile silhouette.
-    import os
-    os.environ.pop("INFINI_LLM_REPLAY_RAW", None)
+    monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     plan = json.loads((FIXTURES / "author_plan" / "rope_spear_author_plan.json").read_text(encoding="utf-8"))
     data = _validate_and_attach(plan, _spear_parent(), _rope_parent(), "test_replay_rope_spear")
     assert data["attack"]["genome"]["runtimeFamily"] == "returning"
@@ -246,6 +258,8 @@ def _check_delivery_payload_replay_normalizes_object_debug_without_changing_game
     assert delivered["runtimeApiVersion"] == "v0.4.23"
     assert delivered["gameplay"]["damage"] == payload["gameplay"]["damage"]
     assert delivered["attack"]["projectileWidth"] == payload["attack"]["projectileWidth"]
+    assert "damage" not in delivered["attack"]
+    assert "useProjectile" not in delivered["attack"]
     assert isinstance(delivered["debug"], dict)
     assert all(isinstance(v, str) for v in delivered["debug"].values())
     assert "authorPreservingValidation" in delivered["debug"]

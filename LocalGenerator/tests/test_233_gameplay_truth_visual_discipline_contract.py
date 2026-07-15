@@ -31,7 +31,7 @@ def _contract_check_incompatible_second_primary_cannot_override_first_executor()
     assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
 
 
-def _contract_check_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routing() -> None:
+def _contract_check_parent_flaming_tag_does_not_author_burn() -> None:
     data = {
         "category": "weapon",
         "itemKnowledge": {
@@ -51,8 +51,9 @@ def _contract_check_parent_grounded_flaming_tag_preserves_burn_without_prompt_ke
 
     patch = compile_runtime_plan_to_genome_patch(data)
 
-    assert patch["onHit"] == "burn"
-    assert patch["parentMechanicPreserved"] == {"kind": "onHit", "value": "burn", "sourceTag": "flaming"}
+    assert patch["onHit"] == "none"
+    assert "parentMechanicPreserved" not in patch
+    assert "debuffTime" not in patch
     assert patch["runtimeLightStrength"] == 0.8
     assert patch["primaryColorName"] == "orange"
 
@@ -116,7 +117,7 @@ def test_233_gameplay_truth_visual_discipline_contract_module_contract(request):
         request,
         (
             '_contract_check_incompatible_second_primary_cannot_override_first_executor',
-            '_contract_check_parent_grounded_flaming_tag_preserves_burn_without_prompt_keyword_routing',
+            '_contract_check_parent_flaming_tag_does_not_author_burn',
             '_contract_check_melee_swing_runtime_gates_wasted_projectile_baked_asset',
             '_contract_check_field_baked_asset_requires_compiled_field_runtime',
             '_contract_check_zimage_prompt_sanitizer_strips_sprite_resolution_tokens',

@@ -17,7 +17,7 @@
         {
           "default": 1,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 230,
+          "line": 229,
           "maximum": 16,
           "minimum": 1,
           "type": "integer"
@@ -85,7 +85,7 @@
             "expression": "A1111_WIDTH"
           },
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 229,
+          "line": 228,
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -118,7 +118,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 225,
+          "line": 224,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -143,7 +143,7 @@
         {
           "default": "0.8",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 226,
+          "line": 225,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -218,7 +218,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 227,
+          "line": 226,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -257,9 +257,6 @@
       "minimum": null,
       "name": "INFINI_A1111_URL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -281,7 +278,7 @@
         {
           "default": 512,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 228,
+          "line": 227,
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -315,28 +312,9 @@
       "gui": false,
       "maximum": null,
       "minimum": null,
-      "name": "INFINI_AGENT_SELFTEST",
-      "owners": [
-        "ModSources/InfiniCrafterLocal/Common/Systems/InfiniAgentContractSelfTestSystem.cs",
-        "tools/runtime_impact_report.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
       "name": "INFINI_AGENT_SELFTEST_REPORT",
       "owners": [
-        "ModSources/InfiniCrafterLocal/Common/Systems/InfiniAgentContractSelfTestSystem.cs",
-        "tools/agentctl.py",
-        "tools/runtime_impact_report.py"
+        "tools/agentctl.py"
       ],
       "secret": false,
       "type": "unknown",
@@ -361,11 +339,7 @@
       "minimum": null,
       "name": "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
       "owners": [
-        "LocalGenerator/infini_local/core/dev_fallback.py",
         "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/combine_pipeline.py",
         "tools/semantic_runtime_diff.py"
       ],
       "secret": false,
@@ -377,7 +351,7 @@
         {
           "default": 28,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 187,
+          "line": 186,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -391,8 +365,6 @@
       "minimum": null,
       "name": "INFINI_ALPHA_THRESHOLD",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -419,11 +391,6 @@
       "name": "INFINI_ASSET_PUBLIC_BASE_URL",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
       ],
       "secret": false,
@@ -454,9 +421,6 @@
       "name": "INFINI_BALANCE_MODE",
       "owners": [
         "LocalGenerator/infini_local/core/balance_mode.py",
-        "LocalGenerator/infini_local/core/balance_report.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "tools/semantic_runtime_diff.py"
       ],
       "secret": false,
@@ -468,7 +432,7 @@
         {
           "default": "magenta",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 183,
+          "line": 182,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -482,9 +446,6 @@
       "minimum": null,
       "name": "INFINI_BG_COLOR",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -496,7 +457,7 @@
         {
           "default": "sprite_keyer",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 182,
+          "line": 181,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -510,9 +471,6 @@
       "minimum": null,
       "name": "INFINI_BG_REMOVE_MODE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -568,7 +526,6 @@
       "minimum": null,
       "name": "INFINI_CATEGORY_CREATIVITY",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
         "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
       ],
       "secret": false,
@@ -648,7 +605,7 @@
         {
           "default": 0.72,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 212,
+          "line": 211,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -673,7 +630,7 @@
         {
           "default": 24,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 174,
+          "line": 173,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -698,7 +655,7 @@
         {
           "default": 34,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 186,
+          "line": 185,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -712,8 +669,6 @@
       "minimum": null,
       "name": "INFINI_CHROMA_TOLERANCE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -725,7 +680,7 @@
         {
           "default": 0,
           "file": "LocalGenerator/infini_local/services/combine_endpoint.py",
-          "line": 18,
+          "line": 19,
           "maximum": 600,
           "minimum": 0,
           "type": "integer"
@@ -739,8 +694,6 @@
       "minimum": 0,
       "name": "INFINI_COMBINE_BUSY_WAIT_SECONDS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/services/combine_endpoint.py"
       ],
       "secret": false,
@@ -752,7 +705,7 @@
         {
           "default": 1,
           "file": "LocalGenerator/infini_local/services/combine_endpoint.py",
-          "line": 16,
+          "line": 17,
           "maximum": 8,
           "minimum": 1,
           "type": "integer"
@@ -777,7 +730,7 @@
         {
           "default": 5.5,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 132,
+          "line": 131,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -802,7 +755,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 125,
+          "line": 124,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -827,7 +780,7 @@
         {
           "default": "infinicrafterlocal",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 138,
+          "line": 137,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -852,7 +805,7 @@
         {
           "default": 1.0,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 135,
+          "line": 134,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -879,7 +832,7 @@
             "expression": "COMFYUI_WIDTH"
           },
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 130,
+          "line": 129,
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -906,7 +859,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 126,
+          "line": 125,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -931,7 +884,7 @@
         {
           "default": "0.8",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 127,
+          "line": 126,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -956,7 +909,7 @@
         {
           "default": 0.75,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 137,
+          "line": 136,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -981,7 +934,7 @@
         {
           "default": "euler",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 133,
+          "line": 132,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1006,7 +959,7 @@
         {
           "default": "normal",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 134,
+          "line": 133,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1031,7 +984,7 @@
         {
           "default": 16,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 131,
+          "line": 130,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1058,7 +1011,7 @@
             "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
           },
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 136,
+          "line": 135,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -1085,7 +1038,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 128,
+          "line": 127,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1124,9 +1077,6 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_URL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1138,7 +1088,7 @@
         {
           "default": 512,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 129,
+          "line": 128,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1163,7 +1113,7 @@
         {
           "default": "auto",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 122,
+          "line": 121,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1177,7 +1127,6 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_WORKFLOW",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1189,7 +1138,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 123,
+          "line": 122,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1214,7 +1163,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 124,
+          "line": 123,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1276,8 +1225,6 @@
       "minimum": null,
       "name": "INFINI_CRAFT_HTTP_ATTEMPTS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
       ],
       "secret": false,
@@ -1294,8 +1241,6 @@
       "minimum": null,
       "name": "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
       ],
       "secret": false,
@@ -1307,7 +1252,7 @@
         {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 203,
+          "line": 202,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -1332,7 +1277,7 @@
         {
           "default": 0.86,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 213,
+          "line": 212,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -1357,7 +1302,7 @@
         {
           "default": 32,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 175,
+          "line": 174,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1386,11 +1331,7 @@
       "maximum": null,
       "minimum": null,
       "name": "INFINI_GUI_PIPELINE_PRESET",
-      "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
-      ],
+      "owners": [],
       "secret": false,
       "type": "unknown",
       "visibility": "gui"
@@ -1400,7 +1341,7 @@
         {
           "default": "127.0.0.1",
           "file": "LocalGenerator/infini_local/web/server.py",
-          "line": 519,
+          "line": 523,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1422,12 +1363,6 @@
       "minimum": null,
       "name": "INFINI_HOST",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_env.py",
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/web/server.py"
       ],
       "secret": false,
@@ -1439,7 +1374,7 @@
         {
           "default": "https://api.openai.com/v1",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 139,
+          "line": 138,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1453,9 +1388,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1467,7 +1399,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 145,
+          "line": 144,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1481,7 +1413,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_EXTRA_HEADERS_JSON",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1493,7 +1424,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 140,
+          "line": 139,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1507,10 +1438,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": true,
@@ -1522,7 +1449,7 @@
         {
           "default": "gpt-image-1",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 141,
+          "line": 140,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1536,9 +1463,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1550,7 +1474,7 @@
         {
           "default": "/images/generations",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 142,
+          "line": 141,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1564,9 +1488,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_PATH",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1578,7 +1499,7 @@
         {
           "default": "512x512",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 143,
+          "line": 142,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1592,9 +1513,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_SIZE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1608,7 +1526,7 @@
             "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
           },
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 144,
+          "line": 143,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -1624,9 +1542,6 @@
       "minimum": 1,
       "name": "INFINI_IMAGE_API_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -1648,7 +1563,7 @@
             "expression": "visual_config.IMAGE_BACKEND"
           },
           "file": "LocalGenerator/infini_local/web/server.py",
-          "line": 517,
+          "line": 521,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1667,12 +1582,6 @@
       "minimum": null,
       "name": "INFINI_IMAGE_BACKEND",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_env.py",
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
         "LocalGenerator/infini_local/web/server.py"
       ],
@@ -1685,7 +1594,7 @@
         {
           "default": 1,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 146,
+          "line": 145,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1710,7 +1619,7 @@
         {
           "default": 0.82,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 211,
+          "line": 210,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -1735,7 +1644,7 @@
         {
           "default": 32,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 173,
+          "line": 172,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1756,45 +1665,11 @@
       "visibility": "internal"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_ITEMS_DUMP",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
-        "LocalGenerator/infini_local/web/server.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_ITEMS_RUNTIME_DUMP",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
-        "LocalGenerator/infini_local/web/server.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
       "declarations": [
         {
           "default": 0.91,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 209,
+          "line": 208,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -1912,29 +1787,11 @@
       "minimum": null,
       "name": "INFINI_LLM_API_MODE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
       "visibility": "gui"
-    },
-    {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_ENGINE_CONTRACT_STYLE",
-      "owners": [
-        "tools/check_planner_prompt_usability.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -1955,9 +1812,7 @@
       "minimum": null,
       "name": "INFINI_LLM_FALLBACK_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "string",
@@ -1982,9 +1837,7 @@
       "minimum": null,
       "name": "INFINI_LLM_FALLBACK_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2009,9 +1862,7 @@
       "minimum": null,
       "name": "INFINI_LLM_FALLBACK_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2036,9 +1887,7 @@
       "minimum": 1,
       "name": "INFINI_LLM_FALLBACK_NETWORK_FAILS",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -2063,9 +1912,7 @@
       "minimum": null,
       "name": "INFINI_LLM_FALLBACK_PROVIDER",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2115,10 +1962,7 @@
       "minimum": null,
       "name": "INFINI_LLM_LOCAL_REASONING_PROMPT",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -2143,32 +1987,11 @@
       "minimum": 256,
       "name": "INFINI_LLM_MAX_TOKENS",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "integer",
       "visibility": "gui"
-    },
-    {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_POOL_",
-      "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -2189,8 +2012,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_2_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "string",
@@ -2215,8 +2037,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_2_API_MODE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2241,8 +2062,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_2_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2267,8 +2087,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_2_ENABLED",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -2293,8 +2112,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_2_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2319,8 +2137,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_2_PROVIDER",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2345,8 +2162,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_3_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "string",
@@ -2371,8 +2187,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_3_API_MODE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2397,8 +2212,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_3_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2423,8 +2237,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_3_ENABLED",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -2449,8 +2262,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_3_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2475,8 +2287,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_3_PROVIDER",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2501,8 +2312,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "string",
@@ -2527,8 +2337,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_API_MODE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2553,8 +2362,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2579,8 +2387,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_ENABLED",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -2605,8 +2412,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2631,8 +2437,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_PROVIDER",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2657,9 +2462,7 @@
       "minimum": null,
       "name": "INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -2709,14 +2512,7 @@
       "minimum": null,
       "name": "INFINI_LLM_PROVIDER",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
-        "LocalGenerator/infini_local/web/server.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2766,10 +2562,7 @@
       "minimum": null,
       "name": "INFINI_LLM_REASONING_EXCLUDE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -2794,10 +2587,7 @@
       "minimum": 0,
       "name": "INFINI_LLM_REASONING_MAX_TOKENS",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "integer",
@@ -2822,10 +2612,7 @@
       "minimum": null,
       "name": "INFINI_LLM_REASONING_MODE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2838,7 +2625,7 @@
             "expression": "env_int(\"INFINI_LLM_TIMEOUT\", 95, lo=1, hi=3600)"
           },
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 572,
+          "line": 577,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -2905,9 +2692,7 @@
       "minimum": null,
       "name": "INFINI_LLM_RESPONSE_FORMAT",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -2932,8 +2717,6 @@
       "minimum": null,
       "name": "INFINI_LLM_RUNTIME_AUTHORING",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
         "tools/semantic_runtime_diff.py"
       ],
@@ -2985,8 +2768,6 @@
       "minimum": null,
       "name": "INFINI_LLM_RUNTIME_PLAN_REQUIRED",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
         "tools/semantic_runtime_diff.py"
       ],
@@ -3013,8 +2794,6 @@
       "minimum": null,
       "name": "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
         "tools/semantic_runtime_diff.py"
       ],
@@ -3027,7 +2806,7 @@
         {
           "default": 0.38,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 135,
+          "line": 136,
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -3041,8 +2820,6 @@
       "minimum": 0.0,
       "name": "INFINI_LLM_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
       ],
       "secret": false,
@@ -3054,7 +2831,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 144,
+          "line": 145,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3062,7 +2839,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 187,
+          "line": 188,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3070,7 +2847,7 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "line": 572,
+          "line": 577,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -3118,10 +2895,7 @@
       "minimum": null,
       "name": "INFINI_LMSTUDIO_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3146,37 +2920,18 @@
       "minimum": null,
       "name": "INFINI_LMSTUDIO_URL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
       "visibility": "gui"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_MATERIAL_RARITY_MULT",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
       "declarations": [
         {
           "default": 32,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 193,
+          "line": 192,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3190,9 +2945,6 @@
       "minimum": null,
       "name": "INFINI_MAX_COLORS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -3243,11 +2995,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "string",
@@ -3272,10 +3020,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3286,7 +3031,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 140,
+          "line": 139,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3311,7 +3056,7 @@
         {
           "default": "https://api.openai.com/v1",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 139,
+          "line": 138,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3336,7 +3081,7 @@
         {
           "default": "gpt-image-1",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 141,
+          "line": 140,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3361,7 +3106,7 @@
         {
           "default": "512x512",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 143,
+          "line": 142,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3400,10 +3145,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3428,13 +3170,7 @@
       "minimum": null,
       "name": "INFINI_OPENROUTER_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py",
-        "LocalGenerator/infini_local/web/server.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
       "type": "string",
@@ -3459,10 +3195,7 @@
       "minimum": null,
       "name": "INFINI_OPENROUTER_APP_TITLE",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3512,10 +3245,7 @@
       "minimum": null,
       "name": "INFINI_OPENROUTER_HTTP_REFERER",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3540,12 +3270,7 @@
       "minimum": null,
       "name": "INFINI_OPENROUTER_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py",
-        "LocalGenerator/infini_local/web/server.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3556,7 +3281,7 @@
         {
           "default": 4,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 155,
+          "line": 154,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3583,7 +3308,7 @@
             "expression": "0 if _LLM_RUNTIME_AUTHORING_DEFAULT else 2"
           },
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 156,
+          "line": 155,
           "maximum": 8,
           "minimum": 0,
           "type": "integer"
@@ -3610,7 +3335,7 @@
         {
           "default": 20,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 157,
+          "line": 156,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3635,7 +3360,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 126,
+          "line": 125,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3660,7 +3385,7 @@
         {
           "default": "0.8",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 127,
+          "line": 126,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3685,7 +3410,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 192,
+          "line": 191,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3699,9 +3424,6 @@
       "minimum": null,
       "name": "INFINI_PIXEL_POSTERIZE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -3713,7 +3435,7 @@
         {
           "default": "",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 128,
+          "line": 127,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3738,7 +3460,7 @@
         {
           "default": 5055,
           "file": "LocalGenerator/infini_local/web/server.py",
-          "line": 520,
+          "line": 524,
           "maximum": 65535,
           "minimum": 1,
           "type": "integer"
@@ -3760,10 +3482,6 @@
       "minimum": 1,
       "name": "INFINI_PORT",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/web/server.py"
       ],
       "secret": false,
@@ -3771,45 +3489,11 @@
       "visibility": "gui"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PROJECTILES_DUMP",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
-        "LocalGenerator/infini_local/web/server.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PROJECTILES_RUNTIME_DUMP",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_dumps.py",
-        "LocalGenerator/infini_local/web/server.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
       "declarations": [
         {
           "default": 0.84,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 210,
+          "line": 209,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -3834,7 +3518,7 @@
         {
           "default": 32,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 172,
+          "line": 171,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3852,6 +3536,22 @@
       ],
       "secret": false,
       "type": "integer",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PYTHON",
+      "owners": [
+        "tools/validate_release.py"
+      ],
+      "secret": false,
+      "type": "unknown",
       "visibility": "internal"
     },
     {
@@ -3880,22 +3580,6 @@
       "visibility": "internal"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_RARITY_BASELINE_STRENGTH",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
       "declarations": [
         {
           "default": "recipe_v4_25_no_item_family_routing",
@@ -3921,27 +3605,11 @@
       "visibility": "internal"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_RECURSIVE_POWER_GROWTH",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
       "declarations": [
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 181,
+          "line": 180,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3955,9 +3623,6 @@
       "minimum": null,
       "name": "INFINI_REMOVE_BG",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -3969,7 +3634,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 185,
+          "line": 184,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3994,7 +3659,7 @@
         {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 191,
+          "line": 190,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -4008,8 +3673,6 @@
       "minimum": null,
       "name": "INFINI_SAVE_SPRITE_STAGES",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4035,9 +3698,6 @@
       "minimum": 0.0,
       "name": "INFINI_SDCPP_CFG",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4067,9 +3727,6 @@
       "minimum": 64,
       "name": "INFINI_SDCPP_HEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4095,10 +3752,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LLM",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4124,10 +3777,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_DIR",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4153,11 +3802,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_FILE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4183,11 +3827,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_PROMPT_TAGS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4213,10 +3852,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_WEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4242,10 +3877,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4271,10 +3902,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_ROCM_COMPAT_ROOT",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4300,9 +3927,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SAMPLER",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4328,9 +3952,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SEED",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4356,10 +3977,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_AUTOSTART",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4385,10 +4002,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_COMMAND_MODE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4414,10 +4027,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4443,10 +4052,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_EXE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4472,11 +4077,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_EXTRA_ARGS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4556,9 +4156,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_LOG_FILE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4667,9 +4264,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_SHOW_CONSOLE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4745,9 +4339,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_URL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4773,10 +4364,6 @@
       "minimum": 1,
       "name": "INFINI_SDCPP_STEPS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4831,10 +4418,6 @@
       "minimum": null,
       "name": "INFINI_SDCPP_VAE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_server_controls.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4860,9 +4443,6 @@
       "minimum": 64,
       "name": "INFINI_SDCPP_WIDTH",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4879,9 +4459,7 @@
       "minimum": null,
       "name": "INFINI_SKIP_CONFIG_FILE",
       "owners": [
-        "LocalGenerator/infini_local/core/env_utils.py",
-        "tools/agentctl.py",
-        "tools/run_pytest_shards.py"
+        "LocalGenerator/infini_local/core/env_utils.py"
       ],
       "secret": false,
       "type": "unknown",
@@ -4892,7 +4470,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 201,
+          "line": 200,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -4906,9 +4484,6 @@
       "minimum": null,
       "name": "INFINI_SPRITE_CHROMA_DEFRINGE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4920,7 +4495,7 @@
         {
           "default": "box",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 199,
+          "line": 198,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4934,9 +4509,6 @@
       "minimum": null,
       "name": "INFINI_SPRITE_DOWNSCALE_FILTER",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -4948,7 +4520,7 @@
         {
           "default": 40,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 208,
+          "line": 207,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4973,7 +4545,7 @@
         {
           "default": 56,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 207,
+          "line": 206,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4998,7 +4570,7 @@
         {
           "default": 8,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 189,
+          "line": 188,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5012,9 +4584,6 @@
       "minimum": null,
       "name": "INFINI_SPRITE_KEYER_RESIDUE_STEPS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -5026,7 +4595,7 @@
         {
           "default": 3,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 188,
+          "line": 187,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5040,9 +4609,6 @@
       "minimum": null,
       "name": "INFINI_SPRITE_KEYER_SPILL_RADIUS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -5054,7 +4620,7 @@
         {
           "default": 256,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 198,
+          "line": 197,
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -5068,9 +4634,6 @@
       "minimum": 64,
       "name": "INFINI_SPRITE_MASTER_CANVAS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -5082,7 +4645,7 @@
         {
           "default": 0.92,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 206,
+          "line": 205,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5107,7 +4670,7 @@
         {
           "default": 0.12,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 224,
+          "line": 223,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5132,7 +4695,7 @@
         {
           "default": 0.82,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 223,
+          "line": 222,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5157,7 +4720,7 @@
         {
           "default": 0.1,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 205,
+          "line": 204,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5182,7 +4745,7 @@
         {
           "default": 0.015,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 222,
+          "line": 221,
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5207,7 +4770,7 @@
         {
           "default": 2,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 190,
+          "line": 189,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5232,7 +4795,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 202,
+          "line": 201,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5246,9 +4809,6 @@
       "minimum": null,
       "name": "INFINI_SPRITE_PREMULTIPLIED_RESIZE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -5260,7 +4820,7 @@
         {
           "default": 2,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 204,
+          "line": 203,
           "maximum": 8,
           "minimum": 0,
           "type": "integer"
@@ -5274,9 +4834,6 @@
       "minimum": 0,
       "name": "INFINI_SPRITE_RETRIES",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -5302,10 +4859,7 @@
       "minimum": null,
       "name": "INFINI_TERRARIA_PORT",
       "owners": [
-        "LocalGenerator/infini_local/core/config_bootstrap.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/config_bootstrap.py"
       ],
       "secret": false,
       "type": "string",
@@ -5346,8 +4900,6 @@
       "minimum": null,
       "name": "INFINI_TRACE_EVENTS_TAIL",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/storage/trace_runtime.py"
       ],
       "secret": false,
@@ -5373,8 +4925,6 @@
       "minimum": null,
       "name": "INFINI_TRACE_MAX_PROMPT_CHARS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/storage/trace_runtime.py"
       ],
       "secret": false,
@@ -5400,9 +4950,6 @@
       "minimum": null,
       "name": "INFINI_TRACE_PROMPTS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_env.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/storage/trace_runtime.py",
         "tools/replay_generation_case.py"
       ],
@@ -5455,8 +5002,6 @@
       "name": "INFINI_USE_LLM",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "tools/semantic_runtime_diff.py"
       ],
       "secret": false,
@@ -5607,10 +5152,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py"
+        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -6221,7 +5763,7 @@
         {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 215,
+          "line": 214,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -6235,9 +5777,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6249,7 +5788,7 @@
         {
           "default": "full",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 148,
+          "line": 147,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -6263,10 +5802,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_ASSET_MODE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_env.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6278,7 +5813,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 160,
+          "line": 159,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -6292,9 +5827,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_LLM",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6320,8 +5852,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_MAX_TOKENS",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/llm_transport.py"
       ],
       "secret": true,
@@ -6347,12 +5877,35 @@
       "minimum": 0.0,
       "name": "INFINI_VISUAL_DIRECTOR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
       ],
       "secret": false,
       "type": "number",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "line": 148,
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": false,
+      "example": null,
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
       "visibility": "gui"
     },
     {
@@ -6372,39 +5925,8 @@
       "gui": true,
       "maximum": null,
       "minimum": null,
-      "name": "INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES",
-      "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 150,
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": false,
-      "documented": false,
-      "example": null,
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
       "name": "INFINI_VISUAL_GENERATE_IMPACT_IMAGES",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6416,7 +5938,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 151,
+          "line": 150,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -6430,9 +5952,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6444,7 +5963,7 @@
         {
           "default": 240,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 171,
+          "line": 170,
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -6460,7 +5979,7 @@
         {
           "default": 240,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 136,
+          "line": 135,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -6468,7 +5987,7 @@
         {
           "default": 240,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 144,
+          "line": 143,
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -6493,7 +6012,7 @@
         {
           "default": "author_visualpack_v2",
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 161,
+          "line": 160,
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -6518,7 +6037,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 218,
+          "line": 217,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -6532,8 +6051,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_REQUIRE_ITEM_SPRITE",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6545,7 +6062,7 @@
         {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 221,
+          "line": 220,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -6559,10 +6076,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-        "LocalGenerator/infini_local/pipelines/visual_delivery_gate.py",
-        "LocalGenerator/infini_local/web/server_utility_routes.py"
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -6573,7 +6087,7 @@
         {
           "default": true,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "line": 214,
+          "line": 213,
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -6587,9 +6101,6 @@
       "minimum": null,
       "name": "INFINI_VISUAL_STRICT_AI_AUTHORSHIP",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_image_args.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6645,9 +6156,6 @@
       "minimum": null,
       "name": "INFINI_ZIMAGE_POSITIVE_ONLY",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6673,9 +6181,6 @@
       "minimum": null,
       "name": "INFINI_ZIMAGE_PROMPT_CONTRACT",
       "owners": [
-        "LocalGenerator/infini_local/desktop/settings_gui_trace_state.py",
-        "LocalGenerator/infini_local/desktop/settings_gui_ui.py",
-        "LocalGenerator/infini_local/desktop/settings_schema.py",
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
       ],
       "secret": false,
@@ -6738,8 +6243,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 253,
-  "fingerprint": "c0fc54bf42d751a55b2ba3ffe4f7ce00f8d80f12c442d0b4fc3c81bde1f661ac",
+  "fieldCount": 244,
+  "fingerprint": "8415dd1fff64bd5255e76ec12e6b8d46081355141c8193bcd6dccdc3fa901e64",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

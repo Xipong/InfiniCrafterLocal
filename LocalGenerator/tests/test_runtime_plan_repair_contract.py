@@ -21,7 +21,7 @@ def _contract_check_runtime_plan_repair_adds_missing_stats_without_reauthoring_i
         "runtimePlan": {
             "resultKind": "weapon",
             "engineCalls": [
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "thrust", "delivery": "thrust", "movement": "straight", "speed": 12, "useTimeTicks": 13, "pierce": 3}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "thrust", "delivery": "thrust", "movement": "straight", "speed": 12, "rangeTiles": 18, "lifetimeTicks": 45, "shotCount": 1, "spreadRadians": 0, "useTimeTicks": 13, "pierce": 3}},
                 {"fn": "apply_on_hit_effect", "params": {"onHit": "aura_pulse", "aoeRadiusTiles": 2, "count": 3}},
             ],
         },
@@ -42,7 +42,7 @@ def _contract_check_runtime_plan_repair_adds_missing_stats_without_reauthoring_i
             "resultKind": "weapon",
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 6, "useTimeTicks": 13, "maxStack": 1, "rarity": 0, "value": 700}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "thrust", "delivery": "thrust", "movement": "straight", "speed": 12, "useTimeTicks": 13, "pierce": 3}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "thrust", "delivery": "thrust", "movement": "straight", "speed": 12, "rangeTiles": 18, "lifetimeTicks": 45, "shotCount": 1, "spreadRadians": 0, "useTimeTicks": 13, "pierce": 3}},
                 {"fn": "apply_on_hit_effect", "params": {"onHit": "aura_pulse", "aoeRadiusTiles": 2, "count": 3}},
             ],
         },
@@ -99,7 +99,7 @@ def _contract_check_runtime_plan_repair_triggers_on_compile_level_runtime_family
             "resultKind": "weapon",
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "projectileShape": "odd spark", "speed": 10, "useTimeTicks": 20}},
+                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "projectileShape": "odd spark", "speed": 10, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "useTimeTicks": 20}},
             ],
         },
     }}
@@ -195,7 +195,7 @@ def _contract_check_runtime_repair_uses_self_contained_authoritative_dossier_wit
             "runtimePlan": {
                 "engineCalls": [
                     {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 9, "useTimeTicks": 24, "maxStack": 1}},
-                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 8, "useTimeTicks": 24}},
+                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 8, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "useTimeTicks": 24}},
                 ]
             }
         }
@@ -405,7 +405,7 @@ def _contract_check_valid_later_repair_does_not_inherit_mutations_from_rejected_
         ]}}},
         {"repairPatch": {"runtimePlan": {"resultKind": "weapon", "engineCalls": [
             {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 12, "useTimeTicks": 28}},
-            {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "shotCount": 1}},
+            {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
         ]}}},
     ]
     seen_prompts: list[dict] = []

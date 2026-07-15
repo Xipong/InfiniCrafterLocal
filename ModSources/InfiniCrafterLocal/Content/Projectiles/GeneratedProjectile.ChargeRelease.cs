@@ -92,7 +92,7 @@ public sealed partial class GeneratedProjectile
         int count = Math.Clamp(_spec.ShotCount, 1, 8);
         float ratio = Math.Clamp(_chargeTicksAccumulated / Math.Max(1f, _spec.ChargeTicks), 0f, 1f);
         float power = MathHelper.Lerp(1f, Math.Clamp(_spec.ChargePowerMultiplier, 1f, 3f), ratio);
-        int damage = Math.Max(1, (int)Math.Round(Math.Max(1, Projectile.originalDamage) * power));
+        int damage = Math.Max(0, (int)Math.Round(Math.Max(0, Projectile.originalDamage) * power));
         float knockback = Projectile.knockBack * power;
         float spread = Math.Clamp(_spec.SpreadRadians, 0f, 0.75f);
         float speed = Math.Max(3f, _spec.Speed);

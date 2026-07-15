@@ -28,7 +28,7 @@ namespace InfiniCrafterLocal.Content.Items;
 // flavor text, or Debug/ExtensionData.
 public partial class GeneratedItem : ModItem
 {
-    private const int GeneratedItemNetPayloadVersion = 3;
+    private const int GeneratedItemNetPayloadVersion = 4;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
@@ -190,8 +190,12 @@ public partial class GeneratedItem : ModItem
     public override void NetSend(BinaryWriter writer)
     {
         writer.Write(GeneratedItemNetPayloadVersion);
-        try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()); }
-        catch { writer.Write(GeneratedItemData.Placeholder().ToNetworkJson()); }
+        // ModItem NetSend runs in both directions. Send only a compact identity
+        // reference here; full definitions move through the server-authoritative
+        // registry hydration packets instead of letting an item-container sync
+        // carry client-authored gameplay state into the server.
+        try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
+        catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
     }
 
     public override void NetReceive(BinaryReader reader)
@@ -201,9 +205,17 @@ public partial class GeneratedItem : ModItem
             int version = reader.ReadInt32();
             if (version != GeneratedItemNetPayloadVersion)
                 throw new InvalidDataException($"Unsupported GeneratedItem net payload version {version}");
-            SetData(GeneratedItemData.FromJson(reader.ReadString()) ?? GeneratedItemData.Placeholder(), ensureAssets: true, notifyNetState: false);
+            var reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
+            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+            GeneratedItemData resolved = reference;
+            if (!string.IsNullOrWhiteSpace(reference.Id)
+                && registry is not null
+                && registry.TryGet(reference.Id, out var canonical)
+                && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+                resolved = canonical;
+            SetData(resolved, ensureAssets: false, registerLocal: false, notifyNetState: false);
         }
-        catch { try { SetData(GeneratedItemData.Placeholder(), ensureAssets: true, notifyNetState: false); } catch { } }
+        catch { try { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); } catch { } }
     }
 
     public override bool CanStack(Item source)
@@ -246,6 +258,12 @@ public partial class GeneratedItem : ModItem
         string altSummary = AltUseSummary();
         if (!string.IsNullOrWhiteSpace(altSummary))
             tooltips.Add(new TooltipLine(Mod, "InfiniAltUse", altSummary) { OverrideColor = Color.LightGoldenrodYellow });
+        string useUtilitySummary = GeneratedUtilitySummary(gameplay.GeneratedBuff, "On use");
+        if (!string.IsNullOrWhiteSpace(useUtilitySummary))
+            tooltips.Add(new TooltipLine(Mod, "InfiniUseUtility", useUtilitySummary) { OverrideColor = Color.LightGreen });
+        string holdUtilitySummary = GeneratedUtilitySummary(gameplay.HoldGeneratedBuff, "While held");
+        if (!string.IsNullOrWhiteSpace(holdUtilitySummary))
+            tooltips.Add(new TooltipLine(Mod, "InfiniHoldUtility", holdUtilitySummary) { OverrideColor = Color.LightCyan });
         string conditionSummary = UseConditionSummary(gameplay);
         if (!string.IsNullOrWhiteSpace(conditionSummary))
             tooltips.Add(new TooltipLine(Mod, "InfiniUseCondition", conditionSummary) { OverrideColor = Color.LightSalmon });
@@ -417,13 +435,15 @@ public partial class GeneratedItem : ModItem
         if (gp is null) return false;
         string mode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(mode) || mode == "none") return false;
-        if (mode == "mobility" || !string.IsNullOrWhiteSpace(gp.AltMobilityMode))
+        if (mode == "mobility")
             return !string.IsNullOrWhiteSpace(gp.AltMobilityMode) || gp.AltMobilityRangeTiles > 0;
-        if (mode == "generated_buff" || mode == "buff")
+        if (mode == "generated_buff")
             return gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect;
         if (mode == "light")
-            return AltLightStrength(gp) > 0f;
-        return true;
+            return gp.AltGeneratedBuff is not null
+                && gp.AltGeneratedBuff.HasAnyEffect
+                && gp.AltGeneratedBuff.EmitLightStrength > 0f;
+        return false;
     }
 
     private string AltUseSummary()
@@ -432,39 +452,42 @@ public partial class GeneratedItem : ModItem
         if (!HasExecutableAltUse(gp)) return "";
         string mode = (gp!.AltUseMode ?? "").Trim().ToLowerInvariant();
         string prefix = "Alt use (Right Click / ПКМ): ";
-        if (mode == "mobility" || !string.IsNullOrWhiteSpace(gp.AltMobilityMode))
+        if (mode == "mobility")
         {
             string kind = string.IsNullOrWhiteSpace(gp.AltMobilityMode) ? "mobility" : gp.AltMobilityMode.Trim();
             string range = gp.AltMobilityRangeTiles > 0 ? $", {gp.AltMobilityRangeTiles} tiles" : "";
             string cooldown = gp.AltMobilityCooldownTicks > 0 ? $", cooldown {Math.Max(1, (int)Math.Ceiling(gp.AltMobilityCooldownTicks / 60f))}s" : "";
             return prefix + kind + range + cooldown;
         }
-        if ((mode == "generated_buff" || mode == "buff") && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
-            return prefix + "generated utility buff";
+        if (mode == "generated_buff" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
+            return prefix + GeneratedUtilitySummary(gp.AltGeneratedBuff, "");
         if (mode == "light")
-            return prefix + $"light pulse ({AltLightStrength(gp):0.00})";
+            return prefix + $"light pulse ({AltLightStrength(gp):0.00}, {Math.Max(1, (int)Math.Ceiling((gp.AltGeneratedBuff?.DurationTicks ?? 0) / 60f))}s)";
         return prefix + mode;
+    }
+
+    private static string GeneratedUtilitySummary(GeneratedBuffSpec? buff, string prefix)
+    {
+        if (buff is null || !buff.HasAnyEffect) return "";
+        var parts = new List<string>();
+        if (Math.Abs(buff.MiningSpeedMultiplier - 1f) > 0.01f) parts.Add($"mining time x{buff.MiningSpeedMultiplier:0.00}");
+        if (buff.EmitLightStrength > 0f) parts.Add(string.IsNullOrWhiteSpace(buff.LightColorName) ? "light" : $"{buff.LightColorName} light");
+        if (buff.OreSenseRadiusTiles > 0) parts.Add($"ore sense {buff.OreSenseRadiusTiles} tiles");
+        if (buff.MovementSpeed != 0f) parts.Add($"{buff.MovementSpeed * 100f:+0;-0;0}% move");
+        if (buff.JumpBoost > 0f) parts.Add($"+{buff.JumpBoost:0.##} jump");
+        if (buff.ManaRegen > 0) parts.Add($"+{buff.ManaRegen} mana regen");
+        if (buff.LifeRegen > 0) parts.Add($"+{buff.LifeRegen} life regen");
+        int seconds = Math.Max(1, (int)Math.Ceiling(buff.DurationTicks / 60f));
+        string head = string.IsNullOrWhiteSpace(prefix) ? $"{seconds}s" : $"{prefix} ({seconds}s)";
+        return parts.Count == 0 ? head : head + ": " + string.Join(", ", parts);
     }
 
     private static float AltLightStrength(GameplaySpec? gp)
     {
         if (gp is null) return 0f;
-        float strength = 0f;
-        if (gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.EmitLightStrength > 0f)
-            strength = Math.Max(strength, gp.AltGeneratedBuff.EmitLightStrength);
-        if (gp.HoldLightStrength > 0f)
-            strength = Math.Max(strength, gp.HoldLightStrength);
-        return Math.Clamp(strength, 0f, 1.5f);
+        return Math.Clamp(gp.AltGeneratedBuff?.EmitLightStrength ?? 0f, 0f, 1.5f);
     }
 
-    private static string AltLightColorName(GameplaySpec? gp, AttackSpec? attack)
-    {
-        if (gp?.AltGeneratedBuff is not null && !string.IsNullOrWhiteSpace(gp.AltGeneratedBuff.LightColorName))
-            return gp.AltGeneratedBuff.LightColorName;
-        if (gp is not null && !string.IsNullOrWhiteSpace(gp.HoldLightColorName))
-            return gp.HoldLightColorName;
-        return attack?.PrimaryColorName ?? "";
-    }
 
     private static string UseConditionSummary(GameplaySpec? gp)
     {
@@ -488,7 +511,7 @@ public partial class GeneratedItem : ModItem
             if (data.Gameplay.PickPower > 0 || data.Gameplay.AxePower > 0 || data.Gameplay.HammerPower > 0)
             {
                 string speed = Math.Abs(data.Gameplay.MiningSpeedScale - 1f) > 0.01f ? $", mine x{Math.Clamp(data.Gameplay.MiningSpeedScale, 0.25f, 2f):0.00}" : "";
-                return $"Tool QoL: pick {data.Gameplay.PickPower}, axe {data.Gameplay.AxePower}, hammer {data.Gameplay.HammerPower}{speed}";
+                return $"Tool QoL: pick {data.Gameplay.PickPower}, axe {data.Gameplay.AxePower * 5}, hammer {data.Gameplay.HammerPower}{speed}";
             }
             return "";
         }
@@ -531,9 +554,8 @@ public partial class GeneratedItem : ModItem
         return $" · impact blink{range}{cooldown}";
     }
 
-    private string UseBlockedReason(Player player)
+    internal static string UseBlockedReason(Player player, GameplaySpec? gp)
     {
-        var gp = Data?.Gameplay;
         if (gp is null) return "";
         string mode = (gp.UseConditionMode ?? "").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(mode) || mode == "none") return "";
@@ -543,6 +565,8 @@ public partial class GeneratedItem : ModItem
         if (mode == "mana_above" && player.statMana < gp.UseConditionMinMana) return $"Need {Math.Max(0, gp.UseConditionMinMana)} mana";
         return "";
     }
+
+    private string UseBlockedReason(Player player) => UseBlockedReason(player, Data?.Gameplay);
 
     private void ShowLocalUseFeedback(Player player, string message, ref int lastTick, Color color)
     {
@@ -564,7 +588,7 @@ public partial class GeneratedItem : ModItem
         if (player.altFunctionUse == 2 && HasExecutableAltUse(gp))
         {
             string altMode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
-            if (altMode == "mobility" || !string.IsNullOrWhiteSpace(gp.AltMobilityMode))
+            if (altMode == "mobility")
             {
                 var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
                 if (modPlayer.GeneratedMobilityCooldownTicks > 0)
@@ -572,6 +596,15 @@ public partial class GeneratedItem : ModItem
                     ShowLocalUseFeedback(player, $"Mobility cooldown: {modPlayer.GeneratedMobilityCooldownSeconds}s", ref _lastAltUseBlockedNoticeTick, Color.Orange);
                     return false;
                 }
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(gp.MobilityMode))
+        {
+            var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+            if (modPlayer.GeneratedMobilityCooldownTicks > 0)
+            {
+                ShowLocalUseFeedback(player, $"Mobility cooldown: {modPlayer.GeneratedMobilityCooldownSeconds}s", ref _lastUseBlockedNoticeTick, Color.Orange);
+                return false;
             }
         }
 
@@ -615,37 +648,39 @@ public partial class GeneratedItem : ModItem
         var gp = Data?.Gameplay;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
         bool runLocalAction = InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player);
+        bool runPlayerGameplay = InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player);
         bool alt = player.altFunctionUse == 2 && gp is not null && !string.IsNullOrWhiteSpace(gp.AltUseMode);
         if (alt)
         {
-            if (runLocalAction)
+            if (Main.netMode == NetmodeID.MultiplayerClient && runLocalAction)
+            {
+                modPlayer.RequestGeneratedAltUseFromServer(Data?.Id ?? "", alternateUse: true, Main.MouseWorld);
+                return true;
+            }
+            // Dedicated/listen servers execute generated alt effects only through
+            // the validated intent packet. Terraria may also call this hook for the
+            // same use; running both paths would refresh buffs and emit two syncs.
+            if (Main.netMode == NetmodeID.Server)
+                return true;
+            if (runLocalAction || runPlayerGameplay)
             {
                 string mode = (gp!.AltUseMode ?? "").Trim().ToLowerInvariant();
                 bool used = false;
-                if (mode == "mobility" || !string.IsNullOrWhiteSpace(gp.AltMobilityMode))
+                if (runLocalAction && mode == "mobility")
                 {
                     used = modPlayer.TryRunGeneratedMobility(gp.AltMobilityMode, gp.AltMobilityRangeTiles, gp.AltMobilityCooldownTicks, gp.AltMobilitySafeTileOnly);
                     if (!used)
                         ShowLocalUseFeedback(player, modPlayer.LastGeneratedMobilityFailureMessage, ref _lastAltUseBlockedNoticeTick, Color.Orange);
                 }
-                if ((mode == "generated_buff" || mode == "buff") && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
+                if (runPlayerGameplay && mode == "generated_buff" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
                 {
-                    modPlayer.ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff);
+                    modPlayer.ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
                     used = true;
                 }
-                if (mode == "light")
+                if (runPlayerGameplay && mode == "light" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
                 {
-                    float strength = AltLightStrength(gp);
-                    if (strength > 0f)
-                    {
-                        modPlayer.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec
-                        {
-                            DurationTicks = Math.Clamp((gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.DurationTicks > 0) ? gp.AltGeneratedBuff.DurationTicks : 8 * 60, 60, 20 * 60),
-                            EmitLightStrength = strength,
-                            LightColorName = AltLightColorName(gp, Data?.Attack),
-                        });
-                        used = true;
-                    }
+                    modPlayer.ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
+                    used = gp.AltGeneratedBuff.EmitLightStrength > 0f;
                 }
                 return used;
             }
@@ -656,7 +691,7 @@ public partial class GeneratedItem : ModItem
         // can carry a small explicit ExtraBuffs list so two potion parents do not collapse
         // into one mismatched buffType/buffTime pair. This only executes concrete buff ids
         // already serialized in Gameplay; no prompt text is interpreted here.
-        if (runLocalAction && gp?.ExtraBuffs is { Length: > 0 })
+        if (runPlayerGameplay && gp?.ExtraBuffs is { Length: > 0 })
         {
             foreach (var buff in gp.ExtraBuffs)
             {
@@ -665,10 +700,15 @@ public partial class GeneratedItem : ModItem
                 player.AddBuff(buff.BuffCode, buff.BuffTime);
             }
         }
-        if (runLocalAction && gp?.GeneratedBuff is not null && gp.GeneratedBuff.HasAnyEffect)
-            modPlayer.ApplyGeneratedUtilityBuff(gp.GeneratedBuff);
-        if (runLocalAction && gp is not null)
-            modPlayer.TryRunGeneratedMobility(gp);
+        if (runPlayerGameplay && gp?.GeneratedBuff is not null && gp.GeneratedBuff.HasAnyEffect)
+            modPlayer.ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
+        if (runLocalAction && gp is not null && !string.IsNullOrWhiteSpace(gp.MobilityMode))
+        {
+            if (Main.netMode == NetmodeID.MultiplayerClient)
+                modPlayer.RequestGeneratedAltUseFromServer(Data?.Id ?? "", alternateUse: false, Main.MouseWorld);
+            else
+                modPlayer.TryRunGeneratedMobility(gp);
+        }
         return base.UseItem(player);
     }
 
@@ -700,7 +740,7 @@ public partial class GeneratedItem : ModItem
                 SpawnSoulDust(player.Center + new Vector2(Main.rand.Next(-10, 11), Main.rand.Next(-20, 9)), c, 0.45f + soulGlow * 0.55f);
         }
 
-        if (Data?.Gameplay?.HoldGeneratedBuff is not null && Data.Gameplay.HoldGeneratedBuff.HasAnyEffect && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
+        if (Data?.Gameplay?.HoldGeneratedBuff is not null && Data.Gameplay.HoldGeneratedBuff.HasAnyEffect && InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player))
             player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(Data.Gameplay.HoldGeneratedBuff);
 
         ApplyAuthoredToolMiningSpeed(player, Data?.Gameplay);
@@ -764,10 +804,7 @@ public partial class GeneratedItem : ModItem
         player.maxTurrets += a.SentrySlots;
         if (a.ManaCostReduction > 0f)
             player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
-        if (a.AmmoSaveChance >= 0.25f)
-            player.ammoCost75 = true;
-        else if (a.AmmoSaveChance >= 0.20f)
-            player.ammoCost80 = true;
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
         player.aggro += a.Aggro;
         player.endurance += a.Endurance;
         player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
@@ -823,10 +860,7 @@ public partial class GeneratedItem : ModItem
         player.maxTurrets += a.SetBonusSentrySlots;
         if (a.SetBonusManaCostReduction > 0f)
             player.manaCost = Math.Max(0.1f, player.manaCost - a.SetBonusManaCostReduction);
-        if (a.SetBonusAmmoSaveChance >= 0.25f)
-            player.ammoCost75 = true;
-        else if (a.SetBonusAmmoSaveChance >= 0.20f)
-            player.ammoCost80 = true;
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.SetBonusAmmoSaveChance);
         player.aggro += a.SetBonusAggro;
         player.endurance += a.SetBonusEndurance;
         player.GetArmorPenetration(DamageClass.Generic) += a.SetBonusArmorPenetration;
@@ -859,10 +893,7 @@ public partial class GeneratedItem : ModItem
         player.maxTurrets += a.SentrySlots;
         if (a.ManaCostReduction > 0f)
             player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
-        if (a.AmmoSaveChance >= 0.25f)
-            player.ammoCost75 = true;
-        else if (a.AmmoSaveChance >= 0.20f)
-            player.ammoCost80 = true;
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
         player.aggro += a.Aggro;
         player.endurance += a.Endurance;
         player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
@@ -907,11 +938,9 @@ public partial class GeneratedItem : ModItem
     private static int MeleeHitboxRadiusBonus(AttackSpec attack)
     {
         if (attack is null) return 0;
-        if (attack.ContactForgivenessPx > 0)
-            return Math.Clamp(attack.ContactForgivenessPx, 0, 14);
-        if (attack.AoeDamageRadiusPx > 0 && (attack.OnHitCode is 1 or 10))
-            return Math.Clamp(attack.AoeDamageRadiusPx / 6, 0, 14);
-        return 0;
+        return attack.ContactForgivenessPx > 0
+            ? Math.Clamp(attack.ContactForgivenessPx, 0, 14)
+            : 0;
     }
 
     public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
@@ -943,7 +972,7 @@ public partial class GeneratedItem : ModItem
             return;
 
         float damageMult = Math.Clamp(Data.Attack.SecondaryDamageMultiplier, 0.02f, 0.35f);
-        int childDamage = Math.Max(1, (int)Math.Round(Math.Max(1, damageDone) * damageMult));
+        int childDamage = Math.Max(0, (int)Math.Round(Math.Max(0, damageDone) * damageMult));
         float speed = Math.Clamp(Math.Max(4f, Data.Attack.Speed * 0.82f), 3f, 18f);
         float spread = Math.Clamp(Data.Attack.SecondarySpreadRadians > 0f ? Data.Attack.SecondarySpreadRadians : Data.Attack.SpreadRadians, 0f, MathHelper.ToRadians(60f));
         Vector2 baseDir = player.DirectionTo(target.Center);
@@ -990,38 +1019,38 @@ public partial class GeneratedItem : ModItem
         if (player is null || target is null || attack is null) return;
         int onHit = attack.OnHitCode;
         if (onHit <= 0) return;
-        int debuffTime = SwingDebuffTime(attack, onHit);
+        int debuffTime = Math.Clamp(attack.DebuffTime, 0, 600);
         switch (onHit)
         {
             case 1:
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 14, 1.25f);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 14), 1.25f);
                 break;
             case 4:
-                target.AddBuff(BuffID.OnFire, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 10, 1.05f);
+                if (debuffTime >= 30) target.AddBuff(BuffID.OnFire, debuffTime);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 10), 1.05f);
                 break;
             case 5:
-                target.AddBuff(BuffID.Frostburn, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 10, 1.05f);
+                if (debuffTime >= 30) target.AddBuff(BuffID.Frostburn, debuffTime);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 10), 1.05f);
                 break;
             case 6:
-                target.AddBuff(BuffID.Poisoned, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 10, 1.05f);
+                if (debuffTime >= 30) target.AddBuff(BuffID.Poisoned, debuffTime);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 10), 1.05f);
                 break;
             case 7:
-                target.AddBuff(BuffID.ShadowFlame, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 12, 1.15f);
+                if (debuffTime >= 30) target.AddBuff(BuffID.ShadowFlame, debuffTime);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 12), 1.15f);
                 break;
             case 9:
-                target.AddBuff(BuffID.Bleeding, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, 9, 8, 1.0f);
+                if (debuffTime >= 30) target.AddBuff(BuffID.Bleeding, debuffTime);
+                EmitGeneratedSwingImpactDust(target.Center, 9, Math.Min(attack.BurstDustCap, 8), 1.0f);
                 break;
             case 10:
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Clamp(attack.BurstDustCap <= 0 ? 16 : attack.BurstDustCap, 4, 24), 1.45f);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Clamp(attack.BurstDustCap, 0, 24), 1.45f);
                 break;
             case 17:
                 HealGeneratedSwingOwner(player, damageDone);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, 8, 1.0f);
+                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 8), 1.0f);
                 break;
             case 18:
                 SpawnGeneratedSwingOverheadBarrage(player, target, attack, damageDone, generatedItemId);
@@ -1029,28 +1058,14 @@ public partial class GeneratedItem : ModItem
         }
     }
 
-    private static int SwingDebuffTime(AttackSpec attack, int onHit)
-    {
-        int authored = attack.DebuffTime > 0 ? attack.DebuffTime : 0;
-        int fallback = onHit switch
-        {
-            4 => 180,
-            5 => 150,
-            6 => 180,
-            7 => 150,
-            9 => 180,
-            _ => 120,
-        };
-        return Math.Clamp(authored > 0 ? authored : fallback, 30, 600);
-    }
+
 
     private static void HealGeneratedSwingOwner(Player player, int damageDone)
     {
         if (player is null || !player.active || player.dead) return;
         int heal = Math.Clamp(Math.Max(1, damageDone / 5), 1, 4);
         if (player.statLife >= player.statLifeMax2) return;
-        player.statLife = Math.Min(player.statLifeMax2, player.statLife + heal);
-        player.HealEffect(heal);
+        player.Heal(heal);
     }
 
     private static void SpawnGeneratedSwingOverheadBarrage(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
@@ -1060,12 +1075,12 @@ public partial class GeneratedItem : ModItem
         int requested = Math.Max(0, attack.SplitCount > 0 ? attack.SplitCount : attack.MaxChildProjectiles);
         int cap = Math.Clamp(attack.MaxChildProjectiles > 0 ? attack.MaxChildProjectiles : requested, 0, 8);
         int count = Math.Min(requested, cap);
-        if (count <= 0) return;
+        if (count <= 0 || attack.SecondaryDamageMultiplier <= 0f) return;
 
         AttackSpec childSpec = SwingSecondarySpec(attack);
         GeneratedOverheadBarragePolicy.ConfigureChild(childSpec, attack);
-        float damageMult = Math.Max(0.12f, attack.SecondaryDamageMultiplier <= 0f ? 0.42f : attack.SecondaryDamageMultiplier);
-        int childDamage = Math.Max(1, (int)Math.Round(Math.Max(1, damageDone) * damageMult));
+        float damageMult = Math.Clamp(attack.SecondaryDamageMultiplier, 0f, 1f);
+        int childDamage = Math.Max(0, (int)Math.Round(Math.Max(0, damageDone) * damageMult));
         float rootId = Main.rand.Next(1, 1_000_000);
 
         for (int i = 0; i < count; i++)
@@ -1163,7 +1178,7 @@ public partial class GeneratedItem : ModItem
             OnHit = "none",
             OnHitCode = 0,
             Speed = Math.Max(3f, parent.Speed * 0.82f),
-            Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks <= 0 ? 24 : parent.SecondaryLifetimeTicks, 6, 120),
+            Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180),
             Pierce = 1,
             ProjectileWidth = size,
             ProjectileHeight = size,

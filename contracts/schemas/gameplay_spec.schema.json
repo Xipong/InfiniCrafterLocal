@@ -324,27 +324,12 @@
       "title": "Damageclass",
       "type": "string"
     },
-    "drawDuringUse": {
-      "default": false,
-      "title": "Drawduringuse",
-      "type": "boolean"
-    },
     "extraBuffs": {
       "items": {
         "$ref": "#/$defs/BuffEntryBoundary"
       },
       "title": "Extrabuffs",
       "type": "array"
-    },
-    "extractinatorOutputItemType": {
-      "default": 0,
-      "title": "Extractinatoroutputitemtype",
-      "type": "integer"
-    },
-    "extractinatorOutputStack": {
-      "default": 0,
-      "title": "Extractinatoroutputstack",
-      "type": "integer"
     },
     "generatedBuff": {
       "$ref": "#/$defs/GeneratedBuffBoundary"
@@ -467,11 +452,6 @@
       "title": "Powerbudget",
       "type": "number"
     },
-    "projectileSizePolicy": {
-      "default": "",
-      "title": "Projectilesizepolicy",
-      "type": "string"
-    },
     "rarity": {
       "default": 0,
       "title": "Rarity",
@@ -489,27 +469,12 @@
       "title": "Releasetiming",
       "type": "string"
     },
-    "rotationMode": {
-      "default": "",
-      "title": "Rotationmode",
-      "type": "string"
-    },
     "runtimeState": {
       "$ref": "#/$defs/RuntimeStateBoundary"
-    },
-    "spawnStyle": {
-      "default": "",
-      "title": "Spawnstyle",
-      "type": "string"
     },
     "stage": {
       "default": "early",
       "title": "Stage",
-      "type": "string"
-    },
-    "trailMode": {
-      "default": "",
-      "title": "Trailmode",
       "type": "string"
     },
     "useAnimation": {
@@ -530,11 +495,6 @@
     "useConditionMode": {
       "default": "",
       "title": "Useconditionmode",
-      "type": "string"
-    },
-    "useFantasy": {
-      "default": "",
-      "title": "Usefantasy",
       "type": "string"
     },
     "useStyle": {

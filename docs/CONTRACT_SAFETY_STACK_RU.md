@@ -12,6 +12,7 @@
 - `GeneratedItemData.Normalize.cs` — C# normalization.
 - `GeneratedProjectile.NetSync.cs` — ordered projectile protocol.
 - `GeneratedChildSpecPolicy.cs` — чистые sentry/charge/generic-child transformations.
+- `qa/csharp_delivery_contract.py` — source-derived recursive JSON shape/kind boundary для уже очищенного `GeneratedItemData` delivery payload.
 
 `contracts/schemas/*.schema.json` и `contracts/config_registry.json` — generated evidence. Они не являются writable source-of-truth.
 
@@ -36,6 +37,7 @@ child policy (inherit/reset/recompute/strip), если применимо
 
 ```bash
 PYTHONPATH=LocalGenerator python tools/contract_parity.py --json
+PYTHONPATH=LocalGenerator python tools/check_delivery_contract.py
 PYTHONPATH=LocalGenerator python tools/mutation_contract_gate.py
 ```
 
@@ -49,6 +51,7 @@ Mutation gate обязан поймать как минимум:
 - перестановку network read;
 - разрушение `dustSpawnDenom=0`;
 - превращение sentry shot обратно в sentry root.
+- scalar вместо nested DTO, unknown nested field и wrong JSON kind в delivered payload.
 
 ## Raw и compiled strict boundaries
 
@@ -97,7 +100,7 @@ Strict replay:
 4. возвращает non-zero при drift;
 5. при `--rerun` запускает реальный `combine()` в изолированном cache с сохранённым raw LLM fixture и не обращается тихо к внешней модели.
 
-`tools/semantic_runtime_diff.py` сравнивает десять golden vertical slices с замороженным v17 baseline. Разрешены только явно канонизированные исправления; damage/timing/family/child-budget не игнорируются.
+`tools/semantic_runtime_diff.py` сравнивает десять golden vertical slices с замороженным v20 authorship baseline. Он фиксирует семантику после удаления скрытых defaults; damage/timing/family/child-budget не игнорируются.
 
 ## Влияние на runtime
 

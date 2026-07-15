@@ -35,7 +35,7 @@ public sealed partial class GeneratedItemData
         item.damage = Math.Max(0, Gameplay.Damage);
         item.knockBack = Gameplay.Knockback;
         item.useTime = Math.Max(10, Gameplay.UseTime);
-        item.useAnimation = Math.Max(10, Gameplay.UseAnimation);
+        item.useAnimation = Math.Max(6, Gameplay.UseAnimation);
         item.useStyle = Gameplay.UseStyle;
         item.autoReuse = Gameplay.AutoReuse;
         item.consumable = Gameplay.Consumable;

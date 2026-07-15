@@ -113,12 +113,11 @@ def cleanup_sdcpp_server_process(reason: str = "cleanup") -> None:
     sdcpp_service.cleanup_server_process(SDCPP_SERVER_STATE, log_event, reason)
 
 
-def _install_sdcpp_cleanup_handlers() -> None:
+def install_sdcpp_cleanup_handlers() -> None:
+    """Install process cleanup from the HTTP entrypoint's main thread."""
     sdcpp_service.install_cleanup_handlers(SDCPP_SERVER_STATE, cleanup_sdcpp_server_process)
 
 
-
-_install_sdcpp_cleanup_handlers()
 COMFYUI_WORKFLOW = env_str("INFINI_COMFYUI_WORKFLOW", "auto")
 COMFYUI_WORKFLOW_LORA = env_str("INFINI_COMFYUI_WORKFLOW_LORA", "")
 COMFYUI_WORKFLOW_NO_LORA = env_str("INFINI_COMFYUI_WORKFLOW_NO_LORA", "")
@@ -273,7 +272,6 @@ __all__ = [
     "SDCPP_SERVER_STATE",
     "_sdcpp_config",
     "cleanup_sdcpp_server_process",
-    "_install_sdcpp_cleanup_handlers",
     "COMFYUI_WORKFLOW",
     "COMFYUI_WORKFLOW_LORA",
     "COMFYUI_WORKFLOW_NO_LORA",

@@ -19,4 +19,5 @@ public static class InfiniNetPacketIds
     public const byte RequestGeneratedItemById = 10;
     public const byte SyncGeneratedHeldItemPresentation = 11;
     public const byte CancelServerCraft = 12;
+    public const byte RequestGeneratedAltUse = 13;
 }

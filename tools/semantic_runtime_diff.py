@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Compare deterministic gameplay semantics with the frozen v17 baseline.
+"""Compare deterministic gameplay semantics with the frozen v20 authorship baseline.
 
-The canonicalizer removes diagnostics and translates the one intentional v18
-bug fix (tool light from Python-only runtimeLight* to executable holdLight*).
-No balance, damage, timing, family, child-budget, or executor field is ignored.
+The canonicalizer removes diagnostics and the retired Python-only tool-light aliases.
+The v20 baseline freezes the post-audit rule that only explicitly compiled gameplay
+semantics survive; no balance, damage, timing, family, child-budget, or executor
+field is ignored.
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ os.environ["INFINI_BALANCE_MODE"] = "safety"
 from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES  # noqa: E402
 from infini_local.qa.runtime_proof import build_gameplay_seam_report  # noqa: E402
 
-DEFAULT_BASELINE = ROOT / "contracts" / "golden_runtime_semantics_v17.json"
+DEFAULT_BASELINE = ROOT / "contracts" / "golden_runtime_semantics_v20.json"
 
 
 def canonical_item(item: dict[str, Any]) -> dict[str, Any]:

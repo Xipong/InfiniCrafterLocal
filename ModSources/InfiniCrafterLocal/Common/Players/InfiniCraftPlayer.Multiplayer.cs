@@ -104,7 +104,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)1); // state version
+        writer.Write((byte)2); // state version
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -115,11 +115,17 @@ public sealed partial class InfiniCraftPlayer
         writer.Write(_generatedManaRegen);
         writer.Write(_generatedLifeRegen);
         writer.Write(_generatedMobilityCooldownTicks);
+        int buffCount = Math.Min(32, _activeGeneratedUtilityBuffs.Count);
+        writer.Write((byte)buffCount);
+        for (int index = 0; index < buffCount; index++)
+            WriteGeneratedUtilityBuffEntry(writer, _activeGeneratedUtilityBuffs[index]);
     }
 
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
-        _ = reader.ReadByte(); // version
+        byte version = reader.ReadByte();
+        if (version != 2)
+            throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _generatedBuffTicks = reader.ReadInt32();
         _generatedMiningSpeedMultiplier = reader.ReadSingle();
         _generatedLightStrength = reader.ReadSingle();
@@ -131,6 +137,76 @@ public sealed partial class InfiniCraftPlayer
         _generatedLifeRegen = reader.ReadInt32();
         _generatedMobilityCooldownTicks = reader.ReadInt32();
         ClampGeneratedBuffState();
+        _activeGeneratedUtilityBuffs.Clear();
+        int buffCount = Math.Min(32, (int)reader.ReadByte());
+        for (int index = 0; index < buffCount; index++)
+            _activeGeneratedUtilityBuffs.Add(ReadGeneratedUtilityBuffEntry(reader));
+    }
+
+    private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
+    {
+        byte version = reader.ReadByte();
+        if (version != 2)
+            throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadString();
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
+        int buffCount = Math.Min(32, (int)reader.ReadByte());
+        for (int index = 0; index < buffCount; index++)
+            DiscardGeneratedUtilityBuffEntry(reader);
+    }
+
+    private static void WriteGeneratedUtilityBuffEntry(System.IO.BinaryWriter writer, ActiveGeneratedUtilityBuff buff)
+    {
+        writer.Write(buff.Ticks);
+        writer.Write(buff.MiningSpeedMultiplier);
+        writer.Write(buff.EmitLightStrength);
+        writer.Write(buff.LightColorName ?? "");
+        writer.Write(buff.OreSenseRadiusTiles);
+        writer.Write(buff.MovementSpeed);
+        writer.Write(buff.JumpBoost);
+        writer.Write(buff.ManaRegen);
+        writer.Write(buff.LifeRegen);
+    }
+
+    private static ActiveGeneratedUtilityBuff ReadGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
+    {
+        int ticks = reader.ReadInt32();
+        float miningSpeedMultiplier = reader.ReadSingle();
+        float lightStrength = reader.ReadSingle();
+        string lightColor = reader.ReadString().Trim();
+        return new ActiveGeneratedUtilityBuff
+        {
+            Ticks = Math.Clamp(ticks, 1, 21600),
+            MiningSpeedMultiplier = Math.Clamp(miningSpeedMultiplier, 0.25f, 4f),
+            EmitLightStrength = Math.Clamp(lightStrength, 0f, 1.5f),
+            LightColorName = lightColor[..Math.Min(lightColor.Length, 32)],
+            OreSenseRadiusTiles = Math.Clamp(reader.ReadInt32(), 0, 60),
+            MovementSpeed = Math.Clamp(reader.ReadSingle(), -0.5f, 2f),
+            JumpBoost = Math.Clamp(reader.ReadSingle(), 0f, 8f),
+            ManaRegen = Math.Clamp(reader.ReadInt32(), 0, 120),
+            LifeRegen = Math.Clamp(reader.ReadInt32(), 0, 120),
+        };
+    }
+
+    private static void DiscardGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
+    {
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadString();
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
     }
 
     private void ClampGeneratedBuffState()
@@ -221,9 +297,150 @@ public sealed partial class InfiniCraftPlayer
         Player player = Main.player[playerId];
         if (player is null || !player.active) return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        modPlayer.ReadGeneratedBuffState(reader);
         if (Main.netMode == NetmodeID.Server)
+        {
+            // Clients may request a resync by sending their predicted snapshot,
+            // but none of its numbers are authoritative. Consume the packet and
+            // rebroadcast the server-owned state built from canonical item data.
+            DiscardGeneratedBuffState(reader);
             modPlayer.SendGeneratedBuffState(-1, whoAmI);
+            return;
+        }
+        modPlayer.ReadGeneratedBuffState(reader);
+    }
+
+    public void RequestGeneratedAltUseFromServer(string generatedItemId, bool alternateUse, Vector2 target)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || Player.whoAmI != Main.myPlayer)
+            return;
+        string safeId = (generatedItemId ?? "").Trim();
+        if (safeId.Length is <= 0 or > 128 || !float.IsFinite(target.X) || !float.IsFinite(target.Y))
+            return;
+        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
+        packet.Write(PacketRequestGeneratedAltUse);
+        packet.Write(alternateUse);
+        packet.Write(safeId);
+        packet.Write(target.X);
+        packet.Write(target.Y);
+        packet.Send();
+    }
+
+    public static void HandleGeneratedAltUseRequestPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers)
+            return;
+        bool alternateUse = reader.ReadBoolean();
+        string generatedItemId = reader.ReadString().Trim();
+        Vector2 target = new(reader.ReadSingle(), reader.ReadSingle());
+        if (generatedItemId.Length is <= 0 or > 128 || !float.IsFinite(target.X) || !float.IsFinite(target.Y))
+            return;
+
+        Player player = Main.player[whoAmI];
+        if (player is null || !player.active || player.dead || player.HeldItem?.ModItem is not GeneratedItem held)
+            return;
+        if (!string.Equals(held.Data?.Id, generatedItemId, StringComparison.Ordinal))
+            return;
+        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+        if (registry is null
+            || !registry.TryGet(generatedItemId, out GeneratedItemData canonical)
+            || !GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+            return;
+
+        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        modPlayer.QueueGeneratedUseIntent(generatedItemId, alternateUse, target);
+        modPlayer.ProcessPendingGeneratedUseIntent();
+    }
+
+    private void QueueGeneratedUseIntent(string generatedItemId, bool alternateUse, Vector2 target)
+    {
+        if (Main.netMode != NetmodeID.Server || _pendingGeneratedUseTicks > 0)
+            return;
+        _pendingGeneratedUseItemId = generatedItemId;
+        _pendingGeneratedUseAlternate = alternateUse;
+        _pendingGeneratedUseTarget = target;
+        _pendingGeneratedUseTicks = GeneratedUseIntentWindowTicks;
+    }
+
+    private void ClearPendingGeneratedUseIntent()
+    {
+        _pendingGeneratedUseItemId = "";
+        _pendingGeneratedUseAlternate = false;
+        _pendingGeneratedUseTarget = Vector2.Zero;
+        _pendingGeneratedUseTicks = 0;
+    }
+
+    private void ProcessPendingGeneratedUseIntent()
+    {
+        if (Main.netMode != NetmodeID.Server)
+        {
+            ClearPendingGeneratedUseIntent();
+            return;
+        }
+        if (_pendingGeneratedUseTicks <= 0)
+            return;
+        _pendingGeneratedUseTicks--;
+        if (!Player.active || Player.dead || Player.HeldItem?.ModItem is not GeneratedItem held
+            || !string.Equals(held.Data?.Id, _pendingGeneratedUseItemId, StringComparison.Ordinal))
+        {
+            ClearPendingGeneratedUseIntent();
+            return;
+        }
+        // A request is only an intent. Execute after Terraria has accepted the
+        // corresponding use and exposed its item animation/time on the server.
+        if (Player.itemAnimation <= 0 && Player.itemTime <= 0)
+        {
+            if (_pendingGeneratedUseTicks <= 0)
+                ClearPendingGeneratedUseIntent();
+            return;
+        }
+
+        string generatedItemId = _pendingGeneratedUseItemId;
+        bool alternateUse = _pendingGeneratedUseAlternate;
+        Vector2 target = _pendingGeneratedUseTarget;
+        ClearPendingGeneratedUseIntent();
+        if (_generatedAltUseRequestCooldownTicks > 0)
+            return;
+        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+        if (registry is null
+            || !registry.TryGet(generatedItemId, out GeneratedItemData canonical)
+            || !GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+            return;
+        GameplaySpec gp = canonical.Gameplay ?? new GameplaySpec();
+        if (!string.IsNullOrWhiteSpace(GeneratedItem.UseBlockedReason(Player, gp)))
+            return;
+        _generatedAltUseRequestCooldownTicks = Math.Clamp(gp.UseTime, 6, 150);
+
+        bool used = false;
+        if (alternateUse)
+        {
+            string altMode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
+            if (altMode is "generated_buff" or "light" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
+            {
+                ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: true);
+                used = true;
+            }
+            else if (altMode == "mobility")
+            {
+                used = TryRunGeneratedMobilityFromServerIntent(
+                    gp.AltMobilityMode,
+                    gp.AltMobilityRangeTiles,
+                    gp.AltMobilityCooldownTicks,
+                    gp.AltMobilitySafeTileOnly,
+                    target);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(gp.MobilityMode))
+        {
+            used = TryRunGeneratedMobilityFromServerIntent(
+                gp.MobilityMode,
+                gp.MobilityRangeTiles,
+                gp.MobilityCooldownTicks,
+                gp.MobilitySafeTileOnly,
+                target);
+        }
+
+        if (used && (alternateUse ? (gp.AltUseMode ?? "").Trim().Equals("mobility", StringComparison.OrdinalIgnoreCase) : true))
+            SendGeneratedBuffState();
     }
 
 
@@ -638,18 +855,14 @@ public sealed partial class InfiniCraftPlayer
         generatedMismatch = false;
         string expected = (generatedId ?? "").Trim();
         if (string.IsNullOrWhiteSpace(expected))
-            return slot.ModItem is not GeneratedItem && slot.ModItem is not global::InfiniCrafterLocal.Content.Items.GeneratedExtractinatorMaterial;
+            return slot.ModItem is not GeneratedItem;
 
-        string actual = "";
-        if (slot.ModItem is GeneratedItem generated)
-            actual = generated.Data?.Id ?? "";
-        else if (slot.ModItem is global::InfiniCrafterLocal.Content.Items.GeneratedExtractinatorMaterial extractinator)
-            actual = extractinator.Data?.Id ?? "";
-        else
+        if (slot.ModItem is not GeneratedItem generated)
         {
             generatedMismatch = true;
             return false;
         }
+        string actual = generated.Data?.Id ?? "";
         bool ok = string.Equals(actual, expected, StringComparison.Ordinal);
         generatedMismatch = !ok;
         return ok;
@@ -712,13 +925,10 @@ public sealed partial class InfiniCraftPlayer
 
             StampHostAssetSyncMetadata(data);
 
-            bool asExtractinatorProxy = global::InfiniCrafterLocal.Content.Items.GeneratedExtractinatorMaterial.CanRepresent(data);
-            bool asArmorProxy = !asExtractinatorProxy && global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.CanRepresent(data);
-            int itemType = asExtractinatorProxy
-                ? ModContent.ItemType<global::InfiniCrafterLocal.Content.Items.GeneratedExtractinatorMaterial>()
-                : asArmorProxy
-                    ? global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.ItemTypeFor(data)
-                    : ModContent.ItemType<GeneratedItem>();
+            bool asArmorProxy = global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.CanRepresent(data);
+            int itemType = asArmorProxy
+                ? global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.ItemTypeFor(data)
+                : ModContent.ItemType<GeneratedItem>();
             int index = Item.NewItem(player.GetSource_Misc("InfiniCraft"), player.Hitbox, itemType);
             if (index < 0 || index >= Main.maxItems)
             {
@@ -726,24 +936,12 @@ public sealed partial class InfiniCraftPlayer
                 return false;
             }
 
-            if (asExtractinatorProxy)
+            if (Main.item[index].ModItem is not GeneratedItem generated)
             {
-                if (Main.item[index].ModItem is not global::InfiniCrafterLocal.Content.Items.GeneratedExtractinatorMaterial proxy)
-                {
-                    error = "Item.NewItem не вернул GeneratedExtractinatorMaterial";
-                    return false;
-                }
-                proxy.SetData(data);
+                error = "Item.NewItem не вернул GeneratedItem";
+                return false;
             }
-            else
-            {
-                if (Main.item[index].ModItem is not GeneratedItem generated)
-                {
-                    error = "Item.NewItem не вернул GeneratedItem";
-                    return false;
-                }
-                generated.SetData(data);
-            }
+            generated.SetData(data);
             int craftYield = Math.Clamp(data.Gameplay?.CraftYield ?? 1, 1, Math.Max(1, data.Gameplay?.MaxStack ?? 1));
             Main.item[index].stack = craftYield;
 

@@ -136,26 +136,17 @@ def apply_secondary_projectile_calls(
     current_onhit = _norm_name(patch.get("onHit"))
 
     if patch["secondaryTrigger"] == SECONDARY_TRIGGER_ON_HIT:
-        if not current_onhit or current_onhit in {"none", "burst"}:
-            patch["onHit"] = "split"
-            patch["onHitForcedBySecondary"] = True
-        elif current_onhit in _DEBUFF_ONHITS:
-            patch.setdefault("debuffHint", current_onhit)
-            patch.setdefault("debuffTime", 180 if current_onhit != "burn" else 240)
-            patch["onHit"] = "split"
-            patch["onHitForcedBySecondary"] = True
-            patch["secondaryPreservedDebuffOnHit"] = current_onhit
-        elif current_onhit not in _CHILD_ONHITS:
-            if secondary_from_rejected_primary and runtime_family in {"swing", "thrust"}:
-                patch["secondaryPreservedAlongsidePrimaryOnHit"] = current_onhit
-            else:
-                patch["secondarySuppressedByPrimaryOnHit"] = current_onhit
-                patch["splitCount"] = 0
-                patch["maxChildProjectiles"] = 0
-                patch["maxChildDepth"] = 0
-        elif current_onhit != "split":
-            patch.setdefault("maxChildProjectiles", split_count)
-            patch.setdefault("maxChildDepth", 1)
+        # Secondary projectiles are an independent trigger channel. They must not
+        # replace the primary authored onHit effect merely to reach the C# executor.
+        # Child-producing primary effects share the same finite child fields and
+        # therefore remain an explicit representability conflict.
+        if current_onhit in _CHILD_ONHITS and current_onhit != "split":
+            patch["secondarySuppressedByPrimaryOnHit"] = current_onhit
+            patch["splitCount"] = existing_split if existing_split > 0 else 0
+            patch["maxChildProjectiles"] = int(max(1, min(48, existing_split))) if existing_split > 0 else 0
+            patch["maxChildDepth"] = 1 if existing_split > 0 else 0
+        else:
+            patch["secondaryPreservedAlongsidePrimaryOnHit"] = current_onhit or "none"
     elif patch["secondaryTrigger"] == SECONDARY_TRIGGER_ON_EXPIRE:
         # Swing has no runtime projectile to expire. Other projectile-owned families
         # use the same finite GeneratedProjectile lifecycle and can execute this trigger.
@@ -187,9 +178,6 @@ def apply_secondary_projectile_calls(
         patch["maxChildProjectiles"] = 0
         patch["maxChildDepth"] = 0
         patch["secondaryDamageMultiplier"] = 0
-        if patch.get("onHitForcedBySecondary"):
-            patch["onHit"] = "none"
-            patch.pop("onHitForcedBySecondary", None)
 
     patch["secondaryCallIndices"] = [index for index in accepted_indices if index is not None]
     if rejected:

@@ -180,7 +180,7 @@ def _has_utility_engine_calls(data: dict[str, Any]) -> bool:
         "tool_capability",
         "mobility_effect",
         "hold_item_effect",
-        "extractinator_output",
+
         "apply_player_effect_on_use",
     }
     for call in calls:

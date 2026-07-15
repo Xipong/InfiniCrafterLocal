@@ -7,7 +7,10 @@ from infini_local.core.result_models import RuntimeCompileResult
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION, _enum, _norm_name, _num
 from infini_local.core.runtime_authoring.compiler import compile_runtime_plan_to_genome_patch
 from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
-from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_family_policy import (
+    CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES,
+    HELD_PROJECTILE_RUNTIME_FAMILIES,
+)
 from infini_local.core.runtime_secondary_policy import normalize_secondary_trigger
 from infini_local.core.runtime_authoring.structural import all_calls, find_call
 from infini_local.core.runtime_contracts import validate_runtime_contract
@@ -72,7 +75,11 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         warnings.append("some engineCalls were hard-rejected by safety policy")
     if "state_meter" in fns or "triggered_action" in fns:
         warnings.append("state_meter/triggered_action are preserved as authored runtime state intent; current gameplay requires concrete executable calls too")
-    combatish = str(data.get("category") or data.get("gameplay", {}).get("kind") or "").lower() in {"weapon", "summon"} or bool((data.get("attack") or {}).get("enabled") if isinstance(data.get("attack"), dict) else False)
+    plan_kind = _norm_name(rp.get("resultKind") or find_call(rp, "set_item_stats").get("resultKind"))
+    combatish = (
+        str(data.get("category") or data.get("gameplay", {}).get("kind") or plan_kind or "").lower() in {"weapon", "summon"}
+        or bool((data.get("attack") or {}).get("enabled") if isinstance(data.get("attack"), dict) else False)
+    )
     if combatish:
         if "set_item_stats" not in fns:
             errors.append("combat result lacks set_item_stats")
@@ -85,6 +92,41 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
                 errors.append("primary executable action did not compile: " + runtime_error)
             if runtime_error == "primary_attack_requires_runtimefamily" or not _norm_name(compiled_patch.get("runtimeFamily")) or _norm_name(compiled_patch.get("runtimeFamily")) == "none":
                 errors.append("combat primary action lacks an executable runtimeFamily")
+            for field in ("delivery", "movement", "speed", "rangeTiles", "lifetimeTicks", "shotCount", "spreadRadians", "pierce"):
+                if field not in compiled_patch:
+                    errors.append(f"combat primary action requires explicit {field}")
+            compiled_family = _norm_name(compiled_patch.get("runtimeFamily"))
+            family_required: dict[str, tuple[str, ...]] = {
+                "beam": ("beamWidthPx", "beamChargeTicks", "immunityCooldown"),
+                "charge_release": ("chargeTicks", "chargePowerMultiplier"),
+                "overhead_barrage": ("delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"),
+            }
+            for field in family_required.get(compiled_family, ()):
+                if field not in compiled_patch:
+                    errors.append(f"combat runtimeFamily={compiled_family} requires explicit {field}")
+            if compiled_family == "overhead_barrage" and (_num(compiled_patch.get("secondaryDamageMultiplier"), 0) or 0) <= 0:
+                errors.append("combat runtimeFamily=overhead_barrage requires secondaryDamageMultiplier > 0")
+            single_runtime_families = set(HELD_PROJECTILE_RUNTIME_FAMILIES) - {"charge_release"}
+            single_runtime_shots = _num(compiled_patch.get("shotCount"), None)
+            if compiled_family in single_runtime_families and single_runtime_shots is not None and single_runtime_shots != 1:
+                errors.append(f"combat runtimeFamily={compiled_family} requires shotCount=1; its executor owns one runtime root")
+            if compiled_family in {"swing", "thrust"}:
+                for secondary_call in all_calls(rp, "spawn_secondary_projectiles"):
+                    if (_num(secondary_call.get("count"), 0) or 0) <= 0:
+                        continue
+                    has_child_body = bool(_norm_name(secondary_call.get("material")) or _norm_name(secondary_call.get("projectileShape")))
+                    if not has_child_body:
+                        errors.append(f"combat runtimeFamily={compiled_family} secondary projectiles require explicit material or projectileShape")
+                    trigger = normalize_secondary_trigger(secondary_call.get("trigger"))
+                    if compiled_family == "swing" and trigger == "on_expire":
+                        errors.append("combat runtimeFamily=swing cannot execute secondary trigger=on_expire; use on_hit")
+        stats_call = find_call(rp, "set_item_stats")
+        for field in ("damageClass", "damage", "useTimeTicks"):
+            if field not in stats_call:
+                errors.append(f"combat set_item_stats requires explicit {field}")
+        damage = _num(stats_call.get("damage"))
+        if damage is not None and damage <= 0:
+            errors.append("combat set_item_stats requires positive damage; use a non-combat resultKind for pure utility")
     for secondary in all_calls(rp, "spawn_secondary_projectiles"):
         count = _num(secondary.get("count"), 0) or 0
         trigger = normalize_secondary_trigger(secondary.get("trigger"))
@@ -98,14 +140,93 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     result_kind = _norm_name(stats.get("resultKind"))
     max_stack = _num(stats.get("maxStack"), 0) or 0
     craft_yield = _num(stats.get("craftYield"), 0) or 0
-    if result_kind == "ammo" and max(max_stack, craft_yield) < 25:
-        warnings.append("ammo output has low stack/yield; playable ammo should usually output 25+")
+    if result_kind in {"ammo", "consumable_weapon"}:
+        if max_stack <= 0 or craft_yield <= 0:
+            errors.append(f"{result_kind} result requires explicit positive maxStack and craftYield")
+        elif max(max_stack, craft_yield) < 25:
+            warnings.append("ammo output has low stack/yield; playable ammo should usually output 25+")
+    ammo_behavior = find_call(rp, "ammo_behavior")
+    ammo_for = _norm_name(stats.get("ammoFor") or ammo_behavior.get("ammoFor"))
+    if result_kind == "ammo" and ammo_for in {"arrow", "arrows", "bullet", "bullets"}:
+        if "damageClass" not in stats or not str(stats.get("damageClass") or "").strip():
+            errors.append("actual ammo requires explicit damageClass")
+        if "damage" not in stats or (_num(stats.get("damage"), -1) or 0) < 0:
+            errors.append("actual ammo requires explicit non-negative damage")
     hit = find_call(rp, "apply_on_hit_effect")
     if hit:
         onhit = _norm_name(hit.get("onHit"))
         aoe = _num(hit.get("aoeRadiusTiles"), 0) or 0
         if onhit in {"burst", "starburst", "blackhole", "radial_beams", "mini_missiles", "vortex_spawn"} and aoe > 10:
             warnings.append("impact AoE exceeds executable range; runtime will clamp")
+        buff_onhits = {"chain", "burn", "frostburn", "poison", "shadowflame", "bleed", "spore_cloud", "lightning_arc", "slow"}
+        if onhit in buff_onhits and (_num(hit.get("debuffTime"), 0) or 0) <= 0:
+            errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit debuffTime")
+        child_projectile_onhits = {
+            "split", "chain", "starburst", "spore_cloud", "mini_missiles",
+            "vortex_spawn", "radial_beams", "lightning_arc", "overhead_barrage",
+        }
+        if onhit in child_projectile_onhits:
+            if (_num(hit.get("secondaryDamageMultiplier"), 0) or 0) <= 0:
+                errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit secondaryDamageMultiplier > 0")
+            if (_num(hit.get("secondaryLifetimeTicks"), 0) or 0) <= 0:
+                errors.append(f"apply_on_hit_effect onHit={onhit} requires explicit secondaryLifetimeTicks")
+
+    for use_effect in all_calls(rp, "apply_player_effect_on_use"):
+        raw_buffs = use_effect.get("buffs") if isinstance(use_effect.get("buffs"), list) else []
+        if use_effect.get("buffType") not in (None, ""):
+            raw_buffs = [*raw_buffs, {"buffType": use_effect.get("buffType"), "buffTime": use_effect.get("buffTime")}]
+        for buff in raw_buffs:
+            if isinstance(buff, dict) and (_num(buff.get("buffType"), 0) or 0) > 0 and (_num(buff.get("buffTime"), 0) or 0) <= 0:
+                errors.append("apply_player_effect_on_use buffType requires explicit positive buffTime")
+        generated = use_effect.get("generatedBuff") if isinstance(use_effect.get("generatedBuff"), dict) else {}
+        if generated and (_num(generated.get("durationTicks") or use_effect.get("durationTicks"), 0) or 0) <= 0:
+            errors.append("apply_player_effect_on_use generatedBuff requires explicit durationTicks")
+
+    for alt in all_calls(rp, "set_alt_use_mode"):
+        mode = _norm_name(alt.get("mode"))
+        mobility_mode = _norm_name(alt.get("mobilityMode"))
+        generated = alt.get("generatedBuff") if isinstance(alt.get("generatedBuff"), dict) else {}
+        duration = _num(generated.get("durationTicks") or alt.get("durationTicks"), 0) or 0
+        if (generated or mode == "light") and duration <= 0:
+            errors.append(f"set_alt_use_mode mode={mode or 'unknown'} requires explicit durationTicks")
+        if mode == "mobility" and mobility_mode == "blink_to_cursor" and (_num(alt.get("rangeTiles"), 0) or 0) <= 0:
+            errors.append("set_alt_use_mode blink_to_cursor requires explicit positive rangeTiles")
+
+    for mobility in all_calls(rp, "mobility_effect"):
+        mode = _norm_name(mobility.get("mode"))
+        if mode in {"blink_to_cursor", "blink_to_projectile_impact"} and (_num(mobility.get("rangeTiles"), 0) or 0) <= 0:
+            errors.append(f"mobility_effect mode={mode} requires explicit positive rangeTiles")
+
+    for hold in all_calls(rp, "hold_item_effect"):
+        generated = hold.get("generatedBuff") if isinstance(hold.get("generatedBuff"), dict) else {}
+        if generated and (_num(generated.get("durationTicks"), 0) or 0) <= 0:
+            errors.append("hold_item_effect generatedBuff requires explicit durationTicks")
+
+    if result_kind == "tool":
+        tool = find_call(rp, "tool_capability")
+        if max((_num(tool.get(name), 0) or 0) for name in ("pickPower", "axePower", "hammerPower")) <= 0:
+            errors.append("tool result lacks explicit executable tool_capability")
+    elif result_kind == "accessory":
+        accessory = find_call(rp, "accessory_effect")
+        stats_obj = accessory.get("stats") if isinstance(accessory.get("stats"), dict) else {}
+        if not any(value not in (None, "", 0, 0.0, False) for value in stats_obj.values()):
+            errors.append("accessory result lacks explicit executable accessory_effect.stats")
+    elif result_kind == "armor":
+        armor = find_call(rp, "armor_effect")
+        slot = _norm_name(armor.get("armorSlot") or stats.get("armorSlot"))
+        armor_stats = armor.get("stats") if isinstance(armor.get("stats"), dict) else {}
+        set_bonus = armor.get("setBonus") if isinstance(armor.get("setBonus"), dict) else {}
+        defense = _num(armor.get("defense", stats.get("defense")), 0) or 0
+        if slot not in {"head", "body", "legs"}:
+            errors.append("armor result requires explicit armorSlot=head|body|legs")
+        if defense <= 0 and not any(value not in (None, "", 0, 0.0, False) for value in [*armor_stats.values(), *set_bonus.values()]):
+            errors.append("armor result lacks explicit defense/stat/set-bonus effect")
+    elif result_kind == "potion":
+        use_calls = all_calls(rp, "apply_player_effect_on_use")
+        heal = max((_num(stats.get("healLife"), 0) or 0), (_num(stats.get("healMana"), 0) or 0))
+        buff_type = _num(stats.get("buffType"), 0) or 0
+        if heal <= 0 and buff_type <= 0 and not use_calls:
+            errors.append("potion result lacks an explicit executable use effect")
     contract_validation = validate_runtime_contract(data, compile_runtime_plan_to_genome_patch(data) if rp else {})
     warnings.extend(contract_validation.get("warnings") or [])
     return {
@@ -202,6 +323,8 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "onHit": "onHit",
             "aoeRadiusTiles": "aoeRadiusTiles",
             "chainCount": "chainCount",
+            "secondaryDamageMultiplier": "secondaryDamageMultiplier",
+            "secondaryLifetimeTicks": "secondaryLifetimeTicks",
             "pullStrength": "pullStrength",
             "pullMode": "pullMode",
             "debuffHint": "debuffHint",
@@ -230,16 +353,10 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "autoReuse": "autoReuse",
             "useTurn": "useTurn",
             "channelUse": "channelUse",
-            "useFantasy": "useFantasy",
             "heldVisibility": "heldVisibility",
             "releaseTiming": "releaseTiming",
             "handPose": "handPose",
-            "spawnStyle": "spawnStyle",
-            "rotationMode": "rotationMode",
             "initialOffsetPx": "initialOffsetPx",
-            "drawDuringUse": "drawDuringUse",
-            "trailMode": "trailMode",
-            "projectileSizePolicy": "projectileSizePolicy",
         },
     }
     calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []

@@ -81,7 +81,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Result kind and bounded item stats.",
         "params": {
             "resultKind": "weapon|ammo|consumable_weapon|tool|accessory|armor|potion|material|furniture|generic",
-            "damageClass": "generic|melee|ranged|magic|summon",
+            "damageClass": "generic|melee|melee_no_speed|ranged|magic|summon|summon_melee_speed|exact ModName/DamageClassName",
             "damage": "0..cap", "useTimeTicks": "10..150", "useAnimationTicks": "6..150; =useTime one action/click; >useTime may repeat", "knockback": "0..12", "manaCost": "0..80", "autoReuse": "bool", "maxStack": "1 gear; 25+ stacks",
             "craftYield": "output count", "healLife": "potion only", "healMana": "potion only", "buffType": "potion buff id", "buffTime": "ticks paired with buffType",
             "pickPower": "tool only", "axePower": "tool only", "hammerPower": "tool only",
@@ -113,7 +113,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Ranged executor; charge_release holds, overhead_barrage spawns above target.",
         "params": {
             "family": "bow|repeater|gun|shotgun|launcher|rocket_launcher|dart|blowgun|harpoon|charge_release|overhead_barrage", "ammoFor": "empty custom; arrow|bullet consume vanilla ammo",
-            "movement": "straight|gravity_arc|slow_homing|phase|proximity_missile|boomerang; phase passes tiles", "speed": "3..18", "rangeTiles": "10..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "delayTicks": "0..300; barrage 0=immediate",
+            "movement": "straight|gravity_arc|slow_homing|phase|proximity_missile|boomerang; phase passes tiles", "speed": "3..18", "rangeTiles": "10..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "delayTicks": "0..300; barrage 0=immediate", "secondaryDamageMultiplier": "0.01..1 barrage damage", "secondaryLifetimeTicks": "5..180 barrage life",
             "projectileFamily": "visual form; launcher+empty=custom rocket", "chargeTicks": "1..300 charge_release hold", "chargePowerMultiplier": "1..3 max power", "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
         },
     },
@@ -121,13 +121,13 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Magic executor; beam channels, charge_release holds, overhead_barrage spawns above target.",
         "params": {
             "family": "staff|wand|rod|book|magic_gun|channelled_beam|charge_release|overhead_barrage|other exact family", "projectileFamily": "spear|bolt|beam|orb|etc",
-            "movement": "straight|slow_homing|gravity_arc|phase|accelerate|vortex_orb|blackhole_pull|expanding_wave", "speed": "3..18", "rangeTiles": "8..120", "chargePowerMultiplier": "1..3 charge_release", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "homingStrength": "0..1", "beamWidthPx": "2..96", "chargeTicks": "beam 0=full immediately; charge_release 1..300", "delayTicks": "0..300; barrage 0=immediate", "immunityCooldown": "4..60",
+            "movement": "straight|slow_homing|gravity_arc|phase|accelerate|vortex_orb|blackhole_pull|expanding_wave", "speed": "3..18", "rangeTiles": "8..120", "chargePowerMultiplier": "1..3 charge_release", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "homingStrength": "0..1", "beamWidthPx": "2..96", "chargeTicks": "beam 0=full immediately; charge_release 1..300", "delayTicks": "0..300; barrage 0=immediate", "secondaryDamageMultiplier": "0.01..1 barrage damage", "secondaryLifetimeTicks": "5..180 barrage life", "immunityCooldown": "4..60",
             "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
         },
     },
     "deploy_sentry": {
         "meaning": "Bounded Terraria sentry at cursor; stationary, targets NPCs, fires generated shots; not a minion.",
-        "params": {"placement": "grounded|floating", "attackIntervalTicks": "12..180 ticks/volley", "targetRangeTiles": "8..60", "helperLifetimeTicks": "120..36000 root", "shotCount": "1..4 simultaneous/volley", "speed": "3..18", "spreadRadians": "0..0.75", "movement": "shot movement", "effect": "shot effect", "onHit": "none|non-child effect only", "projectileShape": "sentry body", "secondaryProjectileShape": "shot body", "secondaryLifetimeTicks": "5..180 shot lifetime; not sentry lifetime"},
+        "params": {"placement": "grounded|floating", "attackIntervalTicks": "12..180 ticks/volley", "targetRangeTiles": "8..60", "helperLifetimeTicks": "120..36000 root", "shotCount": "1..4 simultaneous/volley", "speed": "3..18", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "movement": "shot movement", "effect": "shot effect", "onHit": "none|non-child effect only", "projectileShape": "sentry body", "secondaryProjectileShape": "shot body", "secondaryLifetimeTicks": "5..180 shot lifetime; not sentry lifetime"},
     },
     "spawn_temporary_helper_projectile": {
         "meaning": "Not a persistent Terraria minion or sentry; short orbit/drift only.",
@@ -141,7 +141,7 @@ ENGINE_FN_CATALOG_V2 = {
     },
     "apply_on_hit_effect": {
         "meaning": "Real on-hit gameplay: debuffs, bursts, chained hits, child-producing effects, pull/heal/lifesteal. Visual-only impact belongs in spawn_contact_particles.",
-        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty"},
+        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "secondaryDamageMultiplier": ">0..1 required for damaging child-producing onHit", "secondaryLifetimeTicks": "5..180 required for overhead_barrage children", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty", "debuffTime": "30..600 required for buff-applying onHit"},
     },
     "spawn_contact_particles": {
         "meaning": "Pure VFX/dust, no damage. Use this for chips, sawdust, sparks, slime, smoke, glow.",
@@ -161,7 +161,7 @@ ENGINE_FN_CATALOG_V2 = {
     },
     "tool_capability": {
         "meaning": "Executable Terraria tool stats for real tools only.",
-        "params": {"pickPower": "0..230", "axePower": "0..50", "hammerPower": "0..120", "miningSpeedScale": "0.25..2 executable held-tool mining speed multiplier"},
+        "params": {"pickPower": "0..1000", "axePower": "0..200 internal Item.axe units", "hammerPower": "0..1000", "miningSpeedScale": "0.25..2 executable held-tool mining speed multiplier"},
     },
     "emit_light": {
         "meaning": "Executable runtime light cue on held/projectile/effect contexts. It is not a baked image request and not damage.",
@@ -189,19 +189,16 @@ ENGINE_FN_CATALOG_V2 = {
     },
     "set_alt_use_mode": {
         "meaning": "Right-click/alternate-use utility; normal use unchanged unless authored.",
-        "params": {"mode": "mobility|generated_buff|light|none", "mobilityMode": "recall_home|blink_to_cursor", "rangeTiles": "0..80", "cooldownTicks": "0..3600", "safeTileOnly": "true", "generatedBuff": "same shape as apply_player_effect_on_use.generatedBuff"},
+        "params": {"mode": "mobility|generated_buff|light|none", "mobilityMode": "recall_home|blink_to_cursor", "rangeTiles": "0..80", "cooldownTicks": "0..3600", "safeTileOnly": "true", "generatedBuff": "same shape as apply_player_effect_on_use.generatedBuff", "durationTicks": "1..21600"},
     },
     "hold_item_effect": {
         "meaning": "Held-item utility: light or short generated buff refreshed while held.",
         "params": {"lightStrength": "0..1.5", "lightColorName": "white|gray|brown|tan|red|orange|yellow|gold|green|cyan|blue|purple|pink", "generatedBuff": "generated buff object"},
     },
-    "extractinator_output": {
-        "meaning": "Explicit Extractinator material output via dedicated proxy item.",
-        "params": {"resultType": "Terraria item id", "stack": "1..999"},
-    },
+
     "use_affordance": {
-        "meaning": "Non-damaging use/draw presentation.",
-        "params": {"autoReuse": "bool", "useTurn": "bool", "channelUse": "bool", "itemScale": "0.55..1.55", "offsetPx": "holdout x/y -80..80", "useFantasy": "throw|stab|swing|slam|drink|plant|channel|equip|place", "heldVisibility": "show_item|hide_item|show_projectile|show_both", "releaseTiming": "instant|early|mid_swing|on_contact|on_release", "handPose": "short|two_hand|overhead|throw|staff|held_out|none", "spawnStyle": "from_hand|at_tip|centered|impact_only|world_anchor", "rotationMode": "face_velocity|spin|fixed|swing_locked|random", "drawDuringUse": "bool", "trailMode": "none|afterimage|dust|sprite_stamp|ribbon", "projectileSizePolicy": "authored|inherit_parent_floor"},
+        "meaning": "Executable item-use and held-draw affordance only.",
+        "params": {"autoReuse": "bool", "useTurn": "bool", "channelUse": "bool", "itemScale": "0.55..1.55", "holdoutOffsetX": "-80..80", "holdoutOffsetY": "-80..80", "heldVisibility": "show_item|hide_item|show_projectile|show_both", "releaseTiming": "instant|early|mid_swing|on_contact|on_release", "handPose": "short_weapon|two_hand|overhead|throwing|staff|held_out|none", "initialOffsetPx": "-64..64"},
     },
     "consumption_behavior": {
         "meaning": "Consumable-use behavior; consumeChancePercent controls stack spend; no loot/spawn.",
@@ -275,10 +272,10 @@ NUMERIC_LIMITS = {
     "fieldLifetimeTicks": (0.0, 240.0), "secondaryDamageMultiplier": (0.0, 1.0),
     "secondarySpreadRadians": (0.0, 1.2), "secondaryLifetimeTicks": (5.0, 180.0), "sameTargetBias": (0.0, 1.0),
     "craftYield": (1.0, 999.0),
-    "healLife": (0.0, 500.0), "healMana": (0.0, 500.0), "buffType": (0.0, 1024.0), "buffTime": (0.0, 21600.0),
-    "pickPower": (0.0, 230.0), "axePower": (0.0, 50.0), "hammerPower": (0.0, 120.0),
+    "healLife": (0.0, 500.0), "healMana": (0.0, 500.0), "buffType": (0.0, 2147483647.0), "buffTime": (0.0, 21600.0),
+    "pickPower": (0.0, 1000.0), "axePower": (0.0, 200.0), "hammerPower": (0.0, 1000.0),
     "lightStrength": (0.0, 1.5), "durationTicks": (1.0, 21600.0), "cooldownTicks": (0.0, 3600.0),
-    "resultType": (0.0, 9999.0), "stack": (0.0, 999.0), "minLife": (0.0, 5000.0), "minMana": (0.0, 5000.0),
+    "resultType": (0.0, 2147483647.0), "stack": (0.0, 999.0), "minLife": (0.0, 5000.0), "minMana": (0.0, 5000.0),
     "consumeChancePercent": (0.0, 100.0),
     "soundVolume": (0.05, 1.0), "soundPitch": (-0.9, 0.9), "soundPitchVariance": (0.0, 0.6),
     "scale": (0.15, 5.0), "density": (0.0, 1.0), "duration": (3.0, 120.0), "alpha": (0.0, 1.0), "spread": (0.0, 2.0), "jitter": (0.0, 1.5), "startTick": (0.0, 120.0), "repeatEvery": (0.0, 120.0),

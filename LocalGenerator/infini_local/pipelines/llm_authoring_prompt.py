@@ -12,6 +12,7 @@ MECHANIC_BACKING_REF_RULES: tuple[str, ...] = (
     'Example for the first projectile call after set_item_stats: {"source":"engineCall","callIndex":1,"fn":"shoot_projectile","field":"movement","expected":"boomerang"}.',
 )
 
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
 
 from infini_local.core.balance_mode import current_balance_mode, should_apply_soft_normalization
@@ -58,6 +59,7 @@ from infini_local.pipelines.combine_balance import (
 )
 from infini_local.pipelines.combine_genome_contract import (
     combat_genome_required_for,
+    is_llm_planner,
 )
 from infini_local.pipelines.parent_context_cards import (
     raw_parent_card_for_llm,
@@ -184,11 +186,11 @@ def runtime_plan_to_attack_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
     data["_runtimePlanCompileCache"] = {"signature": signature, "patch": dict(patch), "result": result}
     debug = data.setdefault("debug", {})
     debug["runtimeApiVersion"] = ENGINE_RUNTIME_API_VERSION
-    debug["runtimePlanCompiler"] = json.dumps(result.get("quality", {}), ensure_ascii=False)[:6000]
-    debug["runtimePlanValidation"] = json.dumps(result.get("validation", {}), ensure_ascii=False)[:6000]
-    debug["runtimePlanProvenance"] = json.dumps(result.get("provenance", {}), ensure_ascii=False)[:6000]
+    debug["runtimePlanCompiler"] = bounded_json_dumps(result.get("quality", {}), max_chars=6000)
+    debug["runtimePlanValidation"] = bounded_json_dumps(result.get("validation", {}), max_chars=6000)
+    debug["runtimePlanProvenance"] = bounded_json_dumps(result.get("provenance", {}), max_chars=6000)
     data["runtimeCompiled"] = result.get("compiled", compiled_runtime_contract(data, patch))
-    debug["runtimeCompiled"] = json.dumps(data.get("runtimeCompiled", {}), ensure_ascii=False)[:6000]
+    debug["runtimeCompiled"] = bounded_json_dumps(data.get("runtimeCompiled", {}), max_chars=6000)
     if isinstance(data.get("attack"), dict):
         data["attack"]["runtimeAuthoringProvenance"] = result.get("provenance", {})
     return dict(patch)
@@ -198,8 +200,11 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         return data
     rp = runtime_plan(data)
     if not rp:
-        if LLM_RUNTIME_PLAN_REQUIRED and combat_genome_required_for(data):
-            raise PlannerUnavailable("LLM runtime authoring is enabled but runtimePlan/engineCalls is missing")
+        if LLM_RUNTIME_PLAN_REQUIRED and is_llm_planner(data):
+            raise PlannerUnavailable(
+                "LLM-authored result is missing runtimePlan/engineCalls; "
+                "code will not fall back to parent/tag semantic gameplay authoring"
+            )
         return data
     data.setdefault("debug", {})["runtimeAuthoringMode"] = "llm_engine_calls_v0_4_25"
     # Validation owns normalization.  Pre-normalizing here would feed semantic
@@ -207,8 +212,8 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     # legitimate deploy_sentry/overhead_barrage fields as unknown.
     validation = runtime_plan_validation_report(data)
     rp = runtime_plan(data)
-    data.setdefault("debug", {})["runtimePlanQuality"] = json.dumps(runtime_plan_quality_report(data), ensure_ascii=False)[:6000]
-    data.setdefault("debug", {})["runtimePlanValidation"] = json.dumps(validation, ensure_ascii=False)[:6000]
+    data.setdefault("debug", {})["runtimePlanQuality"] = bounded_json_dumps(runtime_plan_quality_report(data), max_chars=6000)
+    data.setdefault("debug", {})["runtimePlanValidation"] = bounded_json_dumps(validation, max_chars=6000)
     if LLM_RUNTIME_STRICT_VALIDATION and not validation.get("ok", False) and combat_genome_required_for(data):
         raise PlannerUnavailable("LLM runtimePlan failed engine-call validation: " + "; ".join(validation.get("errors") or ["unknown error"]))
     patch = runtime_plan_to_attack_genome_patch(data)
@@ -218,7 +223,7 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         attack["genome"] = genome
         for k, v in patch.items():
             genome[k] = v
-        data.setdefault("debug", {})["runtimePlanGenomePatch"] = json.dumps(patch, ensure_ascii=False)[:6000]
+        data.setdefault("debug", {})["runtimePlanGenomePatch"] = bounded_json_dumps(patch, max_chars=6000)
     result_kind = runtime_value(data, "set_item_stats", "resultKind", None) or rp.get("resultKind")
     if result_kind:
         data["category"] = normalize_category(str(result_kind))
@@ -241,8 +246,8 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         gp["mobilityRangeTiles"] = patch.get("mobilityRangeTiles", 0)
         gp["mobilityCooldownTicks"] = patch.get("mobilityCooldownTicks", 0)
         gp["mobilitySafeTileOnly"] = bool(patch.get("mobilitySafeTileOnly", True))
-    affordance_fields = ["useFantasy", "heldVisibility", "releaseTiming", "handPose", "spawnStyle", "rotationMode", "initialOffsetPx", "drawDuringUse", "trailMode", "projectileSizePolicy"]
-    for field in ["altUseMode", "altMobilityMode", "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly", "holdLightStrength", "holdLightColorName", "extractinatorOutputItemType", "extractinatorOutputStack", "itemScale", "holdoutOffsetX", "holdoutOffsetY", "autoReuse", "useTurn", "channelUse", "consumeChancePercent", "ammoFor", "useConditionMode", "useConditionMinLife", "useConditionMinMana"] + affordance_fields:
+    affordance_fields = ["heldVisibility", "releaseTiming", "handPose", "initialOffsetPx"]
+    for field in ["altUseMode", "altMobilityMode", "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly", "holdLightStrength", "holdLightColorName", "itemScale", "holdoutOffsetX", "holdoutOffsetY", "autoReuse", "useTurn", "channelUse", "consumeChancePercent", "ammoFor", "useConditionMode", "useConditionMinLife", "useConditionMinMana"] + affordance_fields:
         if field in patch and patch.get(field) not in (None, ""):
             gp[field] = patch.get(field)
     authored_affordance = {field: patch.get(field) for field in ["itemScale", "holdoutOffsetX", "holdoutOffsetY", "autoReuse", "useTurn", "channelUse"] + affordance_fields if field in patch and patch.get(field) not in (None, "")}
@@ -250,7 +255,7 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         authored_affordance.setdefault("schema", "infini.runtime-affordance.v2")
         authored_affordance.setdefault("note", "Author-provided use/draw feel. It does not change damage, resultKind, or runtimeFamily by itself.")
         data["runtimeAffordance"] = authored_affordance
-        data.setdefault("debug", {})["runtimeAffordance"] = json.dumps(authored_affordance, ensure_ascii=False)[:2000]
+        data.setdefault("debug", {})["runtimeAffordance"] = bounded_json_dumps(authored_affordance, max_chars=2000)
     if isinstance(patch.get("altGeneratedBuff"), dict):
         gp["altGeneratedBuff"] = patch.get("altGeneratedBuff")
     if isinstance(patch.get("holdGeneratedBuff"), dict):
@@ -259,7 +264,7 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         gp["runtimeState"] = patch.get("runtimeState")
     if isinstance(patch.get("rejectedEngineCalls"), list):
         gp["rejectedEngineCalls"] = patch.get("rejectedEngineCalls")[:16]
-        data.setdefault("debug", {})["rejectedEngineCalls"] = json.dumps(gp["rejectedEngineCalls"], ensure_ascii=False)[:6000]
+        data.setdefault("debug", {})["rejectedEngineCalls"] = bounded_json_dumps(gp["rejectedEngineCalls"], max_chars=6000)
     if isinstance(patch.get("accessory"), dict):
         data["accessory"] = patch.get("accessory")
         gp["kind"] = "accessory"
@@ -510,6 +515,30 @@ def authored_weapon_damage(src: dict[str, Any], fallback: int, max_parent_damage
     """
     balance_mode = current_balance_mode()
     debug["balanceMode"] = balance_mode
+    runtime_authored = bool(genome.get("runtimePlanAuthored"))
+    raw = src.get("damage") if isinstance(src, dict) else None
+    if runtime_authored:
+        debug["damageSource"] = "llm_authored_runtime_contract"
+        debug["authoredDamageHardCap"] = 9999
+        if raw in (None, ""):
+            debug["fallbackDamage"] = int(max(0, fallback))
+            return int(max(0, min(9999, fallback)))
+        try:
+            value = float(raw)
+            if not math.isfinite(value):
+                raise ValueError("non-finite damage")
+            final = max(0, min(9999, int(round(value))))
+            if final != int(round(value)):
+                debug["authoredDamageClamp"] = {
+                    "from": raw,
+                    "to": final,
+                    "reason": "absolute_runtime_safety_bound",
+                }
+            return final
+        except (TypeError, ValueError, OverflowError):
+            debug["invalidAuthoredDamage"] = str(raw)[:80]
+            return int(max(0, min(9999, fallback)))
+
     stage_damage = int(stage.get("derivedDamage") or max_parent_damage or fallback or 4)
     power = max(0.5, float(stage.get("powerBudget") or 1.0))
     hard_cap = int(max(8, stage_damage * 2.60 + 10, max_parent_damage * 3.0 + 18, 14 + power * 35.0))
@@ -537,7 +566,6 @@ def authored_weapon_damage(src: dict[str, Any], fallback: int, max_parent_damage
 
     # Absolute guard for broken JSON / absurd API output. It is not the soft balance layer.
     hard_cap = min(999, hard_cap)
-    raw = src.get("damage") if isinstance(src, dict) else None
     if raw in (None, ""):
         debug["damageSource"] = "fallback_reference_numbers"
         debug["fallbackDamage"] = int(max(1, fallback))

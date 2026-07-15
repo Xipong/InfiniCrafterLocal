@@ -186,7 +186,7 @@ def _contract_check_charge_release_survives_full_gameplay_projection_for_ranged_
             "category": "weapon",
             "runtimePlan": {"resultKind": "weapon", "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": damage_class, "damage": 42, "useTimeTicks": 28, "manaCost": 9 if damage_class == "magic" else 0}},
-                {"fn": fn, "params": {"family": "charge_release", "chargeTicks": charge_ticks, "chargePowerMultiplier": multiplier, "projectileFamily": "orb" if damage_class == "magic" else "arrow", "projectileShape": "one charged projectile"}},
+                {"fn": fn, "params": {"family": "charge_release", "chargeTicks": charge_ticks, "chargePowerMultiplier": multiplier, "projectileFamily": "orb" if damage_class == "magic" else "arrow", "movement": "straight", "speed": 10, "rangeTiles": 55, "lifetimeTicks": 120, "shotCount": 1, "spreadRadians": 0, "pierce": 1, "projectileShape": "one charged projectile"}},
             ]},
         }
         data = _attach_v15(plan, _v15_parent("Parent A", damage_class), _v15_parent("Parent B", damage_class))
@@ -204,7 +204,7 @@ def _contract_check_sentry_survives_full_gameplay_projection_with_live_child_bud
         "category": "weapon",
         "runtimePlan": {"resultKind": "weapon", "engineCalls": [
             {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "summon", "damage": 30, "manaCost": 10, "useTimeTicks": 30}},
-            {"fn": "deploy_sentry", "params": {"placement": "floating", "attackIntervalTicks": 36, "targetRangeTiles": 26, "helperLifetimeTicks": 900, "shotCount": 2, "speed": 11, "spreadRadians": 0.2, "movement": "straight", "effect": "poison", "onHit": "poison", "projectileShape": "crystal sentry core", "secondaryProjectileShape": "single crystal bolt", "secondaryLifetimeTicks": 50}},
+            {"fn": "deploy_sentry", "params": {"placement": "floating", "attackIntervalTicks": 36, "targetRangeTiles": 26, "helperLifetimeTicks": 900, "shotCount": 2, "speed": 11, "spreadRadians": 0.2, "pierce": 1, "movement": "straight", "effect": "poison", "onHit": "poison", "projectileShape": "crystal sentry core", "secondaryProjectileShape": "single crystal bolt", "secondaryLifetimeTicks": 50}},
         ]},
     }
     data = _attach_v15(plan, _v15_parent("Summon A", "summon"), _v15_parent("Summon B", "summon"))

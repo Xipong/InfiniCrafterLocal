@@ -62,13 +62,13 @@ def _check_generated_utility_buff_call_compiles_to_patch() -> None:
     assert patch["generatedBuff"]["oreSenseRadiusTiles"] == 14
 
 
-def _check_alt_hold_extractinator_and_use_condition_calls_compile_to_patch() -> None:
+def _check_alt_hold_and_use_condition_calls_compile_to_patch() -> None:
     data = {
         "runtimePlan": {
             "engineCalls": [
                 {"fn": "set_alt_use_mode", "params": {"mode": "mobility", "mobilityMode": "blink_to_cursor", "rangeTiles": 30, "cooldownTicks": 240, "safeTileOnly": True}},
                 {"fn": "hold_item_effect", "params": {"lightStrength": 0.55, "lightColorName": "cyan", "generatedBuff": {"durationTicks": 90, "movementSpeed": 0.12}}},
-                {"fn": "extractinator_output", "params": {"resultType": 75, "stack": 3}},
+
                 {"fn": "use_condition", "params": {"mode": "mana_above", "minMana": 40}},
             ]
         }
@@ -81,8 +81,7 @@ def _check_alt_hold_extractinator_and_use_condition_calls_compile_to_patch() -> 
     assert patch["holdLightStrength"] == 0.55
     assert patch["holdLightColorName"] == "cyan"
     assert patch["holdGeneratedBuff"]["movementSpeed"] == 0.12
-    assert patch["extractinatorOutputItemType"] == 75
-    assert patch["extractinatorOutputStack"] == 3
+
     assert patch["useConditionMode"] == "mana_above"
     assert patch["useConditionMinMana"] == 40
 
@@ -97,7 +96,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_player_effect_on_use_compiles_multi_buff_channels',
     '_check_tool_light_and_mobility_calls_are_accepted_without_presets',
     '_check_generated_utility_buff_call_compiles_to_patch',
-    '_check_alt_hold_extractinator_and_use_condition_calls_compile_to_patch'
+    '_check_alt_hold_and_use_condition_calls_compile_to_patch'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

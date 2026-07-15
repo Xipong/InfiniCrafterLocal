@@ -126,7 +126,7 @@ Baseline: maintainable runtime v11 + prompt/image contract patch v12.
 
 ## 9. Зелье, инструмент, мебель и материал
 
-**Ожидаемый authoring:** отдельные result kinds и конечные calls (`apply_player_effect_on_use`, `tool_capability`, placeable facts, `extractinator_output`).
+**Ожидаемый authoring:** отдельные result kinds и конечные calls (`apply_player_effect_on_use`, `tool_capability`, placeable facts). Per-instance Extractinator output не рекламируется: tML `ExtractinatorUse` не instanced.
 
 **Image:** один bottle/tool/furniture object/material stack как Terraria inventory icon.
 

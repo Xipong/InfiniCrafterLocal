@@ -158,13 +158,16 @@ def _select_primary_shoot_call(calls: list[dict[str, Any]]) -> tuple[dict[str, A
     if not calls:
         return {}, []
     primary = calls[0] if isinstance(calls[0], dict) else {}
-    primary_delivery = _enum(primary.get("delivery"), DELIVERIES, "shoot")
-    primary_movement = _enum(primary.get("movement"), MOVEMENTS, "straight")
+    primary_delivery = _enum(primary.get("delivery"), DELIVERIES, "")
+    primary_movement = _enum(primary.get("movement"), MOVEMENTS, "")
     compatible: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     total_shots = 0
     max_spread = 0.0
     max_pierce: float = 0.0
+    has_shot_count = False
+    has_spread = False
+    has_pierce = False
     for sc in calls:
         if not isinstance(sc, dict):
             continue
@@ -173,19 +176,27 @@ def _select_primary_shoot_call(calls: list[dict[str, Any]]) -> tuple[dict[str, A
         same_primary = d == primary_delivery and m == primary_movement
         if same_primary:
             compatible.append(sc)
-            total_shots += int(_clamp(sc.get("shotCount"), "shotCount", 1) or 1)
-            max_spread = max(max_spread, float(_clamp(sc.get("spreadRadians"), "spreadRadians", 0) or 0))
-            pv = _clamp(sc.get("pierce"), "pierce", 0)
-            if pv == -1:
-                max_pierce = -1
-            elif max_pierce != -1:
-                max_pierce = max(max_pierce, float(pv or 0))
+            if sc.get("shotCount") not in (None, ""):
+                has_shot_count = True
+                total_shots += int(_clamp(sc.get("shotCount"), "shotCount", 1) or 1)
+            if sc.get("spreadRadians") not in (None, ""):
+                has_spread = True
+                max_spread = max(max_spread, float(_clamp(sc.get("spreadRadians"), "spreadRadians", 0) or 0))
+            if sc.get("pierce") not in (None, ""):
+                has_pierce = True
+                pv = _clamp(sc.get("pierce"), "pierce", 0)
+                if pv == -1:
+                    max_pierce = -1
+                elif max_pierce != -1:
+                    max_pierce = max(max_pierce, float(pv or 0))
         else:
             rejected.append({"index": sc.get("_index"), "delivery": d, "movement": m, "reason": "runtime_one_primary_family"})
     selected = _merged_params(compatible) if compatible else dict(primary)
-    if total_shots > 0:
+    if has_shot_count:
         selected["shotCount"] = min(8, total_shots)
+    if has_spread:
         selected["spreadRadians"] = max(float(selected.get("spreadRadians") or 0), max_spread)
+    if has_pierce:
         selected["pierce"] = max(float(selected.get("pierce") or 0), max_pierce)
     return selected, rejected
 

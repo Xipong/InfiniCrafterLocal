@@ -314,22 +314,18 @@ def _check_network_authority_versioned_sync_and_public_api_contract() -> None:
 
 def _check_generated_item_alt_hold_extractinator_hooks_are_explicit_and_guarded() -> None:
     item = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedItem.cs").read_text(encoding="utf-8")
-    proxy = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedExtractinatorMaterial.cs").read_text(encoding="utf-8")
     data = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "public override bool AltFunctionUse" in item
     assert "public override bool CanUseItem" in item
     assert "public override void HoldItem" in item
     assert "public override void ExtractinatorUse" not in item
     assert "AltGeneratedBuff" in item and "HoldGeneratedBuff" in item
-    assert "TryRunGeneratedMobility(gp.AltMobilityMode" in item
+    assert "RequestGeneratedAltUseFromServer" in item
     assert "ItemID.Sets.ExtractinatorMode[Type]" not in item
-    assert "public static bool CanRepresent(GeneratedItemData? data)" in proxy
-    assert "public override bool CanStack(Item source)" in proxy
-    assert "public override void ExtractinatorUse" in proxy
-    assert "ItemID.Sets.ExtractinatorMode[Type] = Type;" in proxy
+    assert not (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedExtractinatorMaterial.cs").exists()
     assert "public string AltUseMode" in data
     assert "public float HoldLightStrength" in data
-    assert "public int ExtractinatorOutputItemType" in data
+    assert "ExtractinatorOutputItemType" not in data
     assert "public string UseConditionMode" in data
 
 
@@ -366,7 +362,8 @@ def _check_local_player_actions_do_not_run_on_server_or_remote_clients() -> None
     assert "if (IsServer) return false" in body
     assert "return IsLocalPlayer(player.whoAmI)" in body
     assert "bool runLocalAction = InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)" in item
-    assert "runLocalAction && gp?.GeneratedBuff" in item
+    assert "bool runPlayerGameplay = InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player)" in item
+    assert "runPlayerGameplay && gp?.GeneratedBuff" in item
     assert "runLocalAction && gp is not null" in item
     assert "ShouldRunLocalPlayerAction(Player)" in player
 

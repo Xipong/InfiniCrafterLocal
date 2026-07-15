@@ -441,7 +441,7 @@ def _health_payload() -> dict[str, Any]:
         "lastCombineFailure": generation_debug.last_combine_failure_summary(),
         "worldRecipesDir": str(WORLD_RECIPES_DIR),
         "recipeCacheScope": "world",
-        "recipeStorage": "world_recipes_files",
+        "recipeStorage": "authoritative_world_recipe_files",
         "requiresWorldId": True,
         "recipeIdentityVersion": RECIPE_IDENTITY_VERSION,
         "assetSync": {"endpoint": "/get_asset", "publicBaseUrl": ASSET_PUBLIC_BASE_URL, "spriteDir": str(SPRITE_DIR)},
@@ -514,6 +514,10 @@ Handler = build_handler(
 
 
 def main() -> None:
+    # Autostart happens in ThreadingHTTPServer workers, where Python forbids
+    # signal registration. Install the process-tree cleanup on the main thread
+    # before any request can launch sd.cpp.
+    visual_config.install_sdcpp_cleanup_handlers()
     if visual_config.REQUIRE_PILLOW and Image is None and env_str("INFINI_IMAGE_BACKEND", visual_config.IMAGE_BACKEND).lower() != "off":
         raise SystemExit("Pillow is required for InfiniCrafterLocal visual generation/postprocess. Run 02_INSTALL_LOCAL_GENERATOR.bat. Import error: " + PILLOW_IMPORT_ERROR)
     host = env_str("INFINI_HOST", "127.0.0.1")

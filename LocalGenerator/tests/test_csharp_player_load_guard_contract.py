@@ -51,18 +51,6 @@ def _check_generated_item_runtime_hydrates_playersave_ref_from_local_cache() -> 
         assert "EnsureRuntimeHydration();" in item[method_start:method_end]
 
 
-def _check_extractinator_playersave_ref_hydrates_before_use() -> None:
-    extract = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedExtractinatorMaterial.cs").read_text(encoding="utf-8")
-    assert "GeneratedItemData.FromPlayerSaveJson(tag.GetString(\"infiniJson\"))" in extract
-    assert "private void EnsureRuntimeHydration()" in extract
-    hydration_start = extract.index("private void EnsureRuntimeHydration()")
-    hydration_end = extract.index("public override void NetSend", hydration_start)
-    hydration_block = extract[hydration_start:hydration_end]
-    assert "SetData(cachedData, ensureAssets: false, registerLocal: false);" in hydration_block
-    use_start = extract.index("public override void ExtractinatorUse")
-    use_end = extract.index("public override void ModifyTooltips", use_start)
-    assert "EnsureRuntimeHydration();" in extract[use_start:use_end]
-
 
 def _check_registry_register_local_can_skip_asset_hydration() -> None:
     source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Services" / "GeneratedItemRegistryService.cs").read_text(encoding="utf-8")
@@ -102,7 +90,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_registry_register_local_can_skip_asset_hydration',
     '_check_player_save_payload_is_compact_reference_not_runtime_definition',
     '_check_generated_item_runtime_hydrates_playersave_ref_from_local_cache',
-    '_check_extractinator_playersave_ref_hydrates_before_use',
+
     '_check_generated_item_data_rejects_old_runtime_versions_and_caps_strings',
     '_check_generated_item_clone_deep_copies_runtime_payload_without_asset_side_effects'
     ]:

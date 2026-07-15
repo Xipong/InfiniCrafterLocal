@@ -6,6 +6,8 @@ import types
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from urllib.parse import urlparse
 
 from infini_local.web.server_handler import (
@@ -13,7 +15,12 @@ from infini_local.web.server_handler import (
     MAX_JSON_BODY_BYTES,
     build_handler,
 )
+from infini_local.web.http_response_helpers import (
+    _combine_failure_http_response,
+    _combine_failure_payload,
+)
 from infini_local.web.server_utility_routes import ServerUtilityRoutes
+from infini_local.storage import world_storage
 from infini_local.web.vfx_debug_routes import VfxDebugRoutes
 
 
@@ -72,7 +79,7 @@ class _Capture:
         self.payload = {"error": f"http_{int(code)}", "message": str(message or explain or "")}
 
 
-def _make_boundary_handler_class() -> type:
+def _make_boundary_handler_class(combine_endpoint_override: Any = None) -> type:
     class _WorldScopeMissing(Exception):
         pass
 
@@ -116,7 +123,7 @@ def _make_boundary_handler_class() -> type:
         app_version="test",
         utility_routes=_UtilityRoutes,
         vfx_debug_routes=_VfxRoutes,
-        combine_endpoint=_CombineEndpoint(),
+        combine_endpoint=combine_endpoint_override or _CombineEndpoint(),
         combine_cache_lookup=lambda *_args, **_kwargs: None,
         sanitize_recipe_for_delivery=lambda *_args, **_kwargs: None,
         combine=lambda *_args, **_kwargs: None,
@@ -216,6 +223,25 @@ class _CaptureHandler:
         self.called += 1
 
 
+class _BinaryCaptureHandler:
+    def __init__(self) -> None:
+        self.code: int | None = None
+        self.headers: dict[str, str] = {}
+        self.wfile = io.BytesIO()
+
+    def send_response(self, code: int) -> None:
+        self.code = int(code)
+
+    def send_header(self, name: str, value: str) -> None:
+        self.headers[str(name)] = str(value)
+
+    def end_headers(self) -> None:
+        return None
+
+    def send_error(self, code: int, *_args: Any, **_kwargs: Any) -> None:
+        self.code = int(code)
+
+
 def _contract_check_get_asset_route_stays_available_to_remote_peer_and_control_routes_stay_loopback_bound() -> None:
     Handler = _make_boundary_handler_class()
     remote_address = ("198.51.100.20", 1234)
@@ -306,6 +332,104 @@ def _contract_check_utility_shutdown_route_match_is_exact_with_query_string_allo
     assert handler.called == 0
 
 
+def _contract_check_unknown_post_route_returns_404_without_reading_body() -> None:
+    Handler = _make_boundary_handler_class()
+    rfile = _NoReadFile()
+    handler, capture = _make_handler(
+        Handler,
+        path="/missing",
+        headers={"Content-Length": "999"},
+        rfile=rfile,
+        client_address=("127.0.0.1", 1111),
+    )
+
+    handler.do_POST()
+    assert capture.code == 404
+    assert rfile.read_calls == 0
+
+
+def _contract_check_post_requires_strict_object_json() -> None:
+    Handler = _make_boundary_handler_class()
+    rejected = (
+        b"[]",
+        b"null",
+        b'{"value":NaN}',
+        b'{"value":Infinity}',
+        b'{"value":1e999}',
+        b'{"value":1,"value":2}',
+        b'{"value":"\xff"}',
+    )
+    for body in rejected:
+        handler, capture = _make_handler(
+            Handler,
+            path="/combine",
+            headers={"Content-Length": str(len(body))},
+            rfile=io.BytesIO(body),
+            client_address=("127.0.0.1", 1111),
+        )
+        handler.do_POST()
+        assert capture.code == 400, body
+        assert capture.payload["error"] == "invalid_json", body
+
+
+def _contract_check_post_rejects_early_eof() -> None:
+    Handler = _make_boundary_handler_class()
+    handler, capture = _make_handler(
+        Handler,
+        path="/combine",
+        headers={"Content-Length": "8"},
+        rfile=io.BytesIO(b"{}"),
+        client_address=("127.0.0.1", 1111),
+    )
+
+    handler.do_POST()
+    assert capture.code == 400
+    assert capture.payload["error"] == "invalid_json"
+
+
+def _contract_check_internal_value_error_is_not_misclassified_as_bad_json() -> None:
+    class _BrokenCombineEndpoint:
+        def handle_combine_request(self, *_args: Any, **_kwargs: Any) -> None:
+            raise ValueError("internal invariant failed")
+
+    Handler = _make_boundary_handler_class(_BrokenCombineEndpoint())
+    handler, capture = _make_handler(
+        Handler,
+        path="/combine",
+        headers={"Content-Length": "2"},
+        rfile=io.BytesIO(b"{}"),
+        client_address=("127.0.0.1", 1111),
+    )
+
+    handler.do_POST()
+    assert capture.code == 500
+    assert capture.payload["error"] == "internal_error"
+
+
+def _contract_check_sprite_route_rejects_encoded_traversal_and_outside_symlink(tmp_path: Path) -> None:
+    sprite_dir = tmp_path / "sprites"
+    sprite_dir.mkdir()
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(b"not-a-real-png")
+    routes = _build_shutdown_routes(tmp_path)
+    routes.sprite_dir = sprite_dir
+
+    traversal_handler = _BinaryCaptureHandler()
+    routes.sprite_file(traversal_handler, "/sprite/%2e%2e%2foutside.png")
+    assert traversal_handler.code == 404
+    assert traversal_handler.wfile.getvalue() == b""
+
+    link = sprite_dir / "leak.png"
+    try:
+        link.symlink_to(outside)
+    except OSError as error:
+        pytest.skip(f"symlink unavailable: {error}")
+    symlink_handler = _BinaryCaptureHandler()
+    routes.sprite_file(symlink_handler, "/sprite/leak.png")
+    assert symlink_handler.code == 404
+    assert symlink_handler.wfile.getvalue() == b""
+
+
 def _contract_check_post_payload_length_limit_rejects_too_large_body_without_reading() -> None:
     Handler = _make_boundary_handler_class()
     rfile = _NoReadFile()
@@ -381,6 +505,86 @@ def _contract_check_vfx_debug_post_routes_require_an_exact_parsed_path() -> None
     assert handler.json_payload == {"payload": {"x": 1}}
 
 
+
+def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tmp_path: Path) -> None:
+    routes = _build_shutdown_routes(tmp_path)
+    routes.read_json_file = world_storage.read_json_file
+
+    world_storage.write_world_recipe_cache(
+        tmp_path,
+        "9.9.9",
+        "recipe-a",
+        "debug-world",
+        {
+            "id": "generated-a",
+            "name": "Generated A",
+            "sourceMode": "generated",
+            "contractVersions": {"runtimeApiVersion": "v-test"},
+        },
+        parent_a_name="Wooden Sword",
+        parent_b_name="Work Bench",
+        world_name="Debug World",
+    )
+    world_storage.write_world_recipe_cache(
+        tmp_path,
+        "9.9.9",
+        "recipe-b",
+        "debug-world",
+        {"id": "generated-b", "name": "Generated B", "sourceMode": "generated"},
+        parent_a_name="Gel",
+        parent_b_name="Torch",
+        world_name="Debug World",
+    )
+
+    root = world_storage.world_recipe_dir(tmp_path, "debug-world")
+    assert not (root / "index.json").exists()
+    assert not (root / "health.json").exists()
+
+    recipes = routes.debug_recipes()
+    assert {row["key"] for row in recipes} == {"recipe-a", "recipe-b"}
+    assert next(row for row in recipes if row["key"] == "recipe-a")["a"] == "Wooden Sword"
+
+    health = routes.debug_recipe_health()
+    assert {row["key"] for row in health} == {"recipe-a", "recipe-b"}
+    assert all(row["status"] == "healthy" for row in health)
+
+    worlds = routes.debug_worlds()
+    assert worlds == [
+        {
+            "dir": "world_debug-world",
+            "path": str(root),
+            "worldId": "debug-world",
+            "worldName": "Debug World",
+            "recipeCount": 2,
+            "healthCounts": {"healthy": 2},
+            "updatedAt": worlds[0]["updatedAt"],
+        }
+    ]
+    assert isinstance(worlds[0]["updatedAt"], float)
+
+    latest_dump = routes.debug_latest_recipe_dump()
+    assert latest_dump["ok"] is True
+    assert latest_dump["name"] in {"Generated A", "Generated B"}
+    assert routes.debug_contracts()["latestRecipeContractVersions"] == {"runtimeApiVersion": "v-test"}
+
+
+def _contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outage() -> None:
+    failure = {
+        "stage": "01_author_llm_plan",
+        "error": "PlannerUnavailable('planner repeated unsupported gameplay promises after 2 re-author attempts: orbiting_companion')",
+    }
+
+    status, code, retryable, friendly = _combine_failure_http_response(
+        "structured combine failure",
+        failure,
+    )
+    payload = _combine_failure_payload(status, code, friendly, failure, retryable=retryable)
+
+    assert (status, code, retryable) == (422, "llm_output_invalid", True)
+    assert "invalid" in payload["playerMessage"].lower()
+    assert payload["lastFailure"] == failure
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_240_http_boundary_bugfixes_module_contract(request):
     from contract_checks import run_contract_checks
@@ -394,10 +598,17 @@ def test_240_http_boundary_bugfixes_module_contract(request):
             '_contract_check_remote_post_control_route_is_denied_and_body_is_not_read',
             '_contract_check_boundary_route_classification_rejects_shutdown_prefix_and_allows_allowed_assets',
             '_contract_check_utility_shutdown_route_match_is_exact_with_query_string_allowed',
+            '_contract_check_unknown_post_route_returns_404_without_reading_body',
+            '_contract_check_post_requires_strict_object_json',
+            '_contract_check_post_rejects_early_eof',
+            '_contract_check_internal_value_error_is_not_misclassified_as_bad_json',
+            '_contract_check_sprite_route_rejects_encoded_traversal_and_outside_symlink',
             '_contract_check_post_payload_length_limit_rejects_too_large_body_without_reading',
             '_contract_check_post_negative_content_length_is_rejected',
             '_contract_check_post_body_read_timeout_uses_bounded_timeout_and_returns_408',
             '_contract_check_vfx_debug_get_routes_require_an_exact_parsed_path',
             '_contract_check_vfx_debug_post_routes_require_an_exact_parsed_path',
+            '_contract_check_recipe_debug_views_derive_from_authoritative_recipe_files',
+            '_contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outage',
         ),
     )

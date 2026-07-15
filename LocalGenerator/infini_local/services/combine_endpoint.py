@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json as json_module
+from copy import deepcopy
 import threading
 from typing import Any, Callable
 
+from infini_local.core import strict_json
 from infini_local.core.env_utils import env_int
 
 
@@ -20,6 +21,40 @@ COMBINE_BUSY_WAIT_SECONDS = env_int("INFINI_COMBINE_BUSY_WAIT_SECONDS", 0, lo=0,
 JsonSender = Callable[[Any], None]
 JsonStatusSender = Callable[[int, Any], None]
 TraceEvent = Callable[[str, str, str, Any], None]
+
+
+def _response_json_error(
+    value: Any,
+    *,
+    source: str,
+    app_version: str,
+    trace_event: TraceEvent,
+    json_status: JsonStatusSender,
+) -> bool:
+    try:
+        if not isinstance(value, dict):
+            raise TypeError(f"combine response root must be object, got {type(value).__name__}")
+        strict_json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return False
+    except (TypeError, ValueError, OverflowError) as serialization_error:
+        trace_event(
+            "error",
+            "HTTP:/combine",
+            "combine returned invalid strict JSON payload",
+            {"source": source, "error": repr(serialization_error)},
+        )
+        json_status(500, {
+            "ok": False,
+            "status": "combine_response_not_json_serializable",
+            "error": "combine_response_not_json_serializable",
+            "message": repr(serialization_error),
+            "playerMessage": "Generator produced an internal response that cannot be sent to Terraria. Items were returned; check LocalGenerator logs.",
+            "version": app_version,
+            "httpStatus": 500,
+            "retryable": True,
+            "cacheRecoveryAllowed": False,
+        })
+        return True
 
 
 def handle_combine_request(
@@ -64,13 +99,22 @@ def handle_combine_request(
         cached = None
         cache_key = ""
     if cached:
+        trace_event("step", "HTTP:/combine", "world recipe cache hit before generation lock", {"recipeKey": cache_key, "cacheOnly": cache_only})
+        cached_delivery = sanitize_recipe_for_delivery(cached)
+        if _response_json_error(
+            cached_delivery,
+            source="cache",
+            app_version=app_version,
+            trace_event=trace_event,
+            json_status=json_status,
+        ):
+            return
         if clear_failure_state is not None:
             try:
                 clear_failure_state("endpoint_cache_hit_delivered")
             except Exception as diagnostic_error:
                 trace_event("warn", "HTTP:/combine", "could not clear stale failure diagnostics after cache hit", {"error": repr(diagnostic_error), "recipeKey": cache_key})
-        trace_event("step", "HTTP:/combine", "world recipe cache hit before generation lock", {"recipeKey": cache_key, "cacheOnly": cache_only})
-        json(sanitize_recipe_for_delivery(cached))
+        json(cached_delivery)
         return
     if cache_only:
         json_status(404, {
@@ -112,13 +156,14 @@ def handle_combine_request(
     try:
         data = combine(payload)
     except Exception as error:
-        snapshot: dict[str, Any] = {}
         snapshot_error = ""
-        if last_failure_summary is not None:
+        attached = getattr(error, "_infini_failure_snapshot", None)
+        snapshot: dict[str, Any] = deepcopy(attached) if isinstance(attached, dict) else {}
+        if not snapshot and last_failure_summary is not None:
             try:
                 candidate = last_failure_summary()
                 if isinstance(candidate, dict):
-                    snapshot = dict(candidate)
+                    snapshot = deepcopy(candidate)
             except Exception as diagnostic_error:
                 snapshot_error = repr(diagnostic_error)
         try:
@@ -130,20 +175,12 @@ def handle_combine_request(
         raise
     finally:
         COMBINE_SEMAPHORE.release()
-    try:
-        json_module.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    except (TypeError, ValueError) as serialization_error:
-        trace_event("error", "HTTP:/combine", "combine returned non-JSON-serializable payload", {"error": repr(serialization_error)})
-        json_status(500, {
-            "ok": False,
-            "status": "combine_response_not_json_serializable",
-            "error": "combine_response_not_json_serializable",
-            "message": repr(serialization_error),
-            "playerMessage": "Generator produced an internal response that cannot be sent to Terraria. Items were returned; check LocalGenerator logs.",
-            "version": app_version,
-            "httpStatus": 500,
-            "retryable": True,
-            "cacheRecoveryAllowed": False,
-        })
+    if _response_json_error(
+        data,
+        source="fresh",
+        app_version=app_version,
+        trace_event=trace_event,
+        json_status=json_status,
+    ):
         return
     json(data)

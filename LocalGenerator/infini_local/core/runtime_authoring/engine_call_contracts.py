@@ -97,16 +97,17 @@ class ArmorSetBonusParamBoundary(StrictEngineParamModel):
 
 
 _BOOL_PARAMS = frozenset({
-    "autoReuse", "consumable", "visualOnly", "safeTileOnly", "drawDuringUse",
+    "autoReuse", "consumable", "visualOnly", "safeTileOnly",
     "useTurn", "channelUse", "fallDamageImmune", "lavaImmune", "waterWalk",
 })
 _INT_PARAMS = frozenset({
     *INT_FIELDS,
     "damage", "maxStack", "rarity", "value", "defense", "count", "amount",
     "attackIntervalTicks", "helperLifetimeTicks", "secondaryLifetimeTicks",
-    "startTick", "repeatEvery", "duration", "tickRate", "offsetPx", "debuffTime",
+    "startTick", "repeatEvery", "duration", "tickRate", "debuffTime",
     "oreSenseRadiusTiles", "manaRegen", "lifeRegen", "minionSlots", "sentrySlots",
     "aggro", "armorPenetration", "summonTagDamage",
+    "holdoutOffsetX", "holdoutOffsetY", "initialOffsetPx",
 })
 # Deliberately explicit. NUMERIC_LIMITS contains both integral and continuous
 # fields, so using the whole map as a float inventory would make strict raw
@@ -137,7 +138,6 @@ _OBJECT_PARAMS: dict[tuple[str, str], Any] = {
 
 # Semantic enums whose unknown values must never silently become executable.
 _ENUM_PARAMS: dict[tuple[str, str] | str, tuple[str, ...]] = {
-    "damageClass": ("generic", "melee", "ranged", "magic", "summon"),
     "delivery": ("swing", "thrust", "shoot", "cast", "throw", "summon"),
     "runtimeFamily": (
         "swing", "thrust", "returning", "flail", "yoyo", "whip", "shoot", "cast",

@@ -52,7 +52,7 @@ public sealed partial class GeneratedProjectile
         {
             float offset = count == 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
             Vector2 velocity = baseDirection.RotatedBy(offset) * Math.Max(3f, _spec.Speed);
-            SpawnChild(Projectile.Center + velocity.SafeNormalize(Vector2.UnitX) * 14f, velocity, Math.Max(1, Projectile.damage), shot, 1f);
+            SpawnChild(Projectile.Center + velocity.SafeNormalize(Vector2.UnitX) * 14f, velocity, Math.Max(0, Projectile.damage), shot, 1f);
         }
         return true;
     }

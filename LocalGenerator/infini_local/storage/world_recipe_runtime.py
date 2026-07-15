@@ -40,17 +40,6 @@ def write_world_manifest(world_id: Any, world_name: Any = None) -> None:
     world_storage.write_world_manifest(WORLD_RECIPES_DIR, APP_VERSION, world_id, world_name)
 
 
-def update_world_recipe_index(world_id: Any, recipe_key_value: str, data: dict[str, Any], a: Any = None, b: Any = None, world_name: Any = None) -> None:
-    world_storage.update_world_recipe_index(
-        WORLD_RECIPES_DIR,
-        recipe_key_value,
-        data,
-        world_id=world_id,
-        parent_a_name=name_of(a) if isinstance(a, dict) else data.get("recipeMeta", {}).get("parentA", ""),
-        parent_b_name=name_of(b) if isinstance(b, dict) else data.get("recipeMeta", {}).get("parentB", ""),
-        world_name=world_name,
-    )
-
 
 def strip_runtime_only_fields(data: dict[str, Any]) -> dict[str, Any]:
     return world_storage.strip_runtime_only_fields(data)
@@ -155,7 +144,6 @@ __all__ = [
     "atomic_write_json",
     "read_json_file",
     "write_world_manifest",
-    "update_world_recipe_index",
     "strip_runtime_only_fields",
     "_delivery_safe_debug",
     "sanitize_recipe_for_delivery",

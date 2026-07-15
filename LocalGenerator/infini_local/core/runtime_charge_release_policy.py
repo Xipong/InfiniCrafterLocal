@@ -5,10 +5,8 @@ from typing import Any
 CHARGE_RELEASE_RUNTIME_FAMILY = "charge_release"
 CHARGE_TICKS_MIN = 1
 CHARGE_TICKS_MAX = 300
-CHARGE_TICKS_DEFAULT = 45
 CHARGE_POWER_MIN = 1.0
 CHARGE_POWER_MAX = 3.0
-CHARGE_POWER_DEFAULT = 1.6
 CHARGE_RELEASE_DELIVERIES = frozenset({"shoot", "cast", "throw"})
 
 
@@ -17,6 +15,7 @@ def _token(value: Any) -> str:
 
 
 def apply_charge_release_contract(patch: dict[str, Any]) -> None:
+    """Apply structural charge-release invariants without inventing charge numbers."""
     if _token(patch.get("runtimeFamily")) != CHARGE_RELEASE_RUNTIME_FAMILY:
         return
     delivery = _token(patch.get("delivery"))
@@ -28,8 +27,13 @@ def apply_charge_release_contract(patch: dict[str, Any]) -> None:
     patch["hideUseGraphic"] = True
     patch["disableItemMeleeHitbox"] = True
     patch["ownerHitCheck"] = True
-    patch["chargeTicks"] = max(CHARGE_TICKS_MIN, min(CHARGE_TICKS_MAX, int(float(patch.get("chargeTicks") or CHARGE_TICKS_DEFAULT))))
-    patch["chargePowerMultiplier"] = round(max(CHARGE_POWER_MIN, min(CHARGE_POWER_MAX, float(patch.get("chargePowerMultiplier") or CHARGE_POWER_DEFAULT))), 3)
+    if patch.get("chargeTicks") not in (None, ""):
+        patch["chargeTicks"] = max(CHARGE_TICKS_MIN, min(CHARGE_TICKS_MAX, int(float(patch["chargeTicks"]))))
+    if patch.get("chargePowerMultiplier") not in (None, ""):
+        patch["chargePowerMultiplier"] = round(
+            max(CHARGE_POWER_MIN, min(CHARGE_POWER_MAX, float(patch["chargePowerMultiplier"]))),
+            3,
+        )
 
 
 __all__ = [
@@ -37,9 +41,7 @@ __all__ = [
     "CHARGE_RELEASE_DELIVERIES",
     "CHARGE_TICKS_MIN",
     "CHARGE_TICKS_MAX",
-    "CHARGE_TICKS_DEFAULT",
     "CHARGE_POWER_MIN",
     "CHARGE_POWER_MAX",
-    "CHARGE_POWER_DEFAULT",
     "apply_charge_release_contract",
 ]

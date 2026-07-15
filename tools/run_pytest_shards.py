@@ -10,6 +10,7 @@ startup per test file.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = ROOT / "LocalGenerator" / "tests"
+FULL_TEST_MODULES = {
+    "pytest": "pytest",
+    "pydantic": "pydantic",
+    "pydantic_core": "pydantic_core",
+    "Pillow": "PIL",
+    "Hypothesis": "hypothesis",
+}
 
 # These tests invoke subprocesses, temporary servers, runtime smoke paths, or
 # agent/release tools. Keep the list narrow and behavior-based; ordinary test
@@ -44,6 +52,18 @@ ISOLATED_TEST_FILES = {
 
 def _test_files() -> list[Path]:
     return sorted(path for path in TEST_ROOT.glob("test_*.py") if path.is_file())
+
+
+def _missing_test_dependencies() -> list[str]:
+    missing: list[str] = []
+    for label, import_name in FULL_TEST_MODULES.items():
+        try:
+            available = importlib.util.find_spec(import_name) is not None
+        except (ImportError, ModuleNotFoundError, ValueError):
+            available = False
+        if not available:
+            missing.append(label)
+    return missing
 
 
 def _partition(files: list[Path], count: int) -> list[list[Path]]:
@@ -128,7 +148,19 @@ def _run_pytest_command(
     }
 
 
-def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int = 180) -> dict[str, Any]:
+def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int = 60) -> dict[str, Any]:
+    missing = _missing_test_dependencies()
+    if missing:
+        return {
+            "schema": "infini.pytest-shards.v3",
+            "ok": False,
+            "status": "unavailable",
+            "fullSuiteAvailable": False,
+            "missingDependencies": missing,
+            "portableCommand": f"{sys.executable} tools/validate_sandbox.py",
+            "errors": ["full pytest dependencies are unavailable; collection was not started"],
+            "shards": [],
+        }
     files = _test_files()
     if not files:
         return {"schema": "infini.pytest-shards.v3", "ok": False, "errors": ["no test files found"], "shards": []}
@@ -162,6 +194,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
                 temp_root,
                 ignore=shutil.ignore_patterns(
                     ".git",
+                    ".hermes",
                     "__pycache__",
                     ".pytest_cache",
                     ".ruff_cache",
@@ -225,6 +258,8 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
     return {
         "schema": "infini.pytest-shards.v3",
         "ok": len(rows) == expected_rows and all(row["status"] == "passed" for row in rows),
+        "status": "passed" if len(rows) == expected_rows and all(row["status"] == "passed" for row in rows) else "failed",
+        "fullSuiteAvailable": True,
         "requestedShardCount": max(1, shard_count),
         "selectedShardIndex": shard_index,
         "timeoutSecondsPerCommand": max(1, timeout_seconds),
@@ -241,7 +276,7 @@ def main() -> int:
     parser.add_argument("--shards", type=int, default=4)
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--shard-index", type=int)
-    parser.add_argument("--timeout-seconds", type=int, default=180, help="Timeout per batched or isolated pytest command")
+    parser.add_argument("--timeout-seconds", type=int, default=60, help="Timeout per batched or isolated pytest command")
     parser.add_argument("--compact", action="store_true")
     args = parser.parse_args()
 
@@ -254,7 +289,15 @@ def main() -> int:
     for row in report.get("shards", []):
         if row["status"] != "passed":
             print(row["output"])
+    if report.get("status") == "unavailable":
+        print(
+            "[PYTEST] unavailable missing="
+            + ",".join(report.get("missingDependencies", []))
+            + f"; run {report['portableCommand']}"
+        )
     print(f"[PYTEST] ok={report['ok']} passed={report.get('passed', 0)} duration={report.get('durationSeconds', 0)}s")
+    if report.get("status") == "unavailable":
+        return 2
     return 0 if report["ok"] else 1
 
 

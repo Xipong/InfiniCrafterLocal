@@ -25,7 +25,9 @@ def _contract_check_generated_tool_mining_speed_and_alt_light_are_executable():
     assert "executable held-tool mining speed multiplier" in authoring_schema
     assert "AltLightStrength" in item
     assert "mode == \"light\"" in item
-    assert "ApplyGeneratedUtilityBuff(new GeneratedBuffSpec" in item
+    assert "ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork:" in item
+    assert "RequestGeneratedAltUseFromServer" in item
+    assert "gp.AltGeneratedBuff.EmitLightStrength" in item
 
 
 def _contract_check_accessory_authoring_now_covers_runtime_supported_fields():

@@ -11,25 +11,26 @@ def normalize_overhead_barrage_family(value: Any) -> str:
 
 
 def apply_overhead_barrage_contract(patch: dict[str, Any]) -> dict[str, Any]:
-    """Fill only fields owned by the finite overhead-barrage executor.
-
-    This is deliberately not a generic trigger/state engine.
-    """
+    """Apply only bounded executor invariants to explicitly authored barrage fields."""
     family = normalize_overhead_barrage_family(patch.get("runtimeFamily"))
     if family != OVERHEAD_BARRAGE_RUNTIME_FAMILY:
         return patch
     patch["runtimeFamily"] = OVERHEAD_BARRAGE_RUNTIME_FAMILY
-    raw_delay = patch.get("delayTicks")
-    raw_shots = patch.get("shotCount")
-    patch["delayTicks"] = int(max(0, min(300, float(30 if raw_delay in (None, "") else raw_delay))))
-    patch["shotCount"] = int(max(1, min(8, float(3 if raw_shots in (None, "") else raw_shots))))
-    patch.setdefault("secondaryDamageMultiplier", 0.55)
-    patch.setdefault("secondaryLifetimeTicks", 75)
-    patch["maxChildProjectiles"] = int(max(1, min(48, patch["shotCount"])))
-    patch["maxChildDepth"] = 1
-    patch.setdefault("movement", "phase")
-    patch.setdefault("delivery", "shoot")
-    patch.setdefault("projectileFamily", "projectile")
+    if patch.get("delayTicks") not in (None, ""):
+        patch["delayTicks"] = int(max(0, min(300, float(patch["delayTicks"]))))
+    if patch.get("shotCount") not in (None, ""):
+        patch["shotCount"] = int(max(1, min(8, float(patch["shotCount"]))))
+        patch["maxChildProjectiles"] = int(max(1, min(48, patch["shotCount"])))
+        patch["maxChildDepth"] = 1
+    if patch.get("secondaryDamageMultiplier") not in (None, ""):
+        patch["secondaryDamageMultiplier"] = round(
+            max(0.0, min(1.0, float(patch["secondaryDamageMultiplier"]))),
+            3,
+        )
+    if patch.get("secondaryLifetimeTicks") not in (None, ""):
+        patch["secondaryLifetimeTicks"] = int(
+            max(5, min(180, float(patch["secondaryLifetimeTicks"])))
+        )
     return patch
 
 

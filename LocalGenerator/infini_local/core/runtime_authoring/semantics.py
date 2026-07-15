@@ -15,55 +15,6 @@ from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 # Parent knowledge should eventually expose canonical effect capabilities directly
 # (burn/poison/frostburn/shadowflame). Until then, a tiny alias layer maps common
 # elemental trait words to existing runtime onHit values without reading prompt prose.
-PARENT_EFFECT_TRAIT_ALIASES: dict[str, str] = {
-    "flaming": "burn",
-    "fire": "burn",
-    "burning": "burn",
-    "burn": "burn",
-    "poison": "poison",
-    "poisoned": "poison",
-    "venom": "poison",
-    "toxic": "poison",
-    "frostburn": "frostburn",
-    "frost": "frostburn",
-    "shadowflame": "shadowflame",
-}
-
-
-def _iter_parent_tags(data: dict[str, Any]) -> list[str]:
-    tags: list[str] = []
-    knowledge = data.get("itemKnowledge") if isinstance(data.get("itemKnowledge"), dict) else {}
-    for parent in knowledge.get("parents") or []:
-        if not isinstance(parent, dict):
-            continue
-        for tag in parent.get("tags") or []:
-            t = _norm_name(tag)
-            if t:
-                tags.append(t)
-        signals = parent.get("signals") if isinstance(parent.get("signals"), dict) else {}
-        mech = signals.get("mechanicPower") if isinstance(signals.get("mechanicPower"), dict) else {}
-        behavior = mech.get("weaponBehavior") if isinstance(mech.get("weaponBehavior"), dict) else {}
-        for tag in behavior.get("behaviorTags") or []:
-            t = _norm_name(tag)
-            if t:
-                tags.append(t)
-    return list(dict.fromkeys(tags))
-
-
-def _parent_grounded_onhit(data: dict[str, Any]) -> tuple[str, str]:
-    """Return a parent-backed elemental on-hit effect, if unambiguous.
-
-    This never reads free-form prompt/tooltip and therefore does not become category
-    keyword routing. It only preserves concrete mechanics already present in parent
-    runtime/knowledge tags. The alias map is deliberately tiny; broad item-specific
-    behavior should come from richer parent probes, not a growing exception table.
-    """
-    for tag in _iter_parent_tags(data):
-        if tag in PARENT_EFFECT_TRAIT_ALIASES:
-            return PARENT_EFFECT_TRAIT_ALIASES[tag], tag
-    return "", ""
-
-
 def _truthy(value: Any) -> bool:
     if isinstance(value, bool): return value
     s = _norm_name(value)
@@ -76,24 +27,6 @@ def _semantic_param_copy(params: dict[str, Any], keys: list[str]) -> dict[str, A
         if k in params and params.get(k) not in (None, ""):
             out[k] = params.get(k)
     return out
-
-
-def _apply_armor_slot_budget(armor: dict[str, Any]) -> None:
-    slot = _norm_name(armor.get("slot")) or "body"
-    # Soft Terraria-ish distribution: head carries class identity, body carries bulk, legs carry mobility.
-    if slot == "head":
-        caps = {"defense": 24, "movementSpeed": 0.18, "maxRunSpeed": 0.35, "jumpSpeed": 0.8, "endurance": 0.08}
-    elif slot == "legs":
-        caps = {"defense": 26, "genericDamage": 0.14, "meleeDamage": 0.16, "rangedDamage": 0.16, "magicDamage": 0.16, "summonDamage": 0.16, "endurance": 0.08}
-    else:
-        caps = {"defense": 42, "movementSpeed": 0.18, "maxRunSpeed": 0.45, "jumpSpeed": 1.0, "genericCrit": 12, "endurance": 0.18}
-    clamped: dict[str, Any] = {}
-    for field, cap in caps.items():
-        if field in armor and isinstance(armor.get(field), (int, float)) and armor[field] > cap:
-            clamped[field] = {"from": armor[field], "to": cap}
-            armor[field] = int(cap) if isinstance(cap, int) else round(float(cap), 3)
-    if clamped:
-        armor["slotBudgetClamps"] = clamped
 
 
 def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
@@ -111,6 +44,7 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
         "pierce", "extraUpdates", "homingStrength", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "immunityCooldown", "useTimeTicks", "useAnimationTicks",
         "projectileShape", "projectileMotion",
         "projectileTrail", "projectileImpact", "damageMultiplier", "runtimeFamily",
+        "secondaryDamageMultiplier", "secondaryLifetimeTicks",
         "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance",
     ])
 
@@ -143,8 +77,7 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
         overhead_barrage = family == "overhead_barrage"
         charge_release = family == "charge_release"
         if charge_release:
-            common.setdefault("movement", "straight")
-            common.update({"runtimeFamily": "charge_release", "delivery": "shoot", "weaponFamily": _norm_name(p.get("weaponFamily")) or "ranged", "projectileFamily": raw_projectile_family or "projectile", "chargeTicks": p.get("chargeTicks", 45), "chargePowerMultiplier": p.get("chargePowerMultiplier", 1.6)})
+            common.update({"runtimeFamily": "charge_release", "delivery": "shoot", "weaponFamily": _norm_name(p.get("weaponFamily")) or "ranged", "projectileFamily": raw_projectile_family or "projectile"})
         elif overhead_barrage:
             common.setdefault("movement", "phase")
             common.update({
@@ -152,7 +85,6 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
                 "delivery": "shoot",
                 "weaponFamily": _norm_name(p.get("weaponFamily")) or "ranged",
                 "projectileFamily": raw_projectile_family or "projectile",
-                "delayTicks": p.get("delayTicks") if p.get("delayTicks") not in (None, "") else p.get("chargeTicks", 30),
             })
         elif not charge_release:
             if family in {"launcher", "rocket_launcher", "rocket", "missile_launcher"}:
@@ -212,25 +144,27 @@ def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple
         })
         if beam_family:
             common["channelUse"] = True
-            common.setdefault("beamWidthPx", 14)
             if p.get("chargeTicks") not in (None, ""):
                 common["beamChargeTicks"] = p.get("chargeTicks")
             if p.get("immunityCooldown") not in (None, ""):
                 common["immunityCooldown"] = p.get("immunityCooldown")
         elif charge_release:
-            common["chargeTicks"] = p.get("chargeTicks", 45)
-            common["chargePowerMultiplier"] = p.get("chargePowerMultiplier", 1.6)
             common["channelUse"] = True
-        elif overhead_barrage:
-            common["delayTicks"] = p.get("delayTicks") if p.get("delayTicks") not in (None, "") else p.get("chargeTicks", 30)
-            common.setdefault("shotCount", 3)
-            common.setdefault("secondaryDamageMultiplier", 0.55)
-            common.setdefault("secondaryLifetimeTicks", 75)
         return [("shoot_projectile", common)]
 
     if fn == "deploy_sentry":
-        sentry = _semantic_param_copy(p, ["placement", "attackIntervalTicks", "targetRangeTiles", "helperLifetimeTicks", "shotCount", "speed", "spreadRadians", "movement", "effect", "onHit", "projectileShape", "secondaryProjectileShape", "secondaryLifetimeTicks", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance"])
-        sentry.update({"runtimeFamily": "sentry", "delivery": "summon", "weaponFamily": "sentry", "projectileFamily": "sentry", "sentryPlacement": p.get("placement", "grounded"), "sentryAttackIntervalTicks": p.get("attackIntervalTicks", 45), "sentryTargetRangeTiles": p.get("targetRangeTiles", 30), "sentryLifetimeTicks": p.get("helperLifetimeTicks", 3600)})
+        sentry = _semantic_param_copy(p, ["placement", "attackIntervalTicks", "targetRangeTiles", "helperLifetimeTicks", "shotCount", "speed", "spreadRadians", "pierce", "movement", "effect", "onHit", "projectileShape", "secondaryProjectileShape", "secondaryLifetimeTicks", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance"])
+        sentry.update({"runtimeFamily": "sentry", "delivery": "summon", "weaponFamily": "sentry", "projectileFamily": "sentry"})
+        if p.get("placement") not in (None, ""):
+            sentry["sentryPlacement"] = p.get("placement")
+        if p.get("attackIntervalTicks") not in (None, ""):
+            sentry["sentryAttackIntervalTicks"] = p.get("attackIntervalTicks")
+        if p.get("targetRangeTiles") not in (None, ""):
+            sentry["sentryTargetRangeTiles"] = p.get("targetRangeTiles")
+            sentry["rangeTiles"] = p.get("targetRangeTiles")
+        if p.get("helperLifetimeTicks") not in (None, ""):
+            sentry["sentryLifetimeTicks"] = p.get("helperLifetimeTicks")
+            sentry["lifetimeTicks"] = p.get("helperLifetimeTicks")
         return [("shoot_projectile", sentry)]
 
     if fn == "spawn_temporary_helper_projectile":
@@ -309,4 +243,4 @@ def light_repair_runtime_family_from_fields(params: dict[str, Any]) -> tuple[str
     srcs = "+".join(src for fam, src in signals if fam == unique[0])
     return unique[0], f"light:{srcs}"
 
-__all__ = ['_iter_parent_tags', '_parent_grounded_onhit', '_truthy', '_semantic_param_copy', '_apply_armor_slot_budget', '_expand_semantic_runtime_call', '_runtime_family_from_fields', '_runtime_family_group_to_executor', 'light_repair_runtime_family_from_fields']
+__all__ = ['_truthy', '_semantic_param_copy', '_expand_semantic_runtime_call', '_runtime_family_from_fields', '_runtime_family_group_to_executor', 'light_repair_runtime_family_from_fields']

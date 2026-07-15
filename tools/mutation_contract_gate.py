@@ -9,11 +9,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
+from tempfile import TemporaryDirectory
 from typing import Any, Callable
 
-import contract_parity
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "LocalGenerator"))
+
+import contract_parity  # noqa: E402
+from infini_local.qa.csharp_delivery_contract import (  # noqa: E402
+    CSharpContractGraph,
+    load_csharp_contract_graph,
+)
 
 
 def _replace_once(path: Path, old: str, new: str) -> str:
@@ -33,8 +40,45 @@ def _run_mutation(name: str, overrides: dict[Path, str], expected: Callable[[dic
     caught = (not report["ok"]) and expected(report)
     return {
         "name": name,
+        "kind": "source",
         "caught": caught,
         "errors": report.get("errors", [])[:12],
+    }
+
+
+def _run_delivery_mutation(
+    graph: CSharpContractGraph,
+    name: str,
+    payload: dict[str, Any],
+    expected_error: str,
+) -> dict[str, Any]:
+    errors = graph.validate(payload)
+    return {
+        "name": name,
+        "kind": "delivered_json",
+        "caught": expected_error in errors,
+        "expectedError": expected_error,
+        "errors": errors[:12],
+    }
+
+
+def _run_parser_mask_probe() -> dict[str, Any]:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "GeneratedItemData.cs").write_text(
+            'public sealed class GeneratedItemData { public int Damage { get; set; } = 0; '
+            '/* public int Phantom { get; set; } = 1; */ '
+            'public string Note => "public int StringPhantom { get; set; }"; }',
+            encoding="utf-8",
+        )
+        graph = load_csharp_contract_graph(root)
+    actual = sorted(graph.classes["GeneratedItemData"].properties)
+    return {
+        "name": "delivery_parser_ignores_comment_and_string_tokens",
+        "kind": "parser_integrity",
+        "caught": actual == ["damage"],
+        "expectedProperties": ["damage"],
+        "actualProperties": actual,
     }
 
 
@@ -53,6 +97,7 @@ def build_report() -> dict[str, Any]:
         raise RuntimeError("network mutation anchor missing")
 
     rows = [
+        _run_parser_mask_probe(),
         _run_mutation(
             "python_projection_loses_charge_ticks",
             {projection: _replace_once(projection, '"chargeTicks": max(', '"chargeTicksBROKEN": max(')},
@@ -126,8 +171,71 @@ def build_report() -> dict[str, Any]:
             lambda r: any("sentryShot" in e or ("runtimeFamily" in e and "childPolicy" in e) for e in r["errors"]),
         ),
     ]
+    graph = load_csharp_contract_graph()
+    rows.extend([
+        _run_delivery_mutation(
+            graph,
+            "delivery_object_expected_scalar_supplied",
+            {"runtimeArchetype": "consumable_melee"},
+            "$.runtimeArchetype: expected object, got string",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_unknown_nested_field",
+            {"runtimeArchetype": {"futureNestedKey": True}},
+            "$.runtimeArchetype.futureNestedKey: unknown field for RuntimeArchetypeSpec",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_string_expected_number_supplied",
+            {"runtimeArchetype": {"family": 17}},
+            "$.runtimeArchetype.family: expected string, got integer",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_list_expected_string_supplied",
+            {"runtimeArchetype": {"supportNotes": "not-a-list"}},
+            "$.runtimeArchetype.supportNotes: expected array, got string",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_dictionary_expected_list_supplied",
+            {"runtimeArchetype": {"overrideKnobs": []}},
+            "$.runtimeArchetype.overrideKnobs: expected object, got array",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_nested_list_element_unknown_field",
+            {"runtimeContract": {"mechanicClaims": [{"futureNestedKey": 1}]}},
+            "$.runtimeContract.mechanicClaims[0].futureNestedKey: unknown field for MechanicClaimSpec",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_int32_overflow",
+            {"schemaVersion": 2**40},
+            "$.schemaVersion: integer 1099511627776 out of range for int [-2147483648, 2147483647]",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_single_overflow",
+            {"visual": {"inventoryScale": 1e100}},
+            "$.visual.inventoryScale: number 1e+100 out of range for float [-3.4028234663852886e+38, 3.4028234663852886e+38]",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_nonfinite_number",
+            {"visual": {"inventoryScale": float("nan")}},
+            "$.visual.inventoryScale: non-finite number nan is invalid for float",
+        ),
+        _run_delivery_mutation(
+            graph,
+            "delivery_case_insensitive_alias_duplicate",
+            {"name": "one", "Name": "two"},
+            "$.Name: duplicate field for GeneratedItemData.name (already supplied as $.name)",
+        ),
+    ])
     return {
-        "schema": "infini.contract-mutation-gate.v1",
+        "schema": "infini.contract-mutation-gate.v3",
         "ok": all(row["caught"] for row in rows),
         "mutations": rows,
     }

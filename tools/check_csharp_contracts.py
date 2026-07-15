@@ -191,17 +191,7 @@ def check_generated_item(text: str) -> None:
     if "ItemID.Sets.ExtractinatorMode[Type]" in text:
         err("GeneratedItem.cs: shared GeneratedItem must not enable ExtractinatorMode globally")
     if "public override void ExtractinatorUse" in text:
-        err("GeneratedItem.cs: ExtractinatorUse belongs only to GeneratedExtractinatorMaterial proxy")
-
-
-def check_extractinator_proxy(text: str) -> None:
-    path = SRC / "Content/Items/GeneratedExtractinatorMaterial.cs"
-    required(path, text, "ItemID.Sets.ExtractinatorMode[Type] = Type;")
-    required(path, text, "public static bool CanRepresent(GeneratedItemData? data)")
-    required(path, text, "public override bool CanStack(Item source)")
-    required(path, text, "public override void ExtractinatorUse(int extractinatorBlockType, ref int resultType, ref int resultStack)")
-    required(path, text, "public override void NetSend(BinaryWriter writer)")
-    required(path, text, "public override void NetReceive(BinaryReader reader)")
+        err("GeneratedItem.cs: per-instance extractinator output is unsupported because the tML hook is not instanced")
 
 
 def check_projectile(text: str) -> None:
@@ -329,7 +319,7 @@ def check_model_property_references() -> None:
             err(f"GeneratedItem.cs: UpdateArmorSet uses missing ArmorSpec.{prop}")
 
     # Explicit runtime fields that must exist after recent patches.
-    for required_prop in ["GeneratedBuff", "AltGeneratedBuff", "HoldGeneratedBuff", "MobilityMode", "AltMobilityMode", "ExtractinatorOutputItemType", "HoldLightStrength", "RuntimeState", "RejectedEngineCalls", "ConsumeChancePercent", "ChannelUse", "UseFantasy", "HeldVisibility", "ReleaseTiming", "HandPose", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy", "DrawDuringUse", "InitialOffsetPx"]:
+    for required_prop in ["GeneratedBuff", "AltGeneratedBuff", "HoldGeneratedBuff", "MobilityMode", "AltMobilityMode", "HoldLightStrength", "RuntimeState", "RejectedEngineCalls", "ConsumeChancePercent", "ChannelUse", "HeldVisibility", "ReleaseTiming", "HandPose", "InitialOffsetPx"]:
         if required_prop not in gameplay:
             err(f"GameplaySpec missing `{required_prop}`")
     for required_prop in ["DamageClass", "RuntimeLightStrength", "MobilityMode", "AoeDamageRadiusPx", "ImpactVfxRadiusPx", "ContactForgivenessPx", "SoundUseCatalogId", "SoundImpactCatalogId", "SoundPitchVariance", "ChargeTicks", "ChargePowerMultiplier", "SentryPlacement", "SentryAttackIntervalTicks", "SentryTargetRangeTiles", "SentryLifetimeTicks", "SecondaryLifetimeTicks"]:
@@ -364,9 +354,9 @@ def check_generated_item_data_authoring_preservation_contract() -> None:
         err("GeneratedItemData.cs: StripBulkForTransport must clear ExtensionData before network/player-save payloads")
     if "public string ToLocalCacheJson()" not in model or "return ToJson();" not in model:
         err("GeneratedItemData.cs: missing explicit full local cache JSON contract")
-    for future_prop in ["UseFantasy", "HeldVisibility", "ReleaseTiming", "HandPose", "SpawnStyle", "RotationMode", "TrailMode", "ProjectileSizePolicy", "DrawDuringUse", "InitialOffsetPx"]:
+    for future_prop in ["HeldVisibility", "ReleaseTiming", "HandPose", "InitialOffsetPx"]:
         if future_prop not in model:
-            err(f"GeneratedItemData.cs: missing preserved runtime-affordance future field GameplaySpec.{future_prop}")
+            err(f"GeneratedItemData.cs: missing executable runtime-affordance field GameplaySpec.{future_prop}")
 
 
 
@@ -599,7 +589,8 @@ def check_generated_armor_contract() -> None:
         "player.maxMinions += a.MinionSlots",
         "player.maxTurrets += a.SentrySlots",
         "player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction)",
-        "player.ammoCost75 = true",
+        "AddGeneratedAmmoSaveChance(a.AmmoSaveChance)",
+        "AddGeneratedAmmoSaveChance(a.SetBonusAmmoSaveChance)",
         "player.aggro += a.Aggro",
         "player.endurance += a.Endurance",
         "player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration",
@@ -756,7 +747,7 @@ def check_network_read_write_shape() -> None:
     for forbidden in ["PresentationIdentityText", "HasPresentationIdentity", "PolishDustForIdentity"]:
         if forbidden in projectile:
             err(f"GeneratedProjectile.cs: fuzzy presentation router remains `{forbidden}`")
-    for rel_path in ["Content/Items/GeneratedItem.cs", "Content/Items/GeneratedExtractinatorMaterial.cs"]:
+    for rel_path in ["Content/Items/GeneratedItem.cs"]:
         text = read(SRC / rel_path)
         if "NetPayloadVersion" in text or "GeneratedItemNetPayloadVersion" in text:
             if "reader.ReadInt32()" not in text:
@@ -1138,7 +1129,6 @@ def main() -> int:
         check_braces(path, text)
         check_required_usings(path, text)
     check_generated_item(read(SRC / "Content/Items/GeneratedItem.cs"))
-    check_extractinator_proxy(read(SRC / "Content/Items/GeneratedExtractinatorMaterial.cs"))
     check_projectile(read_projectile_bundle())
     check_executor_split(read(SRC / "Content/Projectiles/GeneratedProjectile.Executors.cs"))
     check_player(read_player_bundle())

@@ -21,7 +21,9 @@ from infini_local.core.runtime_authoring.engine_call_contracts import (
     engine_contract_inventory,
     engine_params_model,
 )
+from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
 from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2
+from infini_local.qa.csharp_delivery_contract import load_csharp_contract_graph
 from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
 from infini_local.qa.runtime_proof import build_gameplay_seam_report
 
@@ -37,8 +39,36 @@ def _run_tool(relative: str) -> tuple[int, str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     return proc.returncode, proc.stdout
+
+
+def _load_tool_module(module_name: str, relative: str):
+    import importlib.util
+
+    module_path = ROOT / relative
+    tools_path = str(module_path.parent)
+    inserted = tools_path not in sys.path
+    if inserted:
+        sys.path.insert(0, tools_path)
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        previous = sys.modules.get(module_name)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            if previous is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous
+        return module
+    finally:
+        if inserted:
+            sys.path.remove(tools_path)
 
 
 def _contract_check_dynamic_engine_models_follow_the_canonical_catalog() -> None:
@@ -157,6 +187,19 @@ def _contract_check_final_boundary_requires_compiler_owned_fields_instead_of_def
     item["attack"].pop("lifetime")
     with pytest.raises(ValueError, match="compiler-owned fields missing"):
         validate_executable_item_boundary(item)
+
+    equipment = deepcopy(report["item"])
+    equipment["accessory"] = {"enabled": True, "futureField": 1}
+    with pytest.raises(ValidationError):
+        validate_executable_item_boundary(equipment)
+    equipment.pop("accessory")
+    equipment["armor"] = {"enabled": True, "setBonusLifeRegen": 2**40}
+    with pytest.raises(ValidationError):
+        validate_executable_item_boundary(equipment)
+    equipment.pop("armor")
+    equipment["accessory"] = []
+    with pytest.raises(ValidationError):
+        validate_executable_item_boundary(equipment)
 
 
 def _contract_check_boundary_validation_and_wire_projection_do_not_mutate_inputs() -> None:
@@ -312,20 +355,25 @@ def _contract_check_all_golden_gameplay_cases_cross_the_final_strict_boundary() 
 
 
 def _contract_check_parity_checker_and_mutation_gate_are_release_gates() -> None:
-    parity_code, parity_out = _run_tool("tools/contract_parity.py")
-    assert parity_code == 0, parity_out
-    parity = json.loads(parity_out)
+    parity = _load_tool_module("infini_contract_parity_gate_test", "tools/contract_parity.py").build_report()
     assert parity["ok"] is True
     assert parity["networkWriteFieldCount"] == parity["networkReadFieldCount"] >= 80
     assert parity["nestedContracts"]
 
-    mutation_code, mutation_out = _run_tool("tools/mutation_contract_gate.py")
-    assert mutation_code == 0, mutation_out
-    mutations = json.loads(mutation_out)
-    assert mutations["ok"] is True
-    assert len(mutations["mutations"]) >= 9
-    assert all(row["caught"] for row in mutations["mutations"])
+    delivery = _load_tool_module("infini_delivery_gate_test", "tools/check_delivery_contract.py").build_report()
+    assert delivery["ok"] is True
+    assert delivery["reachable"]["classCount"] >= 30
+    assert delivery["reachable"]["propertyCount"] >= 500
+    assert delivery["payloadCount"] >= 10
+    replay = next(row for row in delivery["payloads"] if row["caseId"] == "replay:object_debug_payload.json")
+    assert replay["deliveryExpected"] is False
+    assert replay["runtimeApiCompatible"] is False
+    assert replay["expectedRuntimeApiRejection"] is True
 
+    mutations = _load_tool_module("infini_mutation_gate_test", "tools/mutation_contract_gate.py").build_report()
+    assert mutations["ok"] is True
+    assert len(mutations["mutations"]) >= 15
+    assert all(row["caught"] for row in mutations["mutations"])
 
 def _contract_check_csharp_strict_json_failures_are_structurally_observable() -> None:
     diagnostics = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/ContractJsonDiagnostics.cs").read_text(encoding="utf-8-sig")
@@ -403,6 +451,7 @@ def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> 
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
+            timeout=30,
         )
         assert proc.returncode == 0, proc.stdout
         payload = json.loads(proc.stdout)
@@ -412,16 +461,46 @@ def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> 
     csharp = next(row for row in rules["rules"] if row["id"] == "csharp-runtime-contract")
     assert csharp["requiresBuild"] is True
     assert "contract_parity" in csharp["checks"]
+    assert "delivery_contract" in csharp["checks"]
     assert "mutation_gate" in csharp["checks"]
 
+    manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
+    assert manifest["runtimeApiVersion"] == ENGINE_RUNTIME_API_VERSION
+    assert "delivery_contract" in manifest["alwaysChecks"]
+    assert "delivery_contract" in manifest["fullChecks"]
+    assert manifest["checks"]["delivery_contract"] == ["python", "tools/check_delivery_contract.py"]
+
+
+def _contract_check_delivery_parser_ignores_comment_and_string_phantoms(tmp_path: Path) -> None:
+    source_root = tmp_path / "csharp"
+    source_root.mkdir()
+    (source_root / "GeneratedItemData.cs").write_text(
+        """
+namespace Probe;
+public sealed class GeneratedItemData
+{
+    public int Damage { get; set; }
+    // public string Phantom { get; set; }
+    public string Note { get; set; } = "public bool StringPhantom { get; set; }";
+}
+""",
+        encoding="utf-8",
+    )
+
+    graph = load_csharp_contract_graph(source_root)
+    assert {name: prop.type_name for name, prop in graph.classes["GeneratedItemData"].properties.items()} == {"damage": "int", "note": "string"}
+
+    gate_keys = (
+        "INFINI_SKIP_CONFIG_FILE", "INFINI_USE_LLM", "INFINI_LLM_RUNTIME_AUTHORING",
+        "INFINI_LLM_RUNTIME_PLAN_REQUIRED", "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
+        "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", "INFINI_BALANCE_MODE",
+    )
+    before = {key: os.environ.get(key) for key in gate_keys}
+    _load_tool_module("infini_delivery_environment_probe", "tools/check_delivery_contract.py")
+    assert {key: os.environ.get(key) for key in gate_keys} == before
 
 def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -> None:
-    # Run the AST scanner in a fresh process. Some older runtime tests install
-    # signal/thread state globally; importing the scanner into that process made
-    # the all-in-one suite order-dependent even though the tool itself was fine.
-    code, output = _run_tool("tools/config_registry.py")
-    assert code == 0, output
-    report = json.loads(output)
+    report = _load_tool_module("infini_config_registry_test", "tools/config_registry.py").build_registry()
     committed = json.loads((ROOT / "contracts" / "config_registry.json").read_text(encoding="utf-8"))
     assert report == committed
     assert report["ok"] is True
@@ -430,7 +509,8 @@ def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -
     secrets = [row for row in report["entries"] if row["secret"]]
     assert secrets
     assert all("PASTE_KEY" not in json.dumps(row) for row in secrets)
-
+    cache_entry = next(row for row in report["entries"] if row["name"] == "INFINI_CACHE_DIR")
+    assert "tools/validate_sandbox.py" not in cache_entry["owners"]
 
 def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag(tmp_path: Path) -> None:
     doctor = subprocess.run(
@@ -441,6 +521,7 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert doctor.returncode == 0, doctor.stdout
     revision = json.loads(doctor.stdout)["gitBaseline"]
@@ -463,6 +544,7 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 0, proc.stdout
     assert json.loads(proc.stdout)["ok"] is True
@@ -477,10 +559,10 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 1
     assert "baseRevision mismatch" in proc.stdout
-
 
 def _contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable(tmp_path: Path) -> None:
     source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Systems/InfiniAgentContractSelfTestSystem.cs").read_text(encoding="utf-8-sig")
@@ -520,15 +602,14 @@ def _contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machin
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=30,
     )
     assert proc.returncode == 0, proc.stdout
     assert json.loads(proc.stdout)["ok"] is True
 
 
 def _contract_check_runtime_impact_gate_proves_tooling_is_not_loaded_by_game() -> None:
-    code, output = _run_tool("tools/runtime_impact_report.py")
-    assert code == 0, output
-    report = json.loads(output)
+    report = _load_tool_module("infini_runtime_impact_test", "tools/runtime_impact_report.py").build_report()
     assert report["gameplaySemanticBaseline"]["differences"] == []
     assert report["infrastructureImportedByRuntime"] == []
     assert all(row["ok"] for row in report["intentionalRuntimeCorrections"])
@@ -546,10 +627,10 @@ def _contract_check_semantic_tools_run_without_preconfigured_pythonpath() -> Non
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
+            timeout=30,
         )
         assert proc.returncode == 0, proc.stdout
         assert json.loads(proc.stdout)["ok"] is True
-
 
 def _contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker() -> None:
     from infini_local.pipelines.llm_authoring_pipeline import _merge_raw_boundary_errors
@@ -652,6 +733,11 @@ def _contract_check_agentctl_resolves_pyright_from_current_python_environment(mo
 
     monkeypatch.setattr(module.sys, "executable", str(python))
     monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="ok", stderr=""),
+    )
 
     row = module._run_check("pyright", ["pyright"])
 
@@ -678,6 +764,11 @@ def _contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python(
 
     monkeypatch.setattr(module.sys, "executable", str(python))
     monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="ok", stderr=""),
+    )
 
     row = module._run_check("pyright", ["pyright"])
 
@@ -685,8 +776,33 @@ def _contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python(
     assert row["command"] == [str(pyright), "--pythonpath", str(python)]
 
 
-# One collected item per contract module; individual checks keep source order and tracebacks.
-def test_v18_contract_safety_stack_module_contract(request):
+# Keep process-spawning tooling checks ahead of runtime-import checks. Some runtime
+# modules install long-lived signal/thread state by design; spawning tool subprocesses
+# after those imports made the former all-in-one contract order-dependent.
+def test_v18_agent_tooling_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(
+        globals(),
+        request,
+        (
+            '_contract_check_semantic_tools_run_without_preconfigured_pythonpath',
+            '_contract_check_parity_checker_and_mutation_gate_are_release_gates',
+            '_contract_check_agent_control_plane_is_machine_readable_and_diff_aware',
+            '_contract_check_delivery_parser_ignores_comment_and_string_phantoms',
+            '_contract_check_generated_config_registry_is_current_and_redacts_secrets',
+            '_contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag',
+            '_contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable',
+            '_contract_check_runtime_impact_gate_proves_tooling_is_not_loaded_by_game',
+            '_contract_check_source_only_agent_diff_uses_file_index_before_git_bootstrap',
+            '_contract_check_source_snapshot_index_excludes_hidden_tool_state',
+            '_contract_check_agentctl_resolves_pyright_from_current_python_environment',
+            '_contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python',
+        ),
+    )
+
+
+def test_v18_runtime_boundary_contract(request):
     from contract_checks import run_contract_checks
 
     run_contract_checks(
@@ -703,20 +819,9 @@ def test_v18_contract_safety_stack_module_contract(request):
             '_contract_check_direct_runtime_vfx_is_projected_before_frozen_csharp_json',
             '_contract_check_runtime_vfx_baked_commands_use_the_authored_item_palette',
             '_contract_check_all_golden_gameplay_cases_cross_the_final_strict_boundary',
-            '_contract_check_parity_checker_and_mutation_gate_are_release_gates',
             '_contract_check_csharp_strict_json_failures_are_structurally_observable',
             '_contract_check_contract_evidence_owners_allow_safe_file_splitting_without_global_token_search',
             '_contract_check_runtime_refactor_preserves_family_separation_in_one_pure_policy_owner',
-            '_contract_check_agent_control_plane_is_machine_readable_and_diff_aware',
-            '_contract_check_generated_config_registry_is_current_and_redacts_secrets',
-            '_contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag',
-            '_contract_check_optional_tml_runtime_selftest_is_inert_by_default_and_machine_checkable',
-            '_contract_check_runtime_impact_gate_proves_tooling_is_not_loaded_by_game',
-            '_contract_check_semantic_tools_run_without_preconfigured_pythonpath',
             '_contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker',
-            '_contract_check_source_only_agent_diff_uses_file_index_before_git_bootstrap',
-            '_contract_check_source_snapshot_index_excludes_hidden_tool_state',
-            '_contract_check_agentctl_resolves_pyright_from_current_python_environment',
-            '_contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python',
         ),
     )

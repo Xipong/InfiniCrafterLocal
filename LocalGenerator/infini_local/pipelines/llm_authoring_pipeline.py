@@ -7,6 +7,7 @@ import re
 
 from typing import Any
 
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
@@ -219,6 +220,10 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         # messages[] contract instead of reconstructing roles from parallel string fields.
         obj["_llmHistory"] = attributed_planner_history(system, planner_user_content, content)
         return obj
+    except PlannerUnavailable as e:
+        trace_event("error", "LLM:author_plan", "Planner rejected authored result", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
+        log_event("warn", "LLM author-first planner exhausted semantic retries", {"error": repr(e)})
+        raise
     except Exception as e:
         trace_event("error", "LLM:author_plan", "Planner failed", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
         log_event("warn", "LLM author-first planner failed", {"error": repr(e)})
@@ -358,7 +363,7 @@ REPAIR_PATCH_ALLOWED_GAMEPLAY_FIELDS = {
     "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly", "altGeneratedBuff",
     "holdGeneratedBuff", "holdLightStrength", "holdLightColorName", "runtimeState", "ammoFor",
     "consumeChancePercent", "useConditionMode", "useConditionMinLife", "useConditionMinMana",
-    "extractinatorOutputItemType", "extractinatorOutputStack", "itemScale", "holdoutOffsetX", "holdoutOffsetY",
+    "itemScale", "holdoutOffsetX", "holdoutOffsetY",
     "channelUse", "runtimeOutputKind", "actualAmmoMode",
 }
 
@@ -515,7 +520,7 @@ def _adopt_runtime_plan_repair(data: dict[str, Any], repaired: dict[str, Any], *
     # Keep repair model/attempt metadata, but never let repair debug erase prior debug.
     for k, v in repaired_debug.items():
         merged_debug.setdefault(str(k), v)
-    merged_debug["runtimePlanRepairPatchContract"] = json.dumps(patch_report, ensure_ascii=False)[:4000]
+    merged_debug["runtimePlanRepairPatchContract"] = bounded_json_dumps(patch_report, max_chars=4000)
     if content_preview:
         merged_debug["runtimePlanRepairRawOutput"] = content_preview[:4000]
     candidate["debug"] = merged_debug
@@ -677,21 +682,21 @@ def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: di
     raw_plan = _raw_runtime_plan_candidate(data)
     raw_boundary = runtime_plan_boundary_report(raw_plan) if raw_plan is not None else None
     if raw_boundary is not None:
-        debug["runtimePlanRawStrictBoundary"] = json.dumps(raw_boundary, ensure_ascii=False)[:6000]
+        debug["runtimePlanRawStrictBoundary"] = bounded_json_dumps(raw_boundary, max_chars=6000)
     had_runtime_input = raw_plan is not None
 
     structural = structural_repair_runtime_plan_inplace(data)
     if structural.get("applied"):
-        debug["runtimeStructuralRepair"] = json.dumps(structural, ensure_ascii=False)[:6000]
+        debug["runtimeStructuralRepair"] = bounded_json_dumps(structural, max_chars=6000)
     # runtime_plan_validation_report owns the single normalization pass.  Running
     # normalize first would make semantic expansions (deploy_sentry -> canonical
     # shoot_projectile) look like raw authoring and reject their compiler-owned
     # fields against the public function schema.
     validation = _merge_raw_boundary_errors(runtime_plan_validation_report(data), raw_boundary, structural.get("fixes"))
-    debug["runtimePlanValidationBeforeRepair"] = json.dumps(validation, ensure_ascii=False)[:6000]
+    debug["runtimePlanValidationBeforeRepair"] = bounded_json_dumps(validation, max_chars=6000)
     if structural.get("applied") and validation.get("ok"):
         debug["runtimeRepairPath"] = "code_structural_repair_only"
-        debug["runtimePlanValidationAfterRepair"] = json.dumps(validation, ensure_ascii=False)[:6000]
+        debug["runtimePlanValidationAfterRepair"] = bounded_json_dumps(validation, max_chars=6000)
         return data
 
     needs_repair = not bool(validation.get("ok")) and (combat_genome_required_for(data) or bool(runtime_plan(data)))
@@ -738,15 +743,15 @@ def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: di
         if after.get("ok"):
             working.setdefault("debug", {})["runtimeRepairPath"] = "llm_targeted_runtime_contract_repair"
             working["debug"]["runtimeRepairKind"] = repair_kind
-            working["debug"]["runtimePlanRepair"] = json.dumps(repair_log, ensure_ascii=False)[:6000]
-            working["debug"]["runtimePlanValidationAfterRepair"] = json.dumps(after, ensure_ascii=False)[:6000]
+            working["debug"]["runtimePlanRepair"] = bounded_json_dumps(repair_log, max_chars=6000)
+            working["debug"]["runtimePlanValidationAfterRepair"] = bounded_json_dumps(after, max_chars=6000)
             return working
     if authored_runtime_plan is not None:
         data["runtimePlan"] = authored_runtime_plan
     debug["runtimeRepairPath"] = "targeted_runtime_repair_exhausted"
     debug["runtimeRepairKind"] = repair_kind
-    debug["runtimePlanRepair"] = json.dumps(repair_log, ensure_ascii=False)[:6000]
-    debug["runtimePlanValidationAfterRepair"] = json.dumps(validation, ensure_ascii=False)[:6000]
+    debug["runtimePlanRepair"] = bounded_json_dumps(repair_log, max_chars=6000)
+    debug["runtimePlanValidationAfterRepair"] = bounded_json_dumps(validation, max_chars=6000)
     exact_errors = [str(error) for error in (validation.get("errors") or [])]
     got_invalid_candidate = any(bool(row.get("gotPatch")) for row in repair_log)
     live_llm_authored = (

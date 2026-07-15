@@ -132,9 +132,9 @@ STAGE_PROFILES = [
 
 
 LLM_REQUIRED_GENOME_FIELDS = [
-    "runtimeFamily", "delivery", "movement", "effect", "onHit",
+    "runtimeFamily", "delivery", "movement",
     "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles",
-    "lifetimeTicks", "rangeTiles",
+    "lifetimeTicks", "rangeTiles", "spreadRadians", "speed",
 ]
 
 LLM_OPTIONAL_GENOME_DEFAULTS = {
@@ -143,8 +143,6 @@ LLM_OPTIONAL_GENOME_DEFAULTS = {
     "delayTicks": 30,
     "immunityCooldown": 0,
     "extraUpdates": 0,
-    "spreadRadians": 0.0,
-    "speed": 8.0,
     "splitCount": 0,
     "chainCount": 0,
     "pullStrength": 0.0,

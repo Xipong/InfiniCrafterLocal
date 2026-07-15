@@ -5,7 +5,7 @@ Generated content is per-instance data carried by proxy item classes, not one cl
 - `InfiniCore.cs` — station key item and ingredient validity guard.
 - `GeneratedItem.cs` — main proxy: set/save/load/net generated data, apply DTO, register world data, tooltips, use/equipment hooks, shoot, runtime sprite drawing.
 - `GeneratedArmorItems.cs` — head/body/legs proxy classes for Terraria armor slots.
-- `GeneratedExtractinatorMaterial.cs` — generated material proxy with extractinator behavior.
+
 
 Rules:
 - `GeneratedItem` applies explicit `GeneratedItemData`; no gameplay from prose/name/prompt/tooltip.

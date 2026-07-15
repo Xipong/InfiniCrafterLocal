@@ -152,7 +152,6 @@ public sealed class InfiniCacheCommand : ModCommand
     {
         if (item is null || item.IsAir) return null;
         if (item.ModItem is GeneratedItem generated) return generated.Data;
-        if (item.ModItem is GeneratedExtractinatorMaterial extractinator) return extractinator.Data;
         return null;
     }
 

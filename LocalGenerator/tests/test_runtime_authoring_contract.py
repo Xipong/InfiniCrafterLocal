@@ -11,6 +11,7 @@ from infini_local.core.runtime_authoring import (
     infer_attack_pattern_from_runtime,
     normalize_runtime_plan_inplace,
     runtime_plan_quality_report,
+    runtime_plan_validation_report,
 )
 
 
@@ -327,6 +328,19 @@ def _check_melee_secondary_requires_explicit_secondary_body() -> None:
     assert patch["maxChildProjectiles"] == 0
     assert patch["secondaryDamageMultiplier"] == 0
     assert "secondarySuppressedByMeleeCore" in patch
+    report = runtime_plan_validation_report(data)
+    assert any("secondary projectiles require explicit material or projectileShape" in error for error in report["errors"])
+
+    held_multi = {"runtimePlan": {"resultKind": "weapon", "engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 24, "useTimeTicks": 30}},
+        {"fn": "shoot_projectile", "params": {
+            "runtimeFamily": "beam", "delivery": "cast", "movement": "straight", "speed": 8,
+            "rangeTiles": 48, "lifetimeTicks": 120, "shotCount": 2, "spreadRadians": 0.1,
+            "pierce": 1, "beamWidthPx": 18, "beamChargeTicks": 15, "immunityCooldown": 10,
+        }},
+    ]}}
+    held_report = runtime_plan_validation_report(held_multi)
+    assert any("runtimeFamily=beam requires shotCount=1" in error for error in held_report["errors"])
 
 
 def _check_melee_secondary_with_authored_body_stays_playable() -> None:
@@ -379,7 +393,7 @@ def _check_state_meter_and_triggered_action_are_preserved_as_contract_only() -> 
 def _check_safe_item_capability_enginecalls_compile_to_gameplay_patch() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "tool", "damage": 0, "useTimeTicks": 32}},
-        {"fn": "use_affordance", "params": {"autoReuse": False, "useTurn": True, "channelUse": True, "itemScale": 1.25, "holdoutOffsetX": 14, "holdoutOffsetY": -6, "projectileSizePolicy": "inherit_parent_floor"}},
+        {"fn": "use_affordance", "params": {"autoReuse": False, "useTurn": True, "channelUse": True, "itemScale": 1.25, "holdoutOffsetX": 14, "holdoutOffsetY": -6, "heldVisibility": "show_projectile", "releaseTiming": "on_release", "handPose": "held_out", "initialOffsetPx": 8}},
         {"fn": "visual_effect_cue", "params": {"event": "hit", "rendererKind": "impactRing", "channel": "impactShape", "lane": "primary", "particleSystemId": "pl:spark", "scale": 1.6, "density": 0.55, "duration": 18, "alpha": 0.8}},
         {"fn": "consumption_behavior", "params": {"consumeChancePercent": 40}},
         {"fn": "ammo_behavior", "params": {"ammoFor": "bullet"}},
@@ -391,7 +405,10 @@ def _check_safe_item_capability_enginecalls_compile_to_gameplay_patch() -> None:
     assert patch["itemScale"] == 1.25
     assert patch["holdoutOffsetX"] == 14
     assert patch["holdoutOffsetY"] == -6
-    assert patch["projectileSizePolicy"] == "inherit_parent_floor"
+    assert patch["heldVisibility"] == "show_projectile"
+    assert patch["releaseTiming"] == "on_release"
+    assert patch["handPose"] == "held_out"
+    assert patch["initialOffsetPx"] == 8
     assert patch["vfxCueCount"] == 1
     assert patch["vfxCues"][0]["rendererKind"] == "impactRing"
     assert patch["vfxCues"][0]["particleSystemId"] == "pl:spark"
@@ -402,7 +419,7 @@ def _check_safe_item_capability_enginecalls_compile_to_gameplay_patch() -> None:
 def _check_overhead_barrage_onhit_is_executable_semantic_child_primitive() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 28, "useTimeTicks": 32}},
-        {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "gold star-edged slash", "effect": "star"}},
+        {"fn": "perform_melee_attack", "params": {"family": "broadsword", "movement": "straight", "speed": 8, "rangeTiles": 6, "lifetimeTicks": 30, "shotCount": 1, "spreadRadians": 0, "pierce": 1, "projectileShape": "gold star-edged slash", "effect": "star"}},
         {"fn": "apply_on_hit_effect", "params": {"onHit": "overhead_barrage", "count": 4, "aoeRadiusTiles": 2}},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(data)

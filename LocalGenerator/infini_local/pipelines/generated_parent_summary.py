@@ -38,8 +38,7 @@ def generated_parent_summary_from_data(data: dict[str, Any]) -> dict[str, Any]:
     mobility = str(gameplay.get("mobilityMode") or "").strip()
     if mobility:
         effects.append("mobility: " + mobility[:48])
-    if int(gameplay.get("extractinatorOutputItemType") or 0) > 0:
-        effects.append("extractinator output")
+
     if int(gameplay.get("consumeChancePercent") or 100) < 100:
         effects.append("custom consume chance")
     runtime_state = gameplay.get("runtimeState") if isinstance(gameplay.get("runtimeState"), dict) else {}

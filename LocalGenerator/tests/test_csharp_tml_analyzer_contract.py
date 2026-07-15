@@ -14,10 +14,8 @@ def _read(rel: str) -> str:
 
 def _contract_check_generated_item_apply_uses_named_none_use_style_ids() -> None:
     generated = _read("Common/Models/GeneratedItemData.cs")
-    extractinator = _read("Content/Items/GeneratedExtractinatorMaterial.cs")
     assert "ItemUseStyleID.None" in generated
-    assert "ItemUseStyleID.None" in extractinator
-    assert not re.search(r"\b(?:item|Item)\.useStyle\s*=\s*0\s*;", generated + "\n" + extractinator)
+    assert not re.search(r"\b(?:item|Item)\.useStyle\s*=\s*0\s*;", generated)
 
 
 def _contract_check_generator_client_uses_named_terraria_id_sentinels_for_snapshots() -> None:
