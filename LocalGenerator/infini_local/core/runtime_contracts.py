@@ -4,6 +4,9 @@ import re
 from typing import Any
 
 RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v2"
+STRUCTURAL_RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v3"
+_STRUCTURAL_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_FINAL_WIRE_ROOTS = {"gameplay", "attack", "accessory", "armor"}
 CONTROL_STYLES = {"", "tap", "hold-to-channel", "right-click-alt", "combo", "passive", "on-hit-trigger"}
 EXECUTION_STATUSES = {"", "executable", "partial", "visual_only", "unsupported"}
 EXECUTABLE_STATUS_ALIASES = {"active", "supported", "stable", "applied", "implemented", "complete", "completed"}
@@ -35,6 +38,81 @@ def _backing_expected(value: Any) -> Any:
     if value is None or isinstance(value, (str, bool, int, float)):
         return value
     return _text(value, 120)
+
+
+def _normalize_structural_backing_ref(raw: Any) -> dict[str, Any]:
+    obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    if str(obj.get("source") or "").strip() != "engineCall":
+        return {}
+    field = _text(obj.get("field"), 64)
+    call_id = _text(obj.get("callId"), 64)
+    if not field or not call_id:
+        return {}
+    return {
+        "source": "engineCall",
+        "callId": call_id,
+        "field": field,
+        "expected": _backing_expected(obj.get("expected")),
+    }
+
+
+def _normalize_structural_claim(raw: Any) -> dict[str, Any]:
+    obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    status = _norm(obj.get("status")).replace("-", "_")
+    if status not in {"executable", "visual_only"}:
+        status = ""
+    refs_candidate = obj.get("backingRefs")
+    refs_raw: list[Any] = refs_candidate if isinstance(refs_candidate, list) else []
+    refs = [_normalize_structural_backing_ref(ref) for ref in refs_raw]
+    return {
+        "claimId": _text(obj.get("claimId"), 64),
+        "playerText": _text(obj.get("playerText"), 220),
+        "backingRefs": [ref for ref in refs if ref][:12],
+        "status": status,
+    }
+
+
+def _normalize_structural_timeline_step(raw: Any) -> dict[str, Any]:
+    obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    return {
+        "phase": _text(obj.get("phase"), 48),
+        "text": _text(obj.get("text"), 180),
+        "claimIds": _list_text(obj.get("claimIds"), max_items=8, max_len=64),
+        "presentationOnly": obj.get("presentationOnly") is True,
+    }
+
+
+def _normalize_structural_runtime_contract(obj: dict[str, Any]) -> dict[str, Any]:
+    claims_candidate = obj.get("mechanicClaims")
+    claims_raw: list[Any] = claims_candidate if isinstance(claims_candidate, list) else []
+    timeline_candidate = obj.get("playerViewTimeline")
+    timeline_raw: list[Any] = timeline_candidate if isinstance(timeline_candidate, list) else []
+    execution = _norm(obj.get("executionStatus")).replace("-", "_")
+    if execution not in EXECUTION_STATUSES:
+        execution = ""
+    signature_mode = _norm(obj.get("signatureMode")).replace("-", "_")
+    if signature_mode not in {"mechanic", "visual"}:
+        signature_mode = ""
+    return {
+        "schema": STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
+        "primaryVerb": _text(obj.get("primaryVerb"), 120),
+        "controlStyle": _norm(obj.get("controlStyle")),
+        "signatureMode": signature_mode,
+        "signatureClaimId": _text(obj.get("signatureClaimId"), 64),
+        "tooltipClaimIds": _list_text(obj.get("tooltipClaimIds"), max_items=16, max_len=64),
+        "stateFields": _list_text(obj.get("stateFields"), max_items=16, max_len=48),
+        "syncFields": _list_text(obj.get("syncFields"), max_items=16, max_len=48),
+        "visualStateFields": _list_text(obj.get("visualStateFields"), max_items=16, max_len=48),
+        "playerViewTimeline": [_normalize_structural_timeline_step(step) for step in timeline_raw][:8],
+        "mechanicClaims": [_normalize_structural_claim(claim) for claim in claims_raw][:16],
+        "unsupportedPromises": _list_text(obj.get("unsupportedPromises"), max_items=24, max_len=120),
+        "finalWireReceipts": [
+            dict(row)
+            for row in (obj.get("finalWireReceipts") or [])
+            if isinstance(row, dict)
+        ][:96],
+        "executionStatus": execution,
+    }
 
 
 def normalize_backing_ref(raw: Any) -> dict[str, Any]:
@@ -199,7 +277,10 @@ def resolve_mechanic_backing_refs(
             actual = archetype.get(field)
         elif source == "engineCall":
             call_index_raw = ref.get("callIndex", -1)
-            call_index = int(call_index_raw) if isinstance(call_index_raw, (int, str)) else -1
+            try:
+                call_index = int(call_index_raw) if isinstance(call_index_raw, (int, str)) else -1
+            except (TypeError, ValueError, OverflowError):
+                call_index = -1
             if 0 <= call_index < len(calls) and isinstance(calls[call_index], dict):
                 call: dict[str, Any] = calls[call_index]
                 fn_candidates = {
@@ -226,6 +307,8 @@ def resolve_mechanic_backing_refs(
 
 def normalize_runtime_contract(raw: Any) -> dict[str, Any]:
     obj: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    if str(obj.get("schema") or "").strip() == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+        return _normalize_structural_runtime_contract(obj)
     control = _norm(obj.get("controlStyle"))
     if control not in CONTROL_STYLES:
         control = ""
@@ -264,12 +347,406 @@ def _append_unique_list(data: dict[str, Any], key: str, values: list[str]) -> No
     data[key] = merged[:32]
 
 
+def _nested_path_value(data: dict[str, Any], path: str) -> tuple[bool, Any]:
+    parts = str(path or "").split(".")
+    if not parts or any(not part for part in parts):
+        return False, None
+    current: Any = data
+    for part in parts:
+        if not isinstance(current, dict) or part not in current:
+            return False, None
+        current = current[part]
+    return True, current
+
+
+def _valid_final_wire_path(path: str) -> bool:
+    parts = str(path or "").split(".")
+    return (
+        len(parts) >= 2
+        and parts[0] in _FINAL_WIRE_ROOTS
+        and all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,95}", part) is not None for part in parts[1:])
+    )
+
+
+def _final_wire_value(data: dict[str, Any], path: str) -> tuple[bool, Any]:
+    if not _valid_final_wire_path(path):
+        return False, None
+    return _nested_path_value(data, path)
+
+
+def validate_structural_planner_contract(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate v3 authorship links before final DTO projection, without prose semantics."""
+    raw_contract_candidate = data.get("runtimeContract")
+    raw_contract: dict[str, Any] = dict(raw_contract_candidate) if isinstance(raw_contract_candidate, dict) else {}
+    model_authored_receipts = bool(raw_contract.get("finalWireReceipts"))
+    raw_claims_candidate = raw_contract.get("mechanicClaims")
+    raw_claims: list[Any] = raw_claims_candidate if isinstance(raw_claims_candidate, list) else []
+    model_authored_final_fields = False
+    for raw_claim in raw_claims:
+        if not isinstance(raw_claim, dict):
+            continue
+        raw_refs_candidate = raw_claim.get("backingRefs")
+        raw_refs: list[Any] = raw_refs_candidate if isinstance(raw_refs_candidate, list) else []
+        if any(isinstance(ref, dict) and ("finalPath" in ref or "finalExpected" in ref) for ref in raw_refs):
+            model_authored_final_fields = True
+            break
+    contract = normalize_runtime_contract(raw_contract)
+    contract["finalWireReceipts"] = []
+    data["runtimeContract"] = contract
+    errors: list[dict[str, Any]] = []
+    if model_authored_receipts:
+        errors.append({"kind": "model_authored_final_wire_receipts"})
+    if model_authored_final_fields:
+        errors.append({"kind": "model_authored_final_wire_fields"})
+    runtime = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
+    calls_candidate = runtime.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    calls_by_id: dict[str, dict[str, Any]] = {}
+    for index, raw in enumerate(calls):
+        if not isinstance(raw, dict):
+            errors.append({"kind": "engine_call_not_object", "callIndex": index})
+            continue
+        call_id = str(raw.get("callId") or "").strip()
+        if not _STRUCTURAL_ID_RE.fullmatch(call_id):
+            errors.append({"kind": "invalid_or_missing_call_id", "callIndex": index, "callId": call_id})
+            continue
+        if call_id in calls_by_id:
+            errors.append({"kind": "duplicate_call_id", "callId": call_id})
+            continue
+        calls_by_id[call_id] = raw
+
+    claims_candidate = contract.get("mechanicClaims")
+    claims: list[dict[str, Any]] = [claim for claim in claims_candidate if isinstance(claim, dict)] if isinstance(claims_candidate, list) else []
+    claims_by_id: dict[str, dict[str, Any]] = {}
+    executable_claim_ids: set[str] = set()
+    visual_claim_ids: set[str] = set()
+    for claim_index, claim in enumerate(claims):
+        claim_id = str(claim.get("claimId") or "").strip()
+        if not _STRUCTURAL_ID_RE.fullmatch(claim_id):
+            errors.append({"kind": "invalid_or_missing_claim_id", "claimIndex": claim_index, "claimId": claim_id})
+            continue
+        if claim_id in claims_by_id:
+            errors.append({"kind": "duplicate_claim_id", "claimId": claim_id})
+            continue
+        claims_by_id[claim_id] = claim
+        if not str(claim.get("playerText") or "").strip():
+            errors.append({"kind": "missing_player_text", "claimId": claim_id})
+        status = str(claim.get("status") or "")
+        refs_candidate = claim.get("backingRefs")
+        refs: list[dict[str, Any]] = [ref for ref in refs_candidate if isinstance(ref, dict)] if isinstance(refs_candidate, list) else []
+        if status == "visual_only":
+            visual_claim_ids.add(claim_id)
+            if refs:
+                errors.append({"kind": "visual_claim_has_execution_refs", "claimId": claim_id})
+            continue
+        if status != "executable":
+            errors.append({"kind": "invalid_claim_status", "claimId": claim_id, "status": status})
+            continue
+        if not refs:
+            errors.append({"kind": "missing_final_wire_refs", "claimId": claim_id})
+            continue
+        claim_resolved = True
+        for ref_index, ref in enumerate(refs):
+            call_id = str(ref.get("callId") or "")
+            call = calls_by_id.get(call_id)
+            field = str(ref.get("field") or "")
+            params_candidate = call.get("params") if isinstance(call, dict) else None
+            params: dict[str, Any] = dict(params_candidate) if isinstance(params_candidate, dict) else {}
+            authored_present, authored_actual = _nested_path_value(params, field)
+            if not authored_present or not _backing_values_match(authored_actual, ref.get("expected")):
+                claim_resolved = False
+                errors.append({
+                    "kind": "authored_ref_unresolved",
+                    "claimId": claim_id,
+                    "refIndex": ref_index,
+                    "callId": call_id,
+                    "field": field,
+                })
+        if claim_resolved:
+            executable_claim_ids.add(claim_id)
+
+    signature_mode = str(contract.get("signatureMode") or "")
+    signature_claim_id = str(contract.get("signatureClaimId") or "")
+    if signature_mode == "mechanic":
+        if signature_claim_id not in executable_claim_ids:
+            errors.append({"kind": "signature_claim_not_executable", "claimId": signature_claim_id})
+    elif signature_mode == "visual":
+        if signature_claim_id not in visual_claim_ids:
+            errors.append({"kind": "signature_claim_not_visual", "claimId": signature_claim_id})
+    else:
+        errors.append({"kind": "missing_signature_mode", "claimId": signature_claim_id})
+
+    tooltip_ids = [str(value) for value in contract.get("tooltipClaimIds") or []]
+    if not tooltip_ids:
+        errors.append({"kind": "missing_tooltip_claim_ids"})
+    for claim_id in tooltip_ids:
+        if claim_id not in claims_by_id:
+            errors.append({"kind": "unknown_tooltip_claim_id", "claimId": claim_id})
+    if signature_mode == "mechanic" and signature_claim_id not in tooltip_ids:
+        errors.append({"kind": "signature_missing_from_tooltip", "claimId": signature_claim_id})
+
+    timeline_candidate = contract.get("playerViewTimeline")
+    timeline: list[dict[str, Any]] = [step for step in timeline_candidate if isinstance(step, dict)] if isinstance(timeline_candidate, list) else []
+    if len(timeline) < 4:
+        errors.append({"kind": "missing_player_view_timeline"})
+    timeline_claim_ids: set[str] = set()
+    for step_index, step in enumerate(timeline):
+        claim_ids = [str(value) for value in step.get("claimIds") or []]
+        if step.get("presentationOnly") is True:
+            if claim_ids:
+                errors.append({"kind": "presentation_step_has_claim_ids", "stepIndex": step_index})
+            continue
+        if not claim_ids:
+            errors.append({"kind": "timeline_step_missing_claim_ids", "stepIndex": step_index})
+            continue
+        for claim_id in claim_ids:
+            timeline_claim_ids.add(claim_id)
+            if claim_id not in claims_by_id:
+                errors.append({"kind": "unknown_timeline_claim_id", "stepIndex": step_index, "claimId": claim_id})
+    if signature_claim_id and signature_claim_id not in timeline_claim_ids:
+        errors.append({"kind": "signature_missing_from_timeline", "claimId": signature_claim_id})
+
+    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
+    weird_twist = concept.get("weirdTwist") if isinstance(concept.get("weirdTwist"), dict) else {}
+    twist_claim_ids = [str(value) for value in weird_twist.get("claimIds") or []]
+    if signature_claim_id and signature_claim_id not in twist_claim_ids:
+        errors.append({"kind": "signature_missing_from_weird_twist", "claimId": signature_claim_id})
+    if not executable_claim_ids:
+        errors.append({"kind": "missing_executable_mechanic_claim"})
+    if contract.get("unsupportedPromises"):
+        errors.append({"kind": "unsupported_promises_present"})
+
+    return {
+        "schema": "infini.structural-planner-contract-report.v1",
+        "ok": not errors,
+        "blockingClaims": errors[:32],
+        "unsupportedPromises": list(contract.get("unsupportedPromises") or []),
+    }
+
+
+def validate_structural_final_wire_contract(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate v3 authorship using compiler-owned final DTO provenance only.
+
+    This function does not interpret prose, infer item mechanics, or map semantic
+    categories.  It proves that authored call scalars survived to the final wire.
+    """
+    contract = normalize_runtime_contract(data.get("runtimeContract"))
+    data["runtimeContract"] = contract
+    errors: list[dict[str, Any]] = []
+    receipts: list[dict[str, Any]] = []
+
+    runtime = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
+    calls_candidate = runtime.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    calls_by_id: dict[str, list[dict[str, Any]]] = {}
+    call_indices_by_id: dict[str, set[int]] = {}
+    for index, raw in enumerate(calls):
+        if not isinstance(raw, dict):
+            continue
+        call_id = str(raw.get("callId") or "").strip()
+        authored_index = raw.get("_index") if isinstance(raw.get("_index"), int) else index
+        if not _STRUCTURAL_ID_RE.fullmatch(call_id):
+            errors.append({"kind": "invalid_or_missing_call_id", "callIndex": authored_index, "callId": call_id})
+            continue
+        calls_by_id.setdefault(call_id, []).append(raw)
+        call_indices_by_id.setdefault(call_id, set()).add(authored_index)
+    for call_id, indices in call_indices_by_id.items():
+        if len(indices) > 1:
+            errors.append({"kind": "duplicate_call_id", "callId": call_id})
+
+    claims_candidate = contract.get("mechanicClaims")
+    claims: list[dict[str, Any]] = [claim for claim in claims_candidate if isinstance(claim, dict)] if isinstance(claims_candidate, list) else []
+    claims_by_id: dict[str, dict[str, Any]] = {}
+    executable_claim_ids: set[str] = set()
+    visual_claim_ids: set[str] = set()
+    for claim_index, claim in enumerate(claims):
+        claim_id = str(claim.get("claimId") or "").strip()
+        if not _STRUCTURAL_ID_RE.fullmatch(claim_id):
+            errors.append({"kind": "invalid_or_missing_claim_id", "claimIndex": claim_index, "claimId": claim_id})
+            continue
+        if claim_id in claims_by_id:
+            errors.append({"kind": "duplicate_claim_id", "claimId": claim_id})
+            continue
+        claims_by_id[claim_id] = claim
+        if not str(claim.get("playerText") or "").strip():
+            errors.append({"kind": "missing_player_text", "claimId": claim_id})
+        status = str(claim.get("status") or "")
+        if status == "visual_only":
+            visual_claim_ids.add(claim_id)
+            if claim.get("backingRefs"):
+                errors.append({"kind": "visual_claim_has_execution_refs", "claimId": claim_id})
+            continue
+        if status != "executable":
+            errors.append({"kind": "invalid_claim_status", "claimId": claim_id, "status": status})
+            continue
+        refs_candidate = claim.get("backingRefs")
+        refs: list[dict[str, Any]] = [ref for ref in refs_candidate if isinstance(ref, dict)] if isinstance(refs_candidate, list) else []
+        if not refs:
+            errors.append({"kind": "missing_final_wire_refs", "claimId": claim_id})
+            continue
+        claim_active = True
+        for ref_index, ref in enumerate(refs):
+            call_id = str(ref.get("callId") or "")
+            field = str(ref.get("field") or "")
+            expected = ref.get("expected")
+            source_calls = calls_by_id.get(call_id) or []
+            authored_present = False
+            for call in source_calls:
+                params_candidate = call.get("params")
+                params: dict[str, Any] = dict(params_candidate) if isinstance(params_candidate, dict) else {}
+                source_present, source_actual = _nested_path_value(params, field)
+                if source_present and _backing_values_match(source_actual, expected):
+                    authored_present = True
+                    break
+            matching_receipts = [
+                row
+                for row in contract.get("finalWireReceipts") or []
+                if isinstance(row, dict)
+                and str(row.get("claimId") or "") == claim_id
+                and row.get("refIndex") == ref_index
+                and str(row.get("callId") or "") == call_id
+                and str(row.get("field") or "") == field
+                and _backing_values_match(row.get("authoredExpected"), expected)
+            ]
+            if not authored_present:
+                receipt = {
+                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
+                    "field": field, "authoredExpected": expected, "finalPath": "",
+                    "compiledValue": None, "finalActual": None, "status": "authored_unresolved",
+                }
+                receipts.append(receipt)
+                claim_active = False
+                errors.append({"kind": "final_wire_ref_authored_unresolved", **receipt})
+                continue
+            if not matching_receipts:
+                receipt = {
+                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
+                    "field": field, "authoredExpected": expected, "finalPath": "",
+                    "compiledValue": None, "finalActual": None, "status": "missing_compiler_receipt",
+                }
+                receipts.append(receipt)
+                claim_active = False
+                errors.append({"kind": "final_wire_ref_missing_compiler_receipt", **receipt})
+                continue
+            for compiler_receipt in matching_receipts:
+                final_path = str(compiler_receipt.get("finalPath") or "")
+                compiled_value = compiler_receipt.get("compiledValue")
+                compiler_status = str(compiler_receipt.get("status") or "")
+                final_present, final_actual = _final_wire_value(data, final_path)
+                if compiler_status not in {"active", "normalized", "clamped"}:
+                    receipt_status = compiler_status or "unsupported"
+                elif not final_present:
+                    receipt_status = "dropped"
+                elif not _backing_values_match(final_actual, compiled_value):
+                    receipt_status = "mismatched"
+                else:
+                    receipt_status = compiler_status
+                receipt = {
+                    "claimId": claim_id,
+                    "refIndex": ref_index,
+                    "callId": call_id,
+                    "field": field,
+                    "authoredExpected": expected,
+                    "finalPath": final_path,
+                    "compiledValue": compiled_value,
+                    "finalActual": final_actual if final_present else None,
+                    "status": receipt_status,
+                }
+                receipts.append(receipt)
+                if receipt_status not in {"active", "normalized", "clamped"}:
+                    claim_active = False
+                    errors.append({"kind": "final_wire_ref_" + receipt_status, **receipt})
+        if claim_active:
+            executable_claim_ids.add(claim_id)
+
+    signature_mode = str(contract.get("signatureMode") or "")
+    signature_claim_id = str(contract.get("signatureClaimId") or "")
+    if signature_mode == "mechanic":
+        if signature_claim_id not in executable_claim_ids:
+            errors.append({"kind": "signature_claim_not_executable", "claimId": signature_claim_id})
+    elif signature_mode == "visual":
+        if signature_claim_id not in visual_claim_ids:
+            errors.append({"kind": "signature_claim_not_visual", "claimId": signature_claim_id})
+    else:
+        errors.append({"kind": "missing_signature_mode", "claimId": signature_claim_id})
+
+    tooltip_ids = [str(value) for value in contract.get("tooltipClaimIds") or []]
+    if not tooltip_ids:
+        errors.append({"kind": "missing_tooltip_claim_ids"})
+    for claim_id in tooltip_ids:
+        if claim_id not in claims_by_id:
+            errors.append({"kind": "unknown_tooltip_claim_id", "claimId": claim_id})
+    if signature_mode == "mechanic" and signature_claim_id not in tooltip_ids:
+        errors.append({"kind": "signature_missing_from_tooltip", "claimId": signature_claim_id})
+
+    timeline_candidate = contract.get("playerViewTimeline")
+    timeline: list[dict[str, Any]] = [step for step in timeline_candidate if isinstance(step, dict)] if isinstance(timeline_candidate, list) else []
+    if len(timeline) < 4:
+        errors.append({"kind": "missing_player_view_timeline"})
+    timeline_claim_ids: set[str] = set()
+    for step_index, step in enumerate(timeline):
+        claim_ids = [str(value) for value in step.get("claimIds") or []]
+        if step.get("presentationOnly") is True:
+            if claim_ids:
+                errors.append({"kind": "presentation_step_has_claim_ids", "stepIndex": step_index})
+            continue
+        if not claim_ids:
+            errors.append({"kind": "timeline_step_missing_claim_ids", "stepIndex": step_index})
+            continue
+        for claim_id in claim_ids:
+            timeline_claim_ids.add(claim_id)
+            if claim_id not in claims_by_id:
+                errors.append({"kind": "unknown_timeline_claim_id", "stepIndex": step_index, "claimId": claim_id})
+    if signature_claim_id and signature_claim_id not in timeline_claim_ids:
+        errors.append({"kind": "signature_missing_from_timeline", "claimId": signature_claim_id})
+
+    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
+    weird_twist = concept.get("weirdTwist") if isinstance(concept.get("weirdTwist"), dict) else {}
+    twist_claim_ids = [str(value) for value in weird_twist.get("claimIds") or []]
+    if signature_claim_id and signature_claim_id not in twist_claim_ids:
+        errors.append({"kind": "signature_missing_from_weird_twist", "claimId": signature_claim_id})
+
+    if not executable_claim_ids:
+        errors.append({"kind": "missing_executable_mechanic_claim"})
+    if contract.get("unsupportedPromises"):
+        errors.append({"kind": "unsupported_promises_present"})
+
+    tooltip_parts = [
+        str(claims_by_id[claim_id].get("playerText") or "").strip().rstrip(" .;")
+        for claim_id in tooltip_ids
+        if claim_id in claims_by_id and str(claims_by_id[claim_id].get("playerText") or "").strip()
+    ]
+    if not errors:
+        data["tooltip"] = "; ".join(tooltip_parts)
+        contract["executionStatus"] = "executable"
+    else:
+        contract["executionStatus"] = "partial"
+    contract["finalWireReceipts"] = receipts[:96]
+    data["runtimeContract"] = contract
+    return {
+        "schema": "infini.final-wire-contract-report.v1",
+        "ok": not errors,
+        "blockingClaims": errors[:32],
+        "finalWireReceipts": receipts[:96],
+        "executionStatus": contract["executionStatus"],
+        "contract": contract,
+    }
+
+
 def validate_runtime_contract(data: dict[str, Any], patch: dict[str, Any] | None = None) -> dict[str, Any]:
     patch = patch or {}
     raw_present = isinstance(data.get("runtimeContract"), dict)
     contract = normalize_runtime_contract(data.get("runtimeContract") if raw_present else {})
     if raw_present:
         data["runtimeContract"] = contract
+    if contract.get("schema") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+        return {
+            "schema": "infini.runtime-contract-validation.v2",
+            "warnings": [],
+            "unsupportedPromises": list(contract.get("unsupportedPromises") or []),
+            "executionStatus": contract.get("executionStatus", ""),
+            "contract": contract,
+        }
 
     warnings: list[str] = []
     unsupported: list[str] = list(contract.get("unsupportedPromises") or [])

@@ -4,7 +4,7 @@ from typing import Any
 
 # Version names are intentionally semantic, not only numeric.  Generated recipes can be
 # inspected later without guessing which prompt/runtime/visual contract authored them.
-PLANNER_PROMPT_PROFILE_VERSION = "planner_prompt_static_prefix_v0.4.194"
+PLANNER_PROMPT_PROFILE_VERSION = "planner_prompt_structural_final_wire_v3_v0.4.241"
 VISUAL_ROLE_CONTRACT_VERSION = "careful_visual_role_prompt_hygiene_v0.4.171"
 RUNTIME_AFFORDANCE_SCHEMA_VERSION = "infini.runtime-affordance.v2"
 FAILURE_UX_CONTRACT_VERSION = "structured_failure_player_message_v0.4.174"
@@ -56,8 +56,8 @@ EQUIPMENT_BUDGET_CONTRACT_VERSION = "armor_accessory_total_soft_budget_v0.4.226"
 REPLAY_HARNESS_CONTRACT_VERSION = "generation_case_replay_audit_v0.4.226"
 ALT_FORK_CHERRYPICK_CONTRACT_VERSION = "best_of_alt_config_signals_trace_replay_v0.4.226"
 RUNTIME_ARCHETYPE_SCHEMA_VERSION = "infini.runtime-archetype.v1"
-RUNTIME_CONTRACT_SCHEMA_VERSION = "infini.runtime-contract.v2"
-RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION = "runtime_promise_truth_validator_v0.4.240"
+RUNTIME_CONTRACT_SCHEMA_VERSION = "infini.runtime-contract.v3"
+RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION = "structural_final_wire_receipts_v0.4.241"
 RECIPE_HEALTH_SCHEMA_VERSION = "infini.recipe-health.v1"
 CONTRACT_STAMP_SCHEMA_VERSION = "infini.contract-stamp.v1"
 

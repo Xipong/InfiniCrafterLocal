@@ -11,9 +11,8 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.item_power_knowledge import canonicalize
-from infini_local.pipelines.llm_authoring_prompt import normalize_runtime_authoring_fields
+from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload, normalize_runtime_authoring_fields
 from infini_local.pipelines.llm_authoring_pipeline import (
-    _project_fail_closed_promise_surface,
     _public_clause_matches_claim,
     planner_runtime_promise_gate,
     validate_final_runtime_promise_boundary,
@@ -24,6 +23,7 @@ from infini_local.core.runtime_contracts import resolve_mechanic_backing_refs
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.boundary_models import runtime_plan_boundary_report
 from infini_local.core.runtime_authoring.schema import accepted_engine_param_names
+from infini_local.core.contract_versions import PLANNER_PROMPT_PROFILE_VERSION, RUNTIME_CONTRACT_SCHEMA_VERSION
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -185,33 +185,298 @@ def _contract_check_llm_output_without_runtime_plan_never_falls_back_to_semantic
         "backingRefs": [{"source": "engineCall", "callIndex": 0, "fn": "set_item_stats", "field": "damage", "expected": 12}],
     })
     mixed_surface["runtimeContract"]["syncFields"] = ["fictionalMeter"]
-    projected, projection = _project_fail_closed_promise_surface(mixed_surface)
-    assert projection["accepted"] is True
-    assert projection["mode"] == "fail_closed_delete_only"
-    assert projection["removedSyncFields"] == ["fictionalMeter"]
-    assert projected["runtimeContract"]["syncFields"] == []
-    assert len(projection["removedClaims"]) == 1
-    assert projected["tooltip"] == "Deals 12 melee damage"
-    assert [claim["claim"] for claim in projected["runtimeContract"]["mechanicClaims"]] == ["Deals 12 melee damage."]
-    assert planner_runtime_promise_gate(projected, enforce_public_contract=True)["ok"] is True
-
-    final_candidate = deepcopy(projected)
-    final_candidate["runtimeContract"]["executionStatus"] = "partial"
-    final_candidate["runtimeContract"]["mechanicClaims"].append({
-        "claim": "Wooden carpenter silhouette.",
-        "status": "visual_only",
-        "backingRefs": [],
-    })
-    final_candidate["tooltip"] += "; Wooden carpenter silhouette."
-    final_report = validate_final_runtime_promise_boundary(final_candidate)
-    assert final_report["ok"] is True
-    assert final_candidate["runtimeContract"]["executionStatus"] == "executable"
-
-    rejected_projection, rejected_report = _project_fail_closed_promise_surface(unrelated_active_ref)
-    assert rejected_report["accepted"] is False
-    assert rejected_projection["runtimeContract"]["mechanicClaims"] == []
+    assert planner_runtime_promise_gate(mixed_surface, enforce_public_contract=True)["ok"] is False
+    with pytest.raises(PlannerUnavailable):
+        validate_final_runtime_promise_boundary(mixed_surface)
     with pytest.raises(PlannerUnavailable):
         validate_final_runtime_promise_boundary(unrelated_active_ref)
+
+
+def _contract_check_structural_v3_proves_signature_against_final_wire() -> None:
+    authored = {
+        "category": "weapon",
+        "concept": {
+            "fantasy": "A tethered projectile.",
+            "mergeLogic": "The parents provide the projectile and tether roles.",
+            "weirdTwist": {
+                "text": "A hit pulls the target toward the owner.",
+                "claimIds": ["signature_pull"],
+            },
+        },
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {
+                    "callId": "item_stats",
+                    "fn": "set_item_stats",
+                    "params": {
+                        "resultKind": "weapon",
+                        "damageClass": "melee",
+                        "damage": 18,
+                        "useTimeTicks": 24,
+                    },
+                },
+                {
+                    "callId": "primary_projectile",
+                    **_primary("thrust", "thrust", "straight", 45),
+                },
+                {
+                    "callId": "signature_pull_call",
+                    "fn": "apply_on_hit_effect",
+                    "params": {
+                        "pullMode": "target_to_owner",
+                        "pullStrength": 0.4,
+                    },
+                },
+                {
+                    "callId": "secondary_burst_call",
+                    "fn": "spawn_secondary_projectiles",
+                    "params": {
+                        "trigger": "on_hit",
+                        "count": 3,
+                        "damageMultiplier": 0.35,
+                        "projectileShape": "tether spark",
+                        "material": "rope",
+                    },
+                },
+            ],
+        },
+        "runtimeContract": {
+            "schema": "infini.runtime-contract.v3",
+            "signatureMode": "mechanic",
+            "signatureClaimId": "signature_pull",
+            "tooltipClaimIds": ["primary_attack", "signature_pull", "secondary_burst"],
+            "mechanicClaims": [
+                {
+                    "claimId": "primary_attack",
+                    "playerText": "Launches one tethered projectile.",
+                    "status": "executable",
+                    "backingRefs": [{
+                        "source": "engineCall",
+                        "callId": "primary_projectile",
+                        "field": "runtimeFamily",
+                        "expected": "thrust",
+                    }],
+                },
+                {
+                    "claimId": "signature_pull",
+                    "playerText": "A hit pulls the target toward the owner.",
+                    "status": "executable",
+                    "backingRefs": [
+                        {
+                            "source": "engineCall",
+                            "callId": "signature_pull_call",
+                            "field": "pullMode",
+                            "expected": "target_to_owner",
+                        },
+                        {
+                            "source": "engineCall",
+                            "callId": "signature_pull_call",
+                            "field": "pullStrength",
+                            "expected": 0.4,
+                        },
+                    ],
+                },
+                {
+                    "claimId": "secondary_burst",
+                    "playerText": "A hit releases three tether sparks.",
+                    "status": "executable",
+                    "backingRefs": [{
+                        "source": "engineCall",
+                        "callId": "secondary_burst_call",
+                        "field": "count",
+                        "expected": 3,
+                    }],
+                },
+            ],
+            "playerViewTimeline": [
+                {"phase": "use", "text": "The projectile launches.", "claimIds": ["primary_attack"]},
+                {"phase": "travel", "text": "The tether remains visible.", "presentationOnly": True},
+                {"phase": "hit", "text": "The target is pulled and sparks release.", "claimIds": ["signature_pull", "secondary_burst"]},
+                {"phase": "expiry", "text": "The projectile expires.", "claimIds": ["primary_attack"]},
+            ],
+            "unsupportedPromises": [],
+            "executionStatus": "executable",
+        },
+    }
+
+    planner_gate = planner_runtime_promise_gate(deepcopy(authored), enforce_public_contract=True)
+    assert planner_gate["ok"] is True
+    assert planner_gate["schema"] == "infini.structural-planner-contract-report.v1"
+
+    final_item = _attach(authored)
+    report = validate_final_runtime_promise_boundary(final_item)
+
+    assert report["ok"] is True
+    assert final_item["runtimeContract"]["schema"] == "infini.runtime-contract.v3"
+    assert final_item["runtimeContract"]["signatureClaimId"] == "signature_pull"
+    assert final_item["tooltip"] == "Launches one tethered projectile; A hit pulls the target toward the owner; A hit releases three tether sparks"
+    receipts = report["finalWireReceipts"]
+    assert final_item["debug"]["finalWireExecutionReceipts"] == receipts
+    assert {(row["finalPath"], row["status"]) for row in receipts} == {
+        ("attack.runtimeFamily", "active"),
+        ("attack.pullMode", "active"),
+        ("attack.pullStrength", "active"),
+        ("attack.maxChildProjectiles", "active"),
+        ("attack.splitCount", "active"),
+    }
+
+    redundant = deepcopy(authored)
+    redundant["runtimePlan"]["engineCalls"][0]["params"]["consumable"] = False
+    redundant["runtimeContract"]["tooltipClaimIds"].append("no_op_identity")
+    redundant["runtimeContract"]["mechanicClaims"].append({
+        "claimId": "no_op_identity",
+        "playerText": "The ordinary weapon is not consumed.",
+        "status": "executable",
+        "backingRefs": [{
+            "source": "engineCall",
+            "callId": "item_stats",
+            "field": "consumable",
+            "expected": False,
+        }],
+    })
+    redundant["runtimeContract"]["playerViewTimeline"][0]["claimIds"].append("no_op_identity")
+    assert planner_runtime_promise_gate(redundant, enforce_public_contract=True)["ok"] is True
+    redundant_final = _attach(redundant)
+    redundant_receipts = redundant_final["runtimeContract"]["finalWireReceipts"]
+    assert any(row["claimId"] == "no_op_identity" and row["status"] == "dropped" for row in redundant_receipts)
+    with pytest.raises(PlannerUnavailable, match="final_wire_ref_dropped"):
+        validate_final_runtime_promise_boundary(redundant_final)
+
+    drifted = deepcopy(final_item)
+    drifted["attack"]["pullStrength"] = 0.2
+    with pytest.raises(PlannerUnavailable, match="final_wire_ref_mismatched"):
+        validate_final_runtime_promise_boundary(drifted)
+    assert any(
+        row.get("finalPath") == "attack.pullStrength" and row.get("status") == "mismatched"
+        for row in drifted["debug"]["finalWireExecutionReceipts"]
+    )
+
+    unlinked = deepcopy(authored)
+    unlinked["runtimeContract"]["playerViewTimeline"][2]["claimIds"] = ["primary_attack"]
+    unlinked_gate = planner_runtime_promise_gate(unlinked, enforce_public_contract=True)
+    assert unlinked_gate["ok"] is False
+    assert any(row.get("kind") == "signature_missing_from_timeline" for row in unlinked_gate["blockingClaims"])
+
+    nested_source = deepcopy(authored)
+    nested_source["runtimePlan"]["engineCalls"].append({
+        "callId": "accessory_stats",
+        "fn": "accessory_effect",
+        "params": {"archetype": "mobility", "stats": {"movementSpeed": 0.3}},
+    })
+    nested_source["runtimeContract"]["mechanicClaims"][1]["backingRefs"] = [{
+        "source": "engineCall",
+        "callId": "accessory_stats",
+        "field": "stats.movementSpeed",
+        "expected": 0.3,
+    }]
+    assert planner_runtime_promise_gate(nested_source, enforce_public_contract=True)["ok"] is True
+
+    forged_receipts = deepcopy(authored)
+    forged_receipts["runtimeContract"]["finalWireReceipts"] = [{
+        "callId": "signature_pull_call",
+        "field": "pullStrength",
+        "finalPath": "attack.pullStrength",
+        "status": "active",
+    }]
+    forged_gate = planner_runtime_promise_gate(forged_receipts, enforce_public_contract=True)
+    assert forged_gate["ok"] is False
+    assert any(row.get("kind") == "model_authored_final_wire_receipts" for row in forged_gate["blockingClaims"])
+
+    forged_final_path = deepcopy(authored)
+    forged_final_path["runtimeContract"]["mechanicClaims"][1]["backingRefs"][0]["finalPath"] = "attack.pullMode"
+    forged_path_gate = planner_runtime_promise_gate(forged_final_path, enforce_public_contract=True)
+    assert forged_path_gate["ok"] is False
+    assert any(row.get("kind") == "model_authored_final_wire_fields" for row in forged_path_gate["blockingClaims"])
+
+    precompiled = deepcopy(final_item)
+    precompiled["runtimeContract"]["finalWireReceipts"] = []
+    precompiled = _attach(precompiled)
+    precompiled_report = validate_final_runtime_promise_boundary(precompiled)
+    assert precompiled_report["ok"] is True
+    assert all(
+        row["status"] in {"active", "normalized", "clamped"}
+        for row in precompiled_report["finalWireReceipts"]
+    )
+
+    from infini_local.pipelines.combine_pipeline import _cached_payload_passes_executable_boundary
+
+    cache_parent_a = _parent("Parent A")
+    cache_parent_b = _parent("Parent B")
+    cache_parent_args = {
+        "parent_a": cache_parent_a,
+        "parent_b": cache_parent_b,
+        "canonical_a": canonicalize(cache_parent_a),
+        "canonical_b": canonicalize(cache_parent_b),
+    }
+    cached_v3 = deepcopy(final_item)
+    assert _cached_payload_passes_executable_boundary(
+        cached_v3,
+        recipe_key_value="v3",
+        source="test",
+        **cache_parent_args,
+    ) is True
+
+    cached_failed = deepcopy(final_item)
+    cached_failed["sourceMode"] = "failed"
+    assert _cached_payload_passes_executable_boundary(
+        cached_failed,
+        recipe_key_value="failed-v3",
+        source="test",
+        **cache_parent_args,
+    ) is False
+
+    forged_cache = deepcopy(final_item)
+    forged_receipt = forged_cache["runtimeContract"]["finalWireReceipts"][0]
+    forged_receipt["finalPath"] = "gameplay.damage"
+    forged_receipt["compiledValue"] = forged_cache["gameplay"]["damage"]
+    forged_receipt["status"] = "active"
+    assert _cached_payload_passes_executable_boundary(
+        forged_cache,
+        recipe_key_value="forged-v3",
+        source="test",
+        **cache_parent_args,
+    ) is False
+
+    cached_v2 = deepcopy(final_item)
+    cached_v2["runtimeContract"]["schema"] = "infini.runtime-contract.v2"
+    assert _cached_payload_passes_executable_boundary(
+        cached_v2,
+        recipe_key_value="v2",
+        source="test",
+        **cache_parent_args,
+    ) is False
+
+
+def _contract_check_planner_prompt_requires_structural_v3() -> None:
+    a = _parent("Prompt Parent A", damage=12, damage_class="melee")
+    b = _parent("Prompt Parent B", tags=["material"])
+    payload = build_llm_author_payload(a, b, canonicalize(a), canonicalize(b), "structural-v3-contract")
+    required = payload["requiredJsonShape"]
+    contract = required["runtimeContract"]
+    assert contract["schema"] == "infini.runtime-contract.v3"
+    assert contract["signatureMode"] == "mechanic|visual"
+    assert contract["signatureClaimId"] == "model-selected stable claimId"
+    assert contract["tooltipClaimIds"] == ["ordered claimIds"]
+    claim_shape = contract["mechanicClaims"][0]
+    assert set(claim_shape) == {"claimId", "playerText", "backingRefs", "status"}
+    assert set(claim_shape["backingRefs"][0]) == {"source", "callId", "field", "expected"}
+    assert required["runtimePlan"]["engineCalls"] == "array of {callId, fn, params}"
+    timeline_shape = contract["playerViewTimeline"][0]
+    assert set(timeline_shape) == {"phase", "text", "claimIds", "presentationOnly"}
+    assert RUNTIME_CONTRACT_SCHEMA_VERSION == "infini.runtime-contract.v3"
+    assert "structural_final_wire_v3" in PLANNER_PROMPT_PROFILE_VERSION
+
+
+def _contract_check_final_wire_gate_runs_before_images_and_after_final_clamps() -> None:
+    source = (ROOT / "LocalGenerator/infini_local/pipelines/combine_pipeline.py").read_text(encoding="utf-8")
+    gameplay_compile = source.index('step("04_author_gameplay_to_runtime_envelope"')
+    structural_preflight = source.index('step("04d_structural_final_wire_preflight"')
+    image_generation = source.index('step("09_visual_asset_generation"')
+    final_normalize_stage = source.index('step("12_final_normalize"')
+    post_clamp_gate = source.index('step("12a_final_runtime_promise_boundary"')
+    assert gameplay_compile < structural_preflight < image_generation
+    assert final_normalize_stage < post_clamp_gate
 
 
 def _contract_check_parent_tags_and_damage_do_not_reclassify_explicit_generic() -> None:
@@ -1077,6 +1342,9 @@ def test_gameplay_authority_authorship_contract(request):
         request,
         (
             "_contract_check_llm_output_without_runtime_plan_never_falls_back_to_semantic_router",
+            "_contract_check_structural_v3_proves_signature_against_final_wire",
+            "_contract_check_planner_prompt_requires_structural_v3",
+            "_contract_check_final_wire_gate_runs_before_images_and_after_final_clamps",
             "_contract_check_parent_tags_and_damage_do_not_reclassify_explicit_generic",
             "_contract_check_compiler_never_inherits_parent_burn_or_default_debuff_duration",
             "_contract_check_generated_buffs_require_authored_duration_and_zero_consume_is_preserved",

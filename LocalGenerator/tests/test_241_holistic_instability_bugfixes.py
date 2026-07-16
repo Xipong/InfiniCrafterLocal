@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -455,6 +456,51 @@ def _contract_check_planner_promise_gate_does_not_treat_material_heat_as_heat_ja
     assert any(claim["kind"] == "heat_jam" for claim in mechanical_gate["blockingClaims"])
 
 
+def _honest_structural_v3_bolt(name: str = "Honest Bolt") -> dict:
+    return {
+        "name": name,
+        "concept": {
+            "fantasy": "A fast bounded bolt.",
+            "mergeLogic": "Both parents contribute to the bolt.",
+            "weirdTwist": {"text": "It launches one fast bolt.", "claimIds": ["primary_attack"]},
+        },
+        "runtimeContract": {
+            "schema": "infini.runtime-contract.v3",
+            "primaryVerb": "shoot a fast bolt",
+            "controlStyle": "tap",
+            "signatureMode": "mechanic",
+            "signatureClaimId": "primary_attack",
+            "tooltipClaimIds": ["primary_attack"],
+            "mechanicClaims": [{
+                "claimId": "primary_attack",
+                "playerText": "Shoots one fast bolt.",
+                "backingRefs": [{
+                    "source": "engineCall",
+                    "callId": "primary_projectile",
+                    "field": "runtimeFamily",
+                    "expected": "shoot",
+                }],
+                "status": "executable",
+            }],
+            "playerViewTimeline": [
+                {"phase": "use", "text": "The bolt is fired.", "claimIds": ["primary_attack"]},
+                {"phase": "travel", "text": "The bolt travels.", "claimIds": ["primary_attack"]},
+                {"phase": "hit", "text": "The bolt hits.", "claimIds": ["primary_attack"]},
+                {"phase": "expiry", "text": "The bolt expires.", "claimIds": ["primary_attack"]},
+            ],
+            "unsupportedPromises": [],
+            "executionStatus": "executable",
+        },
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
+                {"callId": "primary_projectile", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 8, "rangeTiles": 30, "lifetimeTicks": 60, "shotCount": 1, "spreadRadians": 0, "pierce": 1}},
+            ],
+        },
+    }
+
+
 def _contract_check_try_llm_plan_reauthors_once_after_blocking_promise(monkeypatch) -> None:
     responses = [
         {
@@ -462,25 +508,7 @@ def _contract_check_try_llm_plan_reauthors_once_after_blocking_promise(monkeypat
             "tooltip": "Summons orbiting blades that seek enemies.",
             "runtimePlan": {"resultKind": "weapon", "engineCalls": [{"fn": "summon_behavior", "params": {"family": "minion"}}]},
         },
-        {
-            "name": "Honest Bolt",
-            "tooltip": "Shoots a fast bolt.",
-            "runtimeContract": {
-                "schema": "infini.runtime-contract.v2",
-                "primaryVerb": "shoot a fast bolt",
-                "controlStyle": "tap",
-                "mechanicClaims": [{"claim": "shoots a fast bolt", "backing": "shoot_projectile", "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "shoot"}], "status": "executable"}],
-                "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
-                "executionStatus": "executable",
-            },
-            "runtimePlan": {
-                "resultKind": "weapon",
-                "engineCalls": [
-                    {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
-                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "movement": "straight", "speed": 8, "lifetimeTicks": 60, "projectileShape": "bolt"}},
-                ],
-            },
-        },
+        _honest_structural_v3_bolt(),
     ]
     calls: list[dict] = []
 
@@ -503,12 +531,16 @@ def _contract_check_try_llm_plan_reauthors_once_after_blocking_promise(monkeypat
     assert result["debug"]["plannerPromiseGate"]["ok"] is True
     retry_packet = json.loads(calls[1]["messages"][-1]["content"])
     backing_rules = retry_packet["backingRefRules"]
-    assert any("source must be exactly" in rule and "engineCall" in rule for rule in backing_rules)
-    assert any("zero-based absolute index into runtimePlan.engineCalls" in rule for rule in backing_rules)
-    assert any('"source":"engineCall"' in rule and '"callIndex":1' in rule for rule in backing_rules)
+    assert any("engineCall.callId" in rule and "unique" in rule for rule in backing_rules)
+    assert any("exact scalar path inside the selected call.params" in rule for rule in backing_rules)
+    assert any("compiler owns final-wire provenance" in rule for rule in backing_rules)
+    assert all("callIndex" not in rule for rule in backing_rules)
+    assert retry_packet["requiredTopLevelKeys"] == sorted(retry_packet["requiredJsonShape"])
+    assert {"name", "concept", "runtimePlan", "runtimeContract", "visual"} <= set(retry_packet["requiredTopLevelKeys"])
+    assert any("every requiredTopLevelKey" in rule for rule in retry_packet["requirements"])
 
 
-def _contract_check_try_llm_plan_reauthors_again_when_first_feedback_creates_a_new_blocking_promise(monkeypatch) -> None:
+def _contract_check_try_llm_plan_stops_after_one_reauthor_with_a_new_blocking_failure(monkeypatch) -> None:
     responses = [
         {
             "name": "False Orbit",
@@ -520,25 +552,7 @@ def _contract_check_try_llm_plan_reauthors_again_when_first_feedback_creates_a_n
             "tooltip": "Keeps orbiting blades around the player.",
             "runtimePlan": {"resultKind": "weapon", "engineCalls": [{"fn": "summon_behavior", "params": {"family": "minion"}}]},
         },
-        {
-            "name": "Honest Bolt",
-            "tooltip": "Shoots a fast bolt.",
-            "runtimeContract": {
-                "schema": "infini.runtime-contract.v2",
-                "primaryVerb": "shoot a fast bolt",
-                "controlStyle": "tap",
-                "mechanicClaims": [{"claim": "shoots a fast bolt", "backing": "shoot_projectile", "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "shoot"}], "status": "executable"}],
-                "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
-                "executionStatus": "executable",
-            },
-            "runtimePlan": {
-                "resultKind": "weapon",
-                "engineCalls": [
-                    {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
-                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "movement": "straight", "speed": 8, "lifetimeTicks": 60, "projectileShape": "bolt"}},
-                ],
-            },
-        },
+        _honest_structural_v3_bolt(),
     ]
     calls: list[dict] = []
 
@@ -553,12 +567,73 @@ def _contract_check_try_llm_plan_reauthors_again_when_first_feedback_creates_a_n
     monkeypatch.setattr(lap, "log_event", lambda *args, **kwargs: None)
     parent = {"name": "Wood", "internalName": "Wood", "sourceMod": "Terraria", "type": 9, "maxStack": 9999}
 
-    result = lap.try_llm_plan(parent, parent, {}, {}, "promise_retry_twice")
+    with pytest.raises(PlannerUnavailable, match="after 1 re-author"):
+        lap.try_llm_plan(parent, parent, {}, {}, "promise_retry_once")
 
-    assert result is not None
-    assert result["name"] == "Honest Bolt"
-    assert len(calls) == 3
-    assert result["debug"]["plannerPromiseGate"]["ok"] is True
+    assert len(calls) == 2
+
+
+def _contract_check_structural_v3_uses_one_reauthor_and_never_delete_projects(monkeypatch) -> None:
+    blocked = {
+        "name": "Unresolved Signature",
+        "concept": {
+            "fantasy": "A bounded projectile.",
+            "mergeLogic": "Both parents contribute to the projectile.",
+            "weirdTwist": {"text": "An unresolved signature.", "claimIds": ["missing_signature"]},
+        },
+        "runtimeContract": {
+            "schema": "infini.runtime-contract.v3",
+            "signatureMode": "mechanic",
+            "signatureClaimId": "missing_signature",
+            "tooltipClaimIds": ["primary_attack"],
+            "mechanicClaims": [{
+                "claimId": "primary_attack",
+                "playerText": "Launches one projectile.",
+                "status": "executable",
+                "backingRefs": [{
+                    "source": "engineCall",
+                    "callId": "primary_projectile",
+                    "field": "shotCount",
+                    "expected": 1,
+                }],
+            }],
+            "playerViewTimeline": [
+                {"phase": "use", "text": "Use.", "claimIds": ["primary_attack"]},
+                {"phase": "travel", "text": "Travel.", "claimIds": ["primary_attack"]},
+                {"phase": "hit", "text": "Hit.", "claimIds": ["primary_attack"]},
+                {"phase": "expiry", "text": "Expiry.", "claimIds": ["primary_attack"]},
+            ],
+            "unsupportedPromises": [],
+            "executionStatus": "executable",
+        },
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
+                {"callId": "primary_projectile", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 8, "rangeTiles": 30, "lifetimeTicks": 60, "shotCount": 1, "spreadRadians": 0, "pierce": 1}},
+            ],
+        },
+    }
+    calls: list[dict] = []
+
+    def fake_chat(req: dict, timeout: int) -> dict:
+        calls.append(req)
+        if len(calls) > 2:
+            raise AssertionError("structural v3 requested more than one re-author")
+        return {"choices": [{"message": {"content": json.dumps(blocked)}}]}
+
+    monkeypatch.setattr(lap, "USE_LLM", True)
+    monkeypatch.setattr(lap, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(lap, "llm_chat_json", fake_chat)
+    monkeypatch.setattr(lap, "trace_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(lap, "log_event", lambda *args, **kwargs: None)
+    assert not hasattr(lap, "_project_fail_closed_promise_surface")
+    parent = {"name": "Wood", "internalName": "Wood", "sourceMod": "Terraria", "type": 9, "maxStack": 9999}
+
+    with pytest.raises(PlannerUnavailable, match="after 1 re-author"):
+        lap.try_llm_plan(parent, parent, {}, {}, "structural_v3_retry_exhausted")
+
+    assert len(calls) == 2
 
 
 def _contract_check_try_llm_plan_preserves_explicit_promise_exhaustion_reason(monkeypatch) -> None:
@@ -583,33 +658,15 @@ def _contract_check_try_llm_plan_preserves_explicit_promise_exhaustion_reason(mo
     monkeypatch.setattr(lap, "log_event", lambda *args, **kwargs: None)
     parent = {"name": "Wood", "internalName": "Wood", "sourceMod": "Terraria", "type": 9, "maxStack": 9999}
 
-    with pytest.raises(PlannerUnavailable, match="repeated unsupported gameplay promises"):
+    with pytest.raises(PlannerUnavailable, match="after 1 re-author"):
         lap.try_llm_plan(parent, parent, {}, {}, "promise_retry_exhausted")
 
-    assert len(calls) == 3
+    assert len(calls) == 2
 
 
 
 def _contract_check_try_llm_plan_keeps_one_call_for_honest_plan(monkeypatch) -> None:
-    response = {
-        "name": "Honest Bolt",
-        "tooltip": "Shoots a fast bolt.",
-        "runtimeContract": {
-            "schema": "infini.runtime-contract.v2",
-            "primaryVerb": "shoot a fast bolt",
-            "controlStyle": "tap",
-            "mechanicClaims": [{"claim": "shoots a fast bolt", "backing": "shoot_projectile", "backingRefs": [{"source": "engineCall", "callIndex": 1, "fn": "shoot_projectile", "field": "runtimeFamily", "expected": "shoot"}], "status": "executable"}],
-            "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
-            "executionStatus": "executable",
-        },
-        "runtimePlan": {
-            "resultKind": "weapon",
-            "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "movement": "straight", "speed": 8, "lifetimeTicks": 60, "projectileShape": "bolt"}},
-            ],
-        },
-    }
+    response = _honest_structural_v3_bolt()
     calls: list[dict] = []
 
     def fake_chat(req: dict, timeout: int) -> dict:
@@ -630,36 +687,7 @@ def _contract_check_try_llm_plan_keeps_one_call_for_honest_plan(monkeypatch) -> 
 
 
 def _contract_check_try_llm_plan_does_not_runtime_reject_payload_above_test_budget(monkeypatch) -> None:
-    response = {
-        "name": "Oversized Context Bolt",
-        "tooltip": "Shoots a fast bolt.",
-        "runtimeContract": {
-            "schema": "infini.runtime-contract.v2",
-            "primaryVerb": "shoot a fast bolt",
-            "controlStyle": "tap",
-            "mechanicClaims": [{
-                "claim": "shoots a fast bolt",
-                "backing": "shoot_projectile",
-                "backingRefs": [{
-                    "source": "engineCall",
-                    "callIndex": 1,
-                    "fn": "shoot_projectile",
-                    "field": "runtimeFamily",
-                    "expected": "shoot",
-                }],
-                "status": "executable",
-            }],
-            "playerViewTimeline": ["item held", "bolt emitted", "wall collision ends bolt", "NPC collision damages", "bolt expires"],
-            "executionStatus": "executable",
-        },
-        "runtimePlan": {
-            "resultKind": "weapon",
-            "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 10, "useTimeTicks": 20, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "movement": "straight", "speed": 8, "lifetimeTicks": 60, "projectileShape": "bolt"}},
-            ],
-        },
-    }
+    response = _honest_structural_v3_bolt("Oversized Context Bolt")
     calls: list[dict] = []
 
     def fake_chat(req: dict, timeout: int) -> dict:
@@ -679,6 +707,25 @@ def _contract_check_try_llm_plan_does_not_runtime_reject_payload_above_test_budg
     assert result is not None
     assert len(calls) == 1
     assert len(calls[0]["messages"][1]["content"]) > 24_750
+
+
+def _contract_check_runtime_repair_requires_stable_call_ids() -> None:
+    schema = lap._runtime_repair_response_schema()
+    call_schema = schema["properties"]["repairPatch"]["properties"]["runtimePlan"]["properties"]["engineCalls"]["items"]
+    assert "callId" in call_schema["required"]
+
+    no_ids = {"repairPatch": {"runtimePlan": {"resultKind": "weapon", "engineCalls": [
+        {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damage": 9}},
+    ]}}}
+    rejected, rejected_report = lap._filtered_runtime_repair_patch(no_ids, {})
+    assert "runtimePlan" not in rejected
+    assert "runtimePlan.callId" in rejected_report["rejectedTopLevel"]
+
+    with_ids = deepcopy(no_ids)
+    with_ids["repairPatch"]["runtimePlan"]["engineCalls"][0]["callId"] = "item_stats"
+    accepted, accepted_report = lap._filtered_runtime_repair_patch(with_ids, {})
+    assert accepted["runtimePlan"]["engineCalls"][0]["callId"] == "item_stats"
+    assert accepted_report["rejectedTopLevel"] == []
 
 
 def _contract_check_csharp_item_bodied_projectile_falls_back_to_item_sprite() -> None:
@@ -717,10 +764,12 @@ def test_241_holistic_instability_bugfixes_module_contract(request):
             '_contract_check_planner_promise_gate_blocks_gameplay_prose_but_allows_executable_homing',
             '_contract_check_planner_promise_gate_does_not_treat_material_heat_as_heat_jam',
             '_contract_check_try_llm_plan_reauthors_once_after_blocking_promise',
-            '_contract_check_try_llm_plan_reauthors_again_when_first_feedback_creates_a_new_blocking_promise',
+            '_contract_check_try_llm_plan_stops_after_one_reauthor_with_a_new_blocking_failure',
+            '_contract_check_structural_v3_uses_one_reauthor_and_never_delete_projects',
             '_contract_check_try_llm_plan_preserves_explicit_promise_exhaustion_reason',
             '_contract_check_try_llm_plan_keeps_one_call_for_honest_plan',
             '_contract_check_try_llm_plan_does_not_runtime_reject_payload_above_test_budget',
+            '_contract_check_runtime_repair_requires_stable_call_ids',
             '_contract_check_csharp_item_bodied_projectile_falls_back_to_item_sprite',
         ),
     )

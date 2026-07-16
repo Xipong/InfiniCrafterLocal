@@ -37,10 +37,11 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     assert "boss/NPC/mob/enemy" in functions["spawn_temporary_helper_projectile"].get("safety", "")
     assert "plannerChecklist" in payload["engineRuntimeContract"]
     backing_rules = payload["backingRefRules"]
-    assert any("source must be exactly" in rule and "engineCall" in rule for rule in backing_rules)
-    assert any("zero-based absolute index into runtimePlan.engineCalls" in rule for rule in backing_rules)
-    assert any('"source":"engineCall"' in rule and '"callIndex":1' in rule for rule in backing_rules)
-    assert any("tooltip clause" in rule.lower() and "non-generic identifier" in rule.lower() and "visual_only" in rule.lower() for rule in backing_rules)
+    assert any("engineCall.callId" in rule and "unique" in rule for rule in backing_rules)
+    assert any("exact scalar path inside the selected call.params" in rule for rule in backing_rules)
+    assert any("compiler owns final-wire provenance" in rule for rule in backing_rules)
+    assert any('"source":"engineCall"' in rule and '"callId":"primary_projectile"' in rule for rule in backing_rules)
+    assert any("visual_only" in rule and "no refs" in rule.lower() for rule in backing_rules)
     assert any("non-combat" in rule.lower() and "resultkind" in rule.lower() for rule in payload["authorRules"])
     assert payload["priorityHeader"][0].startswith("Author one playable result")
     assert any("set_item_stats" in line and "first" in line for line in payload["priorityHeader"])
@@ -69,7 +70,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
 
 
 def _check_planner_payload_keeps_all_static_contract_bytes_before_recipe_data() -> None:
-    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_static_prefix_v0.4.194"
+    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_structural_final_wire_v3_v0.4.241"
     other_a = {"name": "Magic Mirror", "type": 50, "damage": 0, "useTime": 90, "value": 5000}
     other_b = {"name": "Fallen Star", "type": 75, "damage": 0, "maxStack": 9999, "value": 5}
     first = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_prefix_a")
@@ -242,7 +243,7 @@ def _check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw
     assert "availableFunctions" in text and "consumed_when_placed_as_tile_or_wall" in text
 
 
-def _check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair(monkeypatch) -> None:
+def _check_planner_prompt_guides_structural_mechanic_authoring_not_code_repair(monkeypatch) -> None:
     monkeypatch.delenv("INFINI_LLM_ENGINE_CONTRACT_STYLE", raising=False)
     payload = build_llm_author_payload(PARENT_A, {"name": "Fallen Star", "type": 75, "value": 500}, {}, {}, "planner_starfall")
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).lower()
@@ -250,7 +251,8 @@ def _check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair(mon
 
     assert "overhead_barrage" in functions["apply_on_hit_effect"]["params"]["onHit"]
     assert "overhead barrage" in text and "mechanicclaims" in text
-    assert '"backingrefs":[{"source":"compiledattack|runtimearchetype|enginecall"' in text
+    assert '"backingrefs":[{"source":"enginecall","callid":"call id"' in text
+    assert "callindex" not in text
     assert "enginecalls/numbers/contracts" in text
     assert "do not infer mechanics from names" in text
     assert "custom_executor for normal/utility enginecalls" in text or "never family=unsupported" in text
@@ -275,7 +277,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_release_wrappers_do_not_override_canonical_planner_limit',
     '_check_planner_catalog_exposes_safe_terraria_item_capabilities_without_loss',
     '_check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw_flags',
-    '_check_planner_prompt_guides_semantic_mechanic_authoring_not_code_repair'
+    '_check_planner_prompt_guides_structural_mechanic_authoring_not_code_repair',
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

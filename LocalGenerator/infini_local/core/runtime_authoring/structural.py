@@ -85,6 +85,9 @@ def structural_repair_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, An
             continue
         normalized, fixes = _structural_params(params)
         row = {"fn": fn, "params": normalized}
+        call_id = str(raw.get("callId") or "").strip()
+        if call_id:
+            row["callId"] = call_id
         out.append(row)
         for fix in fixes:
             report["fixes"].append({"index": index, **fix})

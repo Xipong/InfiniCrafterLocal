@@ -129,8 +129,8 @@ def _contract_check_runtime_repair_patch_preserves_identity_fields(monkeypatch):
         "visual": {"itemPrompt": "rejected sprite"},
         "runtimePlan": {
             "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 10, "rangeTiles": 45, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "lifetimeTicks": 90}},
+                {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
+                {"callId": "primary_shot", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 10, "rangeTiles": 45, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "lifetimeTicks": 90}},
             ]
         },
     }}

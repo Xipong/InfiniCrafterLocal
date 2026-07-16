@@ -3,6 +3,11 @@
     "EngineCallBoundary": {
       "additionalProperties": false,
       "properties": {
+        "callId": {
+          "default": "",
+          "title": "Callid",
+          "type": "string"
+        },
         "fn": {
           "title": "Fn",
           "type": "string"

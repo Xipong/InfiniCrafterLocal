@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from typing import Any
 from infini_local.core.balance_report import attach_balance_report
 
 from infini_local.core.balance_mode import should_apply_soft_normalization
 
 from infini_local.core.category_policy import COMBAT_CATEGORIES, NON_WEAPON_CATEGORIES
+from infini_local.core.boundary_models import ATTACK_NON_WIRE_FIELDS, GAMEPLAY_DEBUG_ONLY_FIELDS
+from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import item_field, item_num
+from infini_local.core.runtime_authoring.engine_call_contracts import engine_param_enum_values
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.core.runtime_authoring.structural import all_calls, find_call
+from infini_local.core.runtime_contracts import STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
 from infini_local.pipelines.runtime_presentation_policy import runtime_presentation_defaults
 from infini_local.pipelines.result_identity_policy import (
     choose_result_category,
@@ -34,6 +39,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
     authored_weapon_damage,
     llm_category_without_router,
     llm_runtime_result_kind_policy,
+    normalize_runtime_authoring_fields,
     runtime_plan_to_attack_genome_patch,
 )
 from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
@@ -45,7 +51,255 @@ def _authored_float_or_default(values: dict[str, Any], key: str, default: float 
     return float(default if raw in (None, "") else raw)
 
 
-def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any]) -> dict[str, Any]:
+_PROVENANCE_ROOTS = ("gameplay", "attack", "accessory", "armor")
+
+
+def _provenance_values_match(left: Any, right: Any) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return left is right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return abs(float(left) - float(right)) <= 1e-9
+    return left == right
+
+
+def _nested_param_value(params: dict[str, Any], path: str) -> tuple[bool, Any]:
+    current: Any = params
+    parts = str(path or "").split(".")
+    if not parts or any(not part for part in parts):
+        return False, None
+    for part in parts:
+        if not isinstance(current, dict) or part not in current:
+            return False, None
+        current = current[part]
+    return True, current
+
+
+def _flatten_final_wire(data: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+
+    def visit(path: str, value: Any) -> None:
+        if isinstance(value, dict):
+            for key in sorted(value):
+                visit(f"{path}.{key}", value[key])
+            return
+        out[path] = value
+
+    for root in _PROVENANCE_ROOTS:
+        value = data.get(root)
+        if isinstance(value, dict):
+            non_wire = ATTACK_NON_WIRE_FIELDS if root == "attack" else GAMEPLAY_DEBUG_ONLY_FIELDS if root == "gameplay" else frozenset()
+            for key in sorted(value):
+                if key not in non_wire:
+                    visit(f"{root}.{key}", value[key])
+    return out
+
+
+def _authored_ref_probe_values(data: dict[str, Any], call_id: str, field: str, expected: Any) -> list[Any]:
+    plan_candidate = data.get("runtimePlan")
+    plan: dict[str, Any] = plan_candidate if isinstance(plan_candidate, dict) else {}
+    calls_candidate = plan.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    for call in calls:
+        if not isinstance(call, dict) or str(call.get("callId") or "") != call_id:
+            continue
+        params_candidate = call.get("params")
+        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
+        present, actual = _nested_param_value(params, field)
+        if not present or not _provenance_values_match(actual, expected):
+            return []
+        if isinstance(actual, bool):
+            return [not actual]
+        if isinstance(actual, int):
+            return list(dict.fromkeys((actual + 1, actual - 1)))
+        if isinstance(actual, float):
+            return list(dict.fromkeys((0.125 if abs(actual) <= 1e-9 else actual * 0.5, actual + 0.125)))
+        if isinstance(actual, str):
+            fn = str(call.get("fn") or "")
+            enum_values = engine_param_enum_values(fn, field.split(".")[-1])
+            if enum_values:
+                return [value for value in enum_values if value != actual]
+            return [actual + "__compiler_probe"]
+        return []
+    return []
+
+
+def _probe_authored_ref_source(
+    data: dict[str, Any], call_id: str, field: str, expected: Any, probe_value: Any,
+) -> bool:
+    plan_candidate = data.get("runtimePlan")
+    plan: dict[str, Any] = dict(plan_candidate) if isinstance(plan_candidate, dict) else {}
+    calls_candidate = plan.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    changed = False
+    for call in calls:
+        if not isinstance(call, dict) or str(call.get("callId") or "") != call_id:
+            continue
+        params_candidate = call.get("params")
+        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
+        present, actual = _nested_param_value(params, field)
+        if present and _provenance_values_match(actual, expected):
+            current: Any = params
+            parts = field.split(".")
+            for part in parts[:-1]:
+                current = current[part]
+            current[parts[-1]] = probe_value
+            changed = True
+    data.pop("_runtimePlanCompileCache", None)
+    return changed
+
+
+def _remove_authored_call(data: dict[str, Any], call_id: str) -> bool:
+    plan_candidate = data.get("runtimePlan")
+    plan: dict[str, Any] = plan_candidate if isinstance(plan_candidate, dict) else {}
+    calls_candidate = plan.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    retained = [call for call in calls if not isinstance(call, dict) or str(call.get("callId") or "") != call_id]
+    if len(retained) == len(calls):
+        return False
+    plan["engineCalls"] = retained
+    data.pop("_runtimePlanCompileCache", None)
+    return True
+
+
+def _attach_compiler_final_wire_receipts(
+    output: dict[str, Any],
+    authored_preimage: dict[str, Any],
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+) -> None:
+    contract_candidate = output.get("runtimeContract")
+    contract: dict[str, Any] = dict(contract_candidate) if isinstance(contract_candidate, dict) else {}
+    baseline = _flatten_final_wire(output)
+    receipts: list[dict[str, Any]] = []
+    claims_candidate = contract.get("mechanicClaims")
+    claims: list[Any] = claims_candidate if isinstance(claims_candidate, list) else []
+    for claim in claims:
+        if not isinstance(claim, dict) or str(claim.get("status") or "") != "executable":
+            continue
+        claim_id = str(claim.get("claimId") or "")
+        refs_candidate = claim.get("backingRefs")
+        refs: list[Any] = refs_candidate if isinstance(refs_candidate, list) else []
+        for ref_index, ref in enumerate(refs):
+            if not isinstance(ref, dict):
+                continue
+            call_id = str(ref.get("callId") or "")
+            field = str(ref.get("field") or "")
+            expected = ref.get("expected")
+            variant: dict[str, Any] | None = None
+            variant_changed = False
+            for probe_value in _authored_ref_probe_values(authored_preimage, call_id, field, expected)[:24]:
+                candidate = deepcopy(authored_preimage)
+                candidate_contract = candidate.get("runtimeContract")
+                if isinstance(candidate_contract, dict):
+                    candidate_contract.pop("finalWireReceipts", None)
+                if not _probe_authored_ref_source(candidate, call_id, field, expected, probe_value):
+                    continue
+                try:
+                    candidate = normalize_runtime_authoring_fields(candidate)
+                    candidate = attach_gameplay_and_attack(
+                        candidate, a, b, ca, cb, _trace_structural_provenance=False,
+                    )
+                except PlannerUnavailable:
+                    continue
+                variant = candidate
+                candidate_wire = _flatten_final_wire(candidate)
+                variant_changed = any(
+                    path in baseline
+                    and not _provenance_values_match(baseline.get(path), candidate_wire.get(path))
+                    for path in set(baseline) | set(candidate_wire)
+                )
+                if variant_changed:
+                    break
+            if variant is None or not variant_changed:
+                removed_candidate = deepcopy(authored_preimage)
+                removed_contract = removed_candidate.get("runtimeContract")
+                if isinstance(removed_contract, dict):
+                    removed_contract.pop("finalWireReceipts", None)
+                if _remove_authored_call(removed_candidate, call_id):
+                    try:
+                        removed_candidate = normalize_runtime_authoring_fields(removed_candidate)
+                        removed_candidate = attach_gameplay_and_attack(
+                            removed_candidate, a, b, ca, cb, _trace_structural_provenance=False,
+                        )
+                    except PlannerUnavailable:
+                        pass
+                    else:
+                        removed_wire = _flatten_final_wire(removed_candidate)
+                        removed_changed = any(
+                            path in baseline
+                            and not _provenance_values_match(baseline.get(path), removed_wire.get(path))
+                            for path in set(baseline) | set(removed_wire)
+                        )
+                        if removed_changed:
+                            variant = removed_candidate
+                            variant_changed = True
+            if variant is None:
+                receipts.append({
+                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
+                    "field": field, "authoredExpected": expected, "finalPath": "",
+                    "compiledValue": None, "status": "unsupported",
+                })
+                continue
+            variant_wire = _flatten_final_wire(variant)
+            changed_paths = sorted(
+                path
+                for path in set(baseline) | set(variant_wire)
+                if path in baseline and not _provenance_values_match(baseline.get(path), variant_wire.get(path))
+            )
+            exact_paths = [
+                path for path in changed_paths
+                if _provenance_values_match(baseline.get(path), expected)
+            ]
+            if exact_paths:
+                changed_paths = exact_paths
+            if not changed_paths:
+                receipts.append({
+                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
+                    "field": field, "authoredExpected": expected, "finalPath": "",
+                    "compiledValue": None, "status": "dropped",
+                })
+                continue
+            for final_path in changed_paths[:16]:
+                compiled_value = baseline[final_path]
+                if _provenance_values_match(compiled_value, expected):
+                    receipt_status = "active"
+                elif isinstance(compiled_value, (int, float)) and isinstance(expected, (int, float)):
+                    receipt_status = "clamped"
+                else:
+                    receipt_status = "normalized"
+                receipts.append({
+                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
+                    "field": field, "authoredExpected": expected, "finalPath": final_path,
+                    "compiledValue": compiled_value, "status": receipt_status,
+                })
+    contract["finalWireReceipts"] = receipts[:96]
+    output["runtimeContract"] = contract
+    debug_candidate = output.setdefault("debug", {})
+    if isinstance(debug_candidate, dict):
+        debug_candidate["compilerFinalWireReceipts"] = deepcopy(receipts[:96])
+
+
+def attach_gameplay_and_attack(
+    data: dict[str, Any],
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+    *,
+    _trace_structural_provenance: bool = True,
+) -> dict[str, Any]:
+    runtime_contract_candidate = data.get("runtimeContract")
+    runtime_contract: dict[str, Any] = (
+        runtime_contract_candidate if isinstance(runtime_contract_candidate, dict) else {}
+    )
+    authored_preimage = (
+        deepcopy(data)
+        if _trace_structural_provenance
+        and str(runtime_contract.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
+        else None
+    )
     tags = set(data.get("tags", [])) | tags_of(a) | tags_of(b)
     gp = data.setdefault("gameplay", {})
     attack = data.setdefault("attack", {})
@@ -492,6 +746,8 @@ def attach_gameplay_and_attack(data: dict[str, Any], a: dict[str, Any], b: dict[
     data.setdefault("debug", {})["sizeProfile"] = json.dumps(size, ensure_ascii=False)
     data.setdefault("debug", {})["finalCategory"] = data.get("category", "generic")
     attach_balance_report(data, stage)
+    if authored_preimage is not None:
+        _attach_compiler_final_wire_receipts(data, authored_preimage, a, b, ca, cb)
     return data
 
 __all__ = ["attach_gameplay_and_attack"]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from copy import deepcopy
 from typing import Any
 
 from infini_local.core import dev_fallback
@@ -20,6 +21,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.llm_config import ALLOW_DETERMINISTIC_DEV_FALLBACK, USE_LLM
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
+from infini_local.core.runtime_contracts import STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
 from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
@@ -137,11 +139,44 @@ def _quarantine_cached_recipe(
         )
 
 
+_COMPILER_RECEIPT_IDENTITY_FIELDS = (
+    "claimId",
+    "refIndex",
+    "callId",
+    "field",
+    "authoredExpected",
+    "finalPath",
+    "compiledValue",
+    "status",
+)
+
+
+def _compiler_receipt_fingerprints(data: dict[str, Any]) -> list[str]:
+    contract_candidate = data.get("runtimeContract")
+    contract: dict[str, Any] = contract_candidate if isinstance(contract_candidate, dict) else {}
+    rows_candidate = contract.get("finalWireReceipts")
+    rows: list[Any] = rows_candidate if isinstance(rows_candidate, list) else []
+    return sorted(
+        json.dumps(
+            {field: row.get(field) for field in _COMPILER_RECEIPT_IDENTITY_FIELDS},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for row in rows
+        if isinstance(row, dict)
+    )
+
+
 def _cached_payload_passes_executable_boundary(
     cached: dict[str, Any],
     *,
     recipe_key_value: str,
     source: str,
+    parent_a: dict[str, Any],
+    parent_b: dict[str, Any],
+    canonical_a: dict[str, Any],
+    canonical_b: dict[str, Any],
 ) -> bool:
     """Reject stale/partial cache payloads instead of delivering silent defaults.
 
@@ -150,8 +185,35 @@ def _cached_payload_passes_executable_boundary(
     regenerated from its parents; a cache hit is not permission to bypass the same
     strict Python ↔ C# boundary used by a fresh craft.
     """
+    if not is_deliverable_recipe_payload(cached):
+        return False
+    runtime_contract_candidate = cached.get("runtimeContract")
+    runtime_contract: dict[str, Any] = dict(runtime_contract_candidate) if isinstance(runtime_contract_candidate, dict) else {}
+    if str(runtime_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+        trace_event(
+            "step",
+            "COMBINE:cache",
+            "cached recipe ignored because its structural authoring schema is stale",
+            {
+                "recipeKey": recipe_key_value,
+                "source": str(source or "cache"),
+                "schema": str(runtime_contract.get("schema") or "missing"),
+                "requiredSchema": STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
+            },
+        )
+        return False
     try:
+        replayed = attach_gameplay_and_attack(
+            deepcopy(cached),
+            parent_a,
+            parent_b,
+            canonical_a,
+            canonical_b,
+        )
+        if _compiler_receipt_fingerprints(replayed) != _compiler_receipt_fingerprints(cached):
+            raise ValueError("cached compiler provenance receipts do not match a fresh structural replay")
         validate_executable_item_boundary(cached)
+        validate_final_runtime_promise_boundary(cached)
         normalized = validate_visual_authoring_boundaries(cached)
         if "visualKit" in normalized:
             cached["visualKit"] = normalized["visualKit"]
@@ -179,6 +241,8 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     """
     a = payload.get("itemA") or {}
     b = payload.get("itemB") or {}
+    ca = canonicalize(a)
+    cb = canonicalize(b)
     world_id = normalize_world_id_from_payload(payload)
     world_name = str(payload.get("worldName") or "").strip()
     recipe_identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
@@ -190,6 +254,10 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
             cached,
             recipe_key_value=key,
             source="cache_lookup",
+            parent_a=a,
+            parent_b=b,
+            canonical_a=ca,
+            canonical_b=cb,
         ):
             _quarantine_cached_recipe(
                 world_id=world_id,
@@ -224,6 +292,8 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
 def combine(payload: dict[str, Any]) -> dict[str, Any]:
     a = payload.get("itemA") or {}
     b = payload.get("itemB") or {}
+    ca = canonicalize(a)
+    cb = canonicalize(b)
     world_id = normalize_world_id_from_payload(payload)
     world_name = str(payload.get("worldName") or "").strip()
     recipe_identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
@@ -235,6 +305,10 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             cached,
             recipe_key_value=key,
             source="cache_delivery",
+            parent_a=a,
+            parent_b=b,
+            canonical_a=ca,
+            canonical_b=cb,
         ):
             _quarantine_cached_recipe(
                 world_id=world_id,
@@ -256,8 +330,6 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             details={"problems": visual_report.get("problems") or []},
         )
 
-    ca = canonicalize(a)
-    cb = canonicalize(b)
     pipeline_log: list[dict[str, Any]] = []
     data: dict[str, Any] | None = None
     llm_lease = None
@@ -298,6 +370,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("04_author_gameplay_to_runtime_envelope", attach_gameplay_and_attack, data, a, b, ca, cb)
         data = step("04b_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="post_gameplay_compile")
         step("04c_strict_executable_preflight", validate_executable_item_boundary, data)
+        step("04d_structural_final_wire_preflight", validate_final_runtime_promise_boundary, data)
         data = step("05_presentation_sound_from_author_intent", attach_presentation_and_sound, data)
         data = step("06_result_card_after_runtime_stats", attach_result_knowledge_card, data, a, b)
         data = step("07_item_visual_brief_preserve_author", attach_visual, data, a, b, ca, cb)

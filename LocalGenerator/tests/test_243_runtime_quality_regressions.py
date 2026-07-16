@@ -56,7 +56,10 @@ def _plan() -> dict:
         "concept": {
             "fantasy": "A whole workbench bolted sideways to a wooden sword.",
             "mergeLogic": "The sword remains the handle; the complete workbench is the striking body.",
-            "weirdTwist": "Hits throw three bounded wooden splinter projectiles.",
+            "weirdTwist": {
+                "text": "Hits throw three bounded wooden splinter projectiles.",
+                "claimIds": ["splinter_release"],
+            },
         },
         "runtimeArchetype": {
             "schema": "infini.runtime-archetype.v1",
@@ -65,30 +68,39 @@ def _plan() -> dict:
             "overrideKnobs": {},
         },
         "runtimeContract": {
-            "schema": "infini.runtime-contract.v2",
+            "schema": "infini.runtime-contract.v3",
             "primaryVerb": "swing",
             "controlStyle": "tap",
+            "signatureMode": "mechanic",
+            "signatureClaimId": "splinter_release",
+            "tooltipClaimIds": ["visual_identity", "splinter_release"],
             "stateFields": [],
             "syncFields": [],
             "mechanicClaims": [
                 {
-                    "claim": "It is exactly what it looks like.",
+                    "claimId": "visual_identity",
+                    "playerText": "It is exactly what it looks like.",
                     "status": "visual_only",
                     "backingRefs": [],
                 },
                 {
-                    "claim": "Hits throw exactly 3 bounded wooden splinter projectiles.",
+                    "claimId": "splinter_release",
+                    "playerText": "Hits throw exactly 3 bounded wooden splinter projectiles.",
                     "status": "executable",
                     "backingRefs": [{
                         "source": "engineCall",
-                        "callIndex": 2,
-                        "fn": "spawn_secondary_projectiles",
+                        "callId": "secondary_splinters",
                         "field": "count",
                         "expected": 3,
                     }],
                 },
             ],
-            "playerViewTimeline": ["held", "swung", "NPC hit", "three splinters spawn", "splinters expire"],
+            "playerViewTimeline": [
+                {"phase": "use", "text": "The blade swings.", "claimIds": ["splinter_release"]},
+                {"phase": "travel", "text": "The workbench stays visible.", "presentationOnly": True},
+                {"phase": "npc_hit", "text": "Three splinters spawn.", "claimIds": ["splinter_release"]},
+                {"phase": "expiry", "text": "The splinters expire.", "claimIds": ["splinter_release"]},
+            ],
             "unsupportedPromises": [],
             "executionStatus": "executable",
         },
@@ -100,6 +112,7 @@ def _plan() -> dict:
             },
             "engineCalls": [
                 {
+                    "callId": "item_stats",
                     "fn": "set_item_stats",
                     "params": {
                         "resultKind": "weapon",
@@ -112,6 +125,7 @@ def _plan() -> dict:
                     },
                 },
                 {
+                    "callId": "primary_swing",
                     "fn": "perform_melee_attack",
                     "params": {
                         "family": "broadsword",
@@ -125,6 +139,7 @@ def _plan() -> dict:
                     },
                 },
                 {
+                    "callId": "secondary_splinters",
                     "fn": "spawn_secondary_projectiles",
                     "params": {
                         "trigger": "on_hit",

@@ -121,6 +121,7 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
             dropped.append({"index": i, "reason": "not_object", "rawType": type(raw).__name__})
             continue
         current_fn = str(raw.get("fn") or "").strip()
+        call_id = str(raw.get("callId") or "").strip()
         original_fn = str(raw.get("_rawFn") or current_fn).strip()
         prior_semantic_fn = str(raw.get("_semanticFn") or "").strip()
         fn = _norm_name(current_fn)
@@ -141,6 +142,8 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
                 dropped.append({"index": i, "reason": "semantic_expand_unknown_fn", "fn": expanded_fn, "from": original_fn})
                 continue
             row = {"fn": expanded_fn, "params": expanded_params, "_index": i, "_rawFn": original_fn}
+            if call_id:
+                row["callId"] = call_id
             if prior_semantic_fn:
                 row["_semanticFn"] = prior_semantic_fn
             elif expanded_fn != fn:

@@ -18,6 +18,7 @@ class StrictBoundaryModel(BaseModel):
 
 
 class EngineCallBoundary(StrictBoundaryModel):
+    callId: str = ""
     fn: str
     params: dict[str, Any] = Field(default_factory=dict)
 

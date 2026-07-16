@@ -95,8 +95,8 @@ def _contract_check_explicit_repair_patch_can_adjust_narrow_gameplay_surface(mon
             "gameplay": {"damage": 14, "useTime": 26, "evilProse": "drop me"},
             "runtimePlan": {
                 "engineCalls": [
-                    {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 14, "useTimeTicks": 26, "maxStack": 1}},
-                    {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "useTimeTicks": 26, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
+                    {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 14, "useTimeTicks": 26, "maxStack": 1}},
+                    {"callId": "primary_shot", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "useTimeTicks": 26, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
                 ]
             },
             "visual": {"itemPrompt": "must not adopt"},

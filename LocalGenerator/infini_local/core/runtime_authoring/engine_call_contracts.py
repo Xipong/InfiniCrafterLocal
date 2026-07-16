@@ -193,6 +193,13 @@ def _catalog_enum_values(fn: str, name: str) -> tuple[str, ...] | None:
         return None
     return values
 
+
+def engine_param_enum_values(fn: str, name: str) -> tuple[str, ...]:
+    """Return canonical closed enum values for a strict engine-call parameter."""
+    values = _ENUM_PARAMS.get((str(fn), str(name))) or _catalog_enum_values(str(fn), str(name)) or _ENUM_PARAMS.get(str(name))
+    return tuple(str(value) for value in (values or ()))
+
+
 def _literal_type(values: tuple[str, ...]) -> Any:
     # Pydantic accepts this runtime form on Python 3.10; keeping the dynamic
     # factory typed as Any avoids pretending static type checkers can enumerate

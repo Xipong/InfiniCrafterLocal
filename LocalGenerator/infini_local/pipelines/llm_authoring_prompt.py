@@ -7,10 +7,14 @@ from typing import Any
 
 PLANNER_PROMPT_LIMIT_CHARS = 24_750
 MECHANIC_BACKING_REF_RULES: tuple[str, ...] = (
-    "backingRefs.source must be exactly compiledAttack, runtimeArchetype, or engineCall.",
-    "For source=engineCall, callIndex is the zero-based absolute index into runtimePlan.engineCalls; fn must match that call.",
-    'Example for the first projectile call after set_item_stats: {"source":"engineCall","callIndex":1,"fn":"shoot_projectile","field":"movement","expected":"boomerang"}.',
-    "Every tooltip clause needs a matching mechanicClaim. An executable claim must quote a non-generic identifier, enum value, or exact number from its backingRefs; mark pure visual prose visual_only.",
+    "engineCall.callId: unique, stable, ^[a-z][a-z0-9_]{0,63}$.",
+    "mechanicClaim: unique stable claimId plus model-authored playerText.",
+    "Executable ref.field is an exact scalar path inside the selected call.params and expected is that authored scalar.",
+    "Refs must change final DTO; avoid no-ops: shotCount=1, pierce=1, rangeTiles=4, weapon consumable=false/maxStack=1, primary useTimeTicks shadowed by set_item_stats, visual params.",
+    'Example: {"source":"engineCall","callId":"primary_projectile","field":"speed","expected":12}.',
+    "Never return finalPath, finalExpected, or finalWireReceipts; the compiler owns final-wire provenance.",
+    "Choose signatureClaimId. Mechanic signatures are executable and linked by tooltipClaimIds, timeline claimIds, and weirdTwist.claimIds.",
+    "Presentation: status=visual_only, no refs. Code never infers, rewrites, deletes, or classifies claims.",
 )
 
 from infini_local.core.json_debug import bounded_json_dumps
@@ -411,7 +415,7 @@ def planner_priority_header_for_llm() -> list[str]:
         "Author one playable result from both parents; do not merely describe visuals.",
         "Playable non-material/non-furniture: set_item_stats first, then one executable gameplay call.",
         "Promises need engineCalls/numbers/contracts; do not infer mechanics from names.",
-        "Simulate held sprite, emitted body, surface collision, NPC collision, return/expiry; write 4+ runtimeContract.playerViewTimeline steps. Thrust reuses item body. Resource consumption requires an exact call.",
+        "Simulate held, outbound, surface collision/NPC collision, return/expiry; write 4+ timeline steps linked by claimIds. Thrust reuses item body. Consumption requires an exact call.",
         "Visual prose/VFX is presentation; raw parent fields are evidence.",
         "Placeable consumable usually means spent when placed; not potion/ammo/throwing unless authored.",
         "Keep weird ideas when bounded; unsupported/catastrophic output is rejected.",
@@ -714,11 +718,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         },
         "requiredJsonShape": {
             "name": "short flavorful item name, no Infini/Generated/Hybrid/Combined",
-            "tooltip": "short in-game tooltip",
             "concept": {
                 "fantasy": "one sentence describing the item",
                 "mergeLogic": "one sentence: why these exact parents became this, based on raw parent fields",
-                "weirdTwist": "one sentence: memorable non-vanilla behavior or clean metamorphosis"
+                "weirdTwist": {"text": "memorable behavior or visual twist", "claimIds": ["claimIds"]}
             },
             "runtimeArchetype": {
                 "schema": "infini.runtime-archetype.v1",
@@ -727,20 +730,21 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
                 "overrideKnobs": {},
             },
             "runtimeContract": {
-                "schema": "infini.runtime-contract.v2",
-                "primaryVerb": "actual player action",
+                "schema": "infini.runtime-contract.v3",
+                "primaryVerb": "player action",
                 "controlStyle": "tap|hold-to-channel|passive|toggle|automatic",
-                "stateFields": [],
-                "syncFields": [],
-                "mechanicClaims": [{"claim": "every public gameplay claim from tooltip/concept", "backing": "human-readable summary only", "backingRefs": [{"source": "compiledAttack|runtimeArchetype|engineCall", "callIndex": "required only for engineCall", "fn": "exact fn for engineCall", "field": "exact machine field", "expected": "exact JSON scalar"}], "status": "executable only when all backingRefs resolve"}],
-                "playerViewTimeline": ["held/use", "outbound or active phase", "surface collision", "NPC collision", "return/expiry and what remains on screen"],
+                "signatureMode": "mechanic|visual",
+                "signatureClaimId": "model-selected stable claimId",
+                "tooltipClaimIds": ["ordered claimIds"],
+                "mechanicClaims": [{"claimId": "stable id", "playerText": "tooltip clause", "backingRefs": [{"source": "engineCall", "callId": "call id", "field": "param path", "expected": "authored scalar"}], "status": "executable|visual_only"}],
+                "playerViewTimeline": [{"phase": "use|travel|surface_hit|npc_hit|return|expiry", "text": "visible step", "claimIds": ["claimIds"], "presentationOnly": False}],
                 "unsupportedPromises": [],
                 "executionStatus": "executable"
             },
             "runtimePlan": {
                 "resultKind": "weapon|ammo|consumable_weapon|tool|accessory|armor|potion|material|furniture|generic",
                 "sourceRolePreservation": {"itemA": "short", "itemB": "short"},
-                "engineCalls": "array of {fn, params}; exact fn names from availableFunctions. No legacy attack.genome or boss/NPC/mob spawn calls.",
+                "engineCalls": "array of {callId, fn, params}",
                 "runtimeStateIntent": "optional state intent; gameplay still needs executable calls",
                 "visualIntent": {"item": "brief", "projectile": "brief/empty", "impact": "brief/empty", "vfxIntent": "short", "vfxAvoid": "short"},
                 "sourceReading": "short interpretation from raw parent fields; absent data is unknown",

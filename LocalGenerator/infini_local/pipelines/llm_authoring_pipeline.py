@@ -30,10 +30,13 @@ from infini_local.core.boundary_models import runtime_plan_boundary_report
 from infini_local.core.runtime_authoring.structural import structural_repair_runtime_plan_inplace
 from infini_local.core.runtime_promise_truth import validate_runtime_promises
 from infini_local.core.runtime_contracts import (
+    STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
     mechanic_claim_backing_relevant,
     normalize_runtime_contract,
     resolve_mechanic_backing_refs,
     validate_runtime_contract,
+    validate_structural_final_wire_contract,
+    validate_structural_planner_contract,
 )
 from infini_local.pipelines.combine_genome_contract import combat_genome_required_for
 from infini_local.pipelines.llm_authoring_prompt import (
@@ -120,12 +123,29 @@ def planner_runtime_promise_gate(
     plan: dict[str, Any],
     *,
     enforce_public_contract: bool = False,
+    require_structural_v3: bool = False,
 ) -> dict[str, Any]:
     """Reject public gameplay promises that have no executable runtime backing.
 
     Visual-only wording remains legal inside visual fields.  The probe is copied because
     promise validation deliberately annotates its input for later runtime diagnostics.
     """
+    raw_contract_candidate = plan.get("runtimeContract")
+    raw_contract: dict[str, Any] = dict(raw_contract_candidate) if isinstance(raw_contract_candidate, dict) else {}
+    if require_structural_v3 and str(raw_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+        return {
+            "schema": "infini.structural-planner-contract-report.v1",
+            "ok": False,
+            "blockingClaims": [{
+                "kind": "missing_structural_v3_contract",
+                "source": "runtimeContract.schema",
+                "status": "unsupported",
+                "backing": STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
+            }],
+            "unsupportedPromises": [],
+        }
+    if enforce_public_contract and str(raw_contract.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+        return validate_structural_planner_contract(copy.deepcopy(plan))
     probe = copy.deepcopy(plan)
     patch = runtime_plan_to_attack_genome_patch(probe)
     report = validate_runtime_promises(probe, patch)
@@ -222,97 +242,32 @@ def planner_runtime_promise_gate(
 
 
 def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, Any]:
-    """Re-resolve the authored promise contract against the final executable view."""
-    patch = runtime_plan_to_attack_genome_patch(copy.deepcopy(data))
-    contract_report = validate_runtime_contract(data, patch)
-    gate = planner_runtime_promise_gate(data, enforce_public_contract=True)
-    status = str(contract_report.get("executionStatus") or "")
-    if status in {"partial", "unsupported"}:
-        gate.setdefault("blockingClaims", []).append({
-            "kind": "contract_execution_status",
-            "source": "runtimeContract.executionStatus",
-            "status": status,
-            "backing": "final runtime contract validation",
-        })
-        gate["ok"] = False
+    """Require v3 compiler provenance at every runtime-authored final boundary."""
+    raw_contract_candidate = data.get("runtimeContract")
+    raw_contract: dict[str, Any] = dict(raw_contract_candidate) if isinstance(raw_contract_candidate, dict) else {}
+    gate: dict[str, Any]
+    if str(raw_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+        gate = {
+            "schema": "infini.final-wire-contract-report.v1",
+            "ok": False,
+            "blockingClaims": [{
+                "kind": "missing_structural_v3_contract",
+                "source": "runtimeContract.schema",
+                "required": STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
+            }],
+            "finalWireReceipts": [],
+            "executionStatus": "unsupported",
+        }
+    else:
+        gate = validate_structural_final_wire_contract(data)
     data.setdefault("debug", {})
     if isinstance(data.get("debug"), dict):
+        data["debug"]["finalWireExecutionReceipts"] = copy.deepcopy(gate.get("finalWireReceipts") or [])
         data["debug"]["finalRuntimePromiseGate"] = bounded_json_dumps(gate, max_chars=8000)
     if not gate.get("ok"):
         kinds = sorted({str(row.get("kind") or "unsupported") for row in gate.get("blockingClaims") or []})
-        raise PlannerUnavailable("final runtime promise boundary rejected: " + ", ".join(kinds))
+        raise PlannerUnavailable("final structural runtime promise boundary rejected: " + ", ".join(kinds))
     return gate
-
-
-def _project_fail_closed_promise_surface(plan: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Delete unproved public claims and rebuild tooltip from model-authored survivors.
-
-    The projection never invents prose or mechanics. It is attempted only after model
-    re-authoring is exhausted and is accepted only if the normal strict gate passes.
-    """
-    projected = copy.deepcopy(plan)
-    patch = runtime_plan_to_attack_genome_patch(copy.deepcopy(projected))
-    initial_contract_report = validate_runtime_contract(projected, patch)
-    contract = dict(initial_contract_report.get("contract") or {})
-    unsupported_sync_fields = {
-        str(value).split("unsupported:sync:", 1)[1]
-        for value in initial_contract_report.get("unsupportedPromises") or []
-        if str(value).startswith("unsupported:sync:")
-    }
-    sync_fields = [str(value) for value in contract.get("syncFields") or []]
-    removed_sync_fields = [value for value in sync_fields if value in unsupported_sync_fields]
-    if removed_sync_fields:
-        contract["syncFields"] = [value for value in sync_fields if value not in unsupported_sync_fields]
-        projected["runtimeContract"] = contract
-        stale_unsupported = {f"unsupported:sync:{value}" for value in removed_sync_fields}
-        if isinstance(projected.get("unsupportedPromises"), list):
-            projected["unsupportedPromises"] = [value for value in projected["unsupportedPromises"] if str(value) not in stale_unsupported]
-        contract = dict(validate_runtime_contract(projected, patch).get("contract") or {})
-    kept: list[dict[str, Any]] = []
-    removed: list[dict[str, Any]] = []
-    executable_count = 0
-    for index, claim in enumerate(contract.get("mechanicClaims") or []):
-        status = str(claim.get("status") or "")
-        if status == "visual_only":
-            kept.append(claim)
-            continue
-        if status in {"partial", "unsupported", "ambiguous"}:
-            removed.append({"index": index, "reason": f"status:{status or 'unknown'}", "claim": claim.get("claim")})
-            continue
-        resolved, failures = resolve_mechanic_backing_refs(projected, patch, claim)
-        if not resolved:
-            removed.append({"index": index, "reason": ",".join(failures[:4]) or "unresolved", "claim": claim.get("claim")})
-            continue
-        relevant, relevance_failures = mechanic_claim_backing_relevant(claim)
-        if not relevant:
-            removed.append({"index": index, "reason": ",".join(relevance_failures[:4]) or "irrelevant", "claim": claim.get("claim")})
-            continue
-        kept_claim = dict(claim)
-        kept_claim["status"] = "executable"
-        kept.append(kept_claim)
-        executable_count += 1
-
-    contract["mechanicClaims"] = kept
-    contract["executionStatus"] = "executable" if executable_count else ("visual_only" if kept else "unsupported")
-    projected["runtimeContract"] = contract
-    projected["tooltip"] = "; ".join(str(claim.get("claim") or "").strip().rstrip(".;") for claim in kept if str(claim.get("claim") or "").strip())
-    projection = {
-        "schema": "infini.promise-surface-projection.v1",
-        "mode": "fail_closed_delete_only",
-        "removedClaims": removed,
-        "removedSyncFields": removed_sync_fields,
-        "keptClaimCount": len(kept),
-        "executableClaimCount": executable_count,
-    }
-    projected.setdefault("debug", {})
-    if isinstance(projected.get("debug"), dict):
-        projected["debug"]["plannerPromiseProjection"] = projection
-    gate = planner_runtime_promise_gate(projected, enforce_public_contract=True)
-    result_kind = str(runtime_plan(projected).get("resultKind") or "").strip().lower()
-    requires_executable = result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion"}
-    projection["accepted"] = bool(gate.get("ok")) and (executable_count > 0 or not requires_executable)
-    projection["postProjectionGate"] = gate
-    return projected, projection
 
 
 def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any] | None:
@@ -358,14 +313,14 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         trace_event("response", "LLM:author_plan", "Planner response", {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": transport_debug}, response=content)
         parsed_child_json = parse_first_valid_llm_json(content)
         obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
-        promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True)
+        promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True, require_structural_v3=True)
         retry_messages = list(req["messages"])
-        max_reauthors = 2
+        max_reauthors = 1
         for reauthor_attempt in range(1, max_reauthors + 1):
             if promise_gate["ok"]:
                 break
             retry_instruction = json.dumps({
-                "task": "Re-author the complete item. Keep both parent roles, but remove unsupported gameplay promises from name/tooltip/concept/runtimeStateIntent.",
+                "task": "Re-author one complete structural-v3 item from the same two parents. Repair every exact blocking path; the model remains the only gameplay author.",
                 "agentHandoff": agent_handoff(
                     previous_speaker="item_planner",
                     current_speaker="promise_truth_gate",
@@ -377,16 +332,16 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
                 "maxAttempts": max_reauthors,
                 "blockingClaims": promise_gate["blockingClaims"],
                 "backingRefRules": list(MECHANIC_BACKING_REF_RULES),
+                "requiredTopLevelKeys": sorted(str(key) for key in (user.get("requiredJsonShape") or {})),
+                "requiredJsonShape": user.get("requiredJsonShape") or {},
                 "requirements": [
-                    "Treat every blocking claim as proof that the previous behavior is not executable. Delete that entire behavior from tooltip, concept, state intent, claims, and calls; do not preserve it by renaming fields or changing numbers.",
-                    "Choose a different behavior only from concrete engineCalls in the supplied API card. A parent role may survive purely as visual identity when it has no gameplay executor.",
-                    "projectileShape/projectileImpact/projectileTrail, note strings, runtimeArchetype.family, and visual fields describe presentation or taxonomy; they are not gameplay executors.",
-                    "Every gameplay promise in public prose must be backed by a concrete engineCall/runtime executor whose backingRefs resolve exactly after compilation.",
-                    "backingRefs.expected must be the exact JSON value of the referenced field; never summarize a nested object as a prose string.",
-                    "Rebuild tooltip clauses and mechanicClaims from the final engineCalls. Every executable claim must literally include a non-generic field/enum token or exact number from its backingRefs; mark pure identity or visual prose visual_only.",
-                    "A purely visual motif may stay only in visual/visualIntent and must not claim gameplay behavior.",
-                    "Playable results must keep at least 4 non-empty playerViewTimeline steps in runtimeContract.",
-                    "Return one complete replacement item JSON, not a patch.",
+                    "Return runtimeContract.schema=infini.runtime-contract.v3 and unique stable callId/claimId values.",
+                    "Keep or change mechanics only by your own authored engineCalls; code will not delete, replace, classify, or nerf them.",
+                    "Every executable backingRef must name exact callId/field/expected. Do not return compiler-owned receipts or final paths.",
+                    "Choose signatureClaimId yourself and link it from tooltipClaimIds, playerViewTimeline, and concept.weirdTwist.",
+                    "A presentation-only claim uses status=visual_only and no backingRefs.",
+                    "Return at least 4 structured playerViewTimeline steps. Each non-presentation step links claimIds.",
+                    "Return one complete replacement item JSON containing every requiredTopLevelKey, not a patch or partial document.",
                 ],
             }, ensure_ascii=False, separators=(",", ":"))
             retry_messages.extend([
@@ -410,23 +365,11 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
             content = retry_content
             parsed_child_json = parse_first_valid_llm_json(retry_content)
             obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
-            promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True)
-        if not promise_gate["ok"]:
-            projected, projection = _project_fail_closed_promise_surface(obj)
-            trace_event("repair", "LLM:author_plan_promise_projection", "Fail-closed promise surface projection", {
-                "provider": active_llm_provider(),
-                "model": model_name,
-                "removedClaimCount": len(projection.get("removedClaims") or []),
-                "keptClaimCount": projection.get("keptClaimCount"),
-                "accepted": projection.get("accepted"),
-            }, response=projection)
-            if projection.get("accepted"):
-                obj = projected
-                promise_gate = dict(projection.get("postProjectionGate") or {})
+            promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True, require_structural_v3=True)
         if not promise_gate["ok"]:
             kinds = sorted({str(x.get("kind") or "unsupported") for x in promise_gate["blockingClaims"]})
             raise PlannerUnavailable(
-                f"planner repeated unsupported gameplay promises after {max_reauthors} re-authors: " + ", ".join(kinds)
+                f"planner structural contract remained invalid after {max_reauthors} re-author: " + ", ".join(kinds)
             )
         obj.setdefault("id", "g_" + stable_hash(key, content, length=16))
         obj.setdefault("recipeKey", key)
@@ -449,7 +392,7 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         return obj
     except PlannerUnavailable as e:
         trace_event("error", "LLM:author_plan", "Planner rejected authored result", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
-        log_event("warn", "LLM author-first planner exhausted semantic retries", {"error": repr(e)})
+        log_event("warn", "LLM author-first planner exhausted structural re-author", {"error": repr(e)})
         raise
     except Exception as e:
         trace_event("error", "LLM:author_plan", "Planner failed", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
@@ -464,7 +407,7 @@ def _runtime_plan_repair_current_item_view(data: dict[str, Any]) -> dict[str, An
     Debug/cache state is excluded because runtime repair cannot own it.
     """
     view: dict[str, Any] = {}
-    for key in ["category", "gameplay", "runtimePlan", "attack", "accessory", "armor"]:
+    for key in ["category", "gameplay", "runtimePlan", "runtimeContract", "attack", "accessory", "armor"]:
         value = data.get(key)
         if value not in (None, ""):
             view[key] = value
@@ -518,8 +461,10 @@ def _runtime_plan_repair_dossier_core(data: dict[str, Any], validation: dict[str
     """Build the authoritative current-item core of the Runtime Repair dossier."""
     raw_strict_value = validation.get("rawStrictBoundary")
     raw_strict: dict[str, Any] = raw_strict_value if isinstance(raw_strict_value, dict) else {}
+    contract_candidate = data.get("runtimeContract")
+    structural_v3_repair = isinstance(contract_candidate, dict) and str(contract_candidate.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
     return {
-        "task": "Repair only the executable runtime contract so runtimePlan.engineCalls validates. Return repairPatch only. Do not return the complete item.",
+        "task": "Repair the executable runtimePlan and its structural runtimeContract links so both validate. Return repairPatch only. Do not return the complete item.",
         "agentHandoff": agent_handoff(
             previous_speaker="item_planner",
             current_speaker="runtime_validator",
@@ -528,6 +473,7 @@ def _runtime_plan_repair_dossier_core(data: dict[str, Any], validation: dict[str
             artifact_source="currentItem",
         ),
         "repairMode": "targeted_runtime_contract_repair",
+        "requiredPatchFields": ["runtimePlan", "runtimeContract"] if structural_v3_repair else ["runtimePlan"],
         "attempt": attempt,
         "validationReport": validation,
         "validatorFeedback": {
@@ -538,7 +484,11 @@ def _runtime_plan_repair_dossier_core(data: dict[str, Any], validation: dict[str
         },
         "failedCallContracts": _failed_runtime_call_contracts(data, validation),
         "mustFix": [
+            *(["This is a structural-v3 repair: repairPatch.runtimePlan and a full repairPatch.runtimeContract are both mandatory on every attempt, even when one would be unchanged."] if structural_v3_repair else []),
             "set_item_stats is an engine call, never a gameplay field: put it in repairPatch.runtimePlan.engineCalls, normally as the first call.",
+            "Every returned engineCall must include its unique stable callId. Preserve the exact currentItem callId when repairing the same call; author a new valid callId only for a genuinely new call.",
+            "If any callId, referenced params field, or referenced value changes, return a full repairPatch.runtimeContract=infini.runtime-contract.v3 whose backingRefs exactly match the repaired runtimePlan. Preserve stable claimId/signature links; update model-authored playerText if the executable promise changed.",
+            "Never return finalPath, finalExpected, or finalWireReceipts; those are compiler-owned after repair.",
             "Every runtimePlan.engineCalls[].params must be a JSON object, never an array, JSON string, tuple, or key/value list.",
             "If resultKind/category is weapon, ammo, consumable_weapon, tool, accessory or potion, include {\"fn\":\"set_item_stats\",\"params\":{...safe base item stats...}}.",
             "If it is combat-capable, keep or add one concrete primary executable action such as perform_melee_attack, shoot_projectile, fire_ranged_weapon, cast_magic_weapon, spawn_temporary_helper_projectile, or a valid utility/tool/accessory call.",
@@ -548,7 +498,7 @@ def _runtime_plan_repair_dossier_core(data: dict[str, Any], validation: dict[str
             "Return exactly one JSON object with repairPatch as its only top-level field; no markdown, explanation, or complete item.",
         ],
         "currentItem": _runtime_plan_repair_current_item_view(data),
-        "requiredRepairPatchShape": _runtime_repair_response_schema(),
+        "requiredRepairPatchShape": _runtime_repair_response_schema(require_structural_v3=structural_v3_repair),
     }
 
 
@@ -572,6 +522,7 @@ def _runtime_plan_repair_standalone_packet(
 
 REPAIR_PATCH_ALLOWED_TOP_LEVEL = {
     "runtimePlan",
+    "runtimeContract",
     "attack",
     "gameplay",
     "accessory",
@@ -595,13 +546,14 @@ REPAIR_PATCH_ALLOWED_GAMEPLAY_FIELDS = {
 }
 
 
-def _runtime_repair_response_schema() -> dict[str, Any]:
+def _runtime_repair_response_schema(*, require_structural_v3: bool = False) -> dict[str, Any]:
     """One finite envelope; executable patch internals retain their exact validators."""
     engine_call_schema = {
         "type": "object",
-        "required": ["fn", "params"],
+        "required": ["callId", "fn", "params"],
         "additionalProperties": False,
         "properties": {
+            "callId": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
             "fn": {"type": "string", "minLength": 1},
             "params": {"type": "object", "additionalProperties": True},
         },
@@ -631,6 +583,7 @@ def _runtime_repair_response_schema() -> dict[str, Any]:
                 "type": "object",
                 "additionalProperties": False,
                 "minProperties": 1,
+                **({"required": ["runtimePlan", "runtimeContract"]} if require_structural_v3 else {}),
                 "properties": patch_properties,
             },
         },
@@ -645,6 +598,19 @@ def _repair_patch_payload(repaired: dict[str, Any]) -> tuple[dict[str, Any], str
     if isinstance(repaired.get("repairPatch"), dict):
         return copy.deepcopy(repaired["repairPatch"]), "repairPatch"
     return {}, "missing_repairPatch"
+
+
+def _repair_runtime_plan_has_stable_call_ids(runtime_plan_patch: dict[str, Any]) -> bool:
+    calls_candidate = runtime_plan_patch.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    if not calls:
+        return False
+    call_ids = [str(call.get("callId") or "") for call in calls if isinstance(call, dict)]
+    return (
+        len(call_ids) == len(calls)
+        and len(set(call_ids)) == len(call_ids)
+        and all(re.fullmatch(r"[a-z][a-z0-9_]{0,63}", call_id) is not None for call_id in call_ids)
+    )
 
 
 def _filtered_runtime_repair_patch(repaired: dict[str, Any], original: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -664,7 +630,16 @@ def _filtered_runtime_repair_patch(repaired: dict[str, Any], original: dict[str,
         if key == "debug":
             continue
         if key == "runtimePlan" and isinstance(value, dict):
-            accepted[key] = copy.deepcopy(value)
+            if _repair_runtime_plan_has_stable_call_ids(value):
+                accepted[key] = copy.deepcopy(value)
+            else:
+                rejected.append("runtimePlan.callId")
+            continue
+        if key == "runtimeContract" and isinstance(value, dict):
+            if str(value.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA and not value.get("finalWireReceipts"):
+                accepted[key] = copy.deepcopy(value)
+            else:
+                rejected.append("runtimeContract.schema")
             continue
         if key == "attack" and isinstance(value, dict):
             accepted[key] = copy.deepcopy(value)
@@ -682,6 +657,14 @@ def _filtered_runtime_repair_patch(repaired: dict[str, Any], original: dict[str,
             accepted[key] = copy.deepcopy(value)
             continue
         rejected.append(str(key))
+    original_contract = original.get("runtimeContract")
+    if (
+        isinstance(original_contract, dict)
+        and str(original_contract.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
+        and "runtimePlan" in accepted
+        and "runtimeContract" not in accepted
+    ):
+        rejected.append("runtimeContract.required_with_runtimePlan")
     report = {
         "schema": "infini.runtime-repair-patch-contract.v1",
         "source": source,
@@ -698,6 +681,8 @@ def _merge_repair_patch_into_candidate(candidate: dict[str, Any], patch: dict[st
         # bad engineCalls with a valid authored runtime contract.
         candidate["runtimePlan"] = copy.deepcopy(patch["runtimePlan"])
         candidate.pop("_runtimePlanCompileCache", None)
+    if isinstance(patch.get("runtimeContract"), dict):
+        candidate["runtimeContract"] = copy.deepcopy(patch["runtimeContract"])
     for key in ("attack", "gameplay", "accessory", "armor"):
         if isinstance(patch.get(key), dict):
             base = candidate.get(key) if isinstance(candidate.get(key), dict) else {}
@@ -767,6 +752,8 @@ def try_llm_runtime_plan_repair(data: dict[str, Any], a: dict[str, Any], b: dict
             )
             return None
         model_name = resolve_llm_model()
+        contract_candidate = data.get("runtimeContract")
+        structural_v3_repair = isinstance(contract_candidate, dict) and str(contract_candidate.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
         user = _runtime_plan_repair_standalone_packet(data, validation, attempt, a, b, ca, cb, key)
         message_mode = (
             "authoritative_stage_dossier_v31"
@@ -777,7 +764,7 @@ def try_llm_runtime_plan_repair(data: dict[str, Any], a: dict[str, Any], b: dict
         repair_system = (
             "You are the Runtime Contract Repairer for a Terraria-like item pipeline. "
             "The earlier item_planner response is provenance only; the latest runtime_validator payload and its currentItem are the authoritative current runtime truth. "
-            "Repair executable runtimePlan/attack/gameplay fields only; preserve item identity and visuals. "
+            "Repair executable runtimePlan/attack/gameplay fields and the matching runtimeContract source links only; preserve item identity and visuals. "
             "Return exactly one JSON object whose only top-level field is repairPatch."
             + llm_reasoning_system_suffix(model_name)
         )
@@ -791,7 +778,7 @@ def try_llm_runtime_plan_repair(data: dict[str, Any], a: dict[str, Any], b: dict
             "temperature": 0.12,
             "response_format": llm_json_response_format(
                 "infini_runtime_plan_repair",
-                schema=_runtime_repair_response_schema(),
+                schema=_runtime_repair_response_schema(require_structural_v3=structural_v3_repair),
                 strict=False,
             ),
         }
@@ -962,6 +949,39 @@ def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: di
         if structural_after.get("applied"):
             row["structuralAfterPatch"] = structural_after.get("fixes", [])[:12]
         after = _merge_raw_boundary_errors(runtime_plan_validation_report(candidate), candidate_raw_boundary, structural_after.get("fixes"))
+        contract_candidate = candidate.get("runtimeContract")
+        if isinstance(contract_candidate, dict) and str(contract_candidate.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+            structural_contract_after = validate_structural_planner_contract(candidate)
+            row["structuralContractAfter"] = structural_contract_after
+            if not structural_contract_after.get("ok"):
+                after = dict(after)
+                after["ok"] = False
+                contract_errors = [
+                    "runtimeContract." + str(block.get("kind") or "invalid") + ": " + bounded_json_dumps(block, max_chars=600)
+                    for block in (structural_contract_after.get("blockingClaims") or [])
+                    if isinstance(block, dict)
+                ]
+                after["errors"] = [str(error) for error in (after.get("errors") or [])] + contract_errors[:32]
+                after["structuralRuntimeContract"] = structural_contract_after
+        candidate_debug_candidate = candidate.get("debug")
+        candidate_debug: dict[str, Any] = candidate_debug_candidate if isinstance(candidate_debug_candidate, dict) else {}
+        patch_report_raw = candidate_debug.get("runtimePlanRepairPatchContract")
+        try:
+            patch_report_after = json.loads(str(patch_report_raw or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            patch_report_after = {}
+        blocking_patch_rejections = [
+            str(value)
+            for value in (patch_report_after.get("rejectedTopLevel") or [])
+            if str(value) == "runtimeContract.required_with_runtimePlan"
+        ]
+        if blocking_patch_rejections:
+            after = dict(after)
+            after["ok"] = False
+            after["errors"] = [str(error) for error in (after.get("errors") or [])] + [
+                "repairPatch." + value for value in blocking_patch_rejections
+            ]
+            row["blockingPatchRejections"] = blocking_patch_rejections
         row["okAfter"] = bool(after.get("ok"))
         row["errorsAfter"] = after.get("errors") or []
         repair_log.append(row)

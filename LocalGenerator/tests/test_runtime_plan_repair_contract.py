@@ -12,6 +12,86 @@ from infini_local.pipelines import llm_authoring_pipeline as lap
 from infini_local.core.runtime_authoring import runtime_plan_validation_report
 
 
+def _structural_contract_for_burst(field: str, expected) -> dict:
+    return {
+        "schema": "infini.runtime-contract.v3",
+        "primaryVerb": "swing",
+        "controlStyle": "tap",
+        "signatureMode": "mechanic",
+        "signatureClaimId": "burst_claim",
+        "tooltipClaimIds": ["burst_claim"],
+        "mechanicClaims": [{
+            "claimId": "burst_claim",
+            "playerText": "Splinters burst on hit",
+            "backingRefs": [{"source": "engineCall", "callId": "plank_burst", "field": field, "expected": expected}],
+            "status": "executable",
+        }],
+        "playerViewTimeline": [
+            {"phase": phase, "text": phase, "claimIds": ["burst_claim"], "presentationOnly": False}
+            for phase in ("use", "travel", "npc_hit", "expiry")
+        ],
+        "unsupportedPromises": [],
+        "executionStatus": "executable",
+    }
+
+
+def _valid_burst_repair_plan() -> dict:
+    return {
+        "resultKind": "weapon",
+        "engineCalls": [
+            {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 9, "useTimeTicks": 25, "maxStack": 1}},
+            {"callId": "primary_swing", "fn": "perform_melee_attack", "params": {"family": "broadsword", "speed": 5, "rangeTiles": 3.5, "lifetimeTicks": 20, "pierce": 1, "useTimeTicks": 25, "shotCount": 1, "spreadRadians": 0}},
+            {"callId": "plank_burst", "fn": "apply_on_hit_effect", "params": {"onHit": "split", "count": 3, "secondaryDamageMultiplier": 0.6, "secondaryLifetimeTicks": 45}},
+        ],
+    }
+
+
+def _contract_check_runtime_repair_must_update_stale_v3_backing_refs(monkeypatch):
+    data = {
+        "name": "Contract Repair Blade",
+        "category": "weapon",
+        "gameplay": {"kind": "weapon"},
+        "concept": {"weirdTwist": {"text": "Splinter burst", "claimIds": ["burst_claim"]}},
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"callId": "primary_swing", "fn": "perform_melee_attack", "params": {"family": "broadsword", "speed": 5, "rangeTiles": 3.5, "lifetimeTicks": 20, "pierce": 1, "useTimeTicks": 25, "shotCount": 1, "spreadRadians": 0}},
+                {"callId": "plank_burst", "fn": "apply_on_hit_effect", "params": {"onHit": "split", "count": 3, "pierce": 2}},
+            ],
+        },
+        "runtimeContract": _structural_contract_for_burst("pierce", 2),
+        "debug": {},
+        "sourceMode": "generated",
+    }
+    valid_plan = _valid_burst_repair_plan()
+    responses = [
+        {"repairPatch": {"runtimePlan": valid_plan}},
+        {"repairPatch": {"runtimePlan": valid_plan, "runtimeContract": _structural_contract_for_burst("count", 3)}},
+    ]
+    prompts: list[dict] = []
+
+    def fake_llm(req, timeout=10):
+        prompts.append(json.loads(req["messages"][-1]["content"]))
+        return {"choices": [{"message": {"content": json.dumps(responses[len(prompts) - 1])}}]}
+
+    monkeypatch.setattr(lap, "USE_LLM", True)
+    monkeypatch.setattr(lap, "LLM_RUNTIME_AUTHORING", True)
+    monkeypatch.setattr(lap, "resolve_llm_model", lambda: "repair-test-model")
+    monkeypatch.setattr(lap, "apply_llm_common_options", lambda req, **kwargs: req)
+    monkeypatch.setattr(lap, "llm_chat_json", fake_llm)
+
+    out = lap.repair_runtime_plan_if_needed(data, {}, {}, {}, {}, "repair_structural_refs")
+
+    assert len(prompts) == 2
+    assert prompts[0]["requiredPatchFields"] == ["runtimePlan", "runtimeContract"]
+    repair_patch_schema = prompts[0]["requiredRepairPatchShape"]["properties"]["repairPatch"]
+    assert repair_patch_schema["required"] == ["runtimePlan", "runtimeContract"]
+    assert any("runtimeContract.authored_ref_unresolved" in error for error in prompts[1]["validatorFeedback"]["errors"])
+    assert any("repairPatch.runtimeContract.required_with_runtimePlan" in error for error in prompts[1]["validatorFeedback"]["errors"])
+    assert out["runtimeContract"]["mechanicClaims"][0]["backingRefs"][0]["field"] == "count"
+    assert out["debug"]["runtimeRepairPath"] == "llm_targeted_runtime_contract_repair"
+
+
 def _contract_check_runtime_plan_repair_adds_missing_stats_without_reauthoring_item(monkeypatch):
     data = {
         "name": "Sun-Stabber",
@@ -41,15 +121,15 @@ def _contract_check_runtime_plan_repair_adds_missing_stats_without_reauthoring_i
         "runtimePlan": {
             "resultKind": "weapon",
             "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 6, "useTimeTicks": 13, "maxStack": 1, "rarity": 0, "value": 700}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "thrust", "delivery": "thrust", "movement": "straight", "speed": 12, "rangeTiles": 18, "lifetimeTicks": 45, "shotCount": 1, "spreadRadians": 0, "useTimeTicks": 13, "pierce": 3}},
-                {"fn": "apply_on_hit_effect", "params": {"onHit": "aura_pulse", "aoeRadiusTiles": 2, "count": 3}},
+                {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 6, "useTimeTicks": 13, "maxStack": 1, "rarity": 0, "value": 700}},
+                {"callId": "primary_thrust", "fn": "shoot_projectile", "params": {"runtimeFamily": "thrust", "delivery": "thrust", "movement": "straight", "speed": 12, "rangeTiles": 18, "lifetimeTicks": 45, "shotCount": 1, "spreadRadians": 0, "useTimeTicks": 13, "pierce": 3}},
+                {"callId": "aura_hit", "fn": "apply_on_hit_effect", "params": {"onHit": "aura_pulse", "aoeRadiusTiles": 2, "count": 3}},
             ],
         },
     }}
 
     def fake_llm_chat_json(req, timeout=10):
-        assert "runtimePlan.engineCalls validates" in req["messages"][-1]["content"]
+        assert "runtimePlan and its structural runtimeContract links" in req["messages"][-1]["content"]
         return {"choices": [{"message": {"content": json.dumps(repaired)}}]}
 
     monkeypatch.setattr(lap, "USE_LLM", True)
@@ -98,8 +178,8 @@ def _contract_check_runtime_plan_repair_triggers_on_compile_level_runtime_family
         "runtimePlan": {
             "resultKind": "weapon",
             "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "projectileShape": "odd spark", "speed": 10, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "useTimeTicks": 20}},
+                {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 8, "useTimeTicks": 20, "maxStack": 1}},
+                {"callId": "primary_shot", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "projectileShape": "odd spark", "speed": 10, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0, "useTimeTicks": 20}},
             ],
         },
     }}
@@ -267,7 +347,7 @@ def _contract_check_runtime_repair_uses_self_contained_authoritative_dossier_wit
     assert "requiredJsonShape" not in standalone
     assert standalone["requiredRepairPatchShape"]["required"] == ["repairPatch"]
     call_schema = standalone["requiredRepairPatchShape"]["properties"]["repairPatch"]["properties"]["runtimePlan"]["properties"]["engineCalls"]["items"]
-    assert call_schema["required"] == ["fn", "params"]
+    assert call_schema["required"] == ["callId", "fn", "params"]
     assert call_schema["properties"]["params"]["type"] == "object"
     assert full_payload_builds == [True, True]
 
@@ -340,12 +420,12 @@ def _contract_check_failed_runtime_repairs_return_exact_validator_feedback_and_n
     original_calls = json.loads(json.dumps(data["runtimePlan"]["engineCalls"]))
     bad_repairs = [
         {"repairPatch": {"runtimePlan": {"engineCalls": [
-            {"fn": "set_item_stats", "params": ["resultKind", "accessory"]},
-            {"fn": "accessory_effect", "params": ["archetype", "mobility"]},
+            {"callId": "item_stats", "fn": "set_item_stats", "params": ["resultKind", "accessory"]},
+            {"callId": "accessory_effect", "fn": "accessory_effect", "params": ["archetype", "mobility"]},
         ]}}},
         {"repairPatch": {"runtimePlan": {"engineCalls": [
-            {"fn": "set_item_stats", "params": '{"resultKind":"accessory"}'},
-            {"fn": "accessory_effect", "params": '{"archetype":"mobility"}'},
+            {"callId": "item_stats", "fn": "set_item_stats", "params": '{"resultKind":"accessory"}'},
+            {"callId": "accessory_effect", "fn": "accessory_effect", "params": '{"archetype":"mobility"}'},
         ]}}},
     ]
     captured: list[dict] = []
@@ -400,12 +480,12 @@ def _contract_check_valid_later_repair_does_not_inherit_mutations_from_rejected_
     }
     responses = [
         {"repairPatch": {"gameplay": {"damage": 999}, "runtimePlan": {"resultKind": "weapon", "engineCalls": [
-            {"fn": "set_item_stats", "params": []},
-            {"fn": "shoot_projectile", "params": []},
+            {"callId": "item_stats", "fn": "set_item_stats", "params": []},
+            {"callId": "primary_shot", "fn": "shoot_projectile", "params": []},
         ]}}},
         {"repairPatch": {"runtimePlan": {"resultKind": "weapon", "engineCalls": [
-            {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 12, "useTimeTicks": 28}},
-            {"fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
+            {"callId": "item_stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 12, "useTimeTicks": 28}},
+            {"callId": "primary_shot", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight", "speed": 9, "rangeTiles": 45, "lifetimeTicks": 90, "shotCount": 1, "spreadRadians": 0, "pierce": 0}},
         ]}}},
     ]
     seen_prompts: list[dict] = []
@@ -435,6 +515,7 @@ def test_runtime_plan_repair_contract_module_contract(request):
         globals(),
         request,
         (
+            '_contract_check_runtime_repair_must_update_stale_v3_backing_refs',
             '_contract_check_runtime_plan_repair_adds_missing_stats_without_reauthoring_item',
             '_contract_check_runtime_plan_repair_triggers_on_compile_level_runtime_family_error',
             '_contract_check_validate_and_repair_preserves_runtime_plan_repair_path',
