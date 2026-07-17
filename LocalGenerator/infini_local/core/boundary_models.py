@@ -712,14 +712,14 @@ def executable_wire_view(data: dict[str, Any]) -> dict[str, Any]:
 _ATTACK_ALWAYS_REQUIRED = frozenset({
     "enabled", "runtimePlanAuthored", "runtimeFamily", "delivery", "damageClass",
     "movement", "movementCode", "effect", "effectCode", "onHit", "onHitCode",
-    "speed", "rangeTiles", "lifetime", "pierce", "shotCount", "maxChildProjectiles",
-    "maxChildDepth", "dustSpawnDenom",
+    "speed", "rangeTiles", "lifetime", "pierce", "shotCount", "spreadRadians",
+    "maxChildProjectiles", "maxChildDepth", "dustSpawnDenom",
 })
 _ATTACK_FAMILY_REQUIRED: dict[str, frozenset[str]] = {
     "charge_release": frozenset({"chargeTicks", "chargePowerMultiplier", "channelUse"}),
     "sentry": frozenset({"sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks"}),
-    "beam": frozenset({"beamWidthPx", "beamChargeTicks", "channelUse"}),
-    "overhead_barrage": frozenset({"delayTicks", "secondaryLifetimeTicks"}),
+    "beam": frozenset({"beamWidthPx", "beamChargeTicks", "channelUse", "immunityCooldown"}),
+    "overhead_barrage": frozenset({"delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"}),
 }
 _GAMEPLAY_ALWAYS_REQUIRED = frozenset({"kind", "damageClass", "damage", "useTime", "useAnimation", "maxStack"})
 _GAMEPLAY_KIND_REQUIRED: dict[str, frozenset[str]] = {

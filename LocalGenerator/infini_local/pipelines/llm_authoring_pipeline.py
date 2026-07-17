@@ -5,7 +5,7 @@ import json
 import re
 from typing import Any
 
-from infini_local.core.env_utils import env_float, env_int, env_str
+from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
@@ -29,7 +29,11 @@ from infini_local.pipelines.author_item_contract import (
     project_provider_author_item_to_local,
     strict_author_item_repair_report,
 )
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import (
+    PRIMARY_FUNCTION_AUTHOR_RULES,
+    VISIBLE_ENGINE_FUNCTIONS,
+    build_llm_author_payload,
+)
 
 
 _AUTHOR_STRUCTURAL_WIRE_RULES = (
@@ -39,7 +43,6 @@ _AUTHOR_STRUCTURAL_WIRE_RULES = (
     "Do not return compiler provenance, receipts, signatures, or final DTO paths."
 )
 from infini_local.pipelines.llm_transport import (
-    LLM_MODEL_OVERRIDE_KEY,
     active_llm_provider,
     apply_llm_common_options,
     llm_chat_json,
@@ -622,7 +625,7 @@ def build_same_author_repair_request(
     a: dict[str, Any],
     b: dict[str, Any],
     failure_report: dict[str, Any],
-) -> tuple[dict[str, Any], str, str, bool, str, dict[str, Any]]:
+) -> tuple[dict[str, Any], str, str, bool, dict[str, Any]]:
     """Build one bounded, concept-preserving same-author repair request."""
     current_item = _author_item_snapshot(data)
     current_runtime_plan, preserved_context = _scoped_repair_context(current_item)
@@ -632,8 +635,7 @@ def build_same_author_repair_request(
         "unsupported_mechanic_family",
         "unrepresentable_mechanic",
     )
-    model_override = env_str("INFINI_LLM_REAUTHOR_MODEL")
-    model_name = model_override or resolve_llm_model()
+    model_name = resolve_llm_model()
     system = (
         "You are the scoped repair pass of the SAME ITEM AUTHOR ROLE. "
         "Return only a compact JSON patch using allowedPatchKeys; never repeat the full AuthorItem. "
@@ -655,6 +657,14 @@ def build_same_author_repair_request(
         "repairMode": "targeted_domain_repair" if targeted_repair else "full_redesign",
         "contextOnlyParentNames": {"itemA": name_of(a), "itemB": name_of(b)},
         "allowedPatchKeys": _repair_allowed_patch_keys(failure_report, targeted_repair),
+        "allowedEngineFunctions": list(VISIBLE_ENGINE_FUNCTIONS),
+        "primaryFunctionRules": dict(PRIMARY_FUNCTION_AUTHOR_RULES),
+        "patchRules": [
+            "visualIntent is a top-level patch key; never place it inside runtimePlan.",
+            "Every runtimePlan.engineCalls replacement entry is a complete call with callId, fn, and params.",
+            "Every fn must be one of allowedEngineFunctions; never invent or alias an engine function.",
+            "Keep exactly one primary function; temporary helpers cannot fire or act as turrets; deploy_sentry is the only turret function.",
+        ],
         "invalidTargets": _repair_targets(failure_report),
         "currentRuntimePlan": current_runtime_plan,
         "currentCoreMechanic": (
@@ -689,14 +699,11 @@ def build_same_author_repair_request(
             auto_preference="json_object",
         ),
     }
-    if model_override:
-        req[LLM_MODEL_OVERRIDE_KEY] = model_override
     return (
         apply_llm_common_options(req, model_name=model_name),
         user_content,
         system,
         targeted_repair,
-        model_override,
         current_item,
     )
 
@@ -720,7 +727,7 @@ def repair_author_item_after_failure(
     if not USE_LLM:
         raise PlannerUnavailable("same-author scoped repair requires the configured item author")
 
-    req, user_content, system, _, model_override, current_item = (
+    req, user_content, system, _, current_item = (
         build_same_author_repair_request(data, a, b, failure_report)
     )
     model_name = str(req.get("model") or resolve_llm_model())
@@ -816,7 +823,6 @@ def repair_author_item_after_failure(
     obj["debug"]["model"] = model_name
     obj["debug"]["authorRepair"] = "same_author_role_scoped_patch"
     obj["debug"]["repairPatchKeys"] = sorted(patch)
-    obj["debug"]["repairModelMayDiffer"] = bool(model_override)
     obj["debug"]["authorRepairTransport"] = copy.deepcopy(transport_debug)
     obj["debug"]["llmRawOutput"] = str(content)[:12000]
     obj["_llmHistory"] = attributed_planner_history(system, user_content, content)

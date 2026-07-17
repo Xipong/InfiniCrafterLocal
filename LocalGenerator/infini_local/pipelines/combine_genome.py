@@ -443,6 +443,8 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     # These values already came from typed engineCalls; replacing them with DTO
     # defaults here would silently re-author the item after validation.
     for field, lo, hi, integer in [
+        ("aoeDamageRadiusPx", 0, 160, True),
+        ("projectileHitBudget", -1, 10, True),
         ("debuffTime", 0, 600, True),
         ("secondaryDamageMultiplier", 0, 1, False),
         ("secondarySpreadRadians", 0, 1.2, False),
@@ -462,7 +464,9 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         if proposed.get(field) not in (None, ""):
             value = clamp_float(proposed.get(field), lo, hi, lo)
             g[field] = int(round(value)) if integer else round(value, 3)
-    for field in ("primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial"):
+    for field in (
+        "debuffHint", "primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial",
+    ):
         if proposed.get(field) not in (None, ""):
             g[field] = str(proposed.get(field))[:120]
 
