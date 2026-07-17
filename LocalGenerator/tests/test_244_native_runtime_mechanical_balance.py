@@ -136,8 +136,11 @@ def _contract_check_pull_mode_has_typed_networked_csharp_executor_lifecycle() ->
     assert "public string PullMode" in model
     assert "NormalizePullMode(Attack.PullMode, Attack.PullStrength)" in normalize
     assert 'if (Attack.PullMode == "none") Attack.PullStrength = 0f;' in normalize
-    assert "writer.Write(ShortNet(_spec.PullMode" in net_sync
-    assert "_spec.PullMode = reader.ReadString()" in net_sync
+    send_extra_ai = net_sync.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "_spec." not in send_extra_ai
+    assert "TryGetAttack(_generatedItemId)" in net_sync
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in net_sync
+    assert "_spec.PullMode" in impact
     assert 'case "target_to_owner"' in impact
     assert 'case "owner_to_target"' in impact
     assert 'case "target_to_projectile"' in impact

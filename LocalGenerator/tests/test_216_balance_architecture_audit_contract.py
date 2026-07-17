@@ -45,6 +45,20 @@ def _contract_check_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_n
     contract = payload["engineRuntimeContract"]
     assert contract["availableFunctions"]["set_item_stats"]["params"]["damage"] == "0..cap"
     assert contract["hardEngineLimits"]["maxShotCount"] == 8
+    required = contract["requiredAuthorParams"]
+    assert required["everyCombatPrimary"] == ["shotCount", "spreadRadians"]
+    assert set(required["childProducingOnHit"]) >= {
+        "count", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
+    }
+    assert required["debuffingOnHit"] == ["debuffTime"]
+    assert required["stackConsumedWeaponIdentity"] == "consumable_weapon"
+    assert required["onePrimaryFunction"] is True
+    assert required["temporaryHelperCanFire"] is False
+    assert required["turretFunction"] == "deploy_sentry"
+    assert required["runtimePlanMetadataTypes"]["anomalyFlags"] == "array[string]"
+    assert required["pullOnHitEncoding"] == {
+        "onHit": "none", "requiredParams": ["pullStrength", "pullMode"],
+    }
     assert "safety" in payload["balancePolicy"]
     assert "softDamageCapPerHit" not in text
     assert "sourceEnvelope" not in text

@@ -35,6 +35,8 @@ def _contract_check_strict_archive_runtime_junk_patterns_are_recognized() -> Non
     assert hygiene._is_runtime_junk(Path("LocalGenerator/cache/world/recipe.json"), Path("recipe.json"))
     assert hygiene._is_runtime_junk(Path("build_logs/tml-build.log"), Path("tml-build.log"))
     assert hygiene._is_runtime_junk(Path("LocalGenerator/tests/.pytest_cache/v/cache/nodeids"), Path("nodeids"))
+    assert hygiene._is_runtime_junk(Path(".codex/session.json"), Path("session.json"))
+    assert hygiene._is_runtime_junk(Path(".agents/worker.json"), Path("worker.json"))
     assert not hygiene._is_runtime_junk(Path("LocalGenerator/infini_local/web/server.py"), Path("server.py"))
 
 

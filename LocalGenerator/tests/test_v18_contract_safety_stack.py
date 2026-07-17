@@ -182,16 +182,43 @@ def _contract_check_engine_call_boundary_rejects_wrong_types_and_unambiguous_unk
     assert any("trigger" in error for error in narrow_trigger["errors"])
 
 
-def _contract_check_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_them() -> None:
+def _contract_check_temporary_helper_nonzero_spread_crosses_the_raw_strict_boundary() -> None:
+    helper = runtime_plan_boundary_report({
+        "runtimePlan": {"engineCalls": [{
+            "fn": "spawn_temporary_helper_projectile",
+            "params": {
+                "family": "drone",
+                "movement": "drift",
+                "speed": 7,
+                "rangeTiles": 24,
+                "lifetimeTicks": 180,
+                "shotCount": 3,
+                "spreadRadians": 0.2,
+                "pierce": 1,
+                "projectileShape": "one compact helper drone",
+            },
+        }]}
+    })
+
+    assert helper["ok"] is True, helper
+
+
+def _ranged_final_item_fixture() -> dict:
     case = next(case for case in GOLDEN_RUNTIME_CASES if case["caseId"] == "ranged_straight_shot")
     report = build_gameplay_seam_report(case)
     assert report["error"] is None
     item = deepcopy(report["item"])
+    validate_executable_item_boundary(item)
+    return item
+
+
+def _contract_check_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_them() -> None:
+    item = _ranged_final_item_fixture()
     item["attack"].pop("lifetime")
     with pytest.raises(ValueError, match="compiler-owned fields missing"):
         validate_executable_item_boundary(item)
 
-    equipment = deepcopy(report["item"])
+    equipment = _ranged_final_item_fixture()
     equipment["accessory"] = {"enabled": True, "futureField": 1}
     with pytest.raises(ValidationError):
         validate_executable_item_boundary(equipment)
@@ -203,6 +230,45 @@ def _contract_check_final_boundary_requires_compiler_owned_fields_instead_of_def
     equipment["accessory"] = []
     with pytest.raises(ValidationError):
         validate_executable_item_boundary(equipment)
+
+
+def _contract_check_final_boundary_requires_spread_instead_of_defaulting_to_zero() -> None:
+    item = _ranged_final_item_fixture()
+    item["attack"].pop("spreadRadians")
+
+    with pytest.raises(ValueError, match="compiler-owned fields missing.*spreadRadians"):
+        validate_executable_item_boundary(item)
+
+
+def _contract_check_final_boundary_requires_beam_immunity_cooldown() -> None:
+    item = _ranged_final_item_fixture()
+    item["attack"].update({
+        "runtimeFamily": "beam",
+        "beamWidthPx": 18,
+        "beamChargeTicks": 12,
+        "channelUse": True,
+        "immunityCooldown": 15,
+    })
+    validate_executable_item_boundary(item)
+    item["attack"].pop("immunityCooldown")
+
+    with pytest.raises(ValueError, match="compiler-owned fields missing.*immunityCooldown"):
+        validate_executable_item_boundary(item)
+
+
+def _contract_check_final_boundary_requires_overhead_secondary_damage_multiplier() -> None:
+    item = _ranged_final_item_fixture()
+    item["attack"].update({
+        "runtimeFamily": "overhead_barrage",
+        "delayTicks": 12,
+        "secondaryDamageMultiplier": 0.5,
+        "secondaryLifetimeTicks": 30,
+    })
+    validate_executable_item_boundary(item)
+    item["attack"].pop("secondaryDamageMultiplier")
+
+    with pytest.raises(ValueError, match="compiler-owned fields missing.*secondaryDamageMultiplier"):
+        validate_executable_item_boundary(item)
 
 
 def _contract_check_boundary_validation_and_wire_projection_do_not_mutate_inputs() -> None:
@@ -360,7 +426,9 @@ def _contract_check_all_golden_gameplay_cases_cross_the_final_strict_boundary() 
 def _contract_check_parity_checker_and_mutation_gate_are_release_gates() -> None:
     parity = _load_tool_module("infini_contract_parity_gate_test", "tools/contract_parity.py").build_report()
     assert parity["ok"] is True
-    assert parity["networkWriteFieldCount"] == parity["networkReadFieldCount"] >= 80
+    assert parity["networkWriteFieldCount"] == parity["networkReadFieldCount"] == 0
+    assert parity["compactNetworkFieldCount"] == 13
+    assert parity["registryHydration"]["ok"] is True
     assert parity["nestedContracts"]
 
     delivery = _load_tool_module("infini_delivery_gate_test", "tools/check_delivery_contract.py").build_report()
@@ -501,8 +569,9 @@ public sealed class GeneratedItemData
     _load_tool_module("infini_delivery_environment_probe", "tools/check_delivery_contract.py")
     assert {key: os.environ.get(key) for key in gate_keys} == before
 
-def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -> None:
-    report = _load_tool_module("infini_config_registry_test", "tools/config_registry.py").build_registry()
+def _contract_check_generated_config_registry_is_current_and_redacts_secrets(monkeypatch) -> None:
+    registry = _load_tool_module("infini_config_registry_test", "tools/config_registry.py")
+    report = registry.build_registry()
     committed = json.loads((ROOT / "contracts" / "config_registry.json").read_text(encoding="utf-8"))
     assert report == committed
     assert report["ok"] is True
@@ -513,6 +582,33 @@ def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -
     assert all("PASTE_KEY" not in json.dumps(row) for row in secrets)
     cache_entry = next(row for row in report["entries"] if row["name"] == "INFINI_CACHE_DIR")
     assert "tools/validate_sandbox.py" not in cache_entry["owners"]
+
+    declaration_line = {"value": 10}
+
+    def extract_probe_declaration():
+        return ([registry.Declaration(
+            name="INFINI_LINE_STABLE_PROBE",
+            type_name="integer",
+            default=1,
+            minimum=0,
+            maximum=2,
+            file="probe.py",
+            line=declaration_line["value"],
+        )], {"INFINI_LINE_STABLE_PROBE": {"probe.py"}})
+
+    monkeypatch.setattr(registry, "_extract_python", extract_probe_declaration)
+    monkeypatch.setattr(registry, "_extract_csharp_refs", lambda _references: None)
+    monkeypatch.setattr(registry, "_example_fields", lambda: {})
+    monkeypatch.setattr(registry, "_gui_fields", lambda: ([], {}))
+    before_line_shift = registry.build_registry()
+    declaration_line["value"] = 999
+    after_line_shift = registry.build_registry()
+    assert before_line_shift == after_line_shift
+    assert all(
+        "line" not in declaration
+        for entry in before_line_shift["entries"]
+        for declaration in entry["declarations"]
+    )
 
 def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag(tmp_path: Path) -> None:
     doctor = subprocess.run(
@@ -744,7 +840,14 @@ def _contract_check_agentctl_resolves_pyright_from_current_python_environment(mo
     row = module._run_check("pyright", ["pyright"])
 
     assert row["status"] == "passed"
-    assert row["command"] == [str(pyright), "--pythonpath", str(python)]
+    assert row["command"] == [
+        str(python),
+        str(ROOT / "tools/run_pyright.py"),
+        "--pythonpath",
+        str(python),
+        "--pyright-command",
+        str(pyright),
+    ]
 
 
 def _contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python(monkeypatch, tmp_path: Path) -> None:
@@ -775,7 +878,34 @@ def _contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python(
     row = module._run_check("pyright", ["pyright"])
 
     assert row["status"] == "passed"
-    assert row["command"] == [str(pyright), "--pythonpath", str(python)]
+    assert row["command"] == [
+        str(python),
+        str(ROOT / "tools/run_pyright.py"),
+        "--pythonpath",
+        str(python),
+        "--pyright-command",
+        str(pyright),
+    ]
+
+
+def _contract_check_pyright_overlay_binds_selected_environment_without_changing_target_version(tmp_path: Path) -> None:
+    import importlib.util
+
+    module_path = ROOT / "tools/run_pyright.py"
+    spec = importlib.util.spec_from_file_location("run_pyright_binding_test", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    selected_site_packages = tmp_path / "venv" / "lib" / "python3.12" / "site-packages"
+    selected_site_packages.mkdir(parents=True)
+    overlay = module._overlay_config([selected_site_packages])
+
+    assert overlay["extends"] == str(ROOT / "pyproject.toml")
+    assert str(ROOT / "LocalGenerator") in overlay["extraPaths"]
+    assert str(ROOT / "tools") in overlay["extraPaths"]
+    assert str(selected_site_packages) in overlay["extraPaths"]
+    assert "pythonVersion" not in overlay
 
 
 # Keep process-spawning tooling checks ahead of runtime-import checks. Some runtime
@@ -800,6 +930,7 @@ def test_v18_agent_tooling_contract(request):
             '_contract_check_source_snapshot_index_excludes_hidden_tool_state',
             '_contract_check_agentctl_resolves_pyright_from_current_python_environment',
             '_contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python',
+            '_contract_check_pyright_overlay_binds_selected_environment_without_changing_target_version',
         ),
     )
 
@@ -813,7 +944,11 @@ def test_v18_runtime_boundary_contract(request):
         (
             '_contract_check_dynamic_engine_models_follow_the_canonical_catalog',
             '_contract_check_engine_call_boundary_rejects_wrong_types_and_unambiguous_unknown_enums',
+            '_contract_check_temporary_helper_nonzero_spread_crosses_the_raw_strict_boundary',
             '_contract_check_final_boundary_requires_compiler_owned_fields_instead_of_defaulting_them',
+            '_contract_check_final_boundary_requires_spread_instead_of_defaulting_to_zero',
+            '_contract_check_final_boundary_requires_beam_immunity_cooldown',
+            '_contract_check_final_boundary_requires_overhead_secondary_damage_multiplier',
             '_contract_check_boundary_validation_and_wire_projection_do_not_mutate_inputs',
             '_contract_check_nested_vfx_contract_is_strict_and_defaults_match_csharp',
             '_contract_check_nested_vfx_contract_projects_known_diagnostics_and_stays_strict',

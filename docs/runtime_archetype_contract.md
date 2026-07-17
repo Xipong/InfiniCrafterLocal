@@ -130,7 +130,7 @@ Visual generation may read `runtimeArchetype`/`runtimeContract` to avoid contrad
 
 C# `GeneratedItemData` has data-only `RuntimeArchetypeSpec`, `RuntimeContractSpec`, `MechanicClaimSpec`, and `MechanicBackingRefSpec` DTOs. `Normalize()` clamps known knobs; runtime contract schema is exactly `infini.runtime-contract.v2`. This private single-instance runtime does not migrate old generated contracts: recipes must match the current runtime API.
 
-Generated JSON preserves the archetype and machine backing fields. Projectile protocol is `ProjectileSyncVersion = 18`; it carries the current authored `AttackSpec`, including `pullMode`, plus dynamic return state. Direction/position still use normal projectile sync where applicable.
+Generated JSON and the world-scoped registry preserve the archetype and machine backing fields. Projectile protocol is `ProjectileSyncVersion = 20`: combat packets carry the generated id, one finite runtime-variant byte, and bounded mutable scalar state. The receiver resolves the immutable parent `AttackSpec` (including `pullMode`) from the registry and reconstructs children/releases through `GeneratedChildSpecPolicy`; a full `AttackSpec` is never sent per projectile. Direction/position still use normal projectile sync where applicable.
 
 ## Secondary trigger lifecycle
 

@@ -31,6 +31,9 @@ public sealed partial class GeneratedProjectile
 // =============================================================================
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
     {
+        if (_applyingAuthoredAoeDamage)
+            return projHitbox.Intersects(targetHitbox);
+
         if (IsWhipDelivery())
         {
             FillGeneratedWhipControlPoints(_whipControlPoints);
@@ -81,6 +84,9 @@ public sealed partial class GeneratedProjectile
 
     public override void ModifyDamageHitbox(ref Rectangle hitbox)
     {
+        if (_applyingAuthoredAoeDamage)
+            return;
+
         float scale = Math.Clamp(Math.Max(1f, _spec.HitboxScale), 1f, 2.25f);
         if (_spec.MovementCode == 15 && _spec.ProjectileScale > 0.001f)
         {
@@ -151,6 +157,9 @@ public sealed partial class GeneratedProjectile
 
     public override bool? CanHitNPC(NPC target)
     {
+        if (_applyingAuthoredAoeDamage)
+            return null;
+
         if (_spawnIgnoreTicks > 0 && target is not null && target.whoAmI == _spawnIgnoreNpc)
             return false;
         if (IsBeamDelivery() && target is not null)
@@ -164,6 +173,11 @@ public sealed partial class GeneratedProjectile
 
     public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
     {
+        // Projectile.Damage() below deliberately re-enters Terraria's hit pipeline for
+        // nearby NPCs. Those secondary callbacks must not recursively author another AoE.
+        if (_applyingAuthoredAoeDamage)
+            return;
+
         int onHit = _spec.OnHitCode;
         int effect = _spec.EffectCode;
         PlayImpactSound();
@@ -212,6 +226,52 @@ public sealed partial class GeneratedProjectile
             && _spec.SplitCount > 0
             && onHit is not (2 or 8 or 11 or 12 or 13 or 15 or 18))
             SplitProjectiles(target, _spec.SplitCount);
+
+        ApplyAuthoredOnHitAoeDamage(target.Center, target.whoAmI);
+    }
+
+    private void ApplyAuthoredOnHitAoeDamage(Vector2 center, int directTargetWhoAmI)
+    {
+        int radius = Math.Clamp(_spec.AoeDamageRadiusPx, 0, 160);
+        if (radius <= 0
+            || _applyingAuthoredAoeDamage
+            || !InfiniRuntimeAuthority.ShouldRunNpcGameplay())
+            return;
+
+        Vector2 originalCenter = Projectile.Center;
+        int originalWidth = Projectile.width;
+        int originalHeight = Projectile.height;
+        int originalPenetrate = Projectile.penetrate;
+        bool suppressDirectTarget = Projectile.usesLocalNPCImmunity
+            && directTargetWhoAmI >= 0
+            && directTargetWhoAmI < Projectile.localNPCImmunity.Length;
+        int originalDirectTargetImmunity = suppressDirectTarget
+            ? Projectile.localNPCImmunity[directTargetWhoAmI]
+            : 0;
+
+        _applyingAuthoredAoeDamage = true;
+        try
+        {
+            // The direct contact already dealt its normal hit. Temporarily immunize it
+            // so the authored area damages nearby targets exactly once, not the source
+            // target a second time. Infinite penetrate lets the one bounded scan reach
+            // every NPC in the clamped hitbox without changing the root hit budget.
+            if (suppressDirectTarget)
+                Projectile.localNPCImmunity[directTargetWhoAmI] = Math.Max(1, originalDirectTargetImmunity);
+            Projectile.Center = center;
+            ResizeProjectilePreserveCenter(radius * 2, radius * 2);
+            Projectile.penetrate = -1;
+            Projectile.Damage();
+        }
+        finally
+        {
+            Projectile.penetrate = originalPenetrate;
+            ResizeProjectilePreserveCenter(originalWidth, originalHeight);
+            Projectile.Center = originalCenter;
+            if (suppressDirectTarget)
+                Projectile.localNPCImmunity[directTargetWhoAmI] = originalDirectTargetImmunity;
+            _applyingAuthoredAoeDamage = false;
+        }
     }
 
     private void ApplyValidatedDebuff(NPC target, int buffType)
@@ -362,7 +422,8 @@ public sealed partial class GeneratedProjectile
                 velocity = baseDir.RotatedBy(t * spread) * speed;
                 origin = target.Center + velocity.SafeNormalize(baseDir) * (Math.Max(target.width, target.height) * 0.55f + 18f);
             }
-            SpawnChild(origin, velocity, dmg, childSpec, Projectile.localAI[1] + 1f, target.whoAmI);
+            SpawnChild(origin, velocity, dmg, childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.StraightSecondary, target.whoAmI);
         }
     }
 
@@ -380,7 +441,8 @@ public sealed partial class GeneratedProjectile
             if (next is null) break;
             Vector2 velocity = last.DirectionTo(next.Center).SafeNormalize(Vector2.UnitX) * Math.Max(6f, Projectile.velocity.Length() * 0.9f);
             int chainDamage = Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier));
-            SpawnChild(last.Center, velocity, chainDamage, childSpec, Projectile.localAI[1] + 1f, last.whoAmI);
+            SpawnChild(last.Center, velocity, chainDamage, childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.ChainSecondary, last.whoAmI);
             last = next;
         }
     }
@@ -397,7 +459,8 @@ public sealed partial class GeneratedProjectile
         for (int i = 0; i < count; i++)
         {
             Vector2 velocity = Vector2.UnitX.RotatedBy(MathHelper.TwoPi * i / Math.Max(1, count)) * Main.rand.NextFloat(4.5f, 8.5f);
-            SpawnChild(center + velocity.SafeNormalize(Vector2.UnitX) * 18f, velocity, Math.Max(0, (int)(Projectile.damage * damageMult)), childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
+            SpawnChild(center + velocity.SafeNormalize(Vector2.UnitX) * 18f, velocity, Math.Max(0, (int)(Projectile.damage * damageMult)), childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.RadialSecondary, ignoreNpc);
         }
     }
 
@@ -419,22 +482,35 @@ public sealed partial class GeneratedProjectile
                 count,
                 _spec.SecondarySpreadRadians,
                 childSpec.Speed);
-            SpawnChild(origin, velocity, damage, childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
+            SpawnChild(origin, velocity, damage, childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.OverheadSecondary, ignoreNpc);
         }
     }
 
     private void AuraPulse(Vector2 center)
     {
-        int radius = _spec.AoeDamageRadiusPx;
+        int radius = Math.Clamp(_spec.AoeDamageRadiusPx, 0, 160);
         if (radius <= 0)
         {
             BurstDust(_spec.EffectCode, Math.Min(_spec.BurstDustCap, 8), 1.0f);
             return;
         }
+
+        // Gameplay radius is applied once by ApplyAuthoredOnHitAoeDamage. AuraPulse is
+        // presentation-only so onHitCode=aura cannot resize the live projectile and
+        // accidentally deal a second, lingering collision hit.
+        Vector2 originalCenter = Projectile.Center;
         Projectile.Center = center;
-        ResizeProjectilePreserveCenter(Projectile.width + Math.Max(8, radius), Projectile.height + Math.Max(8, radius));
-        Projectile.netUpdate = true;
-        BurstDust(_spec.EffectCode, 24, 2.4f);
+        try
+        {
+            int dustCount = Math.Clamp(radius / 6, 8, 24);
+            float dustSpeed = MathHelper.Lerp(1.2f, 2.8f, radius / 160f);
+            BurstDust(_spec.EffectCode, dustCount, dustSpeed);
+        }
+        finally
+        {
+            Projectile.Center = originalCenter;
+        }
     }
 
     private void SporeCloud(Vector2 center, int ignoreNpc = -1)
@@ -451,7 +527,8 @@ public sealed partial class GeneratedProjectile
         {
             Vector2 velocity = Main.rand.NextVector2Circular(3.5f, 3.5f);
             int sporeDamage = Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier));
-            SpawnChild(center + velocity.SafeNormalize(Vector2.UnitX) * 18f, velocity, sporeDamage, childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
+            SpawnChild(center + velocity.SafeNormalize(Vector2.UnitX) * 18f, velocity, sporeDamage, childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.SporeSecondary, ignoreNpc);
         }
     }
 
@@ -467,7 +544,8 @@ public sealed partial class GeneratedProjectile
         for (int i = 0; i < count; i++)
         {
             Vector2 v = Main.rand.NextVector2Unit() * Main.rand.NextFloat(5f, 10f);
-            SpawnChild(center + v.SafeNormalize(Vector2.UnitX) * 18f, v, Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier)), childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
+            SpawnChild(center + v.SafeNormalize(Vector2.UnitX) * 18f, v, Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier)), childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.MiniMissileSecondary, ignoreNpc);
         }
     }
 
@@ -483,11 +561,19 @@ public sealed partial class GeneratedProjectile
         for (int i = 0; i < count; i++)
         {
             Vector2 v = Main.rand.NextVector2Unit() * Main.rand.NextFloat(4f, 7f);
-            SpawnChild(center + v.SafeNormalize(Vector2.UnitX) * 18f, v, Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier)), childSpec, Projectile.localAI[1] + 1f, ignoreNpc);
+            SpawnChild(center + v.SafeNormalize(Vector2.UnitX) * 18f, v, Math.Max(0, (int)(Projectile.damage * _spec.SecondaryDamageMultiplier)), childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.VortexSecondary, ignoreNpc);
         }
     }
 
-    private void SpawnChild(Vector2 center, Vector2 velocity, int damage, AttackSpec childSpec, float depth, int ignoreNpc = -1)
+    private void SpawnChild(
+        Vector2 center,
+        Vector2 velocity,
+        int damage,
+        AttackSpec childSpec,
+        float depth,
+        GeneratedProjectileRuntimeVariant runtimeVariant,
+        int ignoreNpc = -1)
     {
         if (Projectile.owner != Main.myPlayer) return;
         if (depth > Math.Max(0, _spec.MaxChildDepth)) return;
@@ -502,7 +588,7 @@ public sealed partial class GeneratedProjectile
             Main.projectile[idx].localAI[2] = rootId;
             gp._spawnIgnoreNpc = ignoreNpc;
             gp._spawnIgnoreTicks = ignoreNpc >= 0 ? 10 : 0;
-            gp.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), _generatedItemId);
+            gp.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), _generatedItemId, runtimeVariant);
             _spawnedGameplayChildCount++;
             Main.projectile[idx].netUpdate = true;
             gp.BroadcastVisualSync();
@@ -599,7 +685,8 @@ public sealed partial class GeneratedProjectile
             Vector2 direction = spread > 0.001f
                 ? baseDirection.RotatedBy(t * spread)
                 : Vector2.UnitX.RotatedBy(MathHelper.TwoPi * i / Math.Max(1, count));
-            SpawnChild(Projectile.Center + direction * 12f, direction * speed, damage, childSpec, Projectile.localAI[1] + 1f);
+            SpawnChild(Projectile.Center + direction * 12f, direction * speed, damage, childSpec, Projectile.localAI[1] + 1f,
+                GeneratedProjectileRuntimeVariant.StraightSecondary);
         }
     }
 
@@ -620,16 +707,9 @@ public sealed partial class GeneratedProjectile
         TryRunImpactMobility(Projectile.Center);
         if (timeLeft > 0) PlayImpactSound();
         int visualRadius = _spec.ImpactVfxRadiusPx;
-        int damageRadius = _spec.AoeDamageRadiusPx;
         int burstCount = visualRadius > 0 ? 24 : 0;
         BurstDust(effect, burstCount, visualRadius > 0 ? 2.8f : 1.4f);
         EmitVanillaImpactPolish(Projectile.Center, true);
-        if (damageRadius > 0 && Projectile.owner == Main.myPlayer)
-        {
-            ResizeProjectilePreserveCenter(damageRadius * 2, damageRadius * 2);
-            Projectile.netUpdate = true;
-            Projectile.Damage();
-        }
     }
 
 }
