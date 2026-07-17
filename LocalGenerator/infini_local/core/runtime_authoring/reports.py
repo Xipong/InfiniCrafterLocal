@@ -277,7 +277,11 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             warnings.append("ammo output has low stack/yield; playable ammo should usually output 25+")
     ammo_behavior = find_call(rp, "ammo_behavior")
     ammo_for = _norm_name(stats.get("ammoFor") or ammo_behavior.get("ammoFor"))
-    if result_kind == "ammo" and ammo_for in {"arrow", "arrows", "bullet", "bullets"}:
+    if result_kind == "ammo":
+        if ammo_for not in {"arrow", "bullet"}:
+            errors.append("ammo result requires vanilla arrow or bullet identity; custom projectile stacks use consumable_weapon")
+        if has_primary:
+            errors.append("actual ammo cannot author a generated primary action; use consumable_weapon or weapon")
         if "damageClass" not in stats or not str(stats.get("damageClass") or "").strip():
             errors.append("actual ammo requires explicit damageClass")
         if "damage" not in stats or (_num(stats.get("damage"), -1) or 0) < 0:

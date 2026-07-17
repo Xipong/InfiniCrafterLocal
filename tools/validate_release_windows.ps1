@@ -67,8 +67,8 @@ if ($LASTEXITCODE -eq 0) { Run-Step "ruff" $Python @("-m", "ruff", "check", "Loc
 elseif (Get-Command ruff -ErrorAction SilentlyContinue) { Run-Step "ruff" "ruff" @("check", "LocalGenerator/infini_local", "tools") }
 else { Add-Unavailable "ruff" "ruff is not installed for the selected Python or on PATH" }
 & $Python -c "import pyright" *> $null
-if ($LASTEXITCODE -eq 0) { Run-Step "pyright" $Python @("-m", "pyright", "--pythonpath", $Python) }
-elseif (Get-Command pyright -ErrorAction SilentlyContinue) { Run-Step "pyright" "pyright" @("--pythonpath", $Python) }
+if ($LASTEXITCODE -eq 0) { Run-Step "pyright" $Python @("tools/run_pyright.py", "--pythonpath", $Python) }
+elseif (Get-Command pyright -ErrorAction SilentlyContinue) { Run-Step "pyright" $Python @("tools/run_pyright.py", "--pythonpath", $Python, "--pyright-command", (Get-Command pyright).Source) }
 else { Add-Unavailable "pyright" "pyright is not installed for the selected Python or on PATH" }
 if ($SkipBuild) { Add-Unavailable "tml_build" "build explicitly skipped" }
 elseif (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { Add-Unavailable "tml_build" "dotnet is not available" }

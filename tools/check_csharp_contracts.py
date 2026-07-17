@@ -144,20 +144,23 @@ def class_property_names(text: str, class_name: str) -> set[str]:
 
 
 def method_block(text: str, method_name: str) -> str:
-    marker = re.search(r"\b" + re.escape(method_name) + r"\s*\(", text)
-    if not marker:
-        return ""
-    start = text.find("{", marker.end())
-    if start < 0:
-        return ""
-    bal = 0
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            bal += 1
-        elif text[i] == "}":
-            bal -= 1
-            if bal == 0:
-                return text[start + 1:i]
+    for marker in re.finditer(r"\b" + re.escape(method_name) + r"\s*\(", text):
+        line_start = text.rfind("\n", 0, marker.start()) + 1
+        declaration_head = text[line_start:marker.end()]
+        if not re.search(r"\b(?:public|private|internal|protected)\b", declaration_head):
+            continue
+        start = text.find("{", marker.end())
+        semicolon = text.find(";", marker.end())
+        if start < 0 or (semicolon >= 0 and semicolon < start):
+            continue
+        bal = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                bal += 1
+            elif text[i] == "}":
+                bal -= 1
+                if bal == 0:
+                    return text[start + 1:i]
     return ""
 
 
@@ -365,7 +368,8 @@ def check_projectile_child_runtime_guards() -> None:
     projectile = read_projectile_bundle()
     required(path, projectile, "private int RuntimeChildCount(int requested)")
     required(path, projectile, "private bool CanRunChildEffect(bool rootOnly = false)")
-    required(path, projectile, "private void SpawnChild(Vector2 center, Vector2 velocity, int damage, AttackSpec childSpec, float depth, int ignoreNpc = -1)")
+    required(path, projectile, "private void SpawnChild(")
+    required(path, projectile, "GeneratedProjectileRuntimeVariant runtimeVariant")
     for needle in [
         "InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)",
         "if (rootOnly && depth > 0.001f)",
@@ -374,10 +378,15 @@ def check_projectile_child_runtime_guards() -> None:
         "CountOwnedGeneratedProjectiles(rootId) >= Math.Max(0, _spec.MaxChildProjectiles)",
         "RemainingGameplayChildBudget()",
         "return Math.Clamp(requested, 1, remaining);",
-        "MaxChildProjectiles = Math.Max(4, _spec.MaxChildProjectiles / 2)",
-        "MaxChildDepth = Math.Max(0, _spec.MaxChildDepth - 1)",
+        "GeneratedChildSpecPolicy.TryCreateRuntimeVariant",
     ]:
         required(path, projectile, needle)
+    child_policy_path = SRC / "Content/Projectiles/GeneratedChildSpecPolicy.cs"
+    child_policy = read(child_policy_path)
+    required(child_policy_path, child_policy, "public static bool IsVariantAllowedForParent(")
+    required(child_policy_path, child_policy, "public static bool TryCreateRuntimeVariant(")
+    required(child_policy_path, child_policy, "MaxChildProjectiles = Math.Max(4, parent.MaxChildProjectiles / 2)")
+    required(child_policy_path, child_policy, "MaxChildDepth = Math.Max(0, parent.MaxChildDepth - 1)")
     if "Projectile.localAI[1] > 1f" in projectile or "Projectile.localAI[1] > 0f" in projectile:
         err("GeneratedProjectile.cs: child depth must use CanRunChildEffect/SpawnChild guard, not per-effect localAI thresholds")
     if "movement == 6" in projectile or "movement == 14" in projectile or "movement == 16" in projectile:
@@ -616,39 +625,107 @@ def check_network_read_write_shape() -> None:
         if needle not in packet_ids:
             err(f"InfiniNetPacketIds.cs: missing central packet id `{needle}`")
     projectile = read_projectile_bundle()
-    if "writer.Write(ProjectileSyncVersion)" not in projectile or "reader.ReadInt32()" not in projectile:
-        err("GeneratedProjectile.cs: versioned SendExtraAI/ReceiveExtraAI shape is incomplete")
+    send = method_block(projectile, "SendExtraAI")
+    receive = method_block(projectile, "ReceiveExtraAI")
+    expected_writes = [
+        "ProjectileSyncVersion",
+        "_configured",
+        "ShortNet(_generatedItemId, 96)",
+        "(byte)_runtimeVariant",
+        "_chargeTicksAccumulated",
+        "_sentryFireTimer",
+        "_beamLengthPx",
+        "Projectile.localAI[1]",
+        "Projectile.localAI[2]",
+        "_spawnIgnoreNpc",
+        "_spawnIgnoreTicks",
+        "_stuckToTile",
+        "_returningPhase",
+    ]
+    actual_writes = [" ".join(match.group(1).split()) for match in re.finditer(r"writer\.Write\((.*?)\);", send, re.S)]
+    if actual_writes != expected_writes:
+        err(f"GeneratedProjectile.cs: compact v20 SendExtraAI order mismatch expected={expected_writes} actual={actual_writes}")
+    read_pattern = re.compile(
+        r"(?:(?:int|bool|float|string)\s+)?"
+        r"(?P<target>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\s*=\s*"
+        r"(?:\([^;\n]+?\))?reader\.Read(?P<method>\w+)\s*\(\s*\)"
+    )
+    expected_reads = [
+        ("syncVersion", "Int32"),
+        ("packetConfigured", "Boolean"),
+        ("_generatedItemId", "String"),
+        ("_runtimeVariant", "Byte"),
+        ("_chargeTicksAccumulated", "Int32"),
+        ("_sentryFireTimer", "Int32"),
+        ("_beamLengthPx", "Single"),
+        ("Projectile.localAI[1]", "Single"),
+        ("Projectile.localAI[2]", "Single"),
+        ("_spawnIgnoreNpc", "Int32"),
+        ("_spawnIgnoreTicks", "Int32"),
+        ("_stuckToTile", "Boolean"),
+        ("_returningPhase", "Boolean"),
+    ]
+    actual_reads = [(match.group("target"), match.group("method")) for match in read_pattern.finditer(receive)]
+    if actual_reads != expected_reads:
+        err(f"GeneratedProjectile.cs: compact v20 ReceiveExtraAI order/type mismatch expected={expected_reads} actual={actual_reads}")
+    if "private const int ProjectileSyncVersion = 20" not in projectile:
+        err("GeneratedProjectile.cs: compact registry-hydrated projectile sync must use exact version 20")
+    if "_spec." in send or "_spec." in receive:
+        err("GeneratedProjectile.cs: combat ExtraAI must not transport AttackSpec fields")
+    for expression in actual_writes:
+        for forbidden in ["VfxManifestJson", "SpritePath", "Prompt", "VisualKit", "GeneratedItemData"]:
+            if forbidden in expression:
+                err(f"GeneratedProjectile.cs: compact ExtraAI contains forbidden bulk field `{forbidden}`")
+
+    hydrate = method_block(projectile, "TryHydrateRuntimeVariantFromRegistry")
+    defer = method_block(projectile, "DeferUnconfiguredNetworkProjectile")
+    clear_resolved = method_block(projectile, "ClearResolvedRuntimeSpec")
+    apply_resolved = method_block(projectile, "ApplyResolvedRuntimeVariant")
+    visual_relay = method_block(projectile, "ApplyProjectileVisualSyncPayload")
+    ai = method_block(projectile, "AI")
+    child_policy = read(SRC / "Content/Projectiles/GeneratedChildSpecPolicy.cs")
+    known_variant = method_block(child_policy, "IsKnownVariant")
+    registry = read(SRC / "Common/Services/GeneratedItemRegistryService.cs")
+    registry_attack = method_block(registry, "TryGetAttack")
+    registry_hydration_needles = [
+        (receive, "packetConfigured && _generatedItemId.Length <= 0", "unconfigured initial packet must allow an empty registry id"),
+        (receive, "Generated projectile packet contains an invalid registry identity or runtime variant.", "configured invalid packets must fail closed"),
+        (receive, "if (!packetConfigured)", "unconfigured initial packet must defer harmlessly"),
+        (receive, "DeferUnconfiguredNetworkProjectile()", "missing registry data must defer harmlessly"),
+        (hydrate, "TryGetAttack(_generatedItemId)", "runtime variant must hydrate from the world registry"),
+        (hydrate, "GeneratedChildSpecPolicy.TryCreateRuntimeVariant", "runtime variant must reconstruct deterministically"),
+        (hydrate, "ApplyAuthoredChildPresentation(resolved, parent)", "generic child presentation must restore from the registry parent"),
+        (hydrate, "RequestOneGeneratedItemForMissingProjectile(_generatedItemId)", "missing registry data must request hydration"),
+        (child_policy, "public static bool IsVariantAllowedForParent(", "runtime variant must be authorized for its parent"),
+        (known_variant, "(byte)variant <= (byte)GeneratedProjectileRuntimeVariant.SwingOverheadSecondary", "runtime variant bounds must compare the declared byte wire representation"),
+        (registry_attack, "GeneratedItemData.FromJson(data.ToJson())?.Attack", "registry attack reads must return a deep clone"),
+        (defer, "Projectile.damage = 0", "deferred projectile must be harmless"),
+        (defer, "Projectile.friendly = false", "deferred projectile must be non-friendly"),
+        (defer, "Projectile.hostile = false", "deferred projectile must be non-hostile"),
+        (defer, "ClearResolvedRuntimeSpec(Math.Max(_pendingNetworkSpecTicks, 45))", "deferral must clear only the resolved immutable spec"),
+        (clear_resolved, "_configured = false", "cleared runtime spec must remain unconfigured"),
+        (clear_resolved, "_pendingNetworkSpecTicks = pendingSpecTicks", "cleared runtime spec must preserve a bounded retry window"),
+        (clear_resolved, "new AttackSpec { Enabled = false", "cleared runtime spec must be inert"),
+        (ai, "TryHydrateRuntimeVariantFromRegistry()", "AI must retry registry hydration"),
+        (ai, "_pendingNetworkSpecTicks", "AI hydration retry must be bounded"),
+        (apply_resolved, "Math.Clamp(chargeTicks, 0, Math.Clamp(resolved.ChargeTicks, 1, 300))", "received charge state must be spec-bounded"),
+        (apply_resolved, "Math.Clamp(sentryTimer, 0, Math.Clamp(resolved.SentryAttackIntervalTicks, 12, 180))", "received sentry state must be spec-bounded"),
+        (apply_resolved, "Math.Clamp(beamLength, 0f, ConfiguredRangePixels(560f))", "received beam state must be range-bounded"),
+        (apply_resolved, "Math.Clamp(childDepth, 0f, 3f)", "received child depth must be bounded"),
+        (apply_resolved, "Math.Clamp(rootIdentity, 0f, 1_000_000f)", "received root identity must be bounded"),
+        (receive, "_spawnIgnoreNpc < -1 || _spawnIgnoreNpc >= Main.maxNPCs", "received ignored NPC id must be bounded"),
+        (receive, "_spawnIgnoreTicks < 0 || _spawnIgnoreTicks > 10", "received ignore duration must be bounded"),
+    ]
+    for owner, needle, message in registry_hydration_needles:
+        if needle not in owner:
+            err(f"GeneratedProjectile.cs: {message}; missing `{needle}`")
+    if "TryHydrateRuntimeVariantFromRegistry()" in visual_relay or "ApplyGeneratedSpec(" in visual_relay:
+        err("GeneratedProjectile.cs: id-only visual relay must not hydrate gameplay or assume the Root runtime variant")
+
     for needle in [
-        "private const int ProjectileSyncVersion = 19",
-        "writer.Write(_spec.RangeTiles)",
-        "writer.Write(_spec.HomingStrength)",
-        "writer.Write(_spec.BeamWidthPx)",
-        "writer.Write(_spec.BeamChargeTicks)",
-        "writer.Write(_spec.ChargeTicks)",
-        "writer.Write(_spec.ChargePowerMultiplier)",
-        "writer.Write(ShortNet(_spec.DamageClass, 96))",
-        "writer.Write(_spec.SentryAttackIntervalTicks)",
-        "writer.Write(_spec.SentryTargetRangeTiles)",
-        "writer.Write(_spec.SentryLifetimeTicks)",
-        "writer.Write(_beamLengthPx)",
-        "_spec.RangeTiles = reader.ReadSingle()",
-        "_spec.HomingStrength = reader.ReadSingle()",
-        "_spec.BeamWidthPx = reader.ReadSingle()",
-        "_spec.BeamChargeTicks = reader.ReadInt32()",
-        "_spec.ChargeTicks = reader.ReadInt32()",
-        "_spec.ChargePowerMultiplier = reader.ReadSingle()",
-        "_spec.DamageClass = ReadStringKeepBase(reader, _spec.DamageClass, childShard)",
-        "_spec.SentryAttackIntervalTicks = reader.ReadInt32()",
-        "_spec.SentryTargetRangeTiles = reader.ReadSingle()",
-        "_spec.SentryLifetimeTicks = reader.ReadInt32()",
-        "_beamLengthPx = reader.ReadSingle()",
         "Collision.LaserScan",
         "CanPayChannelBeamMana",
         "owner.CheckMana(manaCost, true, false)",
-        "writer.Write(ShortNet(_spec.SecondaryTrigger, 24))",
-        "_spec.SecondaryTrigger = reader.ReadString()",
-        "writer.Write(_spec.DelayTicks)",
-        "_spec.DelayTicks = reader.ReadInt32()",
         "GeneratedSecondaryTriggerPolicy.Normalize",
         "ApplyOverheadBarrageAI",
         "SpawnExpireSecondaries();",
@@ -657,16 +734,13 @@ def check_network_read_write_shape() -> None:
         "GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily",
     ]:
         if needle not in projectile:
-            err(f"GeneratedProjectile.cs: missing exact channel-beam runtime/sync guard `{needle}`")
+            err(f"GeneratedProjectile.cs: missing exact channel-beam runtime guard `{needle}`")
     onkill = method_block(projectile, "OnKill")
     if "SpawnExpireSecondaries();" not in onkill:
         err("GeneratedProjectile.Impact.cs: on_expire helper exists without an OnKill call-site")
     trigger_policy = read(SRC / "Common/Models/GeneratedSecondaryTriggerPolicy.cs")
     if '_ => ""' not in trigger_policy or "NormalizeForRuntimeFamily" not in trigger_policy:
         err("GeneratedSecondaryTriggerPolicy.cs: unknown/incompatible triggers must normalize to inert empty state")
-    for flag in ["SyncFlagMobility", "SyncFlagRuntimeLight", "SyncFlagSplitRadii"]:
-        if flag not in projectile:
-            err(f"GeneratedProjectile.cs: missing projectile sync flag `{flag}`")
     for needle in [
         "InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent",
         "HandleProjectileVfxEventSyncPacket",
@@ -677,7 +751,6 @@ def check_network_read_write_shape() -> None:
     ]:
         if needle not in projectile:
             err(f"GeneratedProjectile.cs: missing multiplayer VFX/presentation resync guard `{needle}`")
-    registry = read(SRC / "Common/Services/GeneratedItemRegistryService.cs")
     for needle in ["InfiniNetPacketIds.RequestGeneratedItemById", "RequestOneFromServer", "TryGet(id, out var data)", "FlushPendingProjectileVisualSyncForGeneratedItem(data.Id)", "FlushPendingVfxEventsForGeneratedItem(data.Id)"]:
         if needle not in registry:
             err(f"GeneratedItemRegistryService.cs: missing targeted generated item resync guard `{needle}`")
@@ -945,10 +1018,28 @@ def check_maintenance_qol_cleanup() -> None:
         err("GeneratedProjectile.cs: SendExtraAI must use shared ShortNet, not a local duplicate Short helper")
     if "writer.Write(""); // reserved" in send_block:
         err("GeneratedProjectile.cs: legacy empty reserved strings returned to SendExtraAI")
-    for needle in ["writer.Write((byte)0); // reserved bitset", "reader.ReadByte(); // reserved bitset", "syncVersion != ProjectileSyncVersion"]:
+    for needle in [
+        "private const int ProjectileSyncVersion = 20",
+        "writer.Write(ShortNet(_generatedItemId, 96))",
+        "writer.Write((byte)_runtimeVariant)",
+        "syncVersion != ProjectileSyncVersion",
+        "if (!packetConfigured)",
+        "TryHydrateRuntimeVariantFromRegistry()",
+    ]:
         if needle not in projectile:
             err(f"GeneratedProjectile.cs: missing current-only projectile sync guard `{needle}`")
-    for removed in ["private const int ProjectileSyncVersion = 5", "syncVersion <", "// v3 reserved", "v3/v4 ProjectileChild", "legacy v3-v5 manifest fallback slot"]:
+    for removed in [
+        "private const int ProjectileSyncVersion = 5",
+        "private const int ProjectileSyncVersion = 19",
+        "SyncFlagMobility",
+        "SyncFlagRuntimeLight",
+        "SyncFlagSplitRadii",
+        "ReadStringKeepBase",
+        "syncVersion <",
+        "// v3 reserved",
+        "v3/v4 ProjectileChild",
+        "legacy v3-v5 manifest fallback slot",
+    ]:
         if removed in projectile:
             err(f"GeneratedProjectile.cs: legacy projectile sync branch still present `{removed}`")
     if "private const int ProjectileVisualSyncVersion = 3" not in projectile:

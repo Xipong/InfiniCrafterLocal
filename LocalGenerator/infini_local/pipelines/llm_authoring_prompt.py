@@ -48,7 +48,10 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_PLAN_REQUIRED,
     LLM_RUNTIME_STRICT_VALIDATION,
 )
-from infini_local.pipelines.result_identity_policy import normalize_category
+from infini_local.pipelines.result_identity_policy import (
+    normalize_category,
+    project_runtime_result_identity,
+)
 from infini_local.pipelines.combine_balance import (
     clamp_vanilla_like_weapon_damage,
 )
@@ -650,18 +653,14 @@ def llm_runtime_result_kind_policy(data: dict[str, Any], requested_kind: Any, ta
     """
     rp = runtime_plan(data)
     result_kind = runtime_value(data, "set_item_stats", "resultKind", None) or (rp.get("resultKind") if isinstance(rp, dict) else None) or requested_kind or data.get("category") or "generic"
-    raw = str(result_kind or "generic").strip().lower().replace("-", "_")
-    if raw in {"thrown_stack", "stackable_weapon", "consumable_projectile", "consumable_weapon"}:
-        # Internal runtime category must stay weapon so attach_gameplay_and_attack keeps
-        # the authored projectile executor alive. The stack/consume behavior is recorded
-        # separately as gameplay.runtimeOutputKind=consumable_weapon. Mapping this to
-        # potion/consumable erased the attack and turned grenade/flask outputs back into
-        # ordinary parent-buff potions.
-        selected = "weapon"
-    else:
-        selected = normalize_category(raw)
-    if selected not in ALLOWED_CATEGORIES:
-        selected = "generic"
+    stats = find_call(data, "set_item_stats")
+    projection = project_runtime_result_identity(
+        result_kind,
+        ammo_for=stats.get("ammoFor"),
+        has_primary=bool(find_call(data, "shoot_projectile")),
+    )
+    raw = projection.authored_kind
+    selected = projection.gameplay_kind
     return selected, {
         "mode": "llm_runtime_result_kind",
         "requested": requested_kind,

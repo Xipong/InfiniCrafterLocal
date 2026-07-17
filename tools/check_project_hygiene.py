@@ -12,9 +12,10 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-IGNORED_DOC_DIRS = {".git", ".hermes", "agent_reports", ".tml-build-cache", ".nuget", "build_logs", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
+WORKSPACE_METADATA_DIRS = {".git", ".hermes", ".codex", ".agents"}
+IGNORED_DOC_DIRS = WORKSPACE_METADATA_DIRS | {"agent_reports", ".tml-build-cache", ".nuget", "build_logs", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
 RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", "artifacts", "build_logs"}
-PACKAGED_METADATA_DIRS = {".git", ".hermes"}
+PACKAGED_METADATA_DIRS = WORKSPACE_METADATA_DIRS
 FORBIDDEN_RELEASE_FILE_NAMES = {"Zone.Identifier", ".DS_Store", "Thumbs.db"}
 FORBIDDEN_RELEASE_SUFFIXES = (":Zone.Identifier",)
 PYTHON_BROAD_EXCEPTION_BASELINE = 227

@@ -132,7 +132,7 @@ ENGINE_FN_CATALOG_V2 = {
     "spawn_temporary_helper_projectile": {
         "meaning": "Not a persistent Terraria minion or sentry; short orbit/drift only.",
         "params": {
-            "family": "|".join(sorted(TEMPORARY_HELPER_FAMILIES)), "movement": "orbit|slow_homing|drift|straight", "speed": "3..18", "rangeTiles": "8..120 target/orbit radius", "lifetimeTicks": "25..900 ticks; 60=1s", "shotCount": "1..4 simultaneous helpers", "pierce": "0/1 one hit; 2..10 total hits", "projectileShape": "temporary helper body"
+            "family": "|".join(sorted(TEMPORARY_HELPER_FAMILIES)), "movement": "orbit|slow_homing|drift|straight", "speed": "3..18", "rangeTiles": "8..120 target/orbit radius", "lifetimeTicks": "25..900 ticks; 60=1s", "shotCount": "1..4 simultaneous helpers", "spreadRadians": "0..0.75 total helper spread", "pierce": "0/1 one hit; 2..10 total hits", "projectileShape": "temporary helper body"
         },
     },
     "spawn_secondary_projectiles": {

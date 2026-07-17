@@ -12,7 +12,9 @@ from infini_local.core.runtime_authoring import (
     compile_runtime_plan_to_genome_patch,
     runtime_plan_validation_report,
 )
+from infini_local.core.runtime_authoring.compiler import project_aoe_radius_tiles_to_damage_pixels
 from infini_local.pipelines import combine_gameplay
+from infini_local.pipelines.llm_transport import LLM_MODEL_OVERRIDE_KEY
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.item_power_knowledge import canonicalize
@@ -649,6 +651,7 @@ def _contract_check_aoe_visual_and_contact_radii_are_independent() -> None:
         },
     })
     attack = data["attack"]
+    assert project_aoe_radius_tiles_to_damage_pixels(4) == 64
     assert attack["aoeDamageRadiusPx"] == 64
     assert attack["impactVfxRadiusPx"] == 0
     assert attack["contactForgivenessPx"] == 0
@@ -848,6 +851,25 @@ def _contract_check_actual_ammo_preserves_authored_stats_and_presentation() -> N
     assert bypass_report["ok"] is False
     assert any("actual ammo requires explicit damageClass" in error for error in bypass_report["errors"])
     assert any("actual ammo requires explicit non-negative damage" in error for error in bypass_report["errors"])
+
+    ambiguous_custom_ammo = {"runtimePlan": {"resultKind": "ammo", "engineCalls": [
+        {"fn": "set_item_stats", "params": {
+            "resultKind": "ammo", "damageClass": "ranged", "damage": 7,
+            "maxStack": 99, "craftYield": 25, "ammoFor": "",
+        }},
+        _primary("throw", "throw", "gravity_arc", 60),
+    ]}}
+    ambiguous_report = runtime_plan_validation_report(ambiguous_custom_ammo)
+    assert ambiguous_report["ok"] is False
+    assert any("ammo result requires vanilla arrow or bullet identity" in error for error in ambiguous_report["errors"])
+    assert any("actual ammo cannot author a generated primary action" in error for error in ambiguous_report["errors"])
+
+    plural_alias = deepcopy(ambiguous_custom_ammo)
+    plural_alias["runtimePlan"]["engineCalls"] = [deepcopy(ambiguous_custom_ammo["runtimePlan"]["engineCalls"][0])]
+    plural_alias["runtimePlan"]["engineCalls"][0]["params"]["ammoFor"] = "arrows"
+    plural_report = runtime_plan_validation_report(plural_alias)
+    assert plural_report["ok"] is False
+    assert any("ammo result requires vanilla arrow or bullet identity" in error for error in plural_report["errors"])
 
     zero_weapon = {"category": "weapon", "runtimePlan": {"resultKind": "weapon", "engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 0, "useTimeTicks": 24, "maxStack": 1}},
@@ -1083,6 +1105,7 @@ def _contract_check_family_specific_numbers_are_authored_not_defaulted() -> None
     overhead_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs").read_text(encoding="utf-8")
     impact_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
     item_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
+    child_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
     projectile_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
     charge_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ChargeRelease.cs").read_text(encoding="utf-8")
     sentry_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8")
@@ -1090,7 +1113,9 @@ def _contract_check_family_specific_numbers_are_authored_not_defaulted() -> None
     assert "authoredSpreadRadians <= 0f ? 0.44f" not in overhead_policy
     assert "SecondaryDamageMultiplier <= 0f ? 0.55f" not in overhead_runtime
     assert "Math.Max(0.12f, attack.SecondaryDamageMultiplier)" not in item_runtime
-    assert "Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180)" in item_runtime
+    assert "GeneratedChildSpecPolicy.CreateSwingSecondary(parent)" in item_runtime
+    swing_policy = child_policy.split("public static AttackSpec CreateSwingSecondary", 1)[1].split("private static bool HasExplicitSecondaryBody", 1)[0]
+    assert "Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180)" in swing_policy
     assert "Math.Max(0.05f, _spec.SecondaryDamageMultiplier)" not in impact_runtime
     assert "Math.Clamp(_spec.SecondaryLifetimeTicks, 5, 180)" in projectile_runtime
     assert "Math.Max(1, Projectile.originalDamage)" not in charge_runtime
@@ -1259,13 +1284,16 @@ def _contract_check_active_engine_cards_execute_authored_visual_and_summon_field
     assert "RuntimeLightDurationTicks" in projectile_visuals
     assert "VfxParticleDurationTicks" in projectile_visuals
     assert "EmitAuthoredVisualField" in projectile_visuals
+    send_extra_ai = net_sync.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "_spec." not in send_extra_ai
+    assert "TryGetAttack(_generatedItemId)" in net_sync
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in net_sync
     for field in (
         "VfxParticleScale", "VfxMaterial", "VfxParticleDurationTicks",
         "VfxFieldLifetimeTicks", "VfxFieldRadiusTiles", "VfxFieldTickRate",
         "RuntimeLightDurationTicks",
     ):
-        assert f"writer.Write(_spec.{field})" in net_sync or f"ShortNet(_spec.{field}" in net_sync
-        assert f"_spec.{field} = reader." in net_sync
+        assert f"_spec.{field}" in projectile_visuals
     assert "owner.whipRangeMultiplier" in projectile_runtime
     assert "AddGeneratedSummonTagDamage" in generated_item
     assert "ModifyHitByProjectile" in tag_runtime
@@ -1537,12 +1565,17 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     assert result["runtimePlan"]["visualIntent"] == authored["runtimePlan"]["visualIntent"]
     assert result["runtimePlan"]["engineCalls"][0]["params"]["speed"] == 20
     assert result["runtimePlan"]["engineCalls"][1] == authored["runtimePlan"]["engineCalls"][1]
-    assert result["debug"]["model"] == "replacement-model"
-    assert result["debug"]["repairModelMayDiffer"] is True
+    assert result["debug"]["model"] == "test-model"
+    assert "repairModelMayDiffer" not in result["debug"]
     assert result["debug"]["authorRepairTransport"]["transportFootprint"]["repairChars"] == 321
-    assert captured[0][llm_authoring_pipeline.LLM_MODEL_OVERRIDE_KEY] == "replacement-model"
+    assert captured[0]["model"] == "test-model"
+    assert LLM_MODEL_OVERRIDE_KEY not in captured[0]
     dossier = json.loads(captured[0]["messages"][-1]["content"])
     assert dossier["repairMode"] == "targeted_domain_repair"
+    assert dossier["patchRules"] == [
+        "visualIntent is a top-level patch key; never place it inside runtimePlan.",
+        "Every runtimePlan.engineCalls replacement entry is a complete call with callId, fn, and params.",
+    ]
     assert dossier["currentRuntimePlan"]["engineCalls"] == authored["runtimePlan"]["engineCalls"]
     assert dossier["allowedPatchKeys"] == ["runtimePlan"]
     assert "currentAuthoredItem" not in dossier

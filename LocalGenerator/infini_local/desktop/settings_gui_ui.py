@@ -620,7 +620,6 @@ class SettingsGuiUiMixin:
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         ttk.Label(parent, text="Scoped same-author repair (одна bounded попытка)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         ttk.Label(parent, text="Не verifier и не полный reauthor: после rejection Author role возвращает только разрешённые repair-поля; принятые concept/runtime domains сохраняются.", style="Hint.TLabel").pack(anchor="w", padx=14, pady=(0, 6))
-        self.row(parent, "Repair model", "INFINI_LLM_REAUTHOR_MODEL", hint="Пусто = модель текущего item profile. Legacy env-name REAUTHOR сохранён для совместимости. При межпрофильном failover transport использует configured model следующего profile.")
         self.row(parent, "Repair temperature", "INFINI_LLM_REAUTHOR_TEMPERATURE", width=16, hint="Пусто = Planner temperature. Обычно 0.0-0.2 для bounded repair rejected domain.")
         self.row(parent, "Visual temp", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
