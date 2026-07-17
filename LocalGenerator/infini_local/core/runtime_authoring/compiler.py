@@ -23,6 +23,22 @@ from infini_local.core.runtime_authoring.secondary import apply_secondary_projec
 from infini_local.core.runtime_authoring.semantics import _truthy
 from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _select_primary_shoot_call, all_calls
 
+
+TERRARIA_TILE_SIZE_PX = 16
+
+
+def project_aoe_radius_tiles_to_damage_pixels(value: Any) -> int:
+    """Compile the authored tile radius into the exact AttackSpec pixel unit."""
+    tiles = float(_num(value, 0) or 0)
+    return max(0, min(160, int(tiles * TERRARIA_TILE_SIZE_PX)))
+
+
+def project_authored_pierce_to_runtime_hit_budget(value: Any) -> int:
+    """Compile authored pierce sentinels to Terraria projectile.penetrate truth."""
+    pierce = int(_num(value, 1) or 0)
+    return -1 if pierce == -1 else max(1, pierce)
+
+
 def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
     normalize_runtime_plan_inplace(data)
     rp = runtime_plan(data)
@@ -606,8 +622,17 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         patch.setdefault("burstDustCap", 0)
     patch.setdefault("onHit", "none")
     patch.setdefault("aoeRadiusTiles", 0)
+    patch["aoeDamageRadiusPx"] = project_aoe_radius_tiles_to_damage_pixels(patch["aoeRadiusTiles"])
+    if "pierce" in patch:
+        patch["projectileHitBudget"] = project_authored_pierce_to_runtime_hit_budget(patch["pierce"])
     patch.setdefault("useTimeTicks", int(_clamp(_first_non_empty(itemstats.get("useTimeTicks"), shoot.get("useTimeTicks")), "useTimeTicks", 24) or 24))
     patch.setdefault("useAnimationTicks", int(_clamp(_first_non_empty(itemstats.get("useAnimationTicks"), shoot.get("useAnimationTicks"), patch.get("useTimeTicks")), "useAnimationTicks", patch.get("useTimeTicks", 24)) or patch.get("useTimeTicks", 24)))
+    if authored_result_kind in {"armor", "accessory", "ammo"}:
+        # These DTO families have no authored use action.  Their final item timing is
+        # intentionally fixed at 10/10 downstream; compile the same technical value so
+        # provenance cannot disagree with the executable wire.
+        patch["useTimeTicks"] = 10
+        patch["useAnimationTicks"] = 10
     patch.setdefault("extraUpdates", 0)
     patch.setdefault("homingStrength", 0)
     if trail_calls:
@@ -652,4 +677,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     apply_sentry_contract(patch)
     return {k: v for k, v in patch.items() if v not in (None, "")}
 
-__all__ = ['compile_runtime_plan_to_genome_patch']
+__all__ = [
+    'TERRARIA_TILE_SIZE_PX',
+    'project_aoe_radius_tiles_to_damage_pixels',
+    'project_authored_pierce_to_runtime_hit_budget',
+    'compile_runtime_plan_to_genome_patch',
+]

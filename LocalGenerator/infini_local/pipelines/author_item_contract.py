@@ -332,10 +332,12 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
     schema = author_item_response_schema()
     properties = schema["properties"]
 
-    def enum_or_type(node: dict[str, Any]) -> str:
+    def enum_or_type(node: dict[str, Any]) -> Any:
         enum = node.get("enum")
-        if isinstance(enum, list):
-            return "|".join(str(value) for value in enum)
+        if isinstance(enum, list) and enum:
+            if all(isinstance(value, str) for value in enum):
+                return "|".join(enum)
+            return copy.deepcopy(enum[0])
         return str(node.get("type") or "value")
 
     def value_card(node: dict[str, Any]) -> Any:
@@ -343,10 +345,15 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             child_candidate = node.get("properties")
             child_properties: dict[str, Any] = child_candidate if isinstance(child_candidate, dict) else {}
             required = {str(key) for key in node.get("required") or []}
-            return {
-                key: value_card(child) if key in required else f"optional {value_card(child)}"
-                for key, child in child_properties.items()
-            }
+            out: dict[str, Any] = {}
+            for key, child in child_properties.items():
+                child_card = value_card(child)
+                out[key] = (
+                    child_card
+                    if key in required or not isinstance(child_card, str)
+                    else f"optional {child_card}"
+                )
+            return out
         if node.get("type") == "array":
             return "array"
         return enum_or_type(node)
@@ -447,8 +454,10 @@ def author_item_repair_response_schema() -> dict[str, Any]:
             "balanceIntent", "anomalyFlags",
         )
     }
-    plan["required"] = []
+    plan["required"] = ["resultKind"]
     runtime_contract = properties["runtimeContract"]["properties"]
+    visual_patch = copy.deepcopy(properties["runtimePlan"]["properties"]["visualIntent"])
+    visual_patch["required"] = []
     return {
         "$schema": full["$schema"],
         "$defs": copy.deepcopy(full.get("$defs") or {}),
@@ -466,7 +475,7 @@ def author_item_repair_response_schema() -> dict[str, Any]:
             "sourceRolePreservation": copy.deepcopy(
                 properties["runtimePlan"]["properties"]["sourceRolePreservation"]
             ),
-            "visualIntent": copy.deepcopy(properties["runtimePlan"]["properties"]["visualIntent"]),
+            "visualIntent": visual_patch,
             "runtimePlan": plan,
         },
     }

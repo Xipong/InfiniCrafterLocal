@@ -32,6 +32,7 @@ include = [
   "tools/validate_release.py",
   "tools/render_validation_report.py",
   "tools/run_pytest_shards.py",
+  "tools/run_pyright.py",
   "tools/check_tml_selftest_report.py",
 ]
 exclude = [

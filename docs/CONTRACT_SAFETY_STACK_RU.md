@@ -156,6 +156,6 @@ Linux/CI:
 Без `dotnet`/tML/external assemblies Python/semantic часть может иметь `ok=true`, но `releaseReady` обязано оставаться `false`. После build tModLoader запускается один раз с `INFINI_AGENT_SELFTEST=1`; отчёт проверяется `tools/check_tml_selftest_report.py`. По умолчанию этот ModSystem возвращается сразу и не трогает мир, игроков или projectiles.
 
 
-## Compatibility placeholder slots
+## Compact projectile hydration
 
-Пять legacy-compatible string slots намеренно отправляют пустую строку, а `ReceiveExtraAI` сохраняет соответствующую позицию протокола для prompt/visual-plan fields. Их порядок объявлен как policy в `field_lifecycle.json`, поэтому checker сравнивает полный ordered `AttackSpec` wire sequence, не возвращая тяжёлый prose в combat packet.
+`ProjectileSyncVersion = 20` передаёт только world-scoped generated id, конечный runtime-variant и точную упорядоченную последовательность bounded instance scalars. `ReceiveExtraAI` не присваивает ни одного поля `AttackSpec` из packet: immutable parent spec берётся из `GeneratedItemRegistryService`, а child/release spec детерминированно восстанавливает `GeneratedChildSpecPolicy`. `contract_parity` проверяет packet order/types, отсутствие `_spec` writes/reads, registry hydration, harmless missing-data defer и числовые bounds; `field_lifecycle.json` отмечает этот общий `registryHydrate` stage вместо ложного per-field `netWrite/netRead`.
