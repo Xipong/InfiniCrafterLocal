@@ -12,6 +12,10 @@ from infini_local.core.boundary_models import ATTACK_NON_WIRE_FIELDS, GAMEPLAY_D
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import item_field, item_num
 from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
+from infini_local.core.runtime_authoring.compiler import (
+    project_aoe_radius_tiles_to_damage_pixels,
+    project_authored_pierce_to_runtime_hit_budget,
+)
 from infini_local.core.runtime_authoring.reports import runtime_plan_provenance_report
 from infini_local.core.runtime_authoring.structural import all_calls, find_call
 from infini_local.core.runtime_contracts import (
@@ -23,6 +27,7 @@ from infini_local.pipelines.result_identity_policy import (
     choose_result_category,
     coerce_category_by_policy,
     normalize_category,
+    project_runtime_result_identity,
 )
 from infini_local.pipelines.equipment_stats import (
     accessory_stats_for,
@@ -102,6 +107,12 @@ def _attach_compiler_final_wire_receipts(
     source = deepcopy(authored_preimage)
     provenance = runtime_plan_provenance_report(source)
     compiled_patch = runtime_plan_to_attack_genome_patch(source)
+    stats_call = find_call(source, "set_item_stats")
+    result_projection = project_runtime_result_identity(
+        stats_call.get("resultKind") or runtime_plan(source).get("resultKind"),
+        ammo_for=stats_call.get("ammoFor"),
+        has_primary=bool(all_calls(source, "shoot_projectile")),
+    )
     field_renames = {
         "resultKind": "kind",
         "useTimeTicks": "useTime",
@@ -155,24 +166,16 @@ def _attach_compiler_final_wire_receipts(
                     f"{root}.{wire_field}"
                     for root in ("accessory", "armor")
                 )
-                attack_candidate = output.get("attack")
-                attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
-                genome_candidate = attack.get("genome")
-                compiler_snapshots = [
-                    genome_candidate if isinstance(genome_candidate, dict) else {},
-                    compiled_patch,
-                ]
-                for compiler_snapshot in compiler_snapshots:
-                    for candidate_path in candidate_paths:
-                        current: Any = compiler_snapshot
-                        found = True
-                        for part in candidate_path.split("."):
-                            if not isinstance(current, dict) or part not in current:
-                                found = False
-                                break
-                            current = current[part]
-                        if found:
-                            return True, current
+                for candidate_path in candidate_paths:
+                    current: Any = compiled_patch
+                    found = True
+                    for part in candidate_path.split("."):
+                        if not isinstance(current, dict) or part not in current:
+                            found = False
+                            break
+                        current = current[part]
+                    if found:
+                        return True, current
                 return False, None
 
             compiled_present, compiled_value = compiled_patch_value()
@@ -181,6 +184,15 @@ def _attach_compiler_final_wire_receipts(
                 # scalar. Falling back to the source preimage keeps this value
                 # independent from the final DTO and prevents self-certification.
                 compiled_value = deepcopy(authored_value)
+            if compiled_field == "resultKind":
+                compiled_value = result_projection.gameplay_kind
+            elif compiled_field == "pierce" and "projectileHitBudget" in compiled_patch:
+                compiled_value = compiled_patch["projectileHitBudget"]
+            elif (
+                compiled_field == "ammoFor"
+                and result_projection.runtime_output_kind == "actual_ammo"
+            ):
+                compiled_value = result_projection.final_ammo_for
             if not final_paths:
                 receipts.append({
                     "callId": call_id,
@@ -341,15 +353,24 @@ def attach_gameplay_and_attack(
     runtime_patch = runtime_plan_to_attack_genome_patch(data) if runtime_authored else {}
     if runtime_authored:
         _project_explicit_runtime_item_fields(data, gp, runtime_stats, runtime_patch)
-    runtime_result_kind = str(runtime_stats.get("resultKind") or "").strip().lower().replace("-", "_")
-    runtime_ammo_for = str(runtime_stats.get("ammoFor") or gp.get("ammoFor") or "").strip().lower()
     runtime_has_primary = bool(all_calls(data, "shoot_projectile")) if LLM_RUNTIME_AUTHORING else False
-    supported_actual_ammo = runtime_ammo_for in {"arrow", "arrows", "bullet", "bullets"}
-    if runtime_ammo_for and not supported_actual_ammo:
-        gp["unsupportedAmmoFor"] = runtime_ammo_for
-        runtime_ammo_for = ""
-    runtime_consumable_weapon = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data) and runtime_result_kind in {"ammo", "consumable_weapon", "thrown_stack"} and not runtime_ammo_for and runtime_has_primary)
-    runtime_actual_ammo = bool(LLM_RUNTIME_AUTHORING and runtime_result_kind == "ammo" and supported_actual_ammo)
+    runtime_identity = project_runtime_result_identity(
+        runtime_stats.get("resultKind"),
+        ammo_for=runtime_stats.get("ammoFor") or gp.get("ammoFor"),
+        has_primary=runtime_has_primary,
+    )
+    runtime_ammo_for = runtime_identity.final_ammo_for
+    if runtime_identity.unsupported_ammo_for:
+        gp["unsupportedAmmoFor"] = runtime_identity.unsupported_ammo_for
+    runtime_consumable_weapon = bool(
+        LLM_RUNTIME_AUTHORING
+        and runtime_plan(data)
+        and runtime_identity.runtime_output_kind == "consumable_weapon"
+    )
+    runtime_actual_ammo = bool(
+        LLM_RUNTIME_AUTHORING
+        and runtime_identity.runtime_output_kind == "actual_ammo"
+    )
     if runtime_consumable_weapon:
         kind = "weapon"
         data["category"] = "weapon"
@@ -543,7 +564,11 @@ def attach_gameplay_and_attack(
             gp["releaseTiming"] = presentation_defaults["releaseTiming"]
         if not str(gp.get("handPose") or "").strip():
             gp["handPose"] = presentation_defaults["handPose"]
-        aoe_damage_radius_px = int(float(genome.get("aoeRadiusTiles") or 0) * 16)
+        aoe_damage_radius_px = (
+            int(genome["aoeDamageRadiusPx"])
+            if runtime_authored
+            else project_aoe_radius_tiles_to_damage_pixels(genome.get("aoeRadiusTiles"))
+        )
         impact_vfx_radius_px = int(_authored_float_or_default(
             genome,
             "impactVfxRadiusPx",
@@ -601,7 +626,11 @@ def attach_gameplay_and_attack(
             # Runtime C# treats this as total projectile hit budget.
             # 0/1 = one hit; -1 = explicitly infinite/persistent. Older builds added +1,
             # which made ordinary authored pierce=1 shots hit twice.
-            "pierce": -1 if int(genome["pierce"]) == -1 else max(1, int(genome["pierce"])),
+            "pierce": (
+                int(genome["projectileHitBudget"])
+                if runtime_authored
+                else project_authored_pierce_to_runtime_hit_budget(genome["pierce"])
+            ),
             "scale": 1.0,
             "projectileWidth": int(float(genome.get("projectileWidth") or size["projectileWidth"])),
             "projectileHeight": int(float(genome.get("projectileHeight") or size["projectileHeight"])),

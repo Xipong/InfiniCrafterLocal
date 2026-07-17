@@ -166,8 +166,15 @@ def _run_check(name: str, command: list[str]) -> dict[str, Any]:
                 break
     if executable is None:
         return {"name": name, "status": "unavailable", "command": command, "durationSeconds": 0.0, "reason": f"{command[0]} not installed"}
-    if name == "pyright" and "--pythonpath" not in command:
-        command.extend(["--pythonpath", sys.executable])
+    if name == "pyright":
+        command = [
+            sys.executable,
+            str(ROOT / "tools/run_pyright.py"),
+            "--pythonpath",
+            sys.executable,
+            "--pyright-command",
+            str(executable),
+        ]
     # All manifest commands are repository-root relative. The pytest shard
     # runner creates its own isolated LocalGenerator working directories.
     cwd = ROOT

@@ -263,6 +263,13 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     result_kind = _norm_name(stats.get("resultKind"))
     max_stack = _num(stats.get("maxStack"), 0) or 0
     craft_yield = _num(stats.get("craftYield"), 0) or 0
+    consume_call = find_call(rp, "consumption_behavior")
+    authored_consumable = stats.get("consumable") is True
+    stack_consumption_authored = (
+        authored_consumable
+        or max_stack > 1
+        or (_num(consume_call.get("consumeChancePercent"), 0) or 0) > 0
+    )
     has_primary = bool(all_calls(rp, "shoot_projectile"))
     if result_kind in {"weapon", "consumable_weapon"} and not has_primary:
         errors.append(f"{result_kind} result requires a primary executable action")
@@ -275,9 +282,22 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             errors.append(f"{result_kind} result requires explicit positive maxStack and craftYield")
         elif max(max_stack, craft_yield) < 25:
             warnings.append("ammo output has low stack/yield; playable ammo should usually output 25+")
+    if result_kind == "weapon" and stack_consumption_authored:
+        errors.append(
+            "invalid_result_kind: set_item_stats stack-consumed weapon requires explicit resultKind=consumable_weapon"
+        )
+    if result_kind == "consumable_weapon":
+        if not authored_consumable:
+            errors.append("consumable_weapon set_item_stats requires explicit consumable=true")
+        if max_stack <= 1:
+            errors.append("consumable_weapon set_item_stats requires explicit maxStack > 1")
     ammo_behavior = find_call(rp, "ammo_behavior")
     ammo_for = _norm_name(stats.get("ammoFor") or ammo_behavior.get("ammoFor"))
-    if result_kind == "ammo" and ammo_for in {"arrow", "arrows", "bullet", "bullets"}:
+    if result_kind == "ammo":
+        if ammo_for not in {"arrow", "bullet"}:
+            errors.append("ammo result requires vanilla arrow or bullet identity; custom projectile stacks use consumable_weapon")
+        if has_primary:
+            errors.append("actual ammo cannot author a generated primary action; use consumable_weapon or weapon")
         if "damageClass" not in stats or not str(stats.get("damageClass") or "").strip():
             errors.append("actual ammo requires explicit damageClass")
         if "damage" not in stats or (_num(stats.get("damage"), -1) or 0) < 0:

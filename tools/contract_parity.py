@@ -159,19 +159,35 @@ def _parse_csharp_default(value: str) -> tuple[bool, Any]:
 
 
 def _method_body(source: str, signature_pattern: str) -> str:
-    match = re.search(signature_pattern, source)
-    if not match:
-        return ""
-    brace = source.find("{", match.end())
-    if brace < 0:
-        return ""
-    depth = 0
-    for index in range(brace, len(source)):
-        if source[index] == "{": depth += 1
-        elif source[index] == "}":
-            depth -= 1
-            if depth == 0:
-                return source[brace + 1:index]
+    for match in re.finditer(signature_pattern, source):
+        # A bare method-name pattern can also match a call site. Require an
+        # access modifier on the declaration line so family-policy extraction
+        # cannot accidentally inspect an earlier invocation.
+        line_start = source.rfind("\n", 0, match.start()) + 1
+        declaration_head = source[line_start:match.end()]
+        if not re.search(r"\b(?:public|private|internal|protected)\b", declaration_head):
+            continue
+
+        brace = source.find("{", match.end())
+        arrow = source.find("=>", match.end())
+        semicolon = source.find(";", match.end())
+        first_terminator = min((index for index in (brace, arrow, semicolon) if index >= 0), default=-1)
+        if first_terminator < 0:
+            continue
+        if first_terminator == arrow:
+            end = source.find(";", arrow + 2)
+            return source[arrow + 2:end].strip() if end >= 0 else ""
+        if first_terminator != brace:
+            continue
+
+        depth = 0
+        for index in range(brace, len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    return source[brace + 1:index]
     return ""
 
 
@@ -275,7 +291,7 @@ def _child_policy_state(
     return bool(evidence), method, evidence
 
 
-def _network_contract(csharp_fields: dict[str, dict[str, str]], manifest: dict[str, Any]) -> dict[str, Any]:
+def _network_contract(_csharp_fields: dict[str, dict[str, str]], manifest: dict[str, Any]) -> dict[str, Any]:
     stage_owners = manifest.get("stageOwners") or {}
     owner_patterns = list(stage_owners.get("projectileNetwork") or []) or [
         "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync*.cs"
@@ -298,102 +314,134 @@ def _network_contract(csharp_fields: dict[str, dict[str, str]], manifest: dict[s
             receive = candidate_receive
             owner_evidence.append(rel)
 
-    placeholder_policies = list(manifest.get("networkPlaceholderWrites") or [])
-    write_rows: list[dict[str, str]] = []
-    last_attack_field = ""
-    used_placeholders: set[str] = set()
-    for match in re.finditer(r"writer\.Write\((.*?)\);", send, re.S):
-        expr = " ".join(match.group(1).split())
-        field_match = re.search(r"_spec\.(\w+)", expr)
-        if field_match:
-            source_name = field_match.group(1)
-            field = _camel(source_name)
-            row = csharp_fields.get(field, {})
-            write_rows.append({
-                "field": field,
-                "sourceName": source_name,
-                "wireType": _csharp_type_name(row.get("csharpType", "object")),
-                "expression": expr,
-                "source": "spec",
-            })
-            last_attack_field = field
-            continue
+    compact_policy = manifest.get("projectileCompactSync") or {}
+    expected_writes = [" ".join(str(value).split()) for value in compact_policy.get("writeExpressions") or []]
+    actual_writes = [" ".join(match.group(1).split()) for match in re.finditer(r"writer\.Write\((.*?)\);", send, re.S)]
 
-        # A few compatibility slots deliberately write an empty string while the
-        # receiver assigns that slot to an AttackSpec field and keeps registry
-        # state for root projectiles. The ordered mapping is policy, not a source
-        # fact, so it lives in field_lifecycle.json and remains visible to agents.
-        policy = next((
-            row for row in placeholder_policies
-            if str(row.get("field") or "") not in used_placeholders
-            and str(row.get("afterField") or "") == last_attack_field
-            and re.search(str(row.get("expressionPattern") or r"(?!)"), expr)
-        ), None)
-        if policy is None:
-            continue
-        field = str(policy["field"])
-        write_rows.append({
-            "field": field,
-            "sourceName": _pascal(field),
-            "wireType": str(policy.get("wireType") or "object"),
-            "expression": expr,
-            "source": "placeholder-policy",
-        })
-        used_placeholders.add(field)
-        last_attack_field = field
+    read_pattern = re.compile(
+        r"(?:(?:int|bool|float|string)\s+)?"
+        r"(?P<target>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\s*=\s*"
+        r"(?:\([^;\n]+?\))?reader\.Read(?P<method>\w+)\s*\(\s*\)"
+    )
+    actual_reads = [
+        {"target": match.group("target"), "method": match.group("method")}
+        for match in read_pattern.finditer(receive)
+    ]
+    expected_reads = [
+        {"target": str(row.get("target") or ""), "method": str(row.get("method") or "")}
+        for row in compact_policy.get("readSlots") or []
+    ]
 
-    read_rows: list[dict[str, str]] = []
-    for match in re.finditer(r"_spec\.(\w+)\s*=\s*(.*?);", receive, re.S):
-        source_name = match.group(1)
-        expr = " ".join(match.group(2).split())
-        method = "String" if "ReadStringKeepBase" in expr else ""
-        if not method:
-            method_match = re.search(r"reader\.Read(\w+)\s*\(", expr)
-            method = method_match.group(1) if method_match else ""
-        # ReceiveExtraAI may also assign derived/local defaults. Only actual
-        # BinaryReader consumption belongs to the ordered wire protocol, but an
-        # extra reader-backed field must never be filtered out merely because it
-        # is missing from the writer side.
-        if not method:
-            continue
-        read_rows.append({"field": _camel(source_name), "sourceName": source_name, "readMethod": method, "expression": expr})
-
-    write_fields = [row["field"] for row in write_rows]
-    read_fields = [row["field"] for row in read_rows]
-    expected_read = {"int": "Int32", "float": "Single", "bool": "Boolean", "string": "String"}
     type_errors: list[str] = []
-    for row in read_rows:
-        field_type = _csharp_type_name(csharp_fields.get(row["field"], {}).get("csharpType", "object"))
-        expected = expected_read.get(field_type)
-        if row["field"] not in csharp_fields:
-            type_errors.append(f"AttackSpec.{row['field']}: network reader targets a field missing from the C# DTO")
-        elif expected and row["readMethod"] != expected:
-            type_errors.append(f"AttackSpec.{row['field']}: writer/DTO type {field_type} requires Read{expected}, got Read{row['readMethod']}")
-
     order_errors: list[str] = []
-    if write_fields != read_fields:
-        limit = min(len(write_fields), len(read_fields))
-        mismatch = next((i for i in range(limit) if write_fields[i] != read_fields[i]), limit)
-        order_errors.append(
-            "projectile network order mismatch at scalar field index "
-            f"{mismatch}: write={write_fields[mismatch:mismatch + 4]} read={read_fields[mismatch:mismatch + 4]}"
-        )
-        if len(write_fields) != len(read_fields):
-            order_errors.append(f"projectile network field count mismatch write={len(write_fields)} read={len(read_fields)}")
+    if actual_writes != expected_writes:
+        order_errors.append(f"compact projectile network write order mismatch expected={expected_writes} actual={actual_writes}")
+    if actual_reads != expected_reads:
+        order_errors.append(f"compact projectile network read order/type mismatch expected={expected_reads} actual={actual_reads}")
 
-    configured_placeholders = {str(row.get("field") or "") for row in placeholder_policies}
-    missing_placeholder_writes = sorted(configured_placeholders - used_placeholders)
-    if missing_placeholder_writes:
-        order_errors.append(f"projectile network placeholder writes missing: {missing_placeholder_writes}")
+    version = int(compact_policy.get("version") or 0)
+    network_source = "\n".join(_read(path) for _, path in _owner_paths(owner_patterns))
+    if f"private const int ProjectileSyncVersion = {version}" not in network_source:
+        type_errors.append(f"compact projectile sync version must be exactly {version}")
+    if "_spec." in send or "_spec." in receive:
+        type_errors.append("combat ExtraAI must not write or read AttackSpec fields")
+    for forbidden in compact_policy.get("forbiddenPacketTokens") or []:
+        if any(str(forbidden) in expression for expression in actual_writes):
+            type_errors.append(f"combat ExtraAI contains forbidden packet token {forbidden!r}")
+
+    hydration_policy = compact_policy.get("registryHydration") or {}
+    hydrate = _method_body(network_source, r"private bool TryHydrateRuntimeVariantFromRegistry\s*\(")
+    apply_resolved = _method_body(network_source, r"private void ApplyResolvedRuntimeVariant\s*\(")
+    defer = _method_body(network_source, r"private void DeferUnconfiguredNetworkProjectile\s*\(")
+    clear_resolved = _method_body(network_source, r"private void ClearResolvedRuntimeSpec\s*\(")
+    runtime_source = "\n".join(
+        _read(path) for _, path in _owner_paths(list(stage_owners.get("projectileRuntime") or []))
+    )
+    ai = _method_body(runtime_source, r"public override void AI\s*\(")
+    policy_source = "\n".join(
+        _read(path) for _, path in _owner_paths(list(stage_owners.get("childPolicy") or []))
+    )
+    variant_factory = _method_body(policy_source, r"public static bool TryCreateRuntimeVariant\s*\(")
+    known_variant = _method_body(policy_source, r"public static bool IsKnownVariant\s*\(")
+    visual_relay_method = str(hydration_policy.get("visualRelayMethod") or "").strip()
+    visual_relay = _method_body(
+        network_source,
+        rf"private void {re.escape(visual_relay_method)}\s*\(",
+    ) if visual_relay_method else ""
+    registry_source = "\n".join(
+        _read(path) for _, path in _owner_paths(list(stage_owners.get("projectileRegistry") or []))
+    )
+    registry_method = _method_body(registry_source, r"public AttackSpec\? TryGetAttack\s*\(")
+
+    def has_hydration_token(name: str, source: str) -> bool:
+        token = str(hydration_policy.get(name) or "").strip()
+        return bool(token) and token in source
+
+    hydration_checks = {
+        "receiveDelegates": "TryHydrateRuntimeVariantFromRegistry()" in receive,
+        "unconfiguredEmptyIdentityAllowed": "packetConfigured && _generatedItemId.Length <= 0" in receive,
+        "configuredInvalidPacketRejected": (
+            "packetConfigured && _generatedItemId.Length <= 0" in receive
+            and "Generated projectile packet contains an invalid registry identity or runtime variant." in receive
+        ),
+        "unconfiguredDefersHarmlessly": (
+            "if (!packetConfigured)" in receive
+            and "DeferUnconfiguredNetworkProjectile()" in receive
+            and receive.find("if (!packetConfigured)") < receive.find("if (!TryHydrateRuntimeVariantFromRegistry())")
+        ),
+        "registryLookup": has_hydration_token("registryLookup", hydrate),
+        "variantReconstruction": has_hydration_token("variantReconstruction", hydrate),
+        "variantAuthorization": (
+            has_hydration_token("variantAuthorization", variant_factory)
+            and "return false" in variant_factory
+        ),
+        "finiteVariantCheck": has_hydration_token("finiteVariantCheck", known_variant),
+        "genericPresentation": has_hydration_token("genericPresentation", hydrate),
+        "missingDataRequest": has_hydration_token("missingDataRequest", hydrate),
+        "visualRelayPresentationOnly": (
+            bool(visual_relay)
+            and "TryHydrateRuntimeVariantFromRegistry()" not in visual_relay
+            and "ApplyGeneratedSpec(" not in visual_relay
+        ),
+        "harmlessDamage": "Projectile.damage = 0" in defer,
+        "harmlessFriendly": "Projectile.friendly = false" in defer,
+        "harmlessHostile": "Projectile.hostile = false" in defer,
+        "deferClearsResolvedSpec": "ClearResolvedRuntimeSpec(Math.Max(_pendingNetworkSpecTicks, 45))" in defer,
+        "clearedSpecIsInert": (
+            "_configured = false" in clear_resolved
+            and "_statsApplied = false" in clear_resolved
+            and "_pendingNetworkSpecTicks = pendingSpecTicks" in clear_resolved
+            and "new AttackSpec { Enabled = false" in clear_resolved
+        ),
+        "aiRetry": "TryHydrateRuntimeVariantFromRegistry()" in ai and "_pendingNetworkSpecTicks" in ai,
+        "registryDeepClone": "GeneratedItemData.FromJson(data.ToJson())?.Attack" in registry_method,
+        "chargeStateBounded": "Math.Clamp(chargeTicks, 0, Math.Clamp(resolved.ChargeTicks, 1, 300))" in apply_resolved,
+        "sentryStateBounded": "Math.Clamp(sentryTimer, 0, Math.Clamp(resolved.SentryAttackIntervalTicks, 12, 180))" in apply_resolved,
+        "beamStateBounded": "Math.Clamp(beamLength, 0f, ConfiguredRangePixels(560f))" in apply_resolved,
+        "childDepthBounded": "Math.Clamp(childDepth, 0f, 3f)" in apply_resolved,
+        "rootIdentityBounded": "Math.Clamp(rootIdentity, 0f, 1_000_000f)" in apply_resolved,
+        "spawnIgnoreStateBounded": (
+            "_spawnIgnoreNpc < -1 || _spawnIgnoreNpc >= Main.maxNPCs" in receive
+            and "_spawnIgnoreTicks < 0 || _spawnIgnoreTicks > 10" in receive
+        ),
+    }
+    registry_errors = [f"projectile registry hydration evidence missing: {name}" for name, ok in hydration_checks.items() if not ok]
 
     return {
-        "ok": not type_errors and not order_errors,
-        "writeFields": write_fields,
-        "readFields": read_fields,
-        "writeRows": write_rows,
-        "readRows": read_rows,
+        "ok": not type_errors and not order_errors and not registry_errors,
+        # AttackSpec is hydrated once from the registry; zero immutable spec
+        # fields are transported in normal projectile combat packets.
+        "writeFields": [],
+        "readFields": [],
+        "writeRows": [],
+        "readRows": [],
+        "compactWriteExpressions": actual_writes,
+        "compactReadSlots": actual_reads,
+        "compactFieldCount": len(actual_writes),
+        "registryHydration": {"ok": not registry_errors, "checks": hydration_checks},
         "typeErrors": type_errors,
         "orderErrors": order_errors,
+        "registryErrors": registry_errors,
         "ownerEvidence": sorted(set(owner_evidence)),
     }
 
@@ -523,6 +571,7 @@ def build_report() -> dict[str, Any]:
     network = _network_contract(csharp_attack, manifest)
     errors.extend(network["typeErrors"])
     errors.extend(network["orderErrors"])
+    errors.extend(network["registryErrors"])
     writes = set(network["writeFields"])
     reads = set(network["readFields"])
 
@@ -548,6 +597,7 @@ def build_report() -> dict[str, Any]:
             "csharpNormalize": normalize_ok,
             "netWrite": field in writes,
             "netRead": field in reads,
+            "registryHydration": network["registryHydration"]["ok"],
             "executorRead": executor_ok,
             "childPolicy": child_ok,
         }
@@ -580,6 +630,8 @@ def build_report() -> dict[str, Any]:
         "gameplayFieldCount": len(csharp_gameplay),
         "networkWriteFieldCount": len(network["writeFields"]),
         "networkReadFieldCount": len(network["readFields"]),
+        "compactNetworkFieldCount": network["compactFieldCount"],
+        "registryHydration": network["registryHydration"],
         "checkedPrimitiveDefaults": sum(
             1 for fields in (csharp_attack, csharp_gameplay) for row in fields.values() if _parse_csharp_default(row["default"])[0]
         ),
@@ -610,6 +662,8 @@ def main() -> int:
             "gameplayFieldCount": report.get("gameplayFieldCount"),
             "networkWriteFieldCount": report.get("networkWriteFieldCount"),
             "networkReadFieldCount": report.get("networkReadFieldCount"),
+            "compactNetworkFieldCount": report.get("compactNetworkFieldCount"),
+            "registryHydration": report.get("registryHydration"),
         }, ensure_ascii=False, sort_keys=True))
     else:
         print(text)

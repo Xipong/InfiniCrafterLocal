@@ -98,9 +98,9 @@ else
   record_unavailable ruff "ruff is not installed for the selected Python or on PATH"
 fi
 if "$PYTHON_BIN" -c 'import pyright' >/dev/null 2>&1; then
-  run_step pyright "$PYTHON_BIN" -m pyright --pythonpath "$PYTHON_BIN"
+  run_step pyright "$PYTHON_BIN" tools/run_pyright.py --pythonpath "$PYTHON_BIN"
 elif command -v pyright >/dev/null 2>&1; then
-  run_step pyright "$(command -v pyright)" --pythonpath "$PYTHON_BIN"
+  run_step pyright "$PYTHON_BIN" tools/run_pyright.py --pythonpath "$PYTHON_BIN" --pyright-command "$(command -v pyright)"
 else
   record_unavailable pyright "pyright is not installed for the selected Python or on PATH"
 fi

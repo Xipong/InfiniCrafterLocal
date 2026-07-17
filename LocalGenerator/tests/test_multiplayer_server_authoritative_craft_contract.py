@@ -50,10 +50,17 @@ def _check_server_authoritative_craft_hydrates_assets_automatically() -> None:
 
 def _check_projectile_packets_stay_light_but_restore_visual_assets_from_registry() -> None:
     projectile_source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
-    assert "Native gameplay sync contract: projectile packets carry compact ids/scalar" in projectile_source
-    assert 'string SpritePathForNet(string? path) => "";' in projectile_source
+    send_start = projectile_source.index("public override void SendExtraAI(BinaryWriter writer)")
+    receive_start = projectile_source.index("public override void ReceiveExtraAI(BinaryReader reader)", send_start)
+    send = projectile_source[send_start:receive_start]
+    assert "private const int ProjectileSyncVersion = 20" in projectile_source
+    assert "writer.Write(ShortNet(_generatedItemId, 96));" in send
+    assert "writer.Write((byte)_runtimeVariant);" in send
+    assert "_spec." not in send
     assert "VfxManifestJson = ShortNet" not in projectile_source
     assert "writer.Write(ShortNet(payload.VfxManifestJson" not in projectile_source
+    assert "TryHydrateRuntimeVariantFromRegistry" in projectile_source
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in projectile_source
     assert "HydratePresentationFromRegistryIfPossible" in projectile_source
     assert "TryGetAttack(_generatedItemId)" in projectile_source
     assert "CopyMissingPresentationPaths(parent)" in projectile_source

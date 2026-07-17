@@ -220,11 +220,11 @@ def _check_radmin_gui_friend_guide_says_clients_do_not_need_localgenerator_for_r
 
 def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
     assert "INFINI_LLM_TEMPERATURE" in settings_schema.FIELD_ORDER
-    assert "INFINI_LLM_REAUTHOR_MODEL" in settings_schema.FIELD_ORDER
+    assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.FIELD_ORDER
     assert "INFINI_LLM_REAUTHOR_TEMPERATURE" in settings_schema.FIELD_ORDER
     assert "INFINI_VISUAL_DIRECTOR_TEMPERATURE" in settings_schema.FIELD_ORDER
     assert settings_schema.DEFAULTS["INFINI_LLM_TEMPERATURE"] == "0.38"
-    assert settings_schema.DEFAULTS["INFINI_LLM_REAUTHOR_MODEL"] == ""
+    assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.DEFAULTS
     assert settings_schema.DEFAULTS["INFINI_LLM_REAUTHOR_TEMPERATURE"] == ""
     assert settings_schema.DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"] == "0.42"
     fallback_heading = GUI_SOURCE.index('text="Fallback LLM (optional)"')
@@ -232,12 +232,11 @@ def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
     primary_heading = GUI_SOURCE.index('text="Primary generation controls"')
     planner_row = GUI_SOURCE.index('"Planner temperature"', primary_heading)
     repair_heading = GUI_SOURCE.index('text="Scoped same-author repair', planner_row)
-    repair_model_row = GUI_SOURCE.index('"Repair model"', repair_heading)
-    repair_temperature_row = GUI_SOURCE.index('"Repair temperature"', repair_model_row)
+    repair_temperature_row = GUI_SOURCE.index('"Repair temperature"', repair_heading)
     visual_row = GUI_SOURCE.index('"Visual temp"', repair_temperature_row)
     output_heading = GUI_SOURCE.index('text="Output / reasoning"', visual_row)
-    assert fallback_heading < fallback_last_row < primary_heading < planner_row < repair_heading < repair_model_row < repair_temperature_row < visual_row < output_heading
-    assert "межпрофильном failover" in GUI_SOURCE
+    assert fallback_heading < fallback_last_row < primary_heading < planner_row < repair_heading < repair_temperature_row < visual_row < output_heading
+    assert '"Repair model"' not in GUI_SOURCE
     assert "Это не sd.cpp temperature" in GUI_SOURCE
 
 

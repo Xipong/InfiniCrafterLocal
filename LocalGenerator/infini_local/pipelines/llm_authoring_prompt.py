@@ -48,7 +48,10 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_PLAN_REQUIRED,
     LLM_RUNTIME_STRICT_VALIDATION,
 )
-from infini_local.pipelines.result_identity_policy import normalize_category
+from infini_local.pipelines.result_identity_policy import (
+    normalize_category,
+    project_runtime_result_identity,
+)
 from infini_local.pipelines.combine_balance import (
     clamp_vanilla_like_weapon_damage,
 )
@@ -406,10 +409,11 @@ def planner_priority_header_for_llm() -> list[str]:
         "Output only requiredJsonShape keys; never copy input or prompt metadata.",
         "Playable: engineCalls[0]=set_item_stats(resultKind,...); normally 1-4 calls.",
         "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats; onHit only apply_on_hit_effect; equipment stats is an object. Names aren't mechanics.",
-        "Combat primary authors shotCount, spreadRadians and card fields; shoot_projectile also runtimeFamily; specialized calls derive it.",
+        "MUST explicitly include shotCount and spreadRadians on every combat primary; shoot_projectile also requires runtimeFamily; specialized calls derive it.",
+        "MUST include count, secondaryDamageMultiplier, secondaryLifetimeTicks on child-producing onHit, plus debuffTime when that onHit applies a debuff.",
         "Physical throw defaults to movement=gravity_arc; use movement=straight only when explicitly authoring gravity-free straight flight as part of the item design.",
         "concept.coreMechanic is the concise player-facing gameplay description. playerViewTimeline is optional; include only relevant visible phases.",
-        "consumable_weapon: consumable=true, maxStack>1, craftYield>0; JSON booleans are true/false, never strings.",
+        "MUST use resultKind=consumable_weapon in runtimePlan and set_item_stats for any stack-spent weapon (consumable=true, maxStack>1, or consumption_behavior); require consumable=true, maxStack>1, craftYield>0; reusable weapon uses maxStack=1 and consumable=false; JSON booleans are true/false, never strings.",
     ]
 
 def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, Any], envelope: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -448,6 +452,14 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "primaryAttackParams": sorted(PRIMARY_ATTACK_SHARED_PARAM_NAMES),
             "apply_on_hit_effect": sorted(ENGINE_FN_ACCEPTED_PARAM_EXTRAS["apply_on_hit_effect"]),
         },
+        "requiredAuthorParams": {
+            "everyCombatPrimary": ["shotCount", "spreadRadians"],
+            "childProducingOnHit": [
+                "count", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
+            ],
+            "debuffingOnHit": ["debuffTime"],
+            "stackConsumedWeaponIdentity": "consumable_weapon",
+        },
         "soundCatalog": sound_catalog_card_for_llm(),
         "tickGuide": concise_terraria_tick_guide_for_llm(),
         "criticalValueSemantics": {
@@ -471,7 +483,7 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
         },
         "semanticRules": [
             "Preserve both parents unless mergeLogic names an executable replacement.",
-            "Custom projectiles use weapon or consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
+            "Custom projectiles use weapon or consumable_weapon; every stack-spent weapon uses consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
             "Public gameplay text lives once in concept.coreMechanic; compiler provenance is not authored.",
             "VFX calls present effects; burst, AoE, sticky, mobility, and utility require their typed gameplay calls.",
             "Temporary helper projectiles never summon bosses, NPCs, mobs, or enemies.",
@@ -650,18 +662,14 @@ def llm_runtime_result_kind_policy(data: dict[str, Any], requested_kind: Any, ta
     """
     rp = runtime_plan(data)
     result_kind = runtime_value(data, "set_item_stats", "resultKind", None) or (rp.get("resultKind") if isinstance(rp, dict) else None) or requested_kind or data.get("category") or "generic"
-    raw = str(result_kind or "generic").strip().lower().replace("-", "_")
-    if raw in {"thrown_stack", "stackable_weapon", "consumable_projectile", "consumable_weapon"}:
-        # Internal runtime category must stay weapon so attach_gameplay_and_attack keeps
-        # the authored projectile executor alive. The stack/consume behavior is recorded
-        # separately as gameplay.runtimeOutputKind=consumable_weapon. Mapping this to
-        # potion/consumable erased the attack and turned grenade/flask outputs back into
-        # ordinary parent-buff potions.
-        selected = "weapon"
-    else:
-        selected = normalize_category(raw)
-    if selected not in ALLOWED_CATEGORIES:
-        selected = "generic"
+    stats = find_call(data, "set_item_stats")
+    projection = project_runtime_result_identity(
+        result_kind,
+        ammo_for=stats.get("ammoFor"),
+        has_primary=bool(find_call(data, "shoot_projectile")),
+    )
+    raw = projection.authored_kind
+    selected = projection.gameplay_kind
     return selected, {
         "mode": "llm_runtime_result_kind",
         "requested": requested_kind,

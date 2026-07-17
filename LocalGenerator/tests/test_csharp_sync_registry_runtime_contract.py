@@ -160,11 +160,18 @@ def _check_projectile_remote_visual_sync_is_explicit_and_tolerates_asset_orderin
 
 def _check_projectile_packets_stay_light_but_restore_presentation_from_registry() -> None:
     projectile = _read(PROJECTILE_PATH)
-    assert "Native gameplay sync contract: projectile packets carry compact ids/scalar" in projectile
-    assert 'string SpritePathForNet(string? path) => "";' in projectile
+    send_start = projectile.index("public override void SendExtraAI(BinaryWriter writer)")
+    receive_start = projectile.index("public override void ReceiveExtraAI(BinaryReader reader)", send_start)
+    send = projectile[send_start:receive_start]
+    assert "private const int ProjectileSyncVersion = 20" in projectile
+    assert "writer.Write(ShortNet(_generatedItemId, 96));" in send
+    assert "writer.Write((byte)_runtimeVariant);" in send
+    assert "_spec." not in send
     assert "VfxManifestJson = ShortNet" not in projectile
     assert "writer.Write(ShortNet(payload.VfxManifestJson" not in projectile
     assert "payload.VfxManifestJson" not in projectile
+    assert "TryHydrateRuntimeVariantFromRegistry" in projectile
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in projectile
     assert "HydratePresentationFromRegistryIfPossible" in projectile
     assert "TryGetAttack(_generatedItemId)" in projectile
     assert "CopyMissingPresentationPaths(parent)" in projectile
@@ -275,8 +282,10 @@ def _check_asset_download_hydration_is_deduped_cached_and_counted() -> None:
 
 def _check_projectile_runtime_state_reset_is_single_helper_not_three_near_duplicate_blocks() -> None:
     projectile = _read(PROJECTILE_PATH)
+    assert "private void ClearResolvedRuntimeSpec" in projectile
     assert "private void ResetRuntimeSpecState" in projectile
-    assert "ResetRuntimeSpecState(pendingSpecTicks: Math.Max(_pendingNetworkSpecTicks, 45))" in projectile
+    assert "ClearResolvedRuntimeSpec(Math.Max(_pendingNetworkSpecTicks, 45))" in projectile
+    assert "ClearResolvedRuntimeSpec(pendingSpecTicks)" in projectile
     assert "ResetRuntimeSpecState(clearGeneratedId: true, deactivateProjectile: true)" in projectile
     assert "ResetRuntimeSpecState(deactivateProjectile: true)" in projectile
     assert projectile.count("new AttackSpec { Enabled = false, DustSpawnDenom = 0, BurstDustCap = 0, RuntimePlanAuthored = true }") == 1
