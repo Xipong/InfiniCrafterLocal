@@ -88,7 +88,6 @@ public sealed partial class GeneratedProjectile
     // v0.4.30: vanilla-style combat sync with explicit runtime family.
     // GeneratedItemData/VFX manifest is synchronized once into GeneratedItemRegistryService.
     // Projectile packets must stay lean: id + compact AI fields, never per-shot PNG/prompts/VFX JSON.
-    private const int NetProseMaxChars = InfiniRuntimeLimits.NetProseMaxChars;    // descriptive/script-like strings are not executable network state.
     private const int MaxSupportedMovementCode = InfiniRuntimeLimits.MaxSupportedMovementCode;
     private const int MaxSupportedEffectCode = InfiniRuntimeLimits.MaxSupportedEffectCode;
     private const int MaxSupportedOnHitCode = InfiniRuntimeLimits.MaxSupportedOnHitCode;
@@ -104,11 +103,8 @@ public sealed partial class GeneratedProjectile
     private const int MissingRequestStateAgeTicks = 10 * 60;
     public const byte PacketSyncGeneratedProjectileVisual = InfiniNetPacketIds.SyncGeneratedProjectileVisual;
     public const byte PacketSyncGeneratedProjectileVfxEvent = InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent;
-    private const int ProjectileSyncVersion = 19;
+    private const int ProjectileSyncVersion = 20;
     private const int ProjectileVisualSyncVersion = 3;
-    private const ushort SyncFlagMobility = 1 << 0;
-    private const ushort SyncFlagRuntimeLight = 1 << 1;
-    private const ushort SyncFlagSplitRadii = 1 << 2;
 
 
     public void BroadcastVisualSync()
@@ -542,9 +538,11 @@ public sealed partial class GeneratedProjectile
             AttackSpec? parent = InfiniCrafterLocalMod.GeneratedItems.TryGetAttack(_generatedItemId);
             if (parent is not null)
             {
-                if (!_configured || !RuntimeCodesSupported())
-                    ApplyGeneratedSpec(parent, InfiniCrafterLocalMod.GeneratedItems.TryGetVfxManifest(_generatedItemId), _generatedItemId);
-                else
+                // This relay carries presentation identity only and can race ahead
+                // of ExtraAI. Never treat its arrival as proof that this instance is
+                // the Root variant; gameplay hydration is owned by the compact
+                // identity+variant packet and the pending-AI retry path below.
+                if (_configured && RuntimeCodesSupported())
                 {
                     CopyMissingPresentationPaths(parent);
                     if (string.IsNullOrWhiteSpace(_spec.VisualMode)) _spec.VisualMode = parent.VisualMode ?? "";
@@ -564,272 +562,68 @@ public sealed partial class GeneratedProjectile
 
     public override void SendExtraAI(BinaryWriter writer)
     {
-        // Native gameplay sync contract: projectile packets carry compact ids/scalar
-        // state only. Full GeneratedItemData, AttackSpec, VfxManifestJson, visualKit,
-        // prompts, debug data and PNG/JSON bytes are hydrated through registry + /get_asset.
-        string SpritePathForNet(string? path) => "";
-        bool childShard = Projectile.localAI[1] > 0.001f;
-        ushort syncFlags = 0;
-        if (!string.IsNullOrWhiteSpace(_spec.MobilityMode)) syncFlags |= SyncFlagMobility;
-        if (_spec.RuntimeLightStrength > 0f) syncFlags |= SyncFlagRuntimeLight;
-        if (_spec.ImpactVfxRadiusPx > 0 || _spec.AoeDamageRadiusPx > 0 || _spec.ContactForgivenessPx > 0) syncFlags |= SyncFlagSplitRadii;
-
+        // The world-scoped registry owns the immutable authored AttackSpec. Normal
+        // combat packets identify that spec and carry only per-instance state that
+        // Terraria cannot reconstruct from the registry or vanilla projectile fields.
         writer.Write(ProjectileSyncVersion);
-        writer.Write(syncFlags);
         writer.Write(_configured);
         writer.Write(ShortNet(_generatedItemId, 96));
-        writer.Write(childShard);
-        writer.Write(_spec.MovementCode);
-        writer.Write(_spec.EffectCode);
-        writer.Write(_spec.OnHitCode);
-        writer.Write(_spec.ProjectileWidth);
-        writer.Write(_spec.ProjectileHeight);
-        writer.Write(_spec.ProjectileScale);
-        writer.Write(_spec.HitboxScale);
-        writer.Write(_spec.ExplosionRadius);
-        writer.Write(_spec.ImpactVfxRadiusPx);
-        writer.Write(_spec.AoeDamageRadiusPx);
-        writer.Write(_spec.ContactForgivenessPx);
-        writer.Write(_spec.Lifetime);
-        writer.Write(_spec.Pierce);
-        writer.Write(_spec.ExtraUpdates);
-        writer.Write(_spec.TileCollide);
-        writer.Write(_spec.BounceCount);
-        writer.Write(_spec.SplitCount);
-        writer.Write(ShortNet(_spec.SecondaryTrigger, 24));
-        writer.Write(_spec.ChainCount);
-        writer.Write(_spec.PullStrength);
-        writer.Write(ShortNet(_spec.PullMode, 24));
-        writer.Write(_spec.ImmunityCooldown);
-        writer.Write(_spec.ProcMode);
-        writer.Write(ShortNet(_spec.Pattern, 80));
-        writer.Write(_spec.MaxChildProjectiles);
-        writer.Write(_spec.MaxChildDepth);
-        writer.Write(_spec.DustSpawnDenom);
-        writer.Write(_spec.BurstDustCap);
-        writer.Write(_spec.VfxParticleScale);
-        writer.Write(ShortNet(_spec.VfxMaterial, 80));
-        writer.Write(_spec.VfxParticleDurationTicks);
-        writer.Write(_spec.VfxFieldLifetimeTicks);
-        writer.Write(_spec.VfxFieldRadiusTiles);
-        writer.Write(_spec.VfxFieldTickRate);
-        writer.Write(ShortNet(_spec.VisualMode, 60));
-        writer.Write(ShortNet(_spec.TrailStyle, 80));
-        writer.Write(ShortNet(_spec.ImpactStyle, 80));
-        writer.Write(ShortNet(_spec.PrimaryColorName, 48));
-        writer.Write(_spec.RuntimeLightStrength);
-        writer.Write(_spec.RuntimeLightDurationTicks);
-        writer.Write(ShortNet(_spec.MobilityMode, 32));
-        writer.Write(_spec.MobilityRangeTiles);
-        writer.Write(_spec.MobilityCooldownTicks);
-        writer.Write(_spec.MobilitySafeTileOnly);
-        writer.Write(ShortNet(_spec.SoundUseCatalogId, 64));
-        writer.Write(ShortNet(_spec.SoundImpactCatalogId, 64));
-        writer.Write(ShortNet(_spec.SoundCatalogSource, 48));
-        writer.Write(_spec.SoundPitch);
-        writer.Write(_spec.SoundVolume);
-        writer.Write(_spec.SoundPitchVariance);
-        writer.Write(_spec.RangeTiles);
-        writer.Write(_spec.HomingStrength);
-        writer.Write(_spec.BeamWidthPx);
-        writer.Write(_spec.BeamChargeTicks);
-        writer.Write(_spec.ChargeTicks);
-        writer.Write(_spec.ChargePowerMultiplier);
-        writer.Write(_spec.DelayTicks);
-        writer.Write(ShortNet(_spec.SentryPlacement, 16));
-        writer.Write(_spec.SentryAttackIntervalTicks);
-        writer.Write(_spec.SentryTargetRangeTiles);
-        writer.Write(_spec.SentryLifetimeTicks);
+        writer.Write((byte)_runtimeVariant);
         writer.Write(_chargeTicksAccumulated);
         writer.Write(_sentryFireTimer);
         writer.Write(_beamLengthPx);
-        // v0.4.97: this packet slot used to carry prose/script compatibility strings.
-        // Runtime now carries explicit family state instead; prose never participates in projectile AI.
-        writer.Write(ShortNet(_spec.RuntimeFamily, 32));
-        writer.Write(ShortNet(_spec.DamageClass, 96));
-        writer.Write(ShortNet(_spec.Delivery, 40));
-        writer.Write(ShortNet(_spec.WeaponFamily, 48));
-        writer.Write(ShortNet(_spec.ProjectileFamily, 48));
-        writer.Write(ShortNet(_spec.AmmoKind, 32));
-        writer.Write(_spec.UseStyleCode);
-        writer.Write(_spec.HideUseGraphic);
-        writer.Write(_spec.DisableItemMeleeHitbox);
-        writer.Write(_spec.OwnerHitCheck);
-        writer.Write(_spec.ChannelUse);
-        writer.Write((byte)0); // reserved bitset for future projectile sync flags
-        writer.Write(ShortNet(_spec.ProjectileShape, 160));
-        writer.Write(ShortNet(_spec.ProjectileMotion, 120));
-        writer.Write(ShortNet(_spec.ProjectileRotation, 64));
-        writer.Write(ShortNet(_spec.ProjectileTrail, 120));
-        writer.Write(ShortNet(_spec.ProjectileImpact, 120));
-        writer.Write(SpritePathForNet(_spec.ProjectileSpritePath));
-        writer.Write(ShortNet(_spec.ProjectileSpriteStatus, 40));
-        writer.Write("");
-        writer.Write(SpritePathForNet(_spec.ImpactSpritePath));
-        writer.Write(ShortNet(_spec.ImpactSpriteStatus, 40));
-        writer.Write("");
-        writer.Write(SpritePathForNet(_spec.ChildSpritePath));
-        writer.Write(ShortNet(_spec.ChildSpriteStatus, 40));
-        writer.Write("");
-        writer.Write(SpritePathForNet(_spec.FieldSpritePath));
-        writer.Write(ShortNet(_spec.FieldSpriteStatus, 40));
-        writer.Write("");
-        writer.Write(""); // item-level visual plan is restored from GeneratedItemRegistryService
-        writer.Write(_spec.RuntimePlanAuthored);
-        writer.Write(_spec.SecondarySpreadRadians);
-        writer.Write(_spec.SecondaryDamageMultiplier);
-        writer.Write(_spec.SecondaryLifetimeTicks);
-        writer.Write(_spec.SameTargetBias);
-        writer.Write(ShortNet(_spec.DebuffHint, 80));
-        writer.Write(_spec.DebuffTime);
-        writer.Write(ShortNet(_spec.SecondaryMaterial, 80));
-        writer.Write(ShortNet(_spec.SecondaryProjectileShape, 120));
         writer.Write(Projectile.localAI[1]);
         writer.Write(Projectile.localAI[2]);
+        writer.Write(_spawnIgnoreNpc);
+        writer.Write(_spawnIgnoreTicks);
         writer.Write(_stuckToTile);
         writer.Write(_returningPhase);
     }
 
     public override void ReceiveExtraAI(BinaryReader reader)
     {
-        bool childShard = false;
         try
         {
             int syncVersion = reader.ReadInt32();
-            ushort syncFlags = reader.ReadUInt16();
             if (syncVersion != ProjectileSyncVersion)
             {
                 DisableAfterNetworkReadFailure($"Unsupported GeneratedProjectile sync version {syncVersion}; expected {ProjectileSyncVersion}.");
                 return;
             }
             bool packetConfigured = reader.ReadBoolean();
-            _configured = packetConfigured;
             _generatedItemId = reader.ReadString();
-            childShard = reader.ReadBoolean();
-            _statsApplied = false;
-            _spec = (!childShard && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems is not null)
-                ? (global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems.TryGetAttack(_generatedItemId) ?? new AttackSpec())
-                : new AttackSpec();
-            _spec.MovementCode = reader.ReadInt32();
-            _spec.EffectCode = reader.ReadInt32();
-            _spec.OnHitCode = reader.ReadInt32();
-            _spec.ProjectileWidth = reader.ReadInt32();
-            _spec.ProjectileHeight = reader.ReadInt32();
-            _spec.ProjectileScale = reader.ReadSingle();
-            _spec.HitboxScale = reader.ReadSingle();
-            _spec.ExplosionRadius = reader.ReadInt32();
-            _spec.ImpactVfxRadiusPx = reader.ReadInt32();
-            _spec.AoeDamageRadiusPx = reader.ReadInt32();
-            _spec.ContactForgivenessPx = reader.ReadInt32();
-            _spec.Lifetime = reader.ReadInt32();
-            _spec.Pierce = reader.ReadInt32();
-            _spec.ExtraUpdates = reader.ReadInt32();
-            _spec.TileCollide = reader.ReadBoolean();
-            _spec.BounceCount = reader.ReadInt32();
-            _spec.SplitCount = reader.ReadInt32();
-            _spec.SecondaryTrigger = reader.ReadString();
-            _spec.ChainCount = reader.ReadInt32();
-            _spec.PullStrength = reader.ReadSingle();
-            _spec.PullMode = reader.ReadString();
-            _spec.ImmunityCooldown = reader.ReadInt32();
-            _spec.ProcMode = reader.ReadInt32();
-            _spec.Pattern = reader.ReadString();
-            _spec.MaxChildProjectiles = reader.ReadInt32();
-            _spec.MaxChildDepth = reader.ReadInt32();
-            _spec.DustSpawnDenom = reader.ReadInt32();
-            _spec.BurstDustCap = reader.ReadInt32();
-            _spec.VfxParticleScale = reader.ReadSingle();
-            _spec.VfxMaterial = reader.ReadString();
-            _spec.VfxParticleDurationTicks = reader.ReadInt32();
-            _spec.VfxFieldLifetimeTicks = reader.ReadInt32();
-            _spec.VfxFieldRadiusTiles = reader.ReadSingle();
-            _spec.VfxFieldTickRate = reader.ReadInt32();
-            _spec.VisualMode = reader.ReadString();
-            _spec.TrailStyle = reader.ReadString();
-            _spec.ImpactStyle = reader.ReadString();
-            _spec.PrimaryColorName = reader.ReadString();
-            _spec.RuntimeLightStrength = reader.ReadSingle();
-            _spec.RuntimeLightDurationTicks = reader.ReadInt32();
-            _spec.MobilityMode = reader.ReadString();
-            _spec.MobilityRangeTiles = reader.ReadInt32();
-            _spec.MobilityCooldownTicks = reader.ReadInt32();
-            _spec.MobilitySafeTileOnly = reader.ReadBoolean();
-            _spec.SoundUseCatalogId = reader.ReadString();
-            _spec.SoundImpactCatalogId = reader.ReadString();
-            _spec.SoundCatalogSource = reader.ReadString();
-            _spec.SoundPitch = reader.ReadSingle();
-            _spec.SoundVolume = reader.ReadSingle();
-            _spec.SoundPitchVariance = reader.ReadSingle();
-            _spec.RangeTiles = reader.ReadSingle();
-            _spec.HomingStrength = reader.ReadSingle();
-            _spec.BeamWidthPx = reader.ReadSingle();
-            _spec.BeamChargeTicks = reader.ReadInt32();
-            _spec.ChargeTicks = reader.ReadInt32();
-            _spec.ChargePowerMultiplier = reader.ReadSingle();
-            _spec.DelayTicks = reader.ReadInt32();
-            _spec.SentryPlacement = reader.ReadString();
-            _spec.SentryAttackIntervalTicks = reader.ReadInt32();
-            _spec.SentryTargetRangeTiles = reader.ReadSingle();
-            _spec.SentryLifetimeTicks = reader.ReadInt32();
+            _runtimeVariant = (GeneratedProjectileRuntimeVariant)reader.ReadByte();
             _chargeTicksAccumulated = reader.ReadInt32();
             _sentryFireTimer = reader.ReadInt32();
             _beamLengthPx = reader.ReadSingle();
-            _spec.RuntimeFamily = ReadStringKeepBase(reader, _spec.RuntimeFamily, childShard);
-            _spec.DamageClass = ReadStringKeepBase(reader, _spec.DamageClass, childShard);
-            _spec.Delivery = ReadStringKeepBase(reader, _spec.Delivery, childShard);
-            _spec.WeaponFamily = ReadStringKeepBase(reader, _spec.WeaponFamily, childShard);
-            _spec.ProjectileFamily = ReadStringKeepBase(reader, _spec.ProjectileFamily, childShard);
-            _spec.AmmoKind = ReadStringKeepBase(reader, _spec.AmmoKind, childShard);
-            _spec.UseStyleCode = reader.ReadInt32();
-            _spec.HideUseGraphic = reader.ReadBoolean();
-            _spec.DisableItemMeleeHitbox = reader.ReadBoolean();
-            _spec.OwnerHitCheck = reader.ReadBoolean();
-            _spec.ChannelUse = reader.ReadBoolean();
-            _ = reader.ReadByte(); // reserved bitset for future projectile sync flags
-            _spec.ProjectileShape = ReadStringKeepBase(reader, _spec.ProjectileShape, childShard);
-            _spec.ProjectileMotion = ReadStringKeepBase(reader, _spec.ProjectileMotion, childShard);
-            _spec.ProjectileRotation = ReadStringKeepBase(reader, _spec.ProjectileRotation, childShard);
-            _spec.ProjectileTrail = ReadStringKeepBase(reader, _spec.ProjectileTrail, childShard);
-            _spec.ProjectileImpact = ReadStringKeepBase(reader, _spec.ProjectileImpact, childShard);
-            _spec.ProjectileSpritePath = ReadStringKeepBase(reader, _spec.ProjectileSpritePath, childShard);
-            _spec.ProjectileSpriteStatus = ReadStringKeepBase(reader, _spec.ProjectileSpriteStatus, childShard);
-            _spec.ProjectileSpritePrompt = ReadStringKeepBase(reader, _spec.ProjectileSpritePrompt, childShard);
-            _spec.ImpactSpritePath = ReadStringKeepBase(reader, _spec.ImpactSpritePath, childShard);
-            _spec.ImpactSpriteStatus = ReadStringKeepBase(reader, _spec.ImpactSpriteStatus, childShard);
-            _spec.ImpactSpritePrompt = ReadStringKeepBase(reader, _spec.ImpactSpritePrompt, childShard);
-            _spec.ChildSpritePath = ReadStringKeepBase(reader, _spec.ChildSpritePath, childShard);
-            _spec.ChildSpriteStatus = ReadStringKeepBase(reader, _spec.ChildSpriteStatus, childShard);
-            _spec.ChildSpritePrompt = ReadStringKeepBase(reader, _spec.ChildSpritePrompt, childShard);
-            _spec.FieldSpritePath = ReadStringKeepBase(reader, _spec.FieldSpritePath, childShard);
-            _spec.FieldSpriteStatus = ReadStringKeepBase(reader, _spec.FieldSpriteStatus, childShard);
-            _spec.FieldSpritePrompt = ReadStringKeepBase(reader, _spec.FieldSpritePrompt, childShard);
-            _spec.VisualAnimationPlan = ReadStringKeepBase(reader, _spec.VisualAnimationPlan, childShard);
-            if (!childShard && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems is not null)
-                _vfxManifest = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems.TryGetVfxManifest(_generatedItemId);
-            else
-                _vfxManifest = VfxManifestSpec.FromJson(_spec.VfxManifestJson);
-            HydratePresentationFromRegistryIfPossible();
-            _lastReceivedVfxManifestJson = _spec.VfxManifestJson ?? "";
-            _vfxState = new InfiniVfxState { LocalSeed = _vfxManifest.Seed };
-            try
+            Projectile.localAI[1] = reader.ReadSingle();
+            Projectile.localAI[2] = reader.ReadSingle();
+            _spawnIgnoreNpc = reader.ReadInt32();
+            _spawnIgnoreTicks = reader.ReadInt32();
+            _stuckToTile = reader.ReadBoolean();
+            _returningPhase = reader.ReadBoolean();
+
+            if (_generatedItemId.Length > 96
+                || (packetConfigured && _generatedItemId.Length <= 0)
+                || !GeneratedChildSpecPolicy.IsKnownVariant(_runtimeVariant)
+                || _spawnIgnoreNpc < -1 || _spawnIgnoreNpc >= Main.maxNPCs
+                || _spawnIgnoreTicks < 0 || _spawnIgnoreTicks > 10)
             {
-                _spec.RuntimePlanAuthored = reader.ReadBoolean();
-                _spec.SecondarySpreadRadians = reader.ReadSingle();
-                _spec.SecondaryDamageMultiplier = reader.ReadSingle();
-                _spec.SecondaryLifetimeTicks = reader.ReadInt32();
-                _spec.SameTargetBias = reader.ReadSingle();
-                _spec.DebuffHint = reader.ReadString();
-                _spec.DebuffTime = reader.ReadInt32();
-                _spec.SecondaryMaterial = reader.ReadString();
-                _spec.SecondaryProjectileShape = reader.ReadString();
-                Projectile.localAI[1] = reader.ReadSingle();
-                Projectile.localAI[2] = reader.ReadSingle();
-                _stuckToTile = reader.ReadBoolean();
-                _returningPhase = reader.ReadBoolean();
+                DisableAfterNetworkReadFailure("Generated projectile packet contains an invalid registry identity or runtime variant.");
+                return;
             }
-            catch (Exception ex)
+            _configured = false;
+            _statsApplied = false;
+            if (!packetConfigured)
             {
-                DisableAfterNetworkReadFailure("Runtime-authored projectile packet is missing or corrupt. Legacy lean projectile packets are no longer supported.", ex);
+                if (Projectile.active)
+                    DeferUnconfiguredNetworkProjectile();
+                return;
+            }
+            if (!TryHydrateRuntimeVariantFromRegistry())
+            {
+                if (Projectile.active)
+                    DeferUnconfiguredNetworkProjectile();
                 return;
             }
         }
@@ -838,25 +632,63 @@ public sealed partial class GeneratedProjectile
             DisableAfterNetworkReadFailure("Projectile network payload could not be read.", ex);
             return;
         }
-        if (!_configured)
+    }
+
+    private bool TryHydrateRuntimeVariantFromRegistry()
+    {
+        if (string.IsNullOrWhiteSpace(_generatedItemId)
+            || global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems is null)
         {
-            DeferUnconfiguredNetworkProjectile();
-            return;
+            RequestOneGeneratedItemForMissingProjectile(_generatedItemId);
+            return false;
         }
-        if (!_spec.RuntimePlanAuthored)
+
+        AttackSpec? parent = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems.TryGetAttack(_generatedItemId);
+        if (parent is null)
         {
-            DisableUnsupportedProjectile("Legacy non-runtime-authored generated projectile packet received. This archive is authored-runtime only.");
-            return;
+            RequestOneGeneratedItemForMissingProjectile(_generatedItemId);
+            return false;
         }
-        if (!RuntimeCodesSupported())
+        if (!GeneratedChildSpecPolicy.TryCreateRuntimeVariant(parent, _runtimeVariant, out AttackSpec resolved))
         {
-            DisableUnsupportedProjectile($"Unsupported generated runtime opcode/family after network read: movement={_spec.MovementCode}, effect={_spec.EffectCode}, onHit={_spec.OnHitCode}.");
-            return;
+            DisableUnsupportedProjectile($"Generated projectile variant {_runtimeVariant} is not allowed by registry item {_generatedItemId}.");
+            return false;
         }
-        if (childShard)
-            RestoreAuthoredChildPresentationFromRegistry();
-        _remainingBounces = InitialBounceBudget(_spec);
-        ApplyConfiguredStats();
+
+        if (GeneratedChildSpecPolicy.UsesGenericChildPresentation(_runtimeVariant))
+            ApplyAuthoredChildPresentation(resolved, parent);
+        VfxManifestSpec manifest = GeneratedChildSpecPolicy.UsesRootVfxManifest(_runtimeVariant)
+            ? global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems.TryGetVfxManifest(_generatedItemId)
+            : new VfxManifestSpec();
+        ApplyResolvedRuntimeVariant(resolved, manifest);
+        return _configured && Projectile.active;
+    }
+
+    private void ApplyResolvedRuntimeVariant(AttackSpec resolved, VfxManifestSpec manifest)
+    {
+        int chargeTicks = _chargeTicksAccumulated;
+        int sentryTimer = _sentryFireTimer;
+        float beamLength = _beamLengthPx;
+        float childDepth = Projectile.localAI[1];
+        float rootIdentity = Projectile.localAI[2];
+        bool stuckToTile = _stuckToTile;
+        bool returningPhase = _returningPhase;
+
+        ApplyHydratedGeneratedSpec(resolved, manifest, _generatedItemId, _runtimeVariant);
+        if (!_configured || !Projectile.active)
+            return;
+
+        _chargeTicksAccumulated = Math.Clamp(chargeTicks, 0, Math.Clamp(resolved.ChargeTicks, 1, 300));
+        _sentryFireTimer = Math.Clamp(sentryTimer, 0, Math.Clamp(resolved.SentryAttackIntervalTicks, 12, 180));
+        _beamLengthPx = float.IsFinite(beamLength)
+            ? Math.Clamp(beamLength, 0f, ConfiguredRangePixels(560f))
+            : 0f;
+        Projectile.localAI[1] = float.IsFinite(childDepth) ? Math.Clamp(childDepth, 0f, 3f) : 0f;
+        Projectile.localAI[2] = float.IsFinite(rootIdentity) ? Math.Clamp(rootIdentity, 0f, 1_000_000f) : 0f;
+        _stuckToTile = stuckToTile;
+        _returningPhase = returningPhase;
+        if (_stuckToTile || _returningPhase)
+            Projectile.tileCollide = false;
     }
 
     private void DeferUnconfiguredNetworkProjectile()
@@ -867,7 +699,7 @@ public sealed partial class GeneratedProjectile
         // the projectile harmless for a short grace window and let the next configured
         // net update hydrate it.  This avoids random projectile/child/VFX loss without
         // sending bulky item JSON in every projectile packet.
-        ResetRuntimeSpecState(pendingSpecTicks: Math.Max(_pendingNetworkSpecTicks, 45));
+        ClearResolvedRuntimeSpec(Math.Max(_pendingNetworkSpecTicks, 45));
         Projectile.damage = 0;
         Projectile.knockBack = 0f;
         Projectile.friendly = false;
@@ -876,35 +708,37 @@ public sealed partial class GeneratedProjectile
         Projectile.netUpdate = false;
     }
 
-    private void ResetRuntimeSpecState(int pendingSpecTicks = 0, bool clearGeneratedId = false, bool deactivateProjectile = false)
+    private void ClearResolvedRuntimeSpec(int pendingSpecTicks)
     {
+        // Clear only the hydrated immutable view. Runtime identity and mutable
+        // instance state survive a registry race so the exact variant can resume.
         _configured = false;
         _statsApplied = false;
+        _pendingNetworkSpecTicks = pendingSpecTicks;
+        _spec = new AttackSpec { Enabled = false, DustSpawnDenom = 0, BurstDustCap = 0, RuntimePlanAuthored = true };
+        _vfxManifest = new VfxManifestSpec();
+        _vfxState = new InfiniVfxState();
+    }
+
+    private void ResetRuntimeSpecState(int pendingSpecTicks = 0, bool clearGeneratedId = false, bool deactivateProjectile = false)
+    {
+        ClearResolvedRuntimeSpec(pendingSpecTicks);
+        _runtimeSpecEverApplied = false;
+        _runtimeVariant = GeneratedProjectileRuntimeVariant.Root;
         _returningPhase = false;
         _orbitInitialized = false;
         _whipInitialized = false;
         _whipBaseDirection = Vector2.Zero;
         _whipControlPoints.Clear();
-        _pendingNetworkSpecTicks = pendingSpecTicks;
-        _spec = new AttackSpec { Enabled = false, DustSpawnDenom = 0, BurstDustCap = 0, RuntimePlanAuthored = true };
-        _vfxManifest = new VfxManifestSpec();
-        _vfxState = new InfiniVfxState();
         if (clearGeneratedId)
         {
             _generatedItemId = "";
-            _lastReceivedVfxManifestJson = "";
         }
         if (deactivateProjectile)
         {
             Projectile.active = false;
             Projectile.netUpdate = false;
         }
-    }
-
-    private static string ReadStringKeepBase(BinaryReader reader, string current, bool allowEmptyOverride)
-    {
-        string value = reader.ReadString();
-        return (allowEmptyOverride || !string.IsNullOrWhiteSpace(value)) ? value : (current ?? "");
     }
 
     private void DisableAfterNetworkReadFailure(string reason = "network read failure", Exception? ex = null)

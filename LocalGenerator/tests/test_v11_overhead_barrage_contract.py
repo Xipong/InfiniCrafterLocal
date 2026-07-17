@@ -228,13 +228,13 @@ def _contract_check_starfury_like_star_theme_survives_full_pipeline() -> None:
 def _contract_check_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_from_delivery() -> None:
     family_policy = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedRuntimeFamilyPolicy.cs").read_text(encoding="utf-8")
     apply_source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
-    child_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
+    child_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
     barrage_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedOverheadBarragePolicy.cs").read_text(encoding="utf-8")
 
     assert "UsesProjectileOnlyItemAffordance" in family_policy
     assert 'family == OverheadBarrage && carrier == "swing"' in family_policy
     assert "UsesProjectileOnlyItemAffordance(runtimeFamily, Attack.Delivery)" in apply_source
-    assert "EffectCode = _spec.EffectCode" in child_runtime
+    assert "EffectCode = parent.EffectCode" in child_policy
     assert "child.EffectCode =" not in barrage_policy
     assert "parent.ProjectileFamily" in barrage_policy
     assert "parent.ProjectileShape" in barrage_policy

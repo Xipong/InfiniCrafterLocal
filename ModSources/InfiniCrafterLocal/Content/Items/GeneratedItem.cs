@@ -29,6 +29,7 @@ namespace InfiniCrafterLocal.Content.Items;
 public partial class GeneratedItem : ModItem
 {
     private const int GeneratedItemNetPayloadVersion = 4;
+    private const int MaxGeneratedAoeTargetsPerHit = 16;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
@@ -36,6 +37,7 @@ public partial class GeneratedItem : ModItem
     private int _lastUseBlockedNoticeTick = -9999;
     private int _lastAltUseBlockedNoticeTick = -9999;
     private int _lastRuntimeHydrationTouchTick = -9999;
+    private bool _applyingGeneratedSwingAoeDamage;
 
     private static void LogLowNoiseWarning(string context, Exception ex)
     {
@@ -957,7 +959,10 @@ public partial class GeneratedItem : ModItem
 
     public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
     {
-        if (player.whoAmI != Main.myPlayer || Data?.Attack is null || !Data.Attack.Enabled)
+        if (_applyingGeneratedSwingAoeDamage
+            || player.whoAmI != Main.myPlayer
+            || Data?.Attack is null
+            || !Data.Attack.Enabled)
             return;
         if (!GeneratedRuntimeFamilyPolicy.Is(AttackRuntimeFamily(Data.Attack), GeneratedRuntimeFamilyPolicy.Swing))
             return;
@@ -965,7 +970,10 @@ public partial class GeneratedItem : ModItem
             return;
 
         if (GeneratedMeleeOnHitEffectsEnabled())
+        {
+            ApplyGeneratedSwingAoeDamage(player, target, Data.Attack);
             ApplyGeneratedSwingOnHitEffects(player, target, Data.Attack, damageDone, Data.Id);
+        }
 
         // Explicit real secondary projectiles authored by runtimePlan stay allowed for
         // melee-core swings, but only when the planner described an actual secondary
@@ -1013,7 +1021,11 @@ public partial class GeneratedItem : ModItem
             {
                 Main.projectile[idx].localAI[1] = 1f;
                 Main.projectile[idx].localAI[2] = Main.projectile[idx].identity + 1f;
-                generatedProjectile.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), Data.Id);
+                generatedProjectile.ApplyGeneratedSpec(
+                    childSpec,
+                    new VfxManifestSpec(),
+                    Data.Id,
+                    GeneratedProjectileRuntimeVariant.SwingSecondary);
                 Main.projectile[idx].netUpdate = true;
                 generatedProjectile.BroadcastVisualSync();
             }
@@ -1024,6 +1036,50 @@ public partial class GeneratedItem : ModItem
     {
         try { return ModContent.GetInstance<InfiniGameplayQolConfig>()?.EnableGeneratedMeleeOnHitEffects ?? true; }
         catch { return true; }
+    }
+
+    private void ApplyGeneratedSwingAoeDamage(Player player, NPC directTarget, AttackSpec attack)
+    {
+        int radius = Math.Clamp(attack.AoeDamageRadiusPx, 0, 160);
+        if (radius <= 0
+            || _applyingGeneratedSwingAoeDamage
+            || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
+            return;
+
+        Vector2 center = directTarget.Center;
+        Rectangle aoeHitbox = new(
+            (int)center.X - radius,
+            (int)center.Y - radius,
+            radius * 2,
+            radius * 2);
+        int damage = Math.Max(1, player.GetWeaponDamage(Item));
+        float knockback = player.GetWeaponKnockback(Item);
+        int affectedTargets = 0;
+
+        _applyingGeneratedSwingAoeDamage = true;
+        try
+        {
+            for (int i = 0; i < Main.maxNPCs && affectedTargets < MaxGeneratedAoeTargetsPerHit; i++)
+            {
+                NPC npc = Main.npc[i];
+                if (npc is null
+                    || !npc.active
+                    || npc.life <= 0
+                    || npc.friendly
+                    || npc.dontTakeDamage
+                    || npc.whoAmI == directTarget.whoAmI
+                    || !aoeHitbox.Intersects(npc.Hitbox))
+                    continue;
+
+                int hitDirection = npc.Center.X >= center.X ? 1 : -1;
+                player.ApplyDamageToNPC(npc, damage, knockback, hitDirection, false, Item.DamageType, false);
+                affectedTargets++;
+            }
+        }
+        finally
+        {
+            _applyingGeneratedSwingAoeDamage = false;
+        }
     }
 
     private static void ApplyGeneratedSwingOnHitEffects(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
@@ -1119,7 +1175,11 @@ public partial class GeneratedItem : ModItem
             {
                 Main.projectile[idx].localAI[1] = 1f;
                 Main.projectile[idx].localAI[2] = rootId;
-                generatedProjectile.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), generatedItemId);
+                generatedProjectile.ApplyGeneratedSpec(
+                    childSpec,
+                    new VfxManifestSpec(),
+                    generatedItemId,
+                    GeneratedProjectileRuntimeVariant.SwingOverheadSecondary);
                 Main.projectile[idx].netUpdate = true;
                 generatedProjectile.BroadcastVisualSync();
             }
@@ -1169,67 +1229,7 @@ public partial class GeneratedItem : ModItem
     }
 
     private static AttackSpec SwingSecondarySpec(AttackSpec parent)
-    {
-        int size = Math.Max(8, (int)Math.Round(Math.Min(parent.ProjectileWidth, parent.ProjectileHeight) * 0.55f));
-        string material = string.IsNullOrWhiteSpace(parent.SecondaryMaterial) ? "material" : parent.SecondaryMaterial.Trim();
-        string shape = string.IsNullOrWhiteSpace(parent.SecondaryProjectileShape)
-            ? (material + " shard")
-            : parent.SecondaryProjectileShape.Trim();
-        return new AttackSpec
-        {
-            Enabled = true,
-            RuntimePlanAuthored = true,
-            RuntimeFamily = GeneratedRuntimeFamilyPolicy.Shoot,
-            Delivery = "shoot",
-            WeaponFamily = "secondary_projectile",
-            ProjectileFamily = "secondary_projectile",
-            Movement = "straight",
-            MovementCode = 0,
-            Effect = parent.Effect,
-            EffectCode = parent.EffectCode,
-            OnHit = "none",
-            OnHitCode = 0,
-            Speed = Math.Max(3f, parent.Speed * 0.82f),
-            Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180),
-            Pierce = 1,
-            ProjectileWidth = size,
-            ProjectileHeight = size,
-            ProjectileScale = Math.Clamp(parent.ProjectileScale * 0.58f, 0.45f, 1.15f),
-            HitboxScale = 1f,
-            TileCollide = true,
-            ExtraUpdates = Math.Min(1, parent.ExtraUpdates),
-            ShotCount = 1,
-            SplitCount = 0,
-            MaxChildProjectiles = 0,
-            MaxChildDepth = 0,
-            DustSpawnDenom = Math.Max(4, parent.DustSpawnDenom + 1),
-            BurstDustCap = Math.Max(0, parent.BurstDustCap / 2),
-            SecondaryDamageMultiplier = 0f,
-            SecondaryMaterial = material,
-            SecondaryProjectileShape = shape,
-            ProjectileShape = shape,
-            ProjectileMotion = "short emitted shard from melee hit",
-            ProjectileTrail = parent.ProjectileTrail,
-            ProjectileImpact = parent.ProjectileImpact,
-            PrimaryColorName = parent.PrimaryColorName,
-            SoundUseCatalogId = parent.SoundUseCatalogId,
-            SoundImpactCatalogId = parent.SoundImpactCatalogId,
-            SoundCatalogSource = parent.SoundCatalogSource,
-            SoundPitch = parent.SoundPitch,
-            SoundVolume = parent.SoundVolume,
-            SoundPitchVariance = parent.SoundPitchVariance,
-            ProjectileSpritePath = parent.ChildSpritePath,
-            ProjectileSpriteUrl = parent.ChildSpriteUrl,
-            ProjectileSpriteStatus = parent.ChildSpriteStatus,
-            ProjectileSpritePrompt = "",
-            ProjectileSpriteScore = parent.ChildSpriteScore,
-            ImpactSpritePath = parent.ImpactSpritePath,
-            ImpactSpriteUrl = parent.ImpactSpriteUrl,
-            ImpactSpriteStatus = parent.ImpactSpriteStatus,
-            ImpactSpritePrompt = "",
-            ImpactSpriteScore = parent.ImpactSpriteScore,
-        };
-    }
+        => GeneratedChildSpecPolicy.CreateSwingSecondary(parent);
 
     public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
     {

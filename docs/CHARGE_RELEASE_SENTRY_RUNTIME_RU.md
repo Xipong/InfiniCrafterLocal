@@ -28,7 +28,7 @@ Lifecycle:
 1. Item use создаёт один held root projectile.
 2. Пока удерживается use button, root накапливает bounded charge и отслеживает aim.
 3. При release root создаёт обычные authored primary projectiles.
-4. Released projectile меняет family на `shoot|cast|throw`, поэтому не создаёт новый charge root.
+4. Released projectile меняет family на `shoot|cast|throw`, поэтому не создаёт новый charge root; remote peers reconstruct this finite variant from the registry-owned root through `GeneratedChildSpecPolicy`.
 5. On-hit/secondary/effect/VFX authored contract сохраняется у выпущенного projectile.
 6. Root уничтожается после release или при invalid owner/death/CC/item switch.
 
@@ -67,7 +67,7 @@ Lifecycle:
 1. Item marks itself `Item.sentry` and places root at cursor or Terraria resting spot.
 2. Root marks itself `Projectile.sentry`, remains stationary and targets owner-assigned NPC first, then nearest visible NPC.
 3. Только authoritative owner/server path создаёт shots.
-4. Каждый shot становится ordinary `runtimeFamily=shoot`; он не наследует sentry lifecycle.
+4. Каждый shot становится ordinary `runtimeFamily=shoot`; он не наследует sentry lifecycle, а remote peers reconstruct it from the registry-owned root through the exact `SentryShot` runtime variant.
 5. Все shots расходуют один lifetime child budget; после исчерпания root завершается.
 6. `player.UpdateMaxTurrets()` применяет обычный Terraria sentry limit.
 

@@ -183,6 +183,29 @@ def _check_gemini_length_response_retries_once_with_minimal_reasoning(monkeypatc
     assert payload[lp._REASONING_INTENT_KEY]["effort"] == "low"
 
 
+def _check_gemini_length_complete_json_prefix_is_not_retried(monkeypatch) -> None:
+    calls = []
+    content = '{"ok":true}\n' + ('}\n' * 128)
+
+    def fake_single(payload, timeout, context):
+        calls.append(payload)
+        return {"choices": [{"finish_reason": "length", "message": {"content": content}}]}
+
+    monkeypatch.setattr(lp, "_llm_json_single_context", fake_single)
+    monkeypatch.setattr(lp, "_is_google_openai_compat_reasoning_model", lambda _model, _context: True)
+    monkeypatch.setattr(lp, "log_event", lambda *_args, **_kwargs: None)
+    payload = {
+        "model": "gemini-3.1-flash-lite",
+        "messages": [],
+        "response_format": {"type": "json_object"},
+        lp._REASONING_INTENT_KEY: {"effort": "minimal", "exclude": True},
+    }
+    out = lp._llm_json_single_context_with_length_retry(payload, 1, {"model": payload["model"]})
+    assert lp.parse_first_valid_llm_json(out["choices"][0]["message"]["content"]) == {"ok": True}
+    assert len(calls) == 1
+    assert "transportRetryCount" not in out.get("_debug", {})
+
+
 def _check_malformed_json_response_retries_once_inside_logical_call(monkeypatch) -> None:
     calls = []
 
@@ -241,6 +264,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_llm_chat_json_retries_transient_http_without_fallback',
     '_check_network_attempt_budget_one_disables_inner_retry',
     '_check_gemini_length_response_retries_once_with_minimal_reasoning',
+    '_check_gemini_length_complete_json_prefix_is_not_retried',
     '_check_malformed_json_response_retries_once_inside_logical_call'
     ]:
         _fn = globals()[_name]
