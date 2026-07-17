@@ -74,6 +74,15 @@ def _runtime_validation_error_details(
             selected = next((row for row in indexed_calls if row[0] == wanted_index), None)
             field = str(indexed_match.group(2) or "")
         if selected is None:
+            leading = [
+                row
+                for row in indexed_calls
+                if str(row[1].get("fn") or "").strip()
+                and text.startswith(str(row[1].get("fn") or "").strip())
+            ]
+            if len(leading) == 1:
+                selected = leading[0]
+        if selected is None:
             named = [
                 row
                 for row in indexed_calls
@@ -263,6 +272,13 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     result_kind = _norm_name(stats.get("resultKind"))
     max_stack = _num(stats.get("maxStack"), 0) or 0
     craft_yield = _num(stats.get("craftYield"), 0) or 0
+    consume_call = find_call(rp, "consumption_behavior")
+    authored_consumable = stats.get("consumable") is True
+    stack_consumption_authored = (
+        authored_consumable
+        or max_stack > 1
+        or (_num(consume_call.get("consumeChancePercent"), 0) or 0) > 0
+    )
     has_primary = bool(all_calls(rp, "shoot_projectile"))
     if result_kind in {"weapon", "consumable_weapon"} and not has_primary:
         errors.append(f"{result_kind} result requires a primary executable action")
@@ -270,14 +286,32 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         errors.append("accessory result requires accessory_effect")
     if result_kind == "armor" and not all_calls(rp, "armor_effect"):
         errors.append("armor result requires armor_effect")
+    if result_kind in {"armor", "accessory"} and all_calls(rp, "emit_light"):
+        owner = "armor_effect.stats" if result_kind == "armor" else "accessory_effect.stats"
+        errors.append(
+            f"emit_light is not executable for resultKind={result_kind}; author equipment light in {owner}"
+        )
     if result_kind in {"ammo", "consumable_weapon"}:
         if max_stack <= 0 or craft_yield <= 0:
             errors.append(f"{result_kind} result requires explicit positive maxStack and craftYield")
         elif max(max_stack, craft_yield) < 25:
             warnings.append("ammo output has low stack/yield; playable ammo should usually output 25+")
+    if result_kind == "weapon" and stack_consumption_authored:
+        errors.append(
+            "invalid_result_kind: set_item_stats stack-consumed weapon requires explicit resultKind=consumable_weapon"
+        )
+    if result_kind == "consumable_weapon":
+        if not authored_consumable:
+            errors.append("consumable_weapon set_item_stats requires explicit consumable=true")
+        if max_stack <= 1:
+            errors.append("consumable_weapon set_item_stats requires explicit maxStack > 1")
     ammo_behavior = find_call(rp, "ammo_behavior")
     ammo_for = _norm_name(stats.get("ammoFor") or ammo_behavior.get("ammoFor"))
-    if result_kind == "ammo" and ammo_for in {"arrow", "arrows", "bullet", "bullets"}:
+    if result_kind == "ammo":
+        if ammo_for not in {"arrow", "bullet"}:
+            errors.append("ammo result requires vanilla arrow or bullet identity; custom projectile stacks use consumable_weapon")
+        if has_primary:
+            errors.append("actual ammo cannot author a generated primary action; use consumable_weapon or weapon")
         if "damageClass" not in stats or not str(stats.get("damageClass") or "").strip():
             errors.append("actual ammo requires explicit damageClass")
         if "damage" not in stats or (_num(stats.get("damage"), -1) or 0) < 0:
@@ -368,13 +402,19 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             errors.append("tool result lacks explicit executable tool_capability")
     elif result_kind == "accessory":
         accessory = find_call(rp, "accessory_effect")
-        stats_obj = accessory.get("stats") if isinstance(accessory.get("stats"), dict) else {}
+        stats_obj_candidate = accessory.get("stats")
+        stats_obj: dict[str, Any] = stats_obj_candidate if isinstance(stats_obj_candidate, dict) else {}
+        if (_num(stats_obj.get("lightStrength"), 0) or 0) > 0 and not str(stats_obj.get("lightColorName") or "").strip():
+            errors.append("accessory_effect stats.lightStrength requires explicit lightColorName")
         if not any(value not in (None, "", 0, 0.0, False) for value in stats_obj.values()):
             errors.append("accessory result lacks explicit executable accessory_effect.stats")
     elif result_kind == "armor":
         armor = find_call(rp, "armor_effect")
         slot = _norm_name(armor.get("armorSlot") or stats.get("armorSlot"))
-        armor_stats = armor.get("stats") if isinstance(armor.get("stats"), dict) else {}
+        armor_stats_candidate = armor.get("stats")
+        armor_stats: dict[str, Any] = armor_stats_candidate if isinstance(armor_stats_candidate, dict) else {}
+        if (_num(armor_stats.get("lightStrength"), 0) or 0) > 0 and not str(armor_stats.get("lightColorName") or "").strip():
+            errors.append("armor_effect stats.lightStrength requires explicit lightColorName")
         set_bonus = armor.get("setBonus") if isinstance(armor.get("setBonus"), dict) else {}
         defense = _num(armor.get("defense", stats.get("defense")), 0) or 0
         if slot not in {"head", "body", "legs"}:

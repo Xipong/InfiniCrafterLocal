@@ -228,7 +228,7 @@ class SettingsGuiTraceStateMixin:
             self._set_field_enabled(key, provider == "openrouter", f"LLM provider сейчас `{provider}`, OpenRouter поля не используются.")
         for key in compat_llm:
             self._set_field_enabled(key, provider == "openai_compat", f"LLM provider сейчас `{provider}`, compat API поля не используются.")
-        for key in ("INFINI_LLM_REAUTHOR_MODEL", "INFINI_LLM_REAUTHOR_TEMPERATURE"):
+        for key in ("INFINI_LLM_REAUTHOR_TEMPERATURE",):
             getattr(self, "_set_field_enabled")(key, llm_enabled, "Use LLM=0; scoped same-author repair не вызывается.")
 
         set_field_enabled = getattr(self, "_set_field_enabled")

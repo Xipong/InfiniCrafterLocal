@@ -270,7 +270,6 @@ def build_registry() -> dict[str, Any]:
             "declarations": [
                 {
                     "file": row.file,
-                    "line": row.line,
                     "type": row.type_name,
                     "default": "<redacted>" if secret and row.default not in (None, "") else row.default,
                     "minimum": row.minimum,
