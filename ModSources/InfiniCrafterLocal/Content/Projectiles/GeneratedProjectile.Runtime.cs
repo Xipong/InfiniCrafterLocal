@@ -37,9 +37,31 @@ public sealed partial class GeneratedProjectile
         ProjectileID.Sets.TrailingMode[Type] = 2;
     }
 
-    public void ApplyGeneratedSpec(AttackSpec spec, VfxManifestSpec? vfxManifest = null, string generatedItemId = "")
+    public void ApplyGeneratedSpec(
+        AttackSpec spec,
+        VfxManifestSpec? vfxManifest = null,
+        string generatedItemId = "",
+        GeneratedProjectileRuntimeVariant runtimeVariant = GeneratedProjectileRuntimeVariant.Root)
+        => ApplyGeneratedSpecCore(spec, vfxManifest, generatedItemId, runtimeVariant, resetInstanceState: true);
+
+    private void ApplyHydratedGeneratedSpec(
+        AttackSpec spec,
+        VfxManifestSpec? vfxManifest,
+        string generatedItemId,
+        GeneratedProjectileRuntimeVariant runtimeVariant)
+        => ApplyGeneratedSpecCore(spec, vfxManifest, generatedItemId, runtimeVariant, resetInstanceState: !_runtimeSpecEverApplied);
+
+    private void ApplyGeneratedSpecCore(
+        AttackSpec spec,
+        VfxManifestSpec? vfxManifest,
+        string generatedItemId,
+        GeneratedProjectileRuntimeVariant runtimeVariant,
+        bool resetInstanceState)
     {
         _generatedItemId = generatedItemId ?? "";
+        _runtimeVariant = GeneratedChildSpecPolicy.IsKnownVariant(runtimeVariant)
+            ? runtimeVariant
+            : GeneratedProjectileRuntimeVariant.Root;
         _pendingNetworkSpecTicks = 0;
         _spec = spec ?? new AttackSpec();
         SanitizeRuntimeSize(_spec);
@@ -58,22 +80,27 @@ public sealed partial class GeneratedProjectile
             DisableUnsupportedProjectile($"Unsupported generated runtime opcode/family: movement={_spec.MovementCode}, effect={_spec.EffectCode}, onHit={_spec.OnHitCode}.");
             return;
         }
+        _runtimeSpecEverApplied = true;
         _statsApplied = false;
-        _remainingBounces = InitialBounceBudget(_spec);
-        _returningPhase = false;
-        _orbitInitialized = false;
-        _orbitStartAngle = 0f;
-        _orbitStartRadius = 0f;
-        _stuckToTile = false;
-        _impactMobilityUsed = false;
-        _lastImpactSoundLocalTick = -9999;
-        _chargeReleaseFired = false;
-        _chargeTicksAccumulated = 0;
-        _sentryFireTimer = 0;
-        _whipInitialized = false;
-        _whipBaseDirection = Vector2.Zero;
-        _whipControlPoints.Clear();
-        _visualSyncRebroadcastsSent = 0;
+        if (resetInstanceState)
+        {
+            _remainingBounces = InitialBounceBudget(_spec);
+            _returningPhase = false;
+            _orbitInitialized = false;
+            _orbitStartAngle = 0f;
+            _orbitStartRadius = 0f;
+            _stuckToTile = false;
+            _impactMobilityUsed = false;
+            _applyingAuthoredAoeDamage = false;
+            _lastImpactSoundLocalTick = -9999;
+            _chargeReleaseFired = false;
+            _chargeTicksAccumulated = 0;
+            _sentryFireTimer = 0;
+            _whipInitialized = false;
+            _whipBaseDirection = Vector2.Zero;
+            _whipControlPoints.Clear();
+            _visualSyncRebroadcastsSent = 0;
+        }
         ApplyConfiguredStats();
     }
 
@@ -96,6 +123,9 @@ public sealed partial class GeneratedProjectile
         Projectile.netImportant = false;
         Projectile.usesLocalNPCImmunity = true;
         Projectile.localNPCHitCooldown = 10;
+        _configured = false;
+        _runtimeSpecEverApplied = false;
+        _runtimeVariant = GeneratedProjectileRuntimeVariant.Root;
         _statsApplied = false;
         _returningPhase = false;
         _orbitInitialized = false;
@@ -104,6 +134,7 @@ public sealed partial class GeneratedProjectile
         _whipControlPoints.Clear();
         _stuckToTile = false;
         _impactMobilityUsed = false;
+        _applyingAuthoredAoeDamage = false;
     }
 
 
@@ -140,90 +171,7 @@ public sealed partial class GeneratedProjectile
 
     private AttackSpec ChildSpec(int movement = 0, int onHit = 0, float scale = 0.75f)
     {
-        AttackSpec child = new AttackSpec
-        {
-            Enabled = _spec.Enabled,
-            DamageClass = _spec.DamageClass,
-            MovementCode = movement,
-            EffectCode = _spec.EffectCode,
-            OnHitCode = onHit,
-            ProjectileWidth = Math.Max(8, (int)(_spec.ProjectileWidth * scale)),
-            ProjectileHeight = Math.Max(8, (int)(_spec.ProjectileHeight * scale)),
-            ProjectileScale = Math.Max(0.45f, _spec.ProjectileScale * scale),
-            HitboxScale = 1f,
-            ExplosionRadius = 0,
-            RangeTiles = Math.Clamp(_spec.RangeTiles, 4f, 120f),
-            HomingStrength = Math.Clamp(_spec.HomingStrength, 0f, 1f),
-            BeamWidthPx = 14f,
-            Lifetime = Math.Min(80, Math.Max(24, _spec.Lifetime / 2)),
-            Pierce = 1,
-            ExtraUpdates = Math.Min(1, _spec.ExtraUpdates),
-            TileCollide = true,
-            BounceCount = 0,
-            SplitCount = 0,
-            ChainCount = 0,
-            ImmunityCooldown = 18,
-            ProcMode = 0,
-            RuntimePlanAuthored = _spec.RuntimePlanAuthored,
-            SecondaryTrigger = GeneratedSecondaryTriggerPolicy.OnHit,
-            SecondarySpreadRadians = _spec.SecondarySpreadRadians,
-            SecondaryDamageMultiplier = _spec.SecondaryDamageMultiplier,
-            SecondaryLifetimeTicks = _spec.SecondaryLifetimeTicks,
-            SameTargetBias = _spec.SameTargetBias,
-            DebuffHint = "",
-            DebuffTime = 0,
-            RuntimeFamily = GeneratedRuntimeFamilyPolicy.Shoot,
-            Delivery = "shoot",
-            WeaponFamily = "child_projectile",
-            ProjectileFamily = string.IsNullOrWhiteSpace(_spec.SecondaryProjectileShape) ? "child_projectile" : "secondary_projectile",
-            AmmoKind = "",
-            SecondaryMaterial = _spec.SecondaryMaterial,
-            SecondaryProjectileShape = _spec.SecondaryProjectileShape,
-            Pattern = "basic",
-            MaxChildProjectiles = Math.Max(4, _spec.MaxChildProjectiles / 2),
-            MaxChildDepth = Math.Max(0, _spec.MaxChildDepth - 1),
-            DustSpawnDenom = Math.Max(3, _spec.DustSpawnDenom + 1),
-            BurstDustCap = _spec.BurstDustCap <= 0 ? 0 : Math.Max(1, _spec.BurstDustCap / 2),
-            VisualMode = _spec.VisualMode,
-            TrailStyle = _spec.TrailStyle,
-            ImpactStyle = _spec.ImpactStyle,
-            PrimaryColorName = _spec.PrimaryColorName,
-            SoundPitch = _spec.SoundPitch,
-            SoundVolume = _spec.SoundVolume,
-            SoundPitchVariance = _spec.SoundPitchVariance,
-            ProjectileShape = _spec.ProjectileShape,
-            ProjectileMotion = _spec.ProjectileMotion,
-            ProjectileRotation = _spec.ProjectileRotation,
-            ProjectileTrail = _spec.ProjectileTrail,
-            ProjectileImpact = _spec.ProjectileImpact,
-            SoundUseCatalogId = _spec.SoundUseCatalogId,
-            SoundImpactCatalogId = _spec.SoundImpactCatalogId,
-            SoundUseCatalogPath = _spec.SoundUseCatalogPath,
-            SoundImpactCatalogPath = _spec.SoundImpactCatalogPath,
-            SoundCatalogSource = _spec.SoundCatalogSource,
-            ProjectileSpritePath = _spec.ProjectileSpritePath,
-            ProjectileSpriteUrl = _spec.ProjectileSpriteUrl,
-            ProjectileSpriteStatus = _spec.ProjectileSpriteStatus,
-            ProjectileSpritePrompt = _spec.ProjectileSpritePrompt,
-            ProjectileSpriteScore = _spec.ProjectileSpriteScore,
-            ImpactSpritePath = _spec.ImpactSpritePath,
-            ImpactSpriteUrl = _spec.ImpactSpriteUrl,
-            ImpactSpriteStatus = _spec.ImpactSpriteStatus,
-            ImpactSpritePrompt = _spec.ImpactSpritePrompt,
-            ImpactSpriteScore = _spec.ImpactSpriteScore,
-            ChildSpritePath = _spec.ChildSpritePath,
-            ChildSpriteUrl = _spec.ChildSpriteUrl,
-            ChildSpriteStatus = _spec.ChildSpriteStatus,
-            ChildSpritePrompt = _spec.ChildSpritePrompt,
-            ChildSpriteScore = _spec.ChildSpriteScore,
-            FieldSpritePath = _spec.FieldSpritePath,
-            FieldSpriteUrl = _spec.FieldSpriteUrl,
-            FieldSpriteStatus = _spec.FieldSpriteStatus,
-            FieldSpritePrompt = _spec.FieldSpritePrompt,
-            FieldSpriteScore = _spec.FieldSpriteScore,
-            VisualAnimationPlan = _spec.VisualAnimationPlan,
-            VfxManifestJson = _spec.VfxManifestJson
-        };
+        AttackSpec child = GeneratedChildSpecPolicy.CreateGenericGameplayChild(_spec, movement, onHit, scale);
         SanitizeRuntimePlanChildSpec(child);
         return child;
     }
@@ -690,13 +638,23 @@ public sealed partial class GeneratedProjectile
         ApplyPendingProjectileVisualSyncIfAny();
         if (!_configured && _pendingNetworkSpecTicks > 0)
         {
-            _pendingNetworkSpecTicks--;
-            Projectile.damage = 0;
-            Projectile.friendly = false;
-            Projectile.velocity *= 0.92f;
-            if (_pendingNetworkSpecTicks <= 0)
-                Projectile.Kill();
-            return;
+            if (TryHydrateRuntimeVariantFromRegistry())
+            {
+                // Continue into normal AI on the same tick once the authoritative
+                // world-scoped registry entry becomes available.
+            }
+            else
+            {
+                if (!Projectile.active)
+                    return;
+                _pendingNetworkSpecTicks--;
+                Projectile.damage = 0;
+                Projectile.friendly = false;
+                Projectile.velocity *= 0.92f;
+                if (_pendingNetworkSpecTicks <= 0)
+                    Projectile.Kill();
+                return;
+            }
         }
         if (!RuntimePlanMode)
         {

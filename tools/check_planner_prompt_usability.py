@@ -123,7 +123,7 @@ def _prompt_budgets() -> dict[str, dict[str, int | str]]:
             "schema": author_item_provider_response_schema(),
         },
     }
-    repair_req, _, _, _, _, _ = build_same_author_repair_request(
+    repair_req, _, _, _, _ = build_same_author_repair_request(
         _sample_authored_item(),
         a,
         b,

@@ -6,6 +6,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.pipelines.llm_authoring_prompt import llm_runtime_result_kind_policy
+from infini_local.core.runtime_authoring.compiler import project_authored_pierce_to_runtime_hit_budget
+from infini_local.pipelines.result_identity_policy import project_runtime_result_identity
 
 from csharp_partial_reader import read_text_with_partial_bundles
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,8 +26,29 @@ def _check_consumable_weapon_runtime_kind_keeps_weapon_executor_alive() -> None:
         },
     }
     kind, policy = llm_runtime_result_kind_policy(data, "potion", {"potion", "bomb"}, {}, {}, "test")
+    projection = project_runtime_result_identity(
+        "consumable_weapon",
+        has_primary=True,
+    )
+    assert projection.gameplay_kind == "weapon"
+    assert projection.runtime_output_kind == "consumable_weapon"
     assert kind == "weapon"
     assert policy["runtimeResultKind"] == "consumable_weapon"
+    def assert_rejected(result_kind: str, *, ammo_for: str = "", has_primary: bool = False, reason: str) -> None:
+        try:
+            project_runtime_result_identity(result_kind, ammo_for=ammo_for, has_primary=has_primary)
+        except ValueError as exc:
+            assert reason in str(exc)
+        else:
+            raise AssertionError(f"expected {result_kind!r} identity to be rejected")
+
+    for invalid_alias in ("thrown_stack", "stackable_weapon", "consumable_projectile"):
+        assert_rejected(invalid_alias, has_primary=True, reason="unsupported_result_kind")
+    assert_rejected("ammo", has_primary=True, reason="ammo_result_requires_vanilla_identity")
+    assert_rejected(
+        "ammo", ammo_for="arrow", has_primary=True,
+        reason="actual_ammo_cannot_author_generated_primary",
+    )
 
 
 def _check_csharp_attack_setup_is_not_gated_by_positive_damage() -> None:
@@ -72,6 +95,7 @@ def _check_visual_manifest_distinguishes_runtime_executor_from_vanilla_hitbox() 
 
 def _check_runtime_projectiles_use_single_hit_defaults_and_ignore_spawn_target_for_children() -> None:
     projectile = read_text_with_partial_bundles(CS_ROOT / "Content" / "Projectiles" / "GeneratedProjectile.cs")
+    child_policy = (CS_ROOT / "Content" / "Projectiles" / "GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
     combine = (ROOT / "infini_local" / "pipelines" / "combine_gameplay.py").read_text(encoding="utf-8")
     assert "_spec.Pierce < 0 ? -1 : Math.Max(1, _spec.Pierce)" in projectile
     assert "_spec.Pierce <= 0 ? -1" not in projectile
@@ -79,9 +103,16 @@ def _check_runtime_projectiles_use_single_hit_defaults_and_ignore_spawn_target_f
     assert "whipLike" in projectile and "? -1" in projectile
     assert "_spawnIgnoreNpc" in projectile
     assert "CanHitNPC" in projectile
-    assert "SpawnChild(origin, velocity, dmg, childSpec, Projectile.localAI[1] + 1f, target.whoAmI)" in projectile
+    split_body = projectile.split("private void SplitProjectiles", 1)[1].split("private void ChainProjectiles", 1)[0]
+    assert "GeneratedProjectileRuntimeVariant.StraightSecondary" in split_body
+    assert "target.whoAmI" in split_body
+    assert "StraightSecondary => damagingChild" in child_policy
+    assert "bool damagingChild = boundedChild && parent.SecondaryDamageMultiplier > 0f" in child_policy
+    assert "TryCreateRuntimeVariant" in child_policy
     assert "int(genome[\"pierce\"]) + 1" not in combine
-    assert '"pierce": -1 if int(genome["pierce"]) == -1 else max(1, int(genome["pierce"]))' in combine
+    assert [project_authored_pierce_to_runtime_hit_budget(value) for value in (-1, 0, 1)] == [-1, 1, 1]
+    assert "project_authored_pierce_to_runtime_hit_budget" in combine
+    assert 'genome["projectileHitBudget"]' in combine
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving

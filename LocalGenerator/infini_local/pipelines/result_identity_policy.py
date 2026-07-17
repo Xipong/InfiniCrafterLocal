@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from infini_local.core.category_policy import (
@@ -245,6 +246,73 @@ def normalize_category(category: Any) -> str:
     }
     c = aliases.get(c, c)
     return c if c in ALLOWED_CATEGORIES else "generic"
+
+
+@dataclass(frozen=True)
+class RuntimeResultIdentityProjection:
+    """Typed authored-result to Terraria item-carrier projection.
+
+    ``authored_kind`` remains the model-authored identity. ``gameplay_kind`` is
+    the exact carrier serialized to GameplaySpec, while ``runtime_output_kind``
+    records the stack/consumption mode used by the compiler before debug-only
+    fields are removed from the executable wire.
+    """
+
+    authored_kind: str
+    gameplay_kind: str
+    runtime_output_kind: str
+    authored_ammo_for: str
+    final_ammo_for: str
+    unsupported_ammo_for: str
+
+
+def project_runtime_result_identity(
+    result_kind: Any,
+    *,
+    ammo_for: Any = "",
+    has_primary: bool = False,
+) -> RuntimeResultIdentityProjection:
+    """Project one authored runtime identity to its finite Terraria carrier."""
+    raw_kind = str(result_kind or "generic").strip().lower().replace("-", "_")
+    canonical_kinds = {
+        "weapon", "ammo", "consumable_weapon", "tool", "accessory",
+        "armor", "potion", "material", "furniture", "generic",
+    }
+    if raw_kind not in canonical_kinds:
+        raise ValueError(f"unsupported_result_kind:{raw_kind}")
+    raw_ammo = str(ammo_for or "").strip().lower()
+    supported_ammo = raw_ammo in {"arrow", "arrows", "bullet", "bullets"}
+    canonical_ammo = (
+        "arrow" if raw_ammo in {"arrow", "arrows"}
+        else "bullet" if raw_ammo in {"bullet", "bullets"}
+        else ""
+    )
+    unsupported_ammo = raw_ammo if raw_ammo and not supported_ammo else ""
+
+    gameplay_kind = "weapon" if raw_kind == "consumable_weapon" else normalize_category(raw_kind)
+    runtime_output_kind = ""
+    final_ammo = raw_ammo
+
+    if raw_kind == "consumable_weapon":
+        runtime_output_kind = "consumable_weapon"
+        final_ammo = ""
+    elif raw_kind == "ammo":
+        if not supported_ammo:
+            raise ValueError("ammo_result_requires_vanilla_identity")
+        if has_primary:
+            raise ValueError("actual_ammo_cannot_author_generated_primary")
+        gameplay_kind = "ammo"
+        runtime_output_kind = "actual_ammo"
+        final_ammo = canonical_ammo
+
+    return RuntimeResultIdentityProjection(
+        authored_kind=raw_kind,
+        gameplay_kind=gameplay_kind,
+        runtime_output_kind=runtime_output_kind,
+        authored_ammo_for=raw_ammo,
+        final_ammo_for=final_ammo,
+        unsupported_ammo_for=unsupported_ammo,
+    )
 
 def parent_primary_category(item: dict[str, Any]) -> str:
     """Stable primary role for parent context.
@@ -605,6 +673,8 @@ __all__ = [
     "repair_name_if_needed",
 
     "normalize_category",
+    "RuntimeResultIdentityProjection",
+    "project_runtime_result_identity",
     "parent_primary_category",
     "is_weapon_like_parent",
     "_weighted_choice",

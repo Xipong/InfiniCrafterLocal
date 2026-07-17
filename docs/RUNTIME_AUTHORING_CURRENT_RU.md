@@ -3,12 +3,12 @@
 - `charge_release` is executable through ranged/magic/low-level projectile calls with two bounded authored knobs.
 - `deploy_sentry` is the only true sentry call; temporary helpers remain temporary.
 - Both slices have explicit Python/C# owners and full final-`AttackSpec` projection tests.
-- Protocol 14 syncs damage class, charge state and sentry scalar state.
+- Current shared protocol 20 syncs a registry id, finite runtime variant and bounded charge/sentry/beam instance state; immutable `AttackSpec` data comes from registry hydration.
 - See `CHARGE_RELEASE_SENTRY_RUNTIME_RU.md`.
 
 ## 2026-07-10 — pre-livetest author/image contract v12
 
-- Runtime API Python/C# синхронизирован на `v0.4.51`; ProjectileSyncVersion = 18.
+- Runtime API Python/C# синхронизирован на `v0.4.51`; historical protocol 18 from that snapshot has since been replaced by registry-hydrated compact protocol 20.
 - Active helper call — `spawn_temporary_helper_projectile`; это bounded temporary projectile, не minion/sentry lifecycle. Удалённые function names отклоняются.
 - `on_expire` означает любой projectile kill; `shotCount` — simultaneous multishot, не timed burst.
 - Generated arrow/bullet ammo не обещает собственного generated AttackSpec; authored throwable/dart использует weapon/consumable_weapon + empty ammoFor.
@@ -41,7 +41,7 @@
 - Добавлен `RUNTIME_VERTICAL_SLICES_RU.md` и contract tests, закрепляющие одного владельца на vocabulary/compiler/executor.
 - Balance разделён через маленький policy-owner `core/balance_mode.py`: `safety` default, `normalize` opt-in, `report` diagnostic. Формулы не переписаны и не перенесены в mode-owner.
 - Sparse-output behavior не изменён: explicit zero/default остаётся authored intent и сохраняет provenance.
-- Projectile protocol: `ProjectileSyncVersion = 13`.
+- Historical v10 used `ProjectileSyncVersion = 13`; the current shared projectile protocol is registry-hydrated compact version 20.
 - Verification: 330 tests passed; prompt 22 422 / 24 000 chars, 24 active functions; static C# and hygiene checks PASS; real tML build skipped because `dotnet` is unavailable.
 
 ## 2026-07-10 — gameplay authoring/runtime completion v9
