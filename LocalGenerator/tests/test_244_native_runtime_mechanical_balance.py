@@ -233,11 +233,11 @@ def _contract_check_remaining_finite_families_keep_structural_native_boundaries(
     assert "not a persistent terraria minion" in schema.lower()
 
 
-def _contract_check_runtime_contract_v2_survives_csharp_model_normalization() -> None:
+def _contract_check_python_v3_author_contract_does_not_cross_csharp_wire() -> None:
     model = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs").read_text(encoding="utf-8")
-    assert "public List<string> PlayerViewTimeline { get; set; } = new();" in model
-    assert "PlayerViewTimeline = CleanList(PlayerViewTimeline, 8, 180);" in model
-    assert "public List<MechanicBackingRefSpec> BackingRefs { get; set; } = new();" in model
+    assert "RuntimeContractSpec" not in model
+    assert "MechanicBackingRefSpec" not in model
+    assert "PlayerViewTimeline" not in model
 
 
 def _contract_check_executor_specific_movement_mismatches_are_rejected() -> None:
@@ -375,7 +375,7 @@ def test_244_native_runtime_mechanical_balance_module_contract(request):
             '_contract_check_native_held_family_lifecycles_follow_tmodloader_patterns',
             '_contract_check_runtime_family_matrix_covers_every_canonical_family_and_movement',
             '_contract_check_remaining_finite_families_keep_structural_native_boundaries',
-            '_contract_check_runtime_contract_v2_survives_csharp_model_normalization',
+            '_contract_check_python_v3_author_contract_does_not_cross_csharp_wire',
             '_contract_check_executor_specific_movement_mismatches_are_rejected',
             '_contract_check_starfury_style_affordance_survives_actual_genome_sanitizer',
             '_contract_check_csharp_native_family_guards_are_behavioral_not_prose',

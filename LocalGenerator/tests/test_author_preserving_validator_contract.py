@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.pipelines.combine_balance import apply_family_locks_to_genome
 from infini_local.pipelines.projectile_affordance import apply_parent_projectile_affordance
-from infini_local.pipelines.projectile_affordance import infer_projectile_visual_family
 from infini_local.pipelines.llm_authoring_prompt import authored_weapon_damage
 from infini_local.pipelines.parent_context_pipeline import behavior_policy_for_prompt
 from infini_local.pipelines.parent_context_pipeline import projectile_behavior_digest_for_llm
@@ -119,12 +118,6 @@ def _check_behavior_policy_has_no_item_family_exception_table() -> None:
     assert "prefer" not in a and "forbid" not in a
 
 
-def _check_projectile_name_does_not_infer_shuriken_family() -> None:
-    data = {}
-    parent = {"directProjectileRaw": {"internalName": "Shuriken", "width": 14, "height": 14, "aiStyle": 2}}
-    assert infer_projectile_visual_family(data, parent, {}) == "generic_projectile"
-
-
 def _check_parent_projectile_affordance_does_not_rewrite_motion_or_shape() -> None:
     genome = {
         "delivery": "shoot",
@@ -167,7 +160,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_secondary_children_do_not_replace_lifesteal_identity',
     '_check_behavior_digest_stays_raw_flag_based_for_owner_checked_projectiles',
     '_check_behavior_policy_has_no_item_family_exception_table',
-    '_check_projectile_name_does_not_infer_shuriken_family',
+
     '_check_parent_projectile_affordance_does_not_rewrite_motion_or_shape'
     ]:
         _fn = globals()[_name]

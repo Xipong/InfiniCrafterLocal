@@ -450,6 +450,7 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         ("sameTargetBias", 0, 1, False),
         ("runtimeLightStrength", 0, 1.5, False),
         ("runtimeLightDurationTicks", 0, 240, True),
+        ("dustSpawnDenom", 0, 60, True),
         ("vfxParticleScale", 0, 2, False),
         ("vfxParticleDurationTicks", 0, 80, True),
         ("vfxFieldLifetimeTicks", 0, 240, True),

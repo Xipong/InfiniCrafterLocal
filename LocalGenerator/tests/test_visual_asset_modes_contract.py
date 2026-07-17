@@ -100,7 +100,8 @@ def _check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback(monkeypa
 def _check_nested_baked_assets_can_request_projectile_sprite(monkeypatch) -> None:
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
     data = _base_item()
-    data["visualKit"]["bakedAssets"] = {"projectile": {"mode": "baked_sprite", "prompt": "right-facing amber dart"}}
+    data["visualKit"]["projectileSpritePrompt"] = "right-facing amber dart"
+    data["visualKit"]["bakedAssets"] = {"projectile": {"mode": "baked_sprite"}}
 
     plan = build_visual_asset_plan(data)
     projectile = next(x for x in plan if x["role"] == "projectile")
@@ -205,10 +206,10 @@ def _check_visual_director_preserves_distinct_projectile_contract(monkeypatch) -
                 "message": {
                     "content": json.dumps({
                         "visualKit": {
+                            "projectileSpritePrompt": "distinct opened three-blade flight body",
                             "bakedAssets": {
                                 "projectile": {
                                     "mode": "baked_sprite",
-                                    "prompt": "distinct opened three-blade flight body",
                                     "distinctFromItem": True,
                                     "reason": "authored transformation",
                                 }
@@ -258,15 +259,11 @@ def _check_reuse_item_sprite_slot_never_calls_image_backend(monkeypatch) -> None
     SPRITES.maybe_generate_visual_assets(data)
 
 
-def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeypatch) -> None:
-    levels = [
-        VISUAL.anime_reference_opportunity({"recipeKey": f"anime-reference-{index}"})
-        for index in range(2000)
-    ]
-    assert levels.count("none") >= 1700
-    assert 120 <= levels.count("subtle") <= 260
-    assert 15 <= levels.count("strong") <= 70
-    assert VISUAL.anime_reference_opportunity({"recipeKey": "stable-reference"}) == VISUAL.anime_reference_opportunity({"recipeKey": "stable-reference"})
+def _check_anime_reference_is_disabled_until_explicitly_authored(monkeypatch) -> None:
+    assert VISUAL.anime_reference_opportunity({"recipeKey": "anime-reference"}) == "none"
+    assert VISUAL.anime_reference_opportunity({
+        "runtimePlan": {"visualIntent": {"animeReference": {"strength": "strong"}}}
+    }) == "strong"
     assert VISUAL._sanitize_anime_reference(
         {"strength": "strong", "source": "Example", "motifs": ["crescent blade"]},
         "subtle",
@@ -275,8 +272,26 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
         {"strength": "strong", "source": "Example", "motifs": ["COPIED LOGO"]},
         "strong",
     ) is None
+    try:
+        VISUAL._validated_visual_director_kit(
+            json.dumps({
+                "visualKit": {
+                    "itemIconPrompt": "an otherwise valid authored blade",
+                    "animeReference": {
+                        "strength": "strong",
+                        "source": "Unrequested Source",
+                        "motifs": ["crescent blade"],
+                    },
+                },
+            }),
+            _base_item(),
+            "none",
+        )
+    except ValueError as error:
+        assert "not authorized" in str(error)
+    else:
+        raise AssertionError("unrequested animeReference must fail the Visual Director contract")
 
-    strong_key = next(f"anime-reference-{index}" for index in range(2000) if levels[index] == "strong")
     captured = {}
 
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
@@ -300,7 +315,7 @@ def _check_anime_reference_opportunity_is_rare_deterministic_and_bounded(monkeyp
 
     monkeypatch.setattr(VISUAL, "llm_chat_json", fake_llm)
     data = _base_item()
-    data["recipeKey"] = strong_key
+    data["runtimePlan"]["visualIntent"] = {"animeReference": {"strength": "strong"}}
     result = apply_visual_director(data, {}, {}, {}, {})
 
     policy = captured["payload"]["animeReferenceOpportunity"]
@@ -350,7 +365,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_child_asset_requires_compiled_child_runtime_or_vfx_consumer',
     '_check_visual_director_preserves_distinct_projectile_contract',
     '_check_reuse_item_sprite_slot_never_calls_image_backend',
-    '_check_anime_reference_opportunity_is_rare_deterministic_and_bounded'
+    '_check_anime_reference_is_disabled_until_explicitly_authored'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

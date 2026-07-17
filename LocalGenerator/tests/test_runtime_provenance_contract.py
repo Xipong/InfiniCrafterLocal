@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
+from infini_local.core.runtime_authoring.reports import compiled_fields_for_authored_param
+from infini_local.pipelines import combine_gameplay
+from infini_local.core.runtime_contracts import validate_structural_final_wire_contract
 
 
 def _contract_check_authored_runtime_fields_have_precise_provenance() -> None:
@@ -8,11 +11,11 @@ def _contract_check_authored_runtime_fields_have_precise_provenance() -> None:
         "category": "weapon",
         "runtimePlan": {
             "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 21, "useTimeTicks": 17}},
-                {"fn": "shoot_projectile", "params": {"runtimeFamily": "cast", "delivery": "cast", "movement": "straight", "shotCount": 3, "spreadRadians": 0.2, "speed": 11, "pierce": 2, "rangeTiles": 44, "lifetimeTicks": 120}},
+                {"callId": "stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 21, "useTimeTicks": 17}},
+                {"callId": "shot", "fn": "shoot_projectile", "params": {"runtimeFamily": "cast", "delivery": "cast", "movement": "straight", "shotCount": 3, "spreadRadians": 0.2, "speed": 11, "pierce": 2, "rangeTiles": 44, "lifetimeTicks": 120}},
                 {"fn": "spawn_secondary_projectiles", "params": {"trigger": "on_hit", "count": 2, "maxChildProjectiles": 4}},
                 {"fn": "apply_on_hit_effect", "params": {"onHit": "burst", "aoeRadiusTiles": 3}},
-                {"fn": "spawn_contact_particles", "params": {"effect": "star", "burstDustCap": 20}},
+                {"fn": "spawn_contact_particles", "params": {"effect": "star", "amount": 20}},
                 {"fn": "leave_trail_or_field", "params": {"trailLength": 12, "fieldRadiusTiles": 5}},
             ]
         },
@@ -48,6 +51,22 @@ def _contract_check_authored_runtime_fields_have_precise_provenance() -> None:
     assert provenance["pureVfx"]["enabled"] is True
     assert provenance["pureVfx"]["authoredCallCount"] >= 2
     assert provenance["authoredFields"]["damage"] is True
+    assert {
+        "callId": "stats",
+        "fn": "set_item_stats",
+        "param": "damage",
+        "authoredValue": 21,
+        "compiledFields": ["damage"],
+        "claimableFields": ["damage"],
+    } in provenance["authoredParameters"]
+    assert {
+        "callId": "shot",
+        "fn": "shoot_projectile",
+        "param": "speed",
+        "authoredValue": 11,
+        "compiledFields": ["speed"],
+        "claimableFields": ["speed"],
+    } in provenance["authoredParameters"]
 
 
 def _contract_check_defaults_are_distinguishable_from_authored_fields() -> None:
@@ -70,6 +89,125 @@ def _contract_check_defaults_are_distinguishable_from_authored_fields() -> None:
     assert sources["speed"] == "shoot_projectile"
 
 
+def _contract_check_tool_and_accessory_params_publish_exact_final_wire_fields() -> None:
+
+    assert compiled_fields_for_authored_param("tool_capability", "pickPower") == frozenset({"pickPower"})
+    assert compiled_fields_for_authored_param("tool_capability", "miningSpeedScale") == frozenset({"miningSpeedScale"})
+    assert compiled_fields_for_authored_param("accessory_effect", "stats.lifeRegen") == frozenset({"lifeRegen"})
+    assert compiled_fields_for_authored_param("accessory_effect", "stats.movementSpeed") == frozenset({"movementSpeed"})
+
+
+def _contract_check_final_wire_receipts_are_compiler_owned_per_authored_param() -> None:
+    authored = {
+        "concept": {"coreMechanic": "Deals direct magic damage."},
+        "runtimeContract": {"primaryVerb": "cast", "controlStyle": "tap"},
+        "runtimePlan": {"engineCalls": [{
+            "callId": "stats",
+            "fn": "set_item_stats",
+            "params": {"resultKind": "weapon", "damage": 21, "useTimeTicks": 17},
+        }]},
+    }
+    output = {
+        **authored,
+        "gameplay": {"kind": "weapon", "damage": 21, "useTime": 17},
+        "attack": {},
+    }
+    combine_gameplay._attach_compiler_final_wire_receipts(
+        output, authored, {}, {}, {}, {},
+    )
+    receipts = output["runtimeContract"]["finalWireReceipts"]
+    assert {
+        "callId": "stats",
+        "authoredParam": "damage",
+        "authoredValue": 21,
+        "compiledField": "damage",
+        "finalPath": "gameplay.damage",
+        "compiledValue": 21,
+        "status": "active",
+    } in receipts
+    assert {
+        "callId": "stats",
+        "authoredParam": "useTimeTicks",
+        "authoredValue": 17,
+        "compiledField": "useTimeTicks",
+        "finalPath": "gameplay.useTime",
+        "compiledValue": 17,
+        "status": "active",
+    } in receipts
+    final_report = validate_structural_final_wire_contract(output)
+    assert final_report["ok"] is True
+    assert output["tooltip"] == "Deals direct magic damage."
+
+    dropped = {**authored, "gameplay": {}, "attack": {}}
+    combine_gameplay._attach_compiler_final_wire_receipts(
+        dropped, authored, {}, {}, {}, {},
+    )
+    assert any(
+        row["callId"] == "stats"
+        and row["authoredParam"] == "damage"
+        and row["status"] == "dropped"
+        for row in dropped["runtimeContract"]["finalWireReceipts"]
+    )
+    dropped_report = validate_structural_final_wire_contract(dropped)
+    assert dropped_report["ok"] is False
+    assert any(
+        row["kind"] == "compiler_provenance_dropped"
+        for row in dropped_report["blockingClaims"]
+    )
+
+    # Receipts must be computed from the compiler preimage, never from an already
+    # corrupted final DTO that could otherwise certify itself.
+    misprojected = {
+        **authored,
+        "gameplay": {"kind": "weapon", "damage": 12, "useTime": 17},
+        "attack": {},
+    }
+    combine_gameplay._attach_compiler_final_wire_receipts(
+        misprojected, authored, {}, {}, {}, {},
+    )
+    misprojected_report = validate_structural_final_wire_contract(misprojected)
+    assert misprojected_report["ok"] is False
+    assert any(
+        row["kind"] == "compiler_provenance_mismatched"
+        and row["authoredParam"] == "damage"
+        and row["compiledValue"] == 21
+        and row["finalActual"] == 12
+        for row in misprojected_report["blockingClaims"]
+    )
+
+    list_authored = {
+        "concept": {"coreMechanic": "Applies two finite vanilla buffs."},
+        "runtimeContract": {"primaryVerb": "apply buffs", "controlStyle": "tap"},
+        "runtimePlan": {"engineCalls": [{
+            "callId": "buffs",
+            "fn": "apply_player_effect_on_use",
+            "params": {"buffs": [
+                {"buffType": 5, "buffTime": 600},
+                {"buffType": 6, "buffTime": 300},
+            ]},
+        }]},
+    }
+    list_output = {
+        **list_authored,
+        "gameplay": {"extraBuffs": [
+            {"buffCode": 5, "buffTime": 600},
+            {"buffCode": 6, "buffTime": 300},
+        ]},
+        "attack": {},
+    }
+    combine_gameplay._attach_compiler_final_wire_receipts(
+        list_output, list_authored, {}, {}, {}, {},
+    )
+    list_receipt = next(
+        row
+        for row in list_output["runtimeContract"]["finalWireReceipts"]
+        if row["callId"] == "buffs" and row["authoredParam"] == "buffs"
+    )
+    assert list_receipt["finalPath"] == "gameplay.extraBuffs"
+    assert list_receipt["compiledValue"] == list_output["gameplay"]["extraBuffs"]
+    assert validate_structural_final_wire_contract(list_output)["ok"] is True
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_runtime_provenance_contract_module_contract(request):
     from contract_checks import run_contract_checks
@@ -80,5 +218,7 @@ def test_runtime_provenance_contract_module_contract(request):
         (
             '_contract_check_authored_runtime_fields_have_precise_provenance',
             '_contract_check_defaults_are_distinguishable_from_authored_fields',
+            '_contract_check_tool_and_accessory_params_publish_exact_final_wire_fields',
+            '_contract_check_final_wire_receipts_are_compiler_owned_per_authored_param',
         ),
     )

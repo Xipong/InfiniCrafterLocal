@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from infini_local.core.runtime_archetypes import compile_runtime_archetype_to_attack_patch
+
 from infini_local.core.runtime_overhead_barrage_policy import apply_overhead_barrage_contract
 from infini_local.core.runtime_charge_release_policy import apply_charge_release_contract
 from infini_local.core.runtime_sentry_policy import apply_sentry_contract, reject_recursive_sentry_onhit
@@ -20,11 +20,8 @@ from infini_local.core.sound_catalog import (
 from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
 from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 from infini_local.core.runtime_authoring.secondary import apply_secondary_projectile_calls
-from infini_local.core.runtime_authoring.semantics import (
-    _truthy,
-    light_repair_runtime_family_from_fields,
-)
-from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _recover_rejected_primary_as_swing_secondary, _select_primary_shoot_call, all_calls
+from infini_local.core.runtime_authoring.semantics import _truthy
+from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _select_primary_shoot_call, all_calls
 
 def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
     normalize_runtime_plan_inplace(data)
@@ -69,19 +66,8 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
 
     # Primary executable action: one primary family only.  Incompatible extra
     # primary calls stay visible in provenance/debug and never override final fields.
-    recovered_primary_secondary = _recover_rejected_primary_as_swing_secondary(shoot, rejected_primary, shoots)
-    secondary_from_rejected_primary = bool(recovered_primary_secondary)
-    if recovered_primary_secondary:
-        secondary_calls = [*secondary_calls, recovered_primary_secondary]
     if rejected_primary:
         patch["rejectedPrimaryCalls"] = rejected_primary[:8]
-    if recovered_primary_secondary:
-        patch["recoveredPrimaryConflictAsSecondary"] = {
-            "sourceIndex": recovered_primary_secondary.get("_index"),
-            "mode": "swing_on_hit_secondary",
-            "projectileShape": recovered_primary_secondary.get("projectileShape"),
-            "count": recovered_primary_secondary.get("count"),
-        }
 
     raw_delivery = _norm_name(shoot.get("delivery"))
     delivery = _enum(shoot.get("delivery"), DELIVERIES, None)
@@ -98,17 +84,10 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         patch["ammoFor"] = _norm_name(shoot.get("ammoFor"))[:24]
     explicit_runtime_family = _enum(shoot.get("runtimeFamily"), RUNTIME_FAMILIES, None)
     runtime_family = explicit_runtime_family or "none"
-    repair_reason = ""
-    if shoots and runtime_family == "none":
-        # v0.4.30: tiny repair for weaker models.  This never reads prose and never
-        # invents a family from names; it only accepts one unambiguous family signal.
-        runtime_family, repair_reason = light_repair_runtime_family_from_fields(shoot)
     if shoots and runtime_family == "none":
         patch["runtimeContractError"] = "primary_attack_requires_runtimeFamily"
     else:
         patch["runtimeFamily"] = runtime_family
-        if repair_reason and repair_reason != "authored_runtimeFamily":
-            patch["runtimeFamilyRepair"] = repair_reason
         patch.update(_runtime_family_affordances(runtime_family, patch.get("weaponFamily") or shoot.get("weaponFamily"), patch.get("delivery") or shoot.get("delivery")))
 
     # Aggregate pure VFX calls. This is still not gameplay child logic.
@@ -615,11 +594,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
 
     # Real secondary damaging projectiles live in one small owner module.
     # This keeps trigger/lifecycle rules out of the already-large main compiler.
-    apply_secondary_projectile_calls(
-        patch,
-        secondary_calls,
-        secondary_from_rejected_primary=secondary_from_rejected_primary,
-    )
+    apply_secondary_projectile_calls(patch, secondary_calls)
 
 
     # Do not fill authored primary-action mechanics. Missing delivery/movement/
@@ -672,7 +647,6 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             patch["soundPitchVariance"] = round(float(_clamp(shoot.get("soundPitchVariance"), "soundPitchVariance", 0.18) or 0.0), 3)
 
     patch["runtimePlanAuthored"] = True
-    patch, _archetype_report = compile_runtime_archetype_to_attack_patch(data, patch)
     apply_overhead_barrage_contract(patch)
     apply_charge_release_contract(patch)
     apply_sentry_contract(patch)

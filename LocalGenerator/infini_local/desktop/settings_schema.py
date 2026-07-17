@@ -13,9 +13,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 FIELD_ORDER = [
     "INFINI_USE_LLM",
-    "INFINI_LLM_RUNTIME_AUTHORING",
-    "INFINI_LLM_RUNTIME_PLAN_REQUIRED",
-    "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
     "INFINI_BALANCE_MODE",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
     "INFINI_GUI_PIPELINE_PRESET",
@@ -56,6 +53,8 @@ FIELD_ORDER = [
     "INFINI_LLM_FALLBACK_NETWORK_FAILS",
     "INFINI_LLM_RESPONSE_FORMAT",
     "INFINI_LLM_TEMPERATURE",
+    "INFINI_LLM_REAUTHOR_MODEL",
+    "INFINI_LLM_REAUTHOR_TEMPERATURE",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE",
     "INFINI_LLM_MAX_TOKENS",
     "INFINI_LLM_REASONING_MODE",
@@ -201,9 +200,6 @@ def repair_sdcpp_command_template(template: str) -> tuple[str, bool, str]:
 
 DEFAULTS = {
     "INFINI_USE_LLM": "1",
-    "INFINI_LLM_RUNTIME_AUTHORING": "1",
-    "INFINI_LLM_RUNTIME_PLAN_REQUIRED": "1",
-    "INFINI_LLM_RUNTIME_STRICT_VALIDATION": "1",
     "INFINI_BALANCE_MODE": "safety",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK": "0",
     "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + FLUX.2 Klein 4B hybrid",
@@ -244,6 +240,8 @@ DEFAULTS = {
     "INFINI_LLM_FALLBACK_NETWORK_FAILS": "2",
     "INFINI_LLM_RESPONSE_FORMAT": "auto",
     "INFINI_LLM_TEMPERATURE": "0.38",
+    "INFINI_LLM_REAUTHOR_MODEL": "",
+    "INFINI_LLM_REAUTHOR_TEMPERATURE": "",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "0.42",
     "INFINI_LLM_MAX_TOKENS": "9000",
     "INFINI_LLM_REASONING_MODE": "off",
@@ -447,6 +445,8 @@ FIELD_HELP = {
     "INFINI_LLM_FALLBACK_NETWORK_FAILS": "Сколько сетевых/timeout сбоев подряд терпеть на primary, прежде чем переключаться на fallback. По умолчанию 2.",
     "INFINI_LLM_RESPONSE_FORMAT": "Как просить JSON у модели. auto — безопасный дефолт; strict schema может ломаться на провайдерах без поддержки response_format.",
     "INFINI_LLM_TEMPERATURE": "Температура основного LLM planner: выше = больше вариативности/риска, ниже = стабильнее/однообразнее. Это не Z-Image; картинки регулируются seed/CFG/steps/flow-shift.",
+    "INFINI_LLM_REAUTHOR_MODEL": "Опциональная модель для единственного scoped same-author repair после structural/compiler rejection. Legacy-имя переменной сохранено для config compatibility; ответ — bounded patch, не полный AuthorItem. Пусто = тот же model/profile.",
+    "INFINI_LLM_REAUTHOR_TEMPERATURE": "Температура единственного scoped repair. Пусто = наследовать Planner temperature. Это не verifier и не полный reauthor: модель возвращает только разрешённые repair-поля.",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "Температура LLM Visual Director, который пишет visual kit/prompt-ы для Z-Image. Выше = больше художественной вариативности, но больше риск ухода от предмета.",
     "INFINI_LLM_MAX_TOKENS": "Лимит ответа LLM. Для reasoning-моделей нужен запас, иначе модель может не успеть вернуть JSON.",
     "INFINI_BALANCE_MODE": "Режим пост-авторского баланса: safety сохраняет authored значения и применяет только технические guards; normalize включает старую мягкую нормализацию; report оставляет рекомендации и C# hard clamps.",

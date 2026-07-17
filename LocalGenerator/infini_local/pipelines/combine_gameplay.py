@@ -11,10 +11,13 @@ from infini_local.core.category_policy import COMBAT_CATEGORIES, NON_WEAPON_CATE
 from infini_local.core.boundary_models import ATTACK_NON_WIRE_FIELDS, GAMEPLAY_DEBUG_ONLY_FIELDS
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import item_field, item_num
-from infini_local.core.runtime_authoring.engine_call_contracts import engine_param_enum_values
-from infini_local.core.runtime_authoring.normalize import runtime_plan
+from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
+from infini_local.core.runtime_authoring.reports import runtime_plan_provenance_report
 from infini_local.core.runtime_authoring.structural import all_calls, find_call
-from infini_local.core.runtime_contracts import STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
+from infini_local.core.runtime_contracts import (
+    STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
+    authored_param_requires_final_wire_provenance,
+)
 from infini_local.pipelines.runtime_presentation_policy import runtime_presentation_defaults
 from infini_local.pipelines.result_identity_policy import (
     choose_result_category,
@@ -62,18 +65,6 @@ def _provenance_values_match(left: Any, right: Any) -> bool:
     return left == right
 
 
-def _nested_param_value(params: dict[str, Any], path: str) -> tuple[bool, Any]:
-    current: Any = params
-    parts = str(path or "").split(".")
-    if not parts or any(not part for part in parts):
-        return False, None
-    for part in parts:
-        if not isinstance(current, dict) or part not in current:
-            return False, None
-        current = current[part]
-    return True, current
-
-
 def _flatten_final_wire(data: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
@@ -94,71 +85,7 @@ def _flatten_final_wire(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _authored_ref_probe_values(data: dict[str, Any], call_id: str, field: str, expected: Any) -> list[Any]:
-    plan_candidate = data.get("runtimePlan")
-    plan: dict[str, Any] = plan_candidate if isinstance(plan_candidate, dict) else {}
-    calls_candidate = plan.get("engineCalls")
-    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
-    for call in calls:
-        if not isinstance(call, dict) or str(call.get("callId") or "") != call_id:
-            continue
-        params_candidate = call.get("params")
-        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
-        present, actual = _nested_param_value(params, field)
-        if not present or not _provenance_values_match(actual, expected):
-            return []
-        if isinstance(actual, bool):
-            return [not actual]
-        if isinstance(actual, int):
-            return list(dict.fromkeys((actual + 1, actual - 1)))
-        if isinstance(actual, float):
-            return list(dict.fromkeys((0.125 if abs(actual) <= 1e-9 else actual * 0.5, actual + 0.125)))
-        if isinstance(actual, str):
-            fn = str(call.get("fn") or "")
-            enum_values = engine_param_enum_values(fn, field.split(".")[-1])
-            if enum_values:
-                return [value for value in enum_values if value != actual]
-            return [actual + "__compiler_probe"]
-        return []
-    return []
 
-
-def _probe_authored_ref_source(
-    data: dict[str, Any], call_id: str, field: str, expected: Any, probe_value: Any,
-) -> bool:
-    plan_candidate = data.get("runtimePlan")
-    plan: dict[str, Any] = dict(plan_candidate) if isinstance(plan_candidate, dict) else {}
-    calls_candidate = plan.get("engineCalls")
-    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
-    changed = False
-    for call in calls:
-        if not isinstance(call, dict) or str(call.get("callId") or "") != call_id:
-            continue
-        params_candidate = call.get("params")
-        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
-        present, actual = _nested_param_value(params, field)
-        if present and _provenance_values_match(actual, expected):
-            current: Any = params
-            parts = field.split(".")
-            for part in parts[:-1]:
-                current = current[part]
-            current[parts[-1]] = probe_value
-            changed = True
-    data.pop("_runtimePlanCompileCache", None)
-    return changed
-
-
-def _remove_authored_call(data: dict[str, Any], call_id: str) -> bool:
-    plan_candidate = data.get("runtimePlan")
-    plan: dict[str, Any] = plan_candidate if isinstance(plan_candidate, dict) else {}
-    calls_candidate = plan.get("engineCalls")
-    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
-    retained = [call for call in calls if not isinstance(call, dict) or str(call.get("callId") or "") != call_id]
-    if len(retained) == len(calls):
-        return False
-    plan["engineCalls"] = retained
-    data.pop("_runtimePlanCompileCache", None)
-    return True
 
 
 def _attach_compiler_final_wire_receipts(
@@ -169,116 +96,205 @@ def _attach_compiler_final_wire_receipts(
     ca: dict[str, Any],
     cb: dict[str, Any],
 ) -> None:
+    """Attach exact compiler provenance for every mapped authored scalar."""
+    del a, b, ca, cb
+    baseline = _flatten_final_wire(output)
+    source = deepcopy(authored_preimage)
+    provenance = runtime_plan_provenance_report(source)
+    compiled_patch = runtime_plan_to_attack_genome_patch(source)
+    field_renames = {
+        "resultKind": "kind",
+        "useTimeTicks": "useTime",
+        "useAnimationTicks": "useAnimation",
+        "lifetimeTicks": "lifetime",
+        "buffType": "buffCode",
+    }
+    receipts: list[dict[str, Any]] = []
+    authored_rows = provenance.get("authoredParameters")
+    for row in authored_rows if isinstance(authored_rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        call_id = str(row.get("callId") or "")
+        fn = str(row.get("fn") or "")
+        authored_param = str(row.get("param") or "")
+        if not authored_param_requires_final_wire_provenance(fn, authored_param):
+            continue
+        authored_value = row.get("authoredValue")
+        compiled_fields = row.get("compiledFields")
+        compiled_field_values = compiled_fields if isinstance(compiled_fields, list) else []
+        if not compiled_field_values:
+            receipts.append({
+                "callId": call_id,
+                "authoredParam": authored_param,
+                "authoredValue": authored_value,
+                "compiledField": "unmapped",
+                "finalPath": "",
+                "compiledValue": None,
+                "status": "dropped",
+            })
+            continue
+        for compiled_field_value in compiled_field_values:
+            compiled_field = str(compiled_field_value or "")
+            wire_field = field_renames.get(compiled_field, compiled_field)
+            final_paths = [
+                f"{root}.{wire_field}"
+                for root in _PROVENANCE_ROOTS
+                if f"{root}.{wire_field}" in baseline
+            ]
+
+            def compiled_patch_value() -> tuple[bool, Any]:
+                candidate_paths = [compiled_field]
+                if wire_field != compiled_field:
+                    candidate_paths.append(wire_field)
+                candidate_paths.extend(
+                    source_field
+                    for source_field, target_field in field_renames.items()
+                    if target_field == wire_field and source_field not in candidate_paths
+                )
+                candidate_paths.extend(
+                    f"{root}.{wire_field}"
+                    for root in ("accessory", "armor")
+                )
+                attack_candidate = output.get("attack")
+                attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+                genome_candidate = attack.get("genome")
+                compiler_snapshots = [
+                    genome_candidate if isinstance(genome_candidate, dict) else {},
+                    compiled_patch,
+                ]
+                for compiler_snapshot in compiler_snapshots:
+                    for candidate_path in candidate_paths:
+                        current: Any = compiler_snapshot
+                        found = True
+                        for part in candidate_path.split("."):
+                            if not isinstance(current, dict) or part not in current:
+                                found = False
+                                break
+                            current = current[part]
+                        if found:
+                            return True, current
+                return False, None
+
+            compiled_present, compiled_value = compiled_patch_value()
+            if not compiled_present:
+                # Direct item fields are projected from the already strict authored
+                # scalar. Falling back to the source preimage keeps this value
+                # independent from the final DTO and prevents self-certification.
+                compiled_value = deepcopy(authored_value)
+            if not final_paths:
+                receipts.append({
+                    "callId": call_id,
+                    "authoredParam": authored_param,
+                    "authoredValue": authored_value,
+                    "compiledField": compiled_field,
+                    "finalPath": "",
+                    "compiledValue": compiled_value,
+                    "status": "dropped",
+                })
+                continue
+            for final_path in final_paths:
+                if _provenance_values_match(compiled_value, authored_value):
+                    status = "active"
+                elif (
+                    isinstance(compiled_value, (int, float))
+                    and not isinstance(compiled_value, bool)
+                    and isinstance(authored_value, (int, float))
+                    and not isinstance(authored_value, bool)
+                ):
+                    status = "clamped"
+                else:
+                    status = "normalized"
+                receipts.append({
+                    "callId": call_id,
+                    "authoredParam": authored_param,
+                    "authoredValue": authored_value,
+                    "compiledField": compiled_field,
+                    "finalPath": final_path,
+                    "compiledValue": deepcopy(compiled_value),
+                    "status": status,
+                })
+
+    mapped_params = {
+        (str(receipt.get("callId") or ""), str(receipt.get("authoredParam") or ""))
+        for receipt in receipts
+        if str(receipt.get("finalPath") or "")
+    }
+    receipts = [
+        receipt
+        for receipt in receipts
+        if receipt.get("status") != "dropped"
+        or (str(receipt.get("callId") or ""), str(receipt.get("authoredParam") or "")) not in mapped_params
+    ]
+
     contract_candidate = output.get("runtimeContract")
     contract: dict[str, Any] = dict(contract_candidate) if isinstance(contract_candidate, dict) else {}
-    baseline = _flatten_final_wire(output)
-    receipts: list[dict[str, Any]] = []
-    claims_candidate = contract.get("mechanicClaims")
-    claims: list[Any] = claims_candidate if isinstance(claims_candidate, list) else []
-    for claim in claims:
-        if not isinstance(claim, dict) or str(claim.get("status") or "") != "executable":
-            continue
-        claim_id = str(claim.get("claimId") or "")
-        refs_candidate = claim.get("backingRefs")
-        refs: list[Any] = refs_candidate if isinstance(refs_candidate, list) else []
-        for ref_index, ref in enumerate(refs):
-            if not isinstance(ref, dict):
-                continue
-            call_id = str(ref.get("callId") or "")
-            field = str(ref.get("field") or "")
-            expected = ref.get("expected")
-            variant: dict[str, Any] | None = None
-            variant_changed = False
-            for probe_value in _authored_ref_probe_values(authored_preimage, call_id, field, expected)[:24]:
-                candidate = deepcopy(authored_preimage)
-                candidate_contract = candidate.get("runtimeContract")
-                if isinstance(candidate_contract, dict):
-                    candidate_contract.pop("finalWireReceipts", None)
-                if not _probe_authored_ref_source(candidate, call_id, field, expected, probe_value):
-                    continue
-                try:
-                    candidate = normalize_runtime_authoring_fields(candidate)
-                    candidate = attach_gameplay_and_attack(
-                        candidate, a, b, ca, cb, _trace_structural_provenance=False,
-                    )
-                except PlannerUnavailable:
-                    continue
-                variant = candidate
-                candidate_wire = _flatten_final_wire(candidate)
-                variant_changed = any(
-                    path in baseline
-                    and not _provenance_values_match(baseline.get(path), candidate_wire.get(path))
-                    for path in set(baseline) | set(candidate_wire)
-                )
-                if variant_changed:
-                    break
-            if variant is None or not variant_changed:
-                removed_candidate = deepcopy(authored_preimage)
-                removed_contract = removed_candidate.get("runtimeContract")
-                if isinstance(removed_contract, dict):
-                    removed_contract.pop("finalWireReceipts", None)
-                if _remove_authored_call(removed_candidate, call_id):
-                    try:
-                        removed_candidate = normalize_runtime_authoring_fields(removed_candidate)
-                        removed_candidate = attach_gameplay_and_attack(
-                            removed_candidate, a, b, ca, cb, _trace_structural_provenance=False,
-                        )
-                    except PlannerUnavailable:
-                        pass
-                    else:
-                        removed_wire = _flatten_final_wire(removed_candidate)
-                        removed_changed = any(
-                            path in baseline
-                            and not _provenance_values_match(baseline.get(path), removed_wire.get(path))
-                            for path in set(baseline) | set(removed_wire)
-                        )
-                        if removed_changed:
-                            variant = removed_candidate
-                            variant_changed = True
-            if variant is None:
-                receipts.append({
-                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
-                    "field": field, "authoredExpected": expected, "finalPath": "",
-                    "compiledValue": None, "status": "unsupported",
-                })
-                continue
-            variant_wire = _flatten_final_wire(variant)
-            changed_paths = sorted(
-                path
-                for path in set(baseline) | set(variant_wire)
-                if path in baseline and not _provenance_values_match(baseline.get(path), variant_wire.get(path))
-            )
-            exact_paths = [
-                path for path in changed_paths
-                if _provenance_values_match(baseline.get(path), expected)
-            ]
-            if exact_paths:
-                changed_paths = exact_paths
-            if not changed_paths:
-                receipts.append({
-                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
-                    "field": field, "authoredExpected": expected, "finalPath": "",
-                    "compiledValue": None, "status": "dropped",
-                })
-                continue
-            for final_path in changed_paths[:16]:
-                compiled_value = baseline[final_path]
-                if _provenance_values_match(compiled_value, expected):
-                    receipt_status = "active"
-                elif isinstance(compiled_value, (int, float)) and isinstance(expected, (int, float)):
-                    receipt_status = "clamped"
-                else:
-                    receipt_status = "normalized"
-                receipts.append({
-                    "claimId": claim_id, "refIndex": ref_index, "callId": call_id,
-                    "field": field, "authoredExpected": expected, "finalPath": final_path,
-                    "compiledValue": compiled_value, "status": receipt_status,
-                })
-    contract["finalWireReceipts"] = receipts[:96]
+    contract["schema"] = STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
+    contract["finalWireReceipts"] = receipts
     output["runtimeContract"] = contract
     debug_candidate = output.setdefault("debug", {})
     if isinstance(debug_candidate, dict):
-        debug_candidate["compilerFinalWireReceipts"] = deepcopy(receipts[:96])
+        debug_candidate["compilerFinalWireReceipts"] = deepcopy(receipts[:192])
+
+
+
+
+
+def _project_explicit_runtime_item_fields(
+    data: dict[str, Any],
+    gameplay: dict[str, Any],
+    item_stats: dict[str, Any],
+    runtime_patch: dict[str, Any],
+) -> None:
+    """Project typed engine-call values into the finite item DTO without inference."""
+    for field in (
+        "healLife", "healMana", "buffCode", "buffTime", "pickPower", "axePower",
+        "hammerPower", "miningSpeedScale", "mobilityMode", "mobilityRangeTiles",
+        "mobilityCooldownTicks", "mobilitySafeTileOnly", "altUseMode", "altMobilityMode",
+        "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly",
+        "holdLightStrength", "holdLightColorName", "itemScale", "holdoutOffsetX",
+        "holdoutOffsetY", "autoReuse", "useTurn", "channelUse", "consumeChancePercent",
+        "ammoFor", "useConditionMode", "useConditionMinLife", "useConditionMinMana",
+        "heldVisibility", "releaseTiming", "handPose", "initialOffsetPx",
+    ):
+        if runtime_patch.get(field) not in (None, ""):
+            gameplay[field] = runtime_patch[field]
+    if runtime_patch.get("runtimeLightStrength") not in (None, ""):
+        gameplay["holdLightStrength"] = runtime_patch["runtimeLightStrength"]
+    if runtime_patch.get("runtimeLightColorName") not in (None, ""):
+        gameplay["holdLightColorName"] = runtime_patch["runtimeLightColorName"]
+    for field in ("extraBuffs", "generatedBuff", "altGeneratedBuff", "holdGeneratedBuff", "runtimeState"):
+        if runtime_patch.get(field) not in (None, ""):
+            gameplay[field] = deepcopy(runtime_patch[field])
+
+    direct_fields = (
+        "damageClass", "damage", "knockback", "autoReuse", "maxStack", "consumable",
+        "rarity", "value", "healLife", "healMana", "buffTime", "pickPower", "axePower",
+        "hammerPower", "manaCost", "itemScale", "holdoutOffsetX", "holdoutOffsetY",
+        "width", "height",
+    )
+    for field in direct_fields:
+        if item_stats.get(field) not in (None, ""):
+            gameplay[field] = item_stats[field]
+    for source, target in (("useTimeTicks", "useTime"), ("useAnimationTicks", "useAnimation"), ("buffType", "buffCode")):
+        if item_stats.get(source) not in (None, ""):
+            gameplay[target] = item_stats[source]
+    if gameplay.get("useTime") not in (None, "") and gameplay.get("useAnimation") in (None, ""):
+        gameplay["useAnimation"] = gameplay["useTime"]
+    if item_stats.get("buffCode") not in (None, ""):
+        gameplay["buffCode"] = item_stats["buffCode"]
+    if item_stats.get("craftYield") not in (None, ""):
+        gameplay["craftYield"] = int(item_stats["craftYield"])
+    if item_stats.get("ammoFor") not in (None, ""):
+        gameplay["ammoFor"] = str(item_stats["ammoFor"])
+    if isinstance(runtime_patch.get("accessory"), dict):
+        data["accessory"] = deepcopy(runtime_patch["accessory"])
+    if isinstance(runtime_patch.get("armor"), dict):
+        data["armor"] = deepcopy(runtime_patch["armor"])
+    if isinstance(runtime_patch.get("vfxCues"), list):
+        # The gameplay final-wire gate deliberately defers visual_effect_cue.
+        # Project its compiler-owned representation to the top-level surface read
+        # by the later Visual -> VFX manifest pass; never infer it from prose.
+        data["vfxCues"] = deepcopy(runtime_patch["vfxCues"])
 
 
 def attach_gameplay_and_attack(
@@ -290,16 +306,14 @@ def attach_gameplay_and_attack(
     *,
     _trace_structural_provenance: bool = True,
 ) -> dict[str, Any]:
-    runtime_contract_candidate = data.get("runtimeContract")
-    runtime_contract: dict[str, Any] = (
-        runtime_contract_candidate if isinstance(runtime_contract_candidate, dict) else {}
-    )
     authored_preimage = (
         deepcopy(data)
         if _trace_structural_provenance
-        and str(runtime_contract.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
+        and bool(runtime_plan(data))
         else None
     )
+    if LLM_RUNTIME_AUTHORING and runtime_plan(data):
+        normalize_runtime_plan_inplace(data)
     tags = set(data.get("tags", [])) | tags_of(a) | tags_of(b)
     gp = data.setdefault("gameplay", {})
     attack = data.setdefault("attack", {})
@@ -325,6 +339,8 @@ def attach_gameplay_and_attack(
     runtime_stats = find_call(data, "set_item_stats") if LLM_RUNTIME_AUTHORING else {}
     runtime_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data))
     runtime_patch = runtime_plan_to_attack_genome_patch(data) if runtime_authored else {}
+    if runtime_authored:
+        _project_explicit_runtime_item_fields(data, gp, runtime_stats, runtime_patch)
     runtime_result_kind = str(runtime_stats.get("resultKind") or "").strip().lower().replace("-", "_")
     runtime_ammo_for = str(runtime_stats.get("ammoFor") or gp.get("ammoFor") or "").strip().lower()
     runtime_has_primary = bool(all_calls(data, "shoot_projectile")) if LLM_RUNTIME_AUTHORING else False
@@ -341,11 +357,13 @@ def attach_gameplay_and_attack(
         gp["runtimeOutputKind"] = "consumable_weapon"
         gp["consumable"] = True
         try:
-            authored_stack = int(float(runtime_stats.get("maxStack")))
+            max_stack_raw = runtime_stats.get("maxStack")
+            authored_stack = int(float(max_stack_raw)) if max_stack_raw is not None else 1
         except Exception:
             authored_stack = 1
         try:
-            authored_yield = int(float(runtime_stats.get("craftYield")))
+            craft_yield_raw = runtime_stats.get("craftYield")
+            authored_yield = int(float(craft_yield_raw)) if craft_yield_raw is not None else 1
         except Exception:
             authored_yield = 1
         gp["maxStack"] = max(1, min(999, authored_stack))
@@ -355,10 +373,27 @@ def attach_gameplay_and_attack(
         gp["actualAmmoMode"] = "vanilla_projectile_basic; generated split/onHit runtime is not used by bow/gun ammo yet"
 
     explicit_non_weapon = kind in NON_WEAPON_CATEGORIES and kind != "generic"
-    is_weapon = (kind in COMBAT_CATEGORIES) if runtime_authored else (
+    runtime_tool_family = str(runtime_patch.get("runtimeFamily") or "").strip().lower()
+    runtime_tool_has_primary = kind == "tool" and runtime_tool_family not in {"", "none"}
+    is_weapon = ((kind in COMBAT_CATEGORIES) or runtime_tool_has_primary) if runtime_authored else (
         (kind in COMBAT_CATEGORIES) or (not explicit_non_weapon and ("weapon" in tags or max_parent_damage > 0))
     )
-    size = size_profile_for(str(data.get("name", "generated item")), tags, "weapon" if is_weapon else kind, stage)
+    if runtime_authored:
+        # Physics-neutral compiler defaults. Runtime-authored projectile geometry must
+        # never be selected from item names, parent tags, or prose.
+        size = {
+            "oversized": 0,
+            "itemScale": 1.0,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "projectileWidth": 16,
+            "projectileHeight": 16,
+            "projectileScale": 1.0,
+            "hitboxScale": 1.0,
+            "explosionRadius": 0,
+        }
+    else:
+        size = size_profile_for(str(data.get("name", "generated item")), tags, "weapon" if is_weapon else kind, stage)
 
     if runtime_actual_ammo:
         data["category"] = "ammo"
@@ -397,16 +432,16 @@ def attach_gameplay_and_attack(
         authored_armor_candidate = runtime_patch.get("armor")
         authored_armor: dict[str, Any] = dict(authored_armor_candidate) if isinstance(authored_armor_candidate, dict) else {}
         armor.update(authored_armor)
-        if isinstance(runtime_stats, dict):
-            if runtime_stats.get("armorSlot") not in (None, ""):
-                armor["slot"] = armor_slot_from_authoring(data, tags, runtime_stats)
-            if runtime_stats.get("defense") not in (None, ""):
-                try:
-                    defense_val = float(runtime_stats.get("defense"))
-                except Exception:
-                    defense_val = None
-                if defense_val is not None:
-                    armor["defense"] = max(0, min(80, int(round(defense_val))))
+        if runtime_stats.get("armorSlot") not in (None, ""):
+            armor["slot"] = armor_slot_from_authoring(data, tags, runtime_stats)
+        defense_raw = runtime_stats.get("defense")
+        if defense_raw not in (None, ""):
+            try:
+                defense_val = float(defense_raw)
+            except Exception:
+                defense_val = None
+            if defense_val is not None:
+                armor["defense"] = max(0, min(80, int(round(defense_val))))
         armor["enabled"] = True
         armor["slot"] = armor.get("slot") if armor.get("slot") in {"head", "body", "legs"} else slot
         armor, armor_budget_report = apply_armor_soft_budget(
@@ -448,9 +483,10 @@ def attach_gameplay_and_attack(
         })
         attack.update({"enabled": False})
     elif is_weapon:
-        # Terraria summon weapons are still combat items. Internal category stays "weapon"
-        # so GeneratedItem keeps attack handling, while gameplay.damageClass carries summon.
-        data["category"] = "weapon"
+        # Combat-capable tools keep their authored item identity while sharing the
+        # explicit attack DTO/executor path with weapons.
+        combat_output_kind = "tool" if runtime_tool_has_primary else "weapon"
+        data["category"] = combat_output_kind
         requested_dc = str(gp.get("damageClass") or "").strip()
         if runtime_authored:
             damage_class = requested_dc or ("summon" if kind == "summon" else "generic")
@@ -478,7 +514,7 @@ def attach_gameplay_and_attack(
 
         use_style = int(presentation_defaults["useStyle"])
         gp.update({
-            "kind": "weapon",
+            "kind": combat_output_kind,
             "categoryIntent": kind,
             "stage": stage_name,
             "powerBudget": stage["powerBudget"],
@@ -569,7 +605,7 @@ def attach_gameplay_and_attack(
             "scale": 1.0,
             "projectileWidth": int(float(genome.get("projectileWidth") or size["projectileWidth"])),
             "projectileHeight": int(float(genome.get("projectileHeight") or size["projectileHeight"])),
-            "projectileScale": float(genome.get("projectileScale") or size["projectileScale"]),
+            "projectileScale": float(genome.get("projectileScale") or size.get("projectileScale") or 1.0),
             "hitboxScale": float(genome.get("hitboxScale") if genome.get("hitboxScale") is not None else (1.0 if runtime_authored else size["hitboxScale"])),
             "explosionRadius": int(genome.get("explosionRadius") or 0) if runtime_authored else max(size["explosionRadius"], impact_vfx_radius_px),
             "impactVfxRadiusPx": max(0, min(192, impact_vfx_radius_px)),

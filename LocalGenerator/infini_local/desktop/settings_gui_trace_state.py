@@ -20,6 +20,7 @@ from infini_local.desktop.settings_gui_theme import (
     ROOT,
     CONFIG_PATH,
 )
+from infini_local.storage import trace_tools
 
 
 class SettingsGuiTraceStateMixin:
@@ -75,23 +76,6 @@ class SettingsGuiTraceStateMixin:
 
     def _load_local_trace_snapshot(self, reason: str = "") -> dict:
         cache = ROOT / "cache"
-        def tail_ndjson(path: Path, limit: int = 120):
-            if not path.exists():
-                return []
-            out = []
-            for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[-limit:]:
-                if not line.strip():
-                    continue
-                try:
-                    obj = json.loads(line)
-                    out.append(obj if isinstance(obj, dict) else {"raw": obj})
-                except Exception:
-                    out.append({"raw": line})
-            return out
-        def tail_text(path: Path, max_chars: int = 20000):
-            if not path.exists():
-                return ""
-            return path.read_text(encoding="utf-8", errors="replace")[-max_chars:]
         return {
             "ok": False,
             "source": "local_cache_fallback",
@@ -100,10 +84,13 @@ class SettingsGuiTraceStateMixin:
             "cacheDir": str(cache),
             "pipeline": {"note": "server.py не ответил или отвечает другая копия; показан локальный cache", "reason": reason},
             "traceConfig": {"eventsFile": str(cache / "events.ndjson"), "promptTraceFile": str(cache / "prompt_trace.ndjson"), "pipelineTraceFile": str(cache / "pipeline_trace.ndjson")},
-            "events": tail_ndjson(cache / "events.ndjson"),
-            "promptTrace": tail_ndjson(cache / "prompt_trace.ndjson"),
-            "pipelineTrace": tail_ndjson(cache / "pipeline_trace.ndjson"),
-            "sdcpp": {"logFile": str(cache / "sdcpp_server.log"), "logTail": tail_text(cache / "sdcpp_server.log")},
+            "events": trace_tools.tail_ndjson(cache / "events.ndjson", 120),
+            "promptTrace": trace_tools.tail_ndjson(cache / "prompt_trace.ndjson", 120),
+            "pipelineTrace": trace_tools.tail_ndjson(cache / "pipeline_trace.ndjson", 120),
+            "sdcpp": {
+                "logFile": str(cache / "sdcpp_server.log"),
+                "logTail": trace_tools.tail_text_file(cache / "sdcpp_server.log", 20000),
+            },
             "lastCombineFailure": json.loads((cache / "last_combine_failure.json").read_text(encoding="utf-8")) if (cache / "last_combine_failure.json").exists() else None,
         }
 
@@ -193,7 +180,7 @@ class SettingsGuiTraceStateMixin:
                 cache = ROOT / "cache"
                 for name in ["events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"]:
                     try:
-                        (cache / name).write_text("", encoding="utf-8")
+                        trace_tools.clear_ndjson(cache / name)
                     except Exception:
                         pass
                 self.trace_status_var.set("Trace cleared locally.")
@@ -220,6 +207,7 @@ class SettingsGuiTraceStateMixin:
         self._set_widgets_enabled(self.sdcpp_debug_buttons, True)
 
         provider = (self._value("INFINI_LLM_PROVIDER", "local") or "local").lower()
+        llm_enabled = self._value("INFINI_USE_LLM", "1") == "1"
         backend = (self._value("INFINI_IMAGE_BACKEND", "sdcpp") or "sdcpp").lower()
         visual_mode = (self._value("INFINI_VISUAL_ASSET_MODE", "full") or "full").lower()
         reasoning_mode = (self._value("INFINI_LLM_REASONING_MODE", "off") or "off").lower().replace("-", "_")
@@ -240,6 +228,8 @@ class SettingsGuiTraceStateMixin:
             self._set_field_enabled(key, provider == "openrouter", f"LLM provider сейчас `{provider}`, OpenRouter поля не используются.")
         for key in compat_llm:
             self._set_field_enabled(key, provider == "openai_compat", f"LLM provider сейчас `{provider}`, compat API поля не используются.")
+        for key in ("INFINI_LLM_REAUTHOR_MODEL", "INFINI_LLM_REAUTHOR_TEMPERATURE"):
+            getattr(self, "_set_field_enabled")(key, llm_enabled, "Use LLM=0; scoped same-author repair не вызывается.")
 
         set_field_enabled = getattr(self, "_set_field_enabled")
         for slot in (2, 3, 4):

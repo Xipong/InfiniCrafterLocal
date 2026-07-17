@@ -29,7 +29,7 @@ def _semantic_param_copy(params: dict[str, Any], keys: list[str]) -> dict[str, A
     return out
 
 
-def _expand_semantic_runtime_call(fn: str, params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     """Lower explicit Terraria-family engine calls into the compact runtime executor.
 
     This is not name aliasing: the planner authors a weapon family (spear/flail/yoyo/whip,
@@ -186,61 +186,4 @@ def _runtime_family_from_fields(delivery: Any, movement: Any, weapon_family: Any
     return explicit_norm if explicit_norm and explicit_norm != "none" else "none"
 
 
-def _runtime_family_group_to_executor(group: str) -> str:
-    if group == "thrust": return "thrust"
-    if group == "returning": return "returning"
-    if group in {"flail", "yoyo", "whip"}: return group
-    if group == "ranged": return "shoot"
-    if group == "magic": return "cast"
-    if group == "summon": return "summon"
-    return ""
-
-
-def light_repair_runtime_family_from_fields(params: dict[str, Any]) -> tuple[str, str]:
-    """Tiny, explicit, auditable repair for small models.
-
-    This is deliberately weaker than legacy inference: it only accepts exact
-    weaponFamily groups, exact delivery family words, or movement values that are
-    already one-to-one executor opcodes. projectileFamily is deliberately excluded:
-    it is projectile form, not an executable family signal.  If signals conflict, it
-    returns none and the craft fails/asks LLM repair.
-    """
-    if not isinstance(params, dict):
-        return "none", ""
-    explicit = _enum(params.get("runtimeFamily"), RUNTIME_FAMILIES, None)
-    if explicit and explicit != "none":
-        return explicit, "authored_runtimeFamily"
-
-    signals: list[tuple[str, str]] = []
-    # Tiny repair treats weaponFamily as the executable weapon family.  projectileFamily
-    # is only emitted projectile FORM (e.g. a magic spell can launch a spear-shaped
-    # projectile), so it must not make a cast/shoot spell become a held spear.
-    group = _family_group(params.get("weaponFamily"))
-    fam = _runtime_family_group_to_executor(group)
-    if fam:
-        signals.append((fam, "weaponFamily"))
-
-    d = _enum(params.get("delivery"), DELIVERIES, None)
-    if d in {"swing", "shoot", "cast", "throw", "summon", "flail", "yoyo", "whip"}:
-        signals.append((d, "delivery"))
-    elif d in {"thrust", "spear"}:
-        signals.append(("thrust", "delivery"))
-
-    m = _enum(params.get("movement"), MOVEMENTS, None)
-    movement_map = {
-        "boomerang": "returning",
-        "returning_glaive": "returning",
-        "flail_tether": "flail",
-        "yoyo_hover": "yoyo",
-        "whip_lash": "whip",
-    }
-    if m in movement_map:
-        signals.append((movement_map[m], "movement"))
-
-    unique = sorted({fam for fam, _src in signals if fam and fam != "none"})
-    if len(unique) != 1:
-        return "none", ""
-    srcs = "+".join(src for fam, src in signals if fam == unique[0])
-    return unique[0], f"light:{srcs}"
-
-__all__ = ['_truthy', '_semantic_param_copy', '_expand_semantic_runtime_call', '_runtime_family_from_fields', '_runtime_family_group_to_executor', 'light_repair_runtime_family_from_fields']
+__all__ = ["_truthy", "_semantic_param_copy", "_lower_typed_engine_call", "_runtime_family_from_fields"]

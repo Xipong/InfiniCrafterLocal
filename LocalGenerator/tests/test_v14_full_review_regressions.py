@@ -48,7 +48,6 @@ def _contract_check_projectile_visuals_do_not_route_from_taxonomy_or_prose() -> 
 
 def _contract_check_retired_overhead_family_migration_is_absent_from_active_runtime() -> None:
     active = "\n".join([
-        _source("LocalGenerator/infini_local/core/runtime_archetypes.py"),
         _source("LocalGenerator/infini_local/core/runtime_contracts.py"),
         _source("LocalGenerator/infini_local/core/runtime_overhead_barrage_policy.py"),
         _source("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs"),

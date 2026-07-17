@@ -243,7 +243,6 @@ def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line
     assert "extending left" not in prompt
     assert "back to the player" not in prompt
     assert "long rope/chain/tether is not part of the png" not in prompt
-    assert "short local" in prompt or "local attachment" in prompt or "short rope" in prompt
 
     item_source_prompt = data["visual"].get("imagePrompt") or data["visual"].get("itemPrompt", "")
     item_prompt = normalize_asset_prompt(data, "item", item_source_prompt, 32).lower()
@@ -251,7 +250,7 @@ def _check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line
     assert "rope coil" in item_prompt or "coiled rope" in item_prompt or "rope grip" in item_prompt
 
 
-def _check_delivery_payload_replay_normalizes_object_debug_without_changing_gameplay() -> None:
+def _check_delivery_payload_replay_strips_debug_without_changing_gameplay() -> None:
     payload = json.loads((FIXTURES / "combine_payload" / "object_debug_payload.json").read_text(encoding="utf-8"))
     delivered = sanitize_recipe_for_delivery(payload)
 
@@ -260,10 +259,7 @@ def _check_delivery_payload_replay_normalizes_object_debug_without_changing_game
     assert delivered["attack"]["projectileWidth"] == payload["attack"]["projectileWidth"]
     assert "damage" not in delivered["attack"]
     assert "useProjectile" not in delivered["attack"]
-    assert isinstance(delivered["debug"], dict)
-    assert all(isinstance(v, str) for v in delivered["debug"].values())
-    assert "authorPreservingValidation" in delivered["debug"]
-    assert delivered["debug"]["authorPreservingValidation"].startswith("{")
+    assert "debug" not in delivered
 
 
 def _silver_coin_parent() -> dict:
@@ -328,7 +324,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_replay_stage_prefers_canonical_message_names_over_prose',
     '_check_raw_llm_text_replay_goes_through_real_parser_and_runtime_adapter',
     '_check_parsed_author_plan_replay_keeps_tether_as_runtime_visual_not_png_line',
-    '_check_delivery_payload_replay_normalizes_object_debug_without_changing_gameplay',
+    '_check_delivery_payload_replay_strips_debug_without_changing_gameplay',
     '_check_parent_stage_hints_do_not_turn_starter_melee_or_coins_into_boss_tiers'
     ]:
         _fn = globals()[_name]

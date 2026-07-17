@@ -13,13 +13,34 @@ import re
 from typing import Any
 
 
+def _visible_model_output(text: str) -> str:
+    """Remove model-private thought channels before scanning authored JSON."""
+    visible = text or ""
+    for tag in ("thought", "analysis"):
+        visible = re.sub(
+            rf"<{tag}\b[^>]*>.*?</{tag}\s*>",
+            "",
+            visible,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        # A truncated private channel has no authored answer. Dropping its tail is
+        # safer than parsing a JSON example embedded in unfinished reasoning.
+        visible = re.sub(
+            rf"<{tag}\b[^>]*>.*\Z",
+            "",
+            visible,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    return visible
+
+
 def json_object_candidates(text: str) -> list[str]:
     """Return complete top-level JSON object substrings from arbitrary LLM text.
 
     A greedy regex is unsafe for `{...}{...}` responses. This scanner tracks
     braces, strings, and escapes, then returns each complete object independently.
     """
-    text = (text or "").strip()
+    text = _visible_model_output(text).strip()
     text = re.sub(r"^```(?:json)?", "", text).strip()
     text = re.sub(r"```$", "", text).strip()
     out: list[str] = []

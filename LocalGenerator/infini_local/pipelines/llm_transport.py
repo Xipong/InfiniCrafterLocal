@@ -3,15 +3,19 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+import copy
 import json
+import math
 from pathlib import Path
 import threading
 import time
 from typing import Any
 from urllib import request as urlrequest
 from urllib import error as urlerror
+from urllib.parse import urlsplit
 
 from infini_local.core.env_utils import env_str
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_config import (
     LLM_FALLBACK_API_KEY,
     LLM_FALLBACK_BASE_URL,
@@ -49,6 +53,103 @@ _LLM_POOL_LOCK = threading.Lock()
 _LLM_POOL_CURSOR = 0
 _LLM_LEASE_SEQUENCE = 0
 
+# Remote providers share one process-wide limiter per endpoint+model.  The input
+# estimate deliberately uses the serialized wire body rather than prompt prose so
+# schemas, repair dossiers and provider wrappers are all accounted for.  Local
+# endpoints are excluded: they have no external quota and already serialize at the
+# inference server.
+_LLM_RATE_LOCK = threading.Lock()
+_LLM_RATE_STATE: dict[str, dict[str, Any]] = {}
+_LLM_RATE_WINDOW_SECONDS = 60.0
+_LLM_RATE_TOKENS_PER_WINDOW = 16_000
+_LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS = 5.1
+
+
+def _remote_rate_key(url: str, payload: dict[str, Any]) -> str:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").strip().lower()
+    if host in {"", "localhost", "127.0.0.1", "::1"}:
+        return ""
+    model = str(payload.get("model") or "unknown").strip().lower()
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}|{model}"
+
+
+def _model_min_interval_seconds(model: Any) -> float:
+    normalized = str(model or "").strip().lower()
+    if "gemma" in normalized:
+        return 62.0
+    if "gemini" in normalized:
+        return 12.0
+    return _LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS
+
+
+def _estimated_wire_tokens(serialized_bytes: bytes) -> int:
+    # Conservative provider-independent estimate; exact tokenizers are not shared
+    # across the configured pool.  One request may consume the whole window but can
+    # never deadlock merely because its schema is large.
+    return min(
+        _LLM_RATE_TOKENS_PER_WINDOW,
+        max(1, int(math.ceil(len(serialized_bytes.decode("utf-8", "replace")) / 4.0))),
+    )
+
+
+def _reserve_remote_rate_slot(url: str, payload: dict[str, Any], serialized_bytes: bytes) -> None:
+    key = _remote_rate_key(url, payload)
+    if not key:
+        return
+    tokens = _estimated_wire_tokens(serialized_bytes)
+    minimum_interval = _model_min_interval_seconds(payload.get("model"))
+    while True:
+        with _LLM_RATE_LOCK:
+            now = time.monotonic()
+            state = _LLM_RATE_STATE.setdefault(
+                key,
+                {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0},
+            )
+            events = [
+                (float(at), int(count))
+                for at, count in state.get("events", [])
+                if float(at) > now - _LLM_RATE_WINDOW_SECONDS
+            ]
+            state["events"] = events
+            wait_seconds = max(
+                0.0,
+                float(state.get("blockedUntil") or 0.0) - now,
+                float(state.get("lastRequest", -1.0e30)) + minimum_interval - now,
+            )
+            used_tokens = sum(count for _, count in events)
+            if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW:
+                wait_seconds = max(
+                    wait_seconds,
+                    events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
+                )
+            if wait_seconds <= 0.0:
+                events.append((now, tokens))
+                state["lastRequest"] = now
+                return
+        time.sleep(wait_seconds)
+
+
+def _mark_remote_rate_limited(url: str, payload: dict[str, Any], error: urlerror.HTTPError) -> None:
+    key = _remote_rate_key(url, payload)
+    if not key:
+        return
+    retry_after = 0.0
+    try:
+        retry_after = float((error.headers or {}).get("Retry-After") or 0.0)
+    except (TypeError, ValueError):
+        retry_after = 0.0
+    cooldown = max(60.0, retry_after, _model_min_interval_seconds(payload.get("model")))
+    with _LLM_RATE_LOCK:
+        state = _LLM_RATE_STATE.setdefault(
+            key,
+            {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0},
+        )
+        state["blockedUntil"] = max(
+            float(state.get("blockedUntil") or 0.0),
+            time.monotonic() + cooldown,
+        )
+
 
 @dataclass
 class LlmItemLease:
@@ -57,6 +158,7 @@ class LlmItemLease:
     profile_id: str
     context: dict[str, Any]
     pool_size: int
+    initial_profile_id: str = ""
     profiles: tuple[dict[str, Any], ...] = ()
     legacy_fallback_allowed: bool = False
     previous_response_id: str = ""
@@ -65,9 +167,14 @@ class LlmItemLease:
     stages: list[str] = field(default_factory=list)
     failovers: list[dict[str, str]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if not self.initial_profile_id:
+            self.initial_profile_id = self.profile_id
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "leaseId": self.lease_id,
+            "initialProfileId": self.initial_profile_id,
             "profileId": self.profile_id,
             "provider": self.context.get("provider"),
             "baseUrl": self.context.get("base_url"),
@@ -280,6 +387,8 @@ def _reset_llm_pool_runtime_for_tests() -> None:
     _RESOLVED_LLM_MODELS = {}
     _RESPONSES_CAPABILITY = {}
     _PROFILE_COOLDOWN_UNTIL = {}
+    with _LLM_RATE_LOCK:
+        _LLM_RATE_STATE.clear()
 
 
 def _fallback_llm_context() -> dict[str, Any] | None:
@@ -433,22 +542,22 @@ def llm_json_response_format(
     *,
     schema: dict[str, Any] | None = None,
     strict: bool = False,
+    auto_preference: str | None = None,
 ) -> dict[str, Any] | None:
     """OpenAI-compatible structured JSON hint.
 
-    Callers may supply their real boundary schema. In auto mode, a supplied schema
-    is attempted on every OpenAI-compatible provider; ``llm_chat_json`` retries
-    without the field when a gateway rejects it. Calls without a schema keep the
-    conservative remote ``json_object`` behavior. The Pydantic boundary remains
-    authoritative in every mode.
+    ``auto`` normally uses provider-safe ``json_object`` on remote gateways and
+    JSON Schema on local servers.  A large-stage caller may request a lighter
+    auto default without overriding an explicit environment choice.  Remote or
+    local constrained decoding can otherwise duplicate a very large schema and
+    time out before the authoritative local boundary sees the answer.
     """
     mode = LLM_RESPONSE_FORMAT_MODE
     if mode == "auto":
-        # When a caller supplies a real schema, try it on every OpenAI-compatible
-        # provider. llm_chat_json already retries without response_format when a
-        # gateway rejects json_schema, so remote capability variance does not need
-        # to weaken the first attempt. Callers without a schema keep the old policy.
-        mode = "json_schema" if schema is not None or active_llm_provider() == "local" else "json_object"
+        preferred = str(auto_preference or "").strip().lower()
+        if preferred not in {"", "json_object", "json_schema"}:
+            raise ValueError(f"unsupported auto response-format preference: {auto_preference!r}")
+        mode = preferred or ("json_schema" if active_llm_provider() == "local" else "json_object")
     if mode in {"off", "none", "0", "false", "disabled"}:
         return None
     if mode == "json_object":
@@ -516,11 +625,12 @@ def llm_reasoning_payload(model_name: str = "", context: dict[str, Any] | None =
     return configured
 
 
-def _is_google_gemini_openai_compat(model_name: str, context: dict[str, Any] | None = None) -> bool:
+def _is_google_openai_compat_reasoning_model(model_name: str, context: dict[str, Any] | None = None) -> bool:
+    lowered = str(model_name or "").lower()
     return (
         active_llm_provider(context) == "openai_compat"
         and "generativelanguage.googleapis.com" in llm_base_url(context).lower()
-        and "gemini" in str(model_name or "").lower()
+        and ("gemini" in lowered or "gemma" in lowered)
     )
 
 
@@ -546,6 +656,7 @@ def _google_reasoning_effort(reasoning: dict[str, Any]) -> str:
 
 
 _REASONING_INTENT_KEY = "_infini_reasoning_intent"
+LLM_MODEL_OVERRIDE_KEY = "_infini_model_override"
 
 
 def _remap_reasoning_for_context(payload: dict[str, Any], *, model_name: str, context: dict[str, Any]) -> None:
@@ -563,7 +674,7 @@ def _remap_reasoning_for_context(payload: dict[str, Any], *, model_name: str, co
         reasoning = {"effort": effort, "exclude": bool(LLM_REASONING_EXCLUDE)}
     if not reasoning:
         return
-    if _is_google_gemini_openai_compat(model_name, context):
+    if _is_google_openai_compat_reasoning_model(model_name, context):
         payload["reasoning_effort"] = _google_reasoning_effort(reasoning)
     else:
         payload["reasoning"] = reasoning
@@ -598,7 +709,7 @@ def apply_llm_common_options(req: dict[str, Any], *, model_name: str, default_ma
             req[_REASONING_INTENT_KEY] = dict(configured)
         reasoning = llm_reasoning_payload(model_name)
         if reasoning:
-            if _is_google_gemini_openai_compat(model_name):
+            if _is_google_openai_compat_reasoning_model(model_name):
                 req["reasoning_effort"] = _google_reasoning_effort(reasoning)
             else:
                 req["reasoning"] = reasoning
@@ -659,12 +770,18 @@ def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def http_json(url: str, payload: dict[str, Any], timeout: int = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    _reserve_remote_rate_slot(url, payload, data)
     merged = {"Content-Type": "application/json"}
     if headers:
         merged.update(headers)
     req = urlrequest.Request(url, data=data, headers=merged, method="POST")
-    with urlrequest.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urlrequest.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urlerror.HTTPError as error:
+        if error.code == 429:
+            _mark_remote_rate_limited(url, payload, error)
+        raise
 
 def _llm_replay_stage_from_payload(payload: dict[str, Any]) -> str:
     """Best-effort label for an LLM hop, used only by raw replay fixtures.
@@ -837,7 +954,8 @@ def _responses_chat_fallback_allowed(exc: Exception) -> bool:
 
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     out = _clean_llm_payload(payload)
-    model_name = resolve_llm_model(context)
+    model_override = str(out.pop(LLM_MODEL_OVERRIDE_KEY, "") or "").strip()
+    model_name = model_override or resolve_llm_model(context)
     out["model"] = model_name
     _remap_reasoning_for_context(out, model_name=model_name, context=context)
     return out
@@ -949,66 +1067,45 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, co
     if lease is not None and lease.context is context and not lease.responses_disabled and clean_stage_dossier:
         previous_id = lease.previous_response_id
     request_payload = _responses_payload_from_chat(prepared, previous_id)
-    candidates: list[tuple[str, dict[str, Any]]] = [("original", request_payload)]
-    if request_payload.get("reasoning") is not None:
-        reduced = dict(request_payload)
-        reduced.pop("reasoning", None)
-        candidates.append(("without_reasoning", reduced))
-    if request_payload.get("text") is not None:
-        reduced = dict(request_payload)
-        reduced.pop("text", None)
-        candidates.append(("without_text_format", reduced))
-    if request_payload.get("reasoning") is not None and request_payload.get("text") is not None:
-        reduced = dict(request_payload)
-        reduced.pop("reasoning", None)
-        reduced.pop("text", None)
-        candidates.append(("without_reasoning_and_text_format", reduced))
-
-    last_error: Exception | None = None
-    for label, candidate in candidates:
+    try:
+        result = http_json(
+            llm_responses_url(context),
+            request_payload,
+            timeout=timeout,
+            headers=llm_headers(context=context),
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError("LLM Responses endpoint returned a non-object response")
+        status = str(result.get("status") or "completed").lower()
+        if status in {"failed", "cancelled", "incomplete"}:
+            raise RuntimeError(f"LLM Responses request ended with status={status}")
+        content = _responses_output_text(result)
+        if not content:
+            raise RuntimeError("LLM Responses endpoint returned no output text")
+        response_id = str(result.get("id") or "")
+        if lease is not None and lease.context is context:
+            lease.previous_response_id = response_id
+        usage = _usage_fields(result)
+        return {
+            "choices": [{"message": {"role": "assistant", "content": content}}],
+            "usage": result.get("usage") or {},
+            "_debug": {
+                "apiMode": "responses",
+                "requestMode": "exact",
+                "provider": active_llm_provider(context),
+                "profileId": context.get("profile_id"),
+                "responseId": response_id,
+                "previousResponseId": previous_id,
+                **usage,
+            },
+        }
+    except urlerror.HTTPError as error:
         try:
-            result = http_json(llm_responses_url(context), candidate, timeout=timeout, headers=llm_headers(context=context))
-            if not isinstance(result, dict):
-                raise RuntimeError("LLM Responses endpoint returned a non-object response")
-            status = str(result.get("status") or "completed").lower()
-            if status in {"failed", "cancelled", "incomplete"}:
-                raise RuntimeError(f"LLM Responses request ended with status={status}")
-            content = _responses_output_text(result)
-            if not content:
-                raise RuntimeError("LLM Responses endpoint returned no output text")
-            response_id = str(result.get("id") or "")
-            if lease is not None and lease.context is context:
-                lease.previous_response_id = response_id
-            usage = _usage_fields(result)
-            return {
-                "choices": [{"message": {"role": "assistant", "content": content}}],
-                "usage": result.get("usage") or {},
-                "_debug": {
-                    "apiMode": "responses",
-                    "requestMode": label,
-                    "provider": active_llm_provider(context),
-                    "profileId": context.get("profile_id"),
-                    "responseId": response_id,
-                    "previousResponseId": previous_id,
-                    **usage,
-                },
-            }
-        except urlerror.HTTPError as error:
-            try:
-                body = error.read().decode("utf-8", "replace")[:2000]
-                setattr(error, "_infini_body", body)
-            except Exception:
-                pass
-            last_error = error
-            if error.code in {400, 422} and label != candidates[-1][0]:
-                continue
-            raise
-        except Exception as error:
-            last_error = error
-            raise
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("LLM Responses request failed without response")
+            body = error.read().decode("utf-8", "replace")[:2000]
+            setattr(error, "_infini_body", body)
+        except Exception:
+            pass
+        raise
 
 
 def _record_llm_stage(payload: dict[str, Any]) -> str:
@@ -1021,7 +1118,7 @@ def _record_llm_stage(payload: dict[str, Any]) -> str:
 
 
 def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
-    stage = _record_llm_stage(payload)
+    stage = _llm_replay_stage_from_payload(payload)
     # Raw replay is an explicit offline seam.  Resolve it before choosing
     # Responses vs Chat so auto/responses profiles can never make a network
     # call merely because replay used to live inside the Chat-only helper.
@@ -1032,6 +1129,7 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
     capability_key = _llm_context_key(context)
     lease = _CURRENT_LLM_ITEM_LEASE.get()
     responses_allowed = mode in {"auto", "responses"}
+    responses_to_chat_fallback = False
     if _RESPONSES_CAPABILITY.get(capability_key) is False:
         responses_allowed = False
     if lease is not None and lease.context is context and lease.responses_disabled:
@@ -1050,6 +1148,7 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
             if lease is not None and lease.context is context:
                 lease.responses_disabled = True
                 lease.previous_response_id = ""
+            responses_to_chat_fallback = True
             log_event("warn", "LLM Responses incompatible; retrying same stage through stateless Chat Completions", {
                 "stage": stage,
                 "profileId": context.get("profile_id"),
@@ -1067,78 +1166,50 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
             "profileId": context.get("profile_id"),
             **_usage_fields(result),
         }
+        if responses_to_chat_fallback:
+            result = _with_transport_retry_debug(result, ["responses_to_chat_fallback"])
         log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})
     return result
 
 
 def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
     ensure_llm_auth_configured(context)
-    payload = _clean_llm_payload(payload)
-    payload = _payload_for_context(payload, context)
+    candidate = _payload_for_context(_clean_llm_payload(payload), context)
     url = llm_chat_completions_url(context)
-    candidates: list[tuple[str, dict[str, Any]]] = [("original", payload)]
-    reasoning_requested = payload.get("reasoning") is not None or payload.get("reasoning_effort") is not None
-    if reasoning_requested:
-        retry = dict(payload)
-        retry.pop("reasoning", None)
-        retry.pop("reasoning_effort", None)
-        candidates.append(("without_reasoning", retry))
-    if payload.get("response_format") is not None:
-        retry = dict(payload)
-        retry.pop("response_format", None)
-        candidates.append(("without_response_format", retry))
-    if reasoning_requested and payload.get("response_format") is not None:
-        retry = dict(payload)
-        retry.pop("reasoning", None)
-        retry.pop("reasoning_effort", None)
-        retry.pop("response_format", None)
-        candidates.append(("without_reasoning_and_response_format", retry))
-
-    last_error: Exception | None = None
-    for label, candidate in candidates:
+    try:
+        result = http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
+        choices = result.get("choices") if isinstance(result, dict) else None
+        first_choice = choices[0] if isinstance(choices, list) and choices else None
+        message = first_choice.get("message") if isinstance(first_choice, dict) else None
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+            raise RuntimeError("LLM provider returned an invalid Chat Completions envelope")
+        debug_raw = result.get("_debug")
+        debug: dict[str, Any] = debug_raw if isinstance(debug_raw, dict) else {}
+        result["_debug"] = {
+            **debug,
+            "requestMode": "exact",
+            "provider": active_llm_provider(context),
+            "responseFormatRequested": bool(candidate.get("response_format")),
+            "responseFormatUsed": bool(candidate.get("response_format")),
+            "reasoningRequested": bool(candidate.get("reasoning") or candidate.get("reasoning_effort")),
+            "reasoningUsed": bool(candidate.get("reasoning") or candidate.get("reasoning_effort")),
+            "reasoningEffort": candidate.get("reasoning_effort"),
+        }
+        return result
+    except urlerror.HTTPError as error:
+        body = ""
         try:
-            if label != "original":
-                log_event("warn", "retrying LLM request with reduced compatibility fields", {"provider": active_llm_provider(context), "mode": label, "label": context.get("label")})
-            result = http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
-            choices = result.get("choices") if isinstance(result, dict) else None
-            first_choice = choices[0] if isinstance(choices, list) and choices else None
-            message = first_choice.get("message") if isinstance(first_choice, dict) else None
-            if not isinstance(message, dict) or not isinstance(message.get("content"), str):
-                raise RuntimeError("LLM provider returned an invalid Chat Completions envelope")
-            debug_raw = result.get("_debug")
-            debug: dict[str, Any] = debug_raw if isinstance(debug_raw, dict) else {}
-            result["_debug"] = {
-                **debug,
-                "requestMode": label,
-                "provider": active_llm_provider(context),
-                "responseFormatRequested": bool(payload.get("response_format")),
-                "responseFormatUsed": bool(candidate.get("response_format")),
-                "reasoningRequested": bool(payload.get("reasoning") or payload.get("reasoning_effort")),
-                "reasoningUsed": bool(candidate.get("reasoning") or candidate.get("reasoning_effort")),
-                "reasoningEffort": candidate.get("reasoning_effort"),
-            }
-            return result
-        except urlerror.HTTPError as e:
-            body = ""
-            try:
-                body = e.read().decode("utf-8", "replace")[:2000]
-                setattr(e, "_infini_body", body)
-            except Exception:
-                pass
-            last_error = e
-            provider = active_llm_provider(context)
-            if provider == "openrouter" and e.code == 401:
-                msg = "OpenRouter auth failed: API key is missing/invalid or was not saved in config.env (401 Unauthorized)."
-                log_event("warn", "OpenRouter auth failed", {"provider": provider, "mode": label, "status": e.code, "body": body, "hint": msg, "label": context.get("label")})
-                raise RuntimeError(msg) from e
-            if e.code in {400, 404, 422} and label != candidates[-1][0]:
-                log_event("warn", "LLM endpoint rejected request fields; trying compatibility fallback", {"provider": provider, "mode": label, "status": e.code, "body": body, "label": context.get("label")})
-                continue
-            log_event("warn", "LLM HTTP error", {"provider": provider, "mode": label, "status": e.code, "body": body, "label": context.get("label")})
-            raise
-    if last_error:
-        raise last_error
-    raise RuntimeError("LLM request failed without HTTP response")
+            body = error.read().decode("utf-8", "replace")[:2000]
+            setattr(error, "_infini_body", body)
+        except Exception:
+            pass
+        provider = active_llm_provider(context)
+        if provider == "openrouter" and error.code == 401:
+            message = "OpenRouter auth failed: API key is missing/invalid or was not saved in config.env (401 Unauthorized)."
+            log_event("warn", "OpenRouter auth failed", {"provider": provider, "status": error.code, "body": body, "hint": message, "label": context.get("label")})
+            raise RuntimeError(message) from error
+        log_event("warn", "LLM HTTP error", {"provider": provider, "status": error.code, "body": body, "label": context.get("label")})
+        raise
 
 def _is_profile_failover_failure(error: Exception) -> bool:
     return (
@@ -1207,15 +1278,150 @@ def _switch_lease_to_legacy_fallback(lease: LlmItemLease | None, fallback: dict[
     lease.responses_disabled = False
 
 
+def _with_transport_retry_debug(result: dict[str, Any], causes: list[str]) -> dict[str, Any]:
+    if not causes:
+        return result
+    debug_candidate = result.get("_debug")
+    debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
+    existing_causes = [str(value) for value in debug.get("transportRetryCauses") or []]
+    result["_debug"] = {
+        **debug,
+        "transportRetryCount": int(debug.get("transportRetryCount") or 0) + len(causes),
+        "transportRetryCauses": [*existing_causes, *causes],
+    }
+    return result
+
+
+def _llm_json_single_context_with_length_retry(
+    payload: dict[str, Any],
+    timeout: int,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    result = _llm_json_single_context(payload, timeout, context)
+    choices = result.get("choices") if isinstance(result, dict) else None
+    first = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+    model_name = str(payload.get(LLM_MODEL_OVERRIDE_KEY) or resolve_llm_model(context) or "")
+    finish_reason = str(first.get("finish_reason") or "").lower()
+    raw_message = first.get("message")
+    message = raw_message if isinstance(raw_message, dict) else {}
+    content = str(message.get("content") or "")
+    malformed_json = False
+    if isinstance(payload.get("response_format"), dict):
+        try:
+            parse_first_valid_llm_json(content)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            malformed_json = True
+    gemini_length = (
+        finish_reason == "length"
+        and "gemini-3.1-flash" in model_name.lower()
+        and _is_google_openai_compat_reasoning_model(model_name, context)
+    )
+    if not gemini_length and not malformed_json:
+        return result
+
+    retry_payload = copy.deepcopy(payload)
+    if gemini_length:
+        retry_payload.pop("reasoning", None)
+        retry_payload.pop("reasoning_effort", None)
+        retry_payload[_REASONING_INTENT_KEY] = {"effort": "minimal", "exclude": bool(LLM_REASONING_EXCLUDE)}
+    retry_cause = "length" if gemini_length else "malformed_json"
+    log_event("warn", "retrying incomplete JSON LLM response within the same logical call", {
+        "provider": active_llm_provider(context),
+        "model": model_name,
+        "finishReason": finish_reason,
+        "cause": retry_cause,
+    })
+    retry_result = _llm_json_single_context(retry_payload, timeout, context)
+    return _with_transport_retry_debug(retry_result, [retry_cause])
+
+
+def _payload_without_model_override(payload: dict[str, Any]) -> dict[str, Any]:
+    if LLM_MODEL_OVERRIDE_KEY not in payload:
+        return payload
+    out = copy.deepcopy(payload)
+    out.pop(LLM_MODEL_OVERRIDE_KEY, None)
+    return out
+
+
+def _transport_footprint(payload: dict[str, Any], mode: str) -> dict[str, Any]:
+    def content_chars(role: str) -> int:
+        total = 0
+        for message in payload.get("messages") or []:
+            if not isinstance(message, dict) or str(message.get("role") or "") != role:
+                continue
+            content = message.get("content")
+            total += len(content) if isinstance(content, str) else len(
+                json.dumps(content, ensure_ascii=False, default=str)
+            )
+        return total
+
+    def token_estimate(char_count: int) -> int:
+        return max(0, (int(char_count) + 3) // 4)
+
+    system_chars = content_chars("system")
+    authored_user_chars = content_chars("user")
+    is_repair = "repair" in mode or "retry" in mode
+    schema = payload.get("response_format")
+    schema_chars = len(json.dumps(schema, ensure_ascii=False, default=str)) if schema is not None else 0
+    user_chars = 0 if is_repair else authored_user_chars
+    repair_chars = authored_user_chars if is_repair else 0
+    total_chars = len(json.dumps(_clean_llm_payload(payload), ensure_ascii=False, default=str))
+    response_mode = str(schema.get("type") or "text") if isinstance(schema, dict) else "text"
+    return {
+        "mode": mode,
+        "responseMode": response_mode,
+        "provider": "",
+        "profile": "",
+        "systemChars": system_chars,
+        "systemTokensEstimate": token_estimate(system_chars),
+        "userChars": user_chars,
+        "userTokensEstimate": token_estimate(user_chars),
+        "schemaChars": schema_chars,
+        "schemaTokensEstimate": token_estimate(schema_chars),
+        "repairChars": repair_chars,
+        "repairTokensEstimate": token_estimate(repair_chars),
+        "totalChars": total_chars,
+        "totalTokensEstimate": _estimated_wire_tokens(
+            json.dumps(_clean_llm_payload(payload), ensure_ascii=False, default=str).encode("utf-8")
+        ),
+    }
+
+
+def transport_footprint(payload: dict[str, Any], mode: str) -> dict[str, Any]:
+    """Return internal request-size telemetry without mutating or sending the payload."""
+    return _transport_footprint(payload, mode)
+
+
+def _with_transport_footprint(result: dict[str, Any], payload: dict[str, Any], mode: str) -> dict[str, Any]:
+    out = dict(result)
+    raw_debug = out.get("_debug")
+    debug = dict(raw_debug) if isinstance(raw_debug, dict) else {}
+    footprint = _transport_footprint(payload, mode)
+    footprint["provider"] = str(debug.get("provider") or active_llm_provider())
+    footprint["profile"] = str(debug.get("profileId") or "")
+    debug["transportFootprint"] = footprint
+    out["_debug"] = debug
+    return out
+
+
 def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
+    mode = _record_llm_stage(payload)
+
+    def finish(result: dict[str, Any], used_payload: dict[str, Any]) -> dict[str, Any]:
+        return _with_transport_footprint(result, used_payload, mode)
+
     lease = _CURRENT_LLM_ITEM_LEASE.get()
     if lease is not None and lease.pool_size > 1:
         attempted: set[str] = set()
+        retry_causes: list[str] = []
+        override_profile_id = lease.initial_profile_id
         while True:
             context = lease.context
             attempted.add(lease.profile_id)
+            attempt_payload = payload if lease.profile_id == override_profile_id else _payload_without_model_override(payload)
             try:
-                return _llm_json_single_context(payload, timeout, context)
+                result = _llm_json_single_context_with_length_retry(attempt_payload, timeout, context)
+                return finish(_with_transport_retry_debug(result, retry_causes), attempt_payload)
             except Exception as profile_error:
                 if not _is_profile_failover_failure(profile_error):
                     raise
@@ -1223,19 +1429,26 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
                 next_context = _next_lease_profile(lease, attempted)
                 if next_context is None:
                     raise
+                retry_causes.append("profile_failover")
                 _switch_lease_profile(lease, next_context, profile_error)
 
     primary = _primary_llm_context()
     fallback = _fallback_llm_context() if lease is None or lease.legacy_fallback_allowed else None
+    primary_payload = payload
+    if lease is not None and lease.profile_id != lease.initial_profile_id:
+        primary_payload = _payload_without_model_override(payload)
     try:
-        return _llm_json_single_context(payload, timeout, primary)
+        result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
+        return finish(result, primary_payload)
     except Exception as first_error:
         if not fallback:
             if not _is_transport_error(first_error):
                 raise
             last_error = first_error
-            total_attempts = max(2, int(LLM_FALLBACK_NETWORK_FAILS or 2))
+            retry_causes: list[str] = []
+            total_attempts = max(1, int(LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
+                retry_causes.append("transient_http")
                 delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
                 log_event("warn", "retrying transient LLM failure without fallback", {
                     "attempt": attempt,
@@ -1247,34 +1460,49 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
                 })
                 time.sleep(delay)
                 try:
-                    return _llm_json_single_context(payload, timeout, primary)
+                    result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
+                    return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
                 except Exception as retry_error:
                     last_error = retry_error
                     if not _is_transport_error(retry_error):
                         raise
             raise last_error
+
         if _is_budget_or_auth_failure(first_error):
             log_event("warn", "LLM primary failed; switching to fallback", {"reason": "budget_or_auth", "primaryProvider": active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
             _switch_lease_to_legacy_fallback(lease, fallback)
-            return _llm_json_single_context(payload, timeout, fallback)
+            fallback_payload = _payload_without_model_override(payload)
+            result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
+            return finish(_with_transport_retry_debug(result, ["budget_or_auth_fallback"]), fallback_payload)
+
         if _is_transport_error(first_error):
             last_error = first_error
-            total_attempts = max(2, int(LLM_FALLBACK_NETWORK_FAILS or 2))
+            retry_causes = []
+            total_attempts = max(1, int(LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
+                retry_causes.append("primary_transport")
                 try:
                     log_event("warn", "retrying primary LLM transport before fallback", {"attempt": attempt, "maxAttempts": total_attempts, "provider": active_llm_provider(primary), "model": primary.get("model")})
-                    return _llm_json_single_context(payload, timeout, primary)
+                    result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
+                    return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
                 except Exception as retry_error:
                     last_error = retry_error
                     if _is_budget_or_auth_failure(retry_error):
                         log_event("warn", "LLM primary changed from transport failure to budget/auth failure; switching to fallback", {"provider": active_llm_provider(primary), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
                         _switch_lease_to_legacy_fallback(lease, fallback)
-                        return _llm_json_single_context(payload, timeout, fallback)
+                        fallback_payload = _payload_without_model_override(payload)
+                        result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
+                        retry_causes.append("budget_or_auth_fallback")
+                        return finish(_with_transport_retry_debug(result, retry_causes), fallback_payload)
                     if not _is_transport_error(retry_error):
                         raise
             log_event("warn", "LLM primary transport failed repeatedly; switching to fallback", {"attempts": total_attempts, "primaryProvider": active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
             _switch_lease_to_legacy_fallback(lease, fallback)
-            return _llm_json_single_context(payload, timeout, fallback)
+            fallback_payload = _payload_without_model_override(payload)
+            result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
+            retry_causes.append("primary_transport_fallback")
+            return finish(_with_transport_retry_debug(result, retry_causes), fallback_payload)
         raise
 
-__all__ = ['_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', '_payload_for_context', '_llm_chat_json_single_context', 'llm_chat_json']
+
+__all__ = ['_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']

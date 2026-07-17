@@ -424,7 +424,7 @@ public sealed partial class GeneratedProjectile
         float len = Math.Clamp(Projectile.velocity.Length() * 2.8f + Projectile.width * Projectile.scale, 14f, 96f);
         float width = Math.Clamp(Projectile.height * Projectile.scale * 0.35f, 2f, 14f);
         bool beamLike = IsBeamDelivery();
-        bool executableBeamVisual = _spec.MovementCode == 15;
+        bool executableBeamVisual = beamLike && _spec.MovementCode == 15;
         bool thrustLike = IsThrustDelivery();
         bool tetherLike = IsFlailDelivery()
             || IsYoyoDelivery()
@@ -491,8 +491,6 @@ public sealed partial class GeneratedProjectile
         if (executableSlashVisual)
             DrawSlashSmear(px, center, dir, perp, c, len, width);
 
-        DrawStockMotionPolish(px, center, dir, c, len, width);
-
         if (TryDrawGeneratedProjectileSprite(center, lightColor))
             return false;
 
@@ -515,60 +513,16 @@ public sealed partial class GeneratedProjectile
         }
     }
 
-    private void DrawStockMotionPolish(Texture2D px, Vector2 center, Vector2 dir, Color c, float len, float width)
-    {
-        if (Projectile.oldPos is null || Projectile.oldPos.Length < 3)
-            return;
-        string runtimeFamily = RuntimeFamily();
-        bool shouldTrail = Projectile.velocity.LengthSquared() > 25f
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Shoot)
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Cast)
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Beam)
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Throw)
-            || _spec.EffectCode != 0
-            || _spec.RuntimeLightStrength > 0.001f;
-        if (!shouldTrail)
-            return;
-        int count = Math.Clamp(3 + (int)(_spec.ProjectileScale * 2f), 3, Math.Min(Projectile.oldPos.Length, 8));
-        float baseWidth = Math.Clamp(width * 0.55f, 1f, 5f);
-        for (int i = count - 1; i >= 1; i--)
-        {
-            Vector2 oldCenter = Projectile.oldPos[i] + new Vector2(Projectile.width, Projectile.height) * 0.5f;
-            Vector2 nextCenter = Projectile.oldPos[i - 1] + new Vector2(Projectile.width, Projectile.height) * 0.5f;
-            if (oldCenter == Vector2.Zero || nextCenter == Vector2.Zero)
-                continue;
-            float fade = (count - i) / (float)count;
-            DrawLine(px, oldCenter - Main.screenPosition, nextCenter - Main.screenPosition, c * fade * 0.42f, baseWidth * fade);
-        }
-    }
-
     private void DrawRuntimePlanFallback(Texture2D px, Vector2 center, Vector2 dir, Vector2 perp, Color c, float len, float width)
     {
-        if (_spec.MovementCode == 15)
-        {
-            DrawLine(px, center - dir * 10f, center + dir * len * 1.9f, c * 0.72f, Math.Max(1.5f, width * 0.38f));
-            DrawLine(px, center - dir * 4f, center + dir * len * 1.5f, Color.White * 0.65f, Math.Max(1f, width * 0.18f));
-            return;
-        }
-        if (GeneratedRuntimeFamilyPolicy.Is(RuntimeFamily(), GeneratedRuntimeFamilyPolicy.Swing))
-        {
-            DrawSlashSmear(px, center, dir, perp, c, len, width);
-            return;
-        }
-        if (_spec.MovementCode is 5 or 14 or 16 or 17)
-        {
-            DrawLine(px, center - dir * len * 0.42f, center + dir * len * 0.42f, c * 0.78f, Math.Max(1f, width * 0.42f));
-            DrawRect(px, center + dir * len * 0.32f - new Vector2(width * 0.55f, width * 0.55f), new Vector2(width * 1.1f, width * 1.1f), Color.White * 0.55f);
-            return;
-        }
-        if (!AllowsPresentationLight())
-        {
-            DrawLine(px, center - dir * len * 0.55f, center + dir * len * 0.45f, c * 0.72f, Math.Max(1f, width * 0.45f));
-            DrawLine(px, center - dir * len * 0.18f - perp * width * 0.45f, center + dir * len * 0.25f, c * 0.50f, Math.Max(1f, width * 0.25f));
-            return;
-        }
-        DrawLine(px, center - dir * len * 0.9f, center, c * 0.75f, Math.Max(2f, width));
-        DrawLine(px, center - dir * len * 0.35f, center + dir * 6f, Color.White * 0.85f, Math.Max(1f, width * 0.45f));
+        // Missing/catching-up art needs a compact body marker, not an invented beam or
+        // trail. Mechanically required beam/tether/whip drawing and authored VFX slots
+        // are handled above; this fallback must not author presentation of its own.
+        float body = Math.Clamp(Math.Max(Projectile.width, Projectile.height) * Projectile.scale, 6f, 22f);
+        Vector2 size = new(body, body);
+        DrawRect(px, center - size * 0.5f, size, c * 0.78f);
+        Vector2 core = size * 0.42f;
+        DrawRect(px, center - core * 0.5f, core, Color.White * 0.62f);
     }
 
     private bool UsesItemSpriteAsProjectileByDefault()

@@ -4,9 +4,11 @@ from pathlib import Path
 
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
 from infini_local.core.runtime_authoring.reports import runtime_plan_provenance_report
-from infini_local.core.runtime_promise_truth import validate_runtime_promises
+
 from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.pipelines.item_power_knowledge import canonicalize
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -39,9 +41,15 @@ def _plan(family: str = "overhead_barrage", *, projectile_family: str = "arrow",
                         "projectileFamily": projectile_family,
                         "projectileShape": "wooden arrow",
                         "effect": effect,
+                        "speed": 11,
                         "shotCount": 4,
+                        "spreadRadians": 0.25,
+                        "pierce": 1,
+                        "lifetimeTicks": 90,
                         "delayTicks": 12,
                         "rangeTiles": 55,
+                        "secondaryDamageMultiplier": 0.35,
+                        "secondaryLifetimeTicks": 60,
                     },
                 },
             ],
@@ -67,16 +75,18 @@ def _contract_check_daedalus_like_ranged_authoring_keeps_delivery_and_theme_sepa
 
 
 def _contract_check_daedalus_like_ranged_authoring_survives_full_pipeline() -> None:
-    child = final_normalize(
-        validate_and_repair(_plan(), PARENT_BOW, PARENT_ARROW, {}, {}, "v11_daedalus_like")
-    )
+    ca = canonicalize(PARENT_BOW)
+    cb = canonicalize(PARENT_ARROW)
+    child = validate_and_repair(_plan(), PARENT_BOW, PARENT_ARROW, ca, cb, "v11_daedalus_like")
+    child = final_normalize(attach_gameplay_and_attack(child, PARENT_BOW, PARENT_ARROW, ca, cb))
     genome = child["attack"]["genome"]
 
     assert genome["runtimeFamily"] == "overhead_barrage"
     assert genome["projectileFamily"] == "arrow"
     assert genome["projectileShape"] == "wooden arrow"
     assert genome["effect"] == "none"
-    assert genome["ammoFor"] == "arrow"
+    assert child["attack"]["ammoKind"] == "arrow"
+    assert child["gameplay"]["ammoFor"] == "arrow"
     assert genome["shotCount"] == 4
     assert genome["delayTicks"] == 12
 
@@ -115,24 +125,6 @@ def _contract_check_overhead_barrage_provenance_marks_authored_projectile_identi
 
     assert report["gameplayChildren"]["source"] == "overhead_barrage"
     assert report["gameplayChildren"]["overheadBarrageChildEstimate"] == 4
-
-
-def _contract_check_promise_truth_validates_generic_overhead_wording_without_selecting_it() -> None:
-    unsupported = _plan("bow")
-    unsupported["tooltip"] = "Arrows rain from the sky over the aimed point."
-    patch = compile_runtime_plan_to_genome_patch(unsupported)
-    report = validate_runtime_promises(unsupported, patch)
-    assert any(
-        claim["kind"] == "overhead_barrage" and claim["status"] == "unsupported"
-        for claim in report["claims"]
-    )
-
-    backed = _plan()
-    backed_report = validate_runtime_promises(backed, compile_runtime_plan_to_genome_patch(backed))
-    assert any(
-        claim["kind"] == "overhead_barrage" and claim["status"] == "executable"
-        for claim in backed_report["claims"]
-    )
 
 
 def _contract_check_csharp_executor_configures_geometry_without_forcing_star_theme() -> None:
@@ -179,11 +171,16 @@ def _starfury_plan(*, family: str = "overhead_barrage") -> dict:
                     "params": {
                         "runtimeFamily": family,
                         "delivery": "swing",
+                        "movement": "straight",
                         "weaponFamily": "broadsword",
                         "projectileFamily": "star",
                         "projectileShape": "five-point falling star",
                         "effect": "star",
+                        "speed": 12,
                         "shotCount": 1,
+                        "spreadRadians": 0.0,
+                        "pierce": 1,
+                        "lifetimeTicks": 90,
                         "delayTicks": 0,
                         "rangeTiles": 50,
                     },
@@ -210,16 +207,12 @@ def _contract_check_starfury_like_swing_keeps_authored_star_theme_and_zero_delay
 
 
 def _contract_check_starfury_like_star_theme_survives_full_pipeline() -> None:
-    child = final_normalize(
-        validate_and_repair(
-            _starfury_plan(),
-            {"name": "Gold Broadsword", "type": 1, "damage": 13, "useTime": 21, "value": 1000},
-            {"name": "Fallen Star", "type": 75, "damage": 0, "value": 500},
-            {},
-            {},
-            "v11_starfury_like",
-        )
-    )
+    parent_a = {"name": "Gold Broadsword", "type": 1, "damage": 13, "useTime": 21, "value": 1000}
+    parent_b = {"name": "Fallen Star", "type": 75, "damage": 0, "value": 500}
+    ca = canonicalize(parent_a)
+    cb = canonicalize(parent_b)
+    child = validate_and_repair(_starfury_plan(), parent_a, parent_b, ca, cb, "v11_starfury_like")
+    child = final_normalize(attach_gameplay_and_attack(child, parent_a, parent_b, ca, cb))
     genome = child["attack"]["genome"]
     assert child["gameplay"]["damageClass"] == "melee"
     assert genome["runtimeFamily"] == "overhead_barrage"
@@ -265,7 +258,7 @@ def test_v11_overhead_barrage_contract_module_contract(request):
             '_contract_check_daedalus_like_ranged_authoring_survives_full_pipeline',
             '_contract_check_removed_family_token_and_names_do_not_select_gameplay',
             '_contract_check_overhead_barrage_provenance_marks_authored_projectile_identity',
-            '_contract_check_promise_truth_validates_generic_overhead_wording_without_selecting_it',
+
             '_contract_check_csharp_executor_configures_geometry_without_forcing_star_theme',
             '_contract_check_starfury_like_swing_keeps_authored_star_theme_and_zero_delay',
             '_contract_check_starfury_like_star_theme_survives_full_pipeline',

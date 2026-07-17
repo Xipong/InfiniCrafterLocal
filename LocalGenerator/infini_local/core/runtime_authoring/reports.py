@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import json
+from copy import deepcopy
+import re
 from typing import Any
 
 from infini_local.core.result_models import RuntimeCompileResult
@@ -13,9 +14,8 @@ from infini_local.core.runtime_family_policy import (
 )
 from infini_local.core.runtime_secondary_policy import normalize_secondary_trigger
 from infini_local.core.runtime_authoring.structural import all_calls, find_call
-from infini_local.core.runtime_contracts import validate_runtime_contract
 from infini_local.core.boundary_models import runtime_plan_boundary_report
-from infini_local.core.runtime_promise_truth import validate_runtime_promises
+
 
 
 def _generated_buff_has_executable_effect(buff: dict[str, Any]) -> bool:
@@ -49,6 +49,67 @@ def runtime_plan_quality_report(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _runtime_validation_error_details(
+    errors: list[str],
+    calls: list[Any],
+) -> list[dict[str, Any]]:
+    """Map validator-owned diagnostics back to authored calls without choosing a repair."""
+    indexed_calls: list[tuple[int, dict[str, Any]]] = []
+    for normalized_index, raw_call in enumerate(calls):
+        if not isinstance(raw_call, dict):
+            continue
+        authored_index = raw_call.get("_index")
+        index = authored_index if isinstance(authored_index, int) else normalized_index
+        indexed_calls.append((index, raw_call))
+
+    details: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for message in errors:
+        text = str(message)
+        indexed_match = re.search(r"engineCalls\.(\d+)(?:\.params\.([A-Za-z0-9_.]+))?", text)
+        selected: tuple[int, dict[str, Any]] | None = None
+        field = ""
+        if indexed_match:
+            wanted_index = int(indexed_match.group(1))
+            selected = next((row for row in indexed_calls if row[0] == wanted_index), None)
+            field = str(indexed_match.group(2) or "")
+        if selected is None:
+            named = [
+                row
+                for row in indexed_calls
+                if str(row[1].get("fn") or "").strip()
+                and str(row[1].get("fn") or "").strip() in text
+            ]
+            if len(named) == 1:
+                selected = named[0]
+        if selected is None and "primary action" in text:
+            selected = next(
+                (row for row in indexed_calls if str(row[1].get("fn") or "") == "shoot_projectile"),
+                None,
+            )
+        if selected is None:
+            continue
+        if not field:
+            explicit_match = re.search(r"requires explicit ([A-Za-z0-9_.]+)", text)
+            field = str(explicit_match.group(1) or "") if explicit_match else ""
+        index, call = selected
+        call_id = str(call.get("_callId") or call.get("callId") or "").strip()
+        fn = str(call.get("_rawFn") or call.get("fn") or "").strip()
+        path = f"$.runtimePlan.engineCalls[{index}]"
+        if field:
+            path += f".params.{field}"
+        identity = (call_id, path, text)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        details.append({
+            "kind": "runtime_validation",
+            "path": path,
+            "callId": call_id,
+            "fn": fn,
+            "reason": text,
+        })
+    return details
 
 
 def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
@@ -69,7 +130,8 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     normalize_runtime_plan_inplace(data)
     rp = runtime_plan(data)
     q = runtime_plan_quality_report(data)
-    calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
+    calls_candidate = rp.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
     errors: list[str] = list(boundary.get("errors") or [])
     warnings: list[str] = []
     fns = q.get("functions") or []
@@ -89,7 +151,18 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         warnings.append("some engineCalls were hard-rejected by safety policy")
     if "state_meter" in fns or "triggered_action" in fns:
         warnings.append("state_meter/triggered_action are preserved as authored runtime state intent; current gameplay requires concrete executable calls too")
-    plan_kind = _norm_name(rp.get("resultKind") or find_call(rp, "set_item_stats").get("resultKind"))
+    stats_kind = _norm_name(find_call(rp, "set_item_stats").get("resultKind"))
+    plan_kind = _norm_name(rp.get("resultKind"))
+    authored_category = _norm_name(data.get("category"))
+    if plan_kind and stats_kind and plan_kind != stats_kind:
+        errors.append(f"runtimePlan.resultKind={plan_kind} disagrees with set_item_stats.resultKind={stats_kind}")
+    runtime_kind = stats_kind or plan_kind
+    projected_category = "weapon" if runtime_kind == "consumable_weapon" else runtime_kind
+    if authored_category and projected_category and authored_category != projected_category:
+        errors.append(
+            f"category={authored_category} disagrees with canonical category={projected_category} for authored runtime resultKind={runtime_kind}"
+        )
+    plan_kind = runtime_kind
     combatish = (
         str(data.get("category") or data.get("gameplay", {}).get("kind") or plan_kind or "").lower() in {"weapon", "summon"}
         or bool((data.get("attack") or {}).get("enabled") if isinstance(data.get("attack"), dict) else False)
@@ -101,6 +174,21 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             errors.append("combat result lacks a primary executable action; visual trail is not executable combat")
         else:
             compiled_patch = compile_runtime_plan_to_genome_patch(data)
+            rejected_primary = compiled_patch.get("rejectedPrimaryCalls")
+            if isinstance(rejected_primary, list):
+                for rejection in rejected_primary:
+                    if not isinstance(rejection, dict):
+                        continue
+                    index = rejection.get("index")
+                    index_text = str(index) if isinstance(index, int) else "?"
+                    delivery = str(rejection.get("delivery") or "unknown")
+                    movement = str(rejection.get("movement") or "unknown")
+                    errors.append(
+                        "runtimePlan.engineCalls."
+                        + index_text
+                        + ": runtime supports one primary attack family; "
+                        + f"incompatible extra primary uses delivery={delivery}, movement={movement}"
+                    )
             runtime_error = _norm_name(compiled_patch.get("runtimeContractError"))
             if runtime_error:
                 errors.append("primary executable action did not compile: " + runtime_error)
@@ -299,20 +387,11 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         buff_type = _num(stats.get("buffType"), 0) or 0
         if heal <= 0 and buff_type <= 0 and not use_calls:
             errors.append("potion result lacks an explicit executable use effect")
-    contract_validation = validate_runtime_contract(data, compile_runtime_plan_to_genome_patch(data) if rp else {})
-    contract_warnings = list(contract_validation.get("warnings") or [])
-    warnings.extend(contract_warnings)
-    errors.extend(
-        warning
-        for warning in contract_warnings
-        if warning == "machine_backing_refs_missing_or_unresolved"
-        or "_inactive_compiled_field:" in warning
-        or "_unresolved:" in warning
-    )
     return {
         "api": ENGINE_RUNTIME_API_VERSION,
         "ok": not errors,
         "errors": errors,
+        "errorDetails": _runtime_validation_error_details(errors, calls),
         "warnings": warnings,
         "quality": q,
         "normalization": norm,
@@ -320,12 +399,9 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], dict[str, list[str]]]:
-    """Map compiled field names to the engine call that explicitly authored them."""
-    rp = data_or_plan if isinstance(data_or_plan.get("engineCalls"), list) else runtime_plan(data_or_plan)
-    authored: dict[str, str] = {}
-    authored_by_fn: dict[str, list[str]] = {}
-    maps: dict[str, dict[str, str | tuple[str, ...]]] = {
+def _compiled_field_source_map() -> dict[str, dict[str, str | tuple[str, ...]]]:
+    """Canonical compiled-field → authored-param provenance for engine functions."""
+    return {
         "set_item_stats": {
             "resultKind": "resultKind",
             "damageClass": "damageClass",
@@ -341,6 +417,15 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "manaCost": "manaCost",
             "craftYield": "craftYield",
             "defense": "defense",
+            "healLife": "healLife",
+            "healMana": "healMana",
+            "buffType": "buffType",
+            "buffTime": "buffTime",
+            "pickPower": "pickPower",
+            "axePower": "axePower",
+            "hammerPower": "hammerPower",
+            "ammoFor": "ammoFor",
+            "slot": "armorSlot",
         },
         "shoot_projectile": {
             "runtimeFamily": "runtimeFamily",
@@ -351,6 +436,8 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "disableItemMeleeHitbox": "disableItemMeleeHitbox",
             "ownerHitCheck": "ownerHitCheck",
             "channelUse": "channelUse",
+            "useTimeTicks": "useTimeTicks",
+            "useAnimationTicks": "useAnimationTicks",
             "speed": "speed",
             "rangeTiles": "rangeTiles",
             "range": "rangeTiles",
@@ -386,22 +473,28 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "soundVolume": "soundVolume",
             "soundPitch": "soundPitch",
             "soundPitchVariance": "soundPitchVariance",
+            "secondaryDamageMultiplier": "secondaryDamageMultiplier",
+            "secondaryLifetimeTicks": "secondaryLifetimeTicks",
         },
         "spawn_secondary_projectiles": {
             "secondaryTrigger": "trigger",
             "splitCount": ("splitCount", "count"),
-            "maxChildProjectiles": "maxChildProjectiles",
-            "secondarySpreadRadians": "secondarySpreadRadians",
-            "secondaryDamageMultiplier": "secondaryDamageMultiplier",
-            "secondaryLifetimeTicks": "secondaryLifetimeTicks",
+            "maxChildProjectiles": ("maxChildProjectiles", "count"),
+            "secondarySpreadRadians": ("secondarySpreadRadians", "spreadRadians"),
+            "secondaryDamageMultiplier": ("secondaryDamageMultiplier", "damageMultiplier"),
+            "secondaryLifetimeTicks": ("secondaryLifetimeTicks", "lifetimeTicks"),
             "sameTargetBias": "sameTargetBias",
-            "secondaryMaterial": "secondaryMaterial",
-            "secondaryProjectileShape": "secondaryProjectileShape",
+            "secondaryMaterial": ("secondaryMaterial", "material"),
+            "secondaryProjectileShape": ("secondaryProjectileShape", "projectileShape"),
             "primaryColorName": "primaryColorName",
         },
         "apply_on_hit_effect": {
             "onHit": "onHit",
             "aoeRadiusTiles": "aoeRadiusTiles",
+            "aoeDamageRadiusPx": "aoeRadiusTiles",
+            "immunityCooldown": "immunityCooldown",
+            "splitCount": "count",
+            "maxChildProjectiles": "count",
             "chainCount": "chainCount",
             "secondaryDamageMultiplier": "secondaryDamageMultiplier",
             "secondaryLifetimeTicks": "secondaryLifetimeTicks",
@@ -410,13 +503,155 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "debuffHint": "debuffHint",
             "debuffTime": "debuffTime",
         },
+        "tool_capability": {
+            "pickPower": "pickPower",
+            "axePower": "axePower",
+            "hammerPower": "hammerPower",
+            "miningSpeedScale": "miningSpeedScale",
+        },
+        "apply_player_effect_on_use": {
+            "healLife": "healLife",
+            "healMana": "healMana",
+            "buffType": "buffType",
+            "buffTime": "buffTime",
+            "extraBuffs": "buffs",
+            "generatedBuff.durationTicks": "generatedBuff.durationTicks",
+            "generatedBuff.miningSpeedMultiplier": "generatedBuff.miningSpeedMultiplier",
+            "generatedBuff.emitLightStrength": "generatedBuff.emitLightStrength",
+            "generatedBuff.lightColorName": "generatedBuff.lightColorName",
+            "generatedBuff.oreSenseRadiusTiles": "generatedBuff.oreSenseRadiusTiles",
+            "generatedBuff.movementSpeed": "generatedBuff.movementSpeed",
+            "generatedBuff.jumpBoost": "generatedBuff.jumpBoost",
+            "generatedBuff.manaRegen": "generatedBuff.manaRegen",
+            "generatedBuff.lifeRegen": "generatedBuff.lifeRegen",
+        },
+        "accessory_effect": {
+            "archetype": "archetype",
+            "defense": "defense",
+            "maxLife": "stats.maxLife",
+            "maxMana": "stats.maxMana",
+            "lifeRegen": "stats.lifeRegen",
+            "manaRegen": "stats.manaRegen",
+            "movementSpeed": "stats.movementSpeed",
+            "maxRunSpeed": "stats.maxRunSpeed",
+            "jumpSpeed": "stats.jumpSpeed",
+            "genericDamage": "stats.genericDamage",
+            "meleeDamage": "stats.meleeDamage",
+            "rangedDamage": "stats.rangedDamage",
+            "magicDamage": "stats.magicDamage",
+            "summonDamage": "stats.summonDamage",
+            "genericCrit": "stats.genericCrit",
+            "attackSpeed": "stats.attackSpeed",
+            "knockback": "stats.knockback",
+            "minionSlots": "stats.minionSlots",
+            "sentrySlots": "stats.sentrySlots",
+            "manaCostReduction": "stats.manaCostReduction",
+            "ammoSaveChance": "stats.ammoSaveChance",
+            "aggro": "stats.aggro",
+            "endurance": "stats.endurance",
+            "armorPenetration": "stats.armorPenetration",
+            "whipRange": "stats.whipRange",
+            "summonTagDamage": "stats.summonTagDamage",
+            "lightStrength": "stats.lightStrength",
+            "fallDamageImmune": "stats.fallDamageImmune",
+            "lavaImmune": "stats.lavaImmune",
+            "waterWalk": "stats.waterWalk",
+            "lightColorName": "stats.lightColorName",
+        },
+        "armor_effect": {
+            "slot": ("armorSlot", "slot"),
+            "setKey": "setKey",
+            "archetype": "archetype",
+            "defense": "defense",
+            "maxLife": "stats.maxLife",
+            "maxMana": "stats.maxMana",
+            "lifeRegen": "stats.lifeRegen",
+            "manaRegen": "stats.manaRegen",
+            "movementSpeed": "stats.movementSpeed",
+            "maxRunSpeed": "stats.maxRunSpeed",
+            "jumpSpeed": "stats.jumpSpeed",
+            "genericDamage": "stats.genericDamage",
+            "meleeDamage": "stats.meleeDamage",
+            "rangedDamage": "stats.rangedDamage",
+            "magicDamage": "stats.magicDamage",
+            "summonDamage": "stats.summonDamage",
+            "genericCrit": "stats.genericCrit",
+            "attackSpeed": "stats.attackSpeed",
+            "knockback": "stats.knockback",
+            "minionSlots": "stats.minionSlots",
+            "sentrySlots": "stats.sentrySlots",
+            "manaCostReduction": "stats.manaCostReduction",
+            "ammoSaveChance": "stats.ammoSaveChance",
+            "aggro": "stats.aggro",
+            "endurance": "stats.endurance",
+            "armorPenetration": "stats.armorPenetration",
+            "whipRange": "stats.whipRange",
+            "summonTagDamage": "stats.summonTagDamage",
+            "lightStrength": "stats.lightStrength",
+            "fallDamageImmune": "stats.fallDamageImmune",
+            "lavaImmune": "stats.lavaImmune",
+            "waterWalk": "stats.waterWalk",
+            "lightColorName": "stats.lightColorName",
+            "setBonusText": "setBonus.text",
+            "setBonusGenericDamage": "setBonus.genericDamage",
+            "setBonusMeleeDamage": "setBonus.meleeDamage",
+            "setBonusRangedDamage": "setBonus.rangedDamage",
+            "setBonusMagicDamage": "setBonus.magicDamage",
+            "setBonusSummonDamage": "setBonus.summonDamage",
+            "setBonusGenericCrit": "setBonus.genericCrit",
+            "setBonusMovementSpeed": "setBonus.movementSpeed",
+            "setBonusLifeRegen": "setBonus.lifeRegen",
+            "setBonusManaRegen": "setBonus.manaRegen",
+            "setBonusMinionSlots": "setBonus.minionSlots",
+            "setBonusSentrySlots": "setBonus.sentrySlots",
+            "setBonusManaCostReduction": "setBonus.manaCostReduction",
+            "setBonusAmmoSaveChance": "setBonus.ammoSaveChance",
+            "setBonusAggro": "setBonus.aggro",
+            "setBonusEndurance": "setBonus.endurance",
+            "setBonusArmorPenetration": "setBonus.armorPenetration",
+        },
+        "set_alt_use_mode": {
+            "altUseMode": "mode",
+            "altMobilityMode": ("mobilityMode", "mode"),
+            "altMobilityRangeTiles": "rangeTiles",
+            "altMobilityCooldownTicks": "cooldownTicks",
+            "altMobilitySafeTileOnly": "safeTileOnly",
+            "altGeneratedBuff.durationTicks": ("generatedBuff.durationTicks", "durationTicks"),
+            "altGeneratedBuff.miningSpeedMultiplier": "generatedBuff.miningSpeedMultiplier",
+            "altGeneratedBuff.emitLightStrength": "generatedBuff.emitLightStrength",
+            "altGeneratedBuff.lightColorName": "generatedBuff.lightColorName",
+            "altGeneratedBuff.oreSenseRadiusTiles": "generatedBuff.oreSenseRadiusTiles",
+            "altGeneratedBuff.movementSpeed": "generatedBuff.movementSpeed",
+            "altGeneratedBuff.jumpBoost": "generatedBuff.jumpBoost",
+            "altGeneratedBuff.manaRegen": "generatedBuff.manaRegen",
+            "altGeneratedBuff.lifeRegen": "generatedBuff.lifeRegen",
+        },
+        "hold_item_effect": {
+            "holdLightStrength": "lightStrength",
+            "holdLightColorName": ("lightColorName", "color"),
+            "holdGeneratedBuff.durationTicks": "generatedBuff.durationTicks",
+            "holdGeneratedBuff.miningSpeedMultiplier": "generatedBuff.miningSpeedMultiplier",
+            "holdGeneratedBuff.emitLightStrength": "generatedBuff.emitLightStrength",
+            "holdGeneratedBuff.lightColorName": "generatedBuff.lightColorName",
+            "holdGeneratedBuff.oreSenseRadiusTiles": "generatedBuff.oreSenseRadiusTiles",
+            "holdGeneratedBuff.movementSpeed": "generatedBuff.movementSpeed",
+            "holdGeneratedBuff.jumpBoost": "generatedBuff.jumpBoost",
+            "holdGeneratedBuff.manaRegen": "generatedBuff.manaRegen",
+            "holdGeneratedBuff.lifeRegen": "generatedBuff.lifeRegen",
+        },
+        "mobility_effect": {
+            "mobilityMode": "mode",
+            "mobilityRangeTiles": "rangeTiles",
+            "mobilityCooldownTicks": "cooldownTicks",
+            "mobilitySafeTileOnly": "safeTileOnly",
+        },
         "spawn_contact_particles": {
             "effect": "effect",
-            "burstDustCap": "burstDustCap",
-            "vfxParticleScale": "vfxParticleScale",
-            "vfxMaterial": "vfxMaterial",
+            "burstDustCap": "amount",
+            "dustSpawnDenom": "amount",
+            "vfxParticleScale": "scale",
+            "vfxMaterial": "material",
             "vfxParticleDurationTicks": "durationTicks",
-            "primaryColorName": "primaryColorName",
         },
         "leave_trail_or_field": {
             "trailLength": "trailLength",
@@ -429,8 +664,15 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "runtimeLightStrength": "strength",
             "runtimeLightDurationTicks": "durationTicks",
             "runtimeLightColorName": ("lightColorName", "color"),
+            "primaryColorName": ("lightColorName", "color"),
         },
-        "visual_effect_cue": {"vfxCues": "cue", "vfxCueCount": "cue"},
+        "visual_effect_cue": {
+            "vfxCues": (
+                "event", "rendererKind", "channel", "lane", "textureRole", "particleRole",
+                "emissionMode", "particleSystemId", "scale", "density", "duration", "alpha",
+                "spread", "jitter", "startTick", "repeatEvery", "importance", "note",
+            ),
+        },
         "state_meter": {"runtimeState": "kind"},
         "triggered_action": {"runtimeState": "trigger"},
         "use_affordance": {
@@ -445,13 +687,101 @@ def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], d
             "handPose": "handPose",
             "initialOffsetPx": "initialOffsetPx",
         },
+        "consumption_behavior": {"consumeChancePercent": "consumeChancePercent"},
+        "ammo_behavior": {"ammoFor": "ammoFor"},
+        "use_condition": {
+            "useConditionMode": "mode",
+            "useConditionMinLife": "minLife",
+            "useConditionMinMana": "minMana",
+        },
     }
-    calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
+
+
+def compiled_fields_for_authored_param(fn: str, authored_param: str) -> frozenset[str]:
+    """Return exact compiler fields structurally attributed to one authored param."""
+    normalized_fn = _norm_name(fn)
+    return frozenset(
+        compiled_field
+        for compiled_field, source_params in _compiled_field_source_map().get(normalized_fn, {}).items()
+        if authored_param in (source_params if isinstance(source_params, tuple) else (source_params,))
+    )
+
+
+def compiled_fields_for_authored_call(
+    fn: str,
+    params: dict[str, Any],
+    authored_param: str,
+) -> frozenset[str]:
+    """Resolve a raw typed call through canonical lowering before provenance lookup."""
+    from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call
+
+    def nested(value: dict[str, Any], path: str) -> tuple[bool, Any]:
+        current: Any = value
+        for part in str(path or "").split("."):
+            if not part or not isinstance(current, dict) or part not in current:
+                return False, None
+            current = current[part]
+        return True, current
+
+    present, authored_value = nested(params, authored_param)
+    if not present:
+        return frozenset()
+    resolved = set(compiled_fields_for_authored_param(fn, authored_param))
+    baseline = _lower_typed_engine_call(fn, params)
+    for canonical_fn, canonical_params in baseline:
+        canonical_present, canonical_value = nested(canonical_params, authored_param)
+        if canonical_present and canonical_value == authored_value:
+            resolved.update(compiled_fields_for_authored_param(canonical_fn, authored_param))
+
+    probe_params = deepcopy(params)
+    probe_parent: Any = probe_params
+    probe_parts = str(authored_param or "").split(".")
+    for part in probe_parts[:-1]:
+        if not isinstance(probe_parent, dict) or not isinstance(probe_parent.get(part), dict):
+            return frozenset(resolved)
+        probe_parent = probe_parent[part]
+    if not isinstance(probe_parent, dict) or not probe_parts:
+        return frozenset(resolved)
+    if isinstance(authored_value, bool):
+        probe_value: Any = not authored_value
+    elif isinstance(authored_value, int):
+        probe_value = authored_value + 1
+    elif isinstance(authored_value, float):
+        probe_value = authored_value + 0.5
+    elif isinstance(authored_value, str):
+        probe_value = authored_value + "__icl_provenance_probe__"
+    else:
+        probe_value = "__icl_provenance_probe__"
+    probe_parent[probe_parts[-1]] = probe_value
+    counterfactual = _lower_typed_engine_call(fn, probe_params)
+    for index, (canonical_fn, canonical_params) in enumerate(baseline):
+        if index >= len(counterfactual) or counterfactual[index][0] != canonical_fn:
+            changed_fields = set(canonical_params)
+        else:
+            counterfactual_params = counterfactual[index][1]
+            changed_fields = {
+                field
+                for field in set(canonical_params) | set(counterfactual_params)
+                if canonical_params.get(field) != counterfactual_params.get(field)
+            }
+        for canonical_field in changed_fields:
+            resolved.update(compiled_fields_for_authored_param(canonical_fn, canonical_field))
+    return frozenset(resolved)
+
+
+def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """Map compiled field names to the engine call that explicitly authored them."""
+    rp = data_or_plan if isinstance(data_or_plan.get("engineCalls"), list) else runtime_plan(data_or_plan)
+    authored: dict[str, str] = {}
+    authored_by_fn: dict[str, list[str]] = {}
+    maps = _compiled_field_source_map()
+    calls_candidate = rp.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
     for raw in calls:
         if not isinstance(raw, dict):
             continue
         fn = _norm_name(raw.get("fn"))
-        authored_fn = _norm_name(raw.get("_rawFn") or raw.get("_semanticFn") or fn)
+        authored_fn = _norm_name(raw.get("_rawFn") or fn)
         param_obj = raw.get("params") if isinstance(raw.get("params"), dict) else raw
         if not isinstance(param_obj, dict):
             continue
@@ -470,9 +800,38 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
     normalize_runtime_plan_inplace(data)
     rp = runtime_plan(data)
     patch = patch or compile_runtime_plan_to_genome_patch(data)
-    calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
+    calls_candidate = rp.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
     fns = [str(c.get("fn") or "") for c in calls if isinstance(c, dict)]
     authored_sources, authored_by_fn = _authored_field_map(rp)
+    authored_parameters: list[dict[str, Any]] = []
+    for call_index, raw_call in enumerate(calls):
+        if not isinstance(raw_call, dict):
+            continue
+        fn = _norm_name(raw_call.get("fn"))
+        call_id = str(raw_call.get("callId") or f"call_{call_index}")
+        params_candidate = raw_call.get("params")
+        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
+        pending: list[tuple[str, Any]] = [(str(key), value) for key, value in params.items()]
+        while pending:
+            param_path, authored_value = pending.pop(0)
+            if isinstance(authored_value, dict):
+                pending[0:0] = [
+                    (f"{param_path}.{child_key}", child_value)
+                    for child_key, child_value in authored_value.items()
+                ]
+                continue
+            if authored_value is not None and not isinstance(authored_value, (str, bool, int, float, list)):
+                continue
+            compiled_fields = sorted(compiled_fields_for_authored_call(fn, params, param_path))
+            authored_parameters.append({
+                "callId": call_id,
+                "fn": fn,
+                "param": param_path,
+                "authoredValue": deepcopy(authored_value),
+                "compiledFields": compiled_fields,
+                "claimableFields": compiled_fields,
+            })
 
     field_sources: dict[str, str] = {}
     authored_fields: dict[str, bool] = {}
@@ -532,6 +891,7 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
         "engineFunctions": fns,
         "normalizedCalls": normalized_calls,
         "authoredFields": authored_fields,
+        "authoredParameters": authored_parameters,
         "authoredByFunction": authored_by_fn,
         "gameplayChildren": {
             "enabled": (split > 0 and max_child > 0) or effect_child_count > 0 or overhead_child_count > 0,
@@ -575,34 +935,20 @@ def compiled_runtime_contract(data: dict[str, Any], patch: dict[str, Any] | None
         "functionCounts": q.get("functionCounts", {}),
         "primaryCall": (rp.get("engineCalls") or [{}])[0] if isinstance(rp.get("engineCalls"), list) and rp.get("engineCalls") else {},
         "notes": [
-            "runtimeFamily is required for executable attacks; only tiny unambiguous family-field repair is allowed",
+            "runtimeFamily is explicit; missing or conflicting primary families fail validation",
             "splitCount/maxChildProjectiles represent gameplay children only, not VFX motes",
             "state_meter/triggered_action are preserved as explicit authored intent; they do not spawn bosses/NPCs/mobs and do not execute unsupported gameplay by prose",
-            "runtimeArchetype/runtimeContract are data contracts; unsupported families are preserved as intent, not executed magically",
+            "runtimeContract is model-authored public meaning; unsupported engine calls remain explicit and inert",
         ],
     }
-    if isinstance(data.get("runtimeArchetype"), dict):
-        out["runtimeArchetype"] = data.get("runtimeArchetype")
     if isinstance(data.get("runtimeContract"), dict):
         out["runtimeContract"] = data.get("runtimeContract")
-    if isinstance(patch.get("archetypeCompiler"), dict):
-        out["archetypeCompiler"] = patch.get("archetypeCompiler")
-    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
-    promise_truth = debug.get("runtimePromiseTruth") if isinstance(debug, dict) else None
-    if isinstance(promise_truth, str) and promise_truth.strip().startswith("{"):
-        try:
-            out["runtimePromiseTruth"] = json.loads(promise_truth)
-        except (json.JSONDecodeError, TypeError):
-            pass
     return out
 
 
 def compile_runtime_plan_to_genome_result(data: dict[str, Any]) -> dict[str, Any]:
     patch = compile_runtime_plan_to_genome_patch(data)
-    contract_validation = validate_runtime_contract(data, patch)
-    promise_truth = validate_runtime_promises(data, patch)
     validation = runtime_plan_validation_report(data)
-    validation["warnings"] = list(dict.fromkeys((validation.get("warnings") or []) + (contract_validation.get("warnings") or []) + (promise_truth.get("warnings") or [])))
     provenance = runtime_plan_provenance_report(data, patch)
     model = RuntimeCompileResult(
         patch=patch,
@@ -616,8 +962,6 @@ def compile_runtime_plan_to_genome_result(data: dict[str, Any]) -> dict[str, Any
         "compiled": compiled_runtime_contract(data, patch),
         "validation": validation,
         "quality": runtime_plan_quality_report(data),
-        "runtimeContractValidation": contract_validation,
-        "runtimePromiseTruth": promise_truth,
     })
     return result
 

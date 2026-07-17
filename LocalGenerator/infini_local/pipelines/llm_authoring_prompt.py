@@ -5,17 +5,9 @@ import math
 import re
 from typing import Any
 
-PLANNER_PROMPT_LIMIT_CHARS = 24_750
-MECHANIC_BACKING_REF_RULES: tuple[str, ...] = (
-    "engineCall.callId: unique, stable, ^[a-z][a-z0-9_]{0,63}$.",
-    "mechanicClaim: unique stable claimId plus model-authored playerText.",
-    "Executable ref.field is an exact scalar path inside the selected call.params and expected is that authored scalar.",
-    "Refs must change final DTO; avoid no-ops: shotCount=1, pierce=1, rangeTiles=4, weapon consumable=false/maxStack=1, primary useTimeTicks shadowed by set_item_stats, visual params.",
-    'Example: {"source":"engineCall","callId":"primary_projectile","field":"speed","expected":12}.',
-    "Never return finalPath, finalExpected, or finalWireReceipts; the compiler owns final-wire provenance.",
-    "Choose signatureClaimId. Mechanic signatures are executable and linked by tooltipClaimIds, timeline claimIds, and weirdTwist.claimIds.",
-    "Presentation: status=visual_only, no refs. Code never infers, rewrites, deletes, or classifies claims.",
-)
+from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
+
+PLANNER_PROMPT_LIMIT_CHARS = 26_000
 
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
@@ -27,7 +19,6 @@ from infini_local.core.category_policy import ALLOWED_CATEGORIES
 from infini_local.core.item_identity_tools import (
     item_num,
     name_of,
-    stable_hash,
 )
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
 from infini_local.core.runtime_authoring.normalize import (
@@ -42,8 +33,10 @@ from infini_local.core.runtime_authoring.reports import (
 )
 
 from infini_local.core.runtime_authoring.schema import (
+    ENGINE_FN_ACCEPTED_PARAM_EXTRAS,
     ENGINE_FN_CATALOG_V2,
     PLANNER_HIDDEN_ENGINE_FUNCTIONS,
+    PRIMARY_ATTACK_SHARED_PARAM_NAMES,
 )
 from infini_local.core.sound_catalog import sound_catalog_card_for_llm
 from infini_local.core.runtime_authoring.structural import find_call
@@ -55,10 +48,7 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_PLAN_REQUIRED,
     LLM_RUNTIME_STRICT_VALIDATION,
 )
-from infini_local.pipelines.result_identity_policy import (
-    choose_from,
-    normalize_category,
-)
+from infini_local.pipelines.result_identity_policy import normalize_category
 from infini_local.pipelines.combine_balance import (
     clamp_vanilla_like_weapon_damage,
 )
@@ -358,7 +348,7 @@ def terraria_tick_guide_for_llm() -> dict[str, Any]:
         },
         "warnings": [
             "useTimeTicks <10 is clamped.",
-            "shotCount * low useTime * extraUpdates raises projectile pressure.",
+            "Pressure active<=30; lifetime480/useTime20 + 4 children fails; lower lifetime/count/extraUpdates or slow useTime.",
             "Visual motes => spawn_contact_particles; damaging fragments => spawn_secondary_projectiles(on_hit).",
             "For damaging fragments set count, damageMultiplier, and lifetimeTicks.",
         ],
@@ -412,14 +402,14 @@ def planner_priority_header_for_llm() -> list[str]:
     small/fast planners which obligations outrank the surrounding reference material.
     """
     return [
-        "Author one playable result from both parents; do not merely describe visuals.",
-        "Playable non-material/non-furniture: set_item_stats first, then one executable gameplay call.",
-        "Promises need engineCalls/numbers/contracts; do not infer mechanics from names.",
-        "Simulate held, outbound, surface collision/NPC collision, return/expiry; write 4+ timeline steps linked by claimIds. Thrust reuses item body. Consumption requires an exact call.",
-        "Visual prose/VFX is presentation; raw parent fields are evidence.",
-        "Placeable consumable usually means spent when placed; not potion/ammo/throwing unless authored.",
-        "Keep weird ideas when bounded; unsupported/catastrophic output is rejected.",
-        "Return one JSON object only.",
+        "Author playable output from both parents; no visual-only result.",
+        "Output only requiredJsonShape keys; never copy input or prompt metadata.",
+        "Playable: engineCalls[0]=set_item_stats(resultKind,...); normally 1-4 calls.",
+        "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats; onHit only apply_on_hit_effect; equipment stats is an object. Names aren't mechanics.",
+        "Combat primary authors shotCount, spreadRadians and card fields; shoot_projectile also runtimeFamily; specialized calls derive it.",
+        "Physical throw defaults to movement=gravity_arc; use movement=straight only when explicitly authoring gravity-free straight flight as part of the item design.",
+        "concept.coreMechanic is the concise player-facing gameplay description. playerViewTimeline is optional; include only relevant visible phases.",
+        "consumable_weapon: consumable=true, maxStack>1, craftYield>0; JSON booleans are true/false, never strings.",
     ]
 
 def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, Any], envelope: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -431,69 +421,63 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
     authoring.  This prevents prompt hints from becoming a second balance authority.
     """
     available_functions = sharp_engine_fn_catalog_for_llm()
+    primary_attack_functions = sorted(
+        fn
+        for fn, extras in ENGINE_FN_ACCEPTED_PARAM_EXTRAS.items()
+        if extras == PRIMARY_ATTACK_SHARED_PARAM_NAMES
+    )
     return {
         "mode": ENGINE_RUNTIME_API_VERSION,
         "runtimeApiVersion": ENGINE_RUNTIME_API_VERSION,
         "contractStyle": "sharp",
-        "principle": "LLM authors identity/numbers/engineCalls; Python validates. Engine still executes only registered finite primitives.",
-        "runtimeLanguage": "runtimeArchetype=feel; runtimeContract=sync/truth; unsupported stays explicit.",
+        "principle": "LLM authors; Python validates; engine executes finite primitives.",
+        "runtimeLanguage": "engineCalls=gameplay; runtimeContract=truth/sync.",
         "plannerChecklist": [
             "Pick resultKind; playable outputs start with set_item_stats.",
-            "Add one executable attack/effect/tool/equipment/mobility/alt/extractinator call.",
-            "Held/channel families may add runtimeArchetype/runtimeContract.",
-            "VFX never substitutes gameplay; image prompts name the exact role object.",
-            "Sound: exact ids from soundCatalog; never classify names/tooltips.",
-            "Parent facts are evidence, not copy commands.",
+            "Add only relevant typed gameplay/tool/equipment calls.",
+            "VFX never substitutes gameplay; sound ids come from soundCatalog.",
         ],
         "inputDataPolicy": [
             "Parent cards are facts; missing sections are unknown.",
-            "Ammo does not override item-owned projectiles unless authored.",
-            "Placeable consumables are spent unless authored otherwise.",
+            "Ammo and placeable consumption semantics change only when explicitly authored.",
             "Server does not pre-author visuals or mechanics.",
         ],
         "availableFunctions": available_functions,
+        "acceptedParamExtras": {
+            "primaryAttackFunctions": primary_attack_functions,
+            "primaryAttackParams": sorted(PRIMARY_ATTACK_SHARED_PARAM_NAMES),
+            "apply_on_hit_effect": sorted(ENGINE_FN_ACCEPTED_PARAM_EXTRAS["apply_on_hit_effect"]),
+        },
         "soundCatalog": sound_catalog_card_for_llm(),
         "tickGuide": concise_terraria_tick_guide_for_llm(),
         "criticalValueSemantics": {
             "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets, not extra targets.",
-            "useTiming": "useTime interval; useAnimation=useTime one action/click; useAnimation>useTime may repeat.",
-            "shots": "shotCount simultaneous; extraUpdates are steps, not shots.",
-            "ammo": "empty custom; arrow/bullet vanilla; custom rocket=launcher+empty.",
-            "range": "rangeTiles targets/beam/homing/barrage; straight distance≈speed*lifetime.",
-            "families": "homing→homing; beam*→beam; charge*→charge_release; delay→barrage; sentry*→deploy_sentry.",
-            "zero": "explicit 0 authored: delay immediate; beam full immediately.",
-            "expire": "on_expire is any projectile kill, not timeout-only.",
-            "cadence": "immunityCooldown same-NPC re-hit ticks; lower=more DPS.",
-            "sentryBudget": "at most 48 shots for sentry lifetime; ends when spent.",
+            "useTiming": "useTime is cadence; useAnimation=useTime gives one action per click; larger useAnimation may repeat.",
+            "shots": "shotCount is simultaneous multishot; extraUpdates are simulation steps.",
+            "expire": "on_expire means any projectile kill, not timeout-only.",
+            "sentryBudget": "A sentry has at most 48 authored shots over its lifetime.",
+            "zero": "beamChargeTicks=0 means beam full immediately; cooldown/count/radius 0 disables that optional behavior.",
+            "families": "charge*→charge_release; sentry behavior→deploy_sentry; do not emulate either through prose.",
+            "cadence": "immunityCooldown is same-NPC re-hit cadence, not item use cadence.",
         },
         "hardEngineLimits": {
             "maxShotCount": 8,
             "maxFinitePierce": 10,
-            "infinitePierceValue": -1,
-            "maxAoeRadiusTiles": 10,
             "maxLifetimeTicks": 900,
             "maxExtraUpdates": 3,
             "maxActiveProjectileEstimate": 85,
             "maxDustPerSecondEstimate": 260,
             "maxChildProjectiles": 48,
-            "maxVisualScaleHint": "small/normal unless source explicitly justifies large",
         },
         "semanticRules": [
-
-            "Preserve a complete weapon parent unless ammo/material resultKind and mergeLogic justify replacement.",
-            "Generated ammo ammoFor=arrow/bullet has vanilla projectile identity only. For an authored dart/throwable attack use consumable_weapon or weapon, empty ammoFor, and shoot_projectile.",
-            "Public gameplay prose needs exact executable backingRefs; visual-only motifs stay out of tooltip gameplay promises.",
-            "VFX calls present effects; burst/AoE/sticky are gameplay. Player movement must use a mobility engineCall; low-level shoot_projectile needs explicit runtimeFamily.",
-            "Ore visual execution is not added in this patch; generic oreSense remains report/debug-only.",
-            "spawn_temporary_helper_projectile is short-lived projectile behavior, not a persistent minion/sentry lifecycle. summon_boss/spawn_npc/spawn_enemy are hard-rejected.",
-            "Overhead barrage: on-hit uses apply_on_hit_effect; ranged/magic on-use uses its family call; Starfury-style melee-on-use uses shoot_projectile(runtimeFamily=overhead_barrage,delivery=swing).",
-
+            "Preserve both parents unless mergeLogic names an executable replacement.",
+            "Custom projectiles use weapon or consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
+            "Public gameplay text lives once in concept.coreMechanic; compiler provenance is not authored.",
+            "VFX calls present effects; burst, AoE, sticky, mobility, and utility require their typed gameplay calls.",
+            "Temporary helper projectiles never summon bosses, NPCs, mobs, or enemies.",
+            "Ore-sense remains diagnostic-only because no ore visual executor is available.",
+            "Starfury-style melee-on-use uses shoot_projectile with runtimeFamily=overhead_barrage and delivery=swing.",
         ],
-        "validatorLimits": {
-            "validatorOnly": True,
-            "balanceAuthority": f"python_balance_mode:{current_balance_mode()}",
-            "note": "Prompt exposes hard engine limits only. Soft parent-relative normalization is applied only in balanceMode=normalize.",
-        },
     }
 
 def authored_num(src: dict[str, Any], key: str, fallback: float, lo: float, hi: float) -> float:
@@ -693,88 +677,27 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
     runtime primitives.  This is intentionally the same payload try_llm_plan sends.
     """
     return {
-        "task": "Combine itemA and itemB into one playable Terraria-like item. Return one JSON object.",
+        "task": "Combine itemA+itemB into one playable item. Return one JSON object.",
         "priorityHeader": planner_priority_header_for_llm(),
-        "designGoal": "Derive a testable item from both parents. Prefer distinct behavior, but clean metamorphosis is fine.",
-        "balancePolicy": f"LLM authors numbers; balanceMode={current_balance_mode()}; report/safety preserve authored soft-balance values, normalize applies the legacy soft envelope; C# is final safety.",
+        "designGoal": "Use both parents; prefer distinct behavior, but clean metamorphosis is fine.",
+        "balancePolicy": f"LLM authors numbers; Python reports/clamps per balanceMode={current_balance_mode()}; C# is final safety.",
         "engineRuntimeContract": engine_runtime_capability_contract_for_llm(a, b) if LLM_RUNTIME_AUTHORING else {},
-        "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/directProjectile/effectiveProjectile/ammo/runtimeProbe/generatedParent + optional semantics notes", "rule": "raw fields are facts; semantics notes only clarify overloaded Terraria flags; absence is unknown, not a negative fact", "ammoRepresentativeLimit": 0},
-        "backingRefRules": list(MECHANIC_BACKING_REF_RULES),
+        "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/directProjectile/effectiveProjectile/ammo/runtimeProbe/generatedParent + optional semantics", "rule": "raw=facts; semantics clarify overloaded flags; absent=unknown", "ammoRepresentativeLimit": 0},
         "authorRules": [
-            "Return one JSON object with concept, resultKind, authored numbers, engineCalls and concise visual prompts.",
-            "Use exactly one secondary trigger: on_hit or on_expire. on_expire means any projectile kill, not timeout-only. shotCount is simultaneous multishot, never a timed burst.",
-            "Projectile weapon=weapon. Authored dart/throwable/rocket=consumable_weapon or weapon + empty ammoFor + projectile call. Plain arrow/bullet ammo cannot promise custom runtime effects.",
-            "Preserve a generated-parent anchor, then add one bounded tradeoff, timing, delivery or utility twist.",
-            "Tether/returning sprite is one moving body with only a short local attachment; never a full-canvas rope. Image prompts: item=inventory/held; projectile=moving hit body (same sword/blade/boomerang OK); impact=momentary hit; child=damaging child/mote.",
-            "Utility/player movement needs its exact executable call such as tool_capability, mobility_effect or apply_player_effect_on_use; otherwise keep it VFX-only. Use custom_executor for normal/utility engineCalls; never family=unsupported when executable calls exist.",
-            "Do not default to weapon: when parent raw facts expose a non-combat affordance, resultKind must preserve at least one non-combat affordance unless mergeLogic identifies the exact executable transformation that replaces it.",
+            "Return one JSON object exactly matching the source-derived requiredJsonShape card.",
+            "Use one result identity: runtimePlan.resultKind equals set_item_stats.resultKind; top category is weapon only for consumable_weapon, otherwise it equals that resultKind.",
+            "Use one secondary trigger: on_hit or on_expire; on_expire means any projectile kill. shotCount is simultaneous, not timed.",
+            "Projectile=weapon. Custom dart/throwable/rocket=consumable_weapon or weapon + empty ammoFor + projectile call; arrow/bullet ammo has vanilla behavior.",
+            "Put fusion physics in concept.mergeLogic, central gameplay in concept.coreMechanic, and unusual shape/count/placement in runtimePlan.visualIntent topology/parts/arrangement.",
+            "Tether/returning sprite is one moving body, never a full-canvas rope. Image prompts: item=inventory/held; projectile=hit body (same sword/blade/boomerang OK); impact=momentary; child=damaging.",
+            "Utility/movement needs tool_capability, mobility_effect, or apply_player_effect_on_use; otherwise VFX-only. Never family=unsupported with executable calls.",
+            "Non-combat raw affordance: resultKind preserves it unless mergeLogic names an exact executable replacement; do not default to weapon.",
             "No markdown, analysis, legacy attackPattern, or attack.genome.",
         ],
-        "validatorRanges": {
-            "damage": [0, 999],
-            "useTimeTicks": [10, 150], "shotCount": [1, 8], "pierce": [-1, 10],
-            "rangeTiles": [4, 120], "lifetimeTicks": [25, 900], "extraUpdates": [0, 3],
-            "note": "Schema/engine sanity ranges only. Parent-relative balance is applied after authoring; no legacy attack.genome."
-        },
-        "requiredJsonShape": {
-            "name": "short flavorful item name, no Infini/Generated/Hybrid/Combined",
-            "concept": {
-                "fantasy": "one sentence describing the item",
-                "mergeLogic": "one sentence: why these exact parents became this, based on raw parent fields",
-                "weirdTwist": {"text": "memorable behavior or visual twist", "claimIds": ["claimIds"]}
-            },
-            "runtimeArchetype": {
-                "schema": "infini.runtime-archetype.v1",
-                "source": "generated",
-                "family": "known finite family",
-                "overrideKnobs": {},
-            },
-            "runtimeContract": {
-                "schema": "infini.runtime-contract.v3",
-                "primaryVerb": "player action",
-                "controlStyle": "tap|hold-to-channel|passive|toggle|automatic",
-                "signatureMode": "mechanic|visual",
-                "signatureClaimId": "model-selected stable claimId",
-                "tooltipClaimIds": ["ordered claimIds"],
-                "mechanicClaims": [{"claimId": "stable id", "playerText": "tooltip clause", "backingRefs": [{"source": "engineCall", "callId": "call id", "field": "param path", "expected": "authored scalar"}], "status": "executable|visual_only"}],
-                "playerViewTimeline": [{"phase": "use|travel|surface_hit|npc_hit|return|expiry", "text": "visible step", "claimIds": ["claimIds"], "presentationOnly": False}],
-                "unsupportedPromises": [],
-                "executionStatus": "executable"
-            },
-            "runtimePlan": {
-                "resultKind": "weapon|ammo|consumable_weapon|tool|accessory|armor|potion|material|furniture|generic",
-                "sourceRolePreservation": {"itemA": "short", "itemB": "short"},
-                "engineCalls": "array of {callId, fn, params}",
-                "runtimeStateIntent": "optional state intent; gameplay still needs executable calls",
-                "visualIntent": {"item": "brief", "projectile": "brief/empty", "impact": "brief/empty", "vfxIntent": "short", "vfxAvoid": "short"},
-                "sourceReading": "short interpretation from raw parent fields; absent data is unknown",
-                "balanceIntent": "short tradeoff / why not free power",
-                "anomalyFlags": []
-            },
-            "visual": {
-                "itemPrompt": "concise item icon sprite prompt",
-                "projectilePrompt": "concise projectile sprite prompt or empty",
-                "impactPrompt": "concise impact/expire sprite prompt or empty",
-                "notes": "optional short visual note"
-            }
-        },
-        # Recipe-specific fields deliberately form one final suffix. Everything above
-        # stays byte-identical across crafts so provider prefix caching can retain the
-        # complete executable API card and required output contract.
-        "creativeVariance": {
-            "recipeSalt": stable_hash(key, name_of(a), name_of(b), length=8),
-            "designLane": choose_from([
-                "clean metamorphosis with one crisp tradeoff",
-                "altered delivery/movement (arc, bounce, return, cast) if parents justify it",
-                "on-hit utility with modest direct damage",
-                "contact/timing interaction if the parents support it",
-                "ammo/projectile reinterpretation with a clear cost",
-                "returning/tether or utility twist instead of another straight shot",
-                "visual-material fusion with conservative stats",
-                "support/control twist rather than another straight damage stick"
-            ], "creative_lane", key, name_of(a), name_of(b)),
-            "rule": "Avoid cloning the strongest generated parent's name/runtimeFamily/onHit; do not default every weapon to straight+split."
-        },
+        "requiredJsonShape": author_item_prompt_shape_card(),
+
+        # Parent facts are the only recipe-specific suffix. The model authors the
+        # concept and mechanics without a Python-selected semantic lane.
         "itemA": raw_parent_card_for_llm(a),
         "itemB": raw_parent_card_for_llm(b),
     }

@@ -60,10 +60,8 @@ from infini_local.core.vfx_manifest_config import (
     VFX_EMERGENCY_MAX_PARTICLES_TOTAL,
     VFX_LLM_DIRECTOR_ENABLED,
     VFX_PARENT_EFFECT_INHERITANCE,
-    VFX_PARENT_EFFECT_WEIGHT,
     VFX_RENDER_QUALITY,
     VFX_SELECTOR_ENABLED,
-    VFX_SELECTOR_HINT_WEIGHT,
     VFX_SELECTOR_TOP,
     VFX_SLOT_MACROS,
 )
@@ -98,6 +96,7 @@ from infini_local.services import (
 from infini_local.storage.trace_runtime import (
     _tail_ndjson,
     _trace_clip,
+    initialize_trace_storage,
     log_event,
     PROMPT_TRACE_FILE,
     trace_event,
@@ -402,9 +401,7 @@ def _health_payload() -> dict[str, Any]:
         "vfxRecipeCount": len(get_vfx_recipes()),
         "vfxMacroCount": len(VFX_SLOT_MACROS),
         "vfxSelectorTop": VFX_SELECTOR_TOP,
-        "vfxHintWeight": VFX_SELECTOR_HINT_WEIGHT,
         "vfxParentEffectInheritance": VFX_PARENT_EFFECT_INHERITANCE,
-        "vfxParentEffectWeight": VFX_PARENT_EFFECT_WEIGHT,
         "vfxRenderQuality": VFX_RENDER_QUALITY,
         "vfxEmergencyCaps": {
             "maxParticlesPerTick": VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
@@ -517,6 +514,7 @@ def main() -> None:
     # Autostart happens in ThreadingHTTPServer workers, where Python forbids
     # signal registration. Install the process-tree cleanup on the main thread
     # before any request can launch sd.cpp.
+    initialize_trace_storage()
     visual_config.install_sdcpp_cleanup_handlers()
     if visual_config.REQUIRE_PILLOW and Image is None and env_str("INFINI_IMAGE_BACKEND", visual_config.IMAGE_BACKEND).lower() != "off":
         raise SystemExit("Pillow is required for InfiniCrafterLocal visual generation/postprocess. Run 02_INSTALL_LOCAL_GENERATOR.bat. Import error: " + PILLOW_IMPORT_ERROR)

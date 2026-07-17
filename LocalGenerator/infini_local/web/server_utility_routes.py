@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
+from infini_local.storage.trace_tools import clear_ndjson
+
 
 class ServerUtilityRoutes:
     """Coarse HTTP route block for local status/debug/static-asset endpoints.
@@ -179,7 +181,7 @@ class ServerUtilityRoutes:
         cleared: list[str] = []
         for p in self.trace_files:
             try:
-                Path(p).write_text("", encoding="utf-8")
+                clear_ndjson(p)
                 cleared.append(str(p))
             except Exception:
                 pass
@@ -198,13 +200,18 @@ class ServerUtilityRoutes:
             return {"path": "", "configured": False, "exists": False, "kind": "missing"}
         try:
             p = Path(text)
+            if os.name != "nt" and len(text) >= 3 and text[1] == ":" and text[2] in {"/", "\\"}:
+                relative = text[3:].replace("\\", "/")
+                p = Path("/mnt") / text[0].lower() / relative
+            exists = p.exists()
             return {
                 "path": text,
+                "resolvedPath": str(p),
                 "configured": True,
-                "exists": p.exists(),
+                "exists": exists,
                 "isFile": p.is_file(),
                 "isDir": p.is_dir(),
-                "bytes": p.stat().st_size if p.exists() and p.is_file() else None,
+                "bytes": p.stat().st_size if exists and p.is_file() else None,
             }
         except Exception as e:
             return {"path": text, "configured": True, "exists": False, "error": repr(e)}

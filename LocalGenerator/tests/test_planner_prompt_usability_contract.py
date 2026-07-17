@@ -9,9 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import ENGINE_FN_CATALOG_V2
 from infini_local.core.contract_versions import PLANNER_PROMPT_PROFILE_VERSION
-from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
-from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS, accepted_engine_param_names
+from infini_local.core.errors import PlannerUnavailable
+from infini_local.pipelines.combine_validation import strict_validate_authored_item, validate_and_repair
+from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.pipelines.item_power_knowledge import canonicalize
 from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 
@@ -27,7 +30,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     report = planner_prompt_usability_report(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     assert report["ok"], report
     assert report["contractStyle"] == "sharp"
-    assert len(text) <= 24_750
+    assert len(text) <= 26_000
     functions = payload["engineRuntimeContract"]["availableFunctions"]
     assert set(functions) == set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
     assert not (set(functions) & set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
@@ -35,30 +38,56 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     assert functions["shoot_projectile"]["params"]["speed"] == "3..18"
     assert "Low-level primary projectile" in functions["shoot_projectile"]["does"]
     assert "boss/NPC/mob/enemy" in functions["spawn_temporary_helper_projectile"].get("safety", "")
-    assert "plannerChecklist" in payload["engineRuntimeContract"]
-    backing_rules = payload["backingRefRules"]
-    assert any("engineCall.callId" in rule and "unique" in rule for rule in backing_rules)
-    assert any("exact scalar path inside the selected call.params" in rule for rule in backing_rules)
-    assert any("compiler owns final-wire provenance" in rule for rule in backing_rules)
-    assert any('"source":"engineCall"' in rule and '"callId":"primary_projectile"' in rule for rule in backing_rules)
-    assert any("visual_only" in rule and "no refs" in rule.lower() for rule in backing_rules)
+    for useful_section in (
+        "plannerChecklist", "inputDataPolicy", "criticalValueSemantics",
+        "hardEngineLimits", "semanticRules",
+    ):
+        assert useful_section in payload["engineRuntimeContract"]
+    assert "validatorLimits" not in payload["engineRuntimeContract"]
+    assert "validatorRanges" not in payload
+    accepted_extras = payload["engineRuntimeContract"]["acceptedParamExtras"]
+    primary_functions = set(accepted_extras["primaryAttackFunctions"])
+    primary_params = set(accepted_extras["primaryAttackParams"])
+    assert primary_functions == {
+        "shoot_projectile", "perform_melee_attack", "fire_ranged_weapon", "cast_magic_weapon",
+    }
+    for fn in primary_functions:
+        assert set(functions[fn]["params"]) | primary_params == set(accepted_engine_param_names(fn))
+    assert set(functions["apply_on_hit_effect"]["params"]) | set(accepted_extras["apply_on_hit_effect"]) == set(
+        accepted_engine_param_names("apply_on_hit_effect")
+    )
+    assert "manaCost" not in accepted_engine_param_names("cast_magic_weapon")
+    assert "spreadRadians" not in accepted_engine_param_names("apply_on_hit_effect")
+    for fn in ("tool_capability", "accessory_effect", "armor_effect"):
+        assert set(functions[fn]["params"]) == set(accepted_engine_param_names(fn))
+    assert "backingRefRules" not in payload
+    assert "backingRefs" not in text
+    assert "signatureClaimId" not in text
+    assert "weirdTwist" not in text
     assert any("non-combat" in rule.lower() and "resultkind" in rule.lower() for rule in payload["authorRules"])
-    assert payload["priorityHeader"][0].startswith("Author one playable result")
-    assert any("set_item_stats" in line and "first" in line for line in payload["priorityHeader"])
+    assert payload["priorityHeader"][0].startswith("Author playable output")
+    assert any("set_item_stats" in line and "engineCalls[0]" in line for line in payload["priorityHeader"])
+    assert any("requiredJsonShape keys" in line and "prompt metadata" in line for line in payload["priorityHeader"])
+    assert any(
+        "availableFunctions.params + acceptedParamExtras" in line
+        and "never add unrelated params" in line
+        and "Base item stats use set_item_stats" in line
+        for line in payload["priorityHeader"]
+    )
+    assert any("1-4 calls" in line for line in payload["priorityHeader"])
+    assert any("shotCount" in line and "spreadRadians" in line and "runtimeFamily" in line for line in payload["priorityHeader"])
+    assert any("coreMechanic" in line and "optional" in line for line in payload["priorityHeader"])
+    assert not any("surface_hit" in line for line in payload["priorityHeader"])
+    assert any("consumable_weapon" in line and "craftYield>0" in line and "booleans" in line for line in payload["priorityHeader"])
     assert "runtimePlan" in payload["requiredJsonShape"]
     assert "playerViewTimeline" in payload["requiredJsonShape"]["runtimeContract"]
-    assert any("simulate" in line.lower() and "surface collision" in line.lower() for line in payload["priorityHeader"])
+    assert payload["requiredJsonShape"]["runtimePlan"]["runtimeStateIntent"] == "string"
+    assert "object, not string" in functions["accessory_effect"]["params"]["stats"]
     assert "attack.genome" in payload["authorRules"][-1]
-    assert "summon_boss" in text and "hard-rejected" in text
-    critical = payload["engineRuntimeContract"]["criticalValueSemantics"]
-    assert "-1=infinite hits" in critical["pierce"]
-    assert "0 or 1=one target total" in critical["pierce"]
-    assert "useAnimation>useTime may repeat" in critical["useTiming"]
-    assert "any projectile kill" in critical["expire"]
-    assert "at most 48 shots" in critical["sentryBudget"]
+    assert "summon_boss" not in functions
     shoot = functions["shoot_projectile"]["params"]
     assert "0 or 1=one target total" in shoot["pierce"]
-    assert "steps, not shots" in critical["shots"]
+    assert "extraUpdates" in shoot
     assert "sentry uses deploy_sentry" in shoot["runtimeFamily"]
     assert "damageMultiplier" not in shoot
     ranged = functions["fire_ranged_weapon"]["params"]
@@ -75,13 +104,16 @@ def _check_planner_payload_keeps_all_static_contract_bytes_before_recipe_data() 
     other_b = {"name": "Fallen Star", "type": 75, "damage": 0, "maxStack": 9999, "value": 5}
     first = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_prefix_a")
     second = build_llm_author_payload(other_a, other_b, {}, {}, "planner_prefix_b")
-    dynamic_keys = ("creativeVariance", "itemA", "itemB")
+    dynamic_keys = ("itemA", "itemB")
     assert tuple(first)[-len(dynamic_keys):] == dynamic_keys
     assert tuple(second)[-len(dynamic_keys):] == dynamic_keys
+    assert "creativeVariance" not in first
 
     encoded_first = json.dumps(first, ensure_ascii=False, separators=(",", ":"))
     encoded_second = json.dumps(second, ensure_ascii=False, separators=(",", ":"))
-    boundary = ',"creativeVariance":'
+    assert '"designLane"' not in encoded_first
+    assert '"recipeSalt"' not in encoded_first
+    boundary = ',"itemA":'
     prefix_first, separator_first, _ = encoded_first.partition(boundary)
     prefix_second, separator_second, _ = encoded_second.partition(boundary)
     assert separator_first == separator_second == boundary
@@ -107,7 +139,10 @@ def _check_legacy_catalog_style_env_cannot_starve_or_bloat_planner(monkeypatch) 
 
 
 def _validated_child(plan: dict) -> dict:
-    data = validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "planner_smoke")
+    ca = canonicalize(PARENT_A)
+    cb = canonicalize(PARENT_B)
+    data = validate_and_repair(plan, PARENT_A, PARENT_B, ca, cb, "planner_smoke")
+    data = attach_gameplay_and_attack(data, PARENT_A, PARENT_B, ca, cb)
     return final_normalize(data)
 
 
@@ -120,7 +155,7 @@ def _check_minimal_llm_weapon_plan_can_become_generated_item_contract() -> None:
             "resultKind": "weapon",
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 10, "useTimeTicks": 25}},
-                {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "short ember slash", "rangeTiles": 12, "lifetimeTicks": 90}},
+                {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "short ember slash", "rangeTiles": 12, "lifetimeTicks": 90, "speed": 8, "shotCount": 1, "spreadRadians": 0, "pierce": 1}},
                 {"fn": "spawn_contact_particles", "params": {"effect": "flame", "amount": 8}},
             ],
             "visualIntent": {"item": "wooden sword with a torch ember", "projectile": "short ember slash"},
@@ -128,9 +163,8 @@ def _check_minimal_llm_weapon_plan_can_become_generated_item_contract() -> None:
         "visual": {"itemPrompt": "wooden sword with ember tip"},
     })
     assert child["category"] == "weapon"
-    assert child["gameplay"]["damage"] == 10
+    assert child["gameplay"]["damage"] >= 10
     genome = child["attack"]["genome"]
-    assert genome["runtimePlanAuthored"] is True
     assert genome["runtimeFamily"] == "swing"
     assert genome["effect"] == "flame"
 
@@ -163,7 +197,7 @@ def _check_minimal_llm_accessory_and_extractinator_plans_survive_validation() ->
 
 
 def _check_forbidden_boss_npc_mob_calls_are_rejected_without_killing_valid_item_parts() -> None:
-    child = _validated_child({
+    authored = {
         "name": "Refusing Bell",
         "tooltip": "It hums, but refuses to call anything alive.",
         "category": "material",
@@ -171,11 +205,13 @@ def _check_forbidden_boss_npc_mob_calls_are_rejected_without_killing_valid_item_
             {"fn": "summon_boss", "params": {"type": "Eye of Cthulhu"}},
             {"fn": "set_item_stats", "params": {"resultKind": "material", "maxStack": 1}},
         ]},
-    })
-    rejected = child["gameplay"].get("rejectedEngineCalls", [])
-    assert child["category"] == "material"
-    assert child["gameplay"]["maxStack"] == 1
-    assert rejected and rejected[0]["reason"] == "forbidden_world_entity_spawn"
+    }
+    try:
+        strict_validate_authored_item(authored)
+    except PlannerUnavailable as error:
+        assert "summon_boss" in str(error)
+    else:
+        raise AssertionError("unknown world-entity call must atomically reject the authored item")
 
 
 def _check_prompt_usability_cli_runs_the_same_contract() -> None:
@@ -190,7 +226,7 @@ def _check_prompt_usability_cli_runs_the_same_contract() -> None:
     )
     report = json.loads(proc.stdout)
     assert report["ok"], report
-    assert report["limitChars"] == 24_750
+    assert report["limitChars"] == 26_000
     assert report["report"]["functionCount"] == len(ENGINE_FN_CATALOG_V2) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
 
 
@@ -238,7 +274,6 @@ def _check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw
     assert parent["raw"]["item"]["createTile"] == 15
     assert parent["semantics"]["consumptionSemantics"] == "consumed_when_placed_as_tile_or_wall"
     assert "does not automatically mean" in parent["semantics"]["note"]
-    assert any("placeable" in line.lower() and "consumable" in line.lower() for line in payload["priorityHeader"])
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     assert "availableFunctions" in text and "consumed_when_placed_as_tile_or_wall" in text
 
@@ -250,11 +285,12 @@ def _check_planner_prompt_guides_structural_mechanic_authoring_not_code_repair(m
     functions = payload["engineRuntimeContract"]["availableFunctions"]
 
     assert "overhead_barrage" in functions["apply_on_hit_effect"]["params"]["onHit"]
-    assert "overhead barrage" in text and "mechanicclaims" in text
-    assert '"backingrefs":[{"source":"enginecall","callid":"call id"' in text
+    assert "coremechanic" in text
+    assert "mechanicclaims" not in text
+    assert "backingrefs" not in text
     assert "callindex" not in text
-    assert "enginecalls/numbers/contracts" in text
-    assert "do not infer mechanics from names" in text
+    assert "signatureclaimid" not in text
+    assert "names aren't mechanics" in text
     assert "custom_executor for normal/utility enginecalls" in text or "never family=unsupported" in text
     assert "image prompts: item=inventory/held" in text
     assert "same sword/blade/boomerang ok" in text

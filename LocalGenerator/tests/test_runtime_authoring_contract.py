@@ -148,7 +148,7 @@ def _check_spear_thrust_delivery_is_distinct_from_sword_swing() -> None:
 
 
 
-def _check_direct_shoot_projectile_gets_only_tiny_unambiguous_runtime_family_repair() -> None:
+def _check_direct_shoot_projectile_requires_explicit_runtime_family() -> None:
     spear = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 18, "useTimeTicks": 27}},
         {"fn": "shoot_projectile", "params": {
@@ -161,9 +161,9 @@ def _check_direct_shoot_projectile_gets_only_tiny_unambiguous_runtime_family_rep
         }},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(spear)
-    assert patch["runtimeFamily"] == "thrust"
-    assert patch["runtimeFamilyRepair"].startswith("light:")
-    assert infer_attack_pattern_from_runtime(patch, "melee") == "spear_thrust"
+    assert patch["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert "runtimeFamily" not in patch
+    assert "runtimeFamilyRepair" not in patch
 
     conflicting = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 18, "useTimeTicks": 27}},
@@ -188,10 +188,9 @@ def _check_direct_shoot_projectile_gets_only_tiny_unambiguous_runtime_family_rep
         }},
     ]}}
     patch3 = compile_runtime_plan_to_genome_patch(prose_only)
-    assert patch3["runtimeFamily"] == "swing"
-    assert patch3["runtimeFamilyRepair"] == "light:delivery"
-    # The repair intentionally does not read prose fields and therefore does not guess spear/thrust.
-    assert infer_attack_pattern_from_runtime(patch3, "melee") == "slash_holdout"
+    assert patch3["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert "runtimeFamily" not in patch3
+    assert "runtimeFamilyRepair" not in patch3
 
 
 def _check_terraria_family_semantic_calls_compile_without_generic_swing() -> None:
@@ -326,8 +325,9 @@ def _check_direct_projectile_family_spear_does_not_repair_to_thrust() -> None:
         }},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(data)
-    assert patch["runtimeFamily"] == "cast"
-    assert patch["runtimeFamilyRepair"] == "light:delivery"
+    assert patch["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert "runtimeFamily" not in patch
+    assert "runtimeFamilyRepair" not in patch
     assert patch["projectileFamily"] == "spear"
 
     no_executor = {"runtimePlan": {"engineCalls": [
@@ -481,6 +481,17 @@ def _check_overhead_barrage_onhit_is_executable_semantic_child_primitive() -> No
     assert genome["splitCount"] == 4
     assert genome["maxChildProjectiles"] >= 4
 
+
+def _check_author_prompt_requires_explicit_physical_throw_motion_authorship() -> None:
+    from infini_local.pipelines.llm_authoring_prompt import planner_priority_header_for_llm
+
+    rules = " ".join(planner_priority_header_for_llm()).casefold()
+    assert "physical throw" in rules
+    assert "gravity_arc" in rules
+    assert "straight" in rules
+    assert "explicit" in rules
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -494,7 +505,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay',
     '_check_chain_requires_count_and_does_not_create_children_by_accident',
     '_check_spear_thrust_delivery_is_distinct_from_sword_swing',
-    '_check_direct_shoot_projectile_gets_only_tiny_unambiguous_runtime_family_repair',
+    '_check_direct_shoot_projectile_requires_explicit_runtime_family',
     '_check_terraria_family_semantic_calls_compile_without_generic_swing',
     '_check_semantic_terraria_weapon_family_calls_compile_to_distinct_runtime_behaviors',
     '_check_compiled_contract_uses_executable_fields_not_legacy_fields',
@@ -505,7 +516,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_forbidden_world_entity_spawns_are_rejected_not_repaired',
     '_check_state_meter_and_triggered_action_are_preserved_as_contract_only',
     '_check_safe_item_capability_enginecalls_compile_to_gameplay_patch',
-    '_check_overhead_barrage_onhit_is_executable_semantic_child_primitive'
+    '_check_overhead_barrage_onhit_is_executable_semantic_child_primitive',
+    '_check_author_prompt_requires_explicit_physical_throw_motion_authorship'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 
 
@@ -69,6 +70,51 @@ def _check_authored_visual_effect_cue_becomes_frozen_vfx_slot():
     assert comp["authoredCueSlots"][0]["rendererKind"] == "impactRing"
     assert comp["mode"] in {"authored_cues_plus_recipe", "runtime_plan_direct_authored_cues"}
 
+def _check_vfx_selector_is_invariant_to_names_tooltips_and_prompts():
+    from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
+
+    base = {
+        "id": "prose_invariance",
+        "name": "Plain Name",
+        "tooltip": "plain tooltip",
+        "category": "weapon",
+        "gameplay": {"powerBudget": 1.1},
+        "attack": {
+            "enabled": True,
+            "pattern": "projectile",
+            "projectileSpritePath": "generated/projectile.png",
+            "projectileSpritePrompt": "plain wooden dart",
+            "impactSpritePrompt": "small dust impact",
+        },
+        "visual": {"vfxIntent": "plain dust"},
+        "visualKit": {"styleGuide": "plain", "vfxIntent": "plain"},
+    }
+    adversarial = deepcopy(base)
+    adversarial["name"] = "Holy Inferno Void Laser Ring"
+    adversarial["tooltip"] = "fire frost poison blood shadow star smoke rune"
+    adversarial["attack"]["projectileSpritePrompt"] = "chaotic flaming holy laser ring"
+    adversarial["attack"]["impactSpritePrompt"] = "toxic blood smoke cloud"
+    adversarial["visual"] = {"vfxIntent": "wild shadow orbit rune"}
+    adversarial["visualKit"] = {"styleGuide": "solar frost flame", "vfxIntent": "ragged void"}
+
+    left = attach_hybrid_vfx_manifest(deepcopy(base), "same-typed-runtime")
+    right = attach_hybrid_vfx_manifest(adversarial, "same-typed-runtime")
+    for field in ("recipeId", "motif", "effectMagnitude", "visualBudgetClass"):
+        assert left["vfxManifest"].get(field) == right["vfxManifest"].get(field), field
+    assert left["vfxManifest"]["debug"]["selectedReasons"] == right["vfxManifest"]["debug"]["selectedReasons"]
+    assert left["vfxManifest"]["debug"]["wordProbe"] == right["vfxManifest"]["debug"]["wordProbe"] == []
+
+    empty_impact = deepcopy(base)
+    empty_impact["runtimePlan"] = {"resultKind": "weapon", "engineCalls": [], "visualIntent": {"impact": ""}}
+    none_impact = deepcopy(empty_impact)
+    none_impact["runtimePlan"]["visualIntent"]["impact"] = "None."
+    none_impact["visual"]["impactVfx"] = "No visual effect."
+    empty_attack = attach_hybrid_vfx_manifest(empty_impact, "same-typed-runtime")
+    none_attack = attach_hybrid_vfx_manifest(none_impact, "same-typed-runtime")
+    assert empty_attack["vfxManifest"]["slots"] == []
+    assert none_attack["vfxManifest"]["slots"] == []
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -78,7 +124,8 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_vfx_morph_recipes_schema_is_parseable_and_slot_shaped',
-    '_check_authored_visual_effect_cue_becomes_frozen_vfx_slot'
+    '_check_authored_visual_effect_cue_becomes_frozen_vfx_slot',
+    '_check_vfx_selector_is_invariant_to_names_tooltips_and_prompts',
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

@@ -51,58 +51,19 @@ def _parents() -> tuple[dict, dict]:
 def _plan() -> dict:
     return {
         "name": "Workbench-on-a-Stick",
-        "tooltip": "It is exactly what it looks like.",
-        "debug": {"planner": "llm"},
+        "category": "weapon",
         "concept": {
             "fantasy": "A whole workbench bolted sideways to a wooden sword.",
             "mergeLogic": "The sword remains the handle; the complete workbench is the striking body.",
-            "weirdTwist": {
-                "text": "Hits throw three bounded wooden splinter projectiles.",
-                "claimIds": ["splinter_release"],
-            },
-        },
-        "runtimeArchetype": {
-            "schema": "infini.runtime-archetype.v1",
-            "source": "generated",
-            "family": "broadsword",
-            "overrideKnobs": {},
+            "coreMechanic": "Swings the workbench blade and releases three wooden splinters on hit.",
         },
         "runtimeContract": {
-            "schema": "infini.runtime-contract.v3",
             "primaryVerb": "swing",
             "controlStyle": "tap",
-            "signatureMode": "mechanic",
-            "signatureClaimId": "splinter_release",
-            "tooltipClaimIds": ["visual_identity", "splinter_release"],
-            "stateFields": [],
-            "syncFields": [],
-            "mechanicClaims": [
-                {
-                    "claimId": "visual_identity",
-                    "playerText": "It is exactly what it looks like.",
-                    "status": "visual_only",
-                    "backingRefs": [],
-                },
-                {
-                    "claimId": "splinter_release",
-                    "playerText": "Hits throw exactly 3 bounded wooden splinter projectiles.",
-                    "status": "executable",
-                    "backingRefs": [{
-                        "source": "engineCall",
-                        "callId": "secondary_splinters",
-                        "field": "count",
-                        "expected": 3,
-                    }],
-                },
-            ],
             "playerViewTimeline": [
-                {"phase": "use", "text": "The blade swings.", "claimIds": ["splinter_release"]},
-                {"phase": "travel", "text": "The workbench stays visible.", "presentationOnly": True},
-                {"phase": "npc_hit", "text": "Three splinters spawn.", "claimIds": ["splinter_release"]},
-                {"phase": "expiry", "text": "The splinters expire.", "claimIds": ["splinter_release"]},
+                {"phase": "use", "description": "The workbench blade swings."},
+                {"phase": "npc_hit", "description": "Three wooden splinters release."},
             ],
-            "unsupportedPromises": [],
-            "executionStatus": "executable",
         },
         "runtimePlan": {
             "resultKind": "weapon",
@@ -115,53 +76,47 @@ def _plan() -> dict:
                     "callId": "item_stats",
                     "fn": "set_item_stats",
                     "params": {
-                        "resultKind": "weapon",
-                        "damageClass": "melee",
-                        "damage": 12,
-                        "useTimeTicks": 24,
-                        "useAnimationTicks": 24,
-                        "knockback": 6,
-                        "maxStack": 1,
+                        "resultKind": "weapon", "damageClass": "melee", "damage": 12,
+                        "useTimeTicks": 24, "useAnimationTicks": 24, "knockback": 6, "maxStack": 1,
                     },
                 },
                 {
                     "callId": "primary_swing",
                     "fn": "perform_melee_attack",
                     "params": {
-                        "family": "broadsword",
-                        "speed": 8,
-                        "rangeTiles": 3,
-                        "lifetimeTicks": 24,
-                        "shotCount": 1,
-                        "spreadRadians": 0,
-                        "pierce": 1,
-                        "projectileShape": "workbench bolted to a wooden sword",
+                        "family": "broadsword", "speed": 8, "rangeTiles": 3,
+                        "lifetimeTicks": 24, "shotCount": 1, "spreadRadians": 0,
+                        "pierce": 1, "projectileShape": "workbench bolted to a wooden sword",
                     },
                 },
                 {
                     "callId": "secondary_splinters",
                     "fn": "spawn_secondary_projectiles",
                     "params": {
-                        "trigger": "on_hit",
-                        "count": 3,
-                        "damageMultiplier": 0.35,
-                        "projectileShape": "wooden splinter",
-                        "material": "wood",
+                        "trigger": "on_hit", "count": 3, "damageMultiplier": 0.35,
+                        "projectileShape": "wooden splinter", "material": "wood",
                     },
                 },
             ],
+            "runtimeStateIntent": "No persistent state.",
             "visualIntent": {
                 "item": "A whole rectangular workbench bolted sideways to a wooden sword.",
+                "projectile": "Wooden splinter projectile.",
                 "impact": "Wood chips and sawdust.",
                 "vfxIntent": "Wood chips and sawdust on impact.",
                 "vfxAvoid": "No magical glow.",
+                "topology": "multipart_touching",
+                "parts": ["complete wooden sword", "complete rectangular workbench"],
+                "arrangement": "workbench bolted sideways beside the sword guard",
             },
-        },
-        "visual": {
-            "itemPrompt": "A whole rectangular workbench bolted sideways to a wooden sword.",
-            "palette": ["brown", "tan", "dark brown"],
+            "sourceReading": "The sword supplies the handle and the workbench supplies the striking body.",
+            "balanceIntent": "Slow melee cadence offsets the three bounded splinters.",
+            "anomalyFlags": [],
         },
     }
+
+
+
 
 
 def _check_live_combine_spine_reaches_cache_without_visual_fields_in_attack(
@@ -197,15 +152,12 @@ def _check_live_combine_spine_reaches_cache_without_visual_fields_in_attack(
 
     assert cached["data"] is result
     assert result["name"] == "Workbench-on-a-Stick"
-    assert "whole rectangular workbench" in result["visual"]["imagePrompt"].lower()
+    assert "rectangular workbench" in result["visual"]["imagePrompt"].lower()
     assert "itemPrompt" not in result["visual"]
     assert "vfxIntent" not in result["visual"]
     assert "vfxIntent" not in result["attack"]
     assert "vfxAvoid" not in result["attack"]
-    pipeline = json.loads(result["debug"]["pipelineLog"])
-    labels = [row["stage"] for row in pipeline]
-    assert labels.index("08c_strict_executable_preflight") < labels.index("09_visual_asset_generation")
-    assert all(row["ok"] for row in pipeline)
+    assert "debug" not in result
 
 
 def _check_image_backend_never_silently_becomes_procedural(monkeypatch: pytest.MonkeyPatch) -> None:

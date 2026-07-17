@@ -39,6 +39,19 @@ def _check_csharp_projectile_runtime_is_authored_only_and_logs_network_failures(
     assert "DrawRuntimePlanFallback" in source
 
 
+def _check_unmanifested_projectiles_do_not_get_unrelated_magicpixel_laser_trails() -> None:
+    source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
+    predraw_start = source.index("public override bool PreDraw")
+    predraw_end = source.index("private void DrawSlashSmear", predraw_start)
+    predraw = source[predraw_start:predraw_end]
+    assert "DrawStockMotionPolish" not in predraw
+    fallback_start = source.index("private void DrawRuntimePlanFallback")
+    fallback_end = source.index("private bool UsesItemSpriteAsProjectileByDefault", fallback_start)
+    fallback = source[fallback_start:fallback_end]
+    assert "DrawLine(" not in fallback
+    assert "DrawRect(" in fallback
+
+
 def _check_csharp_generated_item_no_legacy_toy_string_routing() -> None:
     source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedItem.cs").read_text(encoding="utf-8")
     assert "toy.Contains" not in source
@@ -424,6 +437,7 @@ def _run_coarse_contracts(tmp_path):
     for _name in [
     '_check_csharp_generated_item_data_keeps_runtime_api_and_debug_delivery_guards',
     '_check_csharp_projectile_runtime_is_authored_only_and_logs_network_failures',
+    '_check_unmanifested_projectiles_do_not_get_unrelated_magicpixel_laser_trails',
     '_check_csharp_generated_item_no_legacy_toy_string_routing',
     '_check_csharp_projectile_no_legacy_noop_or_free_text_runtime_tables',
     '_check_csharp_projectile_children_keep_authored_presentation_without_prompt_inheritance',

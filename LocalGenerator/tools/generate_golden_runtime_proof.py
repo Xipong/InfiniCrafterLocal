@@ -10,9 +10,6 @@ from typing import Any
 # This proof is an offline deterministic gate. Do not inherit the operator's live
 # model/provider settings or silently switch off the runtime-authoring path.
 os.environ["INFINI_USE_LLM"] = "0"
-os.environ["INFINI_LLM_RUNTIME_AUTHORING"] = "1"
-os.environ["INFINI_LLM_RUNTIME_PLAN_REQUIRED"] = "1"
-os.environ["INFINI_LLM_RUNTIME_STRICT_VALIDATION"] = "1"
 os.environ["INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK"] = "1"
 os.environ["INFINI_BALANCE_MODE"] = "safety"
 

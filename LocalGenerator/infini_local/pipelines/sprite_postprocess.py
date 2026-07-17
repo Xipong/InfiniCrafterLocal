@@ -80,7 +80,7 @@ def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> 
                 core_fill = float(s.get("core_fill") or 0.0)
                 effect_fill = float(s.get("effect_fill") or 0.0)
                 cx, cy = s.get("core_center_norm") or (0.5, 0.5)
-                center_penalty = abs(cx - 0.5) + abs(cy - 0.5)
+                center_penalty = abs(cx - 0.5) + abs(cy - 0.5) if role == "item" else 0.0
                 edge_ratio = edge_touch_ratio(img.getchannel("A"))
                 fill_penalty = abs(core_fill - target_fill) * 2.1
                 effect_penalty = max(0.0, effect_fill - 0.98) * 1.2
@@ -358,17 +358,19 @@ def prepare_sprite_master(img: Any, sprite_id: str, target_size: int, role: str 
     y = (master_size - new_h) // 2
     master.alpha_composite(resized, (x, y))
 
-    # Recentre by core bbox on the master canvas.
-    recentered = sprite_bbox_stats(master, role, master_size)
-    core_bbox_canvas = recentered.get("core_bbox")
-    if core_bbox_canvas is not None:
-        cx, cy = bbox_center(core_bbox_canvas)
-        dx = int(round(master_size / 2.0 - cx))
-        dy = int(round(master_size / 2.0 - cy))
-        if dx or dy:
-            shifted = Image.new("RGBA", (master_size, master_size), (0, 0, 0, 0))
-            shifted.alpha_composite(master, (dx, dy))
-            master = shifted
+    # Inventory icons benefit from centering; projectile/VFX composition may have
+    # authored directional or multipart placement and must not be re-authored here.
+    if role == "item":
+        recentered = sprite_bbox_stats(master, role, master_size)
+        core_bbox_canvas = recentered.get("core_bbox")
+        if core_bbox_canvas is not None:
+            cx, cy = bbox_center(core_bbox_canvas)
+            dx = int(round(master_size / 2.0 - cx))
+            dy = int(round(master_size / 2.0 - cy))
+            if dx or dy:
+                shifted = Image.new("RGBA", (master_size, master_size), (0, 0, 0, 0))
+                shifted.alpha_composite(master, (dx, dy))
+                master = shifted
     return scrub_transparent_rgb(master)
 
 def bake_sprite_from_master(master: Any, target_size: int, role: str = "item") -> Any:
@@ -381,8 +383,9 @@ def bake_sprite_from_master(master: Any, target_size: int, role: str = "item") -
         img = master
     # Final game PNG wants stable opaque/transparent pixels; do it after resizing, not before.
     img = cleanup_alpha(img)
-    img = denoise_alpha_singletons(img)
-    img = palette_cleanup(img)
+    if role == "item":
+        img = denoise_alpha_singletons(img)
+    img = palette_cleanup(img, role)
     img = cleanup_alpha(img)
     # Safe final rescue pass: recolor or remove only true chroma leftovers touching
     # transparency. This is much less destructive than the old blanket magenta wipe.
@@ -442,24 +445,31 @@ def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
     x = (final_size - new_w) // 2
     y = (final_size - new_h) // 2
     canvas.alpha_composite(resized, (x, y))
-    recentered = sprite_bbox_stats(canvas, role, final_size)
-    core_bbox_canvas = recentered.get("core_bbox")
-    if core_bbox_canvas is not None:
-        cx, cy = bbox_center(core_bbox_canvas)
-        dx = int(round(final_size / 2.0 - cx))
-        dy = int(round(final_size / 2.0 - cy))
-        if dx or dy:
-            shifted = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
-            shifted.alpha_composite(canvas, (dx, dy))
-            canvas = shifted
+    if role == "item":
+        recentered = sprite_bbox_stats(canvas, role, final_size)
+        core_bbox_canvas = recentered.get("core_bbox")
+        if core_bbox_canvas is not None:
+            cx, cy = bbox_center(core_bbox_canvas)
+            dx = int(round(final_size / 2.0 - cx))
+            dy = int(round(final_size / 2.0 - cy))
+            if dx or dy:
+                shifted = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
+                shifted.alpha_composite(canvas, (dx, dy))
+                canvas = shifted
     return canvas
 
-def palette_cleanup(img: Any) -> Any:
+def palette_cleanup(img: Any, role: str = "item") -> Any:
     if Image is None or not PIXEL_POSTERIZE:
+        return img
+    normalized_role = str(role or "item").strip().lower()
+    if normalized_role in {"impact", "field"}:
         return img
     img = img.convert("RGBA")
     alpha = img.getchannel("A")
-    colors = max(2, min(256, int(MAX_COLORS)))
+    if normalized_role == "child":
+        colors = max(32, min(48, int(MAX_COLORS)))
+    else:
+        colors = max(24, min(40, int(MAX_COLORS)))
     try:
         # Quantize only the visible bbox.  Quantizing the whole transparent canvas lets
         # transparent black dominate the palette and wastes colors that should go to the
@@ -523,7 +533,14 @@ def significant_alpha_component_areas(alpha: Any, *, alpha_threshold: int = 32) 
     return sorted(areas, reverse=True)
 
 
-def validate_processed_sprite(path: str, role: str = "item") -> dict[str, Any]:
+def validate_processed_sprite(
+    path: str,
+    role: str = "item",
+    *,
+    topology: str = "",
+    part_count_min: int = 0,
+    part_count_max: int = 0,
+) -> dict[str, Any]:
     """Technical validation only. No art taste, no tier judging, no VLM."""
     if Image is None:
         return {"ok": False, "reasons": ["pillow_unavailable_required"], "warnings": [], "stats": {}, "role": role}
@@ -545,8 +562,22 @@ def validate_processed_sprite(path: str, role: str = "item") -> dict[str, Any]:
     significant_components = [area for area in component_areas if area >= max(6, int(visible_component_area * 0.08))]
     bb["alphaComponentAreas"] = component_areas[:12]
     bb["significantAlphaComponents"] = len(significant_components)
-    if role == "item" and len(significant_components) > 1:
-        reasons.append(f"multiple_disconnected_item_bodies:{len(significant_components)}")
+    normalized_topology = str(topology or "unconstrained").strip().lower()
+    if normalized_topology not in {"connected", "multipart_touching", "multipart_separated", "unconstrained"}:
+        normalized_topology = "unconstrained"
+    if normalized_topology == "unconstrained" and role == "item":
+        warnings.append("missing_authored_topology")
+    if normalized_topology == "connected" and len(significant_components) > 1:
+        reasons.append(f"multiple_disconnected_{role}_bodies:{len(significant_components)}")
+    elif normalized_topology == "multipart_touching" and len(significant_components) > 1:
+        reasons.append("multipart_touching_requires_connected_body")
+    elif normalized_topology == "multipart_separated":
+        minimum = max(2, int(part_count_min or 0))
+        maximum = max(minimum, int(part_count_max or 8))
+        if len(significant_components) < minimum:
+            reasons.append(f"multipart_separated_too_few_bodies:{len(significant_components)}<{minimum}")
+        if len(significant_components) > maximum:
+            reasons.append(f"multipart_separated_too_many_bodies:{len(significant_components)}>{maximum}")
     if not effect_bbox or not core_bbox:
         reasons.append("empty_alpha_bbox")
     else:
@@ -581,7 +612,17 @@ def validate_processed_sprite(path: str, role: str = "item") -> dict[str, Any]:
             # background-removal failure, not as an acceptable warning, otherwise the
             # game receives an opaque square instead of a transparent Terraria sprite.
             reasons.append(f"very_dense_opaque_area:{stats.get('opaquePct')}")
-    return {"ok": not reasons, "reasons": reasons, "warnings": warnings, "stats": stats, "bboxStats": bb, "role": role}
+    return {
+        "ok": not reasons,
+        "reasons": reasons,
+        "warnings": warnings,
+        "stats": stats,
+        "bboxStats": bb,
+        "role": role,
+        "topology": normalized_topology,
+        "partCountMin": max(0, int(part_count_min or 0)),
+        "partCountMax": max(0, int(part_count_max or 0)),
+    }
 
 
 def technical_validation_score(validation: dict[str, Any] | None) -> float:
@@ -617,7 +658,10 @@ def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
         "almost_no_transparency_after_bg_removal",
         "too_few_opaque_pixels",
         "very_dense_opaque_area",
-        "multiple_disconnected_item_bodies",
+        "multiple_disconnected_",
+        "multipart_touching_requires_connected_body",
+        "multipart_separated_too_few_bodies",
+        "multipart_separated_too_many_bodies",
         "pillow_unavailable_required",
     )
     return any(any(tok in reason for tok in fatal_tokens) for reason in reasons)
@@ -637,8 +681,11 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         ("almost_no_transparency_after_bg_removal", "keep the background perfectly flat magenta with a cleanly separated object"),
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
         ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the magenta key"),
-        ("multiple_disconnected_item_bodies", "join every significant part into one continuous item body; detached glows may only be tiny accents"),
-        ("empty_alpha_bbox", "draw exactly one visible asset, not an empty image"),
+        ("multiple_disconnected_", "follow the authored connected topology; do not detach significant components"),
+        ("multipart_touching_requires_connected_body", "keep authored multipart components visibly touching"),
+        ("multipart_separated_too_few_bodies", "keep at least the authored minimum number of visibly separated bodies"),
+        ("multipart_separated_too_many_bodies", "keep no more than the authored maximum number of visibly separated bodies"),
+        ("empty_alpha_bbox", "draw the authored role asset, not an empty image"),
     ]
     for raw, msg in mapping:
         if any(str(r).startswith(raw) for r in reasons):
@@ -656,14 +703,14 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
         retry_parts = [
             str(prompt or ""),
             f"Revision {attempt}: preserve the same exact {role} subject, quantity, action, state, materials, and colors.",
-            f"Composition correction: keep the full {role} subject inside the frame and make it larger and clearer.",
+            f"Composition correction: keep the authored {role} components within the sprite bounds and make their physical arrangement clearer.",
             str(contract),
             "Background correction: use a flat #ff00ff magenta chroma-key background.",
             ("Technical correction: " + notes) if notes else "",
         ]
         return compact_zimage_asset_prompt(retry_parts, role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200))
     extra = (
-        f" STRICT RETRY {attempt}: draw only one {role} asset, keep the full object visible, make the subject large in frame, "
+        f" STRICT RETRY {attempt}: draw the authored {role} physical arrangement, keep visible components within the sprite bounds, make it readable, "
         f"{contract}, {bg}, "
         "no checkerboard, no UI, no text, no scene, no ground, no shadow, no crop"
     )
@@ -674,7 +721,16 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
 def strengthen_prompt_for_retry(prompt: str, role: str, attempt: int) -> str:
     return build_retry_prompt_from_validation(prompt, {}, role, attempt, 32)[:2600]
 
-def postprocess_sprite(path: str, sprite_id: str, target_size: int = 32, role: str = "unknown") -> str:
+def postprocess_sprite(
+    path: str,
+    sprite_id: str,
+    target_size: int = 32,
+    role: str = "unknown",
+    *,
+    topology: str = "",
+    part_count_min: int = 0,
+    part_count_max: int = 0,
+) -> str:
     """Return processed sprite path; on postprocess failure, return the original path.
 
     The caller should treat the return value as a usable asset path, not as a nullable
@@ -701,9 +757,11 @@ def postprocess_sprite(path: str, sprite_id: str, target_size: int = 32, role: s
         bg_removed = cleanup_alpha(bg_removed)
         # Layer 3 removes AI-drawn white/pink poster cards inside the requested key.
         # This keeps retry pressure low and prevents opaque square sprites from reaching the game.
-        bg_removed = remove_nested_poster_card_background(bg_removed, role)
+        if role == "item":
+            bg_removed = remove_nested_poster_card_background(bg_removed, role)
         bg_removed = cleanup_alpha(bg_removed)
-        bg_removed = denoise_alpha_singletons(bg_removed)
+        if role == "item":
+            bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
         save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres")
 
@@ -715,7 +773,10 @@ def postprocess_sprite(path: str, sprite_id: str, target_size: int = 32, role: s
         out = SPRITE_DIR / f"{sprite_id}.png"
         final.save(out)
         stats = alpha_stats(final)
-        validation = validate_processed_sprite(str(out), role)
+        validation = validate_processed_sprite(
+            str(out), role, topology=topology,
+            part_count_min=part_count_min, part_count_max=part_count_max,
+        )
         log_event("info", "sprite postprocessed", {"spriteId": sprite_id, "source": str(path), "out": str(out), "targetSize": target_size, "removeBg": REMOVE_BG,
                         "processingProfile": SPRITE_PROCESSING_PROFILE, "masterCanvas": SPRITE_MASTER_CANVAS, "downscaleFilter": SPRITE_DOWNSCALE_FILTER,
                         "premultipliedResize": SPRITE_PREMULTIPLIED_RESIZE, "chromaDefringe": SPRITE_CHROMA_DEFRINGE,

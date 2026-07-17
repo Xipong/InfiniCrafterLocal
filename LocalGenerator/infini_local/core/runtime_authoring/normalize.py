@@ -12,7 +12,7 @@ from infini_local.core.runtime_authoring.schema import (
     TRIGGERED_ACTION_KINDS,
     TRIGGERED_ACTION_TRIGGERS,
 )
-from infini_local.core.runtime_authoring.semantics import _expand_semantic_runtime_call
+from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call
 
 def _forbidden_world_entity_rejection(raw: dict[str, Any], fn: str, params: dict[str, Any], index: int) -> dict[str, Any] | None:
     """Hard safety boundary: generated items may not spawn bosses/NPCs/mobs.
@@ -100,13 +100,6 @@ def _compile_triggered_action_calls(calls: list[dict[str, Any]]) -> tuple[list[d
 def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
     """Canonicalize runtimePlan shape without making design choices."""
     rp = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
-    if not rp:
-        for key in ("enginePlan", "runtimeAuthoring", "engineRuntimePlan"):
-            val = data.get(key)
-            if isinstance(val, dict):
-                rp = val
-                data["runtimePlan"] = rp
-                break
     if not isinstance(rp, dict):
         return data
     calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
@@ -123,9 +116,8 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
         current_fn = str(raw.get("fn") or "").strip()
         call_id = str(raw.get("callId") or "").strip()
         original_fn = str(raw.get("_rawFn") or current_fn).strip()
-        prior_semantic_fn = str(raw.get("_semanticFn") or "").strip()
         fn = _norm_name(current_fn)
-        params = raw.get("params") if isinstance(raw.get("params"), dict) else {}
+        params: dict[str, Any] = dict(raw.get("params") or {}) if isinstance(raw.get("params"), dict) else {}
         hard_reject = _forbidden_world_entity_rejection(raw, fn or original_fn, params, i)
         if hard_reject:
             rejected.append(hard_reject)
@@ -133,21 +125,17 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
         if fn not in ENGINE_FN_CATALOG_V2:
             dropped.append({"index": i, "reason": "unknown_fn", "fn": original_fn})
             continue
-        for expanded_fn, expanded_params in _expand_semantic_runtime_call(fn, params):
+        for expanded_fn, expanded_params in _lower_typed_engine_call(fn, params):
             hard_reject = _forbidden_world_entity_rejection(raw, expanded_fn, expanded_params, i)
             if hard_reject:
                 rejected.append(hard_reject)
                 continue
             if expanded_fn not in ENGINE_FN_CATALOG_V2:
-                dropped.append({"index": i, "reason": "semantic_expand_unknown_fn", "fn": expanded_fn, "from": original_fn})
+                dropped.append({"index": i, "reason": "typed_lowering_unknown_fn", "fn": expanded_fn, "from": original_fn})
                 continue
             row = {"fn": expanded_fn, "params": expanded_params, "_index": i, "_rawFn": original_fn}
             if call_id:
                 row["callId"] = call_id
-            if prior_semantic_fn:
-                row["_semanticFn"] = prior_semantic_fn
-            elif expanded_fn != fn:
-                row["_semanticFn"] = fn
             out.append(row)
     rp["engineCalls"] = out
     rp["_normalization"] = {"api": ENGINE_RUNTIME_API_VERSION, "inputCallCount": len(calls), "acceptedCallCount": len(out), "droppedCalls": dropped[:12], "rejectedEngineCalls": rejected[:16]}

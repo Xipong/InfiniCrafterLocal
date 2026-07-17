@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import json
 import math
 import re
 from typing import Any
 
 from infini_local.core.env_utils import env_int
-from infini_local.core.runtime_family_policy import (
-    ITEM_BODIED_PROJECTILE_RUNTIME_FAMILIES,
-    canonical_runtime_family,
-)
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.services.visual_asset_pipeline import (
@@ -23,16 +18,11 @@ from infini_local.services.visual_asset_pipeline import (
     zimage_pe_clean_text,
     zimage_text_policy_sentence,
 )
-from infini_local.pipelines.projectile_affordance import infer_projectile_visual_family
 
 
 # AGENT MAP: visual prompt contracts and sprite role/canvas shaping.
 # This module may alter image prompts/contracts only; gameplay routing stays in
 # runtime_authoring/combine layers.
-
-_TETHER_GUARD_RUNTIME_FAMILIES = frozenset({"returning", "flail", "yoyo", "whip"})
-_EMITTED_SPEAR_FORM_RUNTIME_FAMILIES = frozenset({"cast", "shoot", "throw"})
-_ITEM_FANTASY_PROJECTILE_FAMILIES = ITEM_BODIED_PROJECTILE_RUNTIME_FAMILIES | frozenset({"flail", "whip"})
 
 def asset_negative_prompt(role: str = "item") -> str:
     # Z-Image Turbo does not use negative prompts as a reliable CFG channel;
@@ -74,7 +64,7 @@ def chroma_name() -> str:
 def sprite_background_positive_clause() -> str:
     # Prefer a magenta key over requesting alpha/transparency. Local postprocess owns alpha.
     if visual_config.REMOVE_BG and visual_config.BG_REMOVE_MODE in {"chroma", "floodfill"}:
-        return f"on a perfectly solid untextured {chroma_name()}, object fully separated from background, no floor, no cast shadow, no gradient"
+        return f"on a perfectly solid untextured {chroma_name()}, authored foreground components separated from background, no floor, no cast shadow, no gradient"
     if visual_config.REMOVE_BG and visual_config.BG_REMOVE_MODE == "rembg":
         return "on a plain solid magenta key background (#ff00ff), no scene, no floor, no cast shadow"
     return "on a perfectly solid untextured pure flat magenta background (#ff00ff), object fully separated from background, no floor, no cast shadow, no gradient"
@@ -144,27 +134,26 @@ def zimage_positive_guard_clause(role: str, data: dict[str, Any] | None = None) 
     """Positive-only technical guard for Z-Image Turbo.
 
     Keep only the minimal technical instructions that improve sprite extraction:
-    flat chroma background, one subject, full subject inside the frame, and the
-    subject spanning most of the canvas on at least one axis.
+    a flat chroma background, visible authored components kept within the sprite
+    bounds, and a readable physical footprint.
     """
     r = (role or "item").lower()
     base = (
         "Flat #ff00ff magenta chroma-key background. "
-        "Show only the described sprite subject, fully inside the frame. "
-        "Let the subject span most of the canvas along at least one axis. "
+        "Show only the described sprite role. "
+        "Keep authored visible components inside the sprite bounds with a thin clear edge. "
+        "Let the authored physical arrangement span a readable portion of the canvas. "
         "Use crisp hard pixel edges, a limited palette, and a clean silhouette."
     )
     if r == "projectile":
-        if isinstance(data, dict) and tether_sprite_guard_required(data, "projectile"):
-            return base + " If rope, cord, chain, or tether detail is present, keep it as a short local attachment on the projectile body."
-        return base + " Show one authored projectile texture/composition only; preserve an explicitly authored connected bundle or multi-part body."
+        return base + " Preserve the authored projectile body or multipart arrangement without adding beam, tether, or trail geometry."
     if r == "impact":
-        return base + " Show one compact impact burst only."
+        return base + " Show the authored momentary impact effect only."
     if r == "field":
-        return base + " Show one authored field texture/composition only; preserve its explicitly authored connected parts."
+        return base + " Show the authored field, rune, cloud, or trap-mark texture only."
     if r == "child":
-        return base + " Show one authored child-projectile texture/composition only; preserve an explicitly authored connected multi-part body."
-    return base + " Show only the item sprite."
+        return base + " Show the authored child-projectile body only."
+    return base + " Show the authored item inventory sprite only."
 
 def _is_generated_usable_gear(data: dict[str, Any]) -> bool:
     """True for generated outputs that are used/held/equipped, not placed as scenes.
@@ -199,26 +188,26 @@ def _explicit_result_kind(data: dict[str, Any]) -> str:
 
 
 def _item_output_kind_visual_guard(data: dict[str, Any]) -> str:
-    """One short inventory-icon rule from explicit resultKind, never prose inference."""
+    """One short framing rule from resultKind; authored text owns morphology."""
     kind = _explicit_result_kind(data)
     gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
     armor = data.get("armor") if isinstance(data.get("armor"), dict) else {}
     slot = str(armor.get("armorSlot") or gameplay.get("armorSlot") or "").strip().lower()
     if kind == "armor":
-        slot_words = {"head": "head armor or helmet", "body": "body armor or chest piece", "legs": "leg armor or greaves"}.get(slot, "single armor piece")
-        return f"inventory icon of one {slot_words} only; no character, mannequin, full armor set, room, or action scene"
+        slot_words = {"head": "head-slot", "body": "body-slot", "legs": "leg-slot"}.get(slot, "authored")
+        return f"inventory icon of the authored {slot_words} armor item only; no character, mannequin, full armor set, room, or action scene"
     if kind == "accessory":
-        return "inventory icon of one compact equippable accessory or charm only; no character wearing it and no full outfit"
+        return "inventory icon of the authored equippable accessory only; no character wearing it and no full outfit"
     if kind == "potion":
-        return "inventory icon of one potion bottle, vial, flask, or compact consumable container only; no drinking character or scene"
+        return "inventory icon of the authored consumable item only; no consuming character or scene"
     if kind == "furniture":
-        return "inventory icon of one placeable furniture object only; no furnished room, floor plan, environment, character, or placement preview"
+        return "inventory icon of the authored placeable furniture item only; no furnished room, floor plan, environment, character, or placement preview"
     if kind == "material":
-        return "inventory icon of one representative crafting material object or compact readable stack only; no mining scene, landscape, or workshop"
+        return "inventory icon of the authored crafting material only; no mining scene, landscape, or workshop"
     if kind == "ammo":
-        return "inventory icon of one representative ammo body or compact ammo stack only; no firing weapon, shooter, or battle scene"
+        return "inventory icon of the authored ammo item only; no firing weapon, shooter, or battle scene"
     if kind == "tool":
-        return "inventory icon of one handheld tool only; no user, mining scene, tree, wall, or harvested environment"
+        return "inventory icon of the authored tool item only; no user, mining scene, tree, wall, or harvested environment"
     return ""
 
 
@@ -234,7 +223,8 @@ def _compact_prompt_append(prompt: str, addition: str, *, limit: int = 1800) -> 
     return truncate_prompt_at_boundary(p, limit)
 
 _ITEM_USABLE_GEAR_GUARD = (
-    "depict the authored final item as one handheld or carriable usable item inventory sprite composition, not a placed tile, room scene, floor layout, "
+    "one usable inventory asset composition; preserve authored part count and intentional gaps; "
+    "keep every authored physical part readable inside the canvas; depict the authored final item as a handheld or carriable usable item inventory sprite composition, not a placed tile, room scene, floor layout, "
     "furniture placement preview, pedestal, or environment; preserve authored literal, attached, fused, disassembled, "
     "or separate-but-associated parent components inside the sprite"
 )
@@ -246,13 +236,30 @@ def _append_item_role_guard_once(prompt: str) -> str:
     """Keep one generic item-role guard without redesigning the authored object."""
     p = _strip_item_role_guard_fragments(prompt)
     probe = _prompt_probe(p)
-    if "authored final item as one handheld or carriable usable item inventory sprite composition" not in probe:
+    if "one usable inventory asset composition" not in probe:
         return _compact_prompt_append(p, _ITEM_USABLE_GEAR_GUARD)
     return truncate_prompt_at_boundary(p, 1800)
 
 def _strip_item_role_guard_fragments(prompt: str) -> str:
     """Remove old/duplicated generated-item role boilerplate before adding one canonical guard."""
     p = str(prompt or "")
+    p = re.sub(re.escape(_ITEM_USABLE_GEAR_GUARD), " ", p, flags=re.IGNORECASE)
+    p = re.sub(
+        r"\bone\s+usable\s+inventory\s+asset\s+composition\s*[;,.]\s*"
+        r"preserve\s+authored\s+part\s+count\s+and\s+intentional\s+gaps\s*[;,.]\s*"
+        r"keep\s+every\s+authored\s+physical\s+part\s+readable\s+inside\s+the\s+canvas\s*[;,.]?",
+        " ",
+        p,
+        flags=re.IGNORECASE,
+    )
+    p = re.sub(
+        r"\s*depict\s+the\s+authored\s+final\s+item\s+as\s+a\s+handheld\s+or\s+carriable\s+usable\s+item\s+inventory\s+sprite\s+composition,\s*"
+        r"not\s+a\s+placed\s+tile,\s*room\s+scene,\s*floor\s+layout,\s*furniture\s+placement\s+preview,\s*pedestal,\s*or\s+environment;?\s*"
+        r"preserve\s+authored\s+literal,\s*attached,\s*fused,\s*disassembled,\s*or\s+separate-but-associated\s+parent\s+components\s+inside\s+the\s+sprite",
+        " ",
+        p,
+        flags=re.IGNORECASE,
+    )
     stop = r"(?=\s*,?\s*depict one handheld|\s*\.\s*Flat #ff00ff|\s*\.\s*Color scheme|\s*\.\s*without letters|$)"
     full_guard = (
         r"\s*,?\s*(?:depict\s+one\s+(?:connected\s+)?handheld\s+or\s+carriable(?:\s+usable)?\s+item\s+object|depict\s+the\s+authored\s+final\s+item\s+as\s+one\s+(?:handheld\s+or\s+carriable\s+usable\s+item\s+)?inventory\s+sprite\s+composition),\s*"
@@ -274,6 +281,18 @@ def _authored_item_silhouette_contract(data: dict[str, Any]) -> str:
     """Return an LLM/data-authored item silhouette contract; no hard-coded weapon taxonomy."""
     if not isinstance(data, dict):
         return ""
+    plan = runtime_plan(data)
+    intent = plan.get("visualIntent") if isinstance(plan, dict) and isinstance(plan.get("visualIntent"), dict) else {}
+    topology = str(intent.get("topology") or "").strip()
+    parts = [str(part).strip() for part in (intent.get("parts") or []) if str(part).strip()]
+    arrangement = str(intent.get("arrangement") or "").strip()
+    if topology and parts and arrangement:
+        # These values are an authored physical contract. Keep them literal rather
+        # than selecting a preferred fusion, grip count, or family silhouette.
+        return compact_visual_words(
+            f"Topology: {topology}. Physical parts: {', '.join(parts[:8])}. Arrangement: {arrangement}",
+            700,
+        )
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
     kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
     for source in (kit, visual):
@@ -336,11 +355,19 @@ def role_visual_prompt_guard(role: str, prompt: str, data: dict[str, Any]) -> st
         )
     if r == "projectile":
         attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+        visual_candidate = data.get("visual")
+        visual: dict[str, Any] = visual_candidate if isinstance(visual_candidate, dict) else {}
         falling = (
             str(attack.get("onHit") or "").lower() == "overhead_barrage"
             or str(attack.get("runtimeFamily") or "").lower() == "overhead_barrage"
         )
         extra = "role contract: projectile body; same weapon shape may be reused when that is the actual hit body, but use attack-frame/projectile-body framing, not inventory-view framing"
+        authored_family = str(visual.get("projectileVisualFamily") or "").strip()
+        authored_orientation = str(visual.get("projectileOrientation") or "").strip()
+        if authored_family:
+            extra += "; authored projectile visual family: " + authored_family
+        if authored_orientation:
+            extra += "; authored projectile orientation: " + authored_orientation
         if falling:
             extra += "; overhead-descending hit body; preserve the authored arrow, shard, meteor, star, spear, or other projectile form; not a decorative background field"
         return _compact_prompt_append(
@@ -350,174 +377,21 @@ def role_visual_prompt_guard(role: str, prompt: str, data: dict[str, Any]) -> st
     if r == "child":
         return _compact_prompt_append(
             p,
-            "role contract: one child damaging projectile or mote body only; runtime spawns any authored copies; not a decorative background sparkle field, not an impact burst, not the inventory weapon icon",
+            "role contract: child damaging projectile or mote body only; runtime spawns any authored copies; not a decorative background sparkle field, not an impact burst, not the inventory weapon icon",
         )
     return p[:1800]
 
-def _authored_tether_context(data: dict[str, Any]) -> str:
-    chunks: list[str] = []
-    for key in ("name", "tooltip", "category"):
-        chunks.append(str(data.get(key) or ""))
-    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
-    for key in ("fantasy", "mergeLogic", "weirdTwist"):
-        chunks.append(str(concept.get(key) or ""))
-    rp = runtime_plan(data)
-    if isinstance(rp, dict):
-        chunks.append(json.dumps(rp, ensure_ascii=False)[:4000])
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    for key in ("runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "movement", "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact"):
-        chunks.append(str(attack.get(key) or ""))
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    for key in ("imagePrompt", "projectileImagePrompt", "impactImagePrompt"):
-        chunks.append(str(visual.get(key) or ""))
-    return " ".join(chunks).lower()
-
-def authored_tether_like(data: dict[str, Any]) -> bool:
-    ctx = _authored_tether_context(data)
-    words = ("rope", "tether", "cord", "chain", "harpoon", "anchor", "reel", "returning_glaive", "snap back", "snaps back", "retract", "reels back")
-    return any(w in ctx for w in words)
-
-def tether_sprite_guard_required(data: dict[str, Any], role: str) -> bool:
-    """Return True only when a sprite-body guard is technically needed.
-
-    Rope/chain words alone are not enough: a rope item icon or decorative chain
-    should keep its authored silhouette.  The guard is only for small projectile
-    body textures whose long tether/cord is represented by gameplay/VFX state.
-    """
-    r = (role or "").lower()
-    if r != "projectile":
-        return False
-    if not authored_tether_like(data):
-        return False
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    runtime_family = canonical_runtime_family(attack.get("runtimeFamily"))
-    movement = str(attack.get("movement") or attack.get("pattern") or attack.get("attackPattern") or "").lower()
-    pattern = str(attack.get("pattern") or attack.get("attackPattern") or "").lower()
-    delivery = str(attack.get("delivery") or "").lower()
-    weapon_family = str(attack.get("weaponFamily") or "").lower()
-    projectile_family = str(attack.get("projectileFamily") or "").lower()
-    family_blob = weapon_family + " " + projectile_family + " " + movement
-    explicit_tether_family = any(w in family_blob for w in ["harpoon", "flail", "yoyo", "whip", "anchor", "return"])
-    return (
-        runtime_family in _TETHER_GUARD_RUNTIME_FAMILIES
-        or movement in {"flail_tether", "yoyo_hover", "whip_lash", "returning_glaive", "boomerang"}
-        or pattern == "spear_thrust" and delivery == "thrust"
-        or runtime_family in {"throw", "shoot"} and explicit_tether_family
-        or delivery in {"throw", "returning"} and explicit_tether_family
-    )
-
-def _scrub_tether_sprite_body_prompt(prompt: str, role: str) -> str:
-    """Remove only full-canvas/off-canvas tether instructions.
-
-    This is deliberately light-touch.  It preserves a visible local rope/chain
-    detail when that detail helps the sprite read better, but prevents Z-Image
-    from turning a projectile texture into a long line across the whole canvas.
-    """
-    p = str(prompt or "")
-    if (role or "").lower() != "projectile":
-        return p
-    replacements = [
-        (r"\bthin\s+taut\s+rope\s+tether\s+line\s+extending\s+left\b", "short local rope attachment at the base"),
-        (r"\bthin\s+(?:taut|taught)\s+rope\s+line\s+back\s+to\s+the\s+player\b", "short local rope attachment at the base"),
-        (r"\btrailing\s+a\s+thin\s+(?:taut|taught)\s+rope\s+line\s+back\s+to\s+the\s+player\b", "with a short rope loop at the base"),
-        (r"\b(?:rope|chain|cord|tether)\s+line\s+extending\s+(?:left|right|back)\b", "short local tether attachment"),
-        (r"\b(?:rope|chain|cord|tether)\s+back\s+to\s+the\s+player\b", "short local tether attachment"),
-        (r"\boff[- ]canvas\s+(?:rope|chain|cord|tether)\b", "small coil attached to the body"),
-        (r"\bfull[- ]screen\s+(?:rope|chain|cord|tether)\b", "short local rope or chain detail"),
-    ]
-    for pat, repl in replacements:
-        p = re.sub(pat, repl, p, flags=re.IGNORECASE)
-    return p
-
-def tether_visual_prompt_guard(role: str, prompt: str, data: dict[str, Any]) -> str:
-    """Minimal Z-Image guard for tethered projectile-body sprites.
-
-    It does not route item families and it does not rewrite rope/chain items.
-    It only keeps tiny projectile-body PNGs from becoming full-canvas tether
-    drawings, which hurts bbox validation and in-game readability.
-    """
-    p = str(prompt or "")
-    if not tether_sprite_guard_required(data, role):
-        return p
-    p = _scrub_tether_sprite_body_prompt(p, role)
-    guard = "visible rope, cord, or chain may appear as a short local attachment, loop, nub, or compact coil attached to the main projectile body; keep the main projectile silhouette readable and keep all tether detail inside the canvas"
-    guard_probe = re.sub(r"[^a-z0-9]+", " ", guard.lower()).strip()
-    prompt_probe = re.sub(r"[^a-z0-9]+", " ", p.lower()).strip()
-    if guard_probe not in prompt_probe:
-        p = (p.rstrip(" ,.;") + ", " + guard).strip()
-    return p[:1800]
-
 def family_prompt_clause(data: dict[str, Any], role: str, canvas: int) -> str:
-    if (role or "").lower() != "projectile":
-        return role_contract_prompt_clause(role, canvas)
-    family = infer_projectile_visual_family(data)
-    spec = sprite_contract_for("projectile", canvas)
-    fill = spec.get("promptFillWords", "the projectile body should fill most of the canvas")
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    runtime_family = canonical_runtime_family(attack.get("runtimeFamily"))
-    pattern = str(attack.get("pattern") or attack.get("attackPattern") or "").lower()
-    projectile_family = str(attack.get("projectileFamily") or "").lower()
-    spear_form = any(w in projectile_family for w in ["spear", "lance", "pike", "trident", "glaive", "halberd", "naginata"])
-    if runtime_family == "thrust" or pattern == "spear_thrust":
-        return ", ".join([
-            "held close-range thrust projection texture matching the authored projectile body",
-            "aligned for a forward stab or short lunge when the authored body has a clear long axis",
-            "one projection texture only; keep unusual authored forms readable rather than forcing a spear or polearm silhouette",
-            str(fill),
-        ])
-    if runtime_family in _EMITTED_SPEAR_FORM_RUNTIME_FAMILIES and spear_form:
-        return ", ".join([
-            "free-flying spear/lance-shaped projectile body in a flight pose",
-            "short readable spearhead or spectral lance aligned along its flight axis",
-            "empty magenta canvas around the projectile body",
-            "one authored projectile texture; preserve an explicitly authored connected bundle or multi-part body inside that texture",
-            str(fill),
-        ])
-    if runtime_family == "flail" or pattern == "flail_tether":
-        return ", ".join([
-            "compact flail or mace head projectile body",
-            "optional short local chain segment attached to the head",
-            "render the authored flail projectile body as one texture; preserve explicitly authored connected heads or parts",
-            str(fill),
-        ])
-    if runtime_family == "yoyo" or pattern == "yoyo_hover":
-        return ", ".join([
-            "compact circular yoyo body sprite",
-            "optional short local string nub attached to the yoyo",
-            "render the authored yoyo projectile body as one texture; preserve explicitly authored connected parts",
-            str(fill),
-        ])
-    if runtime_family == "whip" or pattern == "whip_lash":
-        return ", ".join([
-            "compact whip tip or short lash segment body",
-            "render the authored whip projectile accent as one texture; preserve explicitly authored connected parts",
-            str(fill),
-        ])
-    if family == "linear_side":
-        return ", ".join([
-            "canonical side-view gameplay projectile, long axis horizontal left-to-right",
-            "tip/nose points right in the texture because the game rotates projectile sprites at runtime",
-            "not a vertical inventory icon, not a tiny upright arrow",
-            "one authored projectile texture; preserve an explicitly authored connected bundle or multi-part body inside that texture",
-            str(fill),
-        ])
-    if family == "spark_mote":
-        return ", ".join([
-            "compact spark or ember-like body if the authored projectile is a small spark",
-            "one authored projectile texture; preserve an explicitly authored connected bundle or multi-part body inside that texture",
-            str(fill),
-        ])
+    """Return only role geometry; authored prompts own physical shape and orientation."""
     return role_contract_prompt_clause(role, canvas)
 
 def sanitize_projectile_family_prompt(data: dict[str, Any], role: str, prompt: str) -> str:
     """Final technical prompt guard for sprite assets.
 
-    The guard is minimal and role-aware: form/material/family words stay authored;
-    only full-canvas tether text is compressed into a local visible detail when the
-    executable family says this is a tethered projectile body.
+    Physical form belongs to the authored role prompt. This hook remains a stable
+    boundary for callers but intentionally performs no family or prose routing.
     """
-    p = tether_visual_prompt_guard(role, str(prompt or ""), data)
-    return p[:1800]
+    return str(prompt or "")[:1800]
 
 def zimage_subject_sentence(role: str, authored_prompt: str, fantasy: str) -> str:
     """PE-style invariant subject sentence.
@@ -538,19 +412,12 @@ def zimage_subject_sentence(role: str, authored_prompt: str, fantasy: str) -> st
         return f"The main visual subject is {fantasy}."
     if r == "impact":
         return "The main visual subject is one compact hit effect burst."
-    return f"The main visual subject is one {r} sprite asset."
+    return f"The main visual subject is the authored {r} sprite asset."
 
 
 def role_supporting_fantasy(role: str, data: dict[str, Any], fantasy: str) -> str:
-    """Keep launcher fantasy out of emitted-body prompts without hiding thrown weapons."""
-    r = (role or "item").lower()
-    if r == "item":
-        return fantasy
-    if r != "projectile":
-        return ""
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    runtime_family = canonical_runtime_family(attack.get("runtimeFamily"))
-    return fantasy if runtime_family in _ITEM_FANTASY_PROJECTILE_FAMILIES else ""
+    """Use supporting fantasy only for the item; role prompts own other bodies."""
+    return fantasy if (role or "item").lower() == "item" else ""
 
 
 def zimage_item_identity_sentence(role: str, data: dict[str, Any]) -> str:
@@ -615,7 +482,7 @@ def _semantic_item_prompt(
         shared_style,
         f"Foreground colors and materials use {foreground}" if foreground else "",
         "Crisp Terraria-like hand-drawn pixel art with hard edges, readable clusters, a limited palette, and a clean silhouette",
-        "The complete item is fully visible, floating freely with empty magenta margin on every side",
+        "One usable inventory asset composition; preserve authored part count and intentional gaps; keep every authored physical part readable inside the canvas",
         "Flat #ff00ff magenta chroma-key background",
     ]
     return compact_zimage_asset_prompt(parts, "item", limit=limit)
@@ -633,8 +500,8 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.08,
-            "promptFillWords": "the item body should span most of the canvas along its width or height while staying fully inside the frame",
-            "promptPoseWords": "compose it as a clean Terraria-style item sprite",
+            "promptFillWords": "the authored item arrangement should span a readable portion of the canvas with a thin clear edge",
+            "promptPoseWords": "compose it as an inventory item sprite showing its authored physical arrangement",
         },
         "projectile": {
             "targetFill": visual_config.PROJECTILE_ICON_TARGET_FILL,
@@ -644,8 +511,8 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.10,
-            "promptFillWords": "the projectile body should span most of the canvas along its width or height while staying fully inside the frame",
-            "promptPoseWords": "compose it as one clean projectile sprite in gameplay view",
+            "promptFillWords": "the authored projectile body or multipart arrangement should span a readable portion of the canvas with a thin clear edge",
+            "promptPoseWords": "compose it as the moving projectile body in gameplay view",
         },
         "impact": {
             "targetFill": visual_config.IMPACT_ICON_TARGET_FILL,
@@ -655,8 +522,8 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.18,
-            "promptFillWords": "the burst shape should span most of the canvas along its width or height while staying fully inside the frame",
-            "promptPoseWords": "single compact effect burst only, no item or weapon body",
+            "promptFillWords": "the authored impact effect should span a readable portion of the canvas with a thin clear edge",
+            "promptPoseWords": "compose it as the momentary impact effect, without an item or weapon body",
         },
         "child": {
             "targetFill": visual_config.CHILD_ICON_TARGET_FILL,
@@ -666,8 +533,8 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.14,
-            "promptFillWords": "the child body should span a large visible portion of the canvas while staying fully inside the frame",
-            "promptPoseWords": "one tiny separate object only",
+            "promptFillWords": "the authored child body should remain legible within the canvas with a thin clear edge",
+            "promptPoseWords": "compose it as the child damaging body, not an impact or inventory item",
         },
         "field": {
             "targetFill": visual_config.FIELD_ICON_TARGET_FILL,
@@ -677,8 +544,8 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.14,
-            "promptFillWords": "the field mark should span most of the canvas along its width or height while staying fully inside the frame",
-            "promptPoseWords": "single field effect only",
+            "promptFillWords": "the authored field arrangement should span a readable portion of the canvas with a thin clear edge",
+            "promptPoseWords": "compose it as the persistent field, rune, cloud, or trap-mark texture",
         },
     }
     spec = dict(table.get(role, table["item"]))
@@ -704,16 +571,16 @@ def role_style_prefix(role: str, canvas: int) -> str:
     bg = sprite_background_positive_clause()
     contract = role_contract_prompt_clause(role, canvas)
     if role == "item":
-        return f"pixel art inventory item icon for a Terraria-like mod, {bg}, one object only, {contract}"
+        return f"pixel art inventory item icon for a Terraria-like mod, {bg}, {contract}"
     if role == "projectile":
         return f"pixel art flying projectile sprite for a Terraria-like mod, {bg}, {contract}"
     if role == "impact":
-        return f"pixel art hit impact flash sprite, {bg}, small effect only, {contract}"
+        return f"pixel art hit impact flash sprite, {bg}, momentary impact effect only, {contract}"
     if role == "child":
-        return f"pixel art secondary projectile sprite, {bg}, tiny separate object, {contract}"
+        return f"pixel art secondary projectile sprite, {bg}, child damaging body only, {contract}"
     if role == "field":
         return f"pixel art ground field/trap/rune/cloud sprite, {bg}, flat world effect, {contract}"
-    return f"pixel art sprite asset, {bg}, one object, {contract}"
+    return f"pixel art sprite asset, {bg}, {contract}"
 
 def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas: int) -> str:
     """Make every visual job explicit and role-separated.
@@ -783,68 +650,32 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         return compact_zimage_asset_prompt(semantic_parts, role, limit=semantic_limit)
 
     parts = [
-        ((role_style_prefix(role, canvas) if role != "projectile" else (f"pixel art held spear/thrust projection sprite for a Terraria-like mod, {sprite_background_positive_clause()}, readable {'16x16 to 32x32' if canvas <= 32 else '32x32 to 64x64'} silhouette, {family_prompt_clause(data, role, canvas)}" if str((data.get("attack") if isinstance(data.get("attack"), dict) else {}).get("runtimeFamily") or "") == "thrust" else f"pixel art flying projectile sprite for a Terraria-like mod, {sprite_background_positive_clause()}, readable {'16x16 to 32x32' if canvas <= 32 else '32x32 to 64x64'} silhouette, {family_prompt_clause(data, role, canvas)}"))),
+        role_style_prefix(role, canvas),
         f"asset role: {role}",
         item_name_prompt_clause(role, data),
         f"item fantasy: {fantasy}" if fantasy else "",
         prompt,
         (f"shared authored art direction: {shared_style}" if shared_style else ""),
         f"palette: {palette_words}" if palette_words else "palette: limited high-contrast named colors",
-        ("one authored projectile texture only; if the authored subject is a bundle, cluster, swarm, or fan, keep it as one readable projectile bundle rather than separate copies" if role == "projectile" else ""),
-        "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, centered single readable asset, keep unused area pure magenta key (#ff00ff)",
+        ("preserve the authored projectile body or multipart arrangement; do not add beam, tether, or trail geometry" if role == "projectile" else ""),
+        "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, keep unused area pure magenta key (#ff00ff)",
     ]
     return compact_prompt_parts(parts, limit=2200, separator=", ")
 
-def projectile_visual_blob(data: dict[str, Any]) -> str:
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
-    tags = data.get("tags") if isinstance(data.get("tags"), list) else []
-    parents = []
-    for key in ("parentA", "parentB"):
-        p = data.get(key) if isinstance(data.get(key), dict) else {}
-        parents.append(str(p.get("name") or p.get("internalName") or p.get("fullName") or ""))
-    fields = [
-        data.get("name"), data.get("category"), gameplay.get("kind"), gameplay.get("damageClass"),
-        " ".join(str(t) for t in tags), " ".join(parents),
-        visual.get("imagePrompt"), visual.get("projectileImagePrompt"),
-        attack.get("projectileSpritePrompt"), attack.get("projectileShape"), attack.get("projectileMotion"),
-        attack.get("projectileTrail"), attack.get("weaponFamily"), attack.get("projectileFamily"), attack.get("pattern"), attack.get("attackPattern"),
-    ]
-    return " ".join(str(x or "") for x in fields).lower()
-
-def is_tiny_projectile_visual(data: dict[str, Any]) -> bool:
-    blob = projectile_visual_blob(data)
-    tiny_words = {"bullet", "pellet", "dart", "needle", "seed", "coin", "bb", "mote", "spark", "particle", "droplet", "tiny", "small shard", "micro"}
-    melee_words = {"sword", "blade", "slash", "cut", "swipe", "stab", "thrust", "shortsword", "broadsword", "glaive", "spear", "lance", "scythe", "axe"}
-    return any(w in blob for w in tiny_words) and not any(w in blob for w in melee_words)
-
-def is_melee_arc_projectile_visual(data: dict[str, Any]) -> bool:
-    blob = projectile_visual_blob(data)
-    return any(w in blob for w in ["sword", "blade", "slash", "cut", "swipe", "stab", "thrust", "shortsword", "broadsword", "glaive", "spear", "lance", "scythe", "axe"])
-
 def effective_projectile_canvas(data: dict[str, Any]) -> int:
-    """Choose a readable projectile sprite canvas without changing balance tier.
-
-    Canvas is visual resolution, not progression/medium-tier semantics. A wooden sword
-    may stay early/cheap, but a sword/slash projectile should still be readable and not
-    appear smaller than the starter Copper Shortsword attack.
-    """
+    """Choose canvas from authored visual preference or explicit physical dimensions."""
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
     base = max(16, min(64, int(visual_config.PROJECTILE_SPRITE_CANVAS or 32)))
-    item_canvas = max(16, min(64, int(visual.get("preferredCanvasSize") or 32)))
+    explicit_canvas = kit.get("projectileCanvasSize") or visual.get("projectileCanvasSize")
+    if isinstance(explicit_canvas, (int, float)):
+        return max(16, min(64, int(explicit_canvas)))
     pw = int(float(attack.get("projectileWidth") or 0) or 0)
     ph = int(float(attack.get("projectileHeight") or 0) or 0)
     major = max(pw, ph)
-    if is_tiny_projectile_visual(data):
-        # bullets/sparks/darts may legitimately stay 32.
-        return base
-    if is_melee_arc_projectile_visual(data):
-        # Sword/slash/thrust family: readability floor is 48 even for wooden-tier items.
-        return max(base, 48, item_canvas if item_canvas >= 48 else 0)
-    if major >= 21:
-        return max(base, 64 if item_canvas >= 64 else 48)
+    if major >= 32:
+        return max(base, 64)
     if major >= 16:
         return max(base, 48)
     return base
@@ -871,7 +702,7 @@ def build_projectile_image_prompt(data: dict[str, Any]) -> str:
     return ", ".join([
         "pixel art projectile sprite for a Terraria-like mod",
         sprite_background_positive_clause(),
-        "one authored projectile texture/composition, no item card, no player, no scene; preserve an explicitly authored connected bundle or multi-part body",
+        "authored moving projectile body or multipart arrangement only; no item card, player, scene, added beam, added tether, or added trail geometry",
         f"readable projectile silhouette filling the useful area of a {projectile_canvas}x{projectile_canvas} sprite target",
         "limited palette, crisp hard edges",
         family_prompt_clause(data, "projectile", projectile_canvas),
@@ -911,7 +742,7 @@ def build_child_image_prompt(data: dict[str, Any]) -> str:
     return ", ".join([
         "pixel art child projectile sprite for a Terraria-like mod",
         sprite_background_positive_clause(),
-        "one authored child-projectile texture/composition, no item card, no player, no scene; preserve explicitly authored connected parts",
+        "authored child-projectile body only; no item card, player, scene, added beam, added tether, or added trail geometry",
         "readable 12x12 to 24x24 silhouette",
         "crisp hard pixels, limited palette",
         role_contract_prompt_clause("child", visual_config.CHILD_SPRITE_CANVAS),
@@ -957,11 +788,6 @@ __all__ = [
     "_authored_item_silhouette_contract",
     "_prepend_prompt_contracts",
     "role_visual_prompt_guard",
-    "_authored_tether_context",
-    "authored_tether_like",
-    "tether_sprite_guard_required",
-    "_scrub_tether_sprite_body_prompt",
-    "tether_visual_prompt_guard",
     "family_prompt_clause",
     "sanitize_projectile_family_prompt",
     "zimage_subject_sentence",
@@ -971,9 +797,6 @@ __all__ = [
     "role_contract_prompt_clause",
     "role_style_prefix",
     "normalize_asset_prompt",
-    "projectile_visual_blob",
-    "is_tiny_projectile_visual",
-    "is_melee_arc_projectile_visual",
     "effective_projectile_canvas",
     "compact_visual_words",
     "build_projectile_image_prompt",

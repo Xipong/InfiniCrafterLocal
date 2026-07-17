@@ -40,7 +40,6 @@ from infini_local.core.vfx_composition_primitives import (
     _vfx_slot_score,
     _vfx_arbitrate_slots,
     _vfx_motif_from_data,
-    _vfx_words,
     _vfx_color_hex,
     _vfx_resolve_particle_system_id,
 )
@@ -403,13 +402,13 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
     rp = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
     has_runtime_plan = isinstance(rp, dict) and bool(rp)
     calls = rp.get("engineCalls") if isinstance(rp.get("engineCalls"), list) else []
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    if not attack.get("enabled"):
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+    authored_raw, authored_debug = _vfx_authored_cue_raw_slots(data)
+    if not attack.get("enabled") and not authored_raw:
         return None
     if has_runtime_plan and not calls:
         calls = []
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    vi = rp.get("visualIntent") if isinstance(rp.get("visualIntent"), dict) else {}
     power = float(attack.get("powerBudget") or data.get("gameplay", {}).get("powerBudget") or 1.0) if isinstance(data.get("gameplay"), dict) else float(attack.get("powerBudget") or 1.0)
     seed = _vfx_seed_int(recipe_key_value, data.get("id"), "runtime_intent", reroll_salt)
     effect = str(attack.get("effect") or "none").lower()
@@ -417,9 +416,7 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
     split_count = int(float(attack.get("splitCount") or 0))
     trail_len = int(float(attack.get("trailLength") or 0))
     burst_cap = int(float(attack.get("burstDustCap") or 0))
-    slots_raw: list[dict[str, Any]] = []
-    authored_raw, authored_debug = _vfx_authored_cue_raw_slots(data)
-    slots_raw.extend(authored_raw)
+    slots_raw: list[dict[str, Any]] = list(authored_raw)
     # Travel slot: small by default; no parent-inherited beam/history ribbons.
     if trail_len > 0 and effect not in {"none", ""}:
         slots_raw.append({
@@ -429,7 +426,7 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
             "layer": "BeforeProjectiles", "budgetWeight": [0.45, 0.9], "source": "runtimePlan:travel"
         })
     # Hit feedback is a contact flash/chips/dust unless the LLM explicitly requested real child projectiles.
-    if onhit not in {"none", ""} or burst_cap > 0 or str(vi.get("impact") or visual.get("impactVfx") or "").strip():
+    if onhit not in {"none", ""} or burst_cap > 0:
         slots_raw.append({
             "event": "hit", "rendererKind": "impactSprite", "rendererKind": "impactSprite", "textureRole": "impact",
             "variants": [0, 1], "scale": [0.85, min(1.75, 0.98 + power * 0.20)], "density": [0.10, 0.26], "duration": [6, 13],
@@ -475,7 +472,7 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
         "confidence": 0.88,
         "effectMagnitude": round(effect_mag, 3),
         "visualBudgetClass": budget["visualBudgetClass"],
-        "motif": _vfx_motif_from_data(data, _vfx_words(" ".join(str(x or "") for x in [data.get("name"), visual.get("vfxIntent"), attack.get("vfxIntent"), vi.get("vfxIntent")])) , str(attack.get("pattern") or "thrown_simple")),
+        "motif": _vfx_motif_from_data(data, set(), str((attack or {}).get("pattern") or "thrown_simple")),
         "overlayPolicy": "LocalOnly",
         "budget": budget,
         "slots": slots,

@@ -12,7 +12,7 @@ from infini_local.core.boundary_models import (
     validate_visual_authoring_boundaries,
     validate_visual_kit_boundary,
 )
-from infini_local.core.runtime_promise_truth import validate_runtime_promises
+
 from infini_local.pipelines import combine_pipeline as COMBINE
 from infini_local.pipelines import llm_authoring_pipeline as AUTHOR
 from infini_local.pipelines import visual_generation_pipeline as VISUAL
@@ -61,38 +61,32 @@ def _workbench() -> dict:
     }
 
 
-def _carpentry_plan(*, weird_twist: str = "Splinters become bounded secondary projectiles.") -> dict:
+def _carpentry_plan() -> dict:
     return {
         "name": "Carpentry Blade",
-        "tooltip": "A rough wooden blade that throws 3 secondary splinter projectiles on impact.",
         "concept": {
             "fantasy": "A wooden sword reinforced with the structural essence of a workbench.",
             "mergeLogic": "The sword supplies the attack and the workbench supplies wood and joinery.",
-            "weirdTwist": weird_twist,
+            "coreMechanic": "A heavy wooden slash releases three bounded splinters on hit.",
         },
         "runtimeContract": {
-            "schema": "infini.runtime-contract.v2",
-            "primaryVerb": "swing and release three bounded splinters",
+            "primaryVerb": "swing",
             "controlStyle": "tap",
-            "mechanicClaims": [{
-                "claim": "A rough wooden blade that throws 3 secondary splinter projectiles on impact.",
-                "backing": "spawn_secondary_projectiles count=3",
-                "backingRefs": [{
-                    "source": "engineCall",
-                    "callIndex": 2,
-                    "fn": "spawn_secondary_projectiles",
-                    "field": "count",
-                    "expected": 3,
-                }],
-                "status": "executable",
-            }],
-            "playerViewTimeline": ["blade held", "blade swings", "surface collision has no persistent field", "NPC hit releases three splinters", "splinters expire"],
-            "executionStatus": "executable",
+            "playerViewTimeline": [
+                {"phase": "use", "description": "The player makes a heavy wooden slash."},
+                {"phase": "hit", "description": "Three splinters release from the impact."},
+            ],
         },
         "runtimePlan": {
             "resultKind": "weapon",
+            "runtimeStateIntent": "No persistent state.",
+            "sourceReading": "Sword blade and workbench joinery remain literal physical parts.",
+            "balanceIntent": "One finite melee swing and three low-damage splinters per hit.",
+            "anomalyFlags": [],
+            "sourceRolePreservation": {"itemA": "wooden blade", "itemB": "workbench joinery"},
             "engineCalls": [
                 {
+                    "callId": "item_stats",
                     "fn": "set_item_stats",
                     "params": {
                         "resultKind": "weapon",
@@ -105,6 +99,7 @@ def _carpentry_plan(*, weird_twist: str = "Splinters become bounded secondary pr
                     },
                 },
                 {
+                    "callId": "primary_swing",
                     "fn": "perform_melee_attack",
                     "params": {
                         "family": "broadsword",
@@ -118,6 +113,7 @@ def _carpentry_plan(*, weird_twist: str = "Splinters become bounded secondary pr
                     },
                 },
                 {
+                    "callId": "secondary_splinters",
                     "fn": "spawn_secondary_projectiles",
                     "params": {
                         "trigger": "on_hit",
@@ -128,12 +124,17 @@ def _carpentry_plan(*, weird_twist: str = "Splinters become bounded secondary pr
                     },
                 },
                 {
+                    "callId": "contact_particles",
                     "fn": "spawn_contact_particles",
                     "params": {"effect": "leaf", "amount": 10, "scale": 0.8, "material": "wood"},
                 },
             ],
             "visualIntent": {
                 "item": "A rough wooden plank sword with a blocky workbench-style guard.",
+                "topology": "connected",
+                "parts": ["wooden plank blade", "workbench-style guard", "iron nail"],
+                "arrangement": "The guard crosses and touches the lower blade; the nail pins the joint.",
+                "projectile": "Three short wooden splinters.",
                 "impact": "Wood chips and sawdust.",
                 "vfxIntent": "Wood chips and sawdust on impact.",
                 "vfxAvoid": "No magical glow or generic steel blade.",
@@ -158,39 +159,7 @@ def _compiled_structural_carpentry_item() -> dict:
     b = _workbench()
     ca = canonicalize(a)
     cb = canonicalize(b)
-    plan = _carpentry_plan()
-    for index, call in enumerate(plan["runtimePlan"]["engineCalls"]):
-        call["callId"] = ("item_stats", "primary_swing", "secondary_splinters", "contact_particles")[index]
-    plan["concept"]["weirdTwist"] = {
-        "text": "The blade releases bounded splinters.",
-        "claimIds": ["splinter_release"],
-    }
-    plan["runtimeContract"] = {
-        "schema": "infini.runtime-contract.v3",
-        "signatureMode": "mechanic",
-        "signatureClaimId": "splinter_release",
-        "tooltipClaimIds": ["splinter_release"],
-        "mechanicClaims": [{
-            "claimId": "splinter_release",
-            "playerText": "Throws 3 secondary splinter projectiles on impact.",
-            "backingRefs": [{
-                "source": "engineCall",
-                "callId": "secondary_splinters",
-                "field": "count",
-                "expected": 3,
-            }],
-            "status": "executable",
-        }],
-        "playerViewTimeline": [
-            {"phase": "use", "text": "The blade swings.", "claimIds": ["splinter_release"], "presentationOnly": False},
-            {"phase": "travel", "text": "The blade travels.", "claimIds": ["splinter_release"], "presentationOnly": False},
-            {"phase": "npc_hit", "text": "Three splinters release.", "claimIds": ["splinter_release"], "presentationOnly": False},
-            {"phase": "expiry", "text": "The splinters expire.", "claimIds": ["splinter_release"], "presentationOnly": False},
-        ],
-        "unsupportedPromises": [],
-        "executionStatus": "executable",
-    }
-    data = validate_and_repair(plan, a, b, ca, cb, "wood_workbench_structural_regression")
+    data = validate_and_repair(_carpentry_plan(), a, b, ca, cb, "wood_workbench_structural_regression")
     data = apply_item_knowledge(data, a, b, ca, cb)
     return attach_gameplay_and_attack(data, a, b, ca, cb)
 
@@ -215,15 +184,13 @@ def _contract_check_wood_workbench_keeps_visual_intent_out_of_attack_and_grounds
     validate_executable_item_boundary(data)
 
 
-def _contract_check_visual_kit_repairs_singleton_text_lists_without_leaking_invalid_raw_output(monkeypatch) -> None:
-    parsed = validate_visual_kit_boundary({
-        "qualityNotes": "Keep the wooden material readable.",
-        "animationPlan": "short swing then sawdust impact",
-        "vfxMaterialHints": "wood",
-    })
-    assert parsed["qualityNotes"] == ["Keep the wooden material readable."]
-    assert parsed["animationPlan"] == ["short swing then sawdust impact"]
-    assert parsed["vfxMaterialHints"] == ["wood"]
+def _contract_check_visual_kit_rejects_singleton_text_aliases_without_leaking_invalid_raw_output(monkeypatch) -> None:
+    with pytest.raises(ValidationError):
+        validate_visual_kit_boundary({
+            "qualityNotes": "Keep the wooden material readable.",
+            "animationPlan": "short swing then sawdust impact",
+            "vfxMaterialHints": "wood",
+        })
     with pytest.raises(ValidationError):
         validate_visual_kit_boundary({"qualityNotes": 42})
     with pytest.raises(ValueError, match="unknown roles"):
@@ -246,18 +213,15 @@ def _contract_check_visual_kit_repairs_singleton_text_lists_without_leaking_inva
                 "itemIconPrompt": "one rough wooden plank sword",
                 "vfxIntent": "sawdust burst",
                 "vfxAvoid": "no magic glow",
-                "vfxMaterialHints": "wood",
-                "qualityNotes": "Keep the wood grain readable.",
+                "vfxMaterialHints": ["wood"],
+                "qualityNotes": ["Keep the wood grain readable."],
             }
         })}}]},
     )
     data = _compiled_carpentry_item()
     result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
     assert result["visualKit"]["qualityNotes"] == ["Keep the wood grain readable."]
-    assert result["debug"]["visualDirectorBoundaryRepairs"] == [
-        "vfxMaterialHints:string_to_singleton_list",
-        "qualityNotes:string_to_singleton_list",
-    ]
+    assert result["debug"].get("visualDirectorBoundaryRepairs") in (None, [])
     assert result["visual"]["vfxIntent"] == "sawdust burst"
     assert "vfxIntent" not in result["attack"]
     assert "vfxAvoid" not in result["attack"]
@@ -280,15 +244,41 @@ def _contract_check_visual_kit_repairs_singleton_text_lists_without_leaking_inva
         })}}]},
     )
     repaired_data = _compiled_carpentry_item()
-    repaired_result = VISUAL.apply_visual_director(repaired_data, _wooden_sword(), _workbench(), {}, {})
-    assert repaired_result["debug"]["visualDirectorStatus"] == "validated_and_applied"
-    assert repaired_result["visualKit"]["itemIconPrompt"]
-    assert "distinctFromItem" not in repaired_result["visualKit"]["bakedAssets"]["impact"]
-    assert "distinctFromItem" not in repaired_result["visualKit"]["bakedAssets"]["child"]
-    assert "field" not in repaired_result["visualKit"]["bakedAssets"]
-    assert "bakedAssets.impact.distinctFromItem:dropped_role_inapplicable" in repaired_result["debug"]["visualDirectorBoundaryRepairs"]
-    assert "bakedAssets.child.distinctFromItem:dropped_role_inapplicable" in repaired_result["debug"]["visualDirectorBoundaryRepairs"]
-    assert "bakedAssets.field:dropped_role_inapplicable_reuse_item_sprite" in repaired_result["debug"]["visualDirectorBoundaryRepairs"]
+    repaired = VISUAL.apply_visual_director(repaired_data, _wooden_sword(), _workbench(), {}, {})
+    assert repaired is repaired_data
+    assert repaired_data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+    assert "visualKit" not in repaired_data
+
+    invalid_live_shape = {
+        "itemIconPrompt": "one rope-bound blade",
+        "bakedAssets": {"projectile": "baked_sprite", "vfx": "particle_vfx"},
+    }
+    valid_typed_replacement = {
+        "visualKit": {
+            "itemIconPrompt": "one rope-bound blade",
+            "projectileSpritePrompt": "one rope-bound blade in flight",
+            "bakedAssets": {
+                "projectile": {"mode": "baked_sprite", "reason": "distinct in-flight pose", "distinctFromItem": True},
+            },
+        },
+    }
+    retry_requests: list[dict] = []
+    retry_responses = iter((invalid_live_shape, valid_typed_replacement))
+
+    def invalid_then_valid(req, timeout=None):
+        retry_requests.append(req)
+        return {"choices": [{"message": {"content": json.dumps(next(retry_responses))}}]}
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", invalid_then_valid)
+    retried_data = _compiled_carpentry_item()
+    retried_result = VISUAL.apply_visual_director(retried_data, _wooden_sword(), _workbench(), {}, {})
+    assert retried_result["debug"]["visualDirectorStatus"] == "validated_and_applied"
+    assert retried_result["debug"]["visualDirectorRetryCount"] == 1
+    assert retried_result["visualKit"]["bakedAssets"]["projectile"]["mode"] == "baked_sprite"
+    assert len(retry_requests) == 2
+    correction = json.loads(retry_requests[1]["messages"][-1]["content"])
+    assert correction["task"].startswith("Replace your invalid Visual Director response")
+    assert correction["requiredSchema"]["type"] == "object"
 
     monkeypatch.setattr(
         VISUAL,
@@ -302,11 +292,31 @@ def _contract_check_visual_kit_repairs_singleton_text_lists_without_leaking_inva
     )
     invalid_data = _compiled_carpentry_item()
     invalid_result = VISUAL.apply_visual_director(invalid_data, _wooden_sword(), _workbench(), {}, {})
-    assert "visualKit" not in invalid_result
-    assert "THIS INVALID RAW CONTRACT MUST NOT LEAK" not in json.dumps(invalid_result.get("visual") or {}, ensure_ascii=False)
-    assert "THIS INVALID RAW CONTRACT MUST NOT LEAK" not in json.dumps(invalid_result.get("attack") or {}, ensure_ascii=False)
-    assert "visualDirectorError" in invalid_result["debug"]
-    assert "THIS INVALID RAW CONTRACT" in invalid_result["debug"]["visualDirectorRejectedRawOutput"]
+    assert invalid_result is invalid_data
+    assert "visualKit" not in invalid_data
+    assert "THIS INVALID RAW CONTRACT MUST NOT LEAK" not in json.dumps(invalid_data.get("visual") or {}, ensure_ascii=False)
+    assert "THIS INVALID RAW CONTRACT MUST NOT LEAK" not in json.dumps(invalid_data.get("attack") or {}, ensure_ascii=False)
+    assert invalid_data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+
+    retry_transport_calls = 0
+
+    def invalid_then_transport_failure(_req, timeout=None):
+        nonlocal retry_transport_calls
+        retry_transport_calls += 1
+        if retry_transport_calls == 1:
+            return {"choices": [{"message": {"content": json.dumps(invalid_live_shape)}}]}
+        raise RuntimeError("visual retry transport failed")
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", invalid_then_transport_failure)
+    transport_failure_data = _compiled_carpentry_item()
+    transport_failure_result = VISUAL.apply_visual_director(
+        transport_failure_data, _wooden_sword(), _workbench(), {}, {},
+    )
+    assert transport_failure_result is transport_failure_data
+    assert transport_failure_data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+    assert "visual retry transport failed" in transport_failure_data["debug"]["visualDirectorError"]
+    assert retry_transport_calls == 2
+    assert "visualKit" not in transport_failure_data
 
 
 def _contract_check_visual_director_traces_named_request_and_raw_response(monkeypatch) -> None:
@@ -362,172 +372,74 @@ def _contract_check_visual_director_traces_named_request_and_raw_response(monkey
     assert '"visualKit"' in response_event[1]["response"]
 
 
-def _contract_check_promise_gate_blocks_fake_platform_and_damaging_field_but_keeps_real_children() -> None:
-    platform = _carpentry_plan(
-        weird_twist="On hit it creates temporary floating workbench platforms the player can stand on."
-    )
-    platform_gate = planner_runtime_promise_gate(platform)
-    assert platform_gate["ok"] is False
-    assert any(row["kind"] == "temporary_platform" for row in platform_gate["blockingClaims"])
-
-    fake_field = _carpentry_plan(
-        weird_twist="The splinters linger as a damaging field after the strike."
-    )
-    field_gate = planner_runtime_promise_gate(fake_field)
-    assert field_gate["ok"] is False
-    assert any(row["kind"] == "damaging_field" for row in field_gate["blockingClaims"])
-
-    valid = _carpentry_plan(
-        weird_twist="On hit it throws three bounded wooden splinter projectiles."
-    )
-    assert planner_runtime_promise_gate(valid)["ok"] is True
-
-
-def _contract_check_promise_gate_requires_semantically_matching_ammo_executor() -> None:
-    torch_claim = _carpentry_plan()
-    torch_claim["tooltip"] = "Consumes torches as ammunition and fires an ignited bolt."
-    torch_claim["runtimePlan"]["engineCalls"] = [
-        {
-            "fn": "set_item_stats",
-            "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 8, "useTimeTicks": 28, "maxStack": 1, "ammoFor": "empty"},
+def _contract_check_initial_author_does_not_run_its_own_structural_retry(monkeypatch) -> None:
+    source = _carpentry_plan()
+    calls = copy.deepcopy(source["runtimePlan"]["engineCalls"])
+    valid = {
+        "name": "Hardened Slime Splinterblade",
+        "category": "weapon",
+        "concept": {
+            "fantasy": "A wooden sword permanently coated in a thick slime sheen.",
+            "mergeLogic": "The wooden blade supplies the body while the slime hardens its surface.",
+            "coreMechanic": "Swings the blade and releases three bounded wooden splinters on hit.",
         },
-        {
-            "fn": "fire_ranged_weapon",
-            "params": {"family": "bow", "runtimeFamily": "shoot", "delivery": "shoot", "ammoFor": "empty", "projectileFamily": "fire_bolt"},
+        "runtimeContract": {
+            "primaryVerb": "swing",
+            "controlStyle": "tap",
+            "playerViewTimeline": [
+                {"phase": "use", "description": "The coated blade swings."},
+                {"phase": "npc_hit", "description": "Three wooden splinters release."},
+            ],
         },
-    ]
-    blocked = planner_runtime_promise_gate(torch_claim)
-    assert blocked["ok"] is False
-    assert any(row["kind"] == "ammo_consumption" for row in blocked["blockingClaims"])
-
-    arrow_claim = copy.deepcopy(torch_claim)
-    arrow_claim["tooltip"] = "Consumes arrows as ammunition."
-    arrow_claim["runtimePlan"]["engineCalls"][0]["params"]["ammoFor"] = "arrow"
-    arrow_claim["runtimePlan"]["engineCalls"][1]["params"]["ammoFor"] = "arrow"
-    assert planner_runtime_promise_gate(arrow_claim)["ok"] is True
-
-    no_ammo = copy.deepcopy(torch_claim)
-    no_ammo["tooltip"] = "Does not consume ammo."
-    assert planner_runtime_promise_gate(no_ammo)["ok"] is True
-
-    contradictory = copy.deepcopy(arrow_claim)
-    contradictory["tooltip"] = "Uses no arrows."
-    contradictory_gate = planner_runtime_promise_gate(contradictory)
-    assert contradictory_gate["ok"] is False
-    assert any(row.get("kind") == "ammo_consumption" for row in contradictory_gate["blockingClaims"])
-
-    cross_resource_truth = copy.deepcopy(arrow_claim)
-    cross_resource_truth["tooltip"] = "Uses no bullets."
-    assert planner_runtime_promise_gate(cross_resource_truth)["ok"] is True
-
-    passive_negation = copy.deepcopy(arrow_claim)
-    passive_negation["tooltip"] = "No ammo is consumed."
-    passive_gate = planner_runtime_promise_gate(passive_negation)
-    assert passive_gate["ok"] is False
-    assert any(row.get("kind") == "ammo_consumption" for row in passive_gate["blockingClaims"])
-
-    without_ammo = copy.deepcopy(arrow_claim)
-    without_ammo["tooltip"] = "Fires without ammo."
-    assert planner_runtime_promise_gate(without_ammo)["ok"] is False
-
-    for truthful_custom_negation in (
-        "Does not consume torches.",
-        "Uses no torches.",
-        "Fires without torches.",
-    ):
-        custom_negation = copy.deepcopy(arrow_claim)
-        custom_negation["tooltip"] = truthful_custom_negation
-        truth = validate_runtime_promises(custom_negation, {"ammoFor": "arrow"})
-        ammo_claims = [claim for claim in truth["claims"] if claim.get("kind") == "ammo_consumption"]
-        assert ammo_claims and all(claim.get("status") == "executable" for claim in ammo_claims)
-        assert planner_runtime_promise_gate(custom_negation)["ok"] is True
-
-
-def _contract_check_structural_reauthor_preserves_visual_slime_and_repeats_shape_rules(monkeypatch) -> None:
-    valid = _carpentry_plan(
-        weird_twist="The slime coating provides a slight, purely visual sheen to the weapon."
-    )
-    valid["tooltip"] = "A wooden sword coated in hardened slime."
-    valid["concept"]["fantasy"] = (
-        "A basic wooden sword permanently coated in a thick, sticky layer of slime."
-    )
-    for index, call in enumerate(valid["runtimePlan"]["engineCalls"]):
-        call["callId"] = ("item_stats", "primary_swing", "secondary_splinters", "contact_particles")[index]
-    valid["concept"]["weirdTwist"] = {
-        "text": "The slime coating gives the splintering blade a visual sheen.",
-        "claimIds": ["splinter_release"],
-    }
-    valid["runtimeContract"] = {
-        "schema": "infini.runtime-contract.v3",
-        "primaryVerb": "swing and release three bounded splinters",
-        "controlStyle": "tap",
-        "signatureMode": "mechanic",
-        "signatureClaimId": "splinter_release",
-        "tooltipClaimIds": ["splinter_release", "slime_sheen"],
-        "mechanicClaims": [
-            {
-                "claimId": "splinter_release",
-                "playerText": "Throws 3 secondary splinter projectiles on impact.",
-                "backingRefs": [{
-                    "source": "engineCall",
-                    "callId": "secondary_splinters",
-                    "field": "count",
-                    "expected": 3,
-                }],
-                "status": "executable",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "sourceRolePreservation": {"itemA": "wooden blade body", "itemB": "hardened slime coating"},
+            "engineCalls": calls,
+            "runtimeStateIntent": "No persistent state.",
+            "visualIntent": {
+                "item": "Wooden sword with a hardened translucent slime coating.",
+                "projectile": "Wooden splinter projectile.",
+                "impact": "Wood chips and slime droplets.",
+                "vfxIntent": "A slight slime sheen and bounded impact droplets.",
+                "vfxAvoid": "No beam or laser.",
+                "topology": "connected",
+                "parts": ["wooden sword", "hardened slime coating"],
+                "arrangement": "slime coating wrapped directly around the blade",
             },
-            {
-                "claimId": "slime_sheen",
-                "playerText": "Coated in a hardened slime sheen.",
-                "backingRefs": [],
-                "status": "visual_only",
-            },
-        ],
-        "playerViewTimeline": [
-            {"phase": "use", "text": "The blade swings.", "claimIds": ["splinter_release"], "presentationOnly": False},
-            {"phase": "travel", "text": "The slime sheen remains visible.", "claimIds": [], "presentationOnly": True},
-            {"phase": "npc_hit", "text": "Three splinters release.", "claimIds": ["splinter_release"], "presentationOnly": False},
-            {"phase": "expiry", "text": "The splinters expire.", "claimIds": ["splinter_release"], "presentationOnly": False},
-        ],
-        "unsupportedPromises": [],
-        "executionStatus": "executable",
+            "sourceReading": "Wood supplies the blade; slime supplies the coating.",
+            "balanceIntent": "Normal melee cadence and three bounded secondary splinters.",
+            "anomalyFlags": [],
+        },
     }
-    assert planner_runtime_promise_gate(valid, enforce_public_contract=True, require_structural_v3=True)["ok"] is True
-
-    invalid = copy.deepcopy(valid)
-    invalid["runtimeContract"]["mechanicClaims"][0]["backingRefs"][0]["field"] = "missingCount"
-    blocked = planner_runtime_promise_gate(invalid, enforce_public_contract=True, require_structural_v3=True)
-    assert blocked["ok"] is False
-    assert any(row["kind"] == "authored_ref_unresolved" for row in blocked["blockingClaims"])
+    assert planner_runtime_promise_gate(copy.deepcopy(valid))["ok"] is True
 
     author_payload = AUTHOR.build_llm_author_payload(
-        _wooden_sword(), _workbench(), {}, {}, "wood_gel_runtime_archetype_shape"
+        _wooden_sword(), _workbench(), {}, {}, "wood_gel_runtime_shape"
     )
-    assert isinstance(author_payload["requiredJsonShape"]["runtimeArchetype"], dict)
+    assert "runtimeArchetype" not in author_payload["requiredJsonShape"]
 
     requests: list[dict] = []
-    responses = iter((invalid, valid))
 
     def fake_llm(req, timeout=None):
         requests.append(copy.deepcopy(req))
-        return {
-            "choices": [{"message": {"content": json.dumps(next(responses))}}],
-            "_debug": {},
-        }
+        return {"choices": [{"message": {"content": json.dumps(valid)}}], "_debug": {}}
 
     monkeypatch.setattr(AUTHOR, "USE_LLM", True)
-    monkeypatch.setattr(AUTHOR, "resolve_llm_model", lambda: "promise-retry-test-model")
+    monkeypatch.setattr(AUTHOR, "resolve_llm_model", lambda: "single-author-test-model")
     monkeypatch.setattr(AUTHOR, "active_llm_provider", lambda: "local")
     monkeypatch.setattr(AUTHOR, "llm_chat_json", fake_llm)
     monkeypatch.setattr(AUTHOR, "trace_event", lambda *args, **kwargs: None)
 
     result = AUTHOR.try_llm_plan(
-        _wooden_sword(), _workbench(), {}, {}, "wood_gel_promise_retry"
+        _wooden_sword(), _workbench(), {}, {}, "wood_gel_single_author"
     )
     assert result is not None
-    retry_packet = json.loads(requests[1]["messages"][-1]["content"])
-    retry_rules = " ".join(retry_packet["requirements"]).lower()
-    assert "at least 4" in retry_rules and "playerviewtimeline steps" in retry_rules
+    assert len(requests) == 1
+    assert result["concept"]["coreMechanic"] == valid["concept"]["coreMechanic"]
+    assert result["debug"]["plannerPromiseGate"]["ok"] is True
+
+
+
 
 
 def _contract_check_flux2_preserves_authored_literal_workbench_prompt_without_code_material_router(monkeypatch) -> None:
@@ -543,25 +455,43 @@ def _contract_check_flux2_preserves_authored_literal_workbench_prompt_without_co
         48,
     )
     lower = prompt.lower()
-    assert lower.startswith("a thick wooden plank blade")
+    assert lower.startswith("topology: connected")
+    assert "a thick wooden plank blade" in lower
     assert "foreground colors and materials use brown, tan, dark brown" in lower
     assert "thick wooden plank blade" in lower
     assert "square workbench guard" in lower
     assert "primary authored material:" not in lower
     assert "generic polished steel" not in lower
-    assert "the complete item is fully visible" in lower
+    assert "single centered object" not in lower
+    assert "one usable inventory asset composition" in lower
+    assert "preserve authored part count and intentional gaps" in lower
+    assert "keep every authored physical part readable inside the canvas" in lower
+    renormalized = normalize_asset_prompt(data, "item", prompt, 48).lower()
+    assert renormalized.count("one usable inventory asset composition") == 1
+    assert "#ff00ff" in lower
     assert "show only the item sprite" not in lower
     assert "palette: gray, white" not in lower
 
 
 def _contract_check_strict_preflights_run_before_expensive_image_generation() -> None:
-    source = inspect.getsource(COMBINE.combine)
-    assert source.index("04c_strict_executable_preflight") < source.index("08_visual_director_asset_pack")
-    assert source.index("08c_strict_executable_preflight") < source.index("08d_hybrid_vfx_manifest")
-    assert source.index("08d_hybrid_vfx_manifest") < source.index("08e_visual_asset_runtime_gates")
-    assert source.index("08e_visual_asset_runtime_gates") < source.index("08f_strict_visual_authoring_boundaries")
-    assert source.index("08f_strict_visual_authoring_boundaries") < source.index("09_visual_asset_generation")
-    assert source.index("11a_project_presentation_out_of_attack") < source.index("11b_strict_executable_boundary")
+    from contract_checks import assert_pipeline_phase_order
+
+    source = (
+        inspect.getsource(COMBINE.compile_and_validate_authored_runtime)
+        + "\n"
+        + inspect.getsource(COMBINE.combine)
+    )
+    assert_pipeline_phase_order(source, "initial_executable_preflight", "visual_director")
+    assert_pipeline_phase_order(source, "recovered_final_wire", "visual_director")
+    assert_pipeline_phase_order(
+        source,
+        "post_visual_executable_preflight",
+        "vfx_manifest",
+        "asset_runtime_gates",
+        "visual_author_boundary",
+        "asset_generation",
+    )
+    assert_pipeline_phase_order(source, "final_projection", "final_executable_boundary")
 
 
 def _contract_check_visual_director_palette_policy_uses_provenance_not_material_semantics() -> None:
@@ -701,7 +631,7 @@ def _contract_check_visual_director_projection_is_fully_transactional_on_late_fa
     assert result["visual"] == before_visual
     assert result["attack"] == before_attack
     assert result["visualKit"] == before_kit
-    assert result["debug"]["visualDirectorStatus"] == "rejected_fallback_to_existing_visual"
+    assert result["debug"]["visualDirectorStatus"] == "visual_director_degraded"
     assert "late projection failure" in result["debug"]["visualDirectorError"]
 
 
@@ -746,6 +676,8 @@ def _contract_check_visual_director_payload_contains_raw_parent_facts_and_real_s
     baked_guide = payload["fieldGuide"]["bakedAssets"].casefold()
     assert "projectile-only" in baked_guide
     assert "impact, child, and field" in baked_guide
+    assert "never an array" in baked_guide
+    assert '"projectile":{"mode":"baked_sprite"' in baked_guide.replace(" ", "")
 
     response_format = req["response_format"]
     schema = response_format["json_schema"]["schema"]
@@ -758,6 +690,19 @@ def _contract_check_visual_director_payload_contains_raw_parent_facts_and_real_s
     baked_schema = schema["properties"]["visualKit"]["properties"]["bakedAssets"]
     assert baked_schema["additionalProperties"] is False
     assert set(baked_schema["properties"]) == {"projectile", "impact", "child", "field"}
+
+def _contract_check_visual_kit_rejects_alias_schema_instead_of_semantic_migration() -> None:
+    from infini_local.core.boundary_models import canonical_visual_kit_view
+
+    invalid_shapes = [
+        {"bakedAssets": {"projectile": "baked_sprite"}},
+        {"bakedAssets": ["item_sprite", "projectile_sprite"]},
+        {"bakedAssets": {"item": {"mode": "baked_sprite"}, "vfx": {"mode": "particle_vfx"}}},
+        {"vfx": {"vfxIntent": "splinters", "materialHints": ["wood"]}},
+    ]
+    for invalid in invalid_shapes:
+        with pytest.raises((TypeError, ValueError)):
+            canonical_visual_kit_view(invalid)
 
 
 def _contract_check_code_parent_anchors_are_context_not_mandatory_authored_anchors() -> None:
@@ -798,17 +743,23 @@ def _contract_check_empty_visual_kit_is_rejected_without_erasing_existing_visual
     )
     data = _compiled_carpentry_item()
     before = copy.deepcopy(data["visual"])
-    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
-    assert result["visual"] == before
-    assert "visualKit" not in result
-    assert "no authored visual decision" in result["debug"]["visualDirectorError"]
+    out = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+    assert out is data
+    assert data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+    assert data["visual"] == before
+    assert "visualKit" not in data
+    assert "no authored visual decision" in data["debug"]["visualDirectorError"]
 
 
 
-def _contract_check_visual_director_remote_auto_mode_uses_real_schema_with_safe_transport_fallback(monkeypatch) -> None:
+def _contract_check_visual_director_remote_auto_mode_uses_safe_json_object_and_explicit_schema_opt_in(monkeypatch) -> None:
     monkeypatch.setattr(LLM_TRANSPORT, "LLM_RESPONSE_FORMAT_MODE", "auto")
     monkeypatch.setattr(LLM_TRANSPORT, "active_llm_provider", lambda _context=None: "openai_compat")
     schema = {"type": "object", "additionalProperties": False}
+    result = LLM_TRANSPORT.llm_json_response_format("visual_test", schema=schema, strict=True)
+    assert result == {"type": "json_object"}
+
+    monkeypatch.setattr(LLM_TRANSPORT, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     result = LLM_TRANSPORT.llm_json_response_format("visual_test", schema=schema, strict=True)
     assert result == {
         "type": "json_schema",
@@ -816,7 +767,7 @@ def _contract_check_visual_director_remote_auto_mode_uses_real_schema_with_safe_
     }
 
 
-def _contract_check_visual_director_legacy_silhouette_alias_and_negative_prompt_are_shape_migrated(monkeypatch) -> None:
+def _contract_check_visual_director_rejects_legacy_silhouette_alias(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
@@ -835,10 +786,10 @@ def _contract_check_visual_director_legacy_silhouette_alias_and_negative_prompt_
         })}}]},
     )
     data = _compiled_carpentry_item()
-    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
-    assert result["visualKit"]["itemSilhouetteContract"] == "whole workbench remains attached to the blade"
-    assert "shapeContract:moved_to_itemSilhouetteContract" in result["debug"]["visualDirectorBoundaryRepairs"]
-    assert result["visual"]["negativePrompt"] == "text, watermark, room background"
+    out = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+    assert out is data
+    assert data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+    assert "visualKit" not in data
 
 
 def _contract_check_visual_director_shared_style_reaches_every_asset_prompt(monkeypatch) -> None:
@@ -932,7 +883,7 @@ def _contract_check_visual_director_context_does_not_present_code_fallback_promp
 
 
 
-def _contract_check_visual_director_legacy_baked_prompt_migrates_to_single_role_prompt(monkeypatch) -> None:
+def _contract_check_visual_director_rejects_nested_baked_prompt_alias(monkeypatch) -> None:
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
@@ -951,27 +902,24 @@ def _contract_check_visual_director_legacy_baked_prompt_migrates_to_single_role_
         })}}]},
     )
     data = _compiled_carpentry_item()
-    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
-    assert result["visualKit"]["impactSpritePrompt"].startswith("wood chips and sawdust burst")
-    assert "prompt" not in result["visualKit"]["bakedAssets"]["impact"]
-    assert "bakedAssets.impact.prompt:moved_to_impactSpritePrompt" in result["debug"]["visualDirectorBoundaryRepairs"]
+    out = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+    assert out is data
+    assert data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+    assert "visualKit" not in data
 
 
-def _contract_check_visual_authoring_boundary_canonicalizes_legacy_prompt_and_rejects_unknown_nested_fields() -> None:
-    normalized = validate_visual_authoring_boundaries({
-        "visualKit": {
-            "bakedAssets": {
-                "impact": {
-                    "mode": "baked_sprite",
-                    "prompt": "literal authored wood-chip burst",
+def _contract_check_visual_authoring_boundary_rejects_legacy_prompt_and_unknown_nested_fields() -> None:
+    with pytest.raises(ValidationError):
+        validate_visual_authoring_boundaries({
+            "visualKit": {
+                "bakedAssets": {
+                    "impact": {
+                        "mode": "baked_sprite",
+                        "prompt": "literal authored wood-chip burst",
+                    }
                 }
             }
-        }
-    })
-    kit = normalized["visualKit"]
-    assert kit["impactSpritePrompt"] == "literal authored wood-chip burst"
-    assert "prompt" not in kit["bakedAssets"]["impact"]
-
+        })
     with pytest.raises(ValidationError):
         validate_visual_authoring_boundaries({
             "visualKit": {
@@ -997,14 +945,14 @@ def _contract_check_cached_payload_uses_same_visual_authoring_boundaries_as_fres
         "canonical_a": canonicalize(parent_a),
         "canonical_b": canonicalize(parent_b),
     }
-    legacy = _compiled_carpentry_item()
-    assert not COMBINE._cached_payload_passes_executable_boundary(
-        legacy,
-        recipe_key_value="cache_structural_v2_rejected",
+    fresh = _compiled_carpentry_item()
+    assert COMBINE._cached_payload_passes_executable_boundary(
+        fresh,
+        recipe_key_value="cache_current_structural_payload_accepted",
         source="test",
         **cache_parent_args,
     )
-    fake_v3 = copy.deepcopy(legacy)
+    fake_v3 = copy.deepcopy(fresh)
     fake_v3["runtimeContract"] = {"schema": "infini.runtime-contract.v3"}
     assert not COMBINE._cached_payload_passes_executable_boundary(
         fake_v3,
@@ -1022,14 +970,14 @@ def _contract_check_cached_payload_uses_same_visual_authoring_boundaries_as_fres
             }
         }
     }
-    assert COMBINE._cached_payload_passes_executable_boundary(
+    assert not COMBINE._cached_payload_passes_executable_boundary(
         data,
-        recipe_key_value="cache_visual_migration",
+        recipe_key_value="cache_visual_legacy_rejected",
         source="test",
         **cache_parent_args,
     )
-    assert data["visualKit"]["impactSpritePrompt"] == "legacy sawdust burst"
-    assert "prompt" not in data["visualKit"]["bakedAssets"]["impact"]
+    assert data["visualKit"]["bakedAssets"]["impact"]["prompt"] == "legacy sawdust burst"
+    assert "impactSpritePrompt" not in data["visualKit"]
 
     broken_kit = _compiled_structural_carpentry_item()
     broken_kit["visualKit"] = {"bakedAssets": {"impact": {"mode": "magic_png"}}}
@@ -1094,43 +1042,8 @@ def _contract_check_nonfatal_generated_optional_sprite_remains_deliverable_with_
     assert any(row["code"] == "impact_sprite_generated_warn_invalid" for row in report["warnings"])
 
 
-# One collected item per contract module; individual checks keep source order and tracebacks.
+# One collected item per contract module; local checks are discovered in source order.
 def test_242_live_generation_regressions_module_contract(request):
     from contract_checks import run_contract_checks
 
-    run_contract_checks(
-        globals(),
-        request,
-        (
-            '_contract_check_wood_workbench_keeps_visual_intent_out_of_attack_and_grounds_palette',
-            '_contract_check_visual_kit_repairs_singleton_text_lists_without_leaking_invalid_raw_output',
-            '_contract_check_visual_director_traces_named_request_and_raw_response',
-            '_contract_check_promise_gate_blocks_fake_platform_and_damaging_field_but_keeps_real_children',
-            '_contract_check_promise_gate_requires_semantically_matching_ammo_executor',
-            '_contract_check_structural_reauthor_preserves_visual_slime_and_repeats_shape_rules',
-            '_contract_check_flux2_preserves_authored_literal_workbench_prompt_without_code_material_router',
-            '_contract_check_strict_preflights_run_before_expensive_image_generation',
-            '_contract_check_visual_director_palette_policy_uses_provenance_not_material_semantics',
-            '_contract_check_visual_anchor_and_palette_order_is_deterministic_without_fusion_policy',
-            '_contract_check_invalid_cached_attack_contract_is_not_delivered',
-            '_contract_check_visual_director_receives_planner_fusion_choice_without_code_rewrite',
-            '_contract_check_prompt_cleanup_preserves_texture_and_grounded_words',
-            '_contract_check_visual_director_projection_is_fully_transactional_on_late_failure',
-            '_contract_check_visual_director_payload_contains_raw_parent_facts_and_real_schema',
-            '_contract_check_code_parent_anchors_are_context_not_mandatory_authored_anchors',
-            '_contract_check_runtime_multishot_does_not_rewrite_authored_projectile_topology',
-            '_contract_check_empty_visual_kit_is_rejected_without_erasing_existing_visual',
-            '_contract_check_visual_director_remote_auto_mode_uses_real_schema_with_safe_transport_fallback',
-            '_contract_check_visual_director_legacy_silhouette_alias_and_negative_prompt_are_shape_migrated',
-            '_contract_check_visual_director_shared_style_reaches_every_asset_prompt',
-            '_contract_check_field_asset_gate_runs_after_manifest_and_keeps_consumable_authored_sprite',
-            '_contract_check_visual_parent_context_is_bounded_without_semantic_rewrite',
-            '_contract_check_visual_director_context_does_not_present_code_fallback_prompt_as_authored',
-            '_contract_check_visual_director_legacy_baked_prompt_migrates_to_single_role_prompt',
-            '_contract_check_visual_authoring_boundary_canonicalizes_legacy_prompt_and_rejects_unknown_nested_fields',
-            '_contract_check_cached_payload_uses_same_visual_authoring_boundaries_as_fresh_combine',
-            '_contract_check_visual_asset_gate_debug_is_recomputed_not_left_stale',
-            '_contract_check_baked_asset_mode_requires_a_real_authored_prompt_before_image_generation',
-            '_contract_check_nonfatal_generated_optional_sprite_remains_deliverable_with_warning',
-        ),
-    )
+    run_contract_checks(globals(), request)

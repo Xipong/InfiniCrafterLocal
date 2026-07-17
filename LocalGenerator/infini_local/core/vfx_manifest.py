@@ -8,7 +8,6 @@ from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.boundary_models import validate_vfx_manifest_boundary
 
 from infini_local.core.effect_catalog import normalize_attack_pattern
-from infini_local.core.item_identity_tools import _stringish
 from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
 from infini_local.core.vfx_composition_primitives import (
     _vfx_arbitrate_slots,
@@ -17,17 +16,13 @@ from infini_local.core.vfx_composition_primitives import (
     _vfx_default_backend,
     _vfx_event_stage,
     _vfx_motif_from_data,
-    _vfx_mundane_duplicate_profile,
     _vfx_playback_mode_for_recipe,
     _vfx_seed_int,
-    _vfx_trim_mundane_slots,
     _vfx_unit,
-    _vfx_words,
 )
 from infini_local.core.vfx_composition_parent import (
     _vfx_manifest_from_parent_item,
     _vfx_parent_effect_profile,
-    _vfx_parent_effect_recipe_bonus,
     _vfx_parent_inherited_raw_slots,
 )
 from infini_local.core.vfx_runtime_slots import (
@@ -63,7 +58,6 @@ from infini_local.core.vfx_manifest_config import (
     VFX_LLM_DIRECTOR_TIMEOUT,
     VFX_SELECTOR_DEBUG,
     VFX_SELECTOR_ENABLED,
-    VFX_SELECTOR_HINT_WEIGHT,
     VFX_SELECTOR_JITTER,
     VFX_SELECTOR_NOVELTY_WEIGHT,
     VFX_SELECTOR_TOP,
@@ -258,9 +252,6 @@ def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], rec
     slots = _vfx_arbitrate_slots(slots, budget_class)
     if not slots:
         return None
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    words = _vfx_words(" ".join(str(x or "") for x in [data.get("name"), data.get("tooltip"), raw.get("identity"), kit.get("styleGuide"), visual.get("styleGuide"), attack.get("toyIdentity"), attack.get("projectileTrail"), attack.get("projectileImpact")]))
     provenance = attack.get("runtimeAuthoringProvenance") if isinstance(attack.get("runtimeAuthoringProvenance"), dict) else {}
     effect_lineage = {
         "mode": "llm_vfx_director",
@@ -277,7 +268,7 @@ def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], rec
         "confidence": 0.84,
         "effectMagnitude": effect_magnitude,
         "visualBudgetClass": budget_class,
-        "motif": _vfx_motif_from_data(data, words, pattern),
+        "motif": _vfx_motif_from_data(data, set(), str(pattern or "basic")),
         "parentEffectProfile": {k: v for k, v in _vfx_parent_effect_profile(data, parent_a, parent_b).items() if k != "_rawParentSlots"},
         "overlayPolicy": "LocalOnly",
         "budget": budget,
@@ -297,7 +288,7 @@ def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], rec
             "roles": sorted(_vfx_available_roles(data)),
             "selectedReasons": ["llm_director_validated", "fallback_pipeline_available_if_invalid"],
             "topCandidates": [],
-            "wordProbe": sorted(list(words))[:40] if VFX_SELECTOR_DEBUG else [],
+            "wordProbe": [],
         }
     }
     return manifest
@@ -515,18 +506,16 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
 # =============================================================================
 
 def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, reroll_salt: Any = "", parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, llm_director: Any = None) -> dict[str, Any]:
-    """v0.3.16: dirty hybrid VFX selector.
+    """Freeze a VFX manifest from typed runtime facts and explicit authored VFX cues.
 
-    This intentionally combines mechanical filters, weak LLM hints, recipe ranges and
-    stable seed mutation, then freezes the result into attack.vfxManifestJson.
-    C# runtime only executes the manifest; it must not parse prompt prose every tick.
+    Recipe selection uses compiled attack pattern, available asset roles, recipe cost,
+    renderer diversity, power budget, parent manifests, and a stable reroll seed. It
+    never tokenizes item names, tooltips, prompts, or free-form style prose.
     """
     if not VFX_SELECTOR_ENABLED:
         return data
     attack_value = data.get("attack")
     attack: dict[str, Any] = attack_value if isinstance(attack_value, dict) else {}
-    if not attack.get("enabled"):
-        return data
     direct_manifest = _vfx_runtime_plan_direct_manifest(data, recipe_key_value, reroll_salt)
     if isinstance(direct_manifest, dict):
         wire_manifest = validate_vfx_manifest_boundary(direct_manifest)
@@ -535,6 +524,8 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         data["attack"] = attack
         data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(direct_manifest, max_chars=12000)
         data.setdefault("debug", {})["vfxPath"] = "runtime_plan_direct_empty" if not direct_manifest.get("slots") else "runtime_plan_direct"
+        return data
+    if not attack.get("enabled"):
         return data
     force_recipe_id = str((data.get("recipeMeta") or {}).get("vfxForcedRecipeId") or (data.get("debug") or {}).get("vfxForcedRecipeId") or "").strip()
     forced_recipe = _vfx_find_recipe(force_recipe_id) if force_recipe_id else None
@@ -559,8 +550,6 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
     if not get_vfx_recipes():
         data.setdefault("debug", {})["vfxSelectorError"] = "no vfx_morph_recipes.json recipes loaded"
         return data
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
     pattern = str(attack.get("pattern") or attack.get("attackPattern") or "basic").strip() or "basic"
     roles = _vfx_available_roles(data)
     if not roles:
@@ -576,21 +565,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         if raw_parent_slots:
             parent_effect_profile = dict(parent_effect_profile)
             parent_effect_profile["_rawParentSlots"] = raw_parent_slots[:8]
-    parent_effect_words = " ".join(str(x) for x in ((parent_effect_profile.get("effectTags") if isinstance(parent_effect_profile, dict) else []) or []) + ((parent_effect_profile.get("suggestedRenderers") if isinstance(parent_effect_profile, dict) else []) or []))
-    text_parts = [
-        data.get("name"), data.get("tooltip"), parent_effect_words,
-        kit.get("styleGuide"), kit.get("silhouetteSummary"), kit.get("vfxIntent"),
-        kit.get("projectileVfx"), kit.get("impactVfx"), kit.get("childVfx"), kit.get("fieldVfx"),
-        visual.get("vfxIntent"), visual.get("projectileVfx"), visual.get("impactVfx"), visual.get("childVfx"), visual.get("fieldVfx"),
-        visual.get("vfxScaleHint"), visual.get("vfxRhythmHint"), visual.get("vfxAvoid"), _stringish(visual.get("vfxMaterialHints"), ""),
-        attack.get("vfxIntent"), attack.get("projectileVfx"), attack.get("impactVfx"), attack.get("childVfx"), attack.get("fieldVfx"),
-        attack.get("vfxScaleHint"), attack.get("vfxRhythmHint"), attack.get("vfxAvoid"), _stringish(attack.get("vfxMaterialHints"), ""),
-        attack.get("projectileSpritePrompt"), attack.get("impactSpritePrompt"), attack.get("childSpritePrompt"), attack.get("fieldSpritePrompt"),
-        attack.get("visualAnimationPlan"), attack.get("projectileTrail"), attack.get("projectileImpact"), attack.get("projectileChild"), attack.get("toyIdentity"), attack.get("specialRule"),
-    ]
-    words = _vfx_words(" ".join(str(x or "") for x in text_parts))
     power = float(attack.get("powerBudget") or data.get("gameplay", {}).get("powerBudget") or 1.0) if isinstance(data.get("gameplay"), dict) else float(attack.get("powerBudget") or 1.0)
-    mundane_profile = _vfx_mundane_duplicate_profile(data, pattern, words, power)
     scored: list[tuple[float, dict[str, Any], list[str]]] = []
     for recipe in get_vfx_recipes():
         rid = str(recipe.get("id") or "")
@@ -604,8 +579,6 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         if required and not required.issubset(roles):
             continue
         optional = {str(x) for x in (recipe.get("optionalRoles") or []) if str(x)}
-        hints = _vfx_words(" ".join(str(x) for x in (recipe.get("hints") or [])))
-        overlap = len(words & hints)
         score = 100.0
         reasons = [f"pattern:{pattern}", "roles:" + "/".join(sorted(roles))]
         if pattern in patterns:
@@ -619,13 +592,6 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             score += 13.0 * present_optional
             if present_optional:
                 reasons.append(f"optional_roles:{present_optional}")
-        if overlap:
-            score += min(70.0, overlap * 7.5 * VFX_SELECTOR_HINT_WEIGHT)
-            reasons.append(f"hint_overlap:{overlap}")
-        parent_bonus, parent_reasons = _vfx_parent_effect_recipe_bonus(recipe, parent_effect_profile)
-        if parent_bonus:
-            score += parent_bonus
-            reasons.extend(parent_reasons[:3])
         raw_recipe_slots = [x for x in (recipe.get("slots") or []) if isinstance(x, dict)]
         slot_count = len(raw_recipe_slots)
         renderers = [str(x.get("rendererKind") or "") for x in raw_recipe_slots]
@@ -638,13 +604,6 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             score -= 18.0; reasons.append("high_cost_penalty")
         if cost == "low" and power > 1.35:
             score -= 6.0; reasons.append("low_cost_on_high_power")
-        if mundane_profile.get("enabled"):
-            if rid.startswith("mundane_") or cost in {"tiny", "low"}:
-                score += 70.0; reasons.append("mundane_guard_prefers_small_recipe")
-            if cost in {"high", "signature", "ultra"}:
-                score -= 145.0; reasons.append("mundane_guard_blocks_heavy_recipe")
-            if slot_count > 3:
-                score -= (slot_count - 3) * 24.0; reasons.append("mundane_guard_slot_count_penalty")
         jitter = (_vfx_unit(_vfx_seed_int(selector_key, rid), "selector") - 0.5) * VFX_SELECTOR_JITTER
         score += jitter
         scored.append((score, recipe, reasons))
@@ -670,41 +629,31 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         return data
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[:max(1, VFX_SELECTOR_TOP)]
-    # Weighted deterministic pick from top candidates, so the best usually wins but recipes do not collapse.
-    # Mundane duplicate guard intentionally disables this extra roulette: copper dagger + copper dagger
-    # should choose the safest top recipe, not a runner-up with more spectacle.
+    # Weighted deterministic pick from structurally compatible candidates.
     selected_score, selected, selected_reasons = top[0]
-    if not mundane_profile.get("enabled"):
-        total = sum(max(1.0, x[0] - top[-1][0] + 1.0) for x in top)
-        cursor = _vfx_unit(_vfx_seed_int(selector_key, "vfx_pick"), "pick") * total
-        acc = 0.0
-        for score, recipe, reasons in top:
-            weight = max(1.0, score - top[-1][0] + 1.0)
-            acc += weight
-            if cursor <= acc:
-                selected_score, selected, selected_reasons = score, recipe, reasons
-                break
+    total = sum(max(1.0, x[0] - top[-1][0] + 1.0) for x in top)
+    cursor = _vfx_unit(_vfx_seed_int(selector_key, "vfx_pick"), "pick") * total
+    acc = 0.0
+    for score, recipe, reasons in top:
+        weight = max(1.0, score - top[-1][0] + 1.0)
+        acc += weight
+        if cursor <= acc:
+            selected_score, selected, selected_reasons = score, recipe, reasons
+            break
     seed = _vfx_seed_int(selector_key, selected.get("id"), data.get("id"), pattern)
     budget = _vfx_budget_for_recipe(selected, power, seed, data)
     effect_magnitude = float(budget.get("effectMagnitude") or 0.5)
     budget_class = str(budget.get("visualBudgetClass") or "normal")
-    motif = _vfx_motif_from_data(data, words, pattern)
+    motif = _vfx_motif_from_data(data, set(), str(pattern or "basic"))
     base_raw_slots = [x for x in (selected.get("slots") or []) if isinstance(x, dict)]
-    if mundane_profile.get("enabled"):
-        blended_raw, blended_debug = [], []
-        procedural_raw, procedural_debug = [], []
-    else:
-        blended_raw, blended_debug = _vfx_blend_runner_up_slots(top, str(selected.get("id") or ""), seed, base_raw_slots, budget_class)
-        procedural_raw, procedural_debug = _vfx_add_procedural_slots(base_raw_slots + blended_raw, pattern, roles, motif, budget_class, seed)
+    blended_raw, blended_debug = _vfx_blend_runner_up_slots(top, str(selected.get("id") or ""), seed, base_raw_slots, budget_class)
+    procedural_raw, procedural_debug = _vfx_add_procedural_slots(base_raw_slots + blended_raw, pattern, roles, motif, budget_class, seed)
     inherited_raw, inherited_debug = _vfx_parent_inherited_raw_slots(parent_effect_profile, pattern, roles, budget_class, seed)
     authored_raw, authored_debug = _vfx_authored_cue_raw_slots(data)
-    if mundane_profile.get("enabled"):
-        inherited_raw, inherited_debug = [], []
     composed_raw_slots = authored_raw + base_raw_slots + blended_raw + procedural_raw + inherited_raw
     pre_arbitration_slot_count = len(composed_raw_slots)
     slots = [_vfx_compile_slot(slot, seed, i, power, effect_magnitude) for i, slot in enumerate(composed_raw_slots) if isinstance(slot, dict)]
     slots = _vfx_arbitrate_slots(slots, budget_class)
-    slots = _vfx_trim_mundane_slots(slots, mundane_profile)
     if not slots:
         slots = [{"event": "travel", "rendererKind": "projectileAfterimage", "textureRole": "projectile", "particleRole": "child", "variant": 0, "scale": 0.9, "density": 0.18, "duration": 8, "alpha": 0.28, "spread": 0.5, "source": "fallback"}]
     top_debug = [[str(r.get("id")), round(float(score), 3), reasons[:6]] for score, r, reasons in top]
@@ -733,7 +682,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
         "slots": slots,
         "debug": {
             "composition": {
-                "mode": "authored_cues_plus_recipe" if authored_debug else ("mundane_guard" if mundane_profile.get("enabled") else ("recipe_blend_plus_procedural" if (blended_debug or procedural_debug) else "recipe_only")),
+                "mode": "authored_cues_plus_recipe" if authored_debug else ("recipe_blend_plus_procedural" if (blended_debug or procedural_debug) else "recipe_only"),
                 "baseRecipeId": str(selected.get("id") or "unknown"),
                 "preArbitrationSlotCount": pre_arbitration_slot_count,
                 "postArbitrationSlotCount": len(slots),
@@ -741,7 +690,6 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
                 "proceduralSlots": procedural_debug,
                 "authoredCueSlots": authored_debug,
                 "inheritedParentSlots": inherited_debug,
-                "mundaneProfile": mundane_profile,
                 "parentEffectProfile": {k: v for k, v in parent_effect_profile.items() if k != "_rawParentSlots"} if isinstance(parent_effect_profile, dict) else {},
             },
             "pattern": pattern,
@@ -749,7 +697,7 @@ def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, rero
             "selectedScore": round(float(selected_score), 3),
             "selectedReasons": selected_reasons[:10],
             "topCandidates": top_debug if VFX_SELECTOR_DEBUG else [],
-            "wordProbe": sorted(list(words))[:40] if VFX_SELECTOR_DEBUG else [],
+            "wordProbe": [],
             "rerollSalt": str(reroll_salt or data.get("recipeMeta", {}).get("vfxRerollSalt", "") or ""),
             "effectLineage": effect_lineage,
         }
@@ -785,9 +733,6 @@ def _vfx_manifest_from_recipe(data: dict[str, Any], recipe: dict[str, Any], reci
     effect_magnitude = float(budget.get("effectMagnitude") or 0.5)
     slots = [_vfx_compile_slot(slot, seed, i, power, effect_magnitude) for i, slot in enumerate(recipe.get("slots") or []) if isinstance(slot, dict)]
     slots = _vfx_arbitrate_slots(slots, str(budget.get("visualBudgetClass") or "normal"))
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    words = _vfx_words(" ".join(str(x or "") for x in [data.get("name"), data.get("tooltip"), kit.get("styleGuide"), kit.get("vfxIntent"), visual.get("vfxIntent"), attack.get("vfxIntent"), attack.get("projectileSpritePrompt"), attack.get("impactSpritePrompt"), attack.get("visualAnimationPlan")]))
     provenance = attack.get("runtimeAuthoringProvenance") if isinstance(attack.get("runtimeAuthoringProvenance"), dict) else {}
     effect_lineage = {
         "mode": "forced_recipe" if forced else "direct_recipe",
@@ -805,7 +750,7 @@ def _vfx_manifest_from_recipe(data: dict[str, Any], recipe: dict[str, Any], reci
         "confidence": 0.99 if forced else 0.72,
         "effectMagnitude": effect_magnitude,
         "visualBudgetClass": budget.get("visualBudgetClass"),
-        "motif": _vfx_motif_from_data(data, words, pattern),
+        "motif": _vfx_motif_from_data(data, set(), str(pattern or "basic")),
         "overlayPolicy": "LocalOnly",
         "budget": budget,
         "slots": slots,

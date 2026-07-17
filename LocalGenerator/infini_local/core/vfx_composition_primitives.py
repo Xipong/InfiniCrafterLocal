@@ -9,9 +9,6 @@ from infini_local.core.vfx_manifest_config import (
     VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
     VFX_EMERGENCY_MAX_PARTICLES_TOTAL,
     VFX_MAGNITUDE_JITTER,
-    VFX_MUNDANE_DUPLICATE_GUARD,
-    VFX_MUNDANE_MAX_SLOTS,
-    VFX_PARENT_EFFECT_STRONG_THRESHOLD,
     VFX_RENDER_QUALITY,
 )
 
@@ -66,98 +63,6 @@ def _vfx_available_roles(data: dict[str, Any]) -> set[str]:
         roles.add("field")
     return roles
 
-def _vfx_mundane_duplicate_profile(data: dict[str, Any], pattern: str = "", words: set[str] | None = None, power: float = 1.0) -> dict[str, Any]:
-    """Detect boring same-parent / low-novelty fusions and clamp VFX composition.
-
-    This is deliberately not a semantic VFX classifier. It does not map copper/dagger/wood to
-    visual effects. It only says: if the craft is basically the same low-tier parent twice, do
-    not add runner-up/procedural fireworks just because the generic composer can.
-    """
-    if not VFX_MUNDANE_DUPLICATE_GUARD or not isinstance(data, dict):
-        return {"enabled": False}
-    meta = data.get("recipeMeta") if isinstance(data.get("recipeMeta"), dict) else {}
-    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
-    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
-    parent_names = [str(meta.get("parentA") or data.get("parentA") or "").strip().lower(), str(meta.get("parentB") or data.get("parentB") or "").strip().lower()]
-    identities = meta.get("parentIdentities") if isinstance(meta.get("parentIdentities"), list) else []
-    same_identity = len(identities) >= 2 and str(identities[0] or "") == str(identities[1] or "") and bool(str(identities[0] or ""))
-    same_name = bool(parent_names[0] and parent_names[0] == parent_names[1])
-    try:
-        depths = [int(float(x or 0)) for x in (meta.get("parentGeneratedDepths") or [])]
-    except Exception:
-        depths = []
-    generated_parent = any(x > 0 for x in depths)
-    novelty_raw = debug.get("novelty") or debug.get("noveltyScore") or gameplay.get("novelty") or gameplay.get("noveltyScore") or meta.get("noveltyBudget") or 0.0
-    try:
-        novelty = float(novelty_raw or 0.0)
-    except Exception:
-        novelty = 0.0
-    try:
-        pwr = float(power or 1.0)
-    except Exception:
-        pwr = 1.0
-    w = set(words or set())
-    explosive_or_signature_words = {"explosive", "explosion", "nova", "legendary", "signature", "ultra", "mythic", "boss", "calamity", "cataclysm"}
-    explicit_big = bool(w & explosive_or_signature_words)
-    parent_vfx_profile = meta.get("parentVfxEffectProfile") if isinstance(meta.get("parentVfxEffectProfile"), dict) else {}
-    parent_effect_notable = bool(parent_vfx_profile.get("notable")) and float(parent_vfx_profile.get("maxSpecialScore") or 0.0) >= VFX_PARENT_EFFECT_STRONG_THRESHOLD
-    if (same_identity or same_name) and parent_effect_notable:
-        return {"enabled": False, "sameParent": True, "parentEffectful": True, "reason": "same_parent_has_observable_vfx_or_weapon_effects", "parentEffectScore": round(float(parent_vfx_profile.get("maxSpecialScore") or 0.0), 3)}
-    # Same generated parent can be a recursive power item; don't clamp it blindly.
-    enabled = (same_identity or same_name) and not generated_parent and not explicit_big and pwr <= 1.18 and novelty <= 0.34
-    if not enabled:
-        return {"enabled": False, "sameParent": bool(same_identity or same_name), "generatedParent": generated_parent, "novelty": round(novelty, 3), "power": round(pwr, 3)}
-    return {
-        "enabled": True,
-        "sameParent": bool(same_identity or same_name),
-        "sameIdentity": bool(same_identity),
-        "sameName": bool(same_name),
-        "generatedParent": False,
-        "novelty": round(novelty, 3),
-        "power": round(pwr, 3),
-        "maxSlots": max(1, VFX_MUNDANE_MAX_SLOTS),
-        "reason": "same_low_novelty_parent_pair",
-    }
-
-def _vfx_trim_mundane_slots(slots: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
-    if not profile.get("enabled"):
-        return slots
-    max_slots = max(1, int(profile.get("maxSlots") or VFX_MUNDANE_MAX_SLOTS or 3))
-    # Keep one readable motion layer, one impact shape, and at most one cue/accent.
-    preferred = []
-    for slot in sorted([x for x in slots if isinstance(x, dict)], key=_vfx_slot_score, reverse=True):
-        group = _vfx_event_group(slot.get("event"))
-        channel = str(slot.get("channel") or _vfx_infer_channel(slot.get("rendererKind"), slot.get("event")))
-        renderer = _vfx_renderer_kind(slot.get("rendererKind"))
-        if channel in {"ambientParticles", "decaySmoke"}:
-            continue
-        if group == "live" and channel != "motionTrail" and channel not in {"light", "sound"}:
-            continue
-        if group == "hit" and channel not in {"impactShape", "light", "sound"}:
-            continue
-        if group == "kill" and channel not in {"impactShape", "light", "sound"}:
-            continue
-        if any(((_vfx_event_group(s.get("event")), str(s.get("channel") or _vfx_infer_channel(s.get("rendererKind"), s.get("event")))) == (group, channel)) for s in preferred):
-            continue
-        # Downshift density/alpha/scale a bit but do not make it invisible.
-        slot = dict(slot)
-        slot["source"] = str(slot.get("source") or "recipe") + ":mundaneClamped"
-        slot["importance"] = "core" if not preferred else "secondary"
-        slot["lane"] = "primary" if not preferred else "support"
-        try: slot["density"] = max(0.05, min(0.34, float(slot.get("density") or 0.18)))
-        except Exception: slot["density"] = 0.16
-        try: slot["alpha"] = max(0.18, min(0.56, float(slot.get("alpha") or 0.38)))
-        except Exception: slot["alpha"] = 0.38
-        try: slot["scale"] = max(0.55, min(1.55, float(slot.get("scale") or 1.0)))
-        except Exception: slot["scale"] = 1.0
-        if renderer in {"impactRing", "ghostArc", "orbitingMotes"}:
-            continue
-        preferred.append(slot)
-        if len(preferred) >= max_slots:
-            break
-    if preferred:
-        return preferred
-    return slots[:max_slots]
 
 def _vfx_seed_int(*parts: Any) -> int:
     return int(stable_hash(*parts, length=12), 16) & 0x7fffffff
@@ -484,9 +389,6 @@ def _vfx_compute_effect_magnitude(recipe: dict[str, Any], power: float, seed: in
     stable_seed = _vfx_seed_int(seed or "magnitude", recipe.get("id"), pwr, cost)
     jitter = (_vfx_unit(stable_seed, "mag") - 0.5) * max(0.0, VFX_MAGNITUDE_JITTER)
     value = 0.48 + cost_bias + power_bias + novelty_bias + structural_bias + jitter
-    mundane = _vfx_mundane_duplicate_profile(data or {}, power=pwr)
-    if mundane.get("enabled"):
-        value = min(value - 0.18, 0.34)
     return round(max(0.08, min(1.0, value)), 3)
 
 def _vfx_budget_for_recipe(recipe: dict[str, Any], power: float, seed: int | str | None = None, data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -588,8 +490,6 @@ def _vfx_resolve_particle_system_id(raw: dict[str, Any] | None, renderer: str, e
 __all__ = [
     "_VFX_PARTICLE_ADDRESS_CATALOG",
     "_vfx_available_roles",
-    "_vfx_mundane_duplicate_profile",
-    "_vfx_trim_mundane_slots",
     "_vfx_seed_int",
     "_vfx_unit",
     "_vfx_pick",

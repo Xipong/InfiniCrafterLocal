@@ -21,6 +21,11 @@ def _contract_check_google_openai_compat_uses_native_reasoning_effort(monkeypatc
     assert strongest["reasoning_effort"] == "high"
     assert "reasoning" not in strongest
 
+    monkeypatch.setattr(transport, "LLM_REASONING_MODE", "minimal")
+    gemma = transport.apply_llm_common_options({}, model_name="gemma-4-31b-it")
+    assert gemma["reasoning_effort"] == "minimal"
+    assert "reasoning" not in gemma
+
 
 def _contract_check_non_google_remote_keeps_reasoning_envelope(monkeypatch) -> None:
     monkeypatch.setattr(transport, "active_llm_provider", lambda context=None: "openrouter")

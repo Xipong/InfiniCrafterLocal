@@ -24,9 +24,6 @@ if str(LOCAL_GENERATOR) not in sys.path:
 # The semantic baseline is an offline deterministic contract.  Live GUI/provider
 # settings must not alter the result merely because another test imported config.
 os.environ["INFINI_USE_LLM"] = "0"
-os.environ["INFINI_LLM_RUNTIME_AUTHORING"] = "1"
-os.environ["INFINI_LLM_RUNTIME_PLAN_REQUIRED"] = "1"
-os.environ["INFINI_LLM_RUNTIME_STRICT_VALIDATION"] = "1"
 os.environ["INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK"] = "1"
 os.environ["INFINI_BALANCE_MODE"] = "safety"
 

@@ -29,6 +29,9 @@ def _contract_check_incompatible_second_primary_cannot_override_first_executor()
     assert patch["delivery"] == "swing"
     assert patch["disableItemMeleeHitbox"] is False
     assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
+    assert "recoveredPrimaryConflictAsSecondary" not in patch
+    assert patch.get("splitCount", 0) == 0
+    assert patch.get("maxChildProjectiles", 0) == 0
 
 
 def _contract_check_parent_flaming_tag_does_not_author_burn() -> None:
@@ -66,7 +69,10 @@ def _contract_check_melee_swing_runtime_gates_wasted_projectile_baked_asset(monk
         "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {"resultKind": "weapon"}}]},
         "attack": {"enabled": True, "runtimeFamily": "swing", "delivery": "swing", "disableItemMeleeHitbox": False},
         "visual": {"imagePrompt": "heavy wooden bench blade", "projectileImagePrompt": "spinning table plank"},
-        "visualKit": {"bakedAssets": {"projectile": {"mode": "baked_sprite", "prompt": "spinning table plank", "distinctFromItem": True}}},
+        "visualKit": {
+            "projectileSpritePrompt": "spinning table plank",
+            "bakedAssets": {"projectile": {"mode": "baked_sprite", "distinctFromItem": True}},
+        },
     }
 
     plan = build_visual_asset_plan(data)
@@ -86,7 +92,10 @@ def _contract_check_field_baked_asset_requires_compiled_field_runtime(monkeypatc
         "runtimePlan": {"engineCalls": [{"fn": "set_item_stats", "params": {"resultKind": "weapon"}}]},
         "attack": {"enabled": True, "runtimeFamily": "throw", "delivery": "throw"},
         "visual": {"imagePrompt": "small vial", "fieldImagePrompt": "anchored flame"},
-        "visualKit": {"bakedAssets": {"field": {"mode": "baked_sprite", "prompt": "anchored flame"}}},
+        "visualKit": {
+            "fieldSpritePrompt": "anchored flame",
+            "bakedAssets": {"field": {"mode": "baked_sprite"}},
+        },
     }
 
     plan = build_visual_asset_plan(data)

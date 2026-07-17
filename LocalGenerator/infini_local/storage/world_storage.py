@@ -241,11 +241,16 @@ def build_recipe_health(
     recipe.  It answers the recurring debug question: did gameplay, assets, VFX,
     and contract stamps reach the committed recipe?
     """
-    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
-    recipe_meta = data.get("recipeMeta") if isinstance(data.get("recipeMeta"), dict) else {}
-    affordance = data.get("runtimeAffordance") if isinstance(data.get("runtimeAffordance"), dict) else {}
+    debug_candidate = data.get("debug")
+    debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+    gameplay_candidate = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_candidate if isinstance(gameplay_candidate, dict) else {}
+    recipe_meta_candidate = data.get("recipeMeta")
+    recipe_meta: dict[str, Any] = recipe_meta_candidate if isinstance(recipe_meta_candidate, dict) else {}
+    affordance_candidate = data.get("runtimeAffordance")
+    affordance: dict[str, Any] = affordance_candidate if isinstance(affordance_candidate, dict) else {}
     if not affordance:
         affordance = _maybe_json_obj(debug.get("runtimeAffordance"))
 
@@ -285,21 +290,13 @@ def build_recipe_health(
     visual_ok = bool(visual_report.get("ok", True))
     required_assets_ok = all(bool(slot.get("usable")) for slot in slots.values() if slot.get("required"))
     warnings: list[str] = []
+    visual_director_status = str(debug.get("visualDirectorStatus") or "")
+    if visual_director_status == "visual_director_degraded":
+        warnings.append("visual_director_degraded")
     if attack.get("enabled") and slots.get("projectile", {}).get("assetMode") == "baked_sprite" and not slots.get("projectile", {}).get("usable"):
         warnings.append("projectile_baked_sprite_missing_or_unusable")
     if attack.get("impactSpriteStatus") and not slots.get("impact", {}).get("usable") and slots.get("impact", {}).get("status") not in {"", "skipped_not_authored_baked", "skipped_disabled_by_settings"}:
         warnings.append("impact_sprite_unusable")
-    if str(data.get("concept", {}).get("weirdTwist", "") if isinstance(data.get("concept"), dict) else "").lower().find("shrapnel") >= 0 and not gameplay_children.get("enabled"):
-        warnings.append("shrapnel_wording_without_gameplay_children")
-    promise_truth = _maybe_json_obj(debug.get("runtimePromiseTruth"))
-    if promise_truth:
-        for warning in promise_truth.get("warnings") or []:
-            if warning:
-                warnings.append(str(warning)[:120])
-        unsupported_promises = list(data.get("unsupportedPromises") or []) if isinstance(data.get("unsupportedPromises"), list) else []
-        unsupported_promises += list(promise_truth.get("unsupportedPromises") or []) if isinstance(promise_truth.get("unsupportedPromises"), list) else []
-        if unsupported_promises:
-            warnings.append("runtime_unsupported_promises_present")
 
     problems: list[str] = []
     if not deliverable:
@@ -348,6 +345,7 @@ def build_recipe_health(
         },
         "visual": {
             "ok": visual_ok,
+            "directorStatus": visual_director_status,
             "slots": slots,
             "assetFileCount": len(asset_files or []),
             "assetSync": recipe_meta.get("assetSync") if isinstance(recipe_meta.get("assetSync"), dict) else {},
@@ -374,14 +372,12 @@ def attach_recipe_health(
     if contract_versions:
         data["contractVersions"] = contract_versions
         data.setdefault("recipeMeta", {})["contractVersions"] = contract_versions
-        data.setdefault("debug", {})["contractVersions"] = contract_versions
     data["recipeHealth"] = build_recipe_health(
         data,
         app_version=app_version,
         contract_versions=contract_versions,
         visual_report=visual_report,
     )
-    data.setdefault("debug", {})["recipeHealthStatus"] = data["recipeHealth"].get("status", "")
     return data
 
 
@@ -449,45 +445,13 @@ def _project_delivery_fields(value: Any, allowed: frozenset[str]) -> dict[str, A
     return {key: item for key, item in value.items() if key in allowed}
 
 
-def _project_runtime_archetype_for_delivery(value: Any) -> dict[str, Any] | None:
-    """Project model-authored data to the exact strict C# RuntimeArchetypeSpec surface."""
-    if not isinstance(value, dict):
-        return None
-    projected: dict[str, Any] = {}
-    for key in (
-        "schema",
-        "source",
-        "family",
-        "vanillaProjectileId",
-        "vanillaItemId",
-        "aiType",
-        "phaseModel",
-        "supportStatus",
-    ):
-        if isinstance(value.get(key), str):
-            projected[key] = value[key]
-    for key in ("channelled", "usesHeldProjectile"):
-        if isinstance(value.get(key), bool):
-            projected[key] = value[key]
-    if isinstance(value.get("overrideKnobs"), dict):
-        projected["overrideKnobs"] = value["overrideKnobs"]
-    if isinstance(value.get("supportNotes"), list):
-        projected["supportNotes"] = [note for note in value["supportNotes"] if isinstance(note, str)]
-    return projected
-
-
 def sanitize_recipe_for_delivery(data: Any) -> Any:
     """Make a recipe payload safe to send to Terraria clients without changing runtime semantics."""
     if not isinstance(data, dict):
         return data
     out = strip_runtime_only_fields(data)
-    if "runtimeArchetype" in out:
-        runtime_archetype = _project_runtime_archetype_for_delivery(out.get("runtimeArchetype"))
-        if runtime_archetype is None:
-            # Scalar labels are descriptive only and are not executed by Python.
-            out.pop("runtimeArchetype", None)
-        else:
-            out["runtimeArchetype"] = runtime_archetype
+    for internal_field in ("runtimePlan", "runtimeContract", "runtimeCompiled", "runtimeAffordance", "runtimeArchetype", "debug"):
+        out.pop(internal_field, None)
     attack = out.get("attack") if isinstance(out.get("attack"), dict) else None
     gameplay = out.get("gameplay") if isinstance(out.get("gameplay"), dict) else None
     visual = out.get("visual") if isinstance(out.get("visual"), dict) else None
@@ -540,7 +504,6 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
             clean_vfx_manifest["debug"] = vfx_debug
         out["vfxManifest"] = clean_vfx_manifest
 
-    out["debug"] = delivery_safe_debug(out.get("debug"))
     return out
 
 

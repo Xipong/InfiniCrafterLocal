@@ -22,6 +22,15 @@ TRACE_FILE = CACHE_DIR / "pipeline_trace.ndjson"
 PROMPT_TRACE_FILE = CACHE_DIR / "prompt_trace.ndjson"
 
 
+def initialize_trace_storage() -> dict[str, bool]:
+    """Repair corrupt trailing records before the HTTP server starts accepting work."""
+    return trace_tools.initialize_trace_storage((
+        TRACE_FILE,
+        PROMPT_TRACE_FILE,
+        CACHE_DIR / "events.ndjson",
+    ))
+
+
 def _json_slim(obj: Any, max_chars: int = 40000) -> Any:
     return trace_tools.json_slim(obj, max_chars)
 
@@ -70,6 +79,7 @@ __all__ = [
     "TRACE_EVENTS_TAIL",
     "TRACE_FILE",
     "PROMPT_TRACE_FILE",
+    "initialize_trace_storage",
     "_json_slim",
     "log_event",
     "_trace_clip",

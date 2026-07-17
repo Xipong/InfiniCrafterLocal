@@ -46,16 +46,21 @@ def _check_low_tier_consumable_projectile_power_is_capped() -> None:
 
 def _check_projectile_prompt_for_linear_family_is_horizontal_side_view() -> None:
     src = VISUAL_PIPELINE.read_text(encoding="utf-8") + VISUAL_PROMPT_CONTRACTS.read_text(encoding="utf-8") + PROJECTILE_AFFORDANCE.read_text(encoding="utf-8")
-    assert "long axis horizontal left-to-right" in src
-    assert "tip/nose points right" in src
-    assert "not a vertical inventory icon" in src
-    assert "weapon_family in {\"bow\", \"crossbow\", \"repeater\", \"gun\", \"shotgun\", \"blowgun\", \"dart\", \"launcher\", \"harpoon\"}" in src
+    assert "long axis horizontal left-to-right" not in src
+    assert "tip/nose points right" not in src
+    assert "not a vertical inventory icon" not in src
+    assert "weapon_family in {\"bow\", \"crossbow\", \"repeater\", \"gun\", \"shotgun\", \"blowgun\", \"dart\", \"launcher\", \"harpoon\"}" not in src
 
 
-def _check_recursive_generation_has_soft_power_and_variety_nudges() -> None:
+def _check_recursive_generation_has_soft_power_without_python_semantic_lane() -> None:
     src = LLM_PIPELINE.read_text(encoding="utf-8") + LLM_AUTHORING_PROMPT.read_text(encoding="utf-8") + COMBINE_PIPELINE.read_text(encoding="utf-8") + RESULT_KNOWLEDGE_CARD.read_text(encoding="utf-8")
-    assert "creativeVariance" in src
-    assert "Avoid cloning the strongest generated parent's name/runtimeFamily/onHit" in src
+    assert "designLane" not in src
+    assert "recipeSalt" not in src
+    assert "creativeVariance" not in src
+    assert "without a Python-selected semantic lane" in src
+    assert "source-derived requiredJsonShape" in src
+    assert "Do not return compiler provenance" in src
+    assert "Claim IDs are not call IDs" not in src
     assert "recursiveDamageSoftCap" in src
     assert "powerBudget prices active behavior/complexity" in src
 
@@ -78,7 +83,7 @@ def _check_potion_merge_preserves_independent_channels_and_buff_pairs() -> None:
 
 def _check_planner_contract_uses_engine_calls_for_utility_instead_of_hard_bans() -> None:
     src = LLM_PIPELINE.read_text(encoding="utf-8") + LLM_AUTHORING_PROMPT.read_text(encoding="utf-8")
-    assert "use a mobility engineCall" in src
+    assert "mobility_effect" in src
     assert "tool_capability" in src
     assert "apply_player_effect_on_use" in src
     assert "Do not describe teleportation" not in src
@@ -135,7 +140,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_csharp_hydrates_conventional_role_asset_names_for_old_cached_recipes',
     '_check_low_tier_consumable_projectile_power_is_capped',
     '_check_projectile_prompt_for_linear_family_is_horizontal_side_view',
-    '_check_recursive_generation_has_soft_power_and_variety_nudges',
+    '_check_recursive_generation_has_soft_power_without_python_semantic_lane',
     '_check_server_uses_safe_env_float_for_llm_temperatures',
     '_check_potion_merge_preserves_independent_channels_and_buff_pairs',
     '_check_planner_contract_uses_engine_calls_for_utility_instead_of_hard_bans',

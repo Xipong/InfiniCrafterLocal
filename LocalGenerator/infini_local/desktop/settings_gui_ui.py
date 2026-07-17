@@ -287,7 +287,7 @@ class SettingsGuiUiMixin:
         panel = self._inline_card(parent, bg=bg)
         try:
             tk.Label(panel, text="i", bg="#dbeafe" if tone == "blue" else bg, fg=fg, width=2, font=("Segoe UI", 10, "bold"), highlightthickness=1, highlightbackground="#bfdbfe").pack(side="left", padx=(0, 10), anchor="n")
-            label_kwargs = dict(bg=bg, fg=fg, font=("Segoe UI", 8), justify="left", wraplength=980, anchor="w")
+            label_kwargs = dict(bg=bg, fg=fg, font=("Segoe UI", 8), justify="left", wraplength=880, anchor="w")
             if isinstance(text, tk.StringVar):
                 lbl = tk.Label(panel, textvariable=text, **label_kwargs)
             else:
@@ -308,7 +308,6 @@ class SettingsGuiUiMixin:
         header.pack(fill="x", pady=(0, 12))
         brand = tk.Frame(header, bg=HEADER_BG)
         brand._infini_bg = HEADER_BG
-        brand.pack(side="left", fill="x", expand=True)
         logo = tk.Label(brand, text="⚡", bg=HEADER_BG, fg="#38bdf8", font=("Segoe UI Symbol", 28, "bold"))
         logo.pack(side="left", padx=(0, 14))
         header_text = tk.Frame(brand, bg=HEADER_BG)
@@ -317,10 +316,11 @@ class SettingsGuiUiMixin:
         tk.Label(header_text, text="InfiniCrafterLocal", bg=HEADER_BG, fg="#f8fafc", font=("Segoe UI", 21, "bold")).pack(anchor="w")
         tk.Label(
             header_text,
-            text="Локальный генератор предметов: LLM runtime, картинки, Radmin/LAN и debug-trace в одном месте.",
+            text="Локальный генератор: LLM runtime, PNG, Radmin/LAN и debug-trace.",
             bg=HEADER_BG,
             fg="#cbd5e1",
             font=("Segoe UI", 9),
+            anchor="w",
         ).pack(anchor="w", pady=(4, 0))
 
         actions = tk.Frame(header, bg=HEADER_BG)
@@ -335,26 +335,38 @@ class SettingsGuiUiMixin:
         ]:
             btn = self._modern_button(actions, text, command, variant=variant)
             btn.pack(side="left", padx=4)
+        # Pack the fixed-width action group before the expandable brand so the
+        # right-most config button is never clipped at the default window width.
+        brand.pack(side="left", fill="x", expand=True)
 
         preset_bar = tk.Frame(shell, bg=CARD_BG, padx=16, pady=12, highlightthickness=1, highlightbackground=BORDER_FG)
         preset_bar._infini_bg = CARD_BG
         preset_bar.pack(fill="x", pady=(0, 12))
-        tk.Label(preset_bar, text="Pipeline preset", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 10))
+        preset_label = tk.Label(preset_bar, text="Pipeline preset", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
+        preset_label.pack(side="left", padx=(0, 10))
         self.preset_var = tk.StringVar(value=self._pipeline_preset_from_config(self.data))
-        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=list(PRESETS), state="readonly", width=54)
+        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=list(PRESETS), state="readonly", width=47)
         preset_combo.pack(side="left", padx=6, ipady=2)
         preset_combo.bind("<<ComboboxSelected>>", lambda _e: self._show_preset_help(), add="+")
         self._attach_static_help(preset_combo, lambda: self._preset_help_text())
         apply_btn = self._modern_button(preset_bar, "＋  Apply pipeline", self.apply_preset, variant="soft")
         apply_btn.pack(side="left", padx=(10, 16))
         self._attach_static_help(apply_btn, "Применить выбранный pipeline preset. После применения GUI заблокирует поля, которые не участвуют в выбранной связке.")
-        self._chip(preset_bar, "runtime guarded", "blue").pack(side="right", padx=(8, 0))
+        guard_chip = self._chip(preset_bar, "runtime guarded", "blue")
+        guard_chip.pack(side="right", padx=(8, 0))
         validate_btn = self._modern_button(preset_bar, "📁  Проверить пути", self.validate_paths, variant="ghost")
         validate_btn.pack(side="right", padx=(8, 0))
         self._attach_static_help(validate_btn, "Проверить активные пути/ключи для текущего provider/backend. Неактивные поля не считаются ошибкой.")
         secrets_btn = ttk.Checkbutton(preset_bar, text="Показать ключи", variable=self.show_secrets, command=self._refresh_secret_entries)
         secrets_btn.pack(side="right", padx=8)
         self._attach_static_help(secrets_btn, "Временно показать API keys вместо звёздочек.")
+        # Repack the flexible left group after fixed right-side controls so Tk
+        # reserves room for the full secrets/validate/status labels at 1040px.
+        for widget in (preset_label, preset_combo, apply_btn):
+            widget.pack_forget()
+        preset_label.pack(side="left", padx=(0, 10))
+        preset_combo.pack(side="left", padx=6, ipady=2)
+        apply_btn.pack(side="left", padx=(10, 16))
 
         self.tabs = ttk.Notebook(shell)
         self.tabs.pack(fill="both", expand=True, pady=(0, 8))
@@ -567,9 +579,6 @@ class SettingsGuiUiMixin:
     def _build_llm(self, parent):
         ttk.Label(parent, text="LLM: кто пишет контракт предмета", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
         self.row(parent, "Use LLM", "INFINI_USE_LLM", values=["1", "0"], hint="Главный переключатель LLM-авторинга. 0 допустим только для явных debug/dev сценариев.")
-        self.row(parent, "Runtime authoring", "INFINI_LLM_RUNTIME_AUTHORING", values=["1", "0"], hint="Разрешить planner-у писать строгий runtimePlan с конечными engine calls.")
-        self.row(parent, "Runtime plan required", "INFINI_LLM_RUNTIME_PLAN_REQUIRED", values=["1", "0"], hint="1 = не принимать LLM-результат без runtimePlan; безопасный режим для обычной игры.")
-        self.row(parent, "Strict runtime validation", "INFINI_LLM_RUNTIME_STRICT_VALIDATION", values=["1", "0"], hint="Проверять engine calls и compiled runtime contract до применения предмета.")
         self.row(parent, "Balance mode", "INFINI_BALANCE_MODE", values=["safety", "normalize", "report"])
         self.row(parent, "Deterministic dev fallback", "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", values=["0", "1"], hint="Только для разработки: разрешает кодовый fallback, если LLM недоступна. В обычной игре оставлять 0.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
@@ -608,6 +617,11 @@ class SettingsGuiUiMixin:
         ttk.Label(parent, text="Primary generation controls", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.row(parent, "Response format", "INFINI_LLM_RESPONSE_FORMAT", values=["auto", "json_schema", "json_object", "off"])
         self.row(parent, "Planner temperature", "INFINI_LLM_TEMPERATURE", width=16, hint="Температура основной LLM, которая пишет gameplay/runtime contract. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте. Не относится к fallback-модели.")
+        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
+        ttk.Label(parent, text="Scoped same-author repair (одна bounded попытка)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
+        ttk.Label(parent, text="Не verifier и не полный reauthor: после rejection Author role возвращает только разрешённые repair-поля; принятые concept/runtime domains сохраняются.", style="Hint.TLabel").pack(anchor="w", padx=14, pady=(0, 6))
+        self.row(parent, "Repair model", "INFINI_LLM_REAUTHOR_MODEL", hint="Пусто = модель текущего item profile. Legacy env-name REAUTHOR сохранён для совместимости. При межпрофильном failover transport использует configured model следующего profile.")
+        self.row(parent, "Repair temperature", "INFINI_LLM_REAUTHOR_TEMPERATURE", width=16, hint="Пусто = Planner temperature. Обычно 0.0-0.2 для bounded repair rejected domain.")
         self.row(parent, "Visual temp", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         ttk.Label(parent, text="Output / reasoning", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
@@ -629,7 +643,7 @@ class SettingsGuiUiMixin:
             "5) FLUX.2 Klein preset использует 4 / 1.0 / euler; Z-Image Turbo обычно 6-12 / 1.0 / euler.\n"
             "6) safe_args лучше template: меньше риска сломать --sampling-method или случайно вставить текст пресета в команду."
         )
-        msg = tk.Message(box, text=guide, width=980, foreground="#444")
+        msg = tk.Message(box, text=guide, width=900, foreground="#444")
         msg.pack(fill="x", anchor="w")
         btns = ttk.Frame(box)
         btns.pack(fill="x", pady=(8, 0))

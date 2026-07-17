@@ -141,7 +141,7 @@ ENGINE_FN_CATALOG_V2 = {
     },
     "apply_on_hit_effect": {
         "meaning": "Real on-hit gameplay: debuffs, bursts, chained hits, child-producing effects, pull/heal/lifesteal. Visual-only impact belongs in spawn_contact_particles.",
-        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "secondaryDamageMultiplier": ">0..1 required for damaging child-producing onHit", "secondaryLifetimeTicks": "5..180 required for overhead_barrage children", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty", "debuffTime": "30..600 required for buff-applying onHit"},
+        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "secondaryDamageMultiplier": ">0..1 required for damaging child-producing onHit; authored damage*secondaryDamageMultiplier must round to at least 1", "secondaryLifetimeTicks": "5..180 required for overhead_barrage children", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty", "debuffTime": "30..600 required for buff-applying onHit"},
     },
     "spawn_contact_particles": {
         "meaning": "Pure VFX/dust; no damage.",
@@ -181,7 +181,7 @@ ENGINE_FN_CATALOG_V2 = {
     },
     "accessory_effect": {
         "meaning": "Equippable accessory stats, not temporary use effects.",
-        "params": {"archetype": "mobility|defense|damage|utility|hybrid", "defense": "0..20", "stats": "life/mana/regen/move/jump/classDmg/crit/atkSpeed/kb/minions/sentries/manaCost/ammoSave/aggro/endurance/armorPen/light/immunities"},
+        "params": {"archetype": "mobility|defense|damage|utility|hybrid", "defense": "0..20", "stats": "object, not string; keys include maxLife,maxMana,lifeRegen,manaRegen,movementSpeed,jumpSpeed,genericDamage,genericCrit,attackSpeed,lightStrength"},
     },
     "armor_effect": {
         "meaning": "Armor: slot, defense, equip/set bonuses.",
@@ -243,15 +243,15 @@ TRIGGERED_ACTION_KINDS = {
 # Exact cross-card fields accepted on primary attack calls.  They are documented
 # once in the global sound/critical-value contract instead of duplicated into every
 # function card.  This is a finite field set, not an alias or fuzzy compatibility map.
-_PRIMARY_ATTACK_SHARED_PARAM_NAMES = frozenset({
+PRIMARY_ATTACK_SHARED_PARAM_NAMES = frozenset({
     "effect", "useTimeTicks", "useAnimationTicks",
     "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance",
 })
-_ENGINE_FN_ACCEPTED_PARAM_EXTRAS: dict[str, frozenset[str]] = {
-    "shoot_projectile": _PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "perform_melee_attack": _PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "fire_ranged_weapon": _PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "cast_magic_weapon": _PRIMARY_ATTACK_SHARED_PARAM_NAMES,
+ENGINE_FN_ACCEPTED_PARAM_EXTRAS: dict[str, frozenset[str]] = {
+    "shoot_projectile": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
+    "perform_melee_attack": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
+    "fire_ranged_weapon": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
+    "cast_magic_weapon": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
     "apply_on_hit_effect": frozenset({"debuffTime"}),
 }
 
@@ -260,7 +260,7 @@ def accepted_engine_param_names(fn: str) -> frozenset[str]:
     card = ENGINE_FN_CATALOG_V2.get(str(fn or ""), {})
     params = card.get("params") if isinstance(card, dict) else {}
     declared = frozenset(str(key) for key in params) if isinstance(params, dict) else frozenset()
-    return declared | _ENGINE_FN_ACCEPTED_PARAM_EXTRAS.get(str(fn or ""), frozenset())
+    return declared | ENGINE_FN_ACCEPTED_PARAM_EXTRAS.get(str(fn or ""), frozenset())
 
 NUMERIC_LIMITS = {
     "useTimeTicks": (10.0, 150.0), "useAnimationTicks": (6.0, 150.0), "knockback": (0.0, 12.0), "manaCost": (0.0, 80.0), "shotCount": (1.0, 8.0), "pierce": (-1.0, 10.0),

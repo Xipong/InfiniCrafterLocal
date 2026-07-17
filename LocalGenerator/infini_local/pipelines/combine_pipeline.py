@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import time
 from copy import deepcopy
-from typing import Any
+from typing import Any, Callable
 
 from infini_local.core import dev_fallback
 
 from infini_local.core.boundary_models import (
+    ATTACK_NON_WIRE_FIELDS,
+    GAMEPLAY_DEBUG_ONLY_FIELDS,
     validate_executable_item_boundary,
     validate_visual_authoring_boundaries,
 )
@@ -25,7 +27,7 @@ from infini_local.core.runtime_contracts import STRUCTURAL_RUNTIME_CONTRACT_SCHE
 from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
-from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.combine_validation import strict_validate_authored_item, validate_and_repair
 from infini_local.pipelines.executable_boundary_projection import project_attack_presentation_fields
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
@@ -37,6 +39,8 @@ from infini_local.pipelines.item_power_knowledge import (
 )
 from infini_local.pipelines.llm_authoring_pipeline import (
     call_llm_vfx_director,
+    final_runtime_promise_report,
+    repair_author_item_after_failure,
     try_llm_plan,
     validate_final_runtime_promise_boundary,
 )
@@ -168,6 +172,44 @@ def _compiler_receipt_fingerprints(data: dict[str, Any]) -> list[str]:
     )
 
 
+_POST_AUTHOR_MUTABLE_ATTACK_PRESENTATION_FIELDS = frozenset({
+    "projectileSpritePath", "projectileSpriteUrl", "projectileSpriteStatus", "projectileSpritePrompt", "projectileSpriteScore",
+    "impactSpritePath", "impactSpriteUrl", "impactSpriteStatus", "impactSpritePrompt", "impactSpriteScore",
+    "childSpritePath", "childSpriteUrl", "childSpriteStatus", "childSpritePrompt", "childSpriteScore",
+    "fieldSpritePath", "fieldSpriteUrl", "fieldSpriteStatus", "fieldSpritePrompt", "fieldSpriteScore",
+    "visualAnimationPlan", "vfxManifestJson",
+})
+
+
+def _post_author_executable_projection(data: dict[str, Any]) -> dict[str, Any]:
+    """Project the executable DTO that Presentation/Visual/VFX may read but not rewrite."""
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+    gameplay_candidate = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_candidate if isinstance(gameplay_candidate, dict) else {}
+    return {
+        "category": deepcopy(data.get("category")),
+        "gameplay": deepcopy({key: value for key, value in gameplay.items() if key not in GAMEPLAY_DEBUG_ONLY_FIELDS}),
+        "accessory": deepcopy(data.get("accessory") if isinstance(data.get("accessory"), dict) else {}),
+        "armor": deepcopy(data.get("armor") if isinstance(data.get("armor"), dict) else {}),
+        "attack": deepcopy({
+            key: value
+            for key, value in attack.items()
+            if key not in ATTACK_NON_WIRE_FIELDS and key not in _POST_AUTHOR_MUTABLE_ATTACK_PRESENTATION_FIELDS
+        }),
+    }
+
+
+def _assert_post_author_executable_unchanged(expected: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+    actual = _post_author_executable_projection(data)
+    changed = [field for field in expected if actual.get(field) != expected.get(field)]
+    if changed:
+        raise PlannerUnavailable(
+            "post-author presentation/assets mutated executable DTO sections: " + ", ".join(changed)
+        )
+    return data
+
+
 def _cached_payload_passes_executable_boundary(
     cached: dict[str, Any],
     *,
@@ -187,9 +229,10 @@ def _cached_payload_passes_executable_boundary(
     """
     if not is_deliverable_recipe_payload(cached):
         return False
+    has_runtime_contract = "runtimeContract" in cached
     runtime_contract_candidate = cached.get("runtimeContract")
     runtime_contract: dict[str, Any] = dict(runtime_contract_candidate) if isinstance(runtime_contract_candidate, dict) else {}
-    if str(runtime_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
+    if has_runtime_contract and str(runtime_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
         trace_event(
             "step",
             "COMBINE:cache",
@@ -203,17 +246,18 @@ def _cached_payload_passes_executable_boundary(
         )
         return False
     try:
-        replayed = attach_gameplay_and_attack(
-            deepcopy(cached),
-            parent_a,
-            parent_b,
-            canonical_a,
-            canonical_b,
-        )
-        if _compiler_receipt_fingerprints(replayed) != _compiler_receipt_fingerprints(cached):
-            raise ValueError("cached compiler provenance receipts do not match a fresh structural replay")
+        if has_runtime_contract:
+            replayed = attach_gameplay_and_attack(
+                deepcopy(cached),
+                parent_a,
+                parent_b,
+                canonical_a,
+                canonical_b,
+            )
+            if _compiler_receipt_fingerprints(replayed) != _compiler_receipt_fingerprints(cached):
+                raise ValueError("cached compiler provenance receipts do not match a fresh structural replay")
+            validate_final_runtime_promise_boundary(cached)
         validate_executable_item_boundary(cached)
-        validate_final_runtime_promise_boundary(cached)
         normalized = validate_visual_authoring_boundaries(cached)
         if "visualKit" in normalized:
             cached["visualKit"] = normalized["visualKit"]
@@ -267,7 +311,7 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
             )
             cached = None
     if cached is not None and not is_deliverable_recipe_payload(cached):
-        source_mode = cached.get("sourceMode") if isinstance(cached, dict) else ""
+        source_mode = cached.get("sourceMode")
         trace_event("step", "HTTP:/combine", "world recipe cache skipped non-deliverable payload", {"recipeKey": key, "sourceMode": source_mode})
         _quarantine_cached_recipe(
             world_id=world_id,
@@ -288,6 +332,132 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
             )
             cached = None
     return key, cached
+
+
+def _best_effort_final_wire_preview(
+    item: dict[str, Any],
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+    key: str,
+) -> dict[str, Any]:
+    """Compile a diagnostic deepcopy so one scoped repair sees later wire failures too."""
+    candidate = deepcopy(item)
+    try:
+        candidate = validate_and_repair(candidate, a, b, ca, cb, key)
+        candidate = apply_item_knowledge(candidate, a, b, ca, cb)
+        candidate = attach_gameplay_and_attack(candidate, a, b, ca, cb)
+        candidate = project_attack_presentation_fields(candidate, source="author_failure_compiler_preview")
+        return final_runtime_promise_report(candidate)
+    except (PlannerUnavailable, ValueError, TypeError) as exc:
+        return {
+            "schema": "infini.structural-runtime-contract-report.v1",
+            "ok": False,
+            "finalWireReceipts": [],
+            "previewError": str(exc),
+        }
+
+
+def compile_and_validate_authored_runtime(
+    data: dict[str, Any],
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+    key: str,
+    *,
+    run_stage: Callable[..., Any],
+) -> dict[str, Any]:
+    """Run one strict author transaction plus at most one scoped repair patch."""
+    state: dict[str, Any] = {"data": data, "stage": "strict_author_validation"}
+
+    def domain_pass(item: dict[str, Any], *, repaired: bool) -> dict[str, Any]:
+        labels = (
+            {
+                "validate": "04f_repaired_strict_author_validation",
+                "knowledge": "04g_repaired_runtime_knowledge_context",
+                "compile": "04h_repaired_gameplay_to_runtime_envelope",
+                "project": "04i_repaired_project_presentation_out_of_attack",
+                "strict": "04j_repaired_strict_executable_preflight",
+                "wire": "04k_repaired_structural_final_wire_preflight",
+            }
+            if repaired
+            else {
+                "validate": "02_strict_author_validation",
+                "knowledge": "03_runtime_knowledge_context",
+                "compile": "04_author_gameplay_to_runtime_envelope",
+                "project": "04b_project_presentation_out_of_attack",
+                "strict": "04c_strict_executable_preflight",
+                "wire": "04d_structural_final_wire_preflight",
+            }
+        )
+        state["stage"] = "strict_author_validation"
+        item = run_stage(labels["validate"], strict_validate_authored_item, item, a, b)
+        state["data"] = item
+        state["stage"] = "result_envelope_projection"
+        item = validate_and_repair(item, a, b, ca, cb, key)
+        state["data"] = item
+        state["stage"] = "runtime_knowledge"
+        item = run_stage(labels["knowledge"], apply_item_knowledge, item, a, b, ca, cb)
+        state["data"] = item
+        state["stage"] = "compiler"
+        item = run_stage(labels["compile"], attach_gameplay_and_attack, item, a, b, ca, cb)
+        state["data"] = item
+        item = run_stage(
+            labels["project"],
+            project_attack_presentation_fields,
+            item,
+            source="post_same_author_repair_compile" if repaired else "post_gameplay_compile",
+        )
+        state["data"] = item
+        state["stage"] = "executable_boundary"
+        run_stage(labels["strict"], validate_executable_item_boundary, item)
+        state["stage"] = "final_wire"
+        run_stage(labels["wire"], validate_final_runtime_promise_boundary, item)
+        return item
+
+    try:
+        return domain_pass(data, repaired=False)
+    except PlannerUnavailable as exc:
+        failed_candidate = state.get("data")
+        failed: dict[str, Any] = failed_candidate if isinstance(failed_candidate, dict) else data
+        failure_report: dict[str, Any] = {
+            "schema": "infini.authoring-failure-report.v1",
+            "stage": str(state.get("stage") or "unknown"),
+            "errorType": type(exc).__name__,
+            "error": str(exc)[:2000],
+        }
+        if failure_report["stage"] == "final_wire":
+            failure_report["finalWire"] = final_runtime_promise_report(failed)
+        else:
+            failure_report["compilerFinalWirePreview"] = _best_effort_final_wire_preview(
+                failed, a, b, ca, cb, key,
+            )
+        debug_candidate = failed.get("debug")
+        debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
+        for field in ("plannerPromiseGate", "authorItemV3LocalStrictBoundary", "runtimePlanValidationBeforeRepair", "runtimePlanRawStrictBoundary"):
+            if field in debug:
+                diagnostic = debug[field]
+                if isinstance(diagnostic, str):
+                    try:
+                        diagnostic = json.loads(diagnostic)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                failure_report[field] = diagnostic
+
+    repaired_item = run_stage(
+        "04e_same_author_scoped_repair",
+        repair_author_item_after_failure,
+        failed,
+        a,
+        b,
+        ca,
+        cb,
+        key,
+        failure_report=failure_report,
+    )
+    return domain_pass(repaired_item, repaired=True)
 
 def combine(payload: dict[str, Any]) -> dict[str, Any]:
     a = payload.get("itemA") or {}
@@ -337,7 +507,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     if USE_LLM:
         llm_lease, llm_lease_token = begin_llm_item_lease(key)
 
-    def step(label: str, fn, *args, **kwargs):
+    def step(label: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         t0 = time.time()
         try:
             out = fn(*args, **kwargs)
@@ -355,23 +525,33 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
 
         if data is None:
             if ALLOW_DETERMINISTIC_DEV_FALLBACK:
-                data = step("01b_deterministic_dev_fallback", deterministic_plan, a, b, ca, cb, key)
+                fallback = step("01b_deterministic_dev_fallback", deterministic_plan, a, b, ca, cb, key)
+                if not isinstance(fallback, dict):
+                    raise PlannerUnavailable("deterministic dev fallback returned a non-object")
+                data = fallback
                 data.setdefault("debug", {})["planner"] = "deterministic_dev_fallback"
             else:
                 err = PlannerUnavailable("LLM planner unavailable or returned invalid output; craft failed and ingredients must be refunded")
                 generation_debug.record_combine_failure("01_author_llm_plan", err, payload, data, pipeline_log)
                 raise err
 
+        assert isinstance(data, dict)
         # Author-first pipeline. The code is deliberately not the designer here:
         # it validates shape, computes safety envelope, asks/keeps authored toy fields,
         # then generates a visible asset pack for the authored behavior.
-        data = step("02_schema_validate_and_minimal_repair", validate_and_repair, data, a, b, ca, cb, key)
-        data = step("03_runtime_knowledge_context", apply_item_knowledge, data, a, b, ca, cb)
-        data = step("04_author_gameplay_to_runtime_envelope", attach_gameplay_and_attack, data, a, b, ca, cb)
-        data = step("04b_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="post_gameplay_compile")
-        step("04c_strict_executable_preflight", validate_executable_item_boundary, data)
-        step("04d_structural_final_wire_preflight", validate_final_runtime_promise_boundary, data)
+        data = compile_and_validate_authored_runtime(
+            data,
+            a,
+            b,
+            ca,
+            cb,
+            key,
+            run_stage=step,
+        )
         data = step("05_presentation_sound_from_author_intent", attach_presentation_and_sound, data)
+        if not isinstance(data, dict):
+            raise PlannerUnavailable("presentation/sound stage returned a non-object")
+        post_author_executable = _post_author_executable_projection(data)
         data = step("06_result_card_after_runtime_stats", attach_result_knowledge_card, data, a, b)
         data = step("07_item_visual_brief_preserve_author", attach_visual, data, a, b, ca, cb)
         data = step("08_visual_director_asset_pack", apply_visual_director, data, a, b, ca, cb)
@@ -386,9 +566,19 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("11a_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="final_pre_boundary")
         step("11b_strict_executable_boundary", validate_executable_item_boundary, data)
         data = step("12_final_normalize", final_normalize, data)
+        if not isinstance(data, dict):
+            raise PlannerUnavailable("final normalization returned a non-object")
+        data = step(
+            "12aa_post_author_executable_freeze",
+            _assert_post_author_executable_unchanged,
+            post_author_executable,
+            data,
+        )
         step("12a_final_runtime_promise_boundary", validate_final_runtime_promise_boundary, data)
         step("12b_strict_executable_boundary", validate_executable_item_boundary, data)
         data = step("12c_strict_visual_authoring_boundaries", _validate_and_project_visual_authoring_boundaries, data)
+        if not isinstance(data, dict):
+            raise PlannerUnavailable("final visual projection returned a non-object")
         data.setdefault("recipeMeta", {})["worldScoped"] = True
         data.setdefault("recipeMeta", {})["worldId"] = world_id
         data.setdefault("recipeMeta", {})["worldName"] = world_name
@@ -407,6 +597,8 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             visual_report=visual_delivery_report(data),
         )
         data = sanitize_recipe_for_delivery(data)
+        if not isinstance(data, dict):
+            raise PlannerUnavailable("delivery sanitizer returned a non-object")
         cache_put(key, a, b, data, world_id, world_name)
         generation_debug.clear_combine_failure("fresh_combine_success")
         return data

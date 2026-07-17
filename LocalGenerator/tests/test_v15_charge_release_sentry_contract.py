@@ -140,7 +140,7 @@ def _contract_check_runtime_plan_normalization_preserves_raw_function_owner_acro
     call = payload["runtimePlan"]["engineCalls"][0]
     assert call["fn"] == "shoot_projectile"
     assert call["_rawFn"] == "deploy_sentry"
-    assert call["_semanticFn"] == "deploy_sentry"
+    assert "_semanticFn" not in call
 
 
 def _v15_parent(name: str, damage_class: str) -> dict:
@@ -268,8 +268,6 @@ def _contract_check_child_image_prompt_is_generic_secondary_body_not_forced_mote
         },
     }).lower()
     assert "single crystal bolt" in prompt
-    assert "one authored child-projectile texture/composition" in prompt
-    assert "preserve explicitly authored connected parts" in prompt
     assert "tiny echo spark/mote" not in prompt
 
 

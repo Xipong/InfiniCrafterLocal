@@ -166,6 +166,23 @@ public sealed class GeneratedItemRegistryService : IDisposable
     public void RegisterLocal(GeneratedItemData? data, bool persist = true, bool ensureAssets = true)
     {
         if (data is null) return;
+        // Player files intentionally carry only a compact identity reference. Never let
+        // inventory prefetch or another item-container path downgrade the authoritative
+        // runtime record (and its sprite/VFX paths) to placeholder defaults.
+        if (GeneratedItemData.IsPlayerSaveReferenceOnly(data))
+        {
+            GeneratedItemData? canonical = null;
+            lock (_lock)
+            {
+                if (_byId.TryGetValue(data.Id, out GeneratedItemData? existing)
+                    && existing is not null
+                    && !GeneratedItemData.IsPlayerSaveReferenceOnly(existing))
+                    canonical = existing;
+            }
+            if (ensureAssets && canonical is not null)
+                InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(canonical);
+            return;
+        }
         data.Normalize();
         if (string.IsNullOrWhiteSpace(data.Id) || string.Equals(data.Id, "placeholder", StringComparison.OrdinalIgnoreCase))
             return;

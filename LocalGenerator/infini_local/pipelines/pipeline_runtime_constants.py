@@ -57,9 +57,11 @@ BAD_NAME_PATTERNS = [
 
 
 
-LLM_RUNTIME_AUTHORING = env_bool("INFINI_LLM_RUNTIME_AUTHORING", True)
-LLM_RUNTIME_PLAN_REQUIRED = env_bool("INFINI_LLM_RUNTIME_PLAN_REQUIRED", True)
-LLM_RUNTIME_STRICT_VALIDATION = env_bool("INFINI_LLM_RUNTIME_STRICT_VALIDATION", True)
+# Product invariants: the live /combine pipeline has one strict runtime-authoring path.
+# Offline deterministic harnesses may disable USE_LLM, but cannot re-enable legacy genome repair.
+LLM_RUNTIME_AUTHORING = True
+LLM_RUNTIME_PLAN_REQUIRED = True
+LLM_RUNTIME_STRICT_VALIDATION = True
 LLM_RUNTIME_MAX_CONCEPT_CANDIDATES = env_int("INFINI_LLM_RUNTIME_MAX_CONCEPT_CANDIDATES", 5, lo=1, hi=16)
 LLM_RAW_TOKEN_MODE = env_str("INFINI_LLM_RAW_TOKEN_MODE", "compact").lower()
 LLM_AMMO_REP_LIMIT = env_int("INFINI_LLM_AMMO_REP_LIMIT", 3)

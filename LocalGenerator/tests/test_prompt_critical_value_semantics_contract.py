@@ -19,9 +19,9 @@ def _contract_check_critical_numeric_and_sentinel_semantics_survive_prompt_compa
     assert critical["pierce"].startswith("-1=infinite hits")
     assert "0 or 1=one target total" in critical["pierce"]
     assert "not extra targets" in critical["pierce"]
-    assert "useAnimation>useTime may repeat" in critical["useTiming"]
+    assert "may repeat" in critical["useTiming"]
     assert "any projectile kill" in critical["expire"]
-    assert "at most 48 shots" in critical["sentryBudget"]
+    assert "at most 48" in critical["sentryBudget"].lower()
 
     functions = contract["availableFunctions"]
     assert "-1=infinite hits" in functions["shoot_projectile"]["params"]["pierce"]

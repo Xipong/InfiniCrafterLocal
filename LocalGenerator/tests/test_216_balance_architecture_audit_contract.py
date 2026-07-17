@@ -27,7 +27,7 @@ def _contract_check_llm_prompt_no_longer_receives_parent_relative_soft_balance_c
     assert "softAoeTilesCap" not in prompt_surface
     assert "softActiveProjectileCap" not in prompt_surface
     assert "balancePolicy" in prompt_surface
-    assert "python_balance_mode" in prompt_surface
+    assert "current_balance_mode" in prompt_surface
     assert "should_apply_soft_normalization" in prompt_surface
     assert "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216" in contracts
     assert "balanceArchitectureAuditContract" in contracts
@@ -41,9 +41,11 @@ def _contract_check_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_n
     payload = build_llm_author_payload(item_a, item_b, {}, {}, "audit-key")
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
-    assert payload["validatorRanges"]["damage"] == [0, 999]
     assert "balancePolicy" in payload
-    assert payload["engineRuntimeContract"]["validatorLimits"]["balanceAuthority"] == "python_balance_mode:safety"
+    contract = payload["engineRuntimeContract"]
+    assert contract["availableFunctions"]["set_item_stats"]["params"]["damage"] == "0..cap"
+    assert contract["hardEngineLimits"]["maxShotCount"] == 8
+    assert "safety" in payload["balancePolicy"]
     assert "softDamageCapPerHit" not in text
     assert "sourceEnvelope" not in text
     assert "terrariaProgressionReference" not in text

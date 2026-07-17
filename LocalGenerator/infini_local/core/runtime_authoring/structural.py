@@ -4,12 +4,12 @@ import math
 import re
 from typing import Any
 
-from infini_local.core.runtime_authoring.common import _clamp, _enum, _norm_name, _num
+from infini_local.core.runtime_authoring.common import _clamp, _enum, _norm_name
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2, INT_FIELDS
 from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 from infini_local.core.runtime_executor_vocabulary import MOVEMENTS
-from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+
 
 STRUCTURAL_INTISH_PARAM_FIELDS = INT_FIELDS | {"damage", "useAnimation", "maxStack", "defense", "rarity", "value", "chainCount", "count"}
 
@@ -120,6 +120,7 @@ def all_calls(data_or_plan: dict[str, Any], fn: str) -> list[dict[str, Any]]:
                 row = dict(params)
                 if "_index" in raw: row["_index"] = raw.get("_index")
                 if "_rawFn" in raw: row["_rawFn"] = raw.get("_rawFn")
+                if "callId" in raw: row["_callId"] = raw.get("callId")
                 out.append(row)
     return out
 
@@ -193,7 +194,14 @@ def _select_primary_shoot_call(calls: list[dict[str, Any]]) -> tuple[dict[str, A
                 elif max_pierce != -1:
                     max_pierce = max(max_pierce, float(pv or 0))
         else:
-            rejected.append({"index": sc.get("_index"), "delivery": d, "movement": m, "reason": "runtime_one_primary_family"})
+            rejected.append({
+                "index": sc.get("_index"),
+                "callId": sc.get("_callId"),
+                "fn": sc.get("_rawFn") or "shoot_projectile",
+                "delivery": d,
+                "movement": m,
+                "reason": "runtime_one_primary_family",
+            })
     selected = _merged_params(compatible) if compatible else dict(primary)
     if has_shot_count:
         selected["shotCount"] = min(8, total_shots)
@@ -203,61 +211,6 @@ def _select_primary_shoot_call(calls: list[dict[str, Any]]) -> tuple[dict[str, A
         selected["pierce"] = max(float(selected.get("pierce") or 0), max_pierce)
     return selected, rejected
 
-
-def _call_by_index(calls: list[dict[str, Any]], index: Any) -> dict[str, Any]:
-    for call in calls:
-        if isinstance(call, dict) and call.get("_index") == index:
-            return call
-    return {}
-
-
-def _recover_rejected_primary_as_swing_secondary(
-    primary: dict[str, Any],
-    rejected: list[dict[str, Any]],
-    all_shoot_calls: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Recover a second authored attack as an explicit swing secondary.
-
-    This is not prompt/prose inference and it is not a new category router.  It only
-    handles a structural ambiguity the LLM can produce today: a melee primary plus
-    a second incompatible projectile primary.  Current C# has real on-hit swing
-    secondary projectiles, so preserving the extra call there is safer than either
-    letting it override the primary or deleting it.
-    """
-    if not rejected:
-        return {}
-    primary_delivery = _enum(primary.get("delivery"), DELIVERIES, "")
-    primary_family = _enum(primary.get("runtimeFamily"), RUNTIME_FAMILIES, primary_delivery)
-    if primary_delivery not in {"swing", "thrust"} and primary_family not in {"swing", "thrust"}:
-        return {}
-
-    for row in rejected:
-        src = _call_by_index(all_shoot_calls, row.get("index"))
-        if not src:
-            continue
-        delivery = _enum(src.get("delivery"), DELIVERIES, "")
-        family = _enum(src.get("runtimeFamily"), RUNTIME_FAMILIES, delivery)
-        if delivery not in {"shoot", "throw", "cast"} and family not in {"shoot", "throw", "cast"}:
-            continue
-        shape = str(src.get("projectileShape") or src.get("projectileFamily") or src.get("projectileTrail") or "shard").strip()[:80]
-        material = str(src.get("material") or src.get("projectileTrail") or src.get("projectileFamily") or shape or "shard").strip()[:40]
-        count = int(max(1, min(3, _clamp(src.get("shotCount"), "shotCount", 1) or 1)))
-        life = int(max(6, min(120, _num(src.get("lifetimeTicks"), 24) or 24)))
-        spread = float(_clamp(src.get("spreadRadians"), "secondarySpreadRadians", 0.18) or 0.18)
-        dmg = float(_clamp(src.get("damageMultiplier"), "secondaryDamageMultiplier", 0.25) or 0.25)
-        return {
-            "_index": src.get("_index"),
-            "_rawFn": "recovered_rejected_primary",
-            "_recoveredFromRejectedPrimary": True,
-            "trigger": "on_hit",
-            "count": count,
-            "damageMultiplier": round(max(0.08, min(0.35, dmg)), 3),
-            "spreadRadians": round(max(0.0, min(1.2, spread)), 3),
-            "lifetimeTicks": life,
-            "projectileShape": shape or "shard",
-            "material": material or "shard",
-        }
-    return {}
 
 __all__ = [
     "STRUCTURAL_INTISH_PARAM_FIELDS",
@@ -269,6 +222,4 @@ __all__ = [
     "_first_non_empty",
     "_merged_params",
     "_select_primary_shoot_call",
-    "_call_by_index",
-    "_recover_rejected_primary_as_swing_secondary",
 ]

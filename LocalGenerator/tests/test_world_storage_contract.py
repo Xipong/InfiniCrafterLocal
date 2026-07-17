@@ -46,16 +46,15 @@ def _check_world_cache_delivery_sanitizes_debug_and_runtime_only_fields(tmp_path
     stored = json.loads(stored_path.read_text(encoding="utf-8"))
     assert "_llmHistory" not in stored
     assert "_runtimePlanCompileCache" not in stored
-    assert stored["debug"]["nested"] == '{"ok":true}'
-    assert stored["debug"]["num"] == "7"
-    assert stored["debug"]["recipeHealthStatus"] == "healthy"
+    assert "debug" not in stored
+
     assert stored["recipeMeta"]["parentA"] == "A"
     assert stored["recipeMeta"]["worldScoped"] is True
 
     loaded = world_storage.read_world_recipe_cache(tmp_path, "9.9.9", "recipe_v_test", "parentA+parentB", "world:alpha")
     assert loaded is not None
-    assert loaded["debug"]["cacheHit"] == "world_file"
-    assert loaded["debug"]["recipeIdentityVersion"] == "recipe_v_test"
+    assert "runtimePlan" not in loaded
+    assert "runtimeContract" not in loaded
 
 
 def _check_deliverable_recipe_payload_rejects_placeholders_and_fallbacks() -> None:
@@ -96,6 +95,21 @@ def _check_golden_delivery_has_no_unmapped_nested_csharp_fields() -> None:
         item = build_gameplay_seam_report(case).get("item") or {}
         delivered = world_storage.sanitize_recipe_for_delivery(item)
         assert not _strict_csharp_unmapped_paths(delivered), case["caseId"]
+
+
+def _check_delivery_strips_python_author_proof() -> None:
+    delivered = world_storage.sanitize_recipe_for_delivery({
+        "id": "g_author_proof",
+        "name": "Author Proof",
+        "runtimePlan": {"engineCalls": [{"callId": "primary", "fn": "shoot_projectile", "params": {"runtimeFamily": "shoot"}}]},
+        "runtimeContract": {"schema": "infini.runtime-contract.v3", "mechanicClaims": []},
+        "debug": {"planner": "llm_author_first", "authorProof": "python-only"},
+        "gameplay": {"kind": "weapon", "damage": 12},
+        "attack": {"enabled": True, "runtimeFamily": "shoot"},
+    })
+    assert "runtimePlan" not in delivered
+    assert "runtimeContract" not in delivered
+    assert "debug" not in delivered
 
 
 def _check_delivery_matches_strict_nested_csharp_specs() -> None:
@@ -174,16 +188,14 @@ def _check_delivery_matches_strict_nested_csharp_specs() -> None:
     assert "recipeFrame" in payload["itemKnowledge"]["parents"][0]
 
 
-def _check_delivery_rejects_scalar_for_csharp_object_contract() -> None:
+def _check_delivery_strips_removed_runtime_archetype_surface() -> None:
     payload = {
         "id": "g_scalar_archetype",
         "name": "Scalar Archetype",
         "runtimeArchetype": "consumable_melee_projectile",
     }
 
-    assert _strict_csharp_unmapped_paths(payload) == [
-        "$.runtimeArchetype: expected object, got string"
-    ]
+    assert _strict_csharp_unmapped_paths(payload) == []
     delivered = world_storage.sanitize_recipe_for_delivery(payload)
     assert "runtimeArchetype" not in delivered
     assert payload["runtimeArchetype"] == "consumable_melee_projectile"
@@ -202,19 +214,9 @@ def _check_delivery_rejects_scalar_for_csharp_object_contract() -> None:
             "futureNestedKey": "strict C# must never receive this",
         },
     }
-    assert _strict_csharp_unmapped_paths(object_payload) == [
-        "$.runtimeArchetype.aiType: expected string, got integer",
-        "$.runtimeArchetype.supportNotes: expected array, got string",
-        "$.runtimeArchetype.futureNestedKey: unknown field for RuntimeArchetypeSpec",
-    ]
+    assert _strict_csharp_unmapped_paths(object_payload) == []
     projected = world_storage.sanitize_recipe_for_delivery(object_payload)
-    assert projected["runtimeArchetype"] == {
-        "schema": "infini.runtime-archetype.v1",
-        "source": "generated",
-        "family": "custom_executor",
-        "channelled": True,
-        "overrideKnobs": {"orbitRadius": 4.5},
-    }
+    assert "runtimeArchetype" not in projected
     assert _strict_csharp_unmapped_paths(projected) == []
     assert "futureNestedKey" in object_payload["runtimeArchetype"]
 
@@ -418,8 +420,9 @@ def _run_coarse_contracts(tmp_path):
     '_check_world_cache_delivery_sanitizes_debug_and_runtime_only_fields',
     '_check_deliverable_recipe_payload_rejects_placeholders_and_fallbacks',
     '_check_golden_delivery_has_no_unmapped_nested_csharp_fields',
+    '_check_delivery_strips_python_author_proof',
     '_check_delivery_matches_strict_nested_csharp_specs',
-    '_check_delivery_rejects_scalar_for_csharp_object_contract',
+    '_check_delivery_strips_removed_runtime_archetype_surface',
     '_check_concurrent_world_cache_writes_preserve_every_recipe_without_aggregate_rewrites',
     '_check_distinct_recipes_in_one_world_write_in_parallel',
     '_check_recipe_write_path_only_replaces_the_changed_recipe_after_manifest_creation',

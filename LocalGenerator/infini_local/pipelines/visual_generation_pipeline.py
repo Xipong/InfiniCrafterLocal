@@ -8,11 +8,9 @@ from typing import Any
 from infini_local.core.boundary_models import canonical_visual_kit_view
 
 from infini_local.core.env_utils import env_float, env_int
-from infini_local.core.item_identity_tools import stable_hash
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
-from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
 from infini_local.pipelines.combine_genome_contract import is_llm_planner
 from infini_local.pipelines.combine_validation import _stringish
 from infini_local.pipelines.item_power_knowledge import tags_of
@@ -25,7 +23,7 @@ from infini_local.pipelines.llm_transport import (
     visual_director_max_tokens,
 )
 from infini_local.pipelines.pipeline_visual_config import VISUAL_ASSET_MODE, VISUAL_DIRECTOR_LLM
-from infini_local.pipelines.result_identity_policy import palette_from, required_anchors_from
+from infini_local.pipelines.result_identity_policy import required_anchors_from
 
 from infini_local.pipelines.visual_prompt_contracts import (
     asset_negative_prompt,
@@ -33,7 +31,6 @@ from infini_local.pipelines.visual_prompt_contracts import (
     image_backend_uses_semantic_prompt_contract,
     sprite_background_positive_clause,
     role_visual_prompt_guard,
-    sanitize_projectile_family_prompt,
     role_contract_prompt_clause,
 )
 
@@ -53,13 +50,15 @@ from infini_local.storage.trace_runtime import log_event, trace_event
 
 
 def anime_reference_opportunity(data: dict[str, Any]) -> str:
-    """Return a stable, deliberately rare visual-reference budget for one recipe."""
-    seed = str(data.get("recipeKey") or data.get("id") or data.get("name") or "generated-item")
-    roll = int(stable_hash("anime-reference-opportunity-v1", seed, length=8), 16) % 1000
-    if roll < 20:
-        return "strong"
-    if roll < 120:
-        return "subtle"
+    """Allow anime references only when an upstream visual contract explicitly asks."""
+    runtime_plan = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
+    visual_intent = runtime_plan.get("visualIntent") if isinstance(runtime_plan.get("visualIntent"), dict) else {}
+    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    for authored in (visual_intent.get("animeReference"), visual.get("animeReference")):
+        if isinstance(authored, dict):
+            strength = str(authored.get("strength") or "").strip().lower()
+            if strength in {"subtle", "strong"}:
+                return strength
     return "none"
 
 
@@ -161,13 +160,13 @@ def attach_visual(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca
     ))[:10]
     if not isinstance(visual.get("parentVisualContext"), list):
         visual["parentVisualContext"] = required_anchors_from(ca, cb, tags)[:16]
-    visual["palette"] = visual.get("palette") or palette_from(tags)
+    # A missing palette stays unspecified.  The Visual Director may author one from
+    # its physical evidence; code must not infer colors from category/name/tag prose.
+    visual["palette"] = visual.get("palette") or []
     visual["style"] = "terraria_item_sprite"
-    stage = stat_profile_for(a, b, tags)
-    size = size_profile_for(str(data.get("name", "generated item")), tags, data.get("gameplay", {}).get("kind") or data.get("category") or "generic", stage)
-    visual.setdefault("preferredCanvasSize", size["preferredCanvasSize"])
-    visual.setdefault("inventoryScale", size["inventoryScale"])
-    visual.setdefault("worldScale", size["worldScale"])
+    visual.setdefault("preferredCanvasSize", 32)
+    visual.setdefault("inventoryScale", 1.0)
+    visual.setdefault("worldScale", 1.0)
     visual.setdefault("drawOffsetX", 0)
     visual.setdefault("drawOffsetY", 0)
     visual["negativePrompt"] = asset_negative_prompt("item")
@@ -188,20 +187,12 @@ def build_image_prompt(data: dict[str, Any], visual: dict[str, Any]) -> str:
     anchors = [str(a) for a in visual.get("requiredAnchors", []) if str(a).strip()]
     parent_context = [str(a) for a in visual.get("parentVisualContext", []) if str(a).strip()]
     palette = [str(c).replace("_", " ") for c in visual.get("palette", []) if str(c).strip()]
-    name = data.get("name", "generated item")
     canvas = int(visual.get("preferredCanvasSize") or 32)
-    large_hint = "slightly oversized sprite allowed" if canvas >= 64 else "standard item sprite scale"
     parts = [
-        "pixel art game item icon",
-        "Terraria-like item sprite",
+        "Terraria-like pixel-art inventory item sprite",
         sprite_background_positive_clause(),
-        "centered single object",
-        "simple readable silhouette",
-        "limited palette",
-        large_hint,
+        "show the authored physical item role and arrangement",
         role_contract_prompt_clause("item", canvas),
-        f"target canvas feeling: {canvas}x{canvas}",
-        f"item concept: {name}",
     ]
     if anchors:
         parts.append("author-required visible anchors: " + ", ".join(anchors[:8]))
@@ -209,8 +200,77 @@ def build_image_prompt(data: dict[str, Any], visual: dict[str, Any]) -> str:
         parts.append("nonbinding parent visual context: " + ", ".join(parent_context[:10]))
     if palette:
         parts.append("palette: " + ", ".join(palette[:6]))
+    if visual.get("topology"):
+        parts.append("authored topology: " + str(visual["topology"]))
+    if visual.get("partCountMin") is not None and visual.get("partCountMax") is not None:
+        parts.append(
+            "authored significant body count: "
+            + f"{int(visual['partCountMin'])}-{int(visual['partCountMax'])}"
+        )
+    if visual.get("parts"):
+        parts.append("authored parts: " + ", ".join(str(part) for part in visual["parts"][:8]))
+    if visual.get("arrangement"):
+        parts.append("authored arrangement: " + str(visual["arrangement"]))
     parts.append("no scene, no character, no text")
     return ", ".join(parts)
+
+
+def _validated_visual_director_kit(
+    content: str,
+    data: dict[str, Any],
+    anime_opportunity: str,
+) -> tuple[dict[str, Any], list[str], dict[str, Any] | None]:
+    obj = parse_first_valid_llm_json(content)
+    if not isinstance(obj, dict):
+        raise ValueError("visual director returned a non-object JSON value")
+    boundary_repairs: list[str] = []
+    if not isinstance(obj.get("visualKit"), dict):
+        raise ValueError("visual director visualKit must be a JSON object")
+    kit = copy.deepcopy(obj["visualKit"])
+    kit = canonical_visual_kit_view(kit, repairs=boundary_repairs)
+
+    for prompt_key, role_hint in [
+        ("itemIconPrompt", "item"),
+        ("projectileSpritePrompt", "projectile"),
+        ("childSpritePrompt", "child"),
+        ("impactSpritePrompt", "impact"),
+        ("fieldSpritePrompt", "field"),
+    ]:
+        if kit.get(prompt_key):
+            cleaned = strip_conflicting_sprite_prompt_bits(kit[prompt_key])
+            if role_hint != "item" or not image_backend_uses_semantic_prompt_contract():
+                cleaned = role_visual_prompt_guard(role_hint, cleaned, data)
+            kit[prompt_key] = cleaned[:1400] if cleaned else ""
+
+    for text_key in [
+        "styleGuide", "silhouetteSummary", "itemSilhouetteContract", "vfxIntent",
+        "projectileVfx", "impactVfx", "childVfx", "fieldVfx", "vfxAvoid",
+    ]:
+        if kit.get(text_key):
+            kit[text_key] = str(kit[text_key])[:700]
+
+    requested_anime_reference = kit.get("animeReference")
+    anime_reference = _sanitize_anime_reference(requested_anime_reference, anime_opportunity)
+    if requested_anime_reference is not None and anime_reference is None:
+        raise ValueError(
+            "visualKit.animeReference was not authorized by the authored visual intent "
+            "or exceeded its permitted strength"
+        )
+    if anime_reference:
+        kit["animeReference"] = anime_reference
+        if kit.get("itemIconPrompt"):
+            kit["itemIconPrompt"] = _append_anime_reference_to_prompt(
+                kit["itemIconPrompt"],
+                anime_reference,
+            )
+    else:
+        kit.pop("animeReference", None)
+
+    kit = canonical_visual_kit_view(kit)
+    all_kit_errors = visual_kit_usefulness_errors(kit) + visual_kit_projection_errors(kit, data)
+    if all_kit_errors:
+        raise ValueError("visual director output is structurally valid but unusable: " + "; ".join(all_kit_errors))
+    return kit, boundary_repairs, anime_reference
 
 
 def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any]) -> dict[str, Any]:
@@ -236,6 +296,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     model_name = ""
     transport_debug: dict[str, Any] = {}
     message_mode = ""
+    visual_director_retry_count = 0
     try:
         history_state = planner_history_state(data)
         live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
@@ -279,14 +340,14 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "enabled": anime_opportunity in {"subtle", "strong"},
                 "optional": True,
                 "maximumStrength": anime_opportunity,
-                "frequencyPolicy": "rare deterministic recipe opportunity; most recipes receive none",
+                "frequencyPolicy": "enabled only by explicit authored visual intent; most recipes receive none",
             },
             "fieldGuide": {
                 "styleGuide": "one shared authored art-direction sentence used by every role",
                 "palette": "foreground named colors only",
                 "itemSilhouetteContract": "one compact positive sentence stating global silhouette, part count, proportions, attachment points, and which bodies are continuous or intentionally separate",
                 "rolePrompts": "itemIconPrompt, projectileSpritePrompt, impactSpritePrompt, childSpritePrompt, fieldSpritePrompt",
-                "bakedAssets": "per-role delivery mode/reason only. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. Role prompts above are canonical",
+                "bakedAssets": "exact JSON object of role objects, never an array and never a string mode. Example: {\"projectile\":{\"mode\":\"baked_sprite\",\"reason\":\"distinct moving body\",\"distinctFromItem\":true},\"impact\":{\"mode\":\"particle_vfx\",\"reason\":\"momentary sparks\"}}. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. Role prompts above are canonical",
                 "vfx": "concise vfxIntent/projectileVfx/impactVfx/childVfx/fieldVfx plus scale, rhythm, materials, and avoid notes",
                 "lists": "animationPlan, assetDependencies, qualityNotes, vfxMaterialHints must remain JSON arrays",
                 "negativePrompt": "one optional shared backend negative prompt; keep empty for Z-Image",
@@ -367,63 +428,56 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             {"model": model_name, "chars": len(str(content)), "transport": transport_debug},
             response=content,
         )
-        obj = parse_first_valid_llm_json(content)
-        if not isinstance(obj, dict):
-            raise ValueError("visual director returned a non-object JSON value")
-        boundary_repairs: list[str] = []
-        if isinstance(obj.get("visualKit"), dict):
-            kit = copy.deepcopy(obj["visualKit"])
-        elif "visualKit" not in obj:
-            # Backward-compatible wrapper repair only. Values are preserved exactly;
-            # the strict VisualKit boundary still validates every field below.
-            kit = copy.deepcopy(obj)
-            boundary_repairs.append("root_object_wrapped_as_visualKit")
-        else:
-            raise ValueError("visual director visualKit must be a JSON object")
-        # Strict shape validation also performs bounded legacy migrations such as
-        # singleton string lists and bakedAssets.<role>.prompt -> canonical role prompt.
-        # It never invents visual content or chooses parent fusion.
-        kit = canonical_visual_kit_view(kit, repairs=boundary_repairs)
-
-        for prompt_key, role_hint in [
-            ("itemIconPrompt", "item"),
-            ("projectileSpritePrompt", "projectile"),
-            ("childSpritePrompt", "child"),
-            ("impactSpritePrompt", "impact"),
-            ("fieldSpritePrompt", "field"),
-        ]:
-            if kit.get(prompt_key):
-                cleaned = strip_conflicting_sprite_prompt_bits(kit[prompt_key])
-                cleaned = sanitize_projectile_family_prompt(data, role_hint, cleaned)
-                if role_hint != "item" or not image_backend_uses_semantic_prompt_contract():
-                    cleaned = role_visual_prompt_guard(role_hint, cleaned, data)
-                kit[prompt_key] = cleaned[:1400] if cleaned else ""
-
-        for text_key in [
-            "styleGuide", "silhouetteSummary", "itemSilhouetteContract", "vfxIntent",
-            "projectileVfx", "impactVfx", "childVfx", "fieldVfx", "vfxAvoid",
-        ]:
-            if kit.get(text_key):
-                role_hint = "projectile" if "projectile" in text_key.lower() else "item"
-                kit[text_key] = sanitize_projectile_family_prompt(data, role_hint, kit[text_key])[:700]
-
-        anime_reference = _sanitize_anime_reference(kit.get("animeReference"), anime_opportunity)
-        if anime_reference:
-            kit["animeReference"] = anime_reference
-            if kit.get("itemIconPrompt"):
-                kit["itemIconPrompt"] = _append_anime_reference_to_prompt(
-                    kit["itemIconPrompt"],
-                    anime_reference,
-                )
-        else:
-            kit.pop("animeReference", None)
-
-        # Sanitizers may shorten strings but must not change the contract shape.
-        # Canonicalization also removes legacy duplicate bakedAssets role prompts.
-        kit = canonical_visual_kit_view(kit)
-        all_kit_errors = visual_kit_usefulness_errors(kit) + visual_kit_projection_errors(kit, data)
-        if all_kit_errors:
-            raise ValueError("visual director output is structurally valid but unusable: " + "; ".join(all_kit_errors))
+        try:
+            kit, boundary_repairs, anime_reference = _validated_visual_director_kit(
+                str(content), data, anime_opportunity
+            )
+        except Exception as first_contract_error:
+            visual_director_retry_count = 1
+            correction_payload = {
+                "task": "Replace your invalid Visual Director response with one object matching requiredSchema exactly.",
+                "validationError": repr(first_contract_error),
+                "requiredSchema": visual_kit_response_schema(),
+                "rules": [
+                    "Return {\"visualKit\": {...}} only.",
+                    "bakedAssets is an object, never an array.",
+                    "Each bakedAssets role is an object with mode/reason/distinctFromItem fields; never a mode string or alias.",
+                    "Do not add item or vfx roles inside bakedAssets.",
+                    "Do not change the item design; repair only the contract shape.",
+                ],
+            }
+            retry_req = copy.deepcopy(req)
+            retry_req["messages"] = [
+                *messages,
+                stage_chat_message("assistant", "visual_director", str(content)[:10000]),
+                stage_chat_message(
+                    "user",
+                    "visual_director_context",
+                    json.dumps(correction_payload, ensure_ascii=False, separators=(",", ":")),
+                ),
+            ]
+            retry_req["temperature"] = min(float(req.get("temperature") or 0.0), 0.2)
+            trace_event(
+                "prompt",
+                "LLM:visual_director_retry",
+                "Visual director scoped structural repair request",
+                {"provider": active_llm_provider(), "model": model_name, "attempt": 1},
+                prompt=retry_req.get("messages"),
+            )
+            retry_raw = llm_chat_json(retry_req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+            retry_transport_debug = retry_raw.get("_debug") if isinstance(retry_raw, dict) else None
+            transport_debug = retry_transport_debug if isinstance(retry_transport_debug, dict) else {}
+            content = retry_raw["choices"][0]["message"]["content"]
+            trace_event(
+                "response",
+                "LLM:visual_director_retry",
+                "Visual director scoped structural repair response",
+                {"model": model_name, "chars": len(str(content)), "attempt": 1, "transport": transport_debug},
+                response=content,
+            )
+            kit, boundary_repairs, anime_reference = _validated_visual_director_kit(
+                str(content), data, anime_opportunity
+            )
 
         # Full transaction: Visual Director output is projected into a deep copy and
         # committed only after every palette/gate/mapping step succeeds. A late error
@@ -439,6 +493,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             working_debug.pop("visualDirectorBoundaryRepairs", None)
         working_debug["visualDirectorModel"] = model_name
         working_debug["visualDirectorStatus"] = "validated_and_applied"
+        working_debug["visualDirectorRetryCount"] = visual_director_retry_count
         working_debug["visualDirectorMessageMode"] = message_mode
         working_debug["visualDirectorContextChars"] = len(json.dumps(payload.get("item") or {}, ensure_ascii=False))
         if transport_debug:
@@ -522,12 +577,48 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     except Exception as e:
         # No projection touched the original data unless the transaction completed.
         debug = data.setdefault("debug", {})
+        visual_candidate = data.get("visual")
+        visual_existing: dict[str, Any] = visual_candidate if isinstance(visual_candidate, dict) else {}
+        attack_candidate = data.get("attack")
+        attack_existing: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+        fallback_prompts = {
+            "item": str(visual_existing.get("imagePrompt") or ""),
+            "projectile": str(
+                visual_existing.get("projectileImagePrompt")
+                or attack_existing.get("projectileSpritePrompt")
+                or ""
+            ),
+            "impact": str(
+                visual_existing.get("impactImagePrompt")
+                or attack_existing.get("impactSpritePrompt")
+                or ""
+            ),
+            "child": str(
+                visual_existing.get("childImagePrompt")
+                or attack_existing.get("childSpritePrompt")
+                or ""
+            ),
+            "field": str(
+                visual_existing.get("fieldImagePrompt")
+                or attack_existing.get("fieldSpritePrompt")
+                or ""
+            ),
+        }
         debug["visualDirectorError"] = repr(e)
-        debug["visualDirectorStatus"] = "rejected_fallback_to_existing_visual"
+        debug["visualDirectorStatus"] = "visual_director_degraded"
+        debug["visualDirectorRetryCount"] = visual_director_retry_count
+        debug["visualDirectorFallbackPrompts"] = fallback_prompts
         if model_name:
             debug["visualDirectorModel"] = model_name
         if content:
             debug["visualDirectorRejectedRawOutput"] = content[:10000]
-        trace_event("error", "LLM:visual_director", "Visual director failed", {"model": model_name}, error=repr(e))
+        trace_event(
+            "error",
+            "LLM:visual_director",
+            "Visual director degraded to existing authored prompts",
+            {"model": model_name, "retryCount": visual_director_retry_count},
+            prompt=fallback_prompts,
+            error=repr(e),
+        )
         log_event("warn", "visual director failed", {"error": repr(e), "trace": traceback.format_exc()})
     return data

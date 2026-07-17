@@ -6,7 +6,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.pipelines.item_power_knowledge import canonicalize
 
 
 from csharp_partial_reader import read_text_with_partial_bundles
@@ -55,7 +57,10 @@ def _contract_check_generated_armor_runtime_plan_preserves_executable_armor_prop
         },
     }
 
-    child = final_normalize(validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, "armor_smoke"))
+    ca = canonicalize(PARENT_A)
+    cb = canonicalize(PARENT_B)
+    child = validate_and_repair(plan, PARENT_A, PARENT_B, ca, cb, "armor_smoke")
+    child = final_normalize(attach_gameplay_and_attack(child, PARENT_A, PARENT_B, ca, cb))
 
     assert child["category"] == "armor"
     assert child["gameplay"]["kind"] == "armor"

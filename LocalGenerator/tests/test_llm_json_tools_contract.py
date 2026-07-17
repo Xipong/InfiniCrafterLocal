@@ -18,6 +18,12 @@ def _check_llm_json_tools_respects_string_braces() -> None:
     parsed = parse_first_valid_llm_json('prefix {"text":"brace } inside string", "ok": true} suffix')
     assert parsed["ok"] is True
 
+
+def _check_llm_json_tools_ignores_private_thought_json() -> None:
+    text = '<thought>{"name":"Decoy"}</thought>{"name":"Authored"}'
+    assert parse_first_valid_llm_json(text)["name"] == "Authored"
+    assert json_object_candidates('<thought>{"name":"unfinished-decoy"}') == []
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -27,7 +33,8 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_llm_json_tools_parse_fenced_and_duplicate_objects',
-    '_check_llm_json_tools_respects_string_braces'
+    '_check_llm_json_tools_respects_string_braces',
+    '_check_llm_json_tools_ignores_private_thought_json'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

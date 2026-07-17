@@ -54,6 +54,35 @@ class ImageBackendConfigurationError(RuntimeError):
     """Selected image backend cannot produce an authored sprite in this configuration."""
 
 
+def _authored_sprite_topology(data: dict[str, Any], role: str) -> tuple[str, int, int]:
+    """Pass only explicit item topology to alpha validation; never infer it from prose."""
+    if (role or "item").lower() != "item":
+        return "", 0, 0
+    runtime_plan_candidate = data.get("runtimePlan")
+    runtime_plan: dict[str, Any] = runtime_plan_candidate if isinstance(runtime_plan_candidate, dict) else {}
+    visual_intent_candidate = runtime_plan.get("visualIntent")
+    visual_intent: dict[str, Any] = visual_intent_candidate if isinstance(visual_intent_candidate, dict) else {}
+    topology = str(visual_intent.get("topology") or "").strip().lower()
+    minimum = visual_intent.get("partCountMin")
+    maximum = visual_intent.get("partCountMax")
+    parts = visual_intent.get("parts")
+    authored_part_count = (
+        len([part for part in parts if isinstance(part, str) and part.strip()])
+        if isinstance(parts, list)
+        else 0
+    )
+    if topology == "multipart_separated" and authored_part_count:
+        if not isinstance(minimum, int):
+            minimum = authored_part_count
+        if not isinstance(maximum, int):
+            maximum = authored_part_count
+    return (
+        topology,
+        int(minimum) if isinstance(minimum, int) else 0,
+        int(maximum) if isinstance(maximum, int) else 0,
+    )
+
+
 def _backend_configuration_error() -> str:
     if IMAGE_BACKEND_CONFIG_ERROR:
         return IMAGE_BACKEND_CONFIG_ERROR
@@ -130,6 +159,7 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
         trace_event("error", "IMAGE:item", "image backend configuration is invalid", {"backend": IMAGE_BACKEND, "error": config_error})
         return data
     canvas = int(visual.get("preferredCanvasSize") or 32)
+    topology, part_count_min, part_count_max = _authored_sprite_topology(data, "item")
     negative = str(visual.get("negativePrompt") or asset_negative_prompt("item"))
     asset_id = str(data.get("id") or "sprite")
     attempts: list[dict[str, Any]] = []
@@ -141,6 +171,9 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     for attempt in range(max_attempts):
         attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
         attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, "item", attempt, canvas)
+        visual["finalItemPrompt"] = attempt_prompt
+        data.setdefault("debug", {})["itemFinalPrompt"] = attempt_prompt
+        data["debug"]["itemFinalPromptAttempt"] = attempt
         trace_event("prompt", "IMAGE:item", f"{IMAGE_BACKEND} item prompt attempt {attempt}", {
             "assetId": asset_id, "attemptId": attempt_id, "attempt": attempt, "role": "item",
             "backend": IMAGE_BACKEND, "canvas": canvas, "spriteRetries": SPRITE_RETRIES,
@@ -161,14 +194,20 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
                 continue
             best, score = pick_best_sprite(variants, "item", canvas)
             raw_best = best
-            final_path = postprocess_sprite(best, attempt_id, canvas, "item")
-            validation = validate_processed_sprite(final_path, "item")
+            final_path = postprocess_sprite(
+                best, attempt_id, canvas, "item", topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+            )
+            validation = validate_processed_sprite(
+                final_path, "item", topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+            )
             refit_path = ""
             refit_validation: dict[str, Any] | None = None
             if not validation.get("ok") and not sprite_validation_fatal(validation):
                 refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, "item", validation)
                 if refit_path:
-                    refit_validation = validate_processed_sprite(refit_path, "item")
+                    refit_validation = validate_processed_sprite(
+                        refit_path, "item", topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                    )
                     if refit_validation.get("ok"):
                         data.setdefault("debug", {})["itemSpriteRefit"] = json.dumps({
                             "from": str(Path(final_path).resolve()),
@@ -228,7 +267,10 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     if VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
         try:
             fallback = visual_asset_pipeline.generate_procedural_asset(data, "item", variant=0, canvas_size=canvas, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)
-            final = postprocess_sprite(fallback, str(data.get("id", "sprite")), canvas, "item")
+            final = postprocess_sprite(
+                fallback, str(data.get("id", "sprite")), canvas, "item",
+                topology=topology, part_count_min=part_count_min, part_count_max=part_count_max,
+            )
             visual["spritePath"] = str(Path(final).resolve())
             visual["spriteRawPath"] = str(Path(fallback).resolve())
             visual["spriteStatus"] = "fallback_after_failed_generation"
@@ -327,9 +369,12 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     last_raw_path = ""
     last_score = 0.0
     last_validation: dict[str, Any] | None = None
+    topology, part_count_min, part_count_max = _authored_sprite_topology(data, role)
     for attempt in range(max_attempts):
         attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
         attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, role, attempt, canvas)
+        data.setdefault("debug", {})[f"{role}FinalPrompt"] = attempt_prompt
+        data["debug"][f"{role}FinalPromptAttempt"] = attempt
         trace_event("prompt", f"IMAGE:{role}", f"{IMAGE_BACKEND} {role} prompt attempt {attempt}", {
             "assetId": asset_id, "attemptId": attempt_id, "attempt": attempt, "role": role,
             "backend": IMAGE_BACKEND, "canvas": canvas, "spriteRetries": SPRITE_RETRIES,
@@ -348,14 +393,20 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
                 continue
             best, score = pick_best_sprite(variants, role, canvas)
-            final_path = postprocess_sprite(best, attempt_id, canvas, role)
-            validation = validate_processed_sprite(final_path, role)
+            final_path = postprocess_sprite(
+                best, attempt_id, canvas, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+            )
+            validation = validate_processed_sprite(
+                final_path, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+            )
             refit_path = ""
             refit_validation: dict[str, Any] | None = None
             if not validation.get("ok") and not sprite_validation_fatal(validation):
                 refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, role, validation)
                 if refit_path:
-                    refit_validation = validate_processed_sprite(refit_path, role)
+                    refit_validation = validate_processed_sprite(
+                        refit_path, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                    )
                     if refit_validation.get("ok"):
                         data.setdefault("debug", {})[f"{role}SpriteRefit"] = json.dumps({
                             "from": str(Path(final_path).resolve()),
@@ -441,7 +492,9 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     if VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
         try:
             fallback = visual_asset_pipeline.generate_procedural_asset(data, role, variant=0, canvas_size=canvas, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)
-            final = postprocess_sprite(fallback, asset_id, canvas, role)
+            final = postprocess_sprite(
+                fallback, asset_id, canvas, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+            )
             return str(Path(final).resolve()), f"/sprite/{Path(final).name}", 0.0, "fallback_after_failed_generation"
         except Exception as e:
             log_event("warn", f"{role} sprite procedural fallback failed", {"error": repr(e)})

@@ -9,9 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from infini_local.core.vfx_director_prompt import build_vfx_director_handoff_messages
 from infini_local.core import vfx_manifest as vm
 from infini_local.pipelines import llm_authoring_pipeline as lap
-from infini_local.pipelines import llm_transport
 from infini_local.pipelines import combine_genome as genome
-from infini_local.pipelines import result_identity_policy as identity
 from infini_local.pipelines import visual_generation_pipeline as visual
 
 
@@ -214,39 +212,6 @@ def _contract_check_procedural_vfx_safety_net_logs_selected_manifest(monkeypatch
     }
 
 
-def _contract_check_name_repair_retargets_valid_planner_history(monkeypatch):
-    data = _planner_child()
-    data["name"] = "Generated Hybrid"
-    data["debug"] = {"planner": "llm_author_first"}
-    captured = {}
-
-    def fake_chat(req, timeout=10):
-        captured["request"] = req
-        return {"choices": [{"message": {"content": '{"name":"Starlit Needle"}'}}]}
-
-    monkeypatch.setattr(llm_transport, "resolve_llm_model", lambda: "name-test-model")
-    monkeypatch.setattr(llm_transport, "llm_chat_json", fake_chat)
-
-    name = identity.try_llm_name_repair(
-        data,
-        {"name": "Silver Bullet"},
-        {"name": "Fallen Star"},
-        {},
-        {},
-        "r_name_retarget",
-        {"weapon", "star"},
-        "weapon",
-    )
-
-    assert name == "Starlit Needle"
-    messages = captured["request"]["messages"]
-    assert [message["name"] for message in messages] == ["name_repair_contract", "name_repair_context"]
-    assert "authoritative current" in messages[0]["content"].lower()
-    dossier = json.loads(messages[-1]["content"])
-    assert dossier["currentItem"]["name"] == "Generated Hybrid"
-    assert [parent["name"] for parent in dossier["parents"]] == ["Silver Bullet", "Fallen Star"]
-    assert "_llmHistory" not in messages[-1]["content"]
-
 
 def _contract_check_genome_repair_retargets_history_and_uses_delta(monkeypatch):
     data = _planner_child()
@@ -303,12 +268,6 @@ def _contract_check_malformed_history_never_downgrades_post_planner_stages_to_st
     assert missing_live_calls == []
     assert missing_live_vfx["debug"]["vfxLlmDirectorHistoryFallbackReason"] == "missing_live_planner_history_fail_closed"
 
-    name_child = _planner_child()
-    name_child.update({"name": "Generated Hybrid", "debug": {"planner": "llm_author_first"}, "_llmHistory": malformed})
-    name_calls = []
-    monkeypatch.setattr(llm_transport, "llm_chat_json", lambda *a, **k: name_calls.append(True))
-    assert identity.try_llm_name_repair(name_child, {}, {}, {}, {}, "r_bad_name_history", {"weapon"}, "weapon") is None
-    assert name_calls == []
 
     genome_child = _planner_child()
     genome_child.update({"debug": {"planner": "llm_author_first"}, "_llmHistory": malformed})
@@ -327,7 +286,7 @@ def _contract_check_malformed_history_never_downgrades_post_planner_stages_to_st
     monkeypatch.setattr(visual, "llm_chat_json", lambda *a, **k: visual_calls.append(True))
     out = visual.apply_visual_director(visual_child, {}, {}, {}, {})
     assert visual_calls == []
-    assert out["debug"]["visualDirectorStatus"] == "rejected_fallback_to_existing_visual"
+    assert out["debug"]["visualDirectorStatus"] == "visual_director_degraded"
     assert "refusing standalone fallback" in out["debug"]["visualDirectorError"]
 
 
@@ -344,7 +303,7 @@ def test_245_attributed_chat_history_module_contract(request):
             '_contract_check_invalid_vfx_continuation_does_not_retry_as_standalone',
             '_contract_check_failed_vfx_repair_logs_exact_policy_transition',
             '_contract_check_procedural_vfx_safety_net_logs_selected_manifest',
-            '_contract_check_name_repair_retargets_valid_planner_history',
+
             '_contract_check_genome_repair_retargets_history_and_uses_delta',
             '_contract_check_malformed_history_never_downgrades_post_planner_stages_to_standalone',
         ),

@@ -8,6 +8,7 @@ parameter range/enum, and safety note that the runtime compiler accepts.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -19,8 +20,14 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL_GENERATOR = ROOT / "LocalGenerator"
 sys.path.insert(0, str(LOCAL_GENERATOR))
 
-from infini_local.pipelines.llm_authoring_pipeline import build_llm_author_payload  # noqa: E402
+from infini_local.pipelines.llm_authoring_pipeline import (  # noqa: E402
+    build_initial_author_request,
+    build_llm_author_payload,
+    build_same_author_repair_request,
+)
 from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS  # noqa: E402
+from infini_local.pipelines.author_item_contract import author_item_provider_response_schema  # noqa: E402
+from infini_local.pipelines.llm_transport import transport_footprint  # noqa: E402
 from infini_local.core.runtime_authoring.schema import (  # noqa: E402
     ENGINE_FN_CATALOG_V2,
     PLANNER_HIDDEN_ENGINE_FUNCTIONS,
@@ -67,6 +74,73 @@ def _payload(style_env: str | None = None) -> dict:
     a, b, ca, cb = _sample_parent_cards()
     with _patched_env("INFINI_LLM_ENGINE_CONTRACT_STYLE", style_env):
         return build_llm_author_payload(a, b, ca, cb, "planner_smoke")
+
+
+def _sample_authored_item() -> dict[str, object]:
+    return {
+        "name": "Torchwood Edge",
+        "category": "weapon",
+        "concept": {
+            "fantasy": "A wooden blade carrying a steady torch flame.",
+            "mergeLogic": "The torch flame inhabits the wooden sword grain.",
+            "coreMechanic": "A direct melee strike emits a short-lived flame projectile.",
+        },
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "sourceRolePreservation": {"itemA": "Wooden Sword body", "itemB": "Torch flame"},
+            "engineCalls": [
+                {"callId": "stats", "fn": "set_item_stats", "params": {"resultKind": "weapon", "damage": 12}},
+                {"callId": "shot", "fn": "shoot_projectile", "params": {"movement": "straight", "speed": 8}},
+            ],
+            "visualIntent": {
+                "item": "one wooden blade with an embedded torch flame",
+                "projectile": "one compact flame body",
+                "impact": "small ember burst",
+                "vfxIntent": "warm embers",
+                "vfxAvoid": "no beam",
+                "topology": "connected",
+                "parts": ["wooden blade", "embedded flame"],
+                "arrangement": "the flame sits inside the blade tip",
+            },
+        },
+        "runtimeContract": {
+            "primaryVerb": "swing and release flame",
+            "controlStyle": "tap",
+            "playerViewTimeline": [],
+        },
+    }
+
+
+def _prompt_budgets() -> dict[str, dict[str, int | str]]:
+    a, b, ca, cb = _sample_parent_cards()
+    initial_req, _, _ = build_initial_author_request(a, b, ca, cb, "planner_smoke")
+    explicit_schema_req = copy.deepcopy(initial_req)
+    explicit_schema_req["response_format"] = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "infini_author_item_v3",
+            "strict": True,
+            "schema": author_item_provider_response_schema(),
+        },
+    }
+    repair_req, _, _, _, _, _ = build_same_author_repair_request(
+        _sample_authored_item(),
+        a,
+        b,
+        {
+            "stage": "final_wire",
+            "blockingClaims": [{
+                "kind": "compiler_provenance_dropped",
+                "callId": "shot",
+                "authoredParam": "speed",
+            }],
+        },
+    )
+    return {
+        "authorAutoJsonObject": transport_footprint(initial_req, "author_initial"),
+        "explicitJsonSchemaOptIn": transport_footprint(explicit_schema_req, "author_initial"),
+        "repairAutoJsonObject": transport_footprint(repair_req, "author_retry"),
+    }
 
 
 def _section_sizes(payload: dict) -> dict[str, int]:
@@ -123,8 +197,10 @@ def _check_catalog_metadata(functions: dict) -> list[str]:
 def run(limit_chars: int) -> dict:
     payload = _payload(None)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    contract = payload.get("engineRuntimeContract") if isinstance(payload.get("engineRuntimeContract"), dict) else {}
-    functions = contract.get("availableFunctions") if isinstance(contract.get("availableFunctions"), dict) else {}
+    contract_candidate = payload.get("engineRuntimeContract")
+    contract: dict[str, object] = contract_candidate if isinstance(contract_candidate, dict) else {}
+    functions_candidate = contract.get("availableFunctions")
+    functions: dict[str, object] = functions_candidate if isinstance(functions_candidate, dict) else {}
     problems: list[str] = []
     if len(text) > limit_chars:
         problems.append(f"planner payload too large: {len(text)} > {limit_chars}")
@@ -132,10 +208,17 @@ def run(limit_chars: int) -> dict:
         problems.append(f"planner contract style must be sharp, got {contract.get('contractStyle')!r}")
     problems.extend(_check_catalog_losslessness(functions))
     problems.extend(_check_catalog_metadata(functions))
-    if "runtimePlan" not in payload.get("requiredJsonShape", {}):
+    prompt_budgets = _prompt_budgets()
+    required_shape_candidate = payload.get("requiredJsonShape")
+    required_shape = required_shape_candidate if isinstance(required_shape_candidate, dict) else {}
+    if "runtimePlan" not in required_shape:
         problems.append("requiredJsonShape.runtimePlan missing")
-    if "summon_boss" not in text or "hard-rejected" not in text:
-        problems.append("boss/NPC/mob safety rule not visible in prompt")
+    helper_card_candidate = functions.get("spawn_temporary_helper_projectile")
+    helper_card: dict[str, object] = helper_card_candidate if isinstance(helper_card_candidate, dict) else {}
+    helper_safety = str(helper_card.get("safety", "")).lower()
+    has_no_world_entity_rule = all(token in helper_safety for token in ("boss", "npc", "mob", "enemy"))
+    if not has_no_world_entity_rule:
+        problems.append("temporary helper world-entity safety is incomplete")
     # Environment values used by old builds must not starve or bloat the planner.
     for style in ("compact", "tiny", "minimal", "full", "verbose", "debug"):
         alt = _payload(style)
@@ -156,10 +239,19 @@ def run(limit_chars: int) -> dict:
             "functionCount": len(functions),
             "hasRequiredShape": "requiredJsonShape" in payload,
             "hasRuntimePlanShape": "runtimePlan" in payload.get("requiredJsonShape", {}),
-            "hasNoBossRule": "summon_boss" in text and "hard-rejected" in text,
+            "hasNoBossRule": has_no_world_entity_rule,
             "note": "Prompt-only readiness check; does not call the LLM.",
         },
         "sectionSizes": _section_sizes(payload),
+        "promptBudgets": prompt_budgets,
+        "parentCardChars": sum(
+            len(json.dumps(payload.get(key), ensure_ascii=False, separators=(",", ":")))
+            for key in ("itemA", "itemB")
+        ),
+        "engineFunctionCardChars": sum(
+            len(json.dumps({fn: card}, ensure_ascii=False, separators=(",", ":")))
+            for fn, card in functions.items()
+        ),
         "contractSectionSizes": _contract_section_sizes(contract),
         "functionCardSizes": {fn: len(json.dumps({fn: card}, ensure_ascii=False, separators=(",", ":"))) for fn, card in functions.items()},
         "hiddenFunctions": sorted(PLANNER_HIDDEN_ENGINE_FUNCTIONS),

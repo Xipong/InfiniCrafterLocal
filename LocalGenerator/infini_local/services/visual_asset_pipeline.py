@@ -114,24 +114,12 @@ def zimage_pe_clean_text(text: str) -> str:
         (r"\bruntime code handles\b", "the visible texture keeps"),
         (r"\bcode handles\b", "the visible texture keeps"),
         (r"\bfor runtime rotation\b", "along its length"),
-        (r"\bruntime/VFX draws the long tether\b", "the visible sprite includes a short local tether detail only when it improves readability"),
-        (r"\bprojectile PNG is the compact harpoon head/hook/anchor/blade body only\b", "the visible projectile body is a compact harpoon head, hook, anchor, or blade"),
-        (r"\blong rope/chain/tether is not part of the PNG\b", "visible rope or chain stays as a short local attachment when present"),
-        (r"\bno full-length spear shaft, no polearm handle, no line crossing the canvas, no off-canvas cord; allow only a tiny rope stump, short chain nub, small loop, or compact coil attached to the body\b", "any rope or chain detail is a short local attachment that supports the main silhouette"),
-        (r"\bnot a held polearm animation\b", "in a free-flying projectile pose"),
-        (r"\bnot a free-flying bolt\b", "in a held projection pose"),
-        (r"\bno player hand, no full melee swing pose\b", "show only the projectile body"),
         (r"\bwith no huge empty border\b", "while keeping the subject large in frame"),
-        (r"\bno full[- ]canvas trail\b", "with only a short local trail accent"),
-        (r"\bno full[- ]canvas chains?\b", "with only compact local chain detail when it belongs to the subject"),
-        (r"\bno full[- ]screen cord\b", "with only compact local cord detail when it belongs to the subject"),
         (r"\bno oversized empty icon\b", "with the subject kept large in frame"),
         (r"\bno magic glow\b", "without magical glow"),
         (r"\bno coin silhouette\b", "without a coin silhouette"),
         (r"\bno readable letters, numbers, logo marks, UI labels, or symbols\b", "without text, logos, or UI marks"),
         (r"\bzero readable letters, numbers, logo marks, UI labels, or symbols\b", "without text, logos, or UI marks"),
-        (r"\bstring/tether is runtime/VFX, not in the PNG\b", "the visible yoyo string, if shown, is only a short local nub"),
-        (r"\bfull whip arc/cord is runtime/VFX, not in the PNG\b", "the visible whip form is a compact tip or short segment"),
     ]
     for pat, repl in replacements:
         t = re.sub(pat, repl, t, flags=re.IGNORECASE)
@@ -209,7 +197,7 @@ def compact_zimage_asset_prompt(parts: list[str], role: str, limit: int = 1800) 
         seen.add(key)
         cleaned.append(t)
     if not cleaned:
-        cleaned.append(f"A single Terraria-like {role} pixel sprite on a uniform #ff00ff magenta chroma-key canvas")
+        cleaned.append(f"A Terraria-like {role} pixel sprite on a uniform #ff00ff magenta chroma-key canvas")
 
     if len(cleaned) == 1:
         return truncate_prompt_at_boundary(cleaned[0], max(1, limit - 1)).rstrip(".") + "."

@@ -10,47 +10,10 @@ from infini_local.pipelines.parent_context_pipeline import (
 )
 
 
-# AGENT MAP: projectile visual-family and parent-projectile affordance seam.
-# Owns visual-family inference and raw parent projectile size reference only;
-# executable behavior stays authored through runtimePlan/attack genome.
+# AGENT MAP: raw parent-projectile size reference seam.
+# Executable behavior and visual family stay authored through runtimePlan.
 # Callers import this owner directly.
 
-
-
-def _explicit_visual_family_value(data: dict[str, Any]) -> str:
-    raw = str(data.get("projectileVisualFamily") or data.get("projectileVisualFamilyHint") or "").strip().lower().replace("-", "_")
-    aliases = {
-        "throwing_star": "shuriken_star",
-        "disc": "round_disc",
-        "disk": "round_disc",
-    }
-    return aliases.get(raw, raw)
-
-def infer_projectile_visual_family(data: dict[str, Any], a: dict[str, Any] | None = None, b: dict[str, Any] | None = None) -> str:
-    """Return a visual-orientation family for generated projectile sprites.
-
-    This is not gameplay routing: executable behavior still comes from runtimePlan.
-    The fallback only uses authored runtime family fields and raw projectile facts to keep
-    arrows/darts/bolts side-on instead of vertical inventory-icon sprites.
-    """
-    explicit = _explicit_visual_family_value(data)
-    allowed = {"linear_side", "shuriken_star", "round_disc", "spark_mote", "orb_rune", "generic_projectile"}
-    if explicit in allowed:
-        return explicit
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    weapon_family = str(attack.get("weaponFamily") or attack.get("projectileFamily") or "").lower()
-    runtime_family = str(attack.get("runtimeFamily") or attack.get("delivery") or "").lower()
-    if weapon_family in {"bow", "crossbow", "repeater", "gun", "shotgun", "blowgun", "dart", "launcher", "harpoon"}:
-        return "linear_side"
-    if runtime_family in {"shoot", "throw"}:
-        for parent in (a or {}, b or {}):
-            try:
-                fam = parent_projectile_family(effective_projectile_profile_of(parent))
-            except Exception:
-                fam = ""
-            if fam == "linear_side":
-                return "linear_side"
-    return "generic_projectile"
 
 def parent_projectile_family(proj: dict[str, Any]) -> str:
     """Internal raw-shape bucket for diagnostics only.
@@ -187,8 +150,6 @@ def apply_parent_projectile_affordance(genome: dict[str, Any], a: dict[str, Any]
     return genome
 
 __all__ = [
-    "_explicit_visual_family_value",
-    "infer_projectile_visual_family",
     "parent_projectile_family",
     "choose_parent_projectile_size_reference",
     "apply_parent_projectile_affordance",

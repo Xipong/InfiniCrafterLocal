@@ -494,8 +494,7 @@ public sealed class GeneratedItemData
     assert {name: prop.type_name for name, prop in graph.classes["GeneratedItemData"].properties.items()} == {"damage": "int", "note": "string"}
 
     gate_keys = (
-        "INFINI_SKIP_CONFIG_FILE", "INFINI_USE_LLM", "INFINI_LLM_RUNTIME_AUTHORING",
-        "INFINI_LLM_RUNTIME_PLAN_REQUIRED", "INFINI_LLM_RUNTIME_STRICT_VALIDATION",
+        "INFINI_SKIP_CONFIG_FILE", "INFINI_USE_LLM",
         "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", "INFINI_BALANCE_MODE",
     )
     before = {key: os.environ.get(key) for key in gate_keys}
@@ -636,8 +635,6 @@ def _contract_check_semantic_tools_run_without_preconfigured_pythonpath() -> Non
         assert json.loads(proc.stdout)["ok"] is True
 
 def _contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalization_marker() -> None:
-    from infini_local.pipelines.llm_authoring_pipeline import _merge_raw_boundary_errors
-
     raw = {
         "runtimePlan": {
             "_normalization": {"api": "spoofed"},
@@ -649,9 +646,7 @@ def _contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalizat
     }
     raw_boundary = runtime_plan_boundary_report(raw)
     assert raw_boundary["ok"] is False
-    merged = _merge_raw_boundary_errors({"ok": True, "errors": []}, raw_boundary, [])
-    assert merged["ok"] is False
-    assert any("chargeTicks" in row for row in merged["errors"])
+    assert any("chargeTicks" in row for row in raw_boundary["errors"])
 
     repairable = {
         "runtimePlan": {
@@ -662,13 +657,17 @@ def _contract_check_raw_strict_boundary_cannot_be_bypassed_by_spoofed_normalizat
         }
     }
     repairable_boundary = runtime_plan_boundary_report(repairable)
-    repaired = _merge_raw_boundary_errors(
-        {"ok": True, "errors": []},
-        repairable_boundary,
-        [{"index": 0, "kind": "scalar_parse", "field": "chargeTicks", "to": 24}],
-    )
-    assert repaired["ok"] is True
-    assert repaired["rawStrictBoundary"]["ok"] is False
+    assert repairable_boundary["ok"] is False
+
+    exact = {
+        "runtimePlan": {
+            "engineCalls": [{
+                "fn": "fire_ranged_weapon",
+                "params": {"family": "charge_release", "chargeTicks": 24},
+            }],
+        }
+    }
+    assert runtime_plan_boundary_report(exact)["ok"] is True
 
 
 def _contract_check_source_only_agent_diff_uses_file_index_before_git_bootstrap(tmp_path: Path) -> None:

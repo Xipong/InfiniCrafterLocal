@@ -6,7 +6,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.pipelines.combine_validation import validate_and_repair
+from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.pipelines.item_power_knowledge import canonicalize
 from infini_local.pipelines import presentation_sound
 
 from csharp_partial_reader import read_text_with_partial_bundles
@@ -16,7 +18,10 @@ PARENT_B = {"name": "Fallen Star", "type": 75, "damage": 0, "value": 100}
 
 
 def _compile(plan: dict, key: str) -> dict:
-    child = final_normalize(validate_and_repair(plan, PARENT_A, PARENT_B, {}, {}, key))
+    ca = canonicalize(PARENT_A)
+    cb = canonicalize(PARENT_B)
+    child = validate_and_repair(plan, PARENT_A, PARENT_B, ca, cb, key)
+    child = final_normalize(attach_gameplay_and_attack(child, PARENT_A, PARENT_B, ca, cb))
     attack = child["attack"]
     return attack.get("genome") if isinstance(attack.get("genome"), dict) else attack
 
@@ -29,17 +34,19 @@ def _contract_check_auxiliary_weapon_taxonomy_is_not_part_of_runtime_contract() 
         "runtimePlan": {
             "resultKind": "weapon",
             "engineCalls": [
-                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 32, "useTimeTicks": 38, "weaponSubfamily": "shotgun"}},
+                {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "ranged", "damage": 32, "useTimeTicks": 38}},
                 {"fn": "fire_ranged_weapon", "params": {
                     "family": "shotgun",
                     "ammoFor": "bullet",
                     "movement": "gravity_arc",
+                    "speed": 11,
+                    "rangeTiles": 48,
+                    "lifetimeTicks": 90,
+                    "pierce": 1,
                     "shotCount": 5,
                     "spreadRadians": 0.35,
                     "projectileShape": "small star pellets",
                     "projectileImpact": "sparkling falling star burst",
-                    "weaponSubfamily": "shotgun",
-                    "attackPatternTags": ["shotgun_spread", "falling_star"],
                 }},
                 {"fn": "spawn_contact_particles", "params": {"effect": "star", "amount": 16, "scale": 0.9}},
             ],
@@ -65,7 +72,7 @@ def _contract_check_overhead_visual_role_uses_exact_runtime_fields_without_tags(
             "resultKind": "weapon",
             "engineCalls": [
                 {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 28, "useTimeTicks": 32}},
-                {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "wide golden star slash arc", "effect": "star"}},
+                {"fn": "perform_melee_attack", "params": {"family": "broadsword", "projectileShape": "wide golden star slash arc", "effect": "star", "speed": 8, "rangeTiles": 5, "lifetimeTicks": 24, "shotCount": 1, "spreadRadians": 0.0, "pierce": 1}},
                 {"fn": "apply_on_hit_effect", "params": {"onHit": "overhead_barrage", "count": 4, "aoeRadiusTiles": 2}},
             ],
         },

@@ -59,6 +59,22 @@ def _check_registry_register_local_can_skip_asset_hydration() -> None:
     assert "EnsureAssetsForData(data)" in source
 
 
+def _check_player_save_reference_cannot_replace_or_persist_canonical_registry_data() -> None:
+    source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Services" / "GeneratedItemRegistryService.cs").read_text(encoding="utf-8")
+    start = source.index("public void RegisterLocal")
+    end = source.index("public void PublishGeneratedItem", start)
+    block = source[start:end]
+    guard = block.index("GeneratedItemData.IsPlayerSaveReferenceOnly(data)")
+    normalize = block.index("data.Normalize()")
+    persist = block.index("PersistOne(data)")
+    assert guard < normalize < persist
+    guarded = block[guard:normalize]
+    assert "_byId.TryGetValue(data.Id" in guarded
+    assert "EnsureAssetsForData(canonical" in guarded
+    assert "return;" in guarded
+    assert "PersistOne" not in guarded
+
+
 def _check_generated_item_data_rejects_old_runtime_versions_and_caps_strings() -> None:
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert '"v0.4.28"' not in source and '"v0.4.29"' not in source
@@ -88,6 +104,7 @@ def _run_coarse_contracts(tmp_path):
     for _name in [
     '_check_generated_item_loaddata_does_not_start_registry_or_asset_sync',
     '_check_registry_register_local_can_skip_asset_hydration',
+    '_check_player_save_reference_cannot_replace_or_persist_canonical_registry_data',
     '_check_player_save_payload_is_compact_reference_not_runtime_definition',
     '_check_generated_item_runtime_hydrates_playersave_ref_from_local_cache',
 

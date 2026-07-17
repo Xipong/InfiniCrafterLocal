@@ -36,7 +36,6 @@ class RuntimePlanBoundary(StrictBoundaryModel):
 
 class BakedAssetBoundary(StrictBoundaryModel):
     mode: Literal["baked_sprite", "particle_vfx", "reuse_item_sprite", "none"]
-    prompt: str = ""
     reason: str = ""
     distinctFromItem: bool | None = None
 
@@ -72,27 +71,6 @@ class VisualKitBoundary(StrictBoundaryModel):
     qualityNotes: list[str] = Field(default_factory=list)
     negativePrompt: str = ""
     animeReference: AnimeReferenceBoundary | None = None
-
-    @field_validator("palette", mode="before")
-    @classmethod
-    def canonicalize_palette_shape(cls, value: Any) -> Any:
-        # Shape-only repair for providers that serialize a JSON string instead of
-        # a one-dimensional string array. Palette semantics remain authored.
-        if isinstance(value, str):
-            import re
-            return [part.strip() for part in re.split(r"[,;/]", value) if part.strip()]
-        return value
-
-    @field_validator("vfxMaterialHints", "animationPlan", "assetDependencies", "qualityNotes", mode="before")
-    @classmethod
-    def canonicalize_singleton_text_lists(cls, value: Any) -> Any:
-        # OpenAI-compatible JSON modes still occasionally serialize a one-entry text
-        # list as a plain string.  This is a shape-only canonicalization: no splitting,
-        # guessing, or semantic repair.  Other wrong types remain strict failures.
-        if isinstance(value, str):
-            cleaned = value.strip()
-            return [cleaned] if cleaned else []
-        return value
 
     @field_validator("bakedAssets")
     @classmethod
@@ -520,7 +498,7 @@ class VfxManifestBoundary(StrictBoundaryModel):
 
 ATTACK_DEBUG_ONLY_FIELDS = frozenset({
     "genome", "engineMetrics", "patternSource", "runtimeAuthoringProvenance",
-    "primary", "primaryAction", "mechanicClaims", "runtimeContract", "runtimeArchetype",
+    "primary", "primaryAction", "mechanicClaims", "runtimeContract",
 })
 # Historical cache/replay payloads can contain two redundant top-level AttackSpec
 # fields.  Damage is owned by GameplaySpec and generated-executor activation is
@@ -533,7 +511,7 @@ VFX_MANIFEST_DEBUG_ONLY_FIELDS = frozenset({"parentEffectProfile"})
 VFX_BUDGET_DEBUG_ONLY_FIELDS = frozenset({"renderQuality", "quality"})
 VFX_DEBUG_ONLY_FIELDS = frozenset({"composition", "effectLineage", "rerollSalt"})
 _RUNTIME_PLAN_INTERNAL_KEYS = frozenset({"_normalization"})
-_ENGINE_CALL_INTERNAL_KEYS = frozenset({"_index", "_rawFn", "_semanticFn"})
+_ENGINE_CALL_INTERNAL_KEYS = frozenset({"_index", "_rawFn"})
 
 
 def _errors(exc: ValidationError) -> list[str]:
@@ -614,63 +592,18 @@ _VISUAL_LIST_FIELDS = (
 
 
 def canonical_visual_kit_view(value: Any, *, repairs: list[str] | None = None) -> dict[str, Any]:
-    """Validate VisualKit and collapse legacy duplicate role prompts.
-
-    New authoring has exactly one prompt field per role at VisualKit top level.
-    Old cache/replay payloads may still carry ``bakedAssets.<role>.prompt``; that
-    value is migrated only when the canonical role prompt is absent, then removed.
-    All repairs are shape/provenance migrations only; no visual meaning is inferred.
-    """
+    """Validate the one current VisualKit contract without aliases or migrations."""
     if not isinstance(value, dict):
         raise TypeError("visualKit must be a JSON object")
     raw = copy.deepcopy(value)
-    repair_log = repairs if repairs is not None else []
-
-    for legacy_key in ("silhouetteContract", "shapeContract", "itemShapeContract", "iconShapeContract"):
-        legacy_value = str(raw.get(legacy_key) or "").strip()
-        if legacy_value and not str(raw.get("itemSilhouetteContract") or "").strip():
-            raw["itemSilhouetteContract"] = legacy_value
-            repair_log.append(f"{legacy_key}:moved_to_itemSilhouetteContract")
-        raw.pop(legacy_key, None)
-
-    for field in _VISUAL_LIST_FIELDS:
-        field_value = raw.get(field)
-        if not isinstance(field_value, str):
-            continue
-        if field == "palette":
-            import re
-            raw[field] = [part.strip() for part in re.split(r"[,;/]", field_value) if part.strip()]
-            repair_log.append("palette:string_to_list")
-        else:
-            cleaned = field_value.strip()
-            raw[field] = [cleaned] if cleaned else []
-            repair_log.append(f"{field}:string_to_singleton_list")
 
     baked_value = raw.get("bakedAssets")
+    if baked_value is not None and not isinstance(baked_value, dict):
+        raise TypeError("visualKit.bakedAssets must be a JSON object")
     baked: dict[str, Any] = dict(baked_value) if isinstance(baked_value, dict) else {}
     unknown_roles = sorted(set(baked) - set(_VISUAL_ROLE_PROMPT_FIELDS))
     if unknown_roles:
         raise ValueError(f"visualKit.bakedAssets contains unknown roles: {unknown_roles}")
-    for role, prompt_field in _VISUAL_ROLE_PROMPT_FIELDS.items():
-        spec = baked.get(role) if isinstance(baked.get(role), dict) else None
-        if not isinstance(spec, dict):
-            continue
-        legacy_prompt = str(spec.get("prompt") or "").strip()
-        canonical_prompt = str(raw.get(prompt_field) or "").strip()
-        if legacy_prompt and not canonical_prompt:
-            raw[prompt_field] = legacy_prompt
-            repair_log.append(f"bakedAssets.{role}.prompt:moved_to_{prompt_field}")
-        elif legacy_prompt and canonical_prompt and legacy_prompt != canonical_prompt:
-            repair_log.append(f"bakedAssets.{role}.prompt:discarded_duplicate_of_{prompt_field}")
-        spec.pop("prompt", None)
-        if role != "projectile" and str(spec.get("mode") or "") == "reuse_item_sprite":
-            baked.pop(role, None)
-            repair_log.append(f"bakedAssets.{role}:dropped_role_inapplicable_reuse_item_sprite")
-            continue
-        if role != "projectile" and "distinctFromItem" in spec:
-            spec.pop("distinctFromItem", None)
-            repair_log.append(f"bakedAssets.{role}.distinctFromItem:dropped_role_inapplicable")
-        baked[role] = spec
     raw["bakedAssets"] = baked
 
     parsed = VisualKitBoundary.model_validate(raw)
@@ -680,7 +613,6 @@ def canonical_visual_kit_view(value: Any, *, repairs: list[str] | None = None) -
     for role, spec in out_baked.items():
         if not isinstance(spec, dict):
             continue
-        spec.pop("prompt", None)
         mode = str(spec.get("mode") or "")
         distinct = spec.get("distinctFromItem")
         if mode == "reuse_item_sprite" and role != "projectile":

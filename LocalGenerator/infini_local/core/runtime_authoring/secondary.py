@@ -24,8 +24,6 @@ _DEBUFF_ONHITS = {"burn", "frostburn", "poison", "shadowflame", "bleed"}
 def apply_secondary_projectile_calls(
     patch: dict[str, Any],
     secondary_calls: list[dict[str, Any]],
-    *,
-    secondary_from_rejected_primary: bool = False,
 ) -> dict[str, Any]:
     """Compile one explicit secondary trigger family into bounded AttackSpec fields.
 
@@ -103,7 +101,7 @@ def apply_secondary_projectile_calls(
 
     current_onhit = _norm_name(patch.get("onHit"))
     existing_split = int(_num(patch.get("splitCount"), 0) or 0)
-    runtime_family = _norm_name(patch.get("runtimeFamily") or patch.get("delivery"))
+    runtime_family = _norm_name(patch.get("runtimeFamily"))
     if selected_trigger == SECONDARY_TRIGGER_ON_EXPIRE and runtime_family == "overhead_barrage":
         rejected.extend({
             "index": index,

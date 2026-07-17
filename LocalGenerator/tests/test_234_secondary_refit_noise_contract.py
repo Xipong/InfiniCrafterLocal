@@ -14,7 +14,7 @@ from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
 
 
-def _contract_check_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted() -> None:
+def _contract_check_incompatible_projectile_after_swing_is_rejected_without_semantic_salvage() -> None:
     data = {
         "category": "weapon",
         "runtimePlan": {
@@ -32,14 +32,9 @@ def _contract_check_incompatible_projectile_after_swing_recovers_as_secondary_no
     assert patch["runtimeFamily"] == "swing"
     assert patch["delivery"] == "swing"
     assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
-    assert patch["recoveredPrimaryConflictAsSecondary"]["mode"] == "swing_on_hit_secondary"
-    assert patch["splitCount"] == 1
-    assert patch["maxChildProjectiles"] == 1
-    assert patch["secondaryProjectileShape"] == "splinter"
-    assert patch["secondaryMaterial"] == "shadow"
-    assert patch["secondaryDamageMultiplier"] > 0
+    assert "recoveredPrimaryConflictAsSecondary" not in patch
+    assert "secondaryProjectileShape" not in patch
     assert patch["onHit"] == "lifesteal"
-    assert patch["secondaryPreservedAlongsidePrimaryOnHit"] == "lifesteal"
 
 
 def _contract_check_compiled_swing_secondary_keeps_visual_director_child_mode(monkeypatch) -> None:
@@ -198,7 +193,7 @@ def test_234_secondary_refit_noise_contract_module_contract(request):
         globals(),
         request,
         (
-            '_contract_check_incompatible_projectile_after_swing_recovers_as_secondary_not_deleted',
+            '_contract_check_incompatible_projectile_after_swing_is_rejected_without_semantic_salvage',
             '_contract_check_compiled_swing_secondary_keeps_visual_director_child_mode',
             '_contract_check_hold_light_does_not_synthesize_fake_alt_use',
             '_contract_check_refit_helper_can_salvage_too_small_projectile_sprite',

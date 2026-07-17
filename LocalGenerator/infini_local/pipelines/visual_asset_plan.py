@@ -47,7 +47,7 @@ _ROLE_KIT_PROMPT_FIELDS = {
 
 
 def _role_asset_prompt(data: dict[str, Any], role: str) -> str:
-    """Resolve the one canonical role prompt, with legacy cache fallback last."""
+    """Resolve the one canonical role prompt or its already-projected runtime field."""
     role = (role or "").strip().lower()
     kit = _visual_kit(data)
     prompt_field = _ROLE_KIT_PROMPT_FIELDS.get(role, "")
@@ -56,21 +56,11 @@ def _role_asset_prompt(data: dict[str, Any], role: str) -> str:
         return canonical_prompt
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    projected_prompt = str(
+    return str(
         visual.get(f"{role}ImagePrompt")
         or attack.get(f"{role}SpritePrompt")
         or ""
     ).strip()
-    if projected_prompt:
-        return projected_prompt
-    # Old cache/replay payloads can still reach isolated tools without the combine
-    # boundary migration. Keep this read-only fallback; fresh authoring never writes it.
-    spec = _role_baked_asset_spec(data, role)
-    for key in ("prompt", "spritePrompt", "imagePrompt"):
-        legacy_prompt = str(spec.get(key) or "").strip() if isinstance(spec, dict) else ""
-        if legacy_prompt:
-            return legacy_prompt
-    return ""
 
 def _asset_mode_from_value(value: Any) -> str:
     raw = str(value or "").strip()

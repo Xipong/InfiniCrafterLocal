@@ -32,6 +32,7 @@ LLM draft below; parser must extract the first valid JSON object.
       {
         "fn": "shoot_projectile",
         "params": {
+          "runtimeFamily": "swing",
           "delivery": "swing",
           "movement": "straight",
           "speed": 7,

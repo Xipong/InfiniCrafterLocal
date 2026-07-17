@@ -113,12 +113,39 @@ def _contract_check_responses_chain_and_stateless_chat_fallback_use_full_stage_d
 
     monkeypatch.setattr(transport, "http_json", unsupported_responses)
     dossier = _chat_payload("visual_director")
+    dossier["reasoning"] = {"effort": "low"}
+    dossier[transport.LLM_MODEL_OVERRIDE_KEY] = "replacement-model"
     with transport.llm_item_lease("responses-fallback"):
         result = transport.llm_chat_json(dossier, timeout=1)
 
     assert result["_debug"]["apiMode"] == "chat_completions"
+    footprint = result["_debug"]["transportFootprint"]
+    assert set(footprint) == {
+        "mode", "responseMode", "provider", "profile", "systemChars", "systemTokensEstimate",
+        "userChars", "userTokensEstimate", "schemaChars", "schemaTokensEstimate",
+        "repairChars", "repairTokensEstimate", "totalChars", "totalTokensEstimate",
+    }
+    assert footprint["mode"] == "visual_director"
+    assert footprint["responseMode"] == "json_object"
+    assert footprint["provider"] == "openai_compat"
+    assert footprint["profile"] == "llm_1"
+    assert footprint["systemChars"] > 0 and footprint["userChars"] > 0
+    assert footprint["systemTokensEstimate"] > 0 and footprint["userTokensEstimate"] > 0
+    assert footprint["repairChars"] == 0 and footprint["totalChars"] > footprint["userChars"]
+    repair_footprint = transport._transport_footprint(_chat_payload("runtime_repair"), "author_repair")
+    assert repair_footprint["userChars"] == 0 and repair_footprint["repairChars"] > 0
+    assert result["_debug"]["transportRetryCount"] == 1
+    assert result["_debug"]["transportRetryCauses"] == ["responses_to_chat_fallback"]
     assert [url.rsplit("/", 1)[-1] for url, _ in fallback_bodies] == ["responses", "completions"]
+    assert "text" in fallback_bodies[0][1]
+    assert fallback_bodies[0][1]["reasoning"] == {"effort": "low"}
+    assert fallback_bodies[0][1]["model"] == "replacement-model"
+    assert transport.LLM_MODEL_OVERRIDE_KEY not in fallback_bodies[0][1]
     assert fallback_bodies[-1][1]["messages"] == dossier["messages"]
+    assert fallback_bodies[-1][1]["response_format"] == dossier["response_format"]
+    assert fallback_bodies[-1][1]["reasoning"] == dossier["reasoning"]
+    assert fallback_bodies[-1][1]["model"] == "replacement-model"
+    assert transport.LLM_MODEL_OVERRIDE_KEY not in fallback_bodies[-1][1]
 
 
 def _contract_check_responses_server_failure_uses_profile_failover_without_chat_downgrade(monkeypatch) -> None:
@@ -135,10 +162,10 @@ def _contract_check_responses_server_failure_uses_profile_failover_without_chat_
     monkeypatch.setattr(transport, "OPENAI_COMPAT_MODEL", "primary-model")
     monkeypatch.setattr(transport, "LLM_API_MODE", "auto")
     transport._reset_llm_pool_runtime_for_tests()
-    calls: list[str] = []
+    calls: list[tuple[str, dict]] = []
 
     def fake_http_json(url, payload, timeout=10, headers=None):
-        calls.append(url)
+        calls.append((url, payload))
         if "primary.example" in url:
             raise urllib.error.HTTPError(url, 503, "provider unavailable", Message(), None)
         if url.endswith("/responses"):
@@ -150,15 +177,27 @@ def _contract_check_responses_server_failure_uses_profile_failover_without_chat_
         raise AssertionError(f"unexpected stateless downgrade: {url}")
 
     monkeypatch.setattr(transport, "http_json", fake_http_json)
+    request_payload = _chat_payload("visual_director")
+    request_payload[transport.LLM_MODEL_OVERRIDE_KEY] = "replacement-model"
     with transport.llm_item_lease("responses-provider-failover") as lease:
-        result = transport.llm_chat_json(_chat_payload("visual_director"), timeout=1)
+        result = transport.llm_chat_json(request_payload, timeout=1)
         assert result["_debug"]["apiMode"] == "responses"
+        assert lease.initial_profile_id == "llm_1"
+        assert lease.profile_id == "llm_2"
+        second_request = _chat_payload("item_author_contract")
+        second_request[transport.LLM_MODEL_OVERRIDE_KEY] = "replacement-model"
+        second_result = transport.llm_chat_json(second_request, timeout=1)
+        assert second_result["_debug"]["apiMode"] == "responses"
+        assert lease.snapshot()["initialProfileId"] == "llm_1"
         assert lease.profile_id == "llm_2"
 
-    assert calls == [
+    assert [url for url, _ in calls] == [
         "https://primary.example/v1/responses",
         "https://two.example/v1/responses",
+        "https://two.example/v1/responses",
     ]
+    assert [body["model"] for _, body in calls] == ["replacement-model", "model-two", "model-two"]
+    assert all(transport.LLM_MODEL_OVERRIDE_KEY not in body for _, body in calls)
 
 
 
@@ -285,18 +324,52 @@ def _contract_check_concurrent_item_leases_isolate_sequence_profile_and_response
     assert transport.current_llm_item_lease() is None
 
 
-# One collected item per contract module; individual checks keep source order and tracebacks.
+def _contract_check_remote_rate_limiter_is_shared_token_aware_and_429_safe(monkeypatch) -> None:
+    clock = [1000.0]
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(round(float(seconds), 3))
+        clock[0] += float(seconds)
+
+    monkeypatch.setattr(transport.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(transport.time, "sleep", fake_sleep)
+    body = b"x" * 20_000  # 5K estimated tokens.
+    gemini = {"model": "gemini-3.1-flash-lite"}
+    url = "https://provider.example/v1/chat/completions"
+
+    transport._reset_llm_pool_runtime_for_tests()
+    for _ in range(4):
+        transport._reserve_remote_rate_slot(url, gemini, body)
+    assert sleeps == [12.0, 12.0, 36.0]
+    assert sum(count for _, count in transport._LLM_RATE_STATE[next(iter(transport._LLM_RATE_STATE))]["events"]) == 15_000
+
+    transport._reset_llm_pool_runtime_for_tests()
+    sleeps.clear()
+    gemma = {"model": "gemma-3-27b"}
+    transport._reserve_remote_rate_slot(url, gemma, b"{}")
+    transport._reserve_remote_rate_slot(url, gemma, b"{}")
+    assert sleeps == [62.0]
+
+    transport._reset_llm_pool_runtime_for_tests()
+    sleeps.clear()
+    transport._reserve_remote_rate_slot("http://127.0.0.1:8085/v1/chat/completions", gemini, body)
+    transport._reserve_remote_rate_slot("http://localhost:1234/v1/chat/completions", gemini, body)
+    assert sleeps == []
+    assert transport._LLM_RATE_STATE == {}
+
+    transport._reset_llm_pool_runtime_for_tests()
+    sleeps.clear()
+    headers = Message()
+    headers["Retry-After"] = "75"
+    error = urllib.error.HTTPError(url, 429, "rate limited", headers, None)
+    transport._mark_remote_rate_limited(url, gemini, error)
+    transport._reserve_remote_rate_slot(url, gemini, b"{}")
+    assert sleeps == [75.0]
+
+
+# One collected item per contract module; local checks are discovered in source order.
 def test_246_llm_pool_responses_contract_module_contract(request):
     from contract_checks import run_contract_checks
 
-    run_contract_checks(
-        globals(),
-        request,
-        (
-            '_contract_check_item_lease_round_robin_pins_every_call_to_one_profile',
-            '_contract_check_responses_chain_and_stateless_chat_fallback_use_full_stage_dossier',
-            '_contract_check_responses_server_failure_uses_profile_failover_without_chat_downgrade',
-            '_contract_check_provider_failure_switches_current_item_to_next_profile_and_pins_it',
-            '_contract_check_concurrent_item_leases_isolate_sequence_profile_and_response_chain',
-        ),
-    )
+    run_contract_checks(globals(), request)

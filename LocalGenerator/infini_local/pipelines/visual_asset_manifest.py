@@ -13,10 +13,8 @@ from infini_local.core.config_bootstrap import (
 )
 from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFILE
 from infini_local.services import asset_sync_service
-from infini_local.pipelines.projectile_affordance import infer_projectile_visual_family
 from infini_local.pipelines.visual_prompt_contracts import (
     effective_projectile_canvas,
-    family_prompt_clause,
     sprite_contract_for,
 )
 
@@ -54,12 +52,7 @@ def _asset_descriptor(value: Any, required: bool = False) -> dict[str, Any] | No
 
 def sprite_contract_for_asset(data: dict[str, Any], asset: dict[str, Any]) -> dict[str, Any]:
     role = str(asset.get("role") or "item")
-    out = sprite_contract_for(role, int(asset.get("canvas") or 32))
-    if role == "projectile":
-        fam = infer_projectile_visual_family(data)
-        out["projectileVisualFamily"] = fam
-        out["promptPoseWords"] = family_prompt_clause(data, "projectile", int(asset.get("canvas") or 32))
-    return out
+    return sprite_contract_for(role, int(asset.get("canvas") or 32))
 
 def _compact_text(value: Any, limit: int = 360) -> str:
     text = re.sub(r"\s+", " ", str(value or "").strip())
@@ -112,9 +105,12 @@ def write_visual_manifest(data: dict[str, Any], plan: list[dict[str, Any]]) -> N
     try:
         mid = str(data.get("id") or "sprite")
         path = SPRITE_DIR / f"{mid}_asset_manifest.json"
-        visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-        gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
-        attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+        visual_candidate = data.get("visual")
+        visual: dict[str, Any] = visual_candidate if isinstance(visual_candidate, dict) else {}
+        gameplay_candidate = data.get("gameplay")
+        gameplay: dict[str, Any] = gameplay_candidate if isinstance(gameplay_candidate, dict) else {}
+        attack_candidate = data.get("attack")
+        attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
         clean_assets = [_asset_manifest_entry(data, asset) for asset in plan if isinstance(asset, dict)]
         vanilla_hitbox_damage = (
             int(float(gameplay.get("damage") or 0)) > 0
@@ -167,11 +163,19 @@ def write_visual_manifest(data: dict[str, Any], plan: list[dict[str, Any]]) -> N
                 "palette": visual.get("palette"),
                 "requiredAnchors": visual.get("requiredAnchors"),
                 "itemSilhouetteContract": visual.get("itemSilhouetteContract") or visual.get("silhouetteContract") or visual.get("shapeContract"),
+                "topology": visual.get("topology"),
+                "partCountMin": visual.get("partCountMin"),
+                "partCountMax": visual.get("partCountMax"),
+                "preferredCanvasSize": visual.get("preferredCanvasSize"),
+                "projectileCanvasSize": visual.get("projectileCanvasSize"),
+                "parts": visual.get("parts"),
+                "arrangement": visual.get("arrangement"),
+                "projectileVisualFamily": visual.get("projectileVisualFamily"),
+                "projectileOrientation": visual.get("projectileOrientation"),
                 "styleGuide": _compact_text(visual.get("styleGuide"), 520),
                 "imagePrompt": _compact_text(visual.get("imagePrompt"), 520),
                 "projectileImagePrompt": _compact_text(visual.get("projectileImagePrompt") or attack.get("projectileSpritePrompt"), 520),
             },
-            "projectileVisualFamily": infer_projectile_visual_family(data),
             "authoringPolicy": "ai_primary_non_procedural",
             "assets": clean_assets,
         }

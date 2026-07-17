@@ -24,7 +24,7 @@ def _contract_check_weapon_item_prompt_preserves_authored_topology_without_choos
     prompt = normalize_asset_prompt(data, "item", "leaf-shaped dark steel saber with an ornate brass hilt", 48).lower()
 
     assert "leaf-shaped dark steel saber with an ornate brass hilt" in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
     assert "geometry priority" not in prompt
     assert "do not add mirrored or duplicated structural parts" not in prompt
     assert "absent from the authored item prompt or silhouette contract" not in prompt
@@ -48,7 +48,7 @@ def _contract_check_weapon_topology_guard_allows_explicit_paired_contract_withou
 
     assert "deliberately paired set of two compact tonfa" in prompt
     assert prompt.index("deliberately paired set of two compact tonfa") < prompt.index("paired black-steel tonfa with cyan cores")
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
     assert "geometry priority" not in prompt
     assert "do not add mirrored or duplicated structural parts" not in prompt
     assert "exactly one primary grip" not in prompt
@@ -66,7 +66,7 @@ def _contract_check_non_weapon_item_does_not_receive_weapon_topology_guard(monke
     prompt = normalize_asset_prompt(data, "item", "one braided brass charm with a brown cord", 32).lower()
 
     assert "one braided brass charm with a brown cord" in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
     assert "geometry priority" not in prompt
     assert "preserve the planner-authored topology and part count" not in prompt
     assert "exactly one primary grip" not in prompt

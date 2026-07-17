@@ -741,9 +741,17 @@ def check_network_read_write_shape() -> None:
         err("InfiniCrafterLocal.cs: missing multiplayer presentation cache cleanup on unload")
     if "InfiniNetPacketIds.SyncGeneratedHeldItemPresentation" not in mod:
         err("InfiniCrafterLocal.cs: missing held item presentation sync packet routing")
-    for needle in ["EmitVanillaMotionPolish", "EmitVanillaImpactPolish", "DrawStockMotionPolish", "VanillaPolishDust", "AllowsVanillaMotionPolish"]:
+    for needle in ["EmitVanillaMotionPolish", "EmitVanillaImpactPolish", "VanillaPolishDust", "AllowsVanillaMotionPolish"]:
         if needle not in projectile:
             err(f"GeneratedProjectile.cs: missing exact presentation polish helper `{needle}`")
+    if "DrawStockMotionPolish" in projectile:
+        err("GeneratedProjectile.cs: unauthored universal MagicPixel motion trail remains `DrawStockMotionPolish`")
+    fallback_source = read(SRC / "Content/Projectiles/GeneratedProjectile.Visuals.cs")
+    fallback_marker = "private void DrawRuntimePlanFallback"
+    fallback = fallback_source.split(fallback_marker, 1)[1] if fallback_marker in fallback_source else ""
+    fallback = fallback.split("\n    private ", 1)[0]
+    if "DrawRect(" not in fallback or "DrawLine(" in fallback:
+        err("GeneratedProjectile.cs: missing-art fallback must be a compact body marker, not a directional line/beam")
     for forbidden in ["PresentationIdentityText", "HasPresentationIdentity", "PolishDustForIdentity"]:
         if forbidden in projectile:
             err(f"GeneratedProjectile.cs: fuzzy presentation router remains `{forbidden}`")

@@ -57,12 +57,11 @@ def _check_zimage_prompt_uses_positive_contract_not_negative_channel(monkeypatch
     assert "the game renders" not in prompt
     assert "outside this png" not in prompt
     assert "runtime" not in prompt
-    assert "short local" in prompt or "local attachment" in prompt
+    assert "thin taut rope line back to the player" in prompt
     assert "subject:" not in prompt
     assert "purpose:" not in prompt
-    assert "thin taut rope line back to the player" not in prompt
     assert "long rope/chain/tether is not part of the png" not in prompt
-    assert "show one projectile body only" in prompt or "short local attachment" in prompt
+    assert "preserve the authored projectile body or multipart arrangement" in prompt
     assert len(prompt) <= 1800
 
 
@@ -173,7 +172,8 @@ def _check_zimage_final_prompt_preserves_visual_director_subject_after_wrapper(m
     assert "bright white edge glints" in prompt
     assert prompt.startswith("two silver shurikens")
     assert "appearance:" not in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
+    assert "#ff00ff" in prompt
 
 
 def _check_zimage_palette_filters_chroma_key_but_keeps_background_clause(monkeypatch) -> None:
@@ -240,7 +240,7 @@ def _check_zimage_prompt_strips_inline_negative_blocks_and_sd_boilerplate(monkey
     assert "worst quality" not in prompt
     assert "small green crystal star with a brass socket" in prompt
     assert "without letters, logos, or ui marks" not in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
 
 
 
@@ -268,7 +268,7 @@ def _check_zimage_prompt_uses_simpler_canvas_language(monkeypatch) -> None:
     assert "32x32 to 64x64" not in prompt
     assert "thin safety margin" not in prompt
     assert "unlabeled visual sprite" not in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
     assert "with a thin safety border" not in prompt
     assert "without letters, logos, or ui marks" not in prompt
 
@@ -296,9 +296,8 @@ def _check_role_hygiene_keeps_impact_effect_only(monkeypatch) -> None:
     assert "dense puff of brown sawdust" in prompt
     assert "hit impact sprite" in prompt
     assert "momentary hit effect" in prompt
-    assert "no item or weapon body" in prompt
+    assert "authored momentary impact effect only" in prompt
     assert "jagged wooden blade carved" not in prompt
-    assert "no held weapon body" in prompt
 
 
 def _check_role_hygiene_keeps_weapon_icon_from_placeable_scene(monkeypatch) -> None:
@@ -323,7 +322,7 @@ def _check_role_hygiene_keeps_weapon_icon_from_placeable_scene(monkeypatch) -> N
     ).lower()
 
     assert "wooden chair silhouette" in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
     assert "handheld or carriable usable item" not in prompt
     assert "furniture placement preview" not in prompt
     assert "preserve authored literal, attached, fused, disassembled" not in prompt
@@ -345,11 +344,11 @@ def _check_thrust_projectile_prompt_does_not_force_spear_category(monkeypatch) -
     prompt = normalize_asset_prompt(data, "projectile", data["visual"]["projectileImagePrompt"], 64).lower()
 
     assert "tight bundle of jagged wooden splinters" in prompt
-    assert "close-range thrust projection texture" in prompt
-    assert "forcing a spear or polearm silhouette" in prompt
+    assert "close-range thrust projection texture" not in prompt
+    assert "forcing a spear or polearm silhouette" not in prompt
     assert "held spear/lance" not in prompt
     assert "straight polearm body" not in prompt
-    assert "moving hit object texture only" in prompt
+    assert "projectile body or multipart arrangement" in prompt
 
 
 def _check_item_prompt_does_not_append_generated_name_as_flux_meta_text(monkeypatch) -> None:
@@ -422,7 +421,7 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
     prompt = normalize_asset_prompt(data, "item", authored, 48).lower()
 
     assert "wooden chair leg cudgel" in prompt
-    assert "the complete item is fully visible" in prompt
+    assert "single centered object" not in prompt
     assert "handheld or carriable usable item" not in prompt
     assert "furniture placement preview" not in prompt
     assert "preserve authored literal, attached, fused, disassembled" not in prompt
@@ -437,7 +436,7 @@ def _check_item_prompt_deduplicates_handheld_guard_for_zimage(monkeypatch) -> No
     prompt = normalize_asset_prompt(data, "item", duplicated, 48).lower()
 
     assert "wooden chair leg cudgel" in prompt
-    assert prompt.count("the complete item is fully visible") == 1
+    assert "single centered object" not in prompt
     assert "handheld or carriable usable item" not in prompt
     assert "furniture placement preview" not in prompt
     assert "preserve authored literal, attached, fused, disassembled" not in prompt
@@ -471,7 +470,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
     assert "visible tsuka" in prompt
     assert "not a short knife" not in prompt
     assert prompt.index("long slender slightly curved blade") < prompt.index("a katana with a dark serrated")
-    assert prompt.count("the complete item is fully visible") == 1
+    assert "single centered object" not in prompt
 
     no_contract = {
         "name": "Shadow-Wreathed Katana",
@@ -512,7 +511,7 @@ def _check_item_shape_contract_is_data_authored_not_code_taxonomy(monkeypatch) -
     assert "no detached lower spur" not in kit_prompt
 
     source = (Path(__file__).resolve().parents[1] / "infini_local" / "pipelines" / "visual_prompt_contracts.py").read_text(encoding="utf-8")
-    guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def _authored_tether_context", 1)[0]
+    guard_body = source.split("def role_visual_prompt_guard", 1)[1].split("def family_prompt_clause", 1)[0]
     assert "_authored_item_silhouette_contract(data)" in guard_body
     assert "_item_shape_contract_clauses" not in source
     assert "katana/tachi silhouette contract" not in source
@@ -595,7 +594,8 @@ def _check_projectile_fantasy_context_is_runtime_family_aware(monkeypatch) -> No
     assert "one small copper bullet" in gun_prompt
     assert "large brass flower rifle" not in gun_prompt
     assert "walnut stock" not in gun_prompt
-    assert "jade crescent boomerang bound with gold wire" in boomerang_prompt
+    assert "the same jade crescent weapon body in flight" in boomerang_prompt
+    assert "jade crescent boomerang bound with gold wire" not in boomerang_prompt
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving

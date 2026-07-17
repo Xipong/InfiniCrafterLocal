@@ -207,10 +207,7 @@ public sealed partial class GeneratedItemData
         PresentationGenome ??= new PresentationGenomeSpec();
         VfxManifest ??= new VfxManifestSpec();
         VfxManifest.Normalize();
-        RuntimeArchetype ??= new RuntimeArchetypeSpec();
-        RuntimeArchetype.Normalize();
-        RuntimeContract ??= new RuntimeContractSpec();
-        RuntimeContract.Normalize();
+
         Debug ??= new Dictionary<string, JsonElement>();
         ExtensionData ??= new Dictionary<string, JsonElement>();
         NormalizeGameplayVisualAndAttackRanges();

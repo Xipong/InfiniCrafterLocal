@@ -17,7 +17,6 @@ from infini_local.pipelines.presentation_sound import presentation_from_genome
 
 from infini_local.pipelines.result_identity_policy import (
     bad_result_name,
-    normalize_category,
 )
 from infini_local.pipelines.result_knowledge_card import build_result_item_card
 
@@ -30,20 +29,10 @@ def final_normalize(data: dict[str, Any]) -> dict[str, Any]:
     # project build version. C# can reject future unsupported executable contracts
     # instead of silently losing behavior.
     data.setdefault("runtimeApiVersion", ENGINE_RUNTIME_API_VERSION)
-    data["category"] = normalize_category(data.get("category", "generic"))
-    data.setdefault("gameplay", {}).setdefault("kind", data["category"])
-    data["gameplay"]["kind"] = normalize_category(data["gameplay"].get("kind"))
-    data.setdefault("accessory", {}).setdefault("enabled", data["category"] == "accessory")
-    if data["category"] == "accessory":
-        data.setdefault("attack", {})["enabled"] = False
-        data["gameplay"]["kind"] = "accessory"
     data.setdefault("itemKnowledge", {})
     visual = data.setdefault("visual", {})
     if isinstance(visual.get("palette"), list):
         visual["palette"] = [str(x) for x in visual.get("palette", []) if str(x).strip()][:8]
-    attack = data.setdefault("attack", {})
-    if isinstance(attack, dict) and attack.get("genome") is None:
-        attack["genome"] = {}
     if not isinstance(data.get("presentationGenome"), dict) or not data.get("presentationGenome"):
         data["presentationGenome"] = presentation_from_genome(data)
 

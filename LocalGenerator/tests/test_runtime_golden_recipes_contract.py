@@ -24,8 +24,9 @@ def _check_golden_magic_mirror_boots_authors_mobility_and_accessory():
 
 def _check_golden_spelunker_style_contract_does_not_add_ore_visual_executor():
     card = engine_runtime_capability_contract_for_llm({}, {}, {})
+    semantics = card["semanticRules"]
+    assert any("ore" in rule.lower() and "diagnostic" in rule.lower() for rule in semantics)
     text = str(card)
-    assert "Ore visual execution is not added in this patch" in text
     assert "accessory_effect" in text
     assert "extractinator_output" not in text
 

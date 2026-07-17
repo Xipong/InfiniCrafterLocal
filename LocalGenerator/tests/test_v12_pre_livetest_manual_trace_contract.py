@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
@@ -29,7 +31,8 @@ def _contract_check_active_planner_contract_is_honest_and_compact() -> None:
     assert "on_hit or on_expire" in text
     assert "shotCount is simultaneous multishot" in text
     assert "Starfury-style melee-on-use" in text
-    assert "authored dart/throwable attack" in text
+    assert "consumable_weapon" in text
+    assert "shoot_projectile" in functions
 
 
 def _contract_check_only_canonical_temporary_helper_name_is_accepted_and_world_entities_stay_rejected() -> None:
@@ -59,7 +62,7 @@ def _contract_check_multishot_projectile_prompt_is_one_body_but_explicit_bundle_
     }
     prompt = normalize_asset_prompt(shotgun, "projectile", "six pellets in a wide fan", 32).lower()
     assert "six pellets in a wide fan" in prompt
-    assert "one authored projectile texture" in prompt
+    assert "one authored projectile texture" not in prompt
 
     bundle = {
         "name": "Shard Cluster",
@@ -73,7 +76,7 @@ def _contract_check_multishot_projectile_prompt_is_one_body_but_explicit_bundle_
 
 def _contract_check_child_and_item_role_guards_separate_runtime_multiplicity_and_inventory_scene() -> None:
     child = role_visual_prompt_guard("child", "three ember shards", {"attack": {"splitCount": 3}}).lower()
-    assert "one child" in child and "runtime spawns" in child
+    assert "child damaging projectile" in child and "runtime spawns" in child
 
     weapon = {
         "category": "weapon",
@@ -86,12 +89,19 @@ def _contract_check_child_and_item_role_guards_separate_runtime_multiplicity_and
 
     armor = {"category": "armor", "runtimePlan": {"resultKind": "armor"}, "armor": {"armorSlot": "head"}}
     armor_prompt = role_visual_prompt_guard("item", "astral armor", armor).lower()
-    assert "one head armor or helmet" in armor_prompt
+    assert "authored head-slot armor item" in armor_prompt
+    assert "helmet" not in armor_prompt
     assert "no character" in armor_prompt
+
+    potion = {"category": "potion", "runtimePlan": {"resultKind": "potion"}}
+    potion_prompt = role_visual_prompt_guard("item", "enchanted restorative apple", potion).lower()
+    assert "enchanted restorative apple" in potion_prompt
+    assert "authored consumable item" in potion_prompt
+    assert not any(word in potion_prompt for word in ("bottle", "vial", "flask"))
 
     furniture = {"category": "furniture", "runtimePlan": {"resultKind": "furniture"}}
     furniture_prompt = role_visual_prompt_guard("item", "cozy alchemy desk in a room", furniture).lower()
-    assert "one placeable furniture object" in furniture_prompt
+    assert "authored placeable furniture item" in furniture_prompt
     assert "no furnished room" in furniture_prompt
 
 
@@ -122,8 +132,10 @@ def _contract_check_visual_director_rejects_noncanonical_response_keys(monkeypat
         "visual": {"imagePrompt": "amber wand"},
     }
     out = VISUAL.apply_visual_director(data, {}, {}, {}, {})
-    assert "visualKit" not in out
-    error = str(out.get("debug", {}).get("visualDirectorError", ""))
+    assert out is data
+    assert data["debug"]["visualDirectorStatus"] == "visual_director_degraded"
+    assert "visualKit" not in data
+    error = str(data.get("debug", {}).get("visualDirectorError", ""))
     assert "Extra inputs are not permitted" in error
     assert "assetModes" in error
     assert "heldSpritePrompt" in error

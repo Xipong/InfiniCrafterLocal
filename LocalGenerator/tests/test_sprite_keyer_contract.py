@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image, ImageDraw
 from infini_local.pipelines import sprite_postprocess as SPRITE_POSTPROCESS
+from infini_local.pipelines import visual_sprite_generation as SPRITE_GENERATION
 from infini_local.pipelines.sprite_postprocess import (
     alpha_stats,
     postprocess_sprite,
@@ -189,43 +190,115 @@ def _check_item_topology_rejects_multiple_disconnected_significant_bodies(tmp_pa
     img.save(path)
 
     validation = validate_processed_sprite(str(path), "item")
-    assert validation["ok"] is False
-    assert any(str(reason).startswith("multiple_disconnected_item_bodies") for reason in validation["reasons"])
+    assert validation["ok"] is True
+    assert "missing_authored_topology" in validation["warnings"]
 
 
-# Coarse test bundle: the checks below used to be separate pytest items.
-# Keeping them as helper checks cuts collection/runtime noise while preserving
-# the same assertions inside one scenario-level contract per file.
-def _run_coarse_contracts(tmp_path):
-    import inspect as _inspect
-    import pytest as _pytest
+def _check_authored_multipart_topology_is_not_forced_into_one_body(tmp_path) -> None:
+    path = tmp_path / "authored_multipart_item.png"
+    img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((5, 12, 20, 35), fill=(190, 90, 30, 255))
+    draw.rectangle((28, 12, 43, 35), fill=(70, 150, 220, 255))
+    img.save(path)
 
-    for _name in [
-    '_check_sprite_keyer_removes_magenta_without_eating_white_shape',
-    '_check_sprite_keyer_samples_uniform_shifted_zimage_pink_background',
-    '_check_validation_rejects_opaque_inner_poster_card_as_fatal_background_failure',
-    '_check_sprite_keyer_removes_enclosed_sampled_magenta_holes',
-    '_check_sprite_keyer_removes_inner_white_poster_card_when_foreground_exists',
-    '_check_sprite_keyer_removes_disconnected_nested_pink_frame',
-    '_check_technical_score_describes_final_validation_not_raw_candidate',
-    '_check_postprocess_failure_preserves_the_original_asset_path',
-    '_check_nearest_downscale_is_not_a_supported_runtime_or_gui_path',
-    '_check_item_topology_rejects_multiple_disconnected_significant_bodies',
-    ]:
-        _fn = globals()[_name]
-        _sig = _inspect.signature(_fn)
-        _kwargs = {}
-        if "tmp_path" in _sig.parameters:
-            _case_dir = tmp_path / _name
-            _case_dir.mkdir(parents=True, exist_ok=True)
-            _kwargs["tmp_path"] = _case_dir
-        if "monkeypatch" in _sig.parameters:
-            with _pytest.MonkeyPatch.context() as _mp:
-                _kwargs["monkeypatch"] = _mp
-                _fn(**_kwargs)
-        else:
-            _fn(**_kwargs)
+    separated = validate_processed_sprite(
+        str(path), "item", topology="multipart_separated", part_count_min=2, part_count_max=2
+    )
+    touching = validate_processed_sprite(
+        str(path), "item", topology="multipart_touching", part_count_min=2, part_count_max=2
+    )
+
+    assert separated["ok"], separated
+    assert separated["topology"] == "multipart_separated"
+    assert touching["ok"] is False
+    assert "multipart_touching_requires_connected_body" in touching["reasons"]
+    assert sprite_validation_fatal(touching)
+
+    wrong_count = validate_processed_sprite(
+        str(path), "item", topology="multipart_separated", part_count_min=3, part_count_max=3
+    )
+    assert wrong_count["ok"] is False
+    assert any(reason.startswith("multipart_separated_too_few_bodies") for reason in wrong_count["reasons"])
+    assert sprite_validation_fatal(wrong_count)
+
+    draw.rectangle((20, 12, 28, 35), fill=(190, 90, 30, 255))
+    img.save(path)
+    touching_authored = validate_processed_sprite(
+        str(path), "item", topology="multipart_touching", part_count_min=2, part_count_max=2
+    )
+    assert touching_authored["ok"], touching_authored
 
 
-def test_sprite_keyer_contract_coarse_contract(tmp_path):
-    _run_coarse_contracts(tmp_path)
+def _check_multipart_part_list_supplies_default_component_count_contract() -> None:
+    authored = {
+        "runtimePlan": {
+            "visualIntent": {
+                "topology": "multipart_separated",
+                "parts": ["orbiting head", "central grip", "trailing counterweight"],
+                "arrangement": "the grip sits between two intentionally separated bodies",
+            },
+        },
+    }
+    assert SPRITE_GENERATION._authored_sprite_topology(authored, "item") == (
+        "multipart_separated", 3, 3,
+    )
+    authored["runtimePlan"]["visualIntent"].update({"partCountMin": 2, "partCountMax": 4})
+    assert SPRITE_GENERATION._authored_sprite_topology(authored, "item") == (
+        "multipart_separated", 2, 4,
+    )
+
+
+def _check_debug_keeps_the_exact_last_prompt_sent_to_the_image_backend(tmp_path, monkeypatch) -> None:
+    raw = tmp_path / "backend-result.png"
+    Image.new("RGBA", (32, 32), (90, 120, 160, 255)).save(raw)
+    sent_prompts: list[str] = []
+
+    def fake_backend(_data, *, prompt, negative, asset_id, canvas, role):
+        del negative, asset_id, canvas, role
+        sent_prompts.append(prompt)
+        return [] if len(sent_prompts) == 1 else [str(raw)]
+
+    monkeypatch.setattr(SPRITE_GENERATION, "IMAGE_BACKEND", "sdcpp")
+    monkeypatch.setattr(SPRITE_GENERATION, "SPRITE_RETRIES", 1)
+    monkeypatch.setattr(SPRITE_GENERATION, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(SPRITE_GENERATION, "_backend_configuration_error", lambda: "")
+    monkeypatch.setattr(SPRITE_GENERATION, "_generate_backend_variants", fake_backend)
+    monkeypatch.setattr(SPRITE_GENERATION, "pick_best_sprite", lambda variants, _role, _canvas: (variants[0], 1.0))
+    monkeypatch.setattr(SPRITE_GENERATION, "postprocess_sprite", lambda path, *_args, **_kwargs: path)
+    monkeypatch.setattr(
+        SPRITE_GENERATION,
+        "validate_processed_sprite",
+        lambda *_args, **_kwargs: {"ok": True, "reasons": [], "warnings": []},
+    )
+
+    data = {"debug": {"visualDirectorStatus": "visual_director_degraded"}}
+    path, _url, _score, status = SPRITE_GENERATION.generate_visual_asset(
+        data, "item", "authored separated item", "", "prompt_trace", 32,
+    )
+
+    assert path
+    assert status.startswith("generated")
+    assert len(sent_prompts) == 2
+    assert sent_prompts[1] != sent_prompts[0]
+    assert data["debug"]["itemFinalPrompt"] == sent_prompts[-1]
+
+    sent_prompts.clear()
+    monkeypatch.setattr(SPRITE_GENERATION, "attach_visual_soul_from_sprite", lambda *_args, **_kwargs: None)
+    item_data = {
+        "id": "prompt_trace_item",
+        "visual": {"imagePrompt": "authored separated item", "preferredCanvasSize": 32},
+        "debug": {"visualDirectorStatus": "visual_director_degraded"},
+    }
+    item_result = SPRITE_GENERATION.maybe_generate_sprite(item_data)
+    assert item_result["visual"]["spritePath"]
+    assert len(sent_prompts) == 2
+    assert item_result["debug"]["itemFinalPrompt"] == sent_prompts[-1]
+    assert item_result["visual"]["finalItemPrompt"] == sent_prompts[-1]
+
+
+# One collected item; local checks are discovered and isolated in source order.
+def test_sprite_keyer_contract_coarse_contract(request):
+    from contract_checks import run_contract_checks
+
+    run_contract_checks(globals(), request, prefix="_check_")

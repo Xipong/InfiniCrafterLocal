@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
-
 import re
-
 from typing import Any
 
+from infini_local.core.env_utils import env_float, env_int, env_str
 from infini_local.core.json_debug import bounded_json_dumps
-from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.llm_config import USE_LLM
@@ -17,237 +15,63 @@ from infini_local.core.llm_stage_messages import (
     ATTRIBUTED_PLANNER_HISTORY_KIND,
     agent_handoff,
     attributed_planner_history,
-    attributed_planner_messages,
-    planner_history_state,
     stage_chat_message,
 )
-
-from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
-from infini_local.core.runtime_authoring.reports import runtime_plan_validation_report
-from infini_local.core.runtime_authoring.engine_call_contracts import engine_params_model
-from infini_local.core.boundary_models import runtime_plan_boundary_report
-
-from infini_local.core.runtime_authoring.structural import structural_repair_runtime_plan_inplace
-from infini_local.core.runtime_promise_truth import validate_runtime_promises
 from infini_local.core.runtime_contracts import (
     STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
-    mechanic_claim_backing_relevant,
-    normalize_runtime_contract,
-    resolve_mechanic_backing_refs,
-    validate_runtime_contract,
     validate_structural_final_wire_contract,
     validate_structural_planner_contract,
 )
-from infini_local.pipelines.combine_genome_contract import combat_genome_required_for
-from infini_local.pipelines.llm_authoring_prompt import (
-    MECHANIC_BACKING_REF_RULES,
-    build_llm_author_payload,
-    normalize_behavior_toy_fields,
-    normalize_llm_attack_shape,
-    runtime_plan_to_attack_genome_patch,
+from infini_local.pipelines.author_item_contract import (
+    author_item_provider_repair_response_schema,
+    author_item_provider_response_schema,
+    author_item_repair_response_schema,
+    project_provider_author_item_to_local,
+    strict_author_item_repair_report,
+)
+from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+
+
+_AUTHOR_STRUCTURAL_WIRE_RULES = (
+    " Return exactly the source-derived requiredJsonShape fields. "
+    "For combat, engineCalls[0] is set_item_stats with explicit resultKind and required combat stats; every later call uses only its catalog params. "
+    "concept.coreMechanic is concise player-facing gameplay text. playerViewTimeline is optional and contains only relevant visible phases. "
+    "Do not return compiler provenance, receipts, signatures, or final DTO paths."
 )
 from infini_local.pipelines.llm_transport import (
+    LLM_MODEL_OVERRIDE_KEY,
     active_llm_provider,
     apply_llm_common_options,
-    llm_answer_max_tokens,
     llm_chat_json,
     llm_json_response_format,
     llm_reasoning_system_suffix,
     resolve_llm_model,
 )
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
 from infini_local.storage.trace_runtime import _trace_message_summary, log_event, trace_event
 
 
+def _prepare_parsed_author_item(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Decode provider-only nullable omissions; perform no alias or semantic repair."""
+    canonical = project_provider_author_item_to_local(parsed)
+    raw_snapshot = copy.deepcopy(canonical)
+    obj = copy.deepcopy(canonical)
+    obj["_authorItemRaw"] = raw_snapshot
+    return obj
 
 
-# AGENT MAP: LLM JSON authoring and targeted repair boundary.
-# The model proposes structured item/runtime data; code then validates/compiles it.
-# Repair prompts should be narrow and provenance-visible, not a hidden second author
-# that rewrites identity or routes mechanics from prose.
 
 
-# Generic lexical binding between public tooltip clauses and machine-backed claims.
-# This intentionally has no item/mechanic vocabulary: polarity and authored numbers
-# must agree, while harmless wording variation (for example channel/charge) may pass.
-_PUBLIC_CLAUSE_STOPWORDS = {
-    "a", "an", "and", "as", "at", "by", "for", "from", "in", "into", "is", "it",
-    "near", "of", "on", "or", "point", "that", "the", "then", "this", "to", "up",
-    "while", "with", "within", "you", "your",
-}
-_PUBLIC_NEGATIONS = {"no", "not", "never", "neither", "nor", "without"}
+def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
+    """Validate author metadata without mutating the model-authored document."""
+    return validate_structural_planner_contract(plan)
 
 
-def _normalized_public_clause(value: Any) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^\w%+.-]+", " ", str(value or "").lower(), flags=re.UNICODE)).strip(" .-")
-
-
-def _public_word_stem(word: str) -> str:
-    if len(word) > 5 and word.endswith("ing"):
-        word = word[:-3]
-    elif len(word) > 4 and word.endswith("ed"):
-        word = word[:-2]
-    elif len(word) > 4 and word.endswith("es"):
-        word = word[:-1]
-    elif len(word) > 3 and word.endswith("s"):
-        word = word[:-1]
-    return word
-
-
-def _public_clause_matches_claim(clause: Any, claim: Any) -> bool:
-    clause_text = _normalized_public_clause(clause)
-    claim_text = _normalized_public_clause(claim)
-    if not clause_text or not claim_text:
-        return False
-    if clause_text == claim_text:
-        return True
-    clause_words = set(re.findall(r"[\w%+.-]+", clause_text, flags=re.UNICODE))
-    claim_words = set(re.findall(r"[\w%+.-]+", claim_text, flags=re.UNICODE))
-    if bool(clause_words & _PUBLIC_NEGATIONS) != bool(claim_words & _PUBLIC_NEGATIONS):
-        return False
-    clause_numbers = set(re.findall(r"\d+(?:\.\d+)?%?", clause_text))
-    claim_numbers = set(re.findall(r"\d+(?:\.\d+)?%?", claim_text))
-    if not clause_numbers.issubset(claim_numbers):
-        return False
-    clause_content = {_public_word_stem(word) for word in clause_words - _PUBLIC_CLAUSE_STOPWORDS - _PUBLIC_NEGATIONS}
-    claim_content = {_public_word_stem(word) for word in claim_words - _PUBLIC_CLAUSE_STOPWORDS - _PUBLIC_NEGATIONS}
-    if not clause_content:
-        return False
-    overlap = len(clause_content & claim_content)
-    minimum_overlap = 1 if len(clause_content) == 1 else 2
-    return overlap >= minimum_overlap and (overlap / len(clause_content)) >= 0.60
-
-
-def planner_runtime_promise_gate(
-    plan: dict[str, Any],
-    *,
-    enforce_public_contract: bool = False,
-    require_structural_v3: bool = False,
-) -> dict[str, Any]:
-    """Reject public gameplay promises that have no executable runtime backing.
-
-    Visual-only wording remains legal inside visual fields.  The probe is copied because
-    promise validation deliberately annotates its input for later runtime diagnostics.
-    """
-    raw_contract_candidate = plan.get("runtimeContract")
-    raw_contract: dict[str, Any] = dict(raw_contract_candidate) if isinstance(raw_contract_candidate, dict) else {}
-    if require_structural_v3 and str(raw_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
-        return {
-            "schema": "infini.structural-planner-contract-report.v1",
-            "ok": False,
-            "blockingClaims": [{
-                "kind": "missing_structural_v3_contract",
-                "source": "runtimeContract.schema",
-                "status": "unsupported",
-                "backing": STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
-            }],
-            "unsupportedPromises": [],
-        }
-    if enforce_public_contract and str(raw_contract.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
-        return validate_structural_planner_contract(copy.deepcopy(plan))
-    probe = copy.deepcopy(plan)
-    patch = runtime_plan_to_attack_genome_patch(probe)
-    report = validate_runtime_promises(probe, patch)
-    blocking = [
-        dict(claim)
-        for claim in report.get("claims") or []
-        if claim.get("status") in {"unsupported", "partial"}
-        and not str(claim.get("source") or "").startswith(("visual.", "runtimePlan.visualIntent"))
-    ]
-    has_runtime_contract = enforce_public_contract and isinstance(probe.get("runtimeContract"), dict)
-    contract_report = validate_runtime_contract(probe, patch) if has_runtime_contract else {"contract": normalize_runtime_contract(probe.get("runtimeContract")), "unsupportedPromises": []}
-    contract = dict(contract_report.get("contract") or {})
-    for unsupported_contract in contract_report.get("unsupportedPromises") or []:
-        blocking.append({
-            "kind": "runtime_contract_unsupported",
-            "source": "runtimeContract",
-            "status": "unsupported",
-            "backing": str(unsupported_contract)[:180],
-        })
-    mechanic_claims = list(contract.get("mechanicClaims") or [])
-    executable_machine_claims = 0
-    if has_runtime_contract and str(contract.get("executionStatus") or "") in {"partial", "unsupported"}:
-        blocking.append({
-            "kind": "contract_execution_status",
-            "source": "runtimeContract.executionStatus",
-            "status": str(contract.get("executionStatus") or "unsupported"),
-            "backing": "final aggregate contract must be executable or visual_only",
-        })
-    if has_runtime_contract:
-        for claim_index, mechanic in enumerate(mechanic_claims):
-            if str(mechanic.get("status") or "") in {"visual_only", "unsupported"}:
-                continue
-            machine_backed, failures = resolve_mechanic_backing_refs(probe, patch, mechanic)
-            if not machine_backed:
-                blocking.append({
-                    "kind": "mechanic_claim_backing_unresolved",
-                    "source": f"runtimeContract.mechanicClaims[{claim_index}]",
-                    "status": "unsupported",
-                    "backing": ",".join(failures[:4]) or "none",
-                })
-                continue
-            relevant, relevance_failures = mechanic_claim_backing_relevant(mechanic)
-            if not relevant:
-                blocking.append({
-                    "kind": "mechanic_claim_backing_irrelevant",
-                    "source": f"runtimeContract.mechanicClaims[{claim_index}]",
-                    "status": "unsupported",
-                    "backing": ",".join(relevance_failures[:4]) or "none",
-                })
-                continue
-            executable_machine_claims += 1
-
-    tooltip_clauses = [
-        _normalized_public_clause(part)
-        for part in re.split(r"[;\n]+|(?<=[.!?])\s+", str(probe.get("tooltip") or ""))
-        if has_runtime_contract and _normalized_public_clause(part)
-    ]
-    for clause in tooltip_clauses:
-        if not any(_public_clause_matches_claim(clause, mechanic.get("claim")) for mechanic in mechanic_claims):
-            blocking.append({
-                "kind": "tooltip_clause_missing_mechanic_claim",
-                "source": "tooltip",
-                "status": "unsupported",
-                "backing": "runtimeContract.mechanicClaims must cover each tooltip clause with matching polarity and numbers",
-                "clause": clause[:180],
-            })
-    runtime = runtime_plan(probe)
-    result_kind = str(runtime.get("resultKind") or "").strip().lower()
-    claims_raw = contract.get("mechanicClaims")
-    claims: list[Any] = claims_raw if isinstance(claims_raw, list) else []
-    timeline_raw = contract.get("playerViewTimeline")
-    timeline: list[Any] = timeline_raw if isinstance(timeline_raw, list) else []
-    if result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion"}:
-        if not claims:
-            blocking.append({"kind": "missing_mechanic_claims", "source": "runtimeContract", "status": "unsupported", "backing": "none"})
-        if has_runtime_contract and executable_machine_claims <= 0:
-            blocking.append({"kind": "missing_executable_mechanic_claim", "source": "runtimeContract", "status": "unsupported", "backing": "no resolved relevant backingRefs"})
-        if len([step for step in timeline if str(step).strip()]) < 4:
-            blocking.append({"kind": "missing_player_view_timeline", "source": "runtimeContract", "status": "unsupported", "backing": "none"})
-    calls_raw = runtime.get("engineCalls")
-    calls: list[Any] = calls_raw if isinstance(calls_raw, list) else []
-    item_stats = next((call for call in calls if isinstance(call, dict) and call.get("fn") == "set_item_stats"), {})
-    item_params_raw = item_stats.get("params")
-    item_params: dict[str, Any] = item_params_raw if isinstance(item_params_raw, dict) else {}
-    has_consumption_call = any(isinstance(call, dict) and call.get("fn") == "consumption_behavior" for call in calls)
-    if has_consumption_call and not bool(item_params.get("consumable")):
-        blocking.append({"kind": "inert_consumption_behavior", "source": "runtimePlan.engineCalls", "status": "unsupported", "backing": "set_item_stats.consumable=false"})
-    return {
-        "schema": "infini.planner-promise-gate.v1",
-        "ok": not blocking,
-        "blockingClaims": blocking[:24],
-        "unsupportedPromises": list(report.get("unsupportedPromises") or [])[:24],
-    }
-
-
-def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, Any]:
-    """Require v3 compiler provenance at every runtime-authored final boundary."""
+def final_runtime_promise_report(data: dict[str, Any]) -> dict[str, Any]:
+    """Return the structured v3 compiler-provenance report without raising."""
     raw_contract_candidate = data.get("runtimeContract")
     raw_contract: dict[str, Any] = dict(raw_contract_candidate) if isinstance(raw_contract_candidate, dict) else {}
-    gate: dict[str, Any]
     if str(raw_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
-        gate = {
+        return {
             "schema": "infini.final-wire-contract-report.v1",
             "ok": False,
             "blockingClaims": [{
@@ -258,8 +82,12 @@ def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, A
             "finalWireReceipts": [],
             "executionStatus": "unsupported",
         }
-    else:
-        gate = validate_structural_final_wire_contract(data)
+    return validate_structural_final_wire_contract(data)
+
+
+def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, Any]:
+    """Require v3 compiler provenance at every runtime-authored final boundary."""
+    gate = final_runtime_promise_report(data)
     data.setdefault("debug", {})
     if isinstance(data.get("debug"), dict):
         data["debug"]["finalWireExecutionReceipts"] = copy.deepcopy(gate.get("finalWireReceipts") or [])
@@ -268,6 +96,46 @@ def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, A
         kinds = sorted({str(row.get("kind") or "unsupported") for row in gate.get("blockingClaims") or []})
         raise PlannerUnavailable("final structural runtime promise boundary rejected: " + ", ".join(kinds))
     return gate
+
+
+def build_initial_author_request(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+    key: str,
+    *,
+    model_name: str | None = None,
+) -> tuple[dict[str, Any], str, str]:
+    """Build the exact initial AuthorItem request without performing transport."""
+    user = build_llm_author_payload(a, b, ca, cb, key)
+    selected_model = model_name or resolve_llm_model()
+    system = (
+        "You are the AUTHOR of a Terraria-like generated item. "
+        "Use raw parent fields, semantic notes, and engine functions to design one playable result. "
+        "Follow the priorityHeader before the detailed API card. "
+        "The server validates executable safety only; do not rely on legacy attackPattern/attack.genome. "
+        + _AUTHOR_STRUCTURAL_WIRE_RULES
+        + " "
+        "Return ONLY one JSON object. No reasoning, no markdown, no second JSON."
+        + llm_reasoning_system_suffix(selected_model)
+    )
+    user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
+    req = {
+        "model": selected_model,
+        "messages": [
+            stage_chat_message("system", "item_author_contract", system),
+            stage_chat_message("user", "recipe_context", user_content),
+        ],
+        "temperature": env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
+        "response_format": llm_json_response_format(
+            "infini_author_item_v3",
+            schema=author_item_provider_response_schema(),
+            strict=True,
+            auto_preference="json_object",
+        ),
+    }
+    return apply_llm_common_options(req, model_name=selected_model), user_content, system
 
 
 def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any] | None:
@@ -280,28 +148,11 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
     """
     if not USE_LLM:
         return None
-    user = build_llm_author_payload(a, b, ca, cb, key)
     try:
         model_name = resolve_llm_model()
-        system = (
-            "You are the AUTHOR of a Terraria-like generated item. "
-            "Use raw parent fields, semantic notes, and engine functions to design one playable result. "
-            "Follow the priorityHeader before the detailed API card. "
-            "The server validates executable safety only; do not rely on legacy attackPattern/attack.genome. "
-            "Return ONLY one JSON object. No reasoning, no markdown, no second JSON."
-            + llm_reasoning_system_suffix(model_name)
+        req, planner_user_content, system = build_initial_author_request(
+            a, b, ca, cb, key, model_name=model_name
         )
-        planner_user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
-        req = {
-            "model": model_name,
-            "messages": [
-                stage_chat_message("system", "item_author_contract", system),
-                stage_chat_message("user", "recipe_context", planner_user_content),
-            ],
-            "temperature": env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
-            "response_format": llm_json_response_format("infini_runtime_plan"),
-        }
-        req = apply_llm_common_options(req, model_name=model_name)
         trace_event("prompt", "LLM:author_plan", f"Planner request: {name_of(a)} + {name_of(b)}", {
             "provider": active_llm_provider(), "model": model_name, "temperature": req.get("temperature"),
             "maxTokens": req.get("max_tokens"), "reasoning": req.get("reasoning"), "reasoningEffort": req.get("reasoning_effort"),
@@ -312,65 +163,11 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         transport_debug = raw.get("_debug") if isinstance(raw.get("_debug"), dict) else {}
         trace_event("response", "LLM:author_plan", "Planner response", {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": transport_debug}, response=content)
         parsed_child_json = parse_first_valid_llm_json(content)
-        obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
-        promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True, require_structural_v3=True)
-        retry_messages = list(req["messages"])
-        max_reauthors = 1
-        for reauthor_attempt in range(1, max_reauthors + 1):
-            if promise_gate["ok"]:
-                break
-            retry_instruction = json.dumps({
-                "task": "Re-author one complete structural-v3 item from the same two parents. Repair every exact blocking path; the model remains the only gameplay author.",
-                "agentHandoff": agent_handoff(
-                    previous_speaker="item_planner",
-                    current_speaker="promise_truth_gate",
-                    next_speaker="item_planner",
-                    cause_by="unsupported_public_promise",
-                    artifact_source="item_planner.item",
-                ),
-                "attempt": reauthor_attempt,
-                "maxAttempts": max_reauthors,
-                "blockingClaims": promise_gate["blockingClaims"],
-                "backingRefRules": list(MECHANIC_BACKING_REF_RULES),
-                "requiredTopLevelKeys": sorted(str(key) for key in (user.get("requiredJsonShape") or {})),
-                "requiredJsonShape": user.get("requiredJsonShape") or {},
-                "requirements": [
-                    "Return runtimeContract.schema=infini.runtime-contract.v3 and unique stable callId/claimId values.",
-                    "Keep or change mechanics only by your own authored engineCalls; code will not delete, replace, classify, or nerf them.",
-                    "Every executable backingRef must name exact callId/field/expected. Do not return compiler-owned receipts or final paths.",
-                    "Choose signatureClaimId yourself and link it from tooltipClaimIds, playerViewTimeline, and concept.weirdTwist.",
-                    "A presentation-only claim uses status=visual_only and no backingRefs.",
-                    "Return at least 4 structured playerViewTimeline steps. Each non-presentation step links claimIds.",
-                    "Return one complete replacement item JSON containing every requiredTopLevelKey, not a patch or partial document.",
-                ],
-            }, ensure_ascii=False, separators=(",", ":"))
-            retry_messages.extend([
-                stage_chat_message("assistant", "item_planner", content),
-                stage_chat_message("user", "promise_truth_gate", retry_instruction),
-            ])
-            retry_req = dict(req)
-            retry_req["messages"] = list(retry_messages)
-            trace_event("prompt", "LLM:author_plan_promise_retry", "Planner promise-truth retry", {
-                "provider": active_llm_provider(), "model": model_name, "attempt": reauthor_attempt,
-                "maxAttempts": max_reauthors,
-                "blockingClaims": [str(x.get("kind") or "") for x in promise_gate["blockingClaims"]],
-            }, prompt=retry_instruction)
-            retry_raw = llm_chat_json(retry_req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
-            retry_content = retry_raw["choices"][0]["message"]["content"]
-            retry_transport_debug = retry_raw.get("_debug") if isinstance(retry_raw.get("_debug"), dict) else {}
-            trace_event("response", "LLM:author_plan_promise_retry", "Planner promise-truth retry response", {
-                "provider": active_llm_provider(), "model": model_name, "attempt": reauthor_attempt,
-                "chars": len(str(retry_content)), "transport": retry_transport_debug,
-            }, response=retry_content)
-            content = retry_content
-            parsed_child_json = parse_first_valid_llm_json(retry_content)
-            obj = normalize_behavior_toy_fields(normalize_llm_attack_shape(parsed_child_json))
-            promise_gate = planner_runtime_promise_gate(obj, enforce_public_contract=True, require_structural_v3=True)
-        if not promise_gate["ok"]:
-            kinds = sorted({str(x.get("kind") or "unsupported") for x in promise_gate["blockingClaims"]})
-            raise PlannerUnavailable(
-                f"planner structural contract remained invalid after {max_reauthors} re-author: " + ", ".join(kinds)
-            )
+        obj = _prepare_parsed_author_item(parsed_child_json)
+        # The initial author call never retries internally. Source/runtime/compiler
+        # rejection is owned by the one bounded same-author repair budget in
+        # combine_pipeline.
+        promise_gate = planner_runtime_promise_gate(obj)
         obj.setdefault("id", "g_" + stable_hash(key, content, length=16))
         obj.setdefault("recipeKey", key)
         obj.setdefault("schemaVersion", 1)
@@ -392,7 +189,7 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         return obj
     except PlannerUnavailable as e:
         trace_event("error", "LLM:author_plan", "Planner rejected authored result", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
-        log_event("warn", "LLM author-first planner exhausted structural re-author", {"error": repr(e)})
+        log_event("warn", "LLM author-first planner failed source validation", {"error": repr(e)})
         raise
     except Exception as e:
         trace_event("error", "LLM:author_plan", "Planner failed", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
@@ -400,623 +197,631 @@ def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: d
         return None
 
 
-def _runtime_plan_repair_current_item_view(data: dict[str, Any]) -> dict[str, Any]:
-    """Lossless current executable view for a runtime-repair delta.
-
-    Identity/prose/visuals remain in attributed Planner history and are immutable here.
-    Debug/cache state is excluded because runtime repair cannot own it.
-    """
-    view: dict[str, Any] = {}
-    for key in ["category", "gameplay", "runtimePlan", "runtimeContract", "attack", "accessory", "armor"]:
-        value = data.get(key)
-        if value not in (None, ""):
-            view[key] = value
-    return view
-
-
-def _failed_runtime_call_contracts(data: dict[str, Any], validation: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return exact schemas only for engine calls named by validator error paths."""
-    plan_raw = data.get("runtimePlan")
-    plan: dict[str, Any] = plan_raw if isinstance(plan_raw, dict) else {}
-    calls_raw = plan.get("engineCalls")
-    calls: list[Any] = calls_raw if isinstance(calls_raw, list) else []
-    errors = [str(error) for error in (validation.get("errors") or [])]
-    indices = sorted({int(match.group(1)) for error in errors for match in re.finditer(r"engineCalls\.(\d+)", error)})
-    out: list[dict[str, Any]] = []
-    for index in indices[:6]:
-        if index < 0 or index >= len(calls) or not isinstance(calls[index], dict):
-            continue
-        fn = str(calls[index].get("fn") or "")
-        try:
-            schema = engine_params_model(fn).model_json_schema()
-        except (KeyError, TypeError, ValueError):
-            continue
-        nested_fields: dict[str, list[str]] = {}
-        definitions = schema.get("$defs") if isinstance(schema.get("$defs"), dict) else {}
-        properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
-        for param_name, param_schema in properties.items():
-            if not isinstance(param_schema, dict):
-                continue
-            variants = [param_schema]
-            if isinstance(param_schema.get("anyOf"), list):
-                variants.extend(item for item in param_schema["anyOf"] if isinstance(item, dict))
-            for variant in variants:
-                ref = str(variant.get("$ref") or "")
-                definition_name = ref.rsplit("/", 1)[-1] if ref else ""
-                definition = definitions.get(definition_name) if definition_name else None
-                nested = definition.get("properties") if isinstance(definition, dict) and isinstance(definition.get("properties"), dict) else None
-                if nested:
-                    nested_fields[str(param_name)] = sorted(str(name) for name in nested)
-                    break
-        out.append({
-            "engineCallIndex": index,
-            "fn": fn,
-            "paramsSchema": schema,
-            "allowedNestedFields": nested_fields,
-        })
-    return out
+def _author_item_snapshot(data: dict[str, Any]) -> dict[str, Any]:
+    """Return only the model-owned object, never compiler/debug projections."""
+    raw = data.get("_authorItemRaw")
+    candidate = raw if isinstance(raw, dict) else data
+    schema = author_item_provider_response_schema()
+    properties = schema.get("properties")
+    keys = properties.keys() if isinstance(properties, dict) else ()
+    snapshot = {
+        str(field): copy.deepcopy(candidate[field])
+        for field in keys
+        if field in candidate
+    }
+    contract_candidate = snapshot.get("runtimeContract")
+    if isinstance(contract_candidate, dict):
+        snapshot["runtimeContract"] = {
+            field: copy.deepcopy(contract_candidate[field])
+            for field in ("primaryVerb", "controlStyle", "playerViewTimeline")
+            if field in contract_candidate
+        }
+    return snapshot
 
 
-def _runtime_plan_repair_dossier_core(data: dict[str, Any], validation: dict[str, Any], attempt: int) -> dict[str, Any]:
-    """Build the authoritative current-item core of the Runtime Repair dossier."""
-    raw_strict_value = validation.get("rawStrictBoundary")
-    raw_strict: dict[str, Any] = raw_strict_value if isinstance(raw_strict_value, dict) else {}
-    contract_candidate = data.get("runtimeContract")
-    structural_v3_repair = isinstance(contract_candidate, dict) and str(contract_candidate.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
-    return {
-        "task": "Repair the executable runtimePlan and its structural runtimeContract links so both validate. Return repairPatch only. Do not return the complete item.",
-        "agentHandoff": agent_handoff(
-            previous_speaker="item_planner",
-            current_speaker="runtime_validator",
-            next_speaker="runtime_repairer",
-            cause_by="runtime_contract_validation_failed",
-            artifact_source="currentItem",
-        ),
-        "repairMode": "targeted_runtime_contract_repair",
-        "requiredPatchFields": ["runtimePlan", "runtimeContract"] if structural_v3_repair else ["runtimePlan"],
-        "attempt": attempt,
-        "validationReport": validation,
-        "validatorFeedback": {
-            "errors": [str(error) for error in (validation.get("errors") or [])],
-            "warnings": [str(warning) for warning in (validation.get("warnings") or [])],
-            "rawStrictErrors": [str(error) for error in (raw_strict.get("errors") or [])],
-            "instruction": "Fix every listed validator error in the next repairPatch. Do not reinterpret or omit failed paths.",
-        },
-        "failedCallContracts": _failed_runtime_call_contracts(data, validation),
-        "mustFix": [
-            *(["This is a structural-v3 repair: repairPatch.runtimePlan and a full repairPatch.runtimeContract are both mandatory on every attempt, even when one would be unchanged."] if structural_v3_repair else []),
-            "set_item_stats is an engine call, never a gameplay field: put it in repairPatch.runtimePlan.engineCalls, normally as the first call.",
-            "Every returned engineCall must include its unique stable callId. Preserve the exact currentItem callId when repairing the same call; author a new valid callId only for a genuinely new call.",
-            "If any callId, referenced params field, or referenced value changes, return a full repairPatch.runtimeContract=infini.runtime-contract.v3 whose backingRefs exactly match the repaired runtimePlan. Preserve stable claimId/signature links; update model-authored playerText if the executable promise changed.",
-            "Never return finalPath, finalExpected, or finalWireReceipts; those are compiler-owned after repair.",
-            "Every runtimePlan.engineCalls[].params must be a JSON object, never an array, JSON string, tuple, or key/value list.",
-            "If resultKind/category is weapon, ammo, consumable_weapon, tool, accessory or potion, include {\"fn\":\"set_item_stats\",\"params\":{...safe base item stats...}}.",
-            "If it is combat-capable, keep or add one concrete primary executable action such as perform_melee_attack, shoot_projectile, fire_ranged_weapon, cast_magic_weapon, spawn_temporary_helper_projectile, or a valid utility/tool/accessory call.",
-            "You may replace the whole runtimePlan if that is cleaner, but return it inside repairPatch whenever possible.",
-            "Do not use legacy attackPattern or attack.genome. Do not add boss/NPC/mob/enemy spawning.",
-            "Do not change name, tooltip, concept, visual identity, parents, id, recipeKey, category, or tags. Runtime repair is not a second item author.",
-            "Return exactly one JSON object with repairPatch as its only top-level field; no markdown, explanation, or complete item.",
-        ],
-        "currentItem": _runtime_plan_repair_current_item_view(data),
-        "requiredRepairPatchShape": _runtime_repair_response_schema(require_structural_v3=structural_v3_repair),
+def _failure_rejection_sources(failure_report: dict[str, Any]) -> list[Any]:
+    """Collect validator diagnostics without treating receipts or source payloads as failures."""
+    sources: list[Any] = []
+    fallback_errors: list[Any] = []
+    diagnostic_keys = {
+        "blockingClaims",
+        "errors",
+        "errorDetails",
+        "invalidTargets",
+        "identityError",
     }
 
+    def collect(value: Any) -> None:
+        if isinstance(value, list):
+            for child in value:
+                collect(child)
+            return
+        if not isinstance(value, dict):
+            return
+        for key, child in value.items():
+            if key == "error":
+                if child not in (None, "", [], {}):
+                    fallback_errors.append(child)
+                continue
+            if key in diagnostic_keys:
+                if child not in (None, "", [], {}):
+                    sources.append(child)
+                continue
+            if isinstance(child, (dict, list)):
+                collect(child)
 
-def _runtime_plan_repair_standalone_packet(
+    collect(failure_report)
+    if sources:
+        return sources
+    if fallback_errors:
+        return fallback_errors
+    if any(key in failure_report for key in ("kind", "status", "path", "callId")):
+        return [failure_report]
+    return []
+
+
+def _repair_targets(failure_report: dict[str, Any]) -> list[dict[str, str]]:
+    """Extract bounded structural evidence without interpreting authored prose."""
+    targets: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+
+    def add(
+        *,
+        path: Any = "",
+        call_id: Any = "",
+        fn: Any = "",
+        reason: Any = "",
+    ) -> None:
+        row = {
+            "path": str(path or "").strip(),
+            "callId": str(call_id or "").strip(),
+            "fn": str(fn or "").strip(),
+            "reason": str(reason or "").strip(),
+        }
+        if not any(row.values()):
+            return
+        key = (row["path"], row["callId"], row["fn"], row["reason"])
+        if key not in seen and len(targets) < 24:
+            seen.add(key)
+            targets.append({key: value for key, value in row.items() if value})
+
+    def visit(value: Any) -> None:
+        if isinstance(value, list):
+            for child in value:
+                visit(child)
+            return
+        if isinstance(value, str):
+            indexed = re.search(
+                r"engineCalls(?:\[(\d+)\]|\.(\d+))(?:\.([A-Za-z0-9_.]+))?",
+                value,
+            )
+            if indexed is not None:
+                index = int(indexed.group(1) or indexed.group(2))
+                field = str(indexed.group(3) or "").strip(".")
+                path = f"$.runtimePlan.engineCalls[{index}]"
+                if field:
+                    path += "." + field
+                add(path=path, reason=value)
+            return
+        if not isinstance(value, dict):
+            return
+        add(
+            path=value.get("path") or value.get("source") or value.get("field"),
+            call_id=value.get("callId"),
+            fn=value.get("fn"),
+            reason=(
+                value.get("reason")
+                or value.get("message")
+                or value.get("error")
+                or value.get("kind")
+                or value.get("status")
+            ),
+        )
+        for child in value.values():
+            if isinstance(child, (dict, list)):
+                visit(child)
+
+    rejection_sources = _failure_rejection_sources(failure_report)
+    if rejection_sources:
+        for source in rejection_sources:
+            visit(source)
+    else:
+        visit({
+            key: value
+            for key, value in failure_report.items()
+            if key not in {"finalWireReceipts", "contract"}
+        })
+    if not targets:
+        add(path="$", reason=failure_report.get("error") or failure_report.get("stage") or "validation_rejected")
+    return targets
+
+
+def _failure_mentions(failure_report: dict[str, Any], *markers: str) -> bool:
+    """Classify finite validator reasons, not item names or gameplay prose."""
+    marker_set = {marker.lower() for marker in markers}
+
+    def visit(value: Any) -> bool:
+        if isinstance(value, dict):
+            return any(visit(child) for child in value.values())
+        if isinstance(value, list):
+            return any(visit(child) for child in value)
+        text = str(value or "").strip().lower()
+        return any(marker in text for marker in marker_set)
+
+    return any(visit(source) for source in _failure_rejection_sources(failure_report))
+
+
+def _rejected_call_ids(
+    failure_report: dict[str, Any],
+    current_plan: dict[str, Any],
+) -> set[str]:
+    calls_candidate = current_plan.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    rejected: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            call_id = value.get("callId")
+            if isinstance(call_id, str) and call_id.strip():
+                rejected.add(call_id.strip())
+            for child in value.values():
+                visit(child)
+            return
+        if isinstance(value, list):
+            for child in value:
+                visit(child)
+            return
+        text = str(value or "")
+        indexed = re.search(r"engineCalls(?:\[(\d+)\]|\.(\d+))(?:\.|\]|$)", text)
+        if indexed is None:
+            return
+        index = int(indexed.group(1) or indexed.group(2))
+        if 0 <= index < len(calls) and isinstance(calls[index], dict):
+            call_id = str(calls[index].get("callId") or "").strip()
+            if call_id:
+                rejected.add(call_id)
+
+    rejection_sources = _failure_rejection_sources(failure_report)
+    if rejection_sources:
+        for source in rejection_sources:
+            visit(source)
+    else:
+        visit({
+            key: value
+            for key, value in failure_report.items()
+            if key not in {"finalWireReceipts", "contract"}
+        })
+    return rejected
+
+
+def _preserve_accepted_engine_calls(
+    replacement_plan: dict[str, Any],
+    current_plan: dict[str, Any],
+    rejected_call_ids: set[str],
+) -> None:
+    current_candidate = current_plan.get("engineCalls")
+    replacement_candidate = replacement_plan.get("engineCalls")
+    current_calls: list[Any] = current_candidate if isinstance(current_candidate, list) else []
+    replacement_calls: list[Any] = replacement_candidate if isinstance(replacement_candidate, list) else []
+    replacement_by_id = {
+        str(call.get("callId") or "").strip(): call
+        for call in replacement_calls
+        if isinstance(call, dict) and str(call.get("callId") or "").strip()
+    }
+    current_ids = {
+        str(call.get("callId") or "").strip()
+        for call in current_calls
+        if isinstance(call, dict) and str(call.get("callId") or "").strip()
+    }
+    merged: list[Any] = []
+    for raw_call in current_calls:
+        if not isinstance(raw_call, dict):
+            continue
+        call_id = str(raw_call.get("callId") or "").strip()
+        if call_id in rejected_call_ids:
+            replacement_call = replacement_by_id.get(call_id)
+            if replacement_call is not None:
+                merged.append(copy.deepcopy(replacement_call))
+        else:
+            merged.append(copy.deepcopy(raw_call))
+    merged.extend(
+        copy.deepcopy(call)
+        for call in replacement_calls
+        if isinstance(call, dict)
+        and str(call.get("callId") or "").strip() not in current_ids
+    )
+    replacement_plan["engineCalls"] = merged
+
+
+def _preserve_accepted_authoring(
+    replacement: dict[str, Any],
+    current: dict[str, Any],
+    failure_report: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep accepted identity/fusion/visual authoring out of a domain repair."""
+    gameplay_redesign = _failure_mentions(
+        failure_report,
+        "executor_not_representable",
+        "unsupported_mechanic_family",
+        "unrepresentable_mechanic",
+    )
+
+    preserved = copy.deepcopy(replacement)
+    if not _failure_mentions(failure_report, "invalid_item_name", "invalid_identity") and current.get("name"):
+        preserved["name"] = copy.deepcopy(current["name"])
+    identity_mismatch = _failure_mentions(
+        failure_report,
+        "category_result_kind_mismatch",
+        "result_kind_mismatch",
+    )
+    category_invalid = identity_mismatch or _failure_mentions(
+        failure_report,
+        "invalid_category",
+        "$.category",
+    )
+    result_kind_invalid = identity_mismatch or _failure_mentions(
+        failure_report,
+        "invalid_result_kind",
+        "runtimeplan.resultkind",
+    )
+    if not gameplay_redesign and not category_invalid and current.get("category"):
+        preserved["category"] = copy.deepcopy(current["category"])
+    current_concept = current.get("concept")
+    if isinstance(current_concept, dict):
+        concept = preserved.setdefault("concept", {})
+        if isinstance(concept, dict):
+            fields = [field for field in ("fantasy", "mergeLogic") if field not in concept]
+            if "coreMechanic" not in concept:
+                fields.append("coreMechanic")
+            for field in fields:
+                if field in current_concept:
+                    concept[field] = copy.deepcopy(current_concept[field])
+    current_plan = current.get("runtimePlan")
+    if isinstance(current_plan, dict):
+        plan = preserved.setdefault("runtimePlan", {})
+        if isinstance(plan, dict):
+            if "sourceRolePreservation" in current_plan and "sourceRolePreservation" not in plan:
+                plan["sourceRolePreservation"] = copy.deepcopy(current_plan["sourceRolePreservation"])
+            current_visual = current_plan.get("visualIntent")
+            if isinstance(current_visual, dict):
+                replacement_visual = plan.get("visualIntent")
+                visual = copy.deepcopy(replacement_visual) if isinstance(replacement_visual, dict) else {}
+                rejected_paths = {
+                    str(target.get("path") or "").strip()
+                    for target in _repair_targets(failure_report)
+                    if str(target.get("path") or "").strip()
+                }
+                whole_visual_rejected = "$.runtimePlan.visualIntent" in rejected_paths
+                for field, value in current_visual.items():
+                    rejected_path = f"$.runtimePlan.visualIntent.{field}"
+                    if not whole_visual_rejected and rejected_path not in rejected_paths:
+                        visual[field] = copy.deepcopy(value)
+                plan["visualIntent"] = visual
+            if not gameplay_redesign and not result_kind_invalid and current_plan.get("resultKind"):
+                plan["resultKind"] = copy.deepcopy(current_plan["resultKind"])
+            if not gameplay_redesign:
+                for field in (
+                    "runtimeStateIntent",
+                    "sourceReading",
+                    "balanceIntent",
+                    "anomalyFlags",
+                ):
+                    if field in current_plan and not _failure_mentions(failure_report, field):
+                        plan[field] = copy.deepcopy(current_plan[field])
+                if not _failure_mentions(failure_report, "duplicate_call_id"):
+                    _preserve_accepted_engine_calls(
+                        plan,
+                        current_plan,
+                        _rejected_call_ids(failure_report, current_plan),
+                    )
+    current_contract = current.get("runtimeContract")
+    if not gameplay_redesign and isinstance(current_contract, dict):
+        contract = preserved.setdefault("runtimeContract", {})
+        if isinstance(contract, dict):
+            contract_markers = {
+                "primaryVerb": ("primaryverb", "missing_primary_verb"),
+                "controlStyle": ("controlstyle", "invalid_control_style"),
+                "playerViewTimeline": ("playerviewtimeline", "timeline_runtime_conflict"),
+            }
+            for field in contract_markers:
+                if field in current_contract and field not in contract:
+                    contract[field] = copy.deepcopy(current_contract[field])
+    return preserved
+
+
+def _scoped_repair_candidate(patch: dict[str, Any]) -> dict[str, Any]:
+    """Project the compact repair response into model-owned AuthorItem domains."""
+    candidate: dict[str, Any] = {}
+    for field in ("name", "category"):
+        if field in patch:
+            candidate[field] = copy.deepcopy(patch[field])
+    concept = {
+        field: copy.deepcopy(patch[field])
+        for field in ("fantasy", "mergeLogic", "coreMechanic")
+        if field in patch
+    }
+    if concept:
+        candidate["concept"] = concept
+    contract = {
+        field: copy.deepcopy(patch[field])
+        for field in ("primaryVerb", "controlStyle", "playerViewTimeline")
+        if field in patch
+    }
+    if contract:
+        candidate["runtimeContract"] = contract
+    plan = copy.deepcopy(patch["runtimePlan"]) if isinstance(patch.get("runtimePlan"), dict) else {}
+    for field in ("sourceRolePreservation", "visualIntent"):
+        if field in patch:
+            plan[field] = copy.deepcopy(patch[field])
+    if plan:
+        candidate["runtimePlan"] = plan
+    return candidate
+
+
+def _scoped_repair_context(current_item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    concept_candidate = current_item.get("concept")
+    concept: dict[str, Any] = concept_candidate if isinstance(concept_candidate, dict) else {}
+    plan_candidate = current_item.get("runtimePlan")
+    plan: dict[str, Any] = plan_candidate if isinstance(plan_candidate, dict) else {}
+    current_runtime_plan = {
+        field: copy.deepcopy(plan[field])
+        for field in (
+            "resultKind", "engineCalls", "runtimeStateIntent", "sourceReading",
+            "balanceIntent", "anomalyFlags",
+        )
+        if field in plan
+    }
+    preserved_context = {
+        "name": current_item.get("name"),
+        "fantasy": concept.get("fantasy"),
+        "mergeLogic": concept.get("mergeLogic"),
+        "visualIntent": copy.deepcopy(plan.get("visualIntent")),
+        "sourceRolePreservation": copy.deepcopy(plan.get("sourceRolePreservation")),
+    }
+    return current_runtime_plan, preserved_context
+
+
+def _repair_allowed_patch_keys(failure_report: dict[str, Any], targeted: bool) -> list[str]:
+    gameplay_keys = [
+        "runtimePlan", "coreMechanic", "primaryVerb", "controlStyle", "playerViewTimeline",
+    ]
+    if not targeted:
+        return ["category", *gameplay_keys]
+    target_text = " ".join(
+        " ".join(
+            str(target.get(field) or "").casefold()
+            for field in ("path", "reason", "callId", "fn", "kind")
+        )
+        for target in _repair_targets(failure_report)
+    )
+    keys: list[str] = []
+    mappings = (
+        (("runtimeplan.enginecalls", "runtime_plan", "executor", "engine_call"), ["runtimePlan"]),
+        (("$.name", "invalid_item_name", "invalid_identity"), ["name"]),
+        (("$.category", "invalid_category", "resultkind"), ["category", "runtimePlan"]),
+        (("concept.fantasy",), ["fantasy"]),
+        (("concept.mergelogic",), ["mergeLogic"]),
+        (("concept.coremechanic",), ["coreMechanic"]),
+        (("runtimecontract.primaryverb",), ["primaryVerb"]),
+        (("runtimecontract.controlstyle",), ["controlStyle"]),
+        (("playerviewtimeline", "timeline_runtime_conflict"), ["playerViewTimeline"]),
+        (("sourcerolepreservation",), ["sourceRolePreservation"]),
+        (("visualintent",), ["visualIntent"]),
+        (("runtimestateintent", "sourcereading", "balanceintent", "anomalyflags"), ["runtimePlan"]),
+    )
+    for markers, additions in mappings:
+        if any(marker in target_text for marker in markers):
+            for key in additions:
+                if key not in keys:
+                    keys.append(key)
+    return keys or gameplay_keys
+
+
+def build_same_author_repair_request(
     data: dict[str, Any],
-    validation: dict[str, Any],
-    attempt: int,
+    a: dict[str, Any],
+    b: dict[str, Any],
+    failure_report: dict[str, Any],
+) -> tuple[dict[str, Any], str, str, bool, str, dict[str, Any]]:
+    """Build one bounded, concept-preserving same-author repair request."""
+    current_item = _author_item_snapshot(data)
+    current_runtime_plan, preserved_context = _scoped_repair_context(current_item)
+    targeted_repair = not _failure_mentions(
+        failure_report,
+        "executor_not_representable",
+        "unsupported_mechanic_family",
+        "unrepresentable_mechanic",
+    )
+    model_override = env_str("INFINI_LLM_REAUTHOR_MODEL")
+    model_name = model_override or resolve_llm_model()
+    system = (
+        "You are the scoped repair pass of the SAME ITEM AUTHOR ROLE. "
+        "Return only a compact JSON patch using allowedPatchKeys; never repeat the full AuthorItem. "
+        "Repair only invalidTargets. Preserve identity, fantasy, fusion, physical parts, and visual topology from preservedConceptContext. "
+        "For targeted repair, accepted engine calls remain byte-equivalent unless their callId is invalid. "
+        "For full_redesign, redesign gameplay only; the compiler still does not choose mechanics. "
+        "No reasoning, markdown, wrapper, proof graph, receipts, or DTO paths."
+        + llm_reasoning_system_suffix(model_name)
+    )
+    dossier = {
+        "task": "Repair only the rejected authored domain and return a compact patch.",
+        "agentHandoff": agent_handoff(
+            previous_speaker="item_planner",
+            current_speaker="authoring_contract_gate",
+            next_speaker="item_planner",
+            cause_by="authoring_domain_rejected",
+            artifact_source="current_authored_item",
+        ),
+        "repairMode": "targeted_domain_repair" if targeted_repair else "full_redesign",
+        "contextOnlyParentNames": {"itemA": name_of(a), "itemB": name_of(b)},
+        "allowedPatchKeys": _repair_allowed_patch_keys(failure_report, targeted_repair),
+        "invalidTargets": _repair_targets(failure_report),
+        "currentRuntimePlan": current_runtime_plan,
+        "currentCoreMechanic": (
+            (current_item.get("concept") or {}).get("coreMechanic")
+            if isinstance(current_item.get("concept"), dict)
+            else ""
+        ),
+        "currentPlayerViewTimeline": (
+            (current_item.get("runtimeContract") or {}).get("playerViewTimeline")
+            if isinstance(current_item.get("runtimeContract"), dict)
+            else []
+        ),
+        "preservedConceptContext": preserved_context,
+    }
+    user_content = json.dumps(dossier, ensure_ascii=False, separators=(",", ":"))
+    req = {
+        "model": model_name,
+        "messages": [
+            stage_chat_message("system", "item_author_contract", system),
+            stage_chat_message("user", "final_wire_compiler", user_content),
+        ],
+        "temperature": env_float(
+            "INFINI_LLM_REAUTHOR_TEMPERATURE",
+            env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
+            lo=0.0,
+            hi=1.2,
+        ),
+        "response_format": llm_json_response_format(
+            "infini_author_item_scoped_repair_v1",
+            schema=author_item_provider_repair_response_schema(),
+            strict=True,
+            auto_preference="json_object",
+        ),
+    }
+    if model_override:
+        req[LLM_MODEL_OVERRIDE_KEY] = model_override
+    return (
+        apply_llm_common_options(req, model_name=model_name),
+        user_content,
+        system,
+        targeted_repair,
+        model_override,
+        current_item,
+    )
+
+
+def repair_author_item_after_failure(
+    data: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
     ca: dict[str, Any],
     cb: dict[str, Any],
     key: str,
+    *,
+    failure_report: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build the rich self-contained Runtime Repair v3.1 dossier."""
-    packet = _runtime_plan_repair_dossier_core(data, validation, attempt)
-    author_payload = build_llm_author_payload(a, b, ca, cb, key)
-    packet["parents"] = [raw_parent_card_for_llm(a), raw_parent_card_for_llm(b)]
-    packet["engineRuntimeContract"] = author_payload.get("engineRuntimeContract")
-    return packet
+    """Give one exact domain rejection to the same item-author role before abort.
 
-
-REPAIR_PATCH_ALLOWED_TOP_LEVEL = {
-    "runtimePlan",
-    "runtimeContract",
-    "attack",
-    "gameplay",
-    "accessory",
-    "armor",
-}
-
-# Even inside a gameplay repair patch, keep this surface narrow.  Runtime repair may
-# complete executable stats, utility flags and authored runtime affordances, but it must
-# not silently re-author identity/prose/visuals or become a second item author.
-REPAIR_PATCH_ALLOWED_GAMEPLAY_FIELDS = {
-    "kind", "damageClass", "damage", "useTime", "useAnimation", "useStyle", "autoReuse", "useTurn",
-    "maxStack", "consumable", "craftYield", "rarity", "value", "manaCost", "knockback",
-    "healLife", "healMana", "buffCode", "buffType", "buffTime", "extraBuffs", "generatedBuff",
-    "pickPower", "axePower", "hammerPower", "miningSpeedScale", "mobilityMode", "mobilityRangeTiles",
-    "mobilityCooldownTicks", "mobilitySafeTileOnly", "altUseMode", "altMobilityMode",
-    "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly", "altGeneratedBuff",
-    "holdGeneratedBuff", "holdLightStrength", "holdLightColorName", "runtimeState", "ammoFor",
-    "consumeChancePercent", "useConditionMode", "useConditionMinLife", "useConditionMinMana",
-    "itemScale", "holdoutOffsetX", "holdoutOffsetY",
-    "channelUse", "runtimeOutputKind", "actualAmmoMode",
-}
-
-
-def _runtime_repair_response_schema(*, require_structural_v3: bool = False) -> dict[str, Any]:
-    """One finite envelope; executable patch internals retain their exact validators."""
-    engine_call_schema = {
-        "type": "object",
-        "required": ["callId", "fn", "params"],
-        "additionalProperties": False,
-        "properties": {
-            "callId": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
-            "fn": {"type": "string", "minLength": 1},
-            "params": {"type": "object", "additionalProperties": True},
-        },
-    }
-    patch_properties = {
-        field: {"type": "object", "additionalProperties": True}
-        for field in sorted(REPAIR_PATCH_ALLOWED_TOP_LEVEL)
-    }
-    patch_properties["runtimePlan"] = {
-        "type": "object",
-        "additionalProperties": True,
-        "properties": {
-            "resultKind": {"type": "string"},
-            "engineCalls": {
-                "type": "array",
-                "minItems": 1,
-                "items": engine_call_schema,
-            },
-        },
-    }
-    return {
-        "type": "object",
-        "required": ["repairPatch"],
-        "additionalProperties": False,
-        "properties": {
-            "repairPatch": {
-                "type": "object",
-                "additionalProperties": False,
-                "minProperties": 1,
-                **({"required": ["runtimePlan", "runtimeContract"]} if require_structural_v3 else {}),
-                "properties": patch_properties,
-            },
-        },
-    }
-
-
-def _repair_patch_payload(repaired: dict[str, Any]) -> tuple[dict[str, Any], str]:
-    """Accept only the current repairPatch response contract."""
-    unexpected = set(repaired) - {"repairPatch", "_runtimeRepairMeta"}
-    if unexpected:
-        return {}, "unexpected_response_fields"
-    if isinstance(repaired.get("repairPatch"), dict):
-        return copy.deepcopy(repaired["repairPatch"]), "repairPatch"
-    return {}, "missing_repairPatch"
-
-
-def _repair_runtime_plan_has_stable_call_ids(runtime_plan_patch: dict[str, Any]) -> bool:
-    calls_candidate = runtime_plan_patch.get("engineCalls")
-    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
-    if not calls:
-        return False
-    call_ids = [str(call.get("callId") or "") for call in calls if isinstance(call, dict)]
-    return (
-        len(call_ids) == len(calls)
-        and len(set(call_ids)) == len(call_ids)
-        and all(re.fullmatch(r"[a-z][a-z0-9_]{0,63}", call_id) is not None for call_id in call_ids)
-    )
-
-
-def _filtered_runtime_repair_patch(repaired: dict[str, Any], original: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Extract a narrow runtime repair patch from an LLM response.
-
-    This is the anti-chaos boundary: targeted repair may fix executable runtime fields,
-    but it is not allowed to become a second free-form item author.  Unknown/full-item
-    fields are ignored and recorded for debug.
+    The compiler remains evidence-only: it neither chooses nor edits a mechanic.
+    The configured author returns only a bounded patch, which is merged into the
+    rejected authored object before ordinary source validation and recompilation.
     """
-    payload, source = _repair_patch_payload(repaired)
-    payload = normalize_llm_attack_shape(payload) if isinstance(payload, dict) else {}
-    if not isinstance(payload, dict):
-        payload = {}
-    accepted: dict[str, Any] = {}
-    rejected: list[str] = []
-    for key, value in payload.items():
-        if key == "debug":
-            continue
-        if key == "runtimePlan" and isinstance(value, dict):
-            if _repair_runtime_plan_has_stable_call_ids(value):
-                accepted[key] = copy.deepcopy(value)
-            else:
-                rejected.append("runtimePlan.callId")
-            continue
-        if key == "runtimeContract" and isinstance(value, dict):
-            if str(value.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA and not value.get("finalWireReceipts"):
-                accepted[key] = copy.deepcopy(value)
-            else:
-                rejected.append("runtimeContract.schema")
-            continue
-        if key == "attack" and isinstance(value, dict):
-            accepted[key] = copy.deepcopy(value)
-            continue
-        if key == "gameplay" and isinstance(value, dict):
-            filtered = {str(k): copy.deepcopy(v) for k, v in value.items() if str(k) in REPAIR_PATCH_ALLOWED_GAMEPLAY_FIELDS}
-            dropped = sorted(str(k) for k in value.keys() if str(k) not in REPAIR_PATCH_ALLOWED_GAMEPLAY_FIELDS)
-            if filtered:
-                accepted[key] = filtered
-            rejected.extend(f"gameplay.{k}" for k in dropped[:32])
-            continue
-        if key in {"accessory", "armor"} and isinstance(value, dict) and isinstance(original.get(key), dict):
-            # Only allow targeted completion of an already-authored accessory/armor surface.
-            # Repair must not flip a weapon into armor/accessory by returning a full rewrite.
-            accepted[key] = copy.deepcopy(value)
-            continue
-        rejected.append(str(key))
-    original_contract = original.get("runtimeContract")
-    if (
-        isinstance(original_contract, dict)
-        and str(original_contract.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
-        and "runtimePlan" in accepted
-        and "runtimeContract" not in accepted
-    ):
-        rejected.append("runtimeContract.required_with_runtimePlan")
-    report = {
-        "schema": "infini.runtime-repair-patch-contract.v1",
-        "source": source,
-        "acceptedTopLevel": sorted(accepted.keys()),
-        "rejectedTopLevel": sorted(set(rejected))[:48],
-        "note": "Only repairPatch executable fields are accepted; complete-item responses and identity/visual rewrites are rejected.",
-    }
-    return accepted, report
-
-
-def _merge_repair_patch_into_candidate(candidate: dict[str, Any], patch: dict[str, Any]) -> None:
-    if isinstance(patch.get("runtimePlan"), dict):
-        # Replacing runtimePlan is intentional: executable repair is allowed to replace
-        # bad engineCalls with a valid authored runtime contract.
-        candidate["runtimePlan"] = copy.deepcopy(patch["runtimePlan"])
-        candidate.pop("_runtimePlanCompileCache", None)
-    if isinstance(patch.get("runtimeContract"), dict):
-        candidate["runtimeContract"] = copy.deepcopy(patch["runtimeContract"])
-    for key in ("attack", "gameplay", "accessory", "armor"):
-        if isinstance(patch.get(key), dict):
-            base = candidate.get(key) if isinstance(candidate.get(key), dict) else {}
-            merged = copy.deepcopy(base)
-            merged.update(copy.deepcopy(patch[key]))
-            candidate[key] = merged
-
-
-
-def _adopt_runtime_plan_repair(data: dict[str, Any], repaired: dict[str, Any], *, key: str, content_preview: str = "") -> dict[str, Any]:
-    """Adopt only the executable repair patch while preserving item identity.
-
-    The repair LLM is a contract fixer, not a second item author.  Complete-item JSON and
-    old patch aliases are outside the current contract and produce an empty repair.
-    """
-    if not isinstance(repaired, dict):
-        return data
-    repaired = copy.deepcopy(repaired)
-    repaired_debug = repaired.get("_runtimeRepairMeta") if isinstance(repaired.get("_runtimeRepairMeta"), dict) else {}
-    patch, patch_report = _filtered_runtime_repair_patch(repaired, data)
-    candidate = copy.deepcopy(data)
-    original_debug = dict(candidate.get("debug") or {})
-    protected = {
-        "id": candidate.get("id") or ("g_" + stable_hash(key, candidate.get("name", ""), length=16)),
-        "recipeKey": candidate.get("recipeKey") or key,
-        "schemaVersion": candidate.get("schemaVersion") or 1,
-        "parentA": candidate.get("parentA"),
-        "parentB": candidate.get("parentB"),
-        "sourceMode": candidate.get("sourceMode") or "generated",
-        "_llmHistory": candidate.get("_llmHistory"),
-        "itemKnowledge": candidate.get("itemKnowledge"),
-        "recipeMeta": candidate.get("recipeMeta"),
-        "inheritance": candidate.get("inheritance"),
-        "sourceRepresentation": candidate.get("sourceRepresentation"),
-        "name": candidate.get("name"),
-        "tooltip": candidate.get("tooltip"),
-        "concept": candidate.get("concept"),
-        "visual": candidate.get("visual"),
-        "tags": candidate.get("tags"),
-        "category": candidate.get("category"),
-    }
-    _merge_repair_patch_into_candidate(candidate, patch)
-    for k, v in protected.items():
-        if v not in (None, ""):
-            candidate[k] = v
-    merged_debug = dict(original_debug)
-    # Keep repair model/attempt metadata, but never let repair debug erase prior debug.
-    for k, v in repaired_debug.items():
-        merged_debug.setdefault(str(k), v)
-    merged_debug["runtimePlanRepairPatchContract"] = bounded_json_dumps(patch_report, max_chars=4000)
-    if content_preview:
-        merged_debug["runtimePlanRepairRawOutput"] = content_preview[:4000]
-    candidate["debug"] = merged_debug
-    return candidate
-
-
-def try_llm_runtime_plan_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str, validation: dict[str, Any], attempt: int) -> dict[str, Any] | None:
-    """Run Runtime Repairer from one rich authoritative v3.1 stage dossier."""
     if not USE_LLM:
-        return None
-    try:
-        history_state = planner_history_state(data)
-        live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
-        if history_state == "malformed" or (history_state == "absent" and live_planner):
-            data.setdefault("debug", {})["runtimeRepairHistoryStatus"] = (
-                "malformed_fail_closed" if history_state == "malformed" else "missing_live_planner_history_fail_closed"
-            )
-            return None
-        model_name = resolve_llm_model()
-        contract_candidate = data.get("runtimeContract")
-        structural_v3_repair = isinstance(contract_candidate, dict) and str(contract_candidate.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
-        user = _runtime_plan_repair_standalone_packet(data, validation, attempt, a, b, ca, cb, key)
-        message_mode = (
-            "authoritative_stage_dossier_v31"
-            if history_state == "valid"
-            else "legacy_authoritative_stage_dossier_v31"
-        )
-        repair_user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
-        repair_system = (
-            "You are the Runtime Contract Repairer for a Terraria-like item pipeline. "
-            "The earlier item_planner response is provenance only; the latest runtime_validator payload and its currentItem are the authoritative current runtime truth. "
-            "Repair executable runtimePlan/attack/gameplay fields and the matching runtimeContract source links only; preserve item identity and visuals. "
-            "Return exactly one JSON object whose only top-level field is repairPatch."
-            + llm_reasoning_system_suffix(model_name)
-        )
-        messages = [
-            stage_chat_message("system", "runtime_repair_contract", repair_system),
-            stage_chat_message("user", "runtime_validator", repair_user_content),
-        ]
-        req = {
-            "model": model_name,
-            "messages": messages,
-            "temperature": 0.12,
-            "response_format": llm_json_response_format(
-                "infini_runtime_plan_repair",
-                schema=_runtime_repair_response_schema(require_structural_v3=structural_v3_repair),
-                strict=False,
-            ),
-        }
-        req = apply_llm_common_options(req, model_name=model_name, default_max_tokens=min(5000, llm_answer_max_tokens(2400)))
-        trace_event("prompt", "LLM:runtime_plan_repair", f"Runtime plan repair attempt {attempt}: {name_of(a)} + {name_of(b)}", {
-            "provider": active_llm_provider(), "model": model_name, "temperature": req.get("temperature"),
-            "maxTokens": req.get("max_tokens"), "reasoning": req.get("reasoning"), "reasoningEffort": req.get("reasoning_effort"),
-            "messageMode": message_mode, "messages": _trace_message_summary(req.get("messages")), "errors": validation.get("errors"),
-        }, prompt=repair_user_content)
-        raw = llm_chat_json(req, timeout=max(18, env_int("INFINI_LLM_REPAIR_TIMEOUT", env_int("INFINI_LLM_TIMEOUT", 95, lo=1, hi=3600), lo=1, hi=3600) // 2))
-        content = raw["choices"][0]["message"]["content"]
-        transport_debug = raw.get("_debug") if isinstance(raw.get("_debug"), dict) else {}
-        trace_event("response", "LLM:runtime_plan_repair", "Runtime plan repair response", {"model": model_name, "chars": len(str(content)), "attempt": attempt, "messageMode": message_mode, "transport": transport_debug}, response=content)
-        obj = parse_first_valid_llm_json(content)
-        if isinstance(obj, dict):
-            obj["_runtimeRepairMeta"] = {
-                "runtimePlanRepairModel": model_name,
-                "runtimePlanRepairAttempt": attempt,
-                "runtimePlanRepairSource": f"llm_{message_mode}",
-                "runtimePlanRepairPlannerHistoryReplayed": False,
-                "runtimePlanRepairPreviousErrors": json.dumps(validation.get("errors") or [], ensure_ascii=False),
-                "runtimePlanRepairRawPreview": str(content)[:2000],
-            }
-            return obj
-    except Exception as e:
-        trace_event("error", "LLM:runtime_plan_repair", "Runtime plan repair failed", {"attempt": attempt, "parents": [name_of(a), name_of(b)]}, error=repr(e))
-        log_event("warn", "LLM runtimePlan repair failed", {"error": repr(e), "attempt": attempt})
-    return None
+        raise PlannerUnavailable("same-author scoped repair requires the configured item author")
 
-
-def _runtime_repair_kind(validation: dict[str, Any], data: dict[str, Any]) -> str:
-    errors = [str(e).lower() for e in (validation.get("errors") or [])]
-    if not errors:
-        return "none"
-    if any("missing runtimeplan" in e for e in errors):
-        return "dead_missing_runtime_plan_retry_once"
-    if any("no accepted executable calls" in e for e in errors):
-        return "structural_or_dead_no_executable_calls"
-    if any("lacks set_item_stats" in e for e in errors):
-        return "executable_missing_stats"
-    if any("lacks a primary executable action" in e or "did not compile" in e or "runtimefamily" in e for e in errors):
-        return "executable_targeted_retry"
-    return "contract_retry"
-
-
-def _runtime_repair_attempt_budget(repair_kind: str) -> int:
-    # Full dead/missing-runtime cases get one classic retry: if the model returns
-    # another corpse, fail + debug/refund. More precise executable repairs may get
-    # the existing two-turn budget.
-    if repair_kind == "dead_missing_runtime_plan_retry_once":
-        return 1
-    return 2
-
-
-def _raw_runtime_plan_candidate(data: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the author-supplied plan before structural migration/normalization."""
-    for name in ("runtimePlan", "enginePlan", "runtimeAuthoring", "engineRuntimePlan", "runtime_plan", "runtime"):
-        value = data.get(name)
-        if isinstance(value, dict) and value:
-            return copy.deepcopy(value)
-    return None
-
-
-def _merge_raw_boundary_errors(
-    validation: dict[str, Any],
-    raw_boundary: dict[str, Any] | None,
-    structural_fixes: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Keep raw contract failures visible after deterministic scalar repair.
-
-    Only fields that the structural repair actually changed may stop being blocking.
-    This prevents an author-supplied ``_normalization`` marker from bypassing strict
-    type/enum validation while preserving the established ``"24 ticks" -> 24`` path.
-    """
-    if not raw_boundary or raw_boundary.get("ok"):
-        return validation
-    repaired = {
-        (int(row.get("index", -1)), str(row.get("field") or ""))
-        for row in (structural_fixes or [])
-        if isinstance(row, dict) and row.get("kind") in {"scalar_parse", "scalar_list_parse"}
-    }
-    validation_errors = [str(error) for error in (validation.get("errors") or [])]
-    blocking: list[str] = []
-    for error in (str(row) for row in (raw_boundary.get("errors") or [])):
-        match = re.match(r"engineCalls\.(\d+)\.params\.([^.:]+)(?:\.[^:]+)?:", error)
-        repaired_here = bool(match and (int(match.group(1)), match.group(2)) in repaired)
-        still_invalid = bool(match and any(
-            (candidate.startswith(f"engineCalls.{match.group(1)}.params.{match.group(2)}:")
-            or candidate.startswith(f"engineCalls.{match.group(1)}.params.{match.group(2)}."))
-            for candidate in validation_errors
-        ))
-        if not repaired_here or still_invalid:
-            blocking.append(error)
-    merged = dict(validation)
-    merged["rawStrictBoundary"] = raw_boundary
-    if blocking:
-        merged["ok"] = False
-        merged["errors"] = list(dict.fromkeys([*blocking, *validation_errors]))
-    return merged
-
-
-def repair_runtime_plan_if_needed(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
-    """Repair boundary for LLM runtime authoring before C# sees the item.
-
-    Contract:
-    - crooked shape with concrete authored data is repaired by code only;
-    - formally valid but non-executable runtime is sent to a targeted LLM retry;
-    - totally missing/dead runtime gets one classic retry, then fail/debug/refund;
-    - C# remains hard safety only, not the repair layer.
-    """
-    if not LLM_RUNTIME_AUTHORING:
-        return data
-    debug = data.setdefault("debug", {})
-    authored_runtime_plan = copy.deepcopy(data.get("runtimePlan"))
-    raw_plan = _raw_runtime_plan_candidate(data)
-    raw_boundary = runtime_plan_boundary_report(raw_plan) if raw_plan is not None else None
-    if raw_boundary is not None:
-        debug["runtimePlanRawStrictBoundary"] = bounded_json_dumps(raw_boundary, max_chars=6000)
-    had_runtime_input = raw_plan is not None
-
-    structural = structural_repair_runtime_plan_inplace(data)
-    if structural.get("applied"):
-        debug["runtimeStructuralRepair"] = bounded_json_dumps(structural, max_chars=6000)
-    # runtime_plan_validation_report owns the single normalization pass.  Running
-    # normalize first would make semantic expansions (deploy_sentry -> canonical
-    # shoot_projectile) look like raw authoring and reject their compiler-owned
-    # fields against the public function schema.
-    validation = _merge_raw_boundary_errors(runtime_plan_validation_report(data), raw_boundary, structural.get("fixes"))
-    debug["runtimePlanValidationBeforeRepair"] = bounded_json_dumps(validation, max_chars=6000)
-    if structural.get("applied") and validation.get("ok"):
-        debug["runtimeRepairPath"] = "code_structural_repair_only"
-        debug["runtimePlanValidationAfterRepair"] = bounded_json_dumps(validation, max_chars=6000)
-        return data
-
-    needs_repair = not bool(validation.get("ok")) and (combat_genome_required_for(data) or bool(runtime_plan(data)))
-    if not needs_repair:
-        debug.setdefault("runtimeRepairPath", "not_needed")
-        return data
-
-    repair_kind = _runtime_repair_kind(validation, data)
-    if not had_runtime_input and repair_kind == "structural_or_dead_no_executable_calls":
-        repair_kind = "dead_missing_runtime_plan_retry_once"
-    attempt_budget = _runtime_repair_attempt_budget(repair_kind)
-    debug["runtimeRepairKind"] = repair_kind
-    debug["runtimeRepairAttemptBudget"] = str(attempt_budget)
-
-    repair_log: list[dict[str, Any]] = []
-    # A rejected candidate is useful as feedback context for the next model turn, but
-    # it is never an accepted baseline. Each new patch is applied independently to the
-    # last accepted item so narrow fields from an invalid attempt cannot accumulate.
-    accepted_baseline = copy.deepcopy(data)
-    working = data
-    for attempt in range(1, attempt_budget + 1):
-        patch = try_llm_runtime_plan_repair(working, a, b, ca, cb, key, validation, attempt)
-        row = {
-            "attempt": attempt,
-            "repairKind": repair_kind,
-            "errors": validation.get("errors") or [],
-            "gotPatch": bool(patch),
-        }
-        if not patch:
-            repair_log.append(row)
-            continue
-        candidate = _adopt_runtime_plan_repair(accepted_baseline, patch, key=key, content_preview=str((patch.get("_runtimeRepairMeta") or {}).get("runtimePlanRepairRawPreview") or ""))
-        candidate_raw = _raw_runtime_plan_candidate(candidate)
-        candidate_raw_boundary = runtime_plan_boundary_report(candidate_raw) if candidate_raw is not None else None
-        structural_after = structural_repair_runtime_plan_inplace(candidate)
-        if structural_after.get("applied"):
-            row["structuralAfterPatch"] = structural_after.get("fixes", [])[:12]
-        after = _merge_raw_boundary_errors(runtime_plan_validation_report(candidate), candidate_raw_boundary, structural_after.get("fixes"))
-        contract_candidate = candidate.get("runtimeContract")
-        if isinstance(contract_candidate, dict) and str(contract_candidate.get("schema") or "") == STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
-            structural_contract_after = validate_structural_planner_contract(candidate)
-            row["structuralContractAfter"] = structural_contract_after
-            if not structural_contract_after.get("ok"):
-                after = dict(after)
-                after["ok"] = False
-                contract_errors = [
-                    "runtimeContract." + str(block.get("kind") or "invalid") + ": " + bounded_json_dumps(block, max_chars=600)
-                    for block in (structural_contract_after.get("blockingClaims") or [])
-                    if isinstance(block, dict)
-                ]
-                after["errors"] = [str(error) for error in (after.get("errors") or [])] + contract_errors[:32]
-                after["structuralRuntimeContract"] = structural_contract_after
-        candidate_debug_candidate = candidate.get("debug")
-        candidate_debug: dict[str, Any] = candidate_debug_candidate if isinstance(candidate_debug_candidate, dict) else {}
-        patch_report_raw = candidate_debug.get("runtimePlanRepairPatchContract")
-        try:
-            patch_report_after = json.loads(str(patch_report_raw or "{}"))
-        except (TypeError, ValueError, json.JSONDecodeError):
-            patch_report_after = {}
-        blocking_patch_rejections = [
-            str(value)
-            for value in (patch_report_after.get("rejectedTopLevel") or [])
-            if str(value) == "runtimeContract.required_with_runtimePlan"
-        ]
-        if blocking_patch_rejections:
-            after = dict(after)
-            after["ok"] = False
-            after["errors"] = [str(error) for error in (after.get("errors") or [])] + [
-                "repairPatch." + value for value in blocking_patch_rejections
-            ]
-            row["blockingPatchRejections"] = blocking_patch_rejections
-        row["okAfter"] = bool(after.get("ok"))
-        row["errorsAfter"] = after.get("errors") or []
-        repair_log.append(row)
-        working = candidate
-        validation = after
-        if after.get("ok"):
-            working.setdefault("debug", {})["runtimeRepairPath"] = "llm_targeted_runtime_contract_repair"
-            working["debug"]["runtimeRepairKind"] = repair_kind
-            working["debug"]["runtimePlanRepair"] = bounded_json_dumps(repair_log, max_chars=6000)
-            working["debug"]["runtimePlanValidationAfterRepair"] = bounded_json_dumps(after, max_chars=6000)
-            return working
-    if authored_runtime_plan is not None:
-        data["runtimePlan"] = authored_runtime_plan
-    debug["runtimeRepairPath"] = "targeted_runtime_repair_exhausted"
-    debug["runtimeRepairKind"] = repair_kind
-    debug["runtimePlanRepair"] = bounded_json_dumps(repair_log, max_chars=6000)
-    debug["runtimePlanValidationAfterRepair"] = bounded_json_dumps(validation, max_chars=6000)
-    exact_errors = [str(error) for error in (validation.get("errors") or [])]
-    got_invalid_candidate = any(bool(row.get("gotPatch")) for row in repair_log)
-    live_llm_authored = (
-        str(debug.get("planner") or "") == "llm_author_first"
-        or attributed_planner_messages(data.get("_llmHistory")) is not None
+    req, user_content, system, _, model_override, current_item = (
+        build_same_author_repair_request(data, a, b, failure_report)
     )
-    if got_invalid_candidate or live_llm_authored:
+    model_name = str(req.get("model") or resolve_llm_model())
+    trace_event(
+        "prompt",
+        "LLM:author_plan_scoped_repair",
+        "Planner same-author scoped repair request",
+        {
+            "provider": active_llm_provider(),
+            "model": model_name,
+            "failureStage": str(failure_report.get("stage") or "unknown"),
+        },
+        prompt=user_content,
+    )
+    raw = llm_chat_json(req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+    content = raw["choices"][0]["message"]["content"]
+    transport_debug = raw.get("_debug") if isinstance(raw.get("_debug"), dict) else {}
+    trace_event(
+        "response",
+        "LLM:author_plan_scoped_repair",
+        "Planner same-author scoped repair response",
+        {
+            "provider": active_llm_provider(),
+            "model": model_name,
+            "chars": len(str(content)),
+            "transport": transport_debug,
+        },
+        response=content,
+    )
+    raw_patch = parse_first_valid_llm_json(content)
+    patch = project_provider_author_item_to_local(
+        raw_patch,
+        author_item_repair_response_schema(),
+    )
+    patch_report = strict_author_item_repair_report(patch)
+    targeted_repair = not _failure_mentions(
+        failure_report,
+        "executor_not_representable",
+        "unsupported_mechanic_family",
+        "unrepresentable_mechanic",
+    )
+    allowed_patch_keys = set(_repair_allowed_patch_keys(failure_report, targeted_repair))
+    unexpected_patch_keys = sorted(set(patch) - allowed_patch_keys)
+    if unexpected_patch_keys:
+        patch_report.setdefault("errors", []).append({
+            "path": "$",
+            "kind": "out_of_scope_repair_keys",
+            "keys": unexpected_patch_keys,
+        })
+        patch_report["ok"] = False
+    if not targeted_repair:
+        required_patch_keys = {"category", "coreMechanic", "primaryVerb", "controlStyle", "runtimePlan"}
+        missing_patch_keys = sorted(required_patch_keys - set(patch))
+        plan = patch.get("runtimePlan") if isinstance(patch.get("runtimePlan"), dict) else {}
+        required_plan_keys = {
+            "resultKind", "engineCalls", "runtimeStateIntent", "sourceReading",
+            "balanceIntent", "anomalyFlags",
+        }
+        missing_plan_keys = sorted(required_plan_keys - set(plan))
+        if missing_patch_keys or missing_plan_keys:
+            patch_report.setdefault("errors", []).append({
+                "path": "$",
+                "kind": "incomplete_gameplay_redesign_patch",
+                "missingPatchKeys": missing_patch_keys,
+                "missingRuntimePlanKeys": missing_plan_keys,
+            })
+            patch_report["ok"] = False
+    if not patch_report.get("ok"):
         raise PlannerUnavailable(
-            "runtime repair exhausted with validator errors: "
-            + ("; ".join(exact_errors[:8]) if exact_errors else "invalid repairPatch")
+            "same-author scoped repair returned an invalid patch: "
+            + bounded_json_dumps(patch_report, max_chars=4000)
         )
-    # Offline compiler/golden fixtures may deliberately exercise canonicalization and
-    # rejected-call reporting without an LLM backend. Preserve the original artifact for
-    # the later strict boundary after the one canonical normalization pass. This branch is
-    # unreachable for live Planner-authored data and never adopts a failed model candidate.
-    normalize_runtime_plan_inplace(data)
-    debug["runtimeRepairPath"] = "repair_backend_unavailable_preserved_for_offline_strict_boundary"
-    return data
+    parsed = _preserve_accepted_authoring(
+        _scoped_repair_candidate(patch),
+        current_item,
+        failure_report,
+    )
+    obj = _prepare_parsed_author_item(parsed)
+    source_gate = planner_runtime_promise_gate(copy.deepcopy(obj))
+    if not source_gate.get("ok"):
+        kinds = sorted({str(row.get("kind") or "unsupported") for row in source_gate.get("blockingClaims") or []})
+        raise PlannerUnavailable("same-author scoped repair returned invalid source contract: " + ", ".join(kinds))
+
+    obj.setdefault("id", str(data.get("id") or "g_" + stable_hash(key, content, length=16)))
+    obj.setdefault("recipeKey", key)
+    obj.setdefault("schemaVersion", 1)
+    obj.setdefault("parentA", name_of(a))
+    obj.setdefault("parentB", name_of(b))
+    obj.setdefault("sourceMode", "generated")
+    obj.setdefault("debug", {})
+    obj["debug"]["planner"] = "llm_author_first"
+    obj["debug"]["plannerPromiseGate"] = source_gate
+    obj["debug"]["model"] = model_name
+    obj["debug"]["authorRepair"] = "same_author_role_scoped_patch"
+    obj["debug"]["repairPatchKeys"] = sorted(patch)
+    obj["debug"]["repairModelMayDiffer"] = bool(model_override)
+    obj["debug"]["authorRepairTransport"] = copy.deepcopy(transport_debug)
+    obj["debug"]["llmRawOutput"] = str(content)[:12000]
+    obj["_llmHistory"] = attributed_planner_history(system, user_content, content)
+    return obj
+
 
 def call_llm_vfx_director(system: str, user: dict[str, Any], max_tokens: int, temperature: float, timeout: int, messages: list[dict[str, str]] | None = None) -> dict[str, Any] | None:
     """Small adapter used by vfx_manifest.py.
@@ -1037,7 +842,7 @@ def call_llm_vfx_director(system: str, user: dict[str, Any], max_tokens: int, te
                     str(m.get("content") or ""),
                 )
                 for m in messages
-                if isinstance(m, dict) and str(m.get("content") or "").strip()
+                if str(m.get("content") or "").strip()
             ]
             if not req_messages:
                 return None
