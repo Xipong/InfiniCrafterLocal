@@ -501,8 +501,9 @@ public sealed class GeneratedItemData
     _load_tool_module("infini_delivery_environment_probe", "tools/check_delivery_contract.py")
     assert {key: os.environ.get(key) for key in gate_keys} == before
 
-def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -> None:
-    report = _load_tool_module("infini_config_registry_test", "tools/config_registry.py").build_registry()
+def _contract_check_generated_config_registry_is_current_and_redacts_secrets(monkeypatch) -> None:
+    registry = _load_tool_module("infini_config_registry_test", "tools/config_registry.py")
+    report = registry.build_registry()
     committed = json.loads((ROOT / "contracts" / "config_registry.json").read_text(encoding="utf-8"))
     assert report == committed
     assert report["ok"] is True
@@ -513,6 +514,33 @@ def _contract_check_generated_config_registry_is_current_and_redacts_secrets() -
     assert all("PASTE_KEY" not in json.dumps(row) for row in secrets)
     cache_entry = next(row for row in report["entries"] if row["name"] == "INFINI_CACHE_DIR")
     assert "tools/validate_sandbox.py" not in cache_entry["owners"]
+
+    declaration_line = {"value": 10}
+
+    def extract_probe_declaration():
+        return ([registry.Declaration(
+            name="INFINI_LINE_STABLE_PROBE",
+            type_name="integer",
+            default=1,
+            minimum=0,
+            maximum=2,
+            file="probe.py",
+            line=declaration_line["value"],
+        )], {"INFINI_LINE_STABLE_PROBE": {"probe.py"}})
+
+    monkeypatch.setattr(registry, "_extract_python", extract_probe_declaration)
+    monkeypatch.setattr(registry, "_extract_csharp_refs", lambda _references: None)
+    monkeypatch.setattr(registry, "_example_fields", lambda: {})
+    monkeypatch.setattr(registry, "_gui_fields", lambda: ([], {}))
+    before_line_shift = registry.build_registry()
+    declaration_line["value"] = 999
+    after_line_shift = registry.build_registry()
+    assert before_line_shift == after_line_shift
+    assert all(
+        "line" not in declaration
+        for entry in before_line_shift["entries"]
+        for declaration in entry["declarations"]
+    )
 
 def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_flag(tmp_path: Path) -> None:
     doctor = subprocess.run(

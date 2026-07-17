@@ -655,6 +655,10 @@ def build_same_author_repair_request(
         "repairMode": "targeted_domain_repair" if targeted_repair else "full_redesign",
         "contextOnlyParentNames": {"itemA": name_of(a), "itemB": name_of(b)},
         "allowedPatchKeys": _repair_allowed_patch_keys(failure_report, targeted_repair),
+        "patchRules": [
+            "visualIntent is a top-level patch key; never place it inside runtimePlan.",
+            "Every runtimePlan.engineCalls replacement entry is a complete call with callId, fn, and params.",
+        ],
         "invalidTargets": _repair_targets(failure_report),
         "currentRuntimePlan": current_runtime_plan,
         "currentCoreMechanic": (

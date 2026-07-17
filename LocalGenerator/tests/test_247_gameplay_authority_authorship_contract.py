@@ -1543,6 +1543,10 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     assert captured[0][llm_authoring_pipeline.LLM_MODEL_OVERRIDE_KEY] == "replacement-model"
     dossier = json.loads(captured[0]["messages"][-1]["content"])
     assert dossier["repairMode"] == "targeted_domain_repair"
+    assert dossier["patchRules"] == [
+        "visualIntent is a top-level patch key; never place it inside runtimePlan.",
+        "Every runtimePlan.engineCalls replacement entry is a complete call with callId, fn, and params.",
+    ]
     assert dossier["currentRuntimePlan"]["engineCalls"] == authored["runtimePlan"]["engineCalls"]
     assert dossier["allowedPatchKeys"] == ["runtimePlan"]
     assert "currentAuthoredItem" not in dossier
