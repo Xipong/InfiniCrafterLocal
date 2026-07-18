@@ -102,7 +102,7 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "cropPadPx": 1,
             "maxEdgeTouch": 0.10,
             "promptFillWords": "the projectile body should span most of the canvas along its width or height while staying fully inside the frame",
-            "promptPoseWords": "compose it as one clean projectile sprite in gameplay view",
+            "promptPoseWords": "compose one clean projectile in canonical local +X pose: leading tip or nose faces screen-right, tail or trail faces screen-left; this local texture is later rotated to any world-space travel direction",
         },
         "impact": {
             "targetFill": IMPACT_ICON_TARGET_FILL,
@@ -124,7 +124,7 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "cropPadPx": 1,
             "maxEdgeTouch": 0.14,
             "promptFillWords": "the child body should span a large visible portion of the canvas while staying fully inside the frame",
-            "promptPoseWords": "one tiny separate object only",
+            "promptPoseWords": "one tiny separate object only; if elongated, use canonical local +X with its leading tip screen-right because this local texture is later rotated to any world-space travel direction",
         },
         "field": {
             "targetFill": FIELD_ICON_TARGET_FILL,

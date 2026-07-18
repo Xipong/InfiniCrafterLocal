@@ -277,6 +277,55 @@ def _check_multipart_part_list_supplies_default_component_count_contract() -> No
     )
 
 
+def _check_projectile_axis_is_canonicalized_in_code_and_rejected_when_still_diagonal(tmp_path: Path) -> None:
+    diagonal_path = tmp_path / "diagonal_projectile.png"
+    diagonal = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(diagonal)
+    # Broad base at lower-left, pointed tip at upper-right.
+    draw.polygon(((3, 24), (7, 29), (29, 4), (27, 2)), fill=(210, 150, 70, 255))
+    diagonal.save(diagonal_path)
+
+    before = validate_processed_sprite(str(diagonal_path), "projectile")
+    assert any(str(reason).startswith("projectile_forward_axis_misaligned") for reason in before["reasons"]), before
+    assert sprite_validation_fatal(before), before
+
+    canonicalize = getattr(SPRITE_POSTPROCESS, "canonicalize_projectile_forward_axis", None)
+    assert callable(canonicalize), "projectile postprocess must own deterministic local-axis normalization"
+    normalized_result = canonicalize(diagonal, "projectile")
+    assert isinstance(normalized_result, tuple) and len(normalized_result) == 2
+    normalized, evidence = normalized_result
+    normalized_path = tmp_path / "normalized_projectile.png"
+    normalized.save(normalized_path)
+    after = validate_processed_sprite(str(normalized_path), "projectile")
+
+    assert not any(str(reason).startswith("projectile_forward_axis_misaligned") for reason in after["reasons"]), after
+    assert abs(float(evidence["afterAngleDegrees"])) <= 5.0, evidence
+    assert float(evidence["anisotropy"]) >= 2.5, evidence
+    assert evidence["rotated"] is True
+    assert evidence["flipped"] is False
+
+    reversed_diagonal = diagonal.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    reversed_result = canonicalize(reversed_diagonal, "projectile")
+    assert isinstance(reversed_result, tuple) and len(reversed_result) == 2
+    reversed_normalized, reversed_evidence = reversed_result
+    assert reversed_normalized.size[0] > 0
+    assert reversed_evidence["flipped"] is True, reversed_evidence
+
+    circle = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    ImageDraw.Draw(circle).ellipse((6, 6, 25, 25), fill=(190, 190, 205, 255))
+    circle_result = canonicalize(circle, "projectile")
+    assert isinstance(circle_result, tuple) and len(circle_result) == 2
+    unchanged, circle_evidence = circle_result
+    assert unchanged.tobytes() == circle.tobytes()
+    assert circle_evidence["rotated"] is False
+
+    prompt_contract = SPRITE_POSTPROCESS.role_contract_prompt_clause("projectile", 32).casefold()
+    assert "local +x" in prompt_contract
+    assert "screen-right" in prompt_contract
+    assert "any world-space travel direction" in prompt_contract
+    assert "runtime" not in prompt_contract
+
+
 def _check_debug_keeps_the_exact_last_prompt_sent_to_the_image_backend(tmp_path, monkeypatch) -> None:
     raw = tmp_path / "backend-result.png"
     Image.new("RGBA", (32, 32), (90, 120, 160, 255)).save(raw)

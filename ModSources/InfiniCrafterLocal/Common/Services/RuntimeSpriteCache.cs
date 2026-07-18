@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common.Config;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
@@ -40,11 +41,13 @@ public sealed class RuntimeSpriteCache : IDisposable
     private sealed class CachedTexture
     {
         public readonly Texture2D Texture;
+        public readonly float LocalForwardRadians;
         public long LastAccessTick;
 
-        public CachedTexture(Texture2D texture, long lastAccessTick)
+        public CachedTexture(Texture2D texture, float localForwardRadians, long lastAccessTick)
         {
             Texture = texture;
+            LocalForwardRadians = localForwardRadians;
             LastAccessTick = lastAccessTick;
         }
     }
@@ -63,6 +66,11 @@ public sealed class RuntimeSpriteCache : IDisposable
     private const int MinTextureFileMegabytes = 1;
     private const int MaxTextureFileMegabytesHardLimit = 64;
     private const int MaxMissingOrBadRecords = 256;
+    private const float PrincipalAxisMinimumAnisotropy = 2.5f;
+    private const float ForwardTipMinimumAnisotropy = 8f;
+    private const byte PrincipalAxisAlphaThreshold = 8;
+    private const double ForwardEndpointFraction = 0.24;
+    private const double ForwardEndpointRatio = 0.82;
     private long _accessCounter;
     private long _hitCount;
     private long _missCount;
@@ -88,8 +96,11 @@ public sealed class RuntimeSpriteCache : IDisposable
         }
     }
 
-    public Texture2D? TryGet(string path)
+    public Texture2D? TryGet(string path) => TryGet(path, out _);
+
+    public Texture2D? TryGet(string path, out float localForwardRadians)
     {
+        localForwardRadians = 0f;
         if (string.IsNullOrWhiteSpace(path) || Main.dedServ) return null;
         lock (_lock)
         {
@@ -112,6 +123,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                 {
                     _hitCount++;
                     cached.LastAccessTick = ++_accessCounter;
+                    localForwardRadians = cached.LocalForwardRadians;
                     return cached.Texture;
                 }
                 if (_missingOrBad.TryGetValue(key, out DateTime lastBad))
@@ -150,7 +162,8 @@ public sealed class RuntimeSpriteCache : IDisposable
                     return null;
                 }
 
-                _textures[key] = new CachedTexture(tex, ++_accessCounter);
+                localForwardRadians = MeasureLocalForwardRadians(tex);
+                _textures[key] = new CachedTexture(tex, localForwardRadians, ++_accessCounter);
                 _loadSuccessCount++;
                 TrimTextureCacheIfNeeded(limits.MaxCachedTextures);
                 return tex;
@@ -168,6 +181,112 @@ public sealed class RuntimeSpriteCache : IDisposable
                 catch { }
                 return null;
             }
+        }
+    }
+
+    private static float MeasureLocalForwardRadians(Texture2D texture)
+    {
+        try
+        {
+            int width = texture.Width;
+            int height = texture.Height;
+            if (width <= 0 || height <= 0) return 0f;
+            var pixels = new Color[checked(width * height)];
+            texture.GetData(pixels);
+
+            int count = 0;
+            double sumX = 0.0;
+            double sumY = 0.0;
+            for (int y = 0; y < height; y++)
+            {
+                int row = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    if (pixels[row + x].A < PrincipalAxisAlphaThreshold) continue;
+                    count++;
+                    sumX += x;
+                    sumY += y;
+                }
+            }
+            if (count < 4) return 0f;
+
+            double meanX = sumX / count;
+            double meanY = sumY / count;
+            double varianceX = 0.0;
+            double varianceY = 0.0;
+            double covariance = 0.0;
+            for (int y = 0; y < height; y++)
+            {
+                int row = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    if (pixels[row + x].A < PrincipalAxisAlphaThreshold) continue;
+                    double dx = x - meanX;
+                    double dy = y - meanY;
+                    varianceX += dx * dx;
+                    varianceY += dy * dy;
+                    covariance += dx * dy;
+                }
+            }
+            varianceX /= count;
+            varianceY /= count;
+            covariance /= count;
+            double trace = varianceX + varianceY;
+            double discriminant = Math.Sqrt(Math.Max(
+                0.0,
+                (varianceX - varianceY) * (varianceX - varianceY) + 4.0 * covariance * covariance
+            ));
+            double major = Math.Max(0.0, (trace + discriminant) * 0.5);
+            double minor = Math.Max(1e-9, (trace - discriminant) * 0.5);
+            double anisotropy = major / minor;
+            if (anisotropy < PrincipalAxisMinimumAnisotropy) return 0f;
+
+            double angle = 0.5 * Math.Atan2(2.0 * covariance, varianceX - varianceY);
+            if (anisotropy >= ForwardTipMinimumAnisotropy)
+            {
+                double axisX = Math.Cos(angle);
+                double axisY = Math.Sin(angle);
+                double minProjection = double.MaxValue;
+                double maxProjection = double.MinValue;
+                for (int y = 0; y < height; y++)
+                {
+                    int row = y * width;
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (pixels[row + x].A < PrincipalAxisAlphaThreshold) continue;
+                        double projection = (x - meanX) * axisX + (y - meanY) * axisY;
+                        minProjection = Math.Min(minProjection, projection);
+                        maxProjection = Math.Max(maxProjection, projection);
+                    }
+                }
+
+                double endpointWidth = Math.Max(1e-6, (maxProjection - minProjection) * ForwardEndpointFraction);
+                int negativeEndpointPixels = 0;
+                int positiveEndpointPixels = 0;
+                for (int y = 0; y < height; y++)
+                {
+                    int row = y * width;
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (pixels[row + x].A < PrincipalAxisAlphaThreshold) continue;
+                        double projection = (x - meanX) * axisX + (y - meanY) * axisY;
+                        if (projection <= minProjection + endpointWidth) negativeEndpointPixels++;
+                        if (projection >= maxProjection - endpointWidth) positiveEndpointPixels++;
+                    }
+                }
+                if (
+                    negativeEndpointPixels > 0
+                    && positiveEndpointPixels > 0
+                    && negativeEndpointPixels < positiveEndpointPixels * ForwardEndpointRatio
+                )
+                    angle += Math.PI;
+            }
+            return MathHelper.WrapAngle((float)angle);
+        }
+        catch
+        {
+            // Presentation metadata failure must not make an otherwise valid PNG unusable.
+            return 0f;
         }
     }
 

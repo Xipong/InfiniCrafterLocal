@@ -465,15 +465,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             reasons = list((last_validation or {}).get("reasons") or [])
         except Exception:
             reasons = []
-        fatal_tokens = (
-            "empty_alpha_bbox",
-            "magenta_key_background_left",
-            "almost_no_transparency_after_bg_removal",
-            "too_few_opaque_pixels",
-            "very_dense_opaque_area",
-            "pillow_unavailable_required",
-        )
-        fatal = any(any(tok in str(reason) for tok in fatal_tokens) for reason in reasons)
+        fatal = sprite_validation_fatal(last_validation)
         if not fatal and Path(last_path).exists():
             data.setdefault("debug", {})[f"{role}InvalidGeneratedUsedAsWarn"] = json.dumps({
                 "path": str(Path(last_path).resolve()),

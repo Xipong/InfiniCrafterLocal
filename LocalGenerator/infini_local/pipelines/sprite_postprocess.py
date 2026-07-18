@@ -39,6 +39,7 @@ from infini_local.pipelines.sprite_geometry import (
     bbox_expand,
     bbox_union,
     sprite_bbox_stats,
+    sprite_principal_axis_stats,
 )
 from infini_local.pipelines.sprite_keyer import (
     apply_background_removal,
@@ -413,6 +414,74 @@ def alpha_stats(img: Any) -> dict[str, Any]:
         "bbox": list(alpha.getbbox() or []),
     }
 
+
+def canonicalize_projectile_forward_axis(img: Any, role: str = "projectile") -> tuple[Any, dict[str, Any]]:
+    """Normalize an elongated projectile's local forward axis before final downscale.
+
+    Local +X is only a texture-space convention. Terraria still rotates the sprite
+    toward any world-space velocity. Near-radial sprites remain untouched; head/tail
+    flipping is allowed only for a strongly tapered silhouette.
+    """
+    if Image is None:
+        return img, {"beforeAngleDegrees": 0.0, "afterAngleDegrees": 0.0, "anisotropy": 1.0, "rotated": False, "flipped": False}
+    normalized_role = str(role or "").strip().lower()
+    source = img.convert("RGBA")
+    before = sprite_principal_axis_stats(source, 8)
+    evidence: dict[str, Any] = {
+        "beforeAngleDegrees": float(before.get("angleDegrees") or 0.0),
+        "afterAngleDegrees": float(before.get("angleDegrees") or 0.0),
+        "anisotropy": float(before.get("anisotropy") or 1.0),
+        "rotated": False,
+        "flipped": False,
+        "leftEndpointPixels": 0,
+        "rightEndpointPixels": 0,
+    }
+    if normalized_role not in {"projectile", "child"} or evidence["anisotropy"] < 2.5:
+        return source, evidence
+
+    working = source
+    angle = evidence["beforeAngleDegrees"]
+    if abs(angle) > 3.0:
+        working = source.rotate(
+            angle,
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+            fillcolor=(0, 0, 0, 0),
+        )
+        working = scrub_transparent_rgb(working)
+        evidence["rotated"] = True
+
+    # PCA is undirected. Infer head/tail only for highly elongated, strongly
+    # tapered silhouettes (arrows/spears/shards), never coins or broad fire blobs.
+    if evidence["anisotropy"] >= 8.0:
+        alpha = working.getchannel("A")
+        bbox = alpha_bbox_threshold(working, 8)
+        if bbox is not None:
+            x0, y0, x1, y1 = bbox
+            edge_width = max(2, int(round((x1 - x0) * 0.24)))
+            left = sum(
+                1
+                for y in range(y0, y1)
+                for x in range(x0, min(x1, x0 + edge_width))
+                if int(alpha.getpixel((x, y))) >= 8
+            )
+            right = sum(
+                1
+                for y in range(y0, y1)
+                for x in range(max(x0, x1 - edge_width), x1)
+                if int(alpha.getpixel((x, y))) >= 8
+            )
+            evidence["leftEndpointPixels"] = left
+            evidence["rightEndpointPixels"] = right
+            if left > 0 and right > 0 and left < right * 0.82:
+                working = working.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                evidence["flipped"] = True
+
+    after = sprite_principal_axis_stats(working, 8)
+    evidence["afterAngleDegrees"] = float(after.get("angleDegrees") or 0.0)
+    return working, evidence
+
+
 def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
     img = img.convert("RGBA")
     spec = sprite_contract_for(role, target_size)
@@ -553,6 +622,8 @@ def validate_processed_sprite(
     role = (role or "item").lower()
     spec = sprite_contract_for(role, max(w, h))
     bb = sprite_bbox_stats(img, role, max(w, h))
+    principal_axis = sprite_principal_axis_stats(img, int(spec.get("coreAlphaThreshold") or 8))
+    bb["principalAxis"] = principal_axis
     effect_bbox = bb.get("effect_bbox")
     core_bbox = bb.get("core_bbox")
     core_long = int(bb.get("core_long_axis") or 0)
@@ -594,6 +665,15 @@ def validate_processed_sprite(
             warnings.append(f"item_diagonal_or_thin_core:{area_ratio:.3f}")
         if role in {"projectile", "child"} and area_ratio < 0.08:
             warnings.append(f"thin_projectile_core:{area_ratio:.3f}")
+        if (
+            role in {"projectile", "child"}
+            and float(principal_axis.get("anisotropy") or 1.0) >= 2.5
+            and float(principal_axis.get("horizontalErrorDegrees") or 0.0) > 12.0
+        ):
+            reasons.append(
+                "projectile_forward_axis_misaligned:"
+                f"{float(principal_axis.get('horizontalErrorDegrees') or 0.0):.1f}deg"
+            )
         if stats.get("partialPct", 0) > 0.25:
             warnings.append("many_partial_alpha_pixels")
         if stats.get("opaquePct", 0) < SPRITE_MIN_OPAQUE_PCT:
@@ -651,6 +731,7 @@ def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
         "too_few_opaque_pixels",
         "very_dense_opaque_area",
         "pillow_unavailable_required",
+        "projectile_forward_axis_misaligned",
     )
     return any(any(tok in reason for tok in fatal_tokens) for reason in reasons)
 
@@ -670,6 +751,7 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
         ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the magenta key"),
         ("empty_alpha_bbox", "draw the authored role asset, not an empty image"),
+        ("projectile_forward_axis_misaligned", "use canonical local +X: leading tip/nose screen-right and tail/trail screen-left; runtime rotates this axis to world velocity"),
     ]
     for raw, msg in mapping:
         if any(str(r).startswith(raw) for r in reasons):
@@ -748,6 +830,9 @@ def postprocess_sprite(
             bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
         save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres")
+        bg_removed, forward_axis = canonicalize_projectile_forward_axis(bg_removed, role)
+        if forward_axis.get("rotated") or forward_axis.get("flipped"):
+            save_stage(bg_removed, sprite_id, "15_projectile_forward_axis")
 
         master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
         save_stage(master, sprite_id, "20_master_norm")
@@ -765,7 +850,8 @@ def postprocess_sprite(
                         "processingProfile": SPRITE_PROCESSING_PROFILE, "masterCanvas": SPRITE_MASTER_CANVAS, "downscaleFilter": SPRITE_DOWNSCALE_FILTER,
                         "premultipliedResize": SPRITE_PREMULTIPLIED_RESIZE, "chromaDefringe": SPRITE_CHROMA_DEFRINGE,
                         "requirePillow": REQUIRE_PILLOW,
-                        "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE, "alpha": stats, "validation": validation})
+                        "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE, "alpha": stats,
+                        "projectileForwardAxis": forward_axis, "validation": validation})
         return str(out)
     except Exception as e:
         log_event("warn", "postprocess failed", {"path": path, "error": repr(e), "trace": traceback.format_exc()})
@@ -786,6 +872,7 @@ __all__ = [
     "fit_to_canvas",
     "palette_cleanup",
     "edge_touch_ratio",
+    "canonicalize_projectile_forward_axis",
     "validate_processed_sprite",
     "technical_validation_score",
     "sprite_validation_fatal",

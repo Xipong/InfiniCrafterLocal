@@ -524,7 +524,7 @@ public sealed partial class GeneratedProjectile
     private bool TryDrawGeneratedProjectileSprite(Vector2 center, Color lightColor)
     {
         string spritePath = ResolveProjectileSpritePath();
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(spritePath);
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(spritePath, out float localForwardRadians);
         if (texture is null)
         {
             RequestProjectileAssetCatchupIfMissing(spritePath, _generatedItemId);
@@ -533,7 +533,7 @@ public sealed partial class GeneratedProjectile
 
         var source = new Rectangle(0, 0, texture.Width, texture.Height);
         Vector2 origin = source.Size() * 0.5f;
-        float rotation = Projectile.rotation;
+        float rotation = Projectile.rotation - localForwardRadians;
 
         float basePixels = Math.Max(texture.Width, texture.Height);
         float targetPixels = Math.Max(8f, Math.Max(Projectile.width, Projectile.height) * Projectile.scale * 1.15f);
@@ -545,9 +545,9 @@ public sealed partial class GeneratedProjectile
             targetPixels = Math.Max(targetPixels, 18f * Math.Max(0.75f, _spec.ProjectileScale));
         float drawScale = Math.Clamp(targetPixels / Math.Max(1f, basePixels), 0.35f, 2.5f);
         Color tint = lightColor;
-        SpriteEffects effects = (Projectile.spriteDirection < 0 || (Projectile.spriteDirection == 0 && Projectile.velocity.X < 0f))
-            ? SpriteEffects.FlipHorizontally
-            : SpriteEffects.None;
+        // velocity rotation already carries the full world-space facing through
+        // Projectile.rotation. Mirroring here would invert leftward shots a second time and make them fly butt-first.
+        SpriteEffects effects = SpriteEffects.None;
         // Optional debug/readability silhouette. Disabled by default because it looks like
         // merged light/glow on both generated and vanilla-looking textures.
         Color backTint = PresentationColor(110) * 0.22f;

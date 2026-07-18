@@ -238,6 +238,7 @@ def _check_csharp_vfx_keeps_steady_light_but_rejects_flicker_flash_routing() -> 
 
 def _check_generated_projectile_sprite_rotation_is_side_on_not_vanilla_upward_offset() -> None:
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
+    cache = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Services" / "RuntimeSpriteCache.cs").read_text(encoding="utf-8")
     assert "SideOnGeneratedSpriteRotation" in source
     assert "sprites pointing left-to-right (+X)" in source
     assert "makes arrows/bolts fly sideways" in source
@@ -245,6 +246,16 @@ def _check_generated_projectile_sprite_rotation_is_side_on_not_vanilla_upward_of
     assert "? SideOnGeneratedSpriteRotation(Projectile.velocity)" in source
     assert "Projectile.rotation = dir.ToRotation() + MathHelper.PiOver2;" not in source
     assert "Projectile.velocity.ToRotation() + MathHelper.PiOver2" not in source
+    draw = source.split("private bool TryDrawGeneratedProjectileSprite", 1)[1].split("private static void DrawRect", 1)[0]
+    assert "SpriteEffects effects = SpriteEffects.None;" in draw
+    assert "FlipHorizontally" not in draw
+    assert "velocity rotation already carries the full world-space facing" in draw
+    assert "TryGet(spritePath, out float localForwardRadians)" in draw
+    assert "Projectile.rotation - localForwardRadians" in draw
+    assert "public Texture2D? TryGet(string path, out float localForwardRadians)" in cache
+    assert "MeasureLocalForwardRadians" in cache
+    assert "PrincipalAxisMinimumAnisotropy" in cache
+    assert "ForwardTipMinimumAnisotropy" in cache
 
 
 def _check_particlelibrary_does_not_allocate_alpha_blend_magicpixel_quads_for_stock_torch_safety() -> None:

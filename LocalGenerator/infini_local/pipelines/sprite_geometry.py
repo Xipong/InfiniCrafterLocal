@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 try:
@@ -71,6 +72,39 @@ def bbox_center(b: tuple[int, int, int, int] | None) -> tuple[float, float]:
         return (0.0, 0.0)
     return ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)
 
+
+def sprite_principal_axis_stats(img: Any, alpha_threshold: int = 8) -> dict[str, float | int]:
+    """Measure an undirected visible-body axis without interpreting item semantics."""
+    if Image is None:
+        return {"visiblePixels": 0, "angleDegrees": 0.0, "anisotropy": 1.0, "horizontalErrorDegrees": 0.0}
+    alpha = img.convert("RGBA").getchannel("A")
+    threshold = max(1, min(255, int(alpha_threshold)))
+    points = [
+        (x, y)
+        for y in range(alpha.height)
+        for x in range(alpha.width)
+        if int(alpha.getpixel((x, y))) >= threshold
+    ]
+    if len(points) < 4:
+        return {"visiblePixels": len(points), "angleDegrees": 0.0, "anisotropy": 1.0, "horizontalErrorDegrees": 0.0}
+
+    mean_x = sum(x for x, _ in points) / len(points)
+    mean_y = sum(y for _, y in points) / len(points)
+    variance_x = sum((x - mean_x) ** 2 for x, _ in points) / len(points)
+    variance_y = sum((y - mean_y) ** 2 for _, y in points) / len(points)
+    covariance = sum((x - mean_x) * (y - mean_y) for x, y in points) / len(points)
+    trace = variance_x + variance_y
+    discriminant = math.sqrt(max(0.0, (variance_x - variance_y) ** 2 + 4.0 * covariance * covariance))
+    major = max(0.0, (trace + discriminant) / 2.0)
+    minor = max(1e-9, (trace - discriminant) / 2.0)
+    angle = 0.5 * math.degrees(math.atan2(2.0 * covariance, variance_x - variance_y))
+    return {
+        "visiblePixels": len(points),
+        "angleDegrees": round(angle, 4),
+        "anisotropy": round(major / minor, 4),
+        "horizontalErrorDegrees": round(abs(angle), 4),
+    }
+
 def sprite_bbox_stats(img: Any, role: str = "item", target_size: int | None = None) -> dict[str, Any]:
     role = (role or "item").lower()
     spec = sprite_contract_for(role, target_size or (img.size[0] if getattr(img, "size", None) else 32))
@@ -103,5 +137,6 @@ __all__ = [
     "bbox_expand",
     "bbox_dims",
     "bbox_center",
+    "sprite_principal_axis_stats",
     "sprite_bbox_stats",
 ]
