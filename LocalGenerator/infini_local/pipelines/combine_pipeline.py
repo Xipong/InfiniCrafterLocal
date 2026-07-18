@@ -29,6 +29,7 @@ from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.combine_genome_contract import is_llm_planner
 from infini_local.pipelines.combine_validation import strict_validate_authored_item, validate_and_repair
+from infini_local.pipelines.debug_delivery_overrides import apply_debug_attack_consumable_minimum_for_delivery
 from infini_local.pipelines.executable_boundary_projection import project_attack_presentation_fields
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
@@ -515,7 +516,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         visual_report = visual_delivery_report(cached, check_backend_config=False)
         if visual_report.get("ok"):
             generation_debug.clear_combine_failure("cache_hit_delivered")
-            return sanitize_recipe_for_delivery(cached)
+            return apply_debug_attack_consumable_minimum_for_delivery(sanitize_recipe_for_delivery(cached))
         trace_event("step", "COMBINE:cache", "cached recipe ignored because required visual asset is not deliverable", {"recipeKey": key, "visualDelivery": visual_report})
         _quarantine_cached_recipe(
             world_id=world_id,
@@ -645,7 +646,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             raise PlannerUnavailable("delivery sanitizer returned a non-object")
         cache_put(key, a, b, data, world_id, world_name)
         generation_debug.clear_combine_failure("fresh_combine_success")
-        return data
+        return apply_debug_attack_consumable_minimum_for_delivery(data)
     except Exception as e:
         if not isinstance(getattr(e, "_infini_failure_snapshot", None), dict):
             generation_debug.record_combine_failure("unknown", e, payload, data, pipeline_log)

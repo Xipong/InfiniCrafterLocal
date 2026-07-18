@@ -394,6 +394,32 @@ class SettingsGuiUiMixin:
         tk.Label(status_bar, text="Готово", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
         tk.Label(status_bar, textvariable=self.status_var, bg=CARD_BG, fg=MUTED_FG, font=("Segoe UI", 9), anchor="w", justify="left").pack(side="left", fill="x", expand=True)
 
+    def check_row(self, parent, label, key, hint=None):
+        bg = self._bg_of(parent, CARD_BG)
+        hint_style = "HintMuted.TLabel" if bg == CARD_MUTED_BG else "Hint.TLabel"
+        frame = ttk.Frame(parent, padding=(12, 7), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
+        frame.pack(fill="x")
+        try:
+            setattr(frame, "_infini_bg", bg)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        var = getattr(self, "_var")(key)
+        widget = ttk.Checkbutton(
+            frame,
+            text=label,
+            variable=var,
+            onvalue="1",
+            offvalue="0",
+            command=getattr(self, "_refresh_visibility"),
+        )
+        widget.pack(side="left", anchor="w")
+        hint_label = None
+        if hint:
+            hint_label = ttk.Label(frame, text="   " + hint, style=hint_style)
+            hint_label.pack(side="left", fill="x", expand=True)
+        self._register_field_widgets(key, [widget], hint, hint_label)
+        return frame
+
     def row(self, parent, label, key, width=64, secret=False, browse=None, values=None, hint=None):
         bg = self._bg_of(parent, CARD_BG)
         label_style = "FieldLabelMuted.TLabel" if bg == CARD_MUTED_BG else "FieldLabel.TLabel"
@@ -538,6 +564,15 @@ class SettingsGuiUiMixin:
         self.row(server_card, "Craft HTTP timeout", "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS", width=16, hint="240 секунд: если крафт не готов, tModLoader попробует retry.")
         self.row(server_card, "Craft attempts", "INFINI_CRAFT_HTTP_ATTEMPTS", width=16)
         self.row(server_card, "Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS", width=16, hint="Сколько секунд параллельный /combine ждёт текущий craft/cache вместо немедленного busy response. Для обычной игры: 210.")
+
+        debug_card = self._card(
+            parent,
+            "Debug: запас атакующих расходников",
+            "Consumable weapon и ammo получают выбранный минимум. Зелья и материалы не меняются.\nLLM/prompt и canonical recipe не затрагиваются.",
+            icon="⚒",
+        )
+        self.check_row(debug_card, "Включить минимум для атакующих расходников", "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", hint="Применяется к delivery-копии fresh/cache-hit результата.")
+        self.row(debug_card, "Минимум за один крафт", "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD", width=16, values=["2", "5", "10", "20", "25", "50", "99", "100", "250", "500", "999"], hint="Если authored craftYield/maxStack ниже, оба поднимаются до выбранного количества.")
 
         radmin_status = ("Local only", "green") if not self.radmin_enabled.get() else ("Radmin/LAN", "blue")
         radmin_card = self._card(

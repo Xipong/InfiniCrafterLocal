@@ -82,7 +82,7 @@ def _check_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
 
 
 def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
-    visible_rows = set(re.findall(r"self\.(?:row|text_row)\([^)]*?[\"'](INFINI_[A-Z0-9_]+)[\"']", GUI_SOURCE, flags=re.S))
+    visible_rows = set(re.findall(r"self\.(?:row|text_row|check_row)\([^)]*?[\"'](INFINI_[A-Z0-9_]+)[\"']", GUI_SOURCE, flags=re.S))
     dynamic_pool_rows = {
         f"INFINI_LLM_POOL_{slot}_{suffix}"
         for slot in (2, 3, 4)
@@ -249,6 +249,26 @@ def _check_gui_exposes_critical_delivery_and_busy_wait_controls() -> None:
     assert '"Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE"' in GUI_SOURCE
 
 
+def _check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() -> None:
+    enabled = "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED"
+    minimum = "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD"
+    assert enabled in settings_schema.FIELD_ORDER
+    assert minimum in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS[enabled] == "0"
+    assert settings_schema.DEFAULTS[minimum] == "10"
+    assert f'self.check_row(debug_card, "Включить минимум для атакующих расходников", "{enabled}"' in GUI_SOURCE
+    assert f'"Минимум за один крафт", "{minimum}"' in GUI_SOURCE
+    assert 'onvalue="1"' in GUI_SOURCE and 'offvalue="0"' in GUI_SOURCE
+    assert f'set_field_enabled("{minimum}", attack_consumable_debug' in GUI_SOURCE
+    gui_text = GUI_SOURCE.casefold()
+    assert "consumable weapon и ammo" in gui_text
+    assert "зелья и материалы не меняются" in gui_text
+
+    example = (GUI_PATH.parents[2] / "config.example.env").read_text(encoding="utf-8")
+    assert f"{enabled}=0" in example
+    assert f"{minimum}=10" in example
+
+
 def _check_gui_env_file_io_lives_in_settings_env() -> None:
     assert "from infini_local.desktop.settings_env import" in GUI_SOURCE
     assert "def parse_env" not in GUI_SOURCE
@@ -288,6 +308,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_radmin_gui_friend_guide_says_clients_do_not_need_localgenerator_for_ready_items',
     '_check_gui_exposes_llm_temperatures_not_zimage_temperature',
     '_check_gui_exposes_critical_delivery_and_busy_wait_controls',
+    '_check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount',
     '_check_gui_env_file_io_lives_in_settings_env',
     '_check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy'
     ]:

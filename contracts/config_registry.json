@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 111,
+  "documentedFieldCount": 113,
   "entries": [
     {
       "declarations": [
@@ -1197,6 +1197,54 @@
       ],
       "secret": false,
       "type": "unknown",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 10,
+          "file": "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py",
+          "maximum": 999,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 10,
+      "documented": true,
+      "example": "10",
+      "gui": true,
+      "maximum": 999,
+      "minimum": 1,
+      "name": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": false,
+          "file": "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": false,
+      "documented": true,
+      "example": "0",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py"
+      ],
+      "secret": false,
+      "type": "boolean",
       "visibility": "gui"
     },
     {
@@ -5830,15 +5878,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 237,
-  "fingerprint": "97fe6168ea227d84758c407d04c1fb431c8b16ff3fdb99a90e4837fda88a0e8a",
+  "fieldCount": 239,
+  "fingerprint": "105d7cd5ba427e8bdc89669217dff9bfef6e78286bef2ccf1bd85b4af2c5fdc7",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 116,
+  "guiFieldCount": 118,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

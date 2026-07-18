@@ -215,6 +215,7 @@ class SettingsGuiTraceStateMixin:
         bg_mode = (self._value("INFINI_BG_REMOVE_MODE", "sprite_keyer") or "sprite_keyer").lower()
         posterize = self._value("INFINI_PIXEL_POSTERIZE", "1") == "1"
         strict_ai = self._value("INFINI_VISUAL_STRICT_AI_AUTHORSHIP", "1") == "1"
+        attack_consumable_debug = self._value("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", "0") == "1"
 
         local_llm = ["INFINI_LMSTUDIO_URL", "INFINI_LMSTUDIO_MODEL"]
         openrouter_llm = [
@@ -232,6 +233,7 @@ class SettingsGuiTraceStateMixin:
             getattr(self, "_set_field_enabled")(key, llm_enabled, "Use LLM=0; scoped same-author repair не вызывается.")
 
         set_field_enabled = getattr(self, "_set_field_enabled")
+        set_field_enabled("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD", attack_consumable_debug, "Debug minimum выключен; поставь галочку выше, чтобы выбрать batch size.")
         for slot in (2, 3, 4):
             enabled = self._value(f"INFINI_LLM_POOL_{slot}_ENABLED", "0") == "1"
             for suffix in ("PROVIDER", "BASE_URL", "API_KEY", "MODEL", "API_MODE"):
