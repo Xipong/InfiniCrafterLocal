@@ -38,6 +38,8 @@ public static class InfiniLuminanceSoundBridge
             return false;
         if (!InfiniVfxClientOptions.EnableLuminanceSoundBackend)
             return false;
+        if (!InfiniSoundLibrary.IsBuiltInCatalogId(spec.SoundUseCatalogId))
+            return false;
         if (!ShouldLoop(slot))
             return false;
 

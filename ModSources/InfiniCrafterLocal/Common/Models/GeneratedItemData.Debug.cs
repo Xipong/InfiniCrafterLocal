@@ -16,8 +16,7 @@ public sealed partial class GeneratedItemData
 
     private string BuildAppliedTrace()
     {
-        bool isArmor = Gameplay.Kind == "armor" || Category == "armor" || Armor.Enabled;
-        bool isAccessory = !isArmor && (Gameplay.Kind == "accessory" || Category == "accessory" || Accessory.Enabled);
+        (bool isArmor, bool isAccessory) = ResolveEquipmentRoles(Gameplay, Accessory, Armor);
         var parts = new List<string>();
         void F(string label, object? val) => parts.Add($"{label}={val?.ToString() ?? string.Empty}");
 

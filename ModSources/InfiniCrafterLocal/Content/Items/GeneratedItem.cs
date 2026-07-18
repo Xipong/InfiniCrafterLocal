@@ -29,6 +29,7 @@ namespace InfiniCrafterLocal.Content.Items;
 public partial class GeneratedItem : ModItem
 {
     private const int GeneratedItemNetPayloadVersion = 4;
+    private const int MaxGeneratedAoeTargetsPerHit = 16;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
@@ -36,6 +37,7 @@ public partial class GeneratedItem : ModItem
     private int _lastUseBlockedNoticeTick = -9999;
     private int _lastAltUseBlockedNoticeTick = -9999;
     private int _lastRuntimeHydrationTouchTick = -9999;
+    private bool _applyingGeneratedSwingAoeDamage;
 
     private static void LogLowNoiseWarning(string context, Exception ex)
     {
@@ -249,8 +251,7 @@ public partial class GeneratedItem : ModItem
         tooltips.Add(new TooltipLine(Mod, "InfiniMerge", $"Merge: {data.MergeMode} / {data.Category} / {data.SourceMode}") { OverrideColor = Color.Gray });
         if (!string.IsNullOrWhiteSpace(data.Tooltip))
             tooltips.Add(new TooltipLine(Mod, "InfiniFlavor", data.Tooltip));
-        if (!string.IsNullOrWhiteSpace(visual.VisualSoulTooltip) && VisualSoulAuraEligible(data))
-            tooltips.Add(new TooltipLine(Mod, "InfiniVisualSoul", visual.VisualSoulTooltip) { OverrideColor = VisualSoulColor(data, Color.LightCyan) });
+
         if (armor.Enabled)
             tooltips.Add(new TooltipLine(Mod, "InfiniArmor", ArmorSummary()) { OverrideColor = Color.LightSteelBlue });
         if (accessory.Enabled)
@@ -323,7 +324,7 @@ public partial class GeneratedItem : ModItem
             return false;
         if (data.Gameplay.Damage <= 0)
             return false;
-        string kind = (data.Gameplay.Kind ?? data.Category ?? "").Trim().ToLowerInvariant();
+        string kind = (data.Gameplay.Kind ?? "").Trim().ToLowerInvariant();
         if (kind is "ammo" or "accessory" or "material" or "furniture")
             return false;
         // Attack.Enabled means "generated runtime executor exists"; vanilla item
@@ -737,14 +738,6 @@ public partial class GeneratedItem : ModItem
             Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
         }
 
-        float soulGlow = VisualSoulGlow(Data) * 0.72f;
-        if (soulGlow > 0.04f && Main.netMode != NetmodeID.Server)
-        {
-            Color c = VisualSoulColor(Data, RuntimeColorPolicy.Resolve(colorName, Color.White));
-            Lighting.AddLight(player.Center, c.R / 255f * soulGlow, c.G / 255f * soulGlow, c.B / 255f * soulGlow);
-            if (Main.rand.Next(100) < Math.Clamp((int)(soulGlow * 16f), 1, 14))
-                SpawnSoulDust(player.Center + new Vector2(Main.rand.Next(-10, 11), Main.rand.Next(-20, 9)), c, 0.45f + soulGlow * 0.55f);
-        }
 
         if (Data?.Gameplay?.HoldGeneratedBuff is not null && Data.Gameplay.HoldGeneratedBuff.HasAnyEffect && InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player))
             player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(Data.Gameplay.HoldGeneratedBuff);
@@ -764,17 +757,6 @@ public partial class GeneratedItem : ModItem
         // Player.pickSpeed is inverse speed in Terraria: lower values mine faster.
         // miningSpeedScale is authored as intuitive multiplier, so x1.35 divides pickSpeed by 1.35.
         player.pickSpeed /= scale;
-    }
-
-    public override void Update(ref float gravity, ref float maxFallSpeed)
-    {
-        float glow = VisualSoulGlow(Data) * 0.48f;
-        if (glow <= 0.035f || Main.netMode == NetmodeID.Server)
-            return;
-        Color c = VisualSoulColor(Data, Color.White);
-        Lighting.AddLight(Item.Center, c.R / 255f * glow, c.G / 255f * glow, c.B / 255f * glow);
-        if (Main.rand.Next(120) < Math.Clamp((int)(glow * 10f), 1, 8))
-            SpawnSoulDust(Item.Center + new Vector2(Main.rand.Next(-8, 9), Main.rand.Next(-8, 9)), c, 0.35f + glow * 0.45f);
     }
 
 
@@ -914,9 +896,7 @@ public partial class GeneratedItem : ModItem
         if (a.WaterWalk) player.waterWalk = true;
         if (a.LightStrength > 0f && Main.netMode != NetmodeID.Server)
         {
-            Color c = string.IsNullOrWhiteSpace(a.LightColorName)
-                ? VisualSoulColor(Data, Color.White)
-                : RuntimeColorPolicy.Resolve(a.LightColorName, Color.White);
+            Color c = RuntimeColorPolicy.Resolve(a.LightColorName, Color.White);
             float strength = Math.Clamp(a.LightStrength, 0.02f, 1.5f);
             Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
         }
@@ -957,7 +937,10 @@ public partial class GeneratedItem : ModItem
 
     public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
     {
-        if (player.whoAmI != Main.myPlayer || Data?.Attack is null || !Data.Attack.Enabled)
+        if (_applyingGeneratedSwingAoeDamage
+            || player.whoAmI != Main.myPlayer
+            || Data?.Attack is null
+            || !Data.Attack.Enabled)
             return;
         if (!GeneratedRuntimeFamilyPolicy.Is(AttackRuntimeFamily(Data.Attack), GeneratedRuntimeFamilyPolicy.Swing))
             return;
@@ -965,7 +948,10 @@ public partial class GeneratedItem : ModItem
             return;
 
         if (GeneratedMeleeOnHitEffectsEnabled())
+        {
+            ApplyGeneratedSwingAoeDamage(player, target, Data.Attack);
             ApplyGeneratedSwingOnHitEffects(player, target, Data.Attack, damageDone, Data.Id);
+        }
 
         // Explicit real secondary projectiles authored by runtimePlan stay allowed for
         // melee-core swings, but only when the planner described an actual secondary
@@ -1013,7 +999,11 @@ public partial class GeneratedItem : ModItem
             {
                 Main.projectile[idx].localAI[1] = 1f;
                 Main.projectile[idx].localAI[2] = Main.projectile[idx].identity + 1f;
-                generatedProjectile.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), Data.Id);
+                generatedProjectile.ApplyGeneratedSpec(
+                    childSpec,
+                    new VfxManifestSpec(),
+                    Data.Id,
+                    GeneratedProjectileRuntimeVariant.SwingSecondary);
                 Main.projectile[idx].netUpdate = true;
                 generatedProjectile.BroadcastVisualSync();
             }
@@ -1024,6 +1014,50 @@ public partial class GeneratedItem : ModItem
     {
         try { return ModContent.GetInstance<InfiniGameplayQolConfig>()?.EnableGeneratedMeleeOnHitEffects ?? true; }
         catch { return true; }
+    }
+
+    private void ApplyGeneratedSwingAoeDamage(Player player, NPC directTarget, AttackSpec attack)
+    {
+        int radius = Math.Clamp(attack.AoeDamageRadiusPx, 0, 160);
+        if (radius <= 0
+            || _applyingGeneratedSwingAoeDamage
+            || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
+            return;
+
+        Vector2 center = directTarget.Center;
+        Rectangle aoeHitbox = new(
+            (int)center.X - radius,
+            (int)center.Y - radius,
+            radius * 2,
+            radius * 2);
+        int damage = Math.Max(1, player.GetWeaponDamage(Item));
+        float knockback = player.GetWeaponKnockback(Item);
+        int affectedTargets = 0;
+
+        _applyingGeneratedSwingAoeDamage = true;
+        try
+        {
+            for (int i = 0; i < Main.maxNPCs && affectedTargets < MaxGeneratedAoeTargetsPerHit; i++)
+            {
+                NPC npc = Main.npc[i];
+                if (npc is null
+                    || !npc.active
+                    || npc.life <= 0
+                    || npc.friendly
+                    || npc.dontTakeDamage
+                    || npc.whoAmI == directTarget.whoAmI
+                    || !aoeHitbox.Intersects(npc.Hitbox))
+                    continue;
+
+                int hitDirection = npc.Center.X >= center.X ? 1 : -1;
+                player.ApplyDamageToNPC(npc, damage, knockback, hitDirection, false, Item.DamageType, false);
+                affectedTargets++;
+            }
+        }
+        finally
+        {
+            _applyingGeneratedSwingAoeDamage = false;
+        }
     }
 
     private static void ApplyGeneratedSwingOnHitEffects(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
@@ -1119,7 +1153,11 @@ public partial class GeneratedItem : ModItem
             {
                 Main.projectile[idx].localAI[1] = 1f;
                 Main.projectile[idx].localAI[2] = rootId;
-                generatedProjectile.ApplyGeneratedSpec(childSpec, new VfxManifestSpec(), generatedItemId);
+                generatedProjectile.ApplyGeneratedSpec(
+                    childSpec,
+                    new VfxManifestSpec(),
+                    generatedItemId,
+                    GeneratedProjectileRuntimeVariant.SwingOverheadSecondary);
                 Main.projectile[idx].netUpdate = true;
                 generatedProjectile.BroadcastVisualSync();
             }
@@ -1169,67 +1207,7 @@ public partial class GeneratedItem : ModItem
     }
 
     private static AttackSpec SwingSecondarySpec(AttackSpec parent)
-    {
-        int size = Math.Max(8, (int)Math.Round(Math.Min(parent.ProjectileWidth, parent.ProjectileHeight) * 0.55f));
-        string material = string.IsNullOrWhiteSpace(parent.SecondaryMaterial) ? "material" : parent.SecondaryMaterial.Trim();
-        string shape = string.IsNullOrWhiteSpace(parent.SecondaryProjectileShape)
-            ? (material + " shard")
-            : parent.SecondaryProjectileShape.Trim();
-        return new AttackSpec
-        {
-            Enabled = true,
-            RuntimePlanAuthored = true,
-            RuntimeFamily = GeneratedRuntimeFamilyPolicy.Shoot,
-            Delivery = "shoot",
-            WeaponFamily = "secondary_projectile",
-            ProjectileFamily = "secondary_projectile",
-            Movement = "straight",
-            MovementCode = 0,
-            Effect = parent.Effect,
-            EffectCode = parent.EffectCode,
-            OnHit = "none",
-            OnHitCode = 0,
-            Speed = Math.Max(3f, parent.Speed * 0.82f),
-            Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180),
-            Pierce = 1,
-            ProjectileWidth = size,
-            ProjectileHeight = size,
-            ProjectileScale = Math.Clamp(parent.ProjectileScale * 0.58f, 0.45f, 1.15f),
-            HitboxScale = 1f,
-            TileCollide = true,
-            ExtraUpdates = Math.Min(1, parent.ExtraUpdates),
-            ShotCount = 1,
-            SplitCount = 0,
-            MaxChildProjectiles = 0,
-            MaxChildDepth = 0,
-            DustSpawnDenom = Math.Max(4, parent.DustSpawnDenom + 1),
-            BurstDustCap = Math.Max(0, parent.BurstDustCap / 2),
-            SecondaryDamageMultiplier = 0f,
-            SecondaryMaterial = material,
-            SecondaryProjectileShape = shape,
-            ProjectileShape = shape,
-            ProjectileMotion = "short emitted shard from melee hit",
-            ProjectileTrail = parent.ProjectileTrail,
-            ProjectileImpact = parent.ProjectileImpact,
-            PrimaryColorName = parent.PrimaryColorName,
-            SoundUseCatalogId = parent.SoundUseCatalogId,
-            SoundImpactCatalogId = parent.SoundImpactCatalogId,
-            SoundCatalogSource = parent.SoundCatalogSource,
-            SoundPitch = parent.SoundPitch,
-            SoundVolume = parent.SoundVolume,
-            SoundPitchVariance = parent.SoundPitchVariance,
-            ProjectileSpritePath = parent.ChildSpritePath,
-            ProjectileSpriteUrl = parent.ChildSpriteUrl,
-            ProjectileSpriteStatus = parent.ChildSpriteStatus,
-            ProjectileSpritePrompt = "",
-            ProjectileSpriteScore = parent.ChildSpriteScore,
-            ImpactSpritePath = parent.ImpactSpritePath,
-            ImpactSpriteUrl = parent.ImpactSpriteUrl,
-            ImpactSpriteStatus = parent.ImpactSpriteStatus,
-            ImpactSpritePrompt = "",
-            ImpactSpriteScore = parent.ImpactSpriteScore,
-        };
-    }
+        => GeneratedChildSpecPolicy.CreateSwingSecondary(parent);
 
     public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
     {
@@ -1324,8 +1302,7 @@ public partial class GeneratedItem : ModItem
         var drawOrigin = source.Size() / 2f;
         float finalScale = scale * Math.Clamp(Data.Visual.InventoryScale, 0.55f, 1.55f);
         Vector2 finalPos = position + new Vector2(Data.Visual.DrawOffsetX, Data.Visual.DrawOffsetY);
-        DrawSoulGlow(spriteBatch, texture, finalPos, source, drawOrigin, finalScale, 0f, SpriteEffects.None, Data, 0.72f);
-        spriteBatch.Draw(texture, finalPos, source, DrawColorWithSoul(drawColor, Data, 0.18f), 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
+        spriteBatch.Draw(texture, finalPos, source, drawColor, 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
     }
 
@@ -1338,138 +1315,7 @@ public partial class GeneratedItem : ModItem
         float finalScale = scale * Math.Clamp(Data.Visual.WorldScale, 0.55f, 1.75f);
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0, drawOrigin.Y * finalScale);
         drawPosition += new Vector2(Data.Visual.DrawOffsetX, Data.Visual.DrawOffsetY);
-        DrawSoulGlow(spriteBatch, texture, drawPosition, source, drawOrigin, finalScale, rotation, SpriteEffects.None, Data, 1.0f);
-        spriteBatch.Draw(texture, drawPosition, source, DrawColorWithSoul(lightColor, Data, 0.24f), rotation, drawOrigin, finalScale, SpriteEffects.None, 0f);
+        spriteBatch.Draw(texture, drawPosition, source, lightColor, rotation, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
-    }
-
-    public static void AddSoulDrawData(List<DrawData> cache, Texture2D texture, Vector2 position, Rectangle source, Color drawColor, float rotation, Vector2 origin, float scale, SpriteEffects effects, GeneratedItemData? data, float glowBias = 1f)
-    {
-        if (cache is null || texture is null) return;
-        float glow = VisualSoulGlow(data) * Math.Clamp(glowBias, 0f, 2f);
-        if (glow > 0.025f)
-        {
-            Color c = VisualSoulColor(data, Color.White);
-            float phase = SoulPhase(data);
-            float pulse = 1f + MathF.Sin(Main.GlobalTimeWrappedHourly * (3.5f + VisualSoulPulse(data) * 4.5f) + phase) * (0.035f + VisualSoulPulse(data) * 0.055f);
-            Color glowColor = c * Math.Clamp(0.10f + glow * 0.24f, 0f, 0.42f);
-            cache.Add(new DrawData(texture, position, source, glowColor, rotation, origin, scale * (1.16f * pulse), effects, 0));
-            if (glow > 0.35f)
-                cache.Add(new DrawData(texture, position, source, c * Math.Clamp(glow * 0.10f, 0f, 0.25f), rotation, origin, scale * (1.34f * pulse), effects, 0));
-        }
-        cache.Add(new DrawData(texture, position, source, DrawColorWithSoul(drawColor, data, 0.18f), rotation, origin, scale, effects, 0));
-    }
-
-    private static void DrawSoulGlow(SpriteBatch spriteBatch, Texture2D texture, Vector2 position, Rectangle source, Vector2 origin, float scale, float rotation, SpriteEffects effects, GeneratedItemData? data, float glowBias)
-    {
-        float glow = VisualSoulGlow(data) * Math.Clamp(glowBias, 0f, 2f);
-        if (glow <= 0.025f) return;
-        Color c = VisualSoulColor(data, Color.White);
-        float phase = SoulPhase(data);
-        float pulse = 1f + MathF.Sin(Main.GlobalTimeWrappedHourly * (3.5f + VisualSoulPulse(data) * 4.5f) + phase) * (0.035f + VisualSoulPulse(data) * 0.055f);
-        Color glowColor = c * Math.Clamp(0.10f + glow * 0.24f, 0f, 0.42f);
-        spriteBatch.Draw(texture, position, source, glowColor, rotation, origin, scale * (1.16f * pulse), effects, 0f);
-        if (glow > 0.35f)
-            spriteBatch.Draw(texture, position, source, c * Math.Clamp(glow * 0.10f, 0f, 0.25f), rotation, origin, scale * (1.34f * pulse), effects, 0f);
-    }
-
-    private static Color DrawColorWithSoul(Color baseColor, GeneratedItemData? data, float amount)
-    {
-        float glow = VisualSoulGlow(data);
-        if (glow <= 0.025f) return baseColor;
-        return Color.Lerp(baseColor, VisualSoulColor(data, baseColor), Math.Clamp(amount * glow, 0f, 0.35f));
-    }
-
-    public static bool VisualSoulAuraEligible(GeneratedItemData? data)
-    {
-        if (data is null) return false;
-        int depth = Math.Max(0, data.RecipeMeta?.GenerationDepth ?? 0);
-        if (depth >= 6) return true;
-        if (depth < 3) return false;
-        return IsLateGameVisualSoulCandidate(data);
-    }
-
-    private static bool IsLateGameVisualSoulCandidate(GeneratedItemData data)
-    {
-        string stage = ((data.Gameplay?.Stage ?? data.Attack?.Stage ?? "") + " " + (data.Attack?.Stage ?? "")).Trim().ToLowerInvariant();
-        if (stage.Contains("post_moonlord") || stage.Contains("moonlord") || stage.Contains("moon_lord")
-            || stage.Contains("superboss") || stage.Contains("endgame") || stage.Contains("lunar")
-            || stage.Contains("post_golem"))
-            return true;
-
-        int rarity = data.Gameplay?.Rarity ?? ItemRarityID.White;
-        float power = Math.Max(data.Gameplay?.PowerBudget ?? 0f, data.Attack?.PowerBudget ?? 0f);
-        int value = data.Gameplay?.Value ?? 0;
-        return rarity >= 9 || power >= 3.0f || value >= 20000;
-    }
-
-    public static float VisualSoulAuraGlow(GeneratedItemData? data)
-    {
-        if (!VisualSoulAuraEligible(data)) return 0f;
-        return VisualSoulGlow(data);
-    }
-
-    private static float VisualSoulGlow(GeneratedItemData? data)
-    {
-        if (!VisualSoulAuraEligible(data)) return 0f;
-        float authored = data?.Visual?.VisualSoulGlow ?? 0f;
-        if (authored > 0f) return Math.Clamp(authored, 0f, 1f);
-        float technical = Math.Clamp(data?.Visual?.SpriteTechnicalScore ?? 0f, 0f, 1f);
-        bool hasSprite = !string.IsNullOrWhiteSpace(data?.Visual?.SpritePath);
-        bool vfx = data?.VfxManifest is not null && data.VfxManifest.HasSlots;
-        return Math.Clamp((hasSprite ? 0.10f : 0f) + technical * 0.18f + (vfx ? 0.12f : 0f), 0f, 0.55f);
-    }
-
-    private static float VisualSoulPulse(GeneratedItemData? data)
-        => Math.Clamp(data?.Visual?.VisualSoulPulse ?? 0.25f, 0f, 1f);
-
-    public static Color VisualSoulColor(GeneratedItemData? data, Color fallback)
-    {
-        Color c = ColorFromHex(data?.Visual?.AccentColorHex, Color.Transparent);
-        if (c.A > 0) return c;
-        c = ColorFromHex(data?.Visual?.DominantColorHex, Color.Transparent);
-        if (c.A > 0) return c;
-        return fallback;
-    }
-
-    private static Color ColorFromHex(string? raw, Color fallback)
-    {
-        string s = (raw ?? "").Trim();
-        if (s.StartsWith("#", StringComparison.Ordinal)) s = s[1..];
-        if (s.Length != 6) return fallback;
-        try
-        {
-            int r = Convert.ToInt32(s[0..2], 16);
-            int g = Convert.ToInt32(s[2..4], 16);
-            int b = Convert.ToInt32(s[4..6], 16);
-            return new Color(r, g, b);
-        }
-        catch { return fallback; }
-    }
-
-    private static float SoulPhase(GeneratedItemData? data)
-    {
-        unchecked
-        {
-            string key = data?.Visual?.VisualSoulSignature ?? data?.Id ?? "";
-            int h = 23;
-            foreach (char c in key) h = h * 31 + c;
-            uint uh = (uint)h;
-            return (uh % 1024u) / 1024f * MathHelper.TwoPi;
-        }
-    }
-
-    private static void SpawnSoulDust(Vector2 position, Color color, float scale)
-    {
-        if (Main.netMode == NetmodeID.Server) return;
-        float angle = Main.rand.Next(628) / 100f;
-        float speed = 0.15f + (float)Main.rand.NextDouble() * 0.85f;
-        Vector2 velocity = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * speed;
-        int idx = Dust.NewDust(position, 2, 2, DustID.Torch, velocity.X, velocity.Y, 150, color, Math.Clamp(scale, 0.25f, 1.25f));
-        if (idx >= 0 && idx < Main.maxDust)
-        {
-            Main.dust[idx].noGravity = true;
-            Main.dust[idx].velocity *= 0.55f;
-        }
     }
 }

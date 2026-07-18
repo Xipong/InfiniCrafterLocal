@@ -408,7 +408,6 @@ public sealed class GeneratorClient
             directProjectileRaw = DirectProjectileRawFromItem(craftItem),
             effectiveProjectileRaw = EffectiveProjectileRawFromItem(craftItem, player),
             ammoRaw = AmmoRawFromItem(craftItem, player),
-            parentVfxSignals = ParentVfxSignalsFromItem(craftItem, existing),
             // Only generated items carry authored design tags. Vanilla/modded parents do not get fake semantic tags.
             tags = existing?.Tags is { Length: > 0 } ? existing.Tags : Array.Empty<string>(),
             runtimeFacts = RuntimeFactsFromItem(craftItem),
@@ -545,7 +544,6 @@ public sealed class GeneratorClient
             directProjectileRaw = DirectProjectileRawFromItem(item),
             effectiveProjectileRaw = EffectiveProjectileRawFromItem(item, null),
             ammoRaw = AmmoRawFromItem(item, null),
-            parentVfxSignals = ParentVfxSignalsFromItem(item, existing),
             buffType = item.buffType,
             buffTime = item.buffTime,
             channel = item.channel,
@@ -559,190 +557,6 @@ public sealed class GeneratorClient
         };
     }
 
-
-    private static object ParentVfxSignalsFromItem(Item item, GeneratedItemData? existing)
-    {
-        // Mechanical/runtime-only profile for parent VFX inheritance.
-        // No per-item whitelist and no item-name semantic mapping: if Night's Edge is effectful,
-        // that must come from its Item/Projectile defaults, generated manifest, rarity/power, etc.
-        var tags = new HashSet<string>();
-        var renderers = new HashSet<string>();
-        var reasons = new List<string>();
-
-        bool hasProjectile = item.shoot > ProjectileID.None;
-        bool hasSustained = item.channel;
-        bool hasGeneratedManifest = existing?.VfxManifest?.HasSlots == true;
-        bool hasBeamLike = false;
-        bool hasLight = false;
-        bool hasPierce = false;
-        bool hasMultiHit = false;
-        bool hasFast = false;
-        bool hasNonCollide = false;
-        bool hasSummon = false;
-
-        double score = 0.0;
-
-        if (item.damage > 0)
-        {
-            tags.Add("weapon");
-            score += Math.Min(0.22, item.damage / 220.0);
-        }
-
-        if (item.rare >= ItemRarityID.Orange)
-        {
-            tags.Add("strong_parent");
-            score += Math.Min(0.16, Math.Max(0, item.rare) / 40.0);
-            reasons.Add("rarity>=" + item.rare);
-        }
-
-        if (hasProjectile)
-        {
-            tags.Add("projectile");
-            tags.Add("travel");
-            score += 0.16;
-            reasons.Add("item.shoot>ProjectileID.None");
-        }
-
-        if (item.noMelee && hasProjectile)
-        {
-            tags.Add("projectile_delivery");
-            score += 0.04;
-        }
-
-        if (hasSustained)
-        {
-            tags.Add("channel");
-            tags.Add("sustained");
-            score += 0.12;
-            reasons.Add("channel");
-        }
-
-        if (item.damage > 0 && !hasProjectile)
-        {
-            tags.Add("held");
-            tags.Add("slash");
-        }
-
-        if (hasGeneratedManifest && existing is not null)
-        {
-            tags.Add("generated_vfx_parent");
-            score += Math.Min(0.42, 0.16 + existing.VfxManifest.EffectMagnitude * 0.24 + (existing.VfxManifest.Slots?.Length ?? 0) * 0.015);
-            reasons.Add("generated_parent_manifest");
-            foreach (var slot in existing.VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>())
-            {
-                if (!string.IsNullOrWhiteSpace(slot.RendererKind)) renderers.Add(slot.RendererKind);
-                if (!string.IsNullOrWhiteSpace(slot.Channel)) tags.Add("channel_" + slot.Channel);
-            }
-        }
-
-        object? projectileProfile = null;
-        if (hasProjectile)
-        {
-            try
-            {
-                if (!TryCreateProjectileDefaults(item.shoot, out Projectile p))
-                    throw new InvalidOperationException("Projectile.SetDefaults failed");
-                projectileProfile = new
-                {
-                    type = item.shoot,
-                    width = p.width,
-                    height = p.height,
-                    aiStyle = p.aiStyle,
-                    penetrate = p.penetrate,
-                    timeLeft = p.timeLeft,
-                    extraUpdates = p.extraUpdates,
-                    tileCollide = p.tileCollide,
-                    ownerHitCheck = p.ownerHitCheck,
-                    usesLocalNPCImmunity = p.usesLocalNPCImmunity,
-                    usesIDStaticNPCImmunity = p.usesIDStaticNPCImmunity,
-                    light = p.light,
-                    minion = p.minion,
-                    sentry = p.sentry,
-                    arrow = p.arrow
-                };
-
-                if (p.light > 0f)
-                {
-                    hasLight = true;
-                    tags.Add("light");
-                    score += 0.07;
-                }
-                if (p.extraUpdates > 0)
-                {
-                    hasFast = true;
-                    tags.Add("fast_projectile");
-                    score += 0.05;
-                }
-                if (p.penetrate == -1 || p.penetrate > 1)
-                {
-                    hasPierce = true;
-                    tags.Add("pierce");
-                    score += 0.06;
-                }
-                if (!p.tileCollide)
-                {
-                    hasNonCollide = true;
-                    tags.Add("noncolliding_projectile");
-                    score += 0.05;
-                }
-                if (p.usesLocalNPCImmunity || p.usesIDStaticNPCImmunity)
-                {
-                    hasMultiHit = true;
-                    tags.Add("multihit");
-                    score += 0.07;
-                }
-                if (p.minion || p.sentry)
-                {
-                    hasSummon = true;
-                    tags.Add("summoned");
-                    tags.Add(p.minion ? "minion" : "sentry");
-                    score += 0.10;
-                }
-                if (p.ownerHitCheck)
-                {
-                    tags.Add("melee_projection");
-                            score += 0.04;
-                }
-                if (p.aiStyle > 0)
-                {
-                    tags.Add("aiStyle_" + p.aiStyle);
-                    score += 0.03;
-                }
-                if (hasSustained || (!p.tileCollide && p.timeLeft >= 90 && (p.width > 12 || p.height > 12)))
-                {
-                    hasBeamLike = true;
-                        }
-            }
-            catch
-            {
-                reasons.Add("projectile_setdefaults_failed");
-            }
-        }
-
-        bool notable = hasGeneratedManifest || score >= 0.48;
-        return new
-        {
-            schema = "infini.parent_vfx_signals.v1",
-            source = "csharp_runtime_mechanical",
-            mechanicalOnly = true,
-            hasProjectileEmission = hasProjectile,
-            hasSustainedUse = hasSustained,
-            hasBeamLikeProfile = hasBeamLike,
-            hasGeneratedManifest,
-            hasLight,
-            hasPierce,
-            hasMultiHit,
-            hasFastProjectile = hasFast,
-            hasNonCollidingProjectile = hasNonCollide,
-            hasSummonProfile = hasSummon,
-            specialScore = Math.Clamp(score, 0.0, 1.0),
-            notable,
-            effectTags = tags.OrderBy(x => x).ToArray(),
-            suggestedRenderers = renderers.OrderBy(x => x).ToArray(),
-            reasons = reasons.ToArray(),
-            projectileProfile
-        };
-    }
 
     private static object RuntimeFactsFromItem(Item item)
     {

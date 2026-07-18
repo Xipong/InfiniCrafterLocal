@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from copy import deepcopy
 from typing import Any
 
 from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
@@ -48,7 +49,10 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_PLAN_REQUIRED,
     LLM_RUNTIME_STRICT_VALIDATION,
 )
-from infini_local.pipelines.result_identity_policy import normalize_category
+from infini_local.pipelines.result_identity_policy import (
+    normalize_category,
+    project_runtime_result_identity,
+)
 from infini_local.pipelines.combine_balance import (
     clamp_vanilla_like_weapon_damage,
 )
@@ -59,6 +63,40 @@ from infini_local.pipelines.combine_genome_contract import (
 from infini_local.pipelines.parent_context_cards import (
     raw_parent_card_for_llm,
 )
+
+VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)))
+PRIMARY_FUNCTION_AUTHOR_RULES = {
+    "onePrimaryFunction": True,
+    "temporaryHelperCanFire": False,
+    "turretFunction": "deploy_sentry",
+}
+RUNTIME_PLAN_METADATA_TYPES = {
+    "sourceReading": "string",
+    "balanceIntent": "string",
+    "anomalyFlags": "array[string]",
+}
+PULL_ON_HIT_ENCODING = {
+    "onHit": "none",
+    "requiredParams": ["pullStrength", "pullMode"],
+}
+NEVER_ON_SET_ITEM_STATS = (
+    "shotCount", "spreadRadians", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume",
+)
+RUNTIME_FAMILY_REQUIREMENTS = {
+    "beam": ["beamWidthPx", "beamChargeTicks", "immunityCooldown"],
+    "charge_release": ["chargeTicks", "chargePowerMultiplier"],
+    "overhead_barrage": ["delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"],
+}
+VISUAL_TOPOLOGY_RULES = {
+    "connected": {"partCountMin": 1, "partCountMax": 1},
+    "multipart_separated": {"partCountMin": 2},
+}
+EQUIPMENT_LIGHT_ENCODING = {
+    "resultKinds": ["armor", "accessory"],
+    "authorIn": "armor_effect.stats|accessory_effect.stats",
+    "requiredParams": ["lightStrength", "lightColorName"],
+    "forbiddenFunction": "emit_light",
+}
 
 def normalize_llm_attack_shape(obj: dict[str, Any]) -> dict[str, Any]:
     """Normalize only structural attack/genome duplication from older LLM shapes."""
@@ -255,8 +293,6 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
         gp["altGeneratedBuff"] = patch.get("altGeneratedBuff")
     if isinstance(patch.get("holdGeneratedBuff"), dict):
         gp["holdGeneratedBuff"] = patch.get("holdGeneratedBuff")
-    if isinstance(patch.get("runtimeState"), dict):
-        gp["runtimeState"] = patch.get("runtimeState")
     if isinstance(patch.get("rejectedEngineCalls"), list):
         gp["rejectedEngineCalls"] = patch.get("rejectedEngineCalls")[:16]
         data.setdefault("debug", {})["rejectedEngineCalls"] = bounded_json_dumps(gp["rejectedEngineCalls"], max_chars=6000)
@@ -406,10 +442,14 @@ def planner_priority_header_for_llm() -> list[str]:
         "Output only requiredJsonShape keys; never copy input or prompt metadata.",
         "Playable: engineCalls[0]=set_item_stats(resultKind,...); normally 1-4 calls.",
         "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats; onHit only apply_on_hit_effect; equipment stats is an object. Names aren't mechanics.",
-        "Combat primary authors shotCount, spreadRadians and card fields; shoot_projectile also runtimeFamily; specialized calls derive it.",
+        "MUST explicitly include shotCount and spreadRadians on the one combat primary action call after set_item_stats; NEVER put primary or sound params on set_item_stats. shoot_projectile also requires runtimeFamily; specialized calls derive it.",
+        "MUST choose exactly one primary function. spawn_temporary_helper_projectile cannot fire or act as a turret; use deploy_sentry as the only turret function.",
+        "MUST include count, secondaryDamageMultiplier, secondaryLifetimeTicks on child-producing onHit, plus debuffTime when that onHit applies a debuff.",
         "Physical throw defaults to movement=gravity_arc; use movement=straight only when explicitly authoring gravity-free straight flight as part of the item design.",
         "concept.coreMechanic is the concise player-facing gameplay description. playerViewTimeline is optional; include only relevant visible phases.",
-        "consumable_weapon: consumable=true, maxStack>1, craftYield>0; JSON booleans are true/false, never strings.",
+        "MUST use resultKind=consumable_weapon in runtimePlan and set_item_stats for any stack-spent weapon (consumable=true, maxStack>1, or consumption_behavior); require consumable=true, maxStack>1, craftYield>0; reusable weapon uses maxStack=1 and consumable=false; JSON booleans are true/false, never strings.",
+        "MUST satisfy runtimeFamilyRequirements for the selected primary family and visualTopologyRules for visualIntent.",
+        "For armor/accessory light, author lightStrength and lightColorName in armor_effect.stats/accessory_effect.stats; never use emit_light for equipment.",
     ]
 
 def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, Any], envelope: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -448,6 +488,21 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "primaryAttackParams": sorted(PRIMARY_ATTACK_SHARED_PARAM_NAMES),
             "apply_on_hit_effect": sorted(ENGINE_FN_ACCEPTED_PARAM_EXTRAS["apply_on_hit_effect"]),
         },
+        "requiredAuthorParams": {
+            "everyCombatPrimary": ["shotCount", "spreadRadians"],
+            "childProducingOnHit": [
+                "count", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
+            ],
+            "debuffingOnHit": ["debuffTime"],
+            "stackConsumedWeaponIdentity": "consumable_weapon",
+            "runtimePlanMetadataTypes": dict(RUNTIME_PLAN_METADATA_TYPES),
+            "pullOnHitEncoding": dict(PULL_ON_HIT_ENCODING),
+            "neverOnSetItemStats": list(NEVER_ON_SET_ITEM_STATS),
+            "runtimeFamilyRequirements": {key: list(value) for key, value in RUNTIME_FAMILY_REQUIREMENTS.items()},
+            "visualTopologyRules": deepcopy(VISUAL_TOPOLOGY_RULES),
+            "equipmentLightEncoding": deepcopy(EQUIPMENT_LIGHT_ENCODING),
+            **PRIMARY_FUNCTION_AUTHOR_RULES,
+        },
         "soundCatalog": sound_catalog_card_for_llm(),
         "tickGuide": concise_terraria_tick_guide_for_llm(),
         "criticalValueSemantics": {
@@ -471,7 +526,7 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
         },
         "semanticRules": [
             "Preserve both parents unless mergeLogic names an executable replacement.",
-            "Custom projectiles use weapon or consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
+            "Custom projectiles use weapon or consumable_weapon; every stack-spent weapon uses consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
             "Public gameplay text lives once in concept.coreMechanic; compiler provenance is not authored.",
             "VFX calls present effects; burst, AoE, sticky, mobility, and utility require their typed gameplay calls.",
             "Temporary helper projectiles never summon bosses, NPCs, mobs, or enemies.",
@@ -495,7 +550,16 @@ def authored_num(src: dict[str, Any], key: str, fallback: float, lo: float, hi: 
 def authored_int(src: dict[str, Any], key: str, fallback: int, lo: int, hi: int) -> int:
     return int(round(authored_num(src, key, float(fallback), float(lo), float(hi))))
 
-def authored_weapon_damage(src: dict[str, Any], fallback: int, max_parent_damage: int, stage: dict[str, Any], genome: dict[str, Any], debug: dict[str, Any]) -> int:
+def authored_weapon_damage(
+    src: dict[str, Any],
+    fallback: int,
+    max_parent_damage: int,
+    stage: dict[str, Any],
+    genome: dict[str, Any],
+    debug: dict[str, Any],
+    *,
+    runtime_authored: bool = False,
+) -> int:
     """Preserve authored damage by default; normalize only in explicit legacy mode.
 
     Hard safety remains active in every mode. The stage/DPS envelope is reported
@@ -504,7 +568,6 @@ def authored_weapon_damage(src: dict[str, Any], fallback: int, max_parent_damage
     """
     balance_mode = current_balance_mode()
     debug["balanceMode"] = balance_mode
-    runtime_authored = bool(genome.get("runtimePlanAuthored"))
     raw = src.get("damage") if isinstance(src, dict) else None
     if runtime_authored:
         debug["damageSource"] = "llm_authored_runtime_contract"
@@ -650,18 +713,14 @@ def llm_runtime_result_kind_policy(data: dict[str, Any], requested_kind: Any, ta
     """
     rp = runtime_plan(data)
     result_kind = runtime_value(data, "set_item_stats", "resultKind", None) or (rp.get("resultKind") if isinstance(rp, dict) else None) or requested_kind or data.get("category") or "generic"
-    raw = str(result_kind or "generic").strip().lower().replace("-", "_")
-    if raw in {"thrown_stack", "stackable_weapon", "consumable_projectile", "consumable_weapon"}:
-        # Internal runtime category must stay weapon so attach_gameplay_and_attack keeps
-        # the authored projectile executor alive. The stack/consume behavior is recorded
-        # separately as gameplay.runtimeOutputKind=consumable_weapon. Mapping this to
-        # potion/consumable erased the attack and turned grenade/flask outputs back into
-        # ordinary parent-buff potions.
-        selected = "weapon"
-    else:
-        selected = normalize_category(raw)
-    if selected not in ALLOWED_CATEGORIES:
-        selected = "generic"
+    stats = find_call(data, "set_item_stats")
+    projection = project_runtime_result_identity(
+        result_kind,
+        ammo_for=stats.get("ammoFor"),
+        has_primary=bool(find_call(data, "shoot_projectile")),
+    )
+    raw = projection.authored_kind
+    selected = projection.gameplay_kind
     return selected, {
         "mode": "llm_runtime_result_kind",
         "requested": requested_kind,

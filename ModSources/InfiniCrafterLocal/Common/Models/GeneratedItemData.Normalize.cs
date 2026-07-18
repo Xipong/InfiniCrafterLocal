@@ -271,46 +271,7 @@ public sealed partial class GeneratedItemData
             Gameplay.UseConditionMode = "";
         Gameplay.UseConditionMinLife = ClampInt(Gameplay.UseConditionMinLife, 0, 5000);
         Gameplay.UseConditionMinMana = ClampInt(Gameplay.UseConditionMinMana, 0, 5000);
-        Gameplay.RuntimeState ??= new RuntimeStateSpec();
-        Gameplay.RuntimeState.ExecutionStatus = SafeText(Gameplay.RuntimeState.ExecutionStatus, 64);
-        Gameplay.RuntimeState.StateMeters = (Gameplay.RuntimeState.StateMeters ?? Array.Empty<StateMeterSpec>())
-            .Where(x => x is not null)
-            .Take(4)
-            .Select(x => new StateMeterSpec
-            {
-                Id = SafeText(x.Id, 32),
-                Label = SafeText(x.Label, 48),
-                MaxValue = ClampInt(x.MaxValue, 1, 20),
-                InitialValue = ClampInt(x.InitialValue, 0, 20),
-                GainOnUse = ClampInt(x.GainOnUse, 0, 20),
-                GainOnHit = ClampInt(x.GainOnHit, 0, 20),
-                GainOnKill = ClampInt(x.GainOnKill, 0, 20),
-                SpendOnUse = ClampInt(x.SpendOnUse, 0, 20),
-                SpendOnAltUse = ClampInt(x.SpendOnAltUse, 0, 20),
-                DecayPerSecond = ClampFloat(x.DecayPerSecond, 0f, 20f),
-                CooldownTicks = ClampInt(x.CooldownTicks, 0, 3600),
-                ModeCount = ClampInt(x.ModeCount, 0, 8),
-            })
-            .ToArray();
-        foreach (var meter in Gameplay.RuntimeState.StateMeters)
-        {
-            if (string.IsNullOrWhiteSpace(meter.Id)) meter.Id = "meter";
-            if (meter.InitialValue > meter.MaxValue) meter.InitialValue = meter.MaxValue;
-        }
-        Gameplay.RuntimeState.TriggeredActions = (Gameplay.RuntimeState.TriggeredActions ?? Array.Empty<TriggeredActionSpec>())
-            .Where(x => x is not null)
-            .Take(8)
-            .Select(x => new TriggeredActionSpec
-            {
-                Trigger = SafeText(x.Trigger, 32),
-                Action = SafeText(x.Action, 32),
-                MeterId = SafeText(x.MeterId, 32),
-                RequiredValue = ClampInt(x.RequiredValue, 0, 20),
-                SpendValue = ClampInt(x.SpendValue, 0, 20),
-                CooldownTicks = ClampInt(x.CooldownTicks, 0, 3600),
-                Note = SafeText(x.Note, 80),
-            })
-            .ToArray();
+
         Gameplay.RejectedEngineCalls = (Gameplay.RejectedEngineCalls ?? Array.Empty<RejectedEngineCallSpec>())
             .Where(x => x is not null)
             .Take(16)
@@ -352,10 +313,10 @@ public sealed partial class GeneratedItemData
         Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
         Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName);
         Accessory.Archetype = SafeText(Accessory.Archetype, 32);
-        if (!Accessory.Enabled && Accessory.HasAnyEffect && (Category == "accessory" || Gameplay.Kind == "accessory"))
+        if (!Accessory.Enabled && Accessory.HasAnyEffect && Gameplay.Kind == "accessory")
             Accessory.Enabled = true;
 
-        Armor.Enabled = Armor.Enabled || Category == "armor" || Gameplay.Kind == "armor";
+        Armor.Enabled = Armor.Enabled || Gameplay.Kind == "armor";
         Armor.Slot = NormalizeArmorSlot(Armor.Slot);
         Armor.SetKey = SafeText(Armor.SetKey, 64);
         Armor.Archetype = SafeText(Armor.Archetype, 32);

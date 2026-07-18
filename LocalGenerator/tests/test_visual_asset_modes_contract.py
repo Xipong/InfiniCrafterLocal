@@ -12,6 +12,7 @@ from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.pipelines.visual_director_contract import visual_kit_response_schema
 from infini_local.pipelines.visual_generation_pipeline import apply_visual_director
 import infini_local.pipelines.visual_sprite_generation as SPRITES
+from infini_local.core.boundary_models import validate_visual_authoring_boundaries
 VISUAL = visual_generation_pipeline
 
 
@@ -32,6 +33,7 @@ def _base_item() -> dict:
         },
         "visual": {"imagePrompt": "small tin blade", "impactImagePrompt": "tiny metal spark"},
         "visualKit": {
+            "impactSpritePrompt": "canonical tiny metal spark",
             "bakedAssets": {
                 "impact": {"mode": "particle_vfx"},
                 "child": {"mode": "none"},
@@ -67,7 +69,7 @@ def _check_model_can_explicitly_request_baked_extra_asset(monkeypatch) -> None:
 
     assert impact.get("status") != "skipped_not_authored_baked"
     assert impact["assetMode"] == "baked_sprite"
-    assert impact["prompt"] == "tiny metal spark"
+    assert impact["prompt"] == "canonical tiny metal spark"
 
 
 def _check_prompt_alone_does_not_request_baked_impact(monkeypatch) -> None:
@@ -78,7 +80,7 @@ def _check_prompt_alone_does_not_request_baked_impact(monkeypatch) -> None:
     plan = build_visual_asset_plan(data)
     impact = next(x for x in plan if x["role"] == "impact")
 
-    assert impact["prompt"] == "tiny metal spark"
+    assert impact["prompt"] == "canonical tiny metal spark"
     assert impact["status"] == "skipped_not_authored_baked"
 
 
@@ -95,6 +97,23 @@ def _check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback(monkeypa
     assert projectile["status"] == "skipped_not_authored_baked"
     assert projectile["assetMode"] == "particle_vfx"
     assert "legacy_baked_sprite" not in str(plan)
+
+
+def _check_baked_role_rejects_reverse_legacy_prompt_mirror() -> None:
+    data = _base_item()
+    data["visualKit"].pop("impactSpritePrompt", None)
+    data["visualKit"]["bakedAssets"]["impact"] = {"mode": "baked_sprite"}
+    data["visual"]["impactImagePrompt"] = "legacy mirror must not authorize baking"
+    data["attack"]["impactSpritePrompt"] = "runtime mirror must not authorize baking"
+
+    try:
+        validate_visual_authoring_boundaries(data)
+    except ValueError as exc:
+        assert "baked_sprite requires an authored role prompt" in str(exc)
+    else:
+        raise AssertionError("legacy prompt mirror unexpectedly authorized baked asset")
+    impact = next(x for x in build_visual_asset_plan(data) if x["role"] == "impact")
+    assert impact["prompt"] == ""
 
 
 def _check_nested_baked_assets_can_request_projectile_sprite(monkeypatch) -> None:
@@ -260,6 +279,18 @@ def _check_reuse_item_sprite_slot_never_calls_image_backend(monkeypatch) -> None
 
 
 def _check_anime_reference_is_disabled_until_explicitly_authored(monkeypatch) -> None:
+    provider_nullable_kit, _, _ = VISUAL._validated_visual_director_kit(
+        json.dumps({
+            "visualKit": {
+                "itemIconPrompt": "an otherwise valid authored grenade",
+                "childSpritePrompt": None,
+            },
+        }),
+        _base_item(),
+        "none",
+    )
+    assert provider_nullable_kit["childSpritePrompt"] == ""
+
     assert VISUAL.anime_reference_opportunity({"recipeKey": "anime-reference"}) == "none"
     assert VISUAL.anime_reference_opportunity({
         "runtimePlan": {"visualIntent": {"animeReference": {"strength": "strong"}}}
@@ -360,6 +391,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_model_can_explicitly_request_baked_extra_asset',
     '_check_prompt_alone_does_not_request_baked_impact',
     '_check_projectile_prompt_alone_no_longer_uses_legacy_baked_fallback',
+    '_check_baked_role_rejects_reverse_legacy_prompt_mirror',
     '_check_nested_baked_assets_can_request_projectile_sprite',
     '_check_item_bodied_projectiles_reuse_item_sprite_unless_distinct',
     '_check_child_asset_requires_compiled_child_runtime_or_vfx_consumer',

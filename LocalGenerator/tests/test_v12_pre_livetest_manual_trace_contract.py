@@ -160,13 +160,20 @@ def _contract_check_vfx_director_receives_compiled_runtime_truth_for_beam_and_ch
             "beamChargeTicks": 24,
             "immunityCooldown": 10,
         },
+        "visualKit": {
+            "styleGuide": "prismatic thread pixel art",
+            "palette": ["cyan", "violet"],
+            "bakedAssets": {"projectile": {"mode": "particle_vfx", "reason": "beam body"}},
+            "vfxIntent": "a narrow charged beam with restrained sparks",
+        },
     })
-    attack = card["attack"]
+    attack = card["attackFacts"]
     assert attack["runtimeFamily"] == "beam"
     assert attack["effect"] == "electric"
     assert attack["onHit"] == "lightning_arc"
     assert attack["secondaryTrigger"] == "on_hit"
     assert attack["beamWidthPx"] == 16
+    assert card["visualAssetKit"]["vfxIntent"] == "a narrow charged beam with restrained sparks"
 
 
 def _contract_check_on_expire_children_are_non_recursive_in_csharp_owner() -> None:

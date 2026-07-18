@@ -25,7 +25,7 @@ _DEFERRED_FINAL_WIRE_ENGINE_FUNCTIONS = frozenset({"visual_effect_cue"})
 _NON_WIRE_AUTHORED_PARAMS = frozenset({
     ("apply_player_effect_on_use", "note"),
     ("leave_trail_or_field", "visualOnly"),
-    ("triggered_action", "note"),
+
 })
 
 

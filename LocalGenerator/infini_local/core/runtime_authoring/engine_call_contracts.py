@@ -159,11 +159,7 @@ _ENUM_PARAMS: dict[tuple[str, str] | str, tuple[str, ...]] = {
     ("set_alt_use_mode", "mobilityMode"): ("recall_home", "blink_to_cursor"),
     ("ammo_behavior", "ammoFor"): ("arrow", "bullet", "empty"),
     ("use_condition", "mode"): ("grounded", "not_wet", "life_above", "mana_above"),
-    ("triggered_action", "action"): (
-        "grant_charge", "spend_charge", "apply_generated_buff", "apply_vanilla_buff",
-        "emit_light", "spawn_secondary_projectiles", "mobility_effect",
-        "temporary_stat_boost", "spawn_particles", "set_mode", "cycle_mode",
-    ),
+
 }
 
 

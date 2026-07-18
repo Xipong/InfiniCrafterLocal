@@ -98,36 +98,6 @@ class GeneratedBuffBoundary(StrictBoundaryModel):
     lifeRegen: int = 0
 
 
-class StateMeterBoundary(StrictBoundaryModel):
-    id: str = ""
-    label: str = ""
-    maxValue: int = 3
-    initialValue: int = 0
-    gainOnUse: int = 0
-    gainOnHit: int = 0
-    gainOnKill: int = 0
-    spendOnUse: int = 0
-    spendOnAltUse: int = 0
-    decayPerSecond: float = 0.0
-    cooldownTicks: int = 0
-    modeCount: int = 0
-
-
-class TriggeredActionBoundary(StrictBoundaryModel):
-    trigger: str = ""
-    action: str = ""
-    meterId: str = ""
-    requiredValue: int = 0
-    spendValue: int = 0
-    cooldownTicks: int = 0
-    note: str = ""
-
-
-class RuntimeStateBoundary(StrictBoundaryModel):
-    executionStatus: str = ""
-    stateMeters: list[StateMeterBoundary] = Field(default_factory=list)
-    triggeredActions: list[TriggeredActionBoundary] = Field(default_factory=list)
-
 
 class RejectedEngineCallBoundary(StrictBoundaryModel):
     fn: str = ""
@@ -194,7 +164,6 @@ class GameplaySpecBoundary(StrictBoundaryModel):
     useConditionMode: str = ''
     useConditionMinLife: int = 0
     useConditionMinMana: int = 0
-    runtimeState: RuntimeStateBoundary = Field(default_factory=RuntimeStateBoundary)
     rejectedEngineCalls: list[RejectedEngineCallBoundary] = Field(default_factory=list)
 
 
@@ -658,10 +627,6 @@ def validate_visual_authoring_boundaries(data: dict[str, Any]) -> dict[str, Any]
     normalized: dict[str, Any] = {}
     if "visualKit" in data:
         kit: dict[str, Any] = canonical_visual_kit_view(data.get("visualKit"))
-        visual_value = data.get("visual")
-        attack_value = data.get("attack")
-        visual: dict[str, Any] = visual_value if isinstance(visual_value, dict) else {}
-        attack: dict[str, Any] = attack_value if isinstance(attack_value, dict) else {}
         baked_value = kit.get("bakedAssets")
         baked: dict[str, Any] = dict(baked_value) if isinstance(baked_value, dict) else {}
         for role, prompt_field in _VISUAL_ROLE_PROMPT_FIELDS.items():
@@ -669,12 +634,7 @@ def validate_visual_authoring_boundaries(data: dict[str, Any]) -> dict[str, Any]
             spec: dict[str, Any] = spec_value if isinstance(spec_value, dict) else {}
             if str(spec.get("mode") or "") != "baked_sprite":
                 continue
-            prompt = str(
-                kit.get(prompt_field)
-                or visual.get(f"{role}ImagePrompt")
-                or attack.get(f"{role}SpritePrompt")
-                or ""
-            ).strip()
+            prompt = str(kit.get(prompt_field) or "").strip()
             if not prompt:
                 raise ValueError(
                     f"visualKit.bakedAssets.{role}: baked_sprite requires an authored role prompt"
@@ -712,14 +672,14 @@ def executable_wire_view(data: dict[str, Any]) -> dict[str, Any]:
 _ATTACK_ALWAYS_REQUIRED = frozenset({
     "enabled", "runtimePlanAuthored", "runtimeFamily", "delivery", "damageClass",
     "movement", "movementCode", "effect", "effectCode", "onHit", "onHitCode",
-    "speed", "rangeTiles", "lifetime", "pierce", "shotCount", "maxChildProjectiles",
-    "maxChildDepth", "dustSpawnDenom",
+    "speed", "rangeTiles", "lifetime", "pierce", "shotCount", "spreadRadians",
+    "maxChildProjectiles", "maxChildDepth", "dustSpawnDenom",
 })
 _ATTACK_FAMILY_REQUIRED: dict[str, frozenset[str]] = {
     "charge_release": frozenset({"chargeTicks", "chargePowerMultiplier", "channelUse"}),
     "sentry": frozenset({"sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks"}),
-    "beam": frozenset({"beamWidthPx", "beamChargeTicks", "channelUse"}),
-    "overhead_barrage": frozenset({"delayTicks", "secondaryLifetimeTicks"}),
+    "beam": frozenset({"beamWidthPx", "beamChargeTicks", "channelUse", "immunityCooldown"}),
+    "overhead_barrage": frozenset({"delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"}),
 }
 _GAMEPLAY_ALWAYS_REQUIRED = frozenset({"kind", "damageClass", "damage", "useTime", "useAnimation", "maxStack"})
 _GAMEPLAY_KIND_REQUIRED: dict[str, frozenset[str]] = {
@@ -770,7 +730,7 @@ def validate_executable_item_boundary(data: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "StrictBoundaryModel", "EngineCallBoundary", "RuntimePlanBoundary",
-    "BuffEntryBoundary", "GeneratedBuffBoundary", "RuntimeStateBoundary",
+    "BuffEntryBoundary", "GeneratedBuffBoundary",
     "VisualKitBoundary", "VfxManifestBoundary", "GameplaySpecBoundary", "AccessorySpecBoundary", "ArmorSpecBoundary", "AttackSpecBoundary",
     "ATTACK_DEBUG_ONLY_FIELDS", "ATTACK_LEGACY_NON_WIRE_FIELDS", "ATTACK_NON_WIRE_FIELDS",
     "GAMEPLAY_DEBUG_ONLY_FIELDS", "REJECTED_ENGINE_CALL_DEBUG_ONLY_FIELDS",

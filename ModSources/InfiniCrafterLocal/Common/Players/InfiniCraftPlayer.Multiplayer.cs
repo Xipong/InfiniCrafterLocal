@@ -483,33 +483,7 @@ public sealed partial class InfiniCraftPlayer
         if (player is null || data is null) return;
         string name = string.IsNullOrWhiteSpace(data.Name) ? "Generated Item" : data.Name;
 
-        if (!global::InfiniCrafterLocal.Content.Items.GeneratedItem.VisualSoulAuraEligible(data))
-        {
-            CombatText.NewText(player.Hitbox, Color.Cyan, $"Discovered: {name}");
-            return;
-        }
-
-        Color soulColor = global::InfiniCrafterLocal.Content.Items.GeneratedItem.VisualSoulColor(data, Color.Cyan);
-        CombatText.NewText(player.Hitbox, soulColor, $"✦ Discovered: {name} ✦");
-        if (Main.netMode == NetmodeID.Server)
-            return;
-
-        float glow = Math.Clamp(global::InfiniCrafterLocal.Content.Items.GeneratedItem.VisualSoulAuraGlow(data), 0.20f, 1.0f);
-        Lighting.AddLight(player.Center, soulColor.R / 255f * glow * 1.35f, soulColor.G / 255f * glow * 1.35f, soulColor.B / 255f * glow * 1.35f);
-        int dustCount = 18 + (int)Math.Round(glow * 28f);
-        for (int i = 0; i < dustCount; i++)
-        {
-            float angle = MathHelper.TwoPi * i / Math.Max(1, dustCount) + Main.rand.Next(-20, 21) / 100f;
-            float speed = 1.0f + (float)Main.rand.NextDouble() * (1.5f + glow);
-            Vector2 velocity = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * speed;
-            int idx = Dust.NewDust(player.Center + new Vector2(Main.rand.Next(-10, 11), Main.rand.Next(-16, 8)), 4, 4, DustID.Torch, velocity.X, velocity.Y, 110, soulColor, 0.85f + glow * 0.55f);
-            if (idx >= 0 && idx < Main.maxDust)
-            {
-                Main.dust[idx].noGravity = true;
-                Main.dust[idx].velocity *= 0.85f;
-            }
-        }
-        Terraria.Audio.SoundEngine.PlaySound(SoundID.Item4, player.Center);
+        CombatText.NewText(player.Hitbox, Color.Cyan, $"Discovered: {name}");
     }
 
     public static void HandleCraftCommitResultPacket(System.IO.BinaryReader reader, int whoAmI)

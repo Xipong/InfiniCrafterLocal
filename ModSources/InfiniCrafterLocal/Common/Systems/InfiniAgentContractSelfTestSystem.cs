@@ -40,6 +40,28 @@ public sealed class InfiniAgentContractSelfTestSystem : ModSystem
         item.Normalize();
         Check("dust-zero-remains-disabled", item.Attack.DustSpawnDenom == 0, $"actual={item.Attack.DustSpawnDenom}");
 
+        var mismatchedCategory = new GeneratedItemData
+        {
+            Category = "armor",
+            Gameplay = new GameplaySpec { Kind = "weapon" },
+            Accessory = new AccessorySpec { Enabled = false },
+            Armor = new ArmorSpec { Enabled = false },
+        };
+        mismatchedCategory.Normalize();
+        (bool mismatchArmor, bool mismatchAccessory) = GeneratedItemData.ResolveEquipmentRoles(
+            mismatchedCategory.Gameplay,
+            mismatchedCategory.Accessory,
+            mismatchedCategory.Armor);
+        mismatchedCategory.Category = "accessory";
+        (bool renamedArmor, bool renamedAccessory) = GeneratedItemData.ResolveEquipmentRoles(
+            mismatchedCategory.Gameplay,
+            mismatchedCategory.Accessory,
+            mismatchedCategory.Armor);
+        Check(
+            "category-cannot-select-equipment-role",
+            !mismatchArmor && !mismatchAccessory && !renamedArmor && !renamedAccessory,
+            $"armor={mismatchArmor}/{renamedArmor}, accessory={mismatchAccessory}/{renamedAccessory}");
+
         var sentryParent = new AttackSpec
         {
             RuntimeFamily = GeneratedRuntimeFamilyPolicy.Sentry,

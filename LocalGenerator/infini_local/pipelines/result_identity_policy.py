@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from infini_local.core.category_policy import (
@@ -246,6 +247,69 @@ def normalize_category(category: Any) -> str:
     c = aliases.get(c, c)
     return c if c in ALLOWED_CATEGORIES else "generic"
 
+
+@dataclass(frozen=True)
+class RuntimeResultIdentityProjection:
+    """Typed authored-result to Terraria item-carrier projection.
+
+    ``authored_kind`` remains the model-authored identity. ``gameplay_kind`` is
+    the exact carrier serialized to GameplaySpec, while ``runtime_output_kind``
+    records the stack/consumption mode used by the compiler before debug-only
+    fields are removed from the executable wire.
+    """
+
+    authored_kind: str
+    gameplay_kind: str
+    runtime_output_kind: str
+    authored_ammo_for: str
+    final_ammo_for: str
+    unsupported_ammo_for: str
+
+
+def project_runtime_result_identity(
+    result_kind: Any,
+    *,
+    ammo_for: Any = "",
+    has_primary: bool = False,
+) -> RuntimeResultIdentityProjection:
+    """Project one authored runtime identity to its finite Terraria carrier."""
+    raw_kind = str(result_kind or "generic").strip().lower()
+    canonical_kinds = {
+        "weapon", "ammo", "consumable_weapon", "tool", "accessory",
+        "armor", "potion", "material", "furniture", "generic",
+    }
+    if raw_kind not in canonical_kinds:
+        raise ValueError(f"unsupported_result_kind:{raw_kind}")
+    raw_ammo = str(ammo_for or "").strip().lower()
+    supported_ammo = raw_ammo in {"arrow", "bullet"}
+    canonical_ammo = raw_ammo if supported_ammo else ""
+    unsupported_ammo = raw_ammo if raw_ammo and not supported_ammo else ""
+
+    gameplay_kind = "weapon" if raw_kind == "consumable_weapon" else normalize_category(raw_kind)
+    runtime_output_kind = ""
+    final_ammo = raw_ammo
+
+    if raw_kind == "consumable_weapon":
+        runtime_output_kind = "consumable_weapon"
+        final_ammo = ""
+    elif raw_kind == "ammo":
+        if not supported_ammo:
+            raise ValueError("ammo_result_requires_vanilla_identity")
+        if has_primary:
+            raise ValueError("actual_ammo_cannot_author_generated_primary")
+        gameplay_kind = "ammo"
+        runtime_output_kind = "actual_ammo"
+        final_ammo = canonical_ammo
+
+    return RuntimeResultIdentityProjection(
+        authored_kind=raw_kind,
+        gameplay_kind=gameplay_kind,
+        runtime_output_kind=runtime_output_kind,
+        authored_ammo_for=raw_ammo,
+        final_ammo_for=final_ammo,
+        unsupported_ammo_for=unsupported_ammo,
+    )
+
 def parent_primary_category(item: dict[str, Any]) -> str:
     """Stable primary role for parent context.
 
@@ -253,7 +317,6 @@ def parent_primary_category(item: dict[str, Any]) -> str:
     "this item is primarily a material". Many weapons/tools are material=true.
     Treat material as a secondary craftability flag unless no stronger role fits.
     """
-    t = tags_of(item)
     damage = int(item_num(item, "damage", 0))
     pick = int(item_num(item, "pickPower", item_num(item, "pick", 0)))
     axe = int(item_num(item, "axePower", item_num(item, "axe", 0)))
@@ -261,25 +324,25 @@ def parent_primary_category(item: dict[str, Any]) -> str:
     create_tile = int(item_num(item, "createTile", -1))
     create_wall = int(item_num(item, "createWall", -1))
 
-    if item_bool(item, "accessory") or ("accessory" in t and damage <= 0):
+    if item_bool(item, "accessory"):
         return "accessory"
-    if t & ARMOR_HINT_TAGS or item_num(item, "defense", 0) > 0:
+    if item_num(item, "defense", 0) > 0:
         return "armor"
-    if pick > 0 or axe > 0 or hammer > 0 or t & TOOL_HINT_TAGS:
+    if pick > 0 or axe > 0 or hammer > 0:
         return "tool"
-    if damage > 0 or ("weapon" in t and not (item_bool(item, "consumable") and damage <= 0)):
+    if damage > 0:
         return "weapon"
-    if t & AMMO_HINT_TAGS or item_num(item, "ammo", 0) > 0:
+    if item_num(item, "ammo", 0) > 0:
         return "ammo"
-    if item_num(item, "healLife", 0) > 0 or item_num(item, "healMana", 0) > 0 or item_num(item, "buffType", 0) > 0 or "potion" in t:
+    if item_num(item, "healLife", 0) > 0 or item_num(item, "healMana", 0) > 0 or item_num(item, "buffType", 0) > 0:
         return "potion"
     if item_bool(item, "consumable") and item_num(item, "shoot", 0) > 0:
         return "consumable"
-    if create_tile >= 0 or create_wall >= 0 or t & PLACEABLE_HINT_TAGS:
+    if create_tile >= 0 or create_wall >= 0:
         return "furniture"
     if item_bool(item, "consumable") and not item_bool(item, "material"):
         return "consumable"
-    if item_bool(item, "material") or "material" in t:
+    if item_bool(item, "material"):
         return "material"
     return "generic"
 
@@ -605,6 +668,8 @@ __all__ = [
     "repair_name_if_needed",
 
     "normalize_category",
+    "RuntimeResultIdentityProjection",
+    "project_runtime_result_identity",
     "parent_primary_category",
     "is_weapon_like_parent",
     "_weighted_choice",

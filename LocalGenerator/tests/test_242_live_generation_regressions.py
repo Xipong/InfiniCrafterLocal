@@ -164,10 +164,15 @@ def _compiled_structural_carpentry_item() -> dict:
     return attach_gameplay_and_attack(data, a, b, ca, cb)
 
 
-def _contract_check_wood_workbench_keeps_visual_intent_out_of_attack_and_grounds_palette() -> None:
+def _contract_check_wood_workbench_keeps_visual_intent_out_of_attack_without_code_palette() -> None:
+    from infini_local.pipelines.visual_director_contract import visual_director_context
+
     data = _compiled_carpentry_item()
 
-    assert data["visual"]["palette"] == ["brown", "tan", "dark_brown"]
+    assert data["visual"]["palette"] == []
+    context = visual_director_context(data, _wooden_sword(), _workbench())
+    assert context["parents"][0]["rawFacts"]["internalName"] == "WoodenSword"
+    assert context["parents"][1]["rawFacts"]["internalName"] == "WorkBench"
     assert data["visual"]["vfxIntent"] == "Wood chips and sawdust on impact."
     assert data["visual"]["vfxAvoid"] == "No magical glow or generic steel blade."
     assert "vfxIntent" not in data["attack"]
@@ -457,7 +462,7 @@ def _contract_check_flux2_preserves_authored_literal_workbench_prompt_without_co
     lower = prompt.lower()
     assert lower.startswith("topology: connected")
     assert "a thick wooden plank blade" in lower
-    assert "foreground colors and materials use brown, tan, dark brown" in lower
+    assert "foreground colors and materials use" not in lower
     assert "thick wooden plank blade" in lower
     assert "square workbench guard" in lower
     assert "primary authored material:" not in lower
@@ -496,7 +501,8 @@ def _contract_check_strict_preflights_run_before_expensive_image_generation() ->
 
 def _contract_check_visual_director_palette_policy_uses_provenance_not_material_semantics() -> None:
     fallback = _compiled_carpentry_item()
-    assert fallback["debug"]["visualPaletteSource"] == "result_and_parent_grounding_tags"
+    assert fallback["debug"]["visualPaletteSource"] == "none"
+    assert not fallback["visual"].get("palette")
     palette, policy = VISUAL._merge_visual_director_palette(
         fallback,
         fallback["visual"]["palette"],
@@ -506,7 +512,7 @@ def _contract_check_visual_director_palette_policy_uses_provenance_not_material_
     assert policy == "visual_director_authored"
 
     planner_authored = _carpentry_plan()
-    planner_authored.setdefault("visual", {})["palette"] = ["painted blue", "white"]
+    planner_authored["runtimePlan"]["visualIntent"]["palette"] = ["painted blue", "white"]
     a = _wooden_sword()
     b = _workbench()
     ca = canonicalize(a)
@@ -520,6 +526,35 @@ def _contract_check_visual_director_palette_policy_uses_provenance_not_material_
     )
     assert palette == ["painted blue", "white", "orange", "black"]
     assert policy == "planner_authored_first"
+    planner_authored["debug"]["visualPaletteSource"] = "result_and_parent_grounding_tags"
+    assert VISUAL._merge_visual_director_palette(
+        planner_authored,
+        planner_authored["visual"]["palette"],
+        ["orange", "black"],
+    ) == (palette, policy)
+
+
+def _contract_check_visual_context_and_generation_depth_ignore_debug_authority() -> None:
+    from infini_local.core.item_identity_tools import generation_depth
+    from infini_local.pipelines.visual_director_contract import visual_director_context
+
+    data = _compiled_carpentry_item()
+    data["visual"]["imagePrompt"] = "debug-sensitive image prompt"
+    data["debug"]["visualPromptSource"] = "planner_authored"
+    left = visual_director_context(data, _wooden_sword(), _workbench())
+    data["debug"]["visualPromptSource"] = "code_fallback"
+    right = visual_director_context(data, _wooden_sword(), _workbench())
+    assert left == right
+    assert "existingVisual" not in left
+    assert "sourceRolePreservation" not in left
+
+    parent = {"generatedData": {
+        "recipeMeta": {},
+        "debug": {"generationDepth": 99},
+    }}
+    assert generation_depth(parent) == 1
+    parent["generatedData"]["debug"]["generationDepth"] = 3
+    assert generation_depth(parent) == 1
 
 
 def _contract_check_visual_anchor_and_palette_order_is_deterministic_without_fusion_policy() -> None:
@@ -576,7 +611,8 @@ def _contract_check_visual_director_receives_planner_fusion_choice_without_code_
     data["runtimePlan"]["visualIntent"]["item"] = "A whole workbench bolted to the sword."
     result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
 
-    assert captured["item"]["sourceRolePreservation"]["itemB"] == "the complete workbench is bolted to the blade"
+    assert "sourceRolePreservation" not in captured["item"]
+    assert "wooden sword remains the handle" not in json.dumps(captured["item"])
     assert captured["item"]["plannerVisualIntent"]["item"] == "A whole workbench bolted to the sword."
     assert "whole workbench bolted" in result["visual"]["imagePrompt"].lower()
     assert "complete rectangular workbench" in result["visual"]["itemSilhouetteContract"].lower()
@@ -625,12 +661,11 @@ def _contract_check_visual_director_projection_is_fully_transactional_on_late_fa
     data["visualKit"] = {"itemIconPrompt": "previous validated prompt"}
     before_visual = copy.deepcopy(data["visual"])
     before_attack = copy.deepcopy(data["attack"])
-    before_kit = copy.deepcopy(data["visualKit"])
 
     result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
     assert result["visual"] == before_visual
     assert result["attack"] == before_attack
-    assert result["visualKit"] == before_kit
+    assert "visualKit" not in result
     assert result["debug"]["visualDirectorStatus"] == "visual_director_degraded"
     assert "late projection failure" in result["debug"]["visualDirectorError"]
 
@@ -644,6 +679,14 @@ def _contract_check_visual_director_payload_contains_raw_parent_facts_and_real_s
     monkeypatch.setattr(VISUAL, "image_backend_uses_semantic_prompt_contract", lambda: True)
     monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(VISUAL, "anime_reference_opportunity", lambda _data: "none")
+    monkeypatch.setattr(
+        VISUAL,
+        "llm_json_response_format",
+        lambda name, *, schema, strict: {
+            "type": "json_schema",
+            "json_schema": {"name": name, "strict": strict, "schema": schema},
+        },
+    )
 
     def fake_chat(req, timeout=None):
         captured["request"] = req
@@ -870,16 +913,19 @@ def _contract_check_visual_director_context_does_not_present_code_fallback_promp
     context = visual_director_context(data, _wooden_sword(), _workbench())
     assert context["finalIdentity"] == {
         "resultKind": "weapon",
-        "headNoun": "sword-workbench hybrid",
-        "shapeAnchors": ["wooden sword", "complete workbench", "bolted joint"],
-        "hardTags": ["literal fusion"],
+        "category": "weapon",
     }
-    assert context["existingVisual"]["itemPrompt"] == "A whole workbench bolted to a wooden sword."
-    assert "imagePrompt" not in context["existingVisual"]
+    context_text = json.dumps(context, ensure_ascii=False)
+    assert "sword-workbench hybrid" not in context_text
+    assert "literal fusion" not in context_text
+    assert "shapeAnchors" not in context_text
+    assert "existingVisual" not in context
+    assert "A whole workbench bolted to a wooden sword." not in context_text
+    assert "code-generated technical wrapper" not in context_text
 
     data["debug"]["visualPromptSource"] = "planner_authored"
     authored_context = visual_director_context(data, _wooden_sword(), _workbench())
-    assert authored_context["existingVisual"]["imagePrompt"].startswith("pixel art inventory icon")
+    assert "existingVisual" not in authored_context
 
 
 

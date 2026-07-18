@@ -1355,6 +1355,9 @@ public static class InfiniVfxRuntime
     {
         if (slot.Density < 0.05f || Main.dedServ)
             return;
+        string catalogId = impact ? spec.SoundImpactCatalogId : spec.SoundUseCatalogId;
+        if (!InfiniSoundLibrary.IsBuiltInCatalogId(catalogId))
+            return;
         var style = InfiniSoundLibrary.ForVfxCue(
             spec.RuntimeFamily,
             spec.Effect,
@@ -1363,7 +1366,7 @@ public static class InfiniVfxRuntime
             spec.SoundPitchVariance,
             slot.SlotSeed,
             impact,
-            impact ? spec.SoundImpactCatalogId : spec.SoundUseCatalogId,
+            catalogId,
             impact ? spec.SoundImpactCatalogPath : spec.SoundUseCatalogPath,
             spec.SoundCatalogSource);
         float cueVolume = Math.Clamp(style.Volume * (0.22f + slot.Alpha * 0.58f), 0.04f, 0.72f);

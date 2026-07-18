@@ -7,14 +7,12 @@ from infini_local.core.runtime_overhead_barrage_policy import apply_overhead_bar
 from infini_local.core.runtime_charge_release_policy import apply_charge_release_contract
 from infini_local.core.runtime_sentry_policy import apply_sentry_contract, reject_recursive_sentry_onhit
 from infini_local.core.runtime_authoring.common import _clamp, _enum, _intish, _norm_name, _num
-from infini_local.core.runtime_authoring.normalize import _compile_state_meter_calls, _compile_triggered_action_calls, normalize_runtime_plan_inplace, runtime_plan
+from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
 from infini_local.core.runtime_executor_vocabulary import EFFECTS, MOVEMENTS, ONHITS
 from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
-from infini_local.core.runtime_color_policy import normalize_runtime_color, runtime_color_for_effect
+from infini_local.core.runtime_color_policy import normalize_runtime_color
 from infini_local.core.sound_catalog import (
     SOUND_CATALOG_SOURCE,
-    default_impact_sound_id,
-    default_use_sound_id,
     normalize_sound_catalog_id,
 )
 from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
@@ -22,6 +20,22 @@ from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 from infini_local.core.runtime_authoring.secondary import apply_secondary_projectile_calls
 from infini_local.core.runtime_authoring.semantics import _truthy
 from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _select_primary_shoot_call, all_calls
+
+
+TERRARIA_TILE_SIZE_PX = 16
+
+
+def project_aoe_radius_tiles_to_damage_pixels(value: Any) -> int:
+    """Compile the authored tile radius into the exact AttackSpec pixel unit."""
+    tiles = float(_num(value, 0) or 0)
+    return max(0, min(160, int(tiles * TERRARIA_TILE_SIZE_PX)))
+
+
+def project_authored_pierce_to_runtime_hit_budget(value: Any) -> int:
+    """Compile authored pierce sentinels to Terraria projectile.penetrate truth."""
+    pierce = int(_num(value, 1) or 0)
+    return -1 if pierce == -1 else max(1, pierce)
+
 
 def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
     normalize_runtime_plan_inplace(data)
@@ -50,8 +64,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     use_condition_calls = all_calls(rp, "use_condition")
     accessory_calls = all_calls(rp, "accessory_effect")
     armor_calls = all_calls(rp, "armor_effect")
-    state_meter_calls = all_calls(rp, "state_meter")
-    triggered_action_calls = all_calls(rp, "triggered_action")
+
     itemstats_calls = all_calls(rp, "set_item_stats")
     shoot, rejected_primary = _select_primary_shoot_call(shoots) if shoots else ({}, [])
     hit = _merged_params(hits) if hits else {}
@@ -153,22 +166,6 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         if rejected_trails:
             patch["rejectedTrailCalls"] = rejected_trails[:8]
 
-    # Author-preserved state/trigger intents. These are not semantic routers and do not
-    # execute unsupported gameplay by themselves; they are compact contract data for
-    # lineage/future runtime wiring, while concrete engineCalls still carry immediate effects.
-    runtime_state: dict[str, Any] = {}
-    meters = _compile_state_meter_calls(state_meter_calls)
-    if meters:
-        runtime_state["stateMeters"] = meters
-    triggered, rejected_triggered = _compile_triggered_action_calls(triggered_action_calls)
-    if triggered:
-        runtime_state["triggeredActions"] = triggered
-    if rejected_triggered:
-        patch.setdefault("rejectedEngineCalls", [])
-        patch["rejectedEngineCalls"] = (patch.get("rejectedEngineCalls") or []) + rejected_triggered[:8]
-    if runtime_state:
-        runtime_state["executionStatus"] = "preserved_contract_not_gameplay_executor"
-        patch["runtimeState"] = runtime_state
 
     # Executable utility calls: these expand runtime options without routing item identity
     # into rigid presets.  They only write concrete supported fields/provenance.
@@ -606,8 +603,17 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         patch.setdefault("burstDustCap", 0)
     patch.setdefault("onHit", "none")
     patch.setdefault("aoeRadiusTiles", 0)
+    patch["aoeDamageRadiusPx"] = project_aoe_radius_tiles_to_damage_pixels(patch["aoeRadiusTiles"])
+    if "pierce" in patch:
+        patch["projectileHitBudget"] = project_authored_pierce_to_runtime_hit_budget(patch["pierce"])
     patch.setdefault("useTimeTicks", int(_clamp(_first_non_empty(itemstats.get("useTimeTicks"), shoot.get("useTimeTicks")), "useTimeTicks", 24) or 24))
     patch.setdefault("useAnimationTicks", int(_clamp(_first_non_empty(itemstats.get("useAnimationTicks"), shoot.get("useAnimationTicks"), patch.get("useTimeTicks")), "useAnimationTicks", patch.get("useTimeTicks", 24)) or patch.get("useTimeTicks", 24)))
+    if authored_result_kind in {"armor", "accessory", "ammo"}:
+        # These DTO families have no authored use action.  Their final item timing is
+        # intentionally fixed at 10/10 downstream; compile the same technical value so
+        # provenance cannot disagree with the executable wire.
+        patch["useTimeTicks"] = 10
+        patch["useAnimationTicks"] = 10
     patch.setdefault("extraUpdates", 0)
     patch.setdefault("homingStrength", 0)
     if trail_calls:
@@ -620,9 +626,8 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         if val not in (None, ""):
             patch[field] = str(val)
 
-    # Audio is authored as exact acoustic catalog ids, never inferred from item names,
-    # tooltip prose, weapon taxonomy, projectile shape or material words.  Invalid ids
-    # stay visible in provenance while the finite mechanic-based fallback remains safe.
+    # Audio is authored as exact acoustic catalog ids. Unknown or missing ids remain
+    # absent so validation can target the same author; the compiler is never a composer.
     if shoot:
         raw_use_sound = shoot.get("soundUseCatalogId")
         raw_impact_sound = shoot.get("soundImpactCatalogId")
@@ -633,10 +638,15 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             rejected_sound_ids.append({"field": "soundUseCatalogId", "value": str(raw_use_sound)[:80], "reason": "unknown_exact_catalog_id"})
         if raw_impact_sound not in (None, "") and not impact_sound:
             rejected_sound_ids.append({"field": "soundImpactCatalogId", "value": str(raw_impact_sound)[:80], "reason": "unknown_exact_catalog_id"})
-        patch["soundUseCatalogId"] = use_sound or default_use_sound_id(patch.get("runtimeFamily"), patch.get("effect"), patch.get("delivery"))
-        patch["soundImpactCatalogId"] = impact_sound or default_impact_sound_id(patch.get("onHit"), patch.get("effect"))
-        patch["soundCatalogSource"] = SOUND_CATALOG_SOURCE
-        patch["primaryColorName"] = normalize_runtime_color(patch.get("primaryColorName"), runtime_color_for_effect(patch.get("effect")))
+        if use_sound:
+            patch["soundUseCatalogId"] = use_sound
+        if impact_sound:
+            patch["soundImpactCatalogId"] = impact_sound
+        if use_sound or impact_sound:
+            patch["soundCatalogSource"] = SOUND_CATALOG_SOURCE
+        explicit_color = normalize_runtime_color(patch.get("primaryColorName"))
+        if explicit_color:
+            patch["primaryColorName"] = explicit_color
         if rejected_sound_ids:
             patch["rejectedSoundCatalogIds"] = rejected_sound_ids
         if shoot.get("soundVolume") not in (None, ""):
@@ -652,4 +662,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     apply_sentry_contract(patch)
     return {k: v for k, v in patch.items() if v not in (None, "")}
 
-__all__ = ['compile_runtime_plan_to_genome_patch']
+__all__ = [
+    'TERRARIA_TILE_SIZE_PX',
+    'project_aoe_radius_tiles_to_damage_pixels',
+    'project_authored_pierce_to_runtime_hit_budget',
+    'compile_runtime_plan_to_genome_patch',
+]

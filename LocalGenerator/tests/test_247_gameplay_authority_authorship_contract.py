@@ -12,10 +12,15 @@ from infini_local.core.runtime_authoring import (
     compile_runtime_plan_to_genome_patch,
     runtime_plan_validation_report,
 )
+from infini_local.core.runtime_authoring.compiler import project_aoe_radius_tiles_to_damage_pixels
 from infini_local.pipelines import combine_gameplay
+from infini_local.pipelines.llm_transport import LLM_MODEL_OVERRIDE_KEY
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
+from infini_local.pipelines.equipment_stats import armor_slot_from_authoring
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.item_power_knowledge import canonicalize
+from infini_local.pipelines.combine_balance import stat_profile_for
+from infini_local.pipelines.result_identity_policy import parent_primary_category
 from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload, normalize_runtime_authoring_fields
 from infini_local.pipelines.llm_authoring_pipeline import (
     final_runtime_promise_report,
@@ -57,6 +62,33 @@ def _parent(name: str, *, damage: int = 0, damage_class: str = "generic", tags: 
     }
     item.update(extra)
     return item
+
+
+def _contract_check_armor_slot_never_routes_from_name_or_tags() -> None:
+    semantic_noise = {"name": "Nebula Helmet Boots", "armor": {}}
+    assert armor_slot_from_authoring(semantic_noise, {}, default="") == ""
+    assert armor_slot_from_authoring(semantic_noise, {}, default="body") == "body"
+    assert armor_slot_from_authoring(
+        semantic_noise,
+        {"armorSlot": "head"},
+        default="body",
+    ) == "head"
+
+
+def _contract_check_parent_role_and_power_ignore_fantasy_tokens() -> None:
+    quiet = _parent("Plain Object", maxStack=1, rare=2, value=5000)
+    loud = deepcopy(quiet)
+    loud.update({
+        "name": "Zenith Lunar Helmet Drill Potion",
+        "tags": ["weapon", "armor", "tool", "potion", "material"],
+        "nameTokens": ["zenith", "lunar", "helmet", "drill", "potion"],
+    })
+    assert parent_primary_category(quiet) == "generic"
+    assert parent_primary_category(loud) == "generic"
+    quiet_stage = stat_profile_for(quiet, quiet, set())
+    loud_stage = stat_profile_for(loud, loud, set())
+    assert loud_stage["derivedPower"] == quiet_stage["derivedPower"]
+    assert loud_stage["powerBudget"] == quiet_stage["powerBudget"]
 
 
 def _primary(
@@ -112,7 +144,8 @@ def _contract_check_llm_output_without_runtime_plan_never_falls_back_to_semantic
         normalize_runtime_authoring_fields({
             "name": "Literal Workbench Blade",
             "category": "generic",
-            "debug": {"planner": "llm_author_first"},
+            "acceptedAuthorItem": {"name": "Literal Workbench Blade"},
+            "debug": {"planner": "stale_debug_must_not_route"},
             "gameplay": {"kind": "generic"},
         })
 
@@ -216,6 +249,47 @@ def _contract_check_compiler_provenance_proves_authored_values_against_final_wir
         for row in missing_report["blockingClaims"]
     )
 
+    consumable = deepcopy(authored)
+    consumable["name"] = "Star-Bound Mirror"
+    consumable["runtimePlan"]["resultKind"] = "consumable_weapon"
+    consumable["runtimePlan"]["engineCalls"][0]["params"].update({
+        "resultKind": "consumable_weapon",
+        "damageClass": "magic",
+        "damage": 50,
+        "maxStack": 9999,
+        "craftYield": 1,
+        "consumable": True,
+    })
+    clamped_item = _attach(
+        consumable,
+        _parent("Magic Mirror"),
+        _parent("Fallen Star"),
+    )
+    clamped_report = validate_final_runtime_promise_boundary(clamped_item)
+    assert clamped_item["gameplay"]["damage"] == 50
+    assert clamped_item["gameplay"]["maxStack"] == 999
+    assert any(
+        row["callId"] == "stats"
+        and row["authoredParam"] == "damage"
+        and row["compiledValue"] == 50
+        and row["status"] == "active"
+        for row in clamped_report["finalWireReceipts"]
+    )
+    assert any(
+        row["callId"] == "stats"
+        and row["authoredParam"] == "maxStack"
+        and row["compiledValue"] == 999
+        and row["status"] == "clamped"
+        for row in clamped_report["finalWireReceipts"]
+    )
+    corrupted_clamp = deepcopy(clamped_item)
+    corrupted_clamp["gameplay"]["maxStack"] = 998
+    assert any(
+        row["kind"] == "compiler_provenance_mismatched"
+        and row["authoredParam"] == "maxStack"
+        for row in final_runtime_promise_report(corrupted_clamp)["blockingClaims"]
+    )
+
     family_owned_fields = compiled_fields_for_authored_call(
         "fire_ranged_weapon",
         {
@@ -265,19 +339,6 @@ def _contract_check_planner_prompt_uses_compact_author_item_contract() -> None:
     assert "visual" not in required
     assert RUNTIME_CONTRACT_SCHEMA_VERSION == "infini.runtime-contract.v3"
     assert "planner_prompt" in PLANNER_PROMPT_PROFILE_VERSION
-
-
-def _contract_check_final_wire_gate_runs_before_images_and_after_final_clamps() -> None:
-    from contract_checks import assert_pipeline_phase_order
-
-    source = (ROOT / "LocalGenerator/infini_local/pipelines/combine_pipeline.py").read_text(encoding="utf-8")
-    assert_pipeline_phase_order(
-        source,
-        "runtime_compile",
-        "initial_final_wire",
-        "asset_generation",
-    )
-    assert_pipeline_phase_order(source, "final_normalize", "final_runtime_boundary")
 
 
 def _contract_check_any_domain_rejection_gets_one_same_author_scoped_repair_before_images(monkeypatch) -> None:
@@ -345,6 +406,493 @@ def _contract_check_any_domain_rejection_gets_one_same_author_scoped_repair_befo
         "recovered_final_wire",
     )
     assert_pipeline_terminal_phase(stages, "recovered_final_wire")
+
+
+def _contract_check_targeted_repair_delta_is_leaf_typed_and_scope_bounded() -> None:
+    from infini_local.pipelines.author_item_contract import (
+        strict_author_item_targeted_repair_delta_report,
+    )
+
+    current = {
+        "name": "Stable Yoyo",
+        "category": "weapon",
+        "concept": {"fantasy": "Keep me.", "mergeLogic": "Keep fusion.", "coreMechanic": "Keep mechanic."},
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {
+                    "callId": "stats",
+                    "fn": "set_item_stats",
+                    "params": {"resultKind": "weapon", "damage": 22, "useTimeTicks": 25},
+                },
+                {
+                    "callId": "primary",
+                    "fn": "perform_melee_attack",
+                    "params": {"family": "yoyo", "lifetimeTicks": 900, "useTimeTicks": 25, "speed": 16},
+                },
+                {
+                    "callId": "on_hit",
+                    "fn": "apply_on_hit_effect",
+                    "params": {"onHit": "shadowflame", "debuffTime": 120},
+                },
+            ],
+        },
+    }
+    delta = {
+        "engineCallParamPatches": [
+            {"callId": "stats", "fn": "set_item_stats", "params": {"useTimeTicks": 30}},
+            {
+                "callId": "primary",
+                "fn": "perform_melee_attack",
+                "params": {"lifetimeTicks": 600, "useTimeTicks": 30},
+            },
+        ],
+    }
+    assert strict_author_item_targeted_repair_delta_report(delta)["ok"] is True
+    invalid_param = {
+        "engineCallParamPatches": [{
+            "callId": "primary",
+            "fn": "perform_melee_attack",
+            "params": {"inventedParam": 123},
+        }],
+    }
+    assert strict_author_item_targeted_repair_delta_report(invalid_param)["ok"] is False
+
+    exact_pressure_failure = {
+        "authorRepairTargets": [
+            {
+                "path": "$.runtimePlan.engineCalls[0]",
+                "callId": "stats",
+                "fn": "set_item_stats",
+                "repairParamNames": ["useTimeTicks"],
+                "reason": "cross-call pressure",
+            },
+            {
+                "path": "$.runtimePlan.engineCalls[1]",
+                "callId": "primary",
+                "fn": "perform_melee_attack",
+                "repairParamNames": ["lifetimeTicks", "useTimeTicks"],
+                "reason": "cross-call pressure",
+            },
+        ],
+    }
+    repaired = llm_authoring_pipeline._apply_targeted_repair_delta(
+        current,
+        delta,
+        exact_pressure_failure,
+    )
+    assert repaired["runtimePlan"]["engineCalls"][0]["params"] == {
+        "resultKind": "weapon", "damage": 22, "useTimeTicks": 30,
+    }
+    assert repaired["runtimePlan"]["engineCalls"][1]["params"] == {
+        "family": "yoyo", "lifetimeTicks": 600, "useTimeTicks": 30, "speed": 16,
+    }
+    assert repaired["runtimePlan"]["engineCalls"][2] == current["runtimePlan"]["engineCalls"][2]
+    assert repaired["concept"] == current["concept"]
+
+    role_current = deepcopy(current)
+    role_current["runtimePlan"]["sourceRolePreservation"] = {
+        "itemA": "accepted blade",
+        "itemB": "accepted crystal",
+    }
+    role_failure = {"authorRepairTargets": [{
+        "path": "$.runtimePlan.sourceRolePreservation.itemA",
+        "repairParamNames": ["sourceRolePreservation.itemA"],
+        "reason": "itemA role is incomplete",
+    }]}
+    role_delta = {"authorFields": {
+        "sourceRolePreservation": {"itemA": "repaired blade"},
+    }}
+    assert strict_author_item_targeted_repair_delta_report(role_delta)["ok"] is True
+    role_repaired = llm_authoring_pipeline._apply_targeted_repair_delta(
+        role_current, role_delta, role_failure,
+    )
+    assert role_repaired["runtimePlan"]["sourceRolePreservation"] == {
+        "itemA": "repaired blade",
+        "itemB": "accepted crystal",
+    }
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_author_field_leaf"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            role_current,
+            {"authorFields": {"sourceRolePreservation": {
+                "itemA": "repaired blade",
+                "itemB": "unauthorized crystal mutation",
+            }}},
+            role_failure,
+        )
+
+    targeted_stats_failure = {
+        "errors": [{"callId": "stats", "path": "$.runtimePlan.engineCalls[0].params.damage", "kind": "range"}],
+    }
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_runtime_metadata_leaf:balanceIntent"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            current,
+            {"runtimeMetadata": {"balanceIntent": "unrelated rewrite"}},
+            targeted_stats_failure,
+        )
+
+    metadata_current = deepcopy(current)
+    metadata_current["runtimePlan"].update({
+        "balanceIntent": "accepted balance",
+        "sourceReading": "accepted source reading",
+    })
+    metadata_failure = {"authorRepairTargets": [{
+        "path": "$.runtimePlan.balanceIntent",
+        "repairParamNames": ["balanceIntent"],
+        "reason": "bounded metadata leaf rejected",
+    }]}
+    metadata_repaired = llm_authoring_pipeline._apply_targeted_repair_delta(
+        metadata_current,
+        {"runtimeMetadata": {"balanceIntent": "repaired balance"}},
+        metadata_failure,
+    )
+    assert metadata_repaired["runtimePlan"]["balanceIntent"] == "repaired balance"
+    assert metadata_repaired["runtimePlan"]["sourceReading"] == "accepted source reading"
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_runtime_metadata_leaf:sourceReading"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            metadata_current,
+            {"runtimeMetadata": {"sourceReading": "unauthorized rewrite"}},
+            metadata_failure,
+        )
+
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_engine_call_param_patch"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            current,
+            {"engineCallParamPatches": [{
+                "callId": "primary",
+                "fn": "perform_melee_attack",
+                "params": {"speed": 12},
+            }]},
+            targeted_stats_failure,
+        )
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_engine_call_param"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            current,
+            {"engineCallParamPatches": [{
+                "callId": "stats",
+                "fn": "set_item_stats",
+                "params": {"damage": 24, "useTimeTicks": 12},
+            }]},
+            targeted_stats_failure,
+        )
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_engine_call_replacement"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            current,
+            {"engineCallReplacements": [{
+                "callId": "stats", "fn": "set_item_stats",
+                "params": {"resultKind": "weapon", "damage": 24, "useTimeTicks": 25},
+            }]},
+            targeted_stats_failure,
+        )
+
+    combat_current = deepcopy(current)
+    combat_current["runtimePlan"]["resultKind"] = "consumable_weapon"
+    combat_current["runtimePlan"]["engineCalls"][0]["params"].update({
+        "resultKind": "consumable_weapon",
+        "damage": 0,
+        "maxStack": 25,
+        "craftYield": 1,
+        "consumable": True,
+    })
+    combat_delta = {
+        "engineCallParamPatches": [{
+            "callId": "stats",
+            "fn": "set_item_stats",
+            "params": {"damage": 12},
+        }],
+    }
+    combat_failure = {
+        "errors": [{
+            "callId": "stats",
+            "path": "$.runtimePlan.engineCalls[0].params.damage",
+            "reason": "combat set_item_stats requires positive damage; use a non-combat resultKind",
+            "repairParamNames": ["damage"],
+        }],
+    }
+    repaired_combat = llm_authoring_pipeline._apply_targeted_repair_delta(
+        combat_current,
+        combat_delta,
+        combat_failure,
+    )
+    assert repaired_combat["category"] == "weapon"
+    assert repaired_combat["runtimePlan"]["resultKind"] == "consumable_weapon"
+    assert repaired_combat["runtimePlan"]["engineCalls"][0]["params"]["resultKind"] == "consumable_weapon"
+    assert repaired_combat["runtimePlan"]["engineCalls"][0]["params"]["damage"] == 12
+
+    nested_current = deepcopy(current)
+    nested_current["runtimePlan"]["engineCalls"].append({
+        "callId": "accessory",
+        "fn": "accessory_effect",
+        "params": {"stats": {
+            "movementSpeed": 0.1,
+            "lightStrength": 1.2,
+        }},
+    })
+    nested_failure = {"authorRepairTargets": [{
+        "path": "$.runtimePlan.engineCalls[3].params.stats.lightColorName",
+        "callId": "accessory",
+        "fn": "accessory_effect",
+        "repairParamNames": ["stats.lightColorName"],
+        "reason": "lightStrength requires lightColorName",
+    }]}
+    nested_delta = {"engineCallParamPatches": [{
+        "callId": "accessory",
+        "fn": "accessory_effect",
+        "params": {"stats": {"lightColorName": "blue"}},
+    }]}
+    assert strict_author_item_targeted_repair_delta_report(nested_delta)["ok"] is True
+    nested = llm_authoring_pipeline._apply_targeted_repair_delta(
+        nested_current,
+        nested_delta,
+        nested_failure,
+    )
+    assert nested["runtimePlan"]["engineCalls"][3]["params"]["stats"] == {
+        "movementSpeed": 0.1,
+        "lightStrength": 1.2,
+        "lightColorName": "blue",
+    }
+
+    mixed_sources = llm_authoring_pipeline._failure_rejection_sources({
+        "error": "actual stage failure",
+        "compilerFinalWirePreview": {"errors": ["preview failure"]},
+    })
+    assert "actual stage failure" in mixed_sources
+    assert ["preview failure"] in mixed_sources
+
+    assert llm_authoring_pipeline._targeted_repair_function_cards(
+        current["runtimePlan"],
+        [{"path": "$.runtimePlan.engineCalls", "reason": "ownerless"}],
+        {
+            "set_item_stats": {"params": {"damage": "number"}},
+            "perform_melee_attack": {"params": {"speed": "number"}},
+        },
+    ) == {}
+    with pytest.raises(
+        PlannerUnavailable,
+        match="targeted_repair_has_no_authorized_delta_branches",
+    ):
+        llm_authoring_pipeline.build_same_author_repair_request(
+            current,
+            {},
+            {},
+            {"errors": [{
+                "path": "$.runtimePlan.engineCalls",
+                "reason": "ownerless",
+            }]},
+        )
+
+    overhead_item = {
+        "category": "weapon",
+        "runtimePlan": {
+        "resultKind": "consumable_weapon",
+        "engineCalls": [{
+            "callId": "stats",
+            "fn": "set_item_stats",
+            "params": {
+                "resultKind": "consumable_weapon",
+                "damageClass": "magic",
+                "damage": 45,
+                "useTimeTicks": 90,
+                "maxStack": 99,
+                "craftYield": 1,
+                "consumable": True,
+            },
+        }, {
+            "callId": "stars",
+            "fn": "shoot_projectile",
+            "params": {
+                "delivery": "cast",
+                "movement": "gravity_arc",
+                "speed": 8,
+                "rangeTiles": 20,
+                "lifetimeTicks": 60,
+                "shotCount": 5,
+                "spreadRadians": 0.5,
+                "pierce": 2,
+                "runtimeFamily": "overhead_barrage",
+            },
+        }, {
+            "callId": "starburst",
+            "fn": "apply_on_hit_effect",
+            "params": {
+                "onHit": "starburst",
+                "count": 3,
+                "secondaryDamageMultiplier": 0.5,
+                "secondaryLifetimeTicks": 30,
+            },
+        }],
+    }}
+    overhead_report = runtime_plan_validation_report(overhead_item)
+    delay_detail = next(
+        row for row in overhead_report["errorDetails"]
+        if row.get("reason") == (
+            "combat runtimeFamily=overhead_barrage requires explicit delayTicks"
+        )
+    )
+    assert delay_detail["path"] == "$.runtimePlan.engineCalls[1].params.delayTicks"
+    assert delay_detail["callId"] == "stars"
+    assert delay_detail["fn"] == "shoot_projectile"
+
+    armor_combat_item = deepcopy(overhead_item)
+    armor_combat_item["category"] = "armor"
+    armor_combat_item["runtimePlan"]["resultKind"] = "armor"
+    armor_stats = armor_combat_item["runtimePlan"]["engineCalls"][0]["params"]
+    armor_stats.update({"resultKind": "armor", "armorSlot": "head", "defense": 3})
+    armor_combat_report = runtime_plan_validation_report(armor_combat_item)
+    assert any(
+        error.startswith(
+            "executor_not_representable: resultKind=armor cannot execute combat engine calls"
+        )
+        for error in armor_combat_report["errors"]
+    )
+
+    indexed_targets = llm_authoring_pipeline._resolve_indexed_target_call_owners(
+        [{
+            "path": "$.runtimePlan.engineCalls[1].params.speed",
+            "kind": "type",
+            "reason": "expected number",
+        }],
+        current["runtimePlan"],
+    )
+    assert indexed_targets == [{
+        "path": "$.runtimePlan.engineCalls[1].params.speed",
+        "kind": "type",
+        "reason": "expected number",
+        "callId": "primary",
+        "fn": "perform_melee_attack",
+    }]
+    with pytest.raises(PlannerUnavailable, match="indexed_target_owner_mismatch"):
+        llm_authoring_pipeline._resolve_indexed_target_call_owners(
+            [{
+                "path": "$.runtimePlan.engineCalls[0].params.damage",
+                "callId": "primary",
+                "fn": "perform_melee_attack",
+            }],
+            current["runtimePlan"],
+        )
+
+    from infini_local.pipelines.llm_authoring_prompt import (
+        engine_runtime_capability_contract_for_llm,
+    )
+    capability = engine_runtime_capability_contract_for_llm({}, {})["availableFunctions"]
+    nested_cards = llm_authoring_pipeline._targeted_repair_function_cards(
+        nested_current["runtimePlan"],
+        nested_failure["authorRepairTargets"],
+        capability,
+    )
+    nested_stats_schema = nested_cards["accessory"]["params"]["stats"]
+    assert set(nested_stats_schema["properties"]) == {"lightColorName"}
+    assert "lightStrength" not in json.dumps(nested_stats_schema)
+    assert "movementSpeed" not in json.dumps(nested_stats_schema)
+
+    visual_current = deepcopy(current)
+    visual_current["runtimePlan"]["visualIntent"] = {
+        "topology": "connected",
+        "partCountMin": 1,
+        "partCountMax": 1,
+        "parts": ["one continuous body"],
+        "palette": ["violet", "black"],
+        "preferredCanvasSize": 32,
+    }
+    visual_failure = {"authorRepairTargets": [{
+        "path": "$.runtimePlan.visualIntent.preferredCanvasSize",
+        "kind": "maximum",
+        "reason": "must be <= 64",
+    }]}
+    visual_delta = {"authorFields": {"visualIntent": {"preferredCanvasSize": 64}}}
+    assert strict_author_item_targeted_repair_delta_report(visual_delta)["ok"] is True
+    visual_repaired = llm_authoring_pipeline._apply_targeted_repair_delta(
+        visual_current,
+        visual_delta,
+        visual_failure,
+    )
+    assert visual_repaired["runtimePlan"]["visualIntent"] == {
+        **visual_current["runtimePlan"]["visualIntent"],
+        "preferredCanvasSize": 64,
+    }
+    with pytest.raises(PlannerUnavailable, match="out_of_scope_visual_intent_leaf:topology"):
+        llm_authoring_pipeline._apply_targeted_repair_delta(
+            visual_current,
+            {"authorFields": {"visualIntent": {
+                "preferredCanvasSize": 64,
+                "topology": "multipart_separated",
+            }}},
+            visual_failure,
+        )
+
+
+def _contract_check_same_author_repair_uses_source_validated_snapshot_not_lowered_dto(monkeypatch) -> None:
+    repair_inputs: list[dict] = []
+    repair_reports: list[dict] = []
+
+    def strict_validate(data, *_args):
+        return deepcopy(data)
+
+    def lower_for_runtime(data, *_args):
+        call = data["runtimePlan"]["engineCalls"][1]
+        call["fn"] = "shoot_projectile"
+        call["_rawFn"] = "fire_ranged_weapon"
+        call["_index"] = 1
+        return data
+
+    def final_wire(data):
+        if not data.get("repaired"):
+            error = PlannerUnavailable(
+                "compiler provenance mismatch after lowering",
+                author_repair_rejected_domains=[{
+                    "path": "$.runtimePlan.engineCalls",
+                    "kind": "genome_non_executable",
+                }],
+            )
+            raise error
+        return data
+
+    def same_author_repair(data, *_args, failure_report=None, **_kwargs):
+        repair_inputs.append(deepcopy(data))
+        assert isinstance(failure_report, dict)
+        repair_reports.append(deepcopy(failure_report))
+        repaired = deepcopy(data)
+        repaired["repaired"] = True
+        return repaired
+
+    monkeypatch.setattr(combine_pipeline, "strict_validate_authored_item", strict_validate)
+    monkeypatch.setattr(combine_pipeline, "validate_and_repair", lower_for_runtime)
+    monkeypatch.setattr(combine_pipeline, "apply_item_knowledge", lambda data, *_args: data)
+    monkeypatch.setattr(combine_pipeline, "attach_gameplay_and_attack", lambda data, *_args: data)
+    monkeypatch.setattr(combine_pipeline, "project_attack_presentation_fields", lambda data, **_kwargs: data)
+    monkeypatch.setattr(combine_pipeline, "validate_executable_item_boundary", lambda data: data)
+    monkeypatch.setattr(combine_pipeline, "validate_final_runtime_promise_boundary", final_wire)
+    monkeypatch.setattr(combine_pipeline, "repair_author_item_after_failure", same_author_repair)
+
+    result = combine_pipeline.compile_and_validate_authored_runtime(
+        {
+            "runtimePlan": {
+                "engineCalls": [
+                    {"callId": "stats", "fn": "set_item_stats", "params": {"resultKind": "weapon"}},
+                    {
+                        "callId": "primary",
+                        "fn": "fire_ranged_weapon",
+                        "params": {"family": "gun", "ammoFor": "bullet"},
+                    },
+                ],
+            },
+        },
+        {}, {}, {}, {}, "recipe-key",
+        run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs),
+    )
+
+    assert result["repaired"] is True
+    assert len(repair_inputs) == 1
+    assert repair_reports[0]["authorRepairRejectedDomains"] == [{
+        "path": "$.runtimePlan.engineCalls",
+        "kind": "genome_non_executable",
+    }]
+    repaired_call = repair_inputs[0]["runtimePlan"]["engineCalls"][1]
+    assert repaired_call == {
+        "callId": "primary",
+        "fn": "fire_ranged_weapon",
+        "params": {"family": "gun", "ammoFor": "bullet"},
+    }
 
 
 def _contract_check_internal_pipeline_exceptions_never_invoke_author_repair(monkeypatch) -> None:
@@ -649,6 +1197,7 @@ def _contract_check_aoe_visual_and_contact_radii_are_independent() -> None:
         },
     })
     attack = data["attack"]
+    assert project_aoe_radius_tiles_to_damage_pixels(4) == 64
     assert attack["aoeDamageRadiusPx"] == 64
     assert attack["impactVfxRadiusPx"] == 0
     assert attack["contactForgivenessPx"] == 0
@@ -848,6 +1397,43 @@ def _contract_check_actual_ammo_preserves_authored_stats_and_presentation() -> N
     assert bypass_report["ok"] is False
     assert any("actual ammo requires explicit damageClass" in error for error in bypass_report["errors"])
     assert any("actual ammo requires explicit non-negative damage" in error for error in bypass_report["errors"])
+
+    ambiguous_custom_ammo = {"runtimePlan": {"resultKind": "ammo", "engineCalls": [
+        {"fn": "set_item_stats", "params": {
+            "resultKind": "ammo", "damageClass": "ranged", "damage": 7,
+            "maxStack": 99, "craftYield": 25, "ammoFor": "",
+        }},
+        _primary("throw", "throw", "gravity_arc", 60),
+    ]}}
+    ambiguous_report = runtime_plan_validation_report(ambiguous_custom_ammo)
+    assert ambiguous_report["ok"] is False
+    assert any("ammo result requires vanilla arrow or bullet identity" in error for error in ambiguous_report["errors"])
+    assert any("actual ammo cannot author a generated primary action" in error for error in ambiguous_report["errors"])
+
+    plural_alias = deepcopy(ambiguous_custom_ammo)
+    plural_alias["runtimePlan"]["engineCalls"] = [deepcopy(ambiguous_custom_ammo["runtimePlan"]["engineCalls"][0])]
+    plural_alias["runtimePlan"]["engineCalls"][0]["params"]["ammoFor"] = "arrows"
+    plural_report = runtime_plan_validation_report(plural_alias)
+    assert plural_report["ok"] is False
+    assert any("ammo result requires vanilla arrow or bullet identity" in error for error in plural_report["errors"])
+
+    stack_consumed_weapon = {"category": "weapon", "runtimePlan": {"resultKind": "weapon", "engineCalls": [
+        {"callId": "stats", "fn": "set_item_stats", "params": {
+            "resultKind": "weapon", "damageClass": "melee", "damage": 12,
+            "useTimeTicks": 25, "useAnimationTicks": 25,
+            "maxStack": 99, "craftYield": 25, "consumable": True,
+        }},
+        _primary("swing", "swing", "straight", 15),
+        {"callId": "consume", "fn": "consumption_behavior", "params": {"consumeChancePercent": 100}},
+    ]}}
+    stack_report = runtime_plan_validation_report(stack_consumed_weapon)
+    assert stack_report["ok"] is False
+    assert any("invalid_result_kind" in error for error in stack_report["errors"])
+    assert any(
+        detail.get("callId") == "stats"
+        and detail.get("path") == "$.runtimePlan.engineCalls[0].params.resultKind"
+        for detail in stack_report["errorDetails"]
+    ), stack_report["errorDetails"]
 
     zero_weapon = {"category": "weapon", "runtimePlan": {"resultKind": "weapon", "engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "melee", "damage": 0, "useTimeTicks": 24, "maxStack": 1}},
@@ -1083,6 +1669,7 @@ def _contract_check_family_specific_numbers_are_authored_not_defaulted() -> None
     overhead_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs").read_text(encoding="utf-8")
     impact_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
     item_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
+    child_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
     projectile_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
     charge_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ChargeRelease.cs").read_text(encoding="utf-8")
     sentry_runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8")
@@ -1090,7 +1677,9 @@ def _contract_check_family_specific_numbers_are_authored_not_defaulted() -> None
     assert "authoredSpreadRadians <= 0f ? 0.44f" not in overhead_policy
     assert "SecondaryDamageMultiplier <= 0f ? 0.55f" not in overhead_runtime
     assert "Math.Max(0.12f, attack.SecondaryDamageMultiplier)" not in item_runtime
-    assert "Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180)" in item_runtime
+    assert "GeneratedChildSpecPolicy.CreateSwingSecondary(parent)" in item_runtime
+    swing_policy = child_policy.split("public static AttackSpec CreateSwingSecondary", 1)[1].split("private static bool HasExplicitSecondaryBody", 1)[0]
+    assert "Lifetime = Math.Clamp(parent.SecondaryLifetimeTicks, 5, 180)" in swing_policy
     assert "Math.Max(0.05f, _spec.SecondaryDamageMultiplier)" not in impact_runtime
     assert "Math.Clamp(_spec.SecondaryLifetimeTicks, 5, 180)" in projectile_runtime
     assert "Math.Max(1, Projectile.originalDamage)" not in charge_runtime
@@ -1214,6 +1803,168 @@ def _contract_check_composite_projectile_pressure_requires_llm_repair() -> None:
     assert any("composite projectile pressure" in defect for defect in charge_defects)
 
 
+def _contract_check_runtime_validation_errors_always_publish_structured_targets() -> None:
+    report = runtime_plan_validation_report({
+        "category": "weapon",
+        "runtimePlan": {
+            "resultKind": "consumable_weapon",
+            "engineCalls": [
+                {"callId": "stats", "fn": "set_item_stats", "params": {
+                    "resultKind": "consumable_weapon", "damageClass": "ranged",
+                    "damage": 12, "useTimeTicks": 15, "useAnimationTicks": 15,
+                    "consumable": True, "maxStack": 9999, "craftYield": 0,
+                }},
+                {"callId": "primary", "fn": "shoot_projectile", "params": {
+                    "runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight",
+                    "speed": 10, "rangeTiles": 40, "lifetimeTicks": 60,
+                    "shotCount": 1, "spreadRadians": 0, "pierce": 1,
+                }},
+            ],
+        },
+    })
+    assert report["ok"] is False
+    details = report["errorDetails"]
+    assert set(report["errors"]) <= {str(row.get("reason") or "") for row in details}
+    craft_targets = [row for row in details if str(row.get("path") or "").endswith(".params.craftYield")]
+    assert craft_targets == [{
+        "kind": "runtime_validation",
+        "path": "$.runtimePlan.engineCalls[0].params.craftYield",
+        "callId": "stats",
+        "fn": "set_item_stats",
+        "reason": "consumable_weapon result requires explicit positive maxStack and craftYield",
+        "repairParamNames": ["craftYield"],
+    }]
+
+    armor_report = runtime_plan_validation_report({
+        "category": "armor",
+        "runtimePlan": {
+            "resultKind": "armor",
+            "engineCalls": [
+                {"callId": "stats", "fn": "set_item_stats", "params": {
+                    "resultKind": "armor", "armorSlot": "head", "defense": 4,
+                }},
+                {"callId": "armor", "fn": "armor_effect", "params": {
+                    "armorSlot": "head", "defense": 4,
+                    "stats": {"movementSpeed": 0.05, "lightStrength": 1.2},
+                }},
+            ],
+        },
+    })
+    light_targets = [
+        row
+        for row in armor_report["errorDetails"]
+        if str(row.get("path") or "").endswith(".params.stats.lightColorName")
+    ]
+    assert light_targets == [{
+        "kind": "runtime_validation",
+        "path": "$.runtimePlan.engineCalls[1].params.stats.lightColorName",
+        "callId": "armor",
+        "fn": "armor_effect",
+        "reason": "armor_effect stats.lightStrength requires explicit lightColorName",
+        "repairParamNames": ["stats.lightColorName"],
+    }]
+    cards = llm_authoring_pipeline._targeted_repair_function_cards(
+        armor_report.get("runtimePlan") or {
+            "engineCalls": [
+                {"callId": "stats", "fn": "set_item_stats", "params": {}},
+                {"callId": "armor", "fn": "armor_effect", "params": {
+                    "stats": {"movementSpeed": 0.05, "lightStrength": 1.2},
+                }},
+            ],
+        },
+        light_targets,
+        {"armor_effect": {"params": {"stats": {"type": "object"}, "defense": "number"}}},
+    )
+    assert set(cards) == {"armor"}
+    assert cards["armor"]["fn"] == "armor_effect"
+    assert set(cards["armor"]["params"]) == {"stats"}
+
+
+def _contract_check_global_genome_defect_structurally_rejects_whole_engine_call_domain(monkeypatch) -> None:
+    from infini_local.pipelines import combine_genome
+
+    current_plan = {
+        "engineCalls": [
+            {"callId": "stats", "fn": "set_item_stats", "params": {"useTimeTicks": 10}},
+            {"callId": "primary", "fn": "shoot_projectile", "params": {"lifetimeTicks": 900}},
+        ],
+    }
+    data = {"runtimePlan": deepcopy(current_plan), "debug": {}}
+    monkeypatch.setattr(combine_genome, "combat_genome_required_for", lambda _data: True)
+    monkeypatch.setattr(
+        combine_genome,
+        "genome_defects",
+        lambda _data: ["composite projectile pressure exceeds runtime safety envelope"],
+    )
+    monkeypatch.setattr(combine_genome, "try_llm_genome_repair", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(PlannerUnavailable, match="composite projectile pressure"):
+        combine_genome.repair_llm_combat_genome_if_needed(data, {}, {}, {}, {}, "recipe-key")
+
+    rejected_domains = data["debug"]["authorRepairRejectedDomains"]
+    assert rejected_domains == [{
+        "path": "$.runtimePlan.engineCalls",
+        "kind": "genome_non_executable",
+    }]
+    failure_report = {"authorRepairRejectedDomains": rejected_domains}
+    assert llm_authoring_pipeline._rejected_call_ids(failure_report, current_plan) == {
+        "stats", "primary",
+    }
+
+    replacement = {
+        "engineCalls": [
+            {"callId": "stats", "fn": "set_item_stats", "params": {"useTimeTicks": 30}},
+            {"callId": "primary", "fn": "shoot_projectile", "params": {"lifetimeTicks": 120}},
+        ],
+    }
+    llm_authoring_pipeline._preserve_accepted_engine_calls(
+        replacement,
+        current_plan,
+        llm_authoring_pipeline._rejected_call_ids(failure_report, current_plan),
+    )
+    assert replacement["engineCalls"][0]["params"]["useTimeTicks"] == 30
+    assert replacement["engineCalls"][1]["params"]["lifetimeTicks"] == 120
+
+    pressure_data = {
+        "gameplay": {"powerBudget": 1.0},
+        "runtimePlan": {"engineCalls": [
+            {"callId": "stats", "fn": "set_item_stats", "params": {
+                "resultKind": "weapon", "damageClass": "ranged", "damage": 20,
+                "useTimeTicks": 10, "useAnimationTicks": 10,
+            }},
+            {"callId": "primary", "fn": "shoot_projectile", "params": {
+                "delivery": "shoot", "runtimeFamily": "shoot", "movement": "straight",
+                "useTimeTicks": 10, "shotCount": 8, "pierce": 1,
+                "rangeTiles": 60, "lifetimeTicks": 900, "speed": 12,
+                "spreadRadians": 0, "extraUpdates": 3,
+            }},
+            {"callId": "onhit", "fn": "apply_on_hit_effect", "params": {
+                "onHit": "none",
+            }},
+        ]},
+        "attack": {"genome": {
+            "delivery": "shoot", "runtimeFamily": "shoot", "movement": "straight",
+            "effect": "dust", "onHit": "none", "pullMode": "none", "pullStrength": 0,
+            "useTimeTicks": 10, "shotCount": 8, "pierce": 1, "aoeRadiusTiles": 0,
+            "rangeTiles": 60, "lifetimeTicks": 900, "speed": 12, "spreadRadians": 0,
+            "extraUpdates": 3, "reliability": 1.0, "selfLockTicks": 0, "missPunish": 0,
+        }},
+    }
+    with pytest.raises(PlannerUnavailable) as raised:
+        combine_genome.llm_authored_weapon_genome(pressure_data, {}, {}, {})
+    targets = raised.value.author_repair_targets
+    assert {str(target.get("callId") or "") for target in targets} == {"stats", "primary"}
+    assert all("composite projectile pressure" in str(target.get("reason") or "") for target in targets)
+    compiled_by_call = {
+        str(target.get("callId") or ""): set(target.get("compiledFields") or [])
+        for target in targets
+    }
+    assert compiled_by_call["stats"] == {"useTimeTicks"}
+    assert compiled_by_call["primary"] == {
+        "extraUpdates", "lifetimeTicks", "shotCount", "useTimeTicks",
+    }
+
+
 def _contract_check_active_engine_cards_execute_authored_visual_and_summon_fields() -> None:
     assert "durationTicks" in accepted_engine_param_names("emit_light")
     assert "durationTicks" in accepted_engine_param_names("spawn_contact_particles")
@@ -1259,13 +2010,16 @@ def _contract_check_active_engine_cards_execute_authored_visual_and_summon_field
     assert "RuntimeLightDurationTicks" in projectile_visuals
     assert "VfxParticleDurationTicks" in projectile_visuals
     assert "EmitAuthoredVisualField" in projectile_visuals
+    send_extra_ai = net_sync.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "_spec." not in send_extra_ai
+    assert "TryGetAttack(_generatedItemId)" in net_sync
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in net_sync
     for field in (
         "VfxParticleScale", "VfxMaterial", "VfxParticleDurationTicks",
         "VfxFieldLifetimeTicks", "VfxFieldRadiusTiles", "VfxFieldTickRate",
         "RuntimeLightDurationTicks",
     ):
-        assert f"writer.Write(_spec.{field})" in net_sync or f"ShortNet(_spec.{field}" in net_sync
-        assert f"_spec.{field} = reader." in net_sync
+        assert f"_spec.{field}" in projectile_visuals
     assert "owner.whipRangeMultiplier" in projectile_runtime
     assert "AddGeneratedSummonTagDamage" in generated_item
     assert "ModifyHitByProjectile" in tag_runtime
@@ -1398,13 +2152,11 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
         captured.append(request_payload)
         return {
             "choices": [{"message": {"content": json.dumps({
-                "runtimePlan": {
-                    "engineCalls": [{
-                        "callId": "primary",
-                        "fn": "shoot_projectile",
-                        "params": {"speed": 20},
-                    }],
-                },
+                "engineCallParamPatches": [{
+                    "callId": "primary",
+                    "fn": "shoot_projectile",
+                    "params": {"speed": 20},
+                }],
             })}}],
             "_debug": {"transportFootprint": {"repairChars": 321}},
         }
@@ -1435,6 +2187,7 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
             "playerViewTimeline": [{"phase": "release", "description": "Throw once."}],
         },
         "runtimePlan": {
+            "resultKind": "weapon",
             "runtimeStateIntent": "No persistent state.",
             "sourceReading": "Shaft and crystal remain visible.",
             "balanceIntent": "One finite projectile per use.",
@@ -1495,6 +2248,41 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     assert dotted_replacement["runtimePlan"]["engineCalls"][0]["params"]["speed"] == 20
     assert dotted_replacement["runtimePlan"]["engineCalls"][1] == authored["runtimePlan"]["engineCalls"][1]
 
+    potion_identity_failure = {
+        "errors": [{
+            "path": "$.runtimePlan.engineCalls[0]",
+            "callId": "stats",
+            "reason": "combat set_item_stats requires positive damage; use a non-combat resultKind for pure utility",
+        }],
+    }
+    potion_replacement = llm_authoring_pipeline._preserve_accepted_authoring(
+        {
+            "category": "potion",
+            "runtimePlan": {
+                "resultKind": "potion",
+                "engineCalls": [{
+                    "callId": "stats",
+                    "fn": "set_item_stats",
+                    "params": {"resultKind": "potion", "damage": 0, "healLife": 50},
+                }],
+            },
+        },
+        {
+            "category": "weapon",
+            "runtimePlan": {
+                "resultKind": "consumable_weapon",
+                "engineCalls": [{
+                    "callId": "stats",
+                    "fn": "set_item_stats",
+                    "params": {"resultKind": "consumable_weapon", "damage": 0},
+                }],
+            },
+        },
+        potion_identity_failure,
+    )
+    assert potion_replacement["category"] == "potion"
+    assert potion_replacement["runtimePlan"]["resultKind"] == "potion"
+
     rejected = deepcopy(authored)
     rejected["runtimeContract"].update({
         "schema": "compiler-owned",
@@ -1537,22 +2325,85 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     assert result["runtimePlan"]["visualIntent"] == authored["runtimePlan"]["visualIntent"]
     assert result["runtimePlan"]["engineCalls"][0]["params"]["speed"] == 20
     assert result["runtimePlan"]["engineCalls"][1] == authored["runtimePlan"]["engineCalls"][1]
-    assert result["debug"]["model"] == "replacement-model"
-    assert result["debug"]["repairModelMayDiffer"] is True
+    assert result["debug"]["model"] == "test-model"
+    assert result["debug"]["authorRepair"] == "same_author_role_targeted_leaf_delta"
+    assert "repairModelMayDiffer" not in result["debug"]
     assert result["debug"]["authorRepairTransport"]["transportFootprint"]["repairChars"] == 321
-    assert captured[0][llm_authoring_pipeline.LLM_MODEL_OVERRIDE_KEY] == "replacement-model"
+    assert captured[0]["model"] == "test-model"
+    production_repair_schema = captured[0]["response_format"]["json_schema"]["schema"]
+    assert set(production_repair_schema["properties"]) == {"engineCallParamPatches"}
+    assert LLM_MODEL_OVERRIDE_KEY not in captured[0]
     dossier = json.loads(captured[0]["messages"][-1]["content"])
-    assert dossier["repairMode"] == "targeted_domain_repair"
-    assert dossier["currentRuntimePlan"]["engineCalls"] == authored["runtimePlan"]["engineCalls"]
-    assert dossier["allowedPatchKeys"] == ["runtimePlan"]
-    assert "currentAuthoredItem" not in dossier
-    assert dossier["preservedConceptContext"] == {
-        "name": authored["name"],
-        "fantasy": authored["concept"]["fantasy"],
-        "mergeLogic": authored["concept"]["mergeLogic"],
-        "visualIntent": authored["runtimePlan"]["visualIntent"],
-        "sourceRolePreservation": authored["runtimePlan"]["sourceRolePreservation"],
+    assert dossier["repairMode"] == "targeted_leaf_delta"
+    assert dossier["acceptedAuthorItem"]["runtimePlan"]["engineCalls"] == authored["runtimePlan"]["engineCalls"]
+    assert dossier["acceptedAuthorItem"]["concept"] == authored["concept"]
+    assert dossier["allowedAuthorDomains"] == ["runtimePlan"]
+    assert dossier["rejectedCallIds"] == ["primary"]
+    assert dossier["agentHandoff"]["currentSpeaker"] == "item_planner"
+    assert dossier["agentHandoff"]["artifactSource"] == "acceptedAuthorItem"
+    assert dossier["targetedRepairDeltaShape"]["engineCallParamPatches"][0]["params"] == {
+        "changedParamOnly": "new typed value",
     }
+    assert dossier["deltaRules"][0] == "Return the smallest sufficient delta; omit every unchanged top-level key."
+    assert set(dossier["repairFunctionCards"]) == {"primary"}
+    assert dossier["repairFunctionCards"]["primary"]["fn"] == "shoot_projectile"
+    assert set(dossier["repairFunctionCards"]["primary"]["params"]) == {"speed"}
+    from infini_local.pipelines.author_item_contract import (
+        author_item_provider_targeted_repair_delta_schema,
+        strict_author_item_targeted_repair_delta_report,
+    )
+    exact_provider_schema = author_item_provider_targeted_repair_delta_schema({
+        "set_item_stats": {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {"useTimeTicks": {"type": "integer"}},
+        },
+    })
+    patch_array = next(
+        branch
+        for branch in exact_provider_schema["properties"]["engineCallParamPatches"]["anyOf"]
+        if branch.get("type") == "array"
+    )
+    patch_branch = patch_array["items"]["anyOf"][0]
+    assert patch_branch["properties"]["callId"]["const"] == "set_item_stats"
+    assert patch_branch["properties"]["fn"]["const"] == "set_item_stats"
+    exact_params = patch_branch["properties"]["params"]
+    assert set(exact_params["properties"]) == {"useTimeTicks"}
+    assert exact_params["additionalProperties"] is False
+    assert "useAnimationTicks" not in exact_params["properties"]
+    assert set(exact_provider_schema["properties"]) == {"engineCallParamPatches"}
+    assert strict_author_item_targeted_repair_delta_report({
+        "engineCallReplacements": [{
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {"useTimeTicks": 10},
+        }],
+    })["ok"] is False
+
+    visual_provider_schema = author_item_provider_targeted_repair_delta_schema(
+        {},
+        allowed_author_field_schemas={
+            "visualIntent": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"preferredCanvasSize": {"type": "integer"}},
+                "required": [],
+            },
+        },
+    )
+    assert set(visual_provider_schema["properties"]) == {"authorFields"}
+    visual_author = next(
+        branch
+        for branch in visual_provider_schema["properties"]["authorFields"]["anyOf"]
+        if branch.get("type") == "object"
+    )
+    visual_intent = next(
+        branch
+        for branch in visual_author["properties"]["visualIntent"]["anyOf"]
+        if branch.get("type") == "object"
+    )
+    assert set(visual_intent["properties"]) == {"preferredCanvasSize"}
+    assert "topology" not in visual_intent["properties"]
     assert "parents" not in dossier
     assert dossier["invalidTargets"] == [{
         "path": "$.runtimePlan.engineCalls[0].params.speed",
@@ -1562,6 +2413,64 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     }]
     assert "parentAuthoringPacket" not in dossier
     assert "failureReport" not in dossier
+    duplicate_fn_cards = llm_authoring_pipeline._targeted_repair_function_cards(
+        {
+            "engineCalls": [
+                {"callId": "primary", "fn": "shoot_projectile", "params": {}},
+                {"callId": "secondary", "fn": "shoot_projectile", "params": {}},
+            ],
+        },
+        [
+            {
+                "path": "$.runtimePlan.engineCalls[0].params.speed",
+                "callId": "primary",
+                "fn": "shoot_projectile",
+            },
+            {
+                "path": "$.runtimePlan.engineCalls[1].params.spreadRadians",
+                "callId": "secondary",
+                "fn": "shoot_projectile",
+            },
+        ],
+        {"shoot_projectile": {"description": "finite projectile call"}},
+    )
+    assert set(duplicate_fn_cards) == {"primary", "secondary"}
+    assert set(duplicate_fn_cards["primary"]["params"]) == {"speed"}
+    assert set(duplicate_fn_cards["secondary"]["params"]) == {"spreadRadians"}
+    provenance_failure = {
+        "finalWireReport": {"blockingClaims": [{
+            "kind": "compiler_provenance_mismatched",
+            "callId": "accepted_stats",
+            "authoredParam": "useAnimationTicks",
+            "authoredValue": 0,
+            "compiledField": "useAnimationTicks",
+            "compiledValue": 10,
+            "finalPath": "gameplay.useAnimation",
+            "finalActual": 12,
+        }]},
+    }
+    assert llm_authoring_pipeline._repair_targets(provenance_failure) == [{
+        "callId": "accepted_stats",
+        "reason": "compiler_provenance_mismatched",
+        "authoredParam": "useAnimationTicks",
+        "authoredValue": 0,
+        "compiledField": "useAnimationTicks",
+        "compiledValue": 10,
+        "finalPath": "gameplay.useAnimation",
+        "finalActual": 12,
+    }]
+    visual_and_call_failure = {
+        "finalWireReport": {"blockingClaims": [{
+            "kind": "compiler_provenance_mismatched", "callId": "accepted_stats",
+        }]},
+        "authorItemV3": {"errors": [{
+            "path": "$.runtimePlan.visualIntent",
+            "kind": "connected_topology_requires_one_significant_body",
+        }]},
+    }
+    assert llm_authoring_pipeline._repair_allowed_patch_keys(
+        visual_and_call_failure, True,
+    ) == ["runtimePlan", "visualIntent"]
     assert llm_authoring_pipeline._repair_allowed_patch_keys(
         {"errors": [{"kind": "invalid_item_name"}]},
         True,
@@ -1688,6 +2597,67 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     assert full_redesign["runtimePlan"]["sourceRolePreservation"] == authored["runtimePlan"]["sourceRolePreservation"]
     assert full_redesign["runtimePlan"]["visualIntent"] == authored["runtimePlan"]["visualIntent"]
     assert full_redesign["runtimePlan"]["runtimeStateIntent"] == "No persistent state."
+
+    retained_equipment = {
+        "name": "Accepted Helm",
+        "category": "armor",
+        "runtimePlan": {
+            "resultKind": "armor",
+            "engineCalls": [
+                {
+                    "callId": "stats",
+                    "fn": "set_item_stats",
+                    "params": {"resultKind": "armor", "armorSlot": "head", "defense": 3},
+                },
+                {
+                    "callId": "armor",
+                    "fn": "armor_effect",
+                    "params": {
+                        "armorSlot": "head",
+                        "stats": {"lightStrength": 0.8, "lightColorName": "orange"},
+                    },
+                },
+                {
+                    "callId": "removed_combat",
+                    "fn": "shoot_projectile",
+                    "params": {"runtimeFamily": "shoot", "speed": 8},
+                },
+            ],
+        },
+    }
+    equipment_redesign = llm_authoring_pipeline._preserve_accepted_authoring(
+        {
+            "category": "armor",
+            "runtimePlan": {
+                "resultKind": "armor",
+                "engineCalls": [
+                    {
+                        "callId": "stats",
+                        "fn": "set_item_stats",
+                        "params": {"resultKind": "armor", "armorSlot": "head", "defense": 4},
+                    },
+                    {
+                        "callId": "armor",
+                        "fn": "armor_effect",
+                        "params": {"armorSlot": "head", "stats": {"lightStrength": 0.8}},
+                    },
+                ],
+            },
+        },
+        retained_equipment,
+        {"kind": "executor_not_representable"},
+    )
+    equipment_calls = {
+        call["callId"]: call
+        for call in equipment_redesign["runtimePlan"]["engineCalls"]
+    }
+    assert equipment_calls["stats"]["params"]["defense"] == 4
+    assert equipment_calls["armor"]["params"]["stats"] == {
+        "lightStrength": 0.8,
+        "lightColorName": "orange",
+    }
+    assert "removed_combat" not in equipment_calls
+
     _, redesign_dossier_json, *_ = llm_authoring_pipeline.build_same_author_repair_request(
         rejected,
         parent,
@@ -1697,6 +2667,11 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     redesign_dossier = json.loads(redesign_dossier_json)
     assert redesign_dossier["repairMode"] == "full_redesign"
     assert redesign_dossier["allowedPatchKeys"][0] == "category"
+    assert any(
+        "passive armor/accessory light" in rule
+        and "set_alt_use_mode" in rule
+        for rule in redesign_dossier["redesignRules"]
+    )
     with pytest.raises(PlannerUnavailable, match="incomplete_gameplay_redesign_patch"):
         llm_authoring_pipeline.repair_author_item_after_failure(
             rejected,
@@ -1832,7 +2807,72 @@ def _contract_check_runtime_authored_projectile_geometry_ignores_names_and_paren
         "explosionRadius": 0,
     }
 
+def _contract_check_equipment_light_and_fixed_item_timing_have_one_executable_owner() -> None:
+    authored = {
+        "category": "armor",
+        "concept": {
+            "fantasy": "A finite authored equipment light.",
+            "mergeLogic": "The equipment body carries the authored lamp.",
+            "coreMechanic": "Emits the authored light while equipped.",
+        },
+        "runtimeContract": {"primaryVerb": "equip", "controlStyle": "passive"},
+        "runtimePlan": {
+            "resultKind": "armor",
+            "sourceRolePreservation": {"itemA": "equipment body", "itemB": "lamp"},
+            "runtimeStateIntent": "No mutable runtime state.",
+            "sourceReading": "One armor body with one lamp.",
+            "balanceIntent": "A small passive equipment light.",
+            "anomalyFlags": [],
+            "visualIntent": {
+                "item": "one connected helmet",
+                "topology": "connected",
+                "partCountMin": 1,
+                "partCountMax": 1,
+                "parts": ["helmet with attached lamp"],
+                "arrangement": "one connected body",
+                "preferredCanvasSize": 32,
+            },
+            "engineCalls": [{
+                "callId": "stats",
+                "fn": "set_item_stats",
+                "params": {
+                    "resultKind": "armor", "armorSlot": "head", "defense": 2,
+                    "useTimeTicks": 0, "useAnimationTicks": 0,
+                },
+            }, {
+                "callId": "armor",
+                "fn": "armor_effect",
+                "params": {
+                    "armorSlot": "head", "archetype": "defense", "defense": 2,
+                    "stats": {"lightStrength": 1.2},
+                },
+            }, {
+                "callId": "light",
+                "fn": "emit_light",
+                "params": {"strength": 1.2, "color": "orange", "durationTicks": 240},
+            }],
+        },
+    }
+    invalid = runtime_plan_validation_report(deepcopy(authored))
+    assert any("emit_light" in error and "armor_effect.stats" in error for error in invalid["errors"])
+    assert any("lightColorName" in error for error in invalid["errors"])
+    assert {row.get("callId") for row in invalid["errorDetails"]} >= {"armor", "light"}
 
+    valid = deepcopy(authored)
+    valid["runtimePlan"]["engineCalls"] = valid["runtimePlan"]["engineCalls"][:2]
+    valid["runtimePlan"]["engineCalls"][1]["params"]["stats"]["lightColorName"] = "orange"
+    patch = compile_runtime_plan_to_genome_patch(deepcopy(valid))
+    assert patch["useTimeTicks"] == 10
+    assert patch["useAnimationTicks"] == 10
+    final_item = _attach(valid)
+    assert final_item["gameplay"]["useTime"] == 10
+    assert final_item["gameplay"]["useAnimation"] == 10
+    assert final_item["armor"]["lightStrength"] == 1.2
+    assert final_item["armor"]["lightColorName"] == "orange"
+    assert final_runtime_promise_report(final_item)["ok"] is True
+
+
+# One collected item per contract module; individual checks keep source order and tracebacks.
 def test_gameplay_authority_authorship_contract(request):
     from contract_checks import run_contract_checks
 

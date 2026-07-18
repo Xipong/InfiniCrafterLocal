@@ -7,9 +7,15 @@ from infini_local.core.category_policy import COMBAT_CATEGORIES
 
 
 def is_llm_planner(data: dict[str, Any]) -> bool:
-    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
-    planner = str(debug.get("planner") or "").lower()
-    return planner == "llm" or planner.startswith("llm_") or "llm" in planner
+    accepted_author_item = data.get("acceptedAuthorItem")
+    if isinstance(accepted_author_item, dict) and accepted_author_item:
+        return True
+    runtime_plan_candidate = data.get("runtimePlan")
+    runtime_plan: dict[str, Any] = (
+        runtime_plan_candidate if isinstance(runtime_plan_candidate, dict) else {}
+    )
+    engine_calls = runtime_plan.get("engineCalls")
+    return isinstance(engine_calls, list) and any(isinstance(call, dict) for call in engine_calls)
 
 
 def combat_genome_required_for(data: dict[str, Any]) -> bool:

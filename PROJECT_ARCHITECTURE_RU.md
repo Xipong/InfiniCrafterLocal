@@ -27,8 +27,9 @@
 15. **PNG описывает одно runtime-тело.** `shotCount/splitCount` остаются multiplicity runtime, а не количеством тел внутри текстуры.
 
 16. **Визуальное слияние родителей авторит модель.** Код передаёт факты и сохраняет authored-поля, но не выбирает literal/attached/fused/disassembled/parts-вариант, не вводит material locks и не строит parent-type visual router. Технические role/JSON/runtime gates не должны становиться вторым художником.
-16. Предлайфтестовые негативные примеры и residual risks: `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md`.
-13. **Balance mode выбирается только через `core/balance_mode.py`.** `safety` по умолчанию, `normalize` opt-in, `report` diagnostics; формулы и mode-policy не смешивать.
+17. **Stage handoff использует оптимальную избыточность.** Каждый stateless Director получает все clean accepted facts, полезные его роли, но не repair/debug/compiler receipts, classifier/tag packets, prior transcripts или конкурирующие visual mirrors. Visual получает item intent + raw parent physical/visual facts; VFX+Sound получает accepted concept/gameplay/attack/audio + полный `VisualAssetKit` и авторит bounded event slots, включая `soundCue`.
+18. Предлайфтестовые негативные примеры и residual risks: `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md`.
+19. **Balance mode выбирается только через `core/balance_mode.py`.** `safety` по умолчанию, `normalize` opt-in, `report` diagnostics; формулы и mode-policy не смешивать.
 
 ## Коротко
 
@@ -128,7 +129,7 @@ Multiplayer client path:
 | `GeneratedItemData.Debug.cs` | applied trace/debug JSON для анализа applied-vs-authored |
 
 Ключевые поля:
-- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.51`); пустые и старые версии не мигрируются внутри runtime.
+- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.52`); пустые и старые версии не мигрируются внутри runtime.
 - `RecipeMeta.WorldScoped/WorldId` отделяет generated registry по миру.
 - `RecipeMeta.AssetBaseUrl/AssetFiles` — транспортные поля, не authorship.
 - `Gameplay` — concrete Terraria item stats/utility behavior: kind, damage, use times, use style, buffs, alt use, tools, mobility, extractinator, conditions.
@@ -141,7 +142,7 @@ Multiplayer client path:
 ### Runtime limits (`Common/InfiniRuntimeLimits.cs`)
 
 ```text
-RuntimeApiCurrent = v0.4.51
+RuntimeApiCurrent = v0.4.52
 MaxSupportedMovementCode = 18
 MaxSupportedEffectCode = 15
 MaxSupportedOnHitCode = 19
@@ -305,6 +306,7 @@ Responsibilities:
 | `GeneratedProjectile.Impact.cs` | collision, OnHit, debuffs, child projectiles, AOE, kill/impact behavior |
 | `GeneratedProjectile.Visuals.cs` | registry hydration, sprite/presentation fallback, dust/light/drawing |
 | `GeneratedProjectile.NetSync.cs` | lean projectile sync, visual context packets, VFX event packets, pending catch-up |
+| `GeneratedChildSpecPolicy.cs` | deterministic root `AttackSpec` -> finite runtime-variant reconstruction for ordinary children, sentry shots, charge releases and swing secondaries |
 | `GeneratedVfxOverlayProjectile.cs` | timed local/remote overlay carrier for hit/kill VFX |
 
 Runtime validation:
@@ -322,13 +324,15 @@ Movement families:
 
 OnHit families include bounded burst/split/chain/debuff/radial/aura/spore/mini-missile/vortex/blackhole/lifesteal effects. Child count/depth limits come from explicit `AttackSpec.MaxChildProjectiles` and `MaxChildDepth`.
 
-Held channel beam is a separate canonical `runtimeFamily=beam`, selected only by exact structured authoring. It uses one exact generated-item-owned projectile, wall-bounded `Collision.LaserScan`, line collision, authored range/width/charge/immunity cadence, periodic `HeldItem.mana` payment, and projectile sync v10. Names/tooltips/visual prompts do not select it.
+Held channel beam is a separate canonical `runtimeFamily=beam`, selected only by exact structured authoring. It uses one exact generated-item-owned projectile, wall-bounded `Collision.LaserScan`, line collision, authored range/width/charge/immunity cadence, periodic `HeldItem.mana` payment, and the shared compact projectile sync. Names/tooltips/visual prompts do not select it.
 
 MP projectile sync:
 - Terraria vanilla projectile sync handles core projectile state;
+- `SendExtraAI` carries the world-scoped generated id, a finite runtime-variant byte and bounded per-instance scalars; it never carries a full `AttackSpec`;
+- the receiver resolves the immutable parent `AttackSpec` from `GeneratedItemRegistryService` and reconstructs the exact child/release variant through `GeneratedChildSpecPolicy`;
 - `SyncGeneratedProjectileVisual` sends only owner/identity + generated id; presentation is restored from registry/cache;
 - `SyncGeneratedProjectileVfxEvent` relays hit/kill visual events;
-- missing registry/assets trigger per-id retry-gated catch-up (`RequestGeneratedItemById` or full registry retry).
+- missing registry data keeps the projectile harmless while a retry-gated per-id hydration request is in flight; missing assets use the existing asset catch-up path.
 
 ## VFX/audio layer
 

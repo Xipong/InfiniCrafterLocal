@@ -412,7 +412,7 @@ def _check_forbidden_world_entity_spawns_are_rejected_not_repaired() -> None:
     assert {x["fn"] for x in rejected} == {"summon_boss", "spawn_temporary_helper_projectile"}
 
 
-def _check_state_meter_and_triggered_action_are_preserved_as_contract_only() -> None:
+def _check_future_state_calls_are_rejected_until_the_executor_exists() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damageClass": "magic", "damage": 18, "useTimeTicks": 28}},
         {"fn": "cast_magic_weapon", "params": {"family": "staff", "movement": "straight", "speed": 8}},
@@ -420,13 +420,12 @@ def _check_state_meter_and_triggered_action_are_preserved_as_contract_only() -> 
         {"fn": "triggered_action", "params": {"trigger": "on_alt_use", "action": "spend_charge", "meterId": "charge", "requiredValue": 3, "spendValue": 3}},
         {"fn": "triggered_action", "params": {"trigger": "on_use", "action": "summon_boss"}},
     ]}}
+    report = runtime_plan_validation_report(data)
+    assert report["ok"] is False
+    assert any("state_meter" in error and "unknown" in error for error in report["errors"])
+    assert any("triggered_action" in error and "unknown" in error for error in report["errors"])
     patch = compile_runtime_plan_to_genome_patch(data)
-    state = patch.get("runtimeState") or {}
-    assert state["executionStatus"] == "preserved_contract_not_gameplay_executor"
-    assert state["stateMeters"][0]["id"] == "charge"
-    assert state["triggeredActions"][0]["action"] == "spend_charge"
-    rejected = patch.get("rejectedEngineCalls") or []
-    assert any(x.get("reason") == "forbidden_world_entity_spawn" for x in rejected)
+    assert "runtimeState" not in patch
 
 
 def _check_safe_item_capability_enginecalls_compile_to_gameplay_patch() -> None:
@@ -514,7 +513,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_melee_secondary_requires_explicit_secondary_body',
     '_check_melee_secondary_with_authored_body_stays_playable',
     '_check_forbidden_world_entity_spawns_are_rejected_not_repaired',
-    '_check_state_meter_and_triggered_action_are_preserved_as_contract_only',
+    '_check_future_state_calls_are_rejected_until_the_executor_exists',
     '_check_safe_item_capability_enginecalls_compile_to_gameplay_patch',
     '_check_overhead_barrage_onhit_is_executable_semantic_child_primitive',
     '_check_author_prompt_requires_explicit_physical_throw_motion_authorship'

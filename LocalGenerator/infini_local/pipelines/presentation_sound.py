@@ -5,11 +5,9 @@ from typing import Any
 
 from infini_local.core.runtime_executor_vocabulary import EFFECT_CODE, MOVEMENT_CODE, ONHIT_CODE
 from infini_local.core.runtime_family_policy import canonical_runtime_family
-from infini_local.core.runtime_color_policy import normalize_runtime_color, runtime_color_for_effect
+from infini_local.core.runtime_color_policy import normalize_runtime_color
 from infini_local.core.sound_catalog import (
     SOUND_CATALOG_SOURCE,
-    default_impact_sound_id,
-    default_use_sound_id,
     normalize_sound_catalog_id,
 )
 
@@ -19,25 +17,6 @@ from infini_local.core.sound_catalog import (
 # It must not author gameplay behavior from prose or emit a duplicate sound DTO.
 
 # Callers import this owner directly.
-
-_EFFECT_PRESENTATION = {
-    "none": {"color": "white", "trail": "faint", "impact": "small_flash", "sound": "soft"},
-    "electric": {"color": "cyan_yellow", "trail": "jagged_sparks", "impact": "electric_snap", "sound": "electric"},
-    "slime": {"color": "green", "trail": "glob_droplets", "impact": "squish_burst", "sound": "slime"},
-    "star": {"color": "white_gold", "trail": "sparkle", "impact": "starburst", "sound": "star"},
-    "flame": {"color": "orange_red", "trail": "embers", "impact": "flame_pop", "sound": "fire"},
-    "frost": {"color": "ice_blue", "trail": "snow_sparks", "impact": "ice_flash", "sound": "ice"},
-    "leaf": {"color": "green_yellow", "trail": "leaf_specks", "impact": "petal_puff", "sound": "leaf"},
-    "shadow": {"color": "purple_black", "trail": "dark_wisps", "impact": "shadow_flash", "sound": "shadow"},
-    "poison": {"color": "toxic_green", "trail": "toxic_bubbles", "impact": "venom_splash", "sound": "poison"},
-    "blood": {"color": "deep_red", "trail": "red_sparks", "impact": "cut_splatter", "sound": "cut"},
-    "honey": {"color": "amber", "trail": "sticky_drops", "impact": "sticky_pop", "sound": "slime"},
-    "sand": {"color": "sand_gold", "trail": "sand_grain", "impact": "sand_puff", "sound": "sand"},
-    "lunar": {"color": "cyan_violet", "trail": "cosmic_sparkle", "impact": "lunar_burst", "sound": "star"},
-    "heal": {"color": "green_pink", "trail": "soft_sparkle", "impact": "heal_pop", "sound": "heal"},
-    "holy": {"color": "white_gold", "trail": "sparkle", "impact": "soft_flash", "sound": "star"},
-    "smoke": {"color": "gray", "trail": "smoke", "impact": "smoke_puff", "sound": "soft"},
-}
 
 
 def clamp(n: int, lo: int, hi: int) -> int:
@@ -62,14 +41,16 @@ def presentation_from_genome(data: dict[str, Any]) -> dict[str, Any]:
     Authored projectileShape/projectileFamily may describe the sprite body, but do
     not select gameplay or a different runtime executor.
     """
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    genome = attack.get("genome") if isinstance(attack.get("genome"), dict) else attack
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+    genome_candidate = attack.get("genome")
+    genome: dict[str, Any] = genome_candidate if isinstance(genome_candidate, dict) else attack
 
     runtime_family = canonical_runtime_family(genome.get("runtimeFamily") or attack.get("runtimeFamily"))
     movement = str(genome.get("movement") or attack.get("movement") or "straight").strip()
     effect = str(genome.get("effect") or attack.get("effect") or "none").strip()
     onhit = str(genome.get("onHit") or attack.get("onHit") or "none").strip()
-    profile = _EFFECT_PRESENTATION.get(effect, _EFFECT_PRESENTATION["none"])
+
 
     attack_mode_by_family = {
         "beam": "beam",
@@ -98,10 +79,9 @@ def presentation_from_genome(data: dict[str, Any]) -> dict[str, Any]:
     }
     shape = explicit_shape or projectile_family or default_shape_by_family.get(runtime_family, "bolt")
 
-    trail = str(attack.get("projectileTrail") or genome.get("projectileTrail") or "").strip() or profile["trail"]
-    impact = str(attack.get("projectileImpact") or genome.get("projectileImpact") or "").strip() or profile["impact"]
-
-    color = profile["color"]
+    trail = str(attack.get("projectileTrail") or genome.get("projectileTrail") or "").strip()
+    impact = str(attack.get("projectileImpact") or genome.get("projectileImpact") or "").strip()
+    color = normalize_runtime_color(attack.get("primaryColorName") or genome.get("primaryColorName"))
     silhouette_by_family = {
         "thrust": "spear",
         "flail": "flail",
@@ -113,7 +93,7 @@ def presentation_from_genome(data: dict[str, Any]) -> dict[str, Any]:
     }
     return {
         "schema": "presentationGenome.v1",
-        "palette": data.get("visual", {}).get("palette") or [color, "white"],
+        "palette": data.get("visual", {}).get("palette") or ([color] if color else []),
         "heldSprite": {
             "family": "weapon" if data.get("category") == "weapon" else str(data.get("category") or "generic"),
             "silhouette": silhouette_by_family.get(runtime_family, shape),
@@ -128,7 +108,7 @@ def presentation_from_genome(data: dict[str, Any]) -> dict[str, Any]:
             "arcStyle": "straight_thrust" if runtime_family == "thrust" else "chain_tether" if runtime_family == "flail" else "hover_tether" if runtime_family == "yoyo" else "lash" if runtime_family == "whip" else "wide_crescent" if runtime_family == "swing" else "none",
             "flash": impact,
 
-            "glow": effect not in {"none", "sand", "smoke"},
+            "glow": float(attack.get("runtimeLightStrength") or 0) > 0,
 
         },
         "projectileVisual": {
@@ -147,7 +127,8 @@ def presentation_from_genome(data: dict[str, Any]) -> dict[str, Any]:
 def attach_presentation_and_sound(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data.get("presentationGenome"), dict) or not data.get("presentationGenome"):
         data["presentationGenome"] = presentation_from_genome(data)
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
     if attack.get("enabled"):
         pg = data.get("presentationGenome") or {}
         av = pg.get("attackVisual", {}) if isinstance(pg.get("attackVisual"), dict) else {}
@@ -157,8 +138,9 @@ def attach_presentation_and_sound(data: dict[str, Any]) -> dict[str, Any]:
         attack["visualMode"] = str(av.get("mode") or "projectile")
         attack["trailStyle"] = str(tv.get("style") or pv.get("trailStyle") or "dust")
         attack["impactStyle"] = str(iv.get("style") or "small_flash")
-        attack["primaryColorName"] = normalize_runtime_color(attack.get("primaryColorName"), runtime_color_for_effect(attack.get("effect")))
-        genome = attack.get("genome") if isinstance(attack.get("genome"), dict) else {}
+        attack["primaryColorName"] = normalize_runtime_color(attack.get("primaryColorName"))
+        genome_candidate = attack.get("genome")
+        genome: dict[str, Any] = genome_candidate if isinstance(genome_candidate, dict) else {}
         use_catalog_id = normalize_sound_catalog_id(
             attack.get("soundUseCatalogId") or genome.get("soundUseCatalogId"),
             impact=False,
@@ -167,9 +149,9 @@ def attach_presentation_and_sound(data: dict[str, Any]) -> dict[str, Any]:
             attack.get("soundImpactCatalogId") or genome.get("soundImpactCatalogId"),
             impact=True,
         )
-        attack["soundUseCatalogId"] = use_catalog_id or default_use_sound_id(attack.get("runtimeFamily"), attack.get("effect"), attack.get("delivery"))
-        attack["soundImpactCatalogId"] = impact_catalog_id or default_impact_sound_id(attack.get("onHit"), attack.get("effect"))
-        attack["soundCatalogSource"] = SOUND_CATALOG_SOURCE
+        attack["soundUseCatalogId"] = use_catalog_id
+        attack["soundImpactCatalogId"] = impact_catalog_id
+        attack["soundCatalogSource"] = SOUND_CATALOG_SOURCE if use_catalog_id or impact_catalog_id else ""
         pitch_raw = attack.get("soundPitch") if attack.get("soundPitch") not in (None, "") else genome.get("soundPitch", 0.0)
         volume_raw = attack.get("soundVolume") if attack.get("soundVolume") not in (None, "") else genome.get("soundVolume", 0.85)
         variance_raw = attack.get("soundPitchVariance") if attack.get("soundPitchVariance") not in (None, "") else genome.get("soundPitchVariance", 0.18)

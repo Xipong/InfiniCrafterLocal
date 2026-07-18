@@ -53,7 +53,7 @@ def _contract_check_csharp_runtime_api_and_opcode_limits_have_one_source_of_trut
     projectile = read(MOD / "Content" / "Projectiles" / "GeneratedProjectile.cs")
 
     assert "public static class InfiniRuntimeLimits" in limits
-    assert 'RuntimeApiCurrent = "v0.4.51"' in limits
+    assert 'RuntimeApiCurrent = "v0.4.52"' in limits
     assert "MaxSupportedMovementCode = 18" in limits
     assert "private const string RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in item_data
     assert "private const int MaxSupportedMovementCode = InfiniRuntimeLimits.MaxSupportedMovementCode" in item_data

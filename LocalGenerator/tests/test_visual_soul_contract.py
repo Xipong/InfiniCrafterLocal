@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -16,7 +17,7 @@ HELD = ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Players" / "Gene
 PLAYER = ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Players" / "InfiniCraftPlayer.cs"
 
 
-def _check_visual_soul_is_extracted_from_finished_png(tmp_path: Path) -> None:
+def _check_finished_png_metrics_are_debug_only(tmp_path: Path) -> None:
     path = tmp_path / "soul.png"
     img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
     for y in range(8, 24):
@@ -27,39 +28,33 @@ def _check_visual_soul_is_extracted_from_finished_png(tmp_path: Path) -> None:
 
     data = {"id": "soul_test", "visual": {"palette": ["tin"]}, "debug": {}}
     VISUAL.attach_visual_soul_from_sprite(data, str(path), validation={"ok": True}, score=0.77)
-    visual = data["visual"]
+    assert data["visual"] == {"palette": ["tin"]}
+    metrics = json.loads(data["debug"]["spritePixelMetrics"])
+    assert metrics["spriteSignature"]
+    assert metrics["accentColorHex"].startswith("#")
+    assert metrics["dominantColorHex"].startswith("#")
+    assert 0.0 < metrics["coverage"] <= 1.0
+    assert 0.0 <= metrics["edgeDensity"] <= 1.0
+    assert "visualSoulGlow" not in metrics
+    assert "visualSoulPulse" not in metrics
 
-    assert visual["visualSoulSignature"]
-    assert visual["visualSoulArchetype"] in {"ember", "solar", "crimson"}
-    assert visual["accentColorHex"].startswith("#")
-    assert visual["dominantColorHex"].startswith("#")
-    assert 0.0 < visual["visualSoulGlow"] <= 1.0
-    assert 0.0 <= visual["visualSoulPulse"] <= 1.0
-    assert "Visual soul:" in visual["visualSoulTooltip"]
-    assert "visualSoul" in data["debug"]
 
-
-def _check_csharp_visual_soul_runtime_contract_exists() -> None:
+def _check_csharp_does_not_execute_png_derived_presentation() -> None:
     model = read_text_with_partial_bundles(MODEL)
     item = ITEM.read_text(encoding="utf-8")
     held = HELD.read_text(encoding="utf-8")
     player = read_text_with_partial_bundles(PLAYER)
 
-    assert "public string VisualSoulSignature" in model
-    assert "public string AccentColorHex" in model
-    assert "VisualSoulGlow = ClampFloat" in model
-    assert "InfiniVisualSoul" in item
-    assert "VisualSoulAuraEligible" in item
-    assert "GenerationDepth >= 6" in item or "depth >= 6" in item
-    assert "depth < 3" in item
-    assert "post_golem" in item and "lunar" in item and "endgame" in item
-    assert "DrawSoulGlow" in item
-    assert "VisualSoulColor" in item
-    assert "SpawnSoulDust" in item
-    assert "GeneratedItem.AddSoulDrawData" in held
+    assert "public string VisualSoulSignature" in model  # legacy wire stays readable
+    for forbidden in (
+        "InfiniVisualSoul", "VisualSoulAuraEligible", "DrawSoulGlow",
+        "VisualSoulColor", "SpawnSoulDust", "AddSoulDrawData",
+    ):
+        assert forbidden not in item
+    assert "GeneratedItem.AddSoulDrawData" not in held
     assert "RunLocalCraftReveal" in player
-    assert "VisualSoulAuraEligible(data)" in player
-    assert "✦ Discovered:" in player
+    assert "VisualSoulAuraEligible(data)" not in player
+    assert "✦ Discovered:" not in player
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -69,8 +64,8 @@ def _run_coarse_contracts(tmp_path):
     import pytest as _pytest
 
     for _name in [
-    '_check_visual_soul_is_extracted_from_finished_png',
-    '_check_csharp_visual_soul_runtime_contract_exists'
+    '_check_finished_png_metrics_are_debug_only',
+    '_check_csharp_does_not_execute_png_derived_presentation'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

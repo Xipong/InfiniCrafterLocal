@@ -405,41 +405,15 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
     attack_candidate = data.get("attack")
     attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
     authored_raw, authored_debug = _vfx_authored_cue_raw_slots(data)
-    if not attack.get("enabled") and not authored_raw:
+    if not authored_raw:
         return None
     if has_runtime_plan and not calls:
         calls = []
     power = float(attack.get("powerBudget") or data.get("gameplay", {}).get("powerBudget") or 1.0) if isinstance(data.get("gameplay"), dict) else float(attack.get("powerBudget") or 1.0)
     seed = _vfx_seed_int(recipe_key_value, data.get("id"), "runtime_intent", reroll_salt)
     effect = str(attack.get("effect") or "none").lower()
-    onhit = str(attack.get("onHit") or "none").lower()
-    split_count = int(float(attack.get("splitCount") or 0))
-    trail_len = int(float(attack.get("trailLength") or 0))
-    burst_cap = int(float(attack.get("burstDustCap") or 0))
     slots_raw: list[dict[str, Any]] = list(authored_raw)
-    # Travel slot: small by default; no parent-inherited beam/history ribbons.
-    if trail_len > 0 and effect not in {"none", ""}:
-        slots_raw.append({
-            "event": "travel", "rendererKind": "projectileAfterimage", "textureRole": "projectile",
-            "variants": [0, 1], "scale": [0.65, 1.05], "density": [0.10, 0.24], "duration": [5, min(18, max(6, trail_len))],
-            "alpha": [0.18, 0.42], "stage": "loop", "backend": "Sprite", "anchor": "self", "blend": "alpha",
-            "layer": "BeforeProjectiles", "budgetWeight": [0.45, 0.9], "source": "runtimePlan:travel"
-        })
-    # Hit feedback is a contact flash/chips/dust unless the LLM explicitly requested real child projectiles.
-    if onhit not in {"none", ""} or burst_cap > 0:
-        slots_raw.append({
-            "event": "hit", "rendererKind": "impactSprite", "rendererKind": "impactSprite", "textureRole": "impact",
-            "variants": [0, 1], "scale": [0.85, min(1.75, 0.98 + power * 0.20)], "density": [0.10, 0.26], "duration": [6, 13],
-            "alpha": [0.45, 0.86], "stage": "impact", "backend": "Sprite", "anchor": "hitPoint", "blend": "alpha",
-            "layer": "BeforeProjectiles", "budgetWeight": [0.60, 1.05], "source": "runtimePlan:impact_readable_flash_v0.4.174"
-        })
-    if False and split_count > 0 and attack.get("maxChildProjectiles", 0):
-        # v0.4.8: real gameplay children are visible by themselves. Do not duplicate them
-        # with VFX childSpriteMotes, or 3 authored shards look like 9+ fragments on screen.
-        pass
-    # v0.4.3: runtimePlan presence is authoritative even if it requests no visible VFX.
-    # Return an empty tiny manifest instead of falling back to legacy recipe roulette.
-    effect_mag = 0.0 if not slots_raw else max(0.08, min(0.38 if power <= 1.8 else 0.48, 0.12 + power * 0.08 + split_count * 0.015))
+    effect_mag = max(0.08, min(0.38 if power <= 1.8 else 0.48, 0.12 + power * 0.08))
     budget = {
         "renderQuality": VFX_RENDER_QUALITY, "quality": VFX_RENDER_QUALITY, "effectMagnitude": round(effect_mag, 3),
         "visualBudgetClass": "small" if effect_mag < 0.42 else "normal", "emergencyCap": True,

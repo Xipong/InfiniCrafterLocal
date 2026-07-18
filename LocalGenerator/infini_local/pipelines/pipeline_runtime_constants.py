@@ -65,7 +65,7 @@ LLM_RUNTIME_STRICT_VALIDATION = True
 LLM_RUNTIME_MAX_CONCEPT_CANDIDATES = env_int("INFINI_LLM_RUNTIME_MAX_CONCEPT_CANDIDATES", 5, lo=1, hi=16)
 LLM_RAW_TOKEN_MODE = env_str("INFINI_LLM_RAW_TOKEN_MODE", "compact").lower()
 LLM_AMMO_REP_LIMIT = env_int("INFINI_LLM_AMMO_REP_LIMIT", 3)
-# v0.4.51: LLM should see behavior words, not opaque vanilla aiStyle numbers.
+# v0.4.52: LLM should see behavior words, not opaque vanilla aiStyle numbers.
 # Keep numeric aiStyle internal/debug by default; expose only if explicitly requested.
 LLM_INCLUDE_AISTYLE_RAW = env_bool("INFINI_LLM_INCLUDE_AISTYLE", False)
 LLM_INCLUDE_PROJECTILE_BEHAVIOR_DIGEST = env_bool("INFINI_LLM_PROJECTILE_BEHAVIOR_DIGEST", True)

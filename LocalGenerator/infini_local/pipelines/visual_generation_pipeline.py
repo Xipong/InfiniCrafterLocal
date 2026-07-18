@@ -10,9 +10,12 @@ from infini_local.core.boundary_models import canonical_visual_kit_view
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
-from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
+from infini_local.core.llm_stage_messages import agent_handoff, stage_chat_message
 from infini_local.pipelines.combine_genome_contract import is_llm_planner
 from infini_local.pipelines.combine_validation import _stringish
+from infini_local.pipelines.author_item_contract import (
+    project_provider_nullable_optionals_to_local,
+)
 from infini_local.pipelines.item_power_knowledge import tags_of
 from infini_local.pipelines.llm_transport import (
     active_llm_provider,
@@ -49,10 +52,17 @@ from infini_local.services.visual_asset_pipeline import (
 from infini_local.storage.trace_runtime import log_event, trace_event
 
 
+def _accepted_visual_intent(data: dict[str, Any]) -> dict[str, Any]:
+    runtime_plan_value = data.get("runtimePlan")
+    if not isinstance(runtime_plan_value, dict):
+        return {}
+    visual_intent_value = runtime_plan_value.get("visualIntent")
+    return visual_intent_value if isinstance(visual_intent_value, dict) else {}
+
+
 def anime_reference_opportunity(data: dict[str, Any]) -> str:
     """Allow anime references only when an upstream visual contract explicitly asks."""
-    runtime_plan = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
-    visual_intent = runtime_plan.get("visualIntent") if isinstance(runtime_plan.get("visualIntent"), dict) else {}
+    visual_intent = _accepted_visual_intent(data)
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
     for authored in (visual_intent.get("animeReference"), visual.get("animeReference")):
         if isinstance(authored, dict):
@@ -142,10 +152,10 @@ def _merge_visual_director_palette(
     """
     existing = sanitize_visual_palette(existing_palette or [], limit=8)
     proposed = sanitize_visual_palette(proposed_palette or [], limit=8)
-    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
-    source = str(debug.get("visualPaletteSource") or "")
-    if source == "planner_authored":
-        return sanitize_visual_palette(existing + proposed, limit=8), "planner_authored_first"
+    visual_intent = _accepted_visual_intent(data)
+    authored = sanitize_visual_palette(visual_intent.get("palette") or [], limit=8)
+    if authored:
+        return sanitize_visual_palette(authored + proposed, limit=8), "planner_authored_first"
     if proposed:
         return proposed, "visual_director_authored"
     return existing, "fallback_preserved"
@@ -170,10 +180,16 @@ def attach_visual(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca
     visual.setdefault("drawOffsetX", 0)
     visual.setdefault("drawOffsetY", 0)
     visual["negativePrompt"] = asset_negative_prompt("item")
-    authored_prompt = str(visual.get("imagePrompt") or visual.get("itemPrompt") or "").strip()
-    if authored_prompt and is_llm_planner(data):
-        visual["imagePrompt"] = sanitize_image_prompt_background(authored_prompt)
+    llm_authored_product = is_llm_planner(data)
+    visual_intent = _accepted_visual_intent(data)
+    planner_item_prompt = str(visual_intent.get("item") or "").strip()
+    if planner_item_prompt and llm_authored_product:
+        visual["imagePrompt"] = sanitize_image_prompt_background(planner_item_prompt)
         debug["visualPromptSource"] = "planner_authored"
+    elif llm_authored_product:
+        visual.pop("imagePrompt", None)
+        visual.pop("itemPrompt", None)
+        debug["visualPromptSource"] = "awaiting_visual_director"
     else:
         visual["imagePrompt"] = sanitize_image_prompt_background(build_image_prompt(data, visual))
         debug["visualPromptSource"] = "code_fallback"
@@ -223,6 +239,10 @@ def _validated_visual_director_kit(
     obj = parse_first_valid_llm_json(content)
     if not isinstance(obj, dict):
         raise ValueError("visual director returned a non-object JSON value")
+    obj = project_provider_nullable_optionals_to_local(
+        obj,
+        visual_kit_response_schema(),
+    )
     boundary_repairs: list[str] = []
     if not isinstance(obj.get("visualKit"), dict):
         raise ValueError("visual director visualKit must be a JSON object")
@@ -280,13 +300,18 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     item icon, projectile, child/echo, impact and field/trap. It is deliberately
     separate from balance so the art prompt is not rebuilt into generic bolts.
     """
+    llm_authored_product = is_llm_planner(data)
+    if llm_authored_product:
+        # A prior/cache VisualKit is not evidence that this Director transaction
+        # succeeded. Only this invocation may install the accepted kit.
+        data.pop("visualKit", None)
     if not USE_LLM:
         data.setdefault("debug", {})["visualDirectorStatus"] = "skipped_llm_disabled"
         return data
     if not VISUAL_DIRECTOR_LLM:
         data.setdefault("debug", {})["visualDirectorStatus"] = "skipped_director_disabled"
         return data
-    if not is_llm_planner(data):
+    if not llm_authored_product:
         data.setdefault("debug", {})["visualDirectorStatus"] = "skipped_non_llm_planner"
         return data
     if VISUAL_ASSET_MODE not in {"full", "all", "projectile", "visualpack", "assetpack"}:
@@ -298,12 +323,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     message_mode = ""
     visual_director_retry_count = 0
     try:
-        history_state = planner_history_state(data)
-        live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
-        if history_state == "malformed" or (history_state == "absent" and live_planner):
-            raise ValueError(
-                "visual director requires valid Planner history for live LLM data; refusing standalone fallback"
-            )
         anime_opportunity = anime_reference_opportunity(data)
         anime_rule = (
             "This recipe has a rare optional anime-reference opportunity. You may decline it. "
@@ -359,7 +378,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "name one source and 1-3 concrete motifs"
             )
         payload["agentHandoff"] = agent_handoff(
-            previous_speaker="item_planner" if history_state == "valid" else "pipeline_orchestrator",
+            previous_speaker="pipeline_orchestrator",
             current_speaker="visual_director_context",
             next_speaker="visual_director",
             cause_by="visual_asset_prompt_authoring",
@@ -368,7 +387,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         model_name = resolve_llm_model()
         visual_system = (
             f"You direct pixel-art assets for {backend_name} in a Terraria-like generated-item mod. "
-            "The latest visual_director_context payload.item is the authoritative current item truth after validation and runtime repair; any earlier item_planner response is provenance only. "
+            "The visual_director_context payload.item is the authoritative current accepted item truth. "
             "Write coherent subject-first visual descriptions, not legacy SD tag recipes. Establish physical class, count, silhouette, view, and connected functional parts before materials, decoration, light, style, and background. "
             "Preserve authored subject, state, colors, materials, and topology. Use only authored glow, magic, energy, child motes, and material effects. Return one JSON object."
         )
@@ -377,11 +396,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             stage_chat_message("system", "visual_director_contract", visual_system),
             stage_chat_message("user", "visual_director_context", visual_user_content),
         ]
-        message_mode = (
-            "authoritative_stage_dossier_v31"
-            if history_state == "valid"
-            else "legacy_authoritative_stage_dossier_v31"
-        )
+        message_mode = "authoritative_stage_dossier_v31"
         req = {
             "model": model_name,
             "messages": messages,
@@ -520,14 +535,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
 
         mapping = [
             (visual, "imagePrompt", "itemIconPrompt"),
-            (visual, "projectileImagePrompt", "projectileSpritePrompt"),
-            (visual, "impactImagePrompt", "impactSpritePrompt"),
-            (visual, "childImagePrompt", "childSpritePrompt"),
-            (visual, "fieldImagePrompt", "fieldSpritePrompt"),
-            (attack, "projectileSpritePrompt", "projectileSpritePrompt"),
-            (attack, "impactSpritePrompt", "impactSpritePrompt"),
-            (attack, "childSpritePrompt", "childSpritePrompt"),
-            (attack, "fieldSpritePrompt", "fieldSpritePrompt"),
         ]
         for dst, dst_key, src_key in mapping:
             val = strip_conflicting_sprite_prompt_bits(kit.get(src_key) or "")

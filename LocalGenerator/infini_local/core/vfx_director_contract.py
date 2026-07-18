@@ -170,15 +170,12 @@ def _vfx_director_validation_report(raw: Any, max_slots: int | None = None) -> d
 
     raw_slots = raw.get("slots")
     if not isinstance(raw_slots, list):
-        _vfx_director_error(errors, "slots", "invalid_type" if "slots" in raw else "missing_required", actual=raw_slots if "slots" in raw else None, expected="non-empty array")
-        return {"valid": False, "errors": errors, "warnings": warnings}
-    if not raw_slots:
-        _vfx_director_error(errors, "slots", "missing_required", actual=[], expected="non-empty array")
+        _vfx_director_error(errors, "slots", "invalid_type" if "slots" in raw else "missing_required", actual=raw_slots if "slots" in raw else None, expected="array")
         return {"valid": False, "errors": errors, "warnings": warnings}
     if max_slots is None:
         max_slots = max(2, min(8, VFX_LLM_DIRECTOR_MAX_SLOTS))
     if len(raw_slots) > max_slots:
-        _vfx_director_error(errors, "slots", "out_of_range", actual=len(raw_slots), expected={"min": 1, "max": max_slots})
+        _vfx_director_error(errors, "slots", "out_of_range", actual=len(raw_slots), expected={"min": 0, "max": max_slots})
 
     numeric_ranges = surface.get("numericRanges", {}) if isinstance(surface.get("numericRanges"), dict) else {}
     enum_fields = {

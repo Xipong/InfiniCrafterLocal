@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
+from infini_local.core.boundary_models import VisualKitBoundary
 from infini_local.core.item_identity_tools import (
     dict_get_ci,
-    fingerprint_of,
     generated_data_of,
     item_field,
     name_of,
@@ -14,7 +15,6 @@ from infini_local.core.vfx_composition_primitives import (
     _vfx_available_roles,
     _vfx_words,
 )
-from infini_local.core.vfx_director_context import _vfx_director_tag_packet
 from infini_local.core.vfx_director_contract import vfx_director_surface
 from infini_local.core.vfx_manifest_config import (
     VFX_EFFECT_NAME_BANK_MAX_CARDS,
@@ -23,7 +23,7 @@ from infini_local.core.vfx_manifest_config import (
     load_json_file,
 )
 from infini_local.core.vfx_projectile_profile import effective_projectile_profile_of
-from infini_local.core.llm_stage_messages import agent_handoff, attributed_planner_messages, stage_chat_message
+from infini_local.core.llm_stage_messages import agent_handoff, stage_chat_message
 
 
 # AGENT MAP: optional LLM VFX Director prompt/name-bank helpers.
@@ -32,10 +32,12 @@ from infini_local.core.llm_stage_messages import agent_handoff, attributed_plann
 # Public callers use infini_local.core.vfx_manifest.
 
 VFX_DIRECTOR_SYSTEM = (
-    "You are the VFX Director for a Terraria/tModLoader generated item. "
-    "The latest user vfxInputPacket is the authoritative current item truth after validation, runtime repair, and visual authoring; any earlier item_planner response is provenance only. "
+    "You are the VFX+Sound Director for a Terraria/tModLoader generated item. "
+    "The latest user vfxInputPacket is the authoritative current item truth after validation and visual authoring. "
+    "This request is self-contained; use only its accepted facts and VisualAssetKit. "
     "Return only one JSON object, with no markdown or reasoning. "
-    "Use only the listed VFX surface enums and ranges, author concrete slot parameters, and never invent code names, gameplay, or extra top-level keys."
+    "Use only the listed VFX surface enums and ranges, including soundCue slots where useful; "
+    "never invent code names, gameplay, or extra top-level keys."
 )
 
 def get_vfx_effect_name_bank() -> dict[str, Any]:
@@ -120,111 +122,177 @@ def vfx_director_name_bank(parent_a: dict[str, Any] | None = None, parent_b: dic
     }
 
 
-def _vfx_compact_item_for_director(item: dict[str, Any] | None) -> dict[str, Any]:
-    item = item if isinstance(item, dict) else {}
-    gd = generated_data_of(item)
-    attack = dict_get_ci(gd, "attack", {}) if isinstance(gd, dict) else {}
-    visual = dict_get_ci(gd, "visual", {}) if isinstance(gd, dict) else {}
-    fp = fingerprint_of(item)
-    tags_packet = _vfx_director_tag_packet(item)
+def _accepted_visual_asset_kit(value: dict[str, Any]) -> dict[str, Any]:
+    direct = value.get("visualKit")
+    if not isinstance(direct, dict):
+        generated = generated_data_of(value)
+        direct = generated.get("visualKit") if isinstance(generated, dict) else {}
+    kit: dict[str, Any] = direct if isinstance(direct, dict) else {}
     return {
-        "name": name_of(item),
-        "id": item.get("id"),
-        "sourceMod": item.get("sourceMod") or fp.get("sourceMod"),
-        "internalName": item.get("internalName") or fp.get("internalName"),
-        "displayName": name_of(item),
-        "fullName": item.get("fullName") or fp.get("fullName"),
-        "damage": item_field(item, "damage", 0),
-        "rare": item_field(item, "rare", item_field(item, "rarity", 0)),
-        "useTime": item_field(item, "useTime", 0),
-        "shoot": item_field(item, "shoot", 0),
-        "shootSpeed": item_field(item, "shootSpeed", 0),
-        "nameTokens": tags_packet["nameTokens"],
-        "runtimeAutoFeatures": tags_packet["runtimeAutoFeatures"],
-        "generatedAuthoredTags": tags_packet["generatedAuthoredTags"],
-        "tagProvenance": tags_packet["tagProvenance"],
-        "tagProvenanceNote": tags_packet["provenanceNote"],
-        # Read-only convenience view of actually authored generated tags.  Python no
-        # longer invents semantic tags from parent names/runtime facts.
-        "tags": list(tags_packet["generatedAuthoredTags"])[:24],
-        "projectileProfile": effective_projectile_profile_of(item),
-        "parentVfxSignals": item.get("parentVfxSignals") or fp.get("parentVfxSignals"),
-        "generatedAttack": {
-            "enabled": bool(attack.get("enabled")) if isinstance(attack, dict) else False,
-            "pattern": dict_get_ci(attack, "pattern", dict_get_ci(attack, "attackPattern", "")) if isinstance(attack, dict) else "",
-            "toyIdentity": dict_get_ci(attack, "toyIdentity", "") if isinstance(attack, dict) else "",
-            "projectileTrail": dict_get_ci(attack, "projectileTrail", "") if isinstance(attack, dict) else "",
-            "projectileImpact": dict_get_ci(attack, "projectileImpact", "") if isinstance(attack, dict) else "",
-        },
-        "visual": {
-            "palette": dict_get_ci(visual, "palette", []) if isinstance(visual, dict) else [],
-            "projectilePrompt": dict_get_ci(visual, "projectileImagePrompt", "") if isinstance(visual, dict) else "",
-            "impactPrompt": dict_get_ci(visual, "impactImagePrompt", "") if isinstance(visual, dict) else "",
-            "childPrompt": dict_get_ci(visual, "childImagePrompt", "") if isinstance(visual, dict) else "",
-            "fieldPrompt": dict_get_ci(visual, "fieldImagePrompt", "") if isinstance(visual, dict) else "",
-        },
+        field: copy.deepcopy(kit[field])
+        for field in VisualKitBoundary.model_fields
+        if field in kit
     }
 
 
+def _vfx_compact_item_for_director(item: dict[str, Any] | None) -> dict[str, Any]:
+    """Clean parent facts only: no tag/classifier/debug/provenance packets."""
+    item = item if isinstance(item, dict) else {}
+    generated = generated_data_of(item)
+    generated = generated if isinstance(generated, dict) else {}
+    attack = dict_get_ci(generated, "attack", {})
+    attack = attack if isinstance(attack, dict) else {}
+    visual = dict_get_ci(generated, "visual", {})
+    visual = visual if isinstance(visual, dict) else {}
+    source_identity = {
+        key: copy.deepcopy(value)
+        for key, value in {
+            "id": item.get("id"),
+            "sourceMod": item.get("sourceMod"),
+            "internalName": item.get("internalName"),
+            "fullName": item.get("fullName"),
+        }.items()
+        if value not in (None, "", [], {})
+    }
+    physical_facts = {
+        key: copy.deepcopy(value)
+        for key, value in {
+            "damage": item_field(item, "damage", 0),
+            "damageClass": item_field(item, "damageClass", ""),
+            "rare": item_field(item, "rare", item_field(item, "rarity", 0)),
+            "useTime": item_field(item, "useTime", 0),
+            "useStyle": item_field(item, "useStyle", 0),
+            "shoot": item_field(item, "shoot", 0),
+            "shootSpeed": item_field(item, "shootSpeed", 0),
+            "material": item_field(item, "material", False),
+            "createTile": item_field(item, "createTile", -1),
+            "createWall": item_field(item, "createWall", -1),
+            "accessory": item_field(item, "accessory", False),
+            "defense": item_field(item, "defense", 0),
+        }.items()
+        if value not in (None, "", [], {})
+    }
+    accepted_attack_fields = (
+        "enabled", "runtimeFamily", "delivery", "movement", "effect", "onHit",
+        "pattern", "attackPattern", "projectileShape", "projectileMotion",
+        "projectileTrail", "projectileImpact", "secondaryTrigger",
+        "soundUseCatalogId", "soundImpactCatalogId",
+    )
+    accepted_attack = {
+        field: copy.deepcopy(dict_get_ci(attack, field, None))
+        for field in accepted_attack_fields
+        if dict_get_ci(attack, field, None) not in (None, "", [], {})
+    }
+    kit = _accepted_visual_asset_kit(generated or item)
+    legacy_visual = {
+        key: copy.deepcopy(dict_get_ci(visual, key, None))
+        for key in (
+            "palette", "styleGuide", "itemSilhouetteContract", "silhouetteSummary",
+            "imagePrompt", "projectileImagePrompt", "impactImagePrompt",
+            "childImagePrompt", "fieldImagePrompt",
+        )
+        if dict_get_ci(visual, key, None) not in (None, "", [], {})
+    }
+    raw_projectile_profile = effective_projectile_profile_of(item)
+    projectile_profile_fields = (
+        "type", "width", "height", "aiStyle", "timeLeft", "penetrate",
+        "extraUpdates", "light", "scale", "alpha", "tileCollide", "ignoreWater",
+        "friendly", "hostile", "minion", "sentry", "minionSlots",
+        "usesLocalNPCImmunity", "localNPCHitCooldown",
+        "usesIDStaticNPCImmunity", "idStaticNPCHitCooldown",
+    )
+    projectile_profile = {
+        field: copy.deepcopy(raw_projectile_profile[field])
+        for field in projectile_profile_fields
+        if raw_projectile_profile.get(field) not in (None, "", [], {})
+        and isinstance(raw_projectile_profile.get(field), (str, int, float, bool))
+    }
+    card: dict[str, Any] = {
+        "name": name_of(item),
+        "sourceIdentity": source_identity,
+        "physicalFacts": physical_facts,
+    }
+    if projectile_profile:
+        card["projectileProfile"] = projectile_profile
+    if accepted_attack:
+        card["acceptedAttackFacts"] = accepted_attack
+    if kit:
+        card["acceptedVisualAssetKit"] = kit
+    elif legacy_visual:
+        card["acceptedVisualFacts"] = legacy_visual
+    return card
+
+
 def _vfx_compact_child_for_director(data: dict[str, Any]) -> dict[str, Any]:
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
+    """Self-contained accepted product context plus the full canonical VisualAssetKit."""
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
+    gameplay_candidate = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_candidate if isinstance(gameplay_candidate, dict) else {}
+    concept_candidate = data.get("concept")
+    concept: dict[str, Any] = concept_candidate if isinstance(concept_candidate, dict) else {}
+    runtime_contract_candidate = data.get("runtimeContract")
+    runtime_contract: dict[str, Any] = (
+        runtime_contract_candidate if isinstance(runtime_contract_candidate, dict) else {}
+    )
+    attack_fields = (
+        "enabled", "runtimeFamily", "delivery", "movement", "effect", "onHit",
+        "pattern", "attackPattern", "weaponFamily", "projectileFamily", "ammoKind",
+        "shotCount", "spreadRadians", "pierce", "aoeRadiusTiles", "splitCount",
+        "chainCount", "secondaryTrigger", "secondaryDamageMultiplier",
+        "secondaryLifetimeTicks", "channelUse", "useTimeTicks", "useAnimationTicks",
+        "lifetimeTicks", "extraUpdates", "speed", "rangeTiles", "beamWidthPx",
+        "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks",
+        "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles",
+        "sentryLifetimeTicks", "immunityCooldown", "projectileShape",
+        "projectileMotion", "projectileTrail", "projectileImpact", "projectileChild",
+        "secondaryProjectileShape", "secondaryMaterial", "visualAnimationPlan",
+    )
+    attack_facts = {
+        field: copy.deepcopy(attack[field])
+        for field in attack_fields
+        if attack.get(field) not in (None, "", [], {})
+    }
+    audio_fields = (
+        "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch",
+        "soundPitchVariance",
+    )
+    audio_facts = {
+        field: copy.deepcopy(attack[field])
+        for field in audio_fields
+        if attack.get(field) not in (None, "", [], {})
+    }
+    runtime_contract_fields = (
+        "primaryVerb", "controlStyle", "playerViewTimeline",
+    )
+    accepted_runtime_contract = {
+        field: copy.deepcopy(runtime_contract[field])
+        for field in runtime_contract_fields
+        if runtime_contract.get(field) not in (None, "", [], {})
+    }
+    gameplay_fields = (
+        "kind", "damageClass", "damage", "knockback", "crit", "defense",
+        "useTime", "useTimeTicks", "useAnimation", "useAnimationTicks", "mana",
+        "rarity", "value", "maxStack", "craftYield", "consumable", "autoReuse",
+        "channel", "healLife", "healMana", "buffType", "buffTime", "pick",
+        "axe", "hammer", "shootSpeed", "powerBudget", "mobilityMode",
+        "mobilityRangeTiles", "mobilityCooldownTicks",
+    )
+    gameplay_facts = {
+        field: copy.deepcopy(gameplay[field])
+        for field in gameplay_fields
+        if gameplay.get(field) not in (None, "", [], {})
+    }
     return {
         "name": data.get("name"),
         "tooltip": data.get("tooltip"),
         "category": data.get("category"),
-        "gameplay": {
-            "damage": gameplay.get("damage"),
-            "damageClass": gameplay.get("damageClass"),
-            "useTime": gameplay.get("useTime"),
-            "rarity": gameplay.get("rarity"),
-            "stage": gameplay.get("stage"),
-            "powerBudget": gameplay.get("powerBudget"),
-        },
-        "attack": {
-            "enabled": attack.get("enabled"),
-            "runtimeFamily": attack.get("runtimeFamily"),
-            "delivery": attack.get("delivery"),
-            "movement": attack.get("movement"),
-            "effect": attack.get("effect"),
-            "onHit": attack.get("onHit"),
-            "pattern": attack.get("pattern") or attack.get("attackPattern"),
-            "weaponFamily": attack.get("weaponFamily"),
-            "projectileFamily": attack.get("projectileFamily"),
-            "shotCount": attack.get("shotCount"),
-            "spreadRadians": attack.get("spreadRadians"),
-            "splitCount": attack.get("splitCount"),
-            "secondaryTrigger": attack.get("secondaryTrigger"),
-            "channelUse": attack.get("channelUse"),
-            "beamWidthPx": attack.get("beamWidthPx"),
-            "beamChargeTicks": attack.get("beamChargeTicks"),
-            "chargeTicks": attack.get("chargeTicks"),
-            "chargePowerMultiplier": attack.get("chargePowerMultiplier"),
-            "sentryPlacement": attack.get("sentryPlacement"),
-            "sentryAttackIntervalTicks": attack.get("sentryAttackIntervalTicks"),
-            "sentryTargetRangeTiles": attack.get("sentryTargetRangeTiles"),
-            "sentryLifetimeTicks": attack.get("sentryLifetimeTicks"),
-            "immunityCooldown": attack.get("immunityCooldown"),
-            "toyIdentity": attack.get("toyIdentity"),
-            "specialRule": attack.get("specialRule"),
-            "behaviorTimeline": attack.get("behaviorTimeline"),
-            "projectileShape": attack.get("projectileShape"),
-            "projectileMotion": attack.get("projectileMotion"),
-            "projectileTrail": attack.get("projectileTrail"),
-            "projectileImpact": attack.get("projectileImpact"),
-            "projectileChild": attack.get("projectileChild"),
-            "visualAnimationPlan": attack.get("visualAnimationPlan"),
-        },
-        "visual": {
-            "styleGuide": kit.get("styleGuide") or visual.get("styleGuide"),
-            "palette": kit.get("palette") or visual.get("palette"),
-            "projectilePrompt": attack.get("projectileSpritePrompt") or kit.get("projectileSpritePrompt") or visual.get("projectileImagePrompt"),
-            "impactPrompt": attack.get("impactSpritePrompt") or kit.get("impactSpritePrompt") or visual.get("impactImagePrompt"),
-            "childPrompt": attack.get("childSpritePrompt") or kit.get("childSpritePrompt") or visual.get("childImagePrompt"),
-            "fieldPrompt": attack.get("fieldSpritePrompt") or kit.get("fieldSpritePrompt") or visual.get("fieldImagePrompt"),
-        },
+        "acceptedConcept": copy.deepcopy(concept),
+        "acceptedRuntimeContract": accepted_runtime_contract,
+        "gameplayFacts": gameplay_facts,
+        "attackFacts": attack_facts,
+        "audioFacts": audio_facts,
+        "visualAssetKit": _accepted_visual_asset_kit(data),
         "availableRoles": sorted(_vfx_available_roles(data)),
     }
 
@@ -239,23 +307,18 @@ def build_vfx_director_prompt(parent_a: dict[str, Any] | None, parent_b: dict[st
     parent_a_card = _vfx_compact_item_for_director(parent_a)
     parent_b_card = _vfx_compact_item_for_director(parent_b)
     child_card = _vfx_compact_child_for_director(child_item)
-    packet = {
+    packet: dict[str, Any] = {
         "parentA": parent_a_card,
         "parentB": parent_b_card,
         "childItem": child_card,
-        "provenanceContract": {
-            "nameTokens": "tokens sent by C# GeneratorClient.NameTokens from internalName/displayName only",
-            "runtimeAutoFeatures": "mechanical facts from C# AutoFeaturesFromItem / runtime fields",
-            "generatedAuthoredTags": "only tags authored in generatedData for generated items",
-            "tagProvenance": "per-tag source + matched text/fact; vanilla parents are not treated as hand-authored tagged items",
-        },
     }
     return {
         "vfxInputPacket": packet,
-        "runtimeTruthInstruction": "Use compiled runtimeFamily/delivery/movement/effect/onHit/secondaryTrigger/cadence to choose matching VFX events and exact rendererKind values. Do not infer gameplay from names or prose.",
-        "parentA": parent_a_card,
-        "parentB": parent_b_card,
-        "childItem": child_card,
+        "runtimeTruthInstruction": (
+            "Use accepted runtimeFamily/delivery/movement/effect/onHit/secondaryTrigger/cadence "
+            "and VisualAssetKit to choose VFX+sound events and exact rendererKind values. "
+            "soundCue slots use the accepted audioFacts catalog IDs at runtime."
+        ),
         "vfxSurface": surface,
         "constraints": constraints or {},
         "requiredJsonShape": {
@@ -319,7 +382,7 @@ def build_vfx_director_handoff_payload(parent_a: dict[str, Any] | None = None, p
     required_shape = build_vfx_director_prompt(None, None, {}, surface, constraints).get("requiredJsonShape", {})
     vfx_input_packet = build_vfx_director_prompt(parent_a, parent_b, child_item or {}, surface, constraints).get("vfxInputPacket", {})
     return {
-        "task": "Continue from the generated item and author only its runtime VFX manifest.",
+        "task": "Continue from the accepted generated item and author only its runtime VFX+sound manifest.",
         "continuationMode": "No Planner transcript is replayed. vfxInputPacket is the authoritative current accepted item truth.",
         "agentHandoff": agent_handoff(
             previous_speaker="item_planner",
@@ -334,7 +397,8 @@ def build_vfx_director_handoff_payload(parent_a: dict[str, Any] | None = None, p
             "Do not redesign, rename, rebalance, or add gameplay mechanics.",
             "No unauthored glow, magic, energy, material effects, child motes, or fields.",
             "If no visible VFX was requested, return empty slots when allowed.",
-            "Weak hints are optional; combine them with child concept, attack/visual fields, parent facts, and VFX surface; avoid same-hint repetition.",
+            "Use accepted child concept, gameplay/attack/audio facts, full VisualAssetKit, clean parent facts, and VFX surface.",
+            "Use soundCue slots for useful travel/impact/kill audio timing; runtime resolves accepted audioFacts catalog IDs.",
             "Use only listed VFX enums/ranges.",
             "particleSystemId must be explicit: pl:glow, pl:shard, pl:smoke, pl:spark, or dust.",
             "Author concrete slot parameters only; Python validates enums/ranges/budget.",
@@ -346,18 +410,8 @@ def build_vfx_director_handoff_payload(parent_a: dict[str, Any] | None = None, p
     }
 
 
-def _vfx_attributed_planner_history(child_item: dict[str, Any]) -> list[dict[str, str]] | None:
-    """Read the canonical transient attributed Planner history from the child item."""
-    if not isinstance(child_item, dict):
-        return None
-    return attributed_planner_messages(child_item.get("_llmHistory"))
-
-
 def build_vfx_director_handoff_messages(child_item: dict[str, Any], parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, vfx_surface: dict[str, Any] | None = None, constraints: dict[str, Any] | None = None) -> list[dict[str, str]] | None:
-    """Build system + authoritative VFX dossier after validating live provenance."""
-    history = _vfx_attributed_planner_history(child_item)
-    if not history:
-        return None
+    """Build a self-contained system + accepted-product VFX dossier."""
     instruction = build_vfx_director_handoff_payload(parent_a, parent_b, child_item, vfx_surface, constraints)
     return [
         stage_chat_message("system", "vfx_director_contract", VFX_DIRECTOR_SYSTEM),
@@ -377,6 +431,5 @@ __all__ = [
     "build_vfx_director_prompt",
     "build_vfx_director_handoff_payload",
     "VFX_DIRECTOR_SYSTEM",
-    "_vfx_attributed_planner_history",
     "build_vfx_director_handoff_messages",
 ]

@@ -12,6 +12,7 @@ from infini_local.pipelines.author_item_contract import (
     author_item_repair_response_schema,
     author_item_response_schema,
     project_provider_author_item_to_local,
+    strict_author_item_repair_report,
     strict_author_item_v3_report,
 )
 from infini_local.pipelines import llm_transport
@@ -96,6 +97,10 @@ def test_author_item_v3_design_metadata_is_compact_and_proof_is_compiler_owned()
         "projectileCanvasSize", "projectileVisualFamily", "projectileOrientation",
     ):
         assert field in visual_card
+    assert visual_card["preferredCanvasSize"] == 32
+    assert visual_card["projectileCanvasSize"] == 32
+    assert isinstance(visual_card["preferredCanvasSize"], int)
+    assert isinstance(visual_card["projectileCanvasSize"], int)
 
     runtime = schema["properties"]["runtimeContract"]
     assert set(runtime["required"]) == {"primaryVerb", "controlStyle"}
@@ -124,8 +129,21 @@ def test_author_item_v3_design_metadata_is_compact_and_proof_is_compiler_owned()
 
     repair_calls = author_item_repair_response_schema()["properties"]["runtimePlan"]["properties"]["engineCalls"]
     assert all(
-        "callId" in branch["required"]
+        {"callId", "fn"}.issubset(branch["required"])
         for branch in repair_calls["items"]["oneOf"]
+    )
+    partial_visual_repair = strict_author_item_repair_report({
+        "visualIntent": {"preferredCanvasSize": 48},
+    })
+    assert partial_visual_repair["ok"] is True, partial_visual_repair["errors"]
+    quoted_visual_repair = strict_author_item_repair_report({
+        "visualIntent": {"preferredCanvasSize": "48"},
+    })
+    assert quoted_visual_repair["ok"] is False
+    assert any(
+        row.get("path") == "$.visualIntent.preferredCanvasSize"
+        and row.get("kind") == "enum"
+        for row in quoted_visual_repair["errors"]
     )
 
     candidate = _valid_author_item()

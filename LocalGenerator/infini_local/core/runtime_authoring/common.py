@@ -11,7 +11,7 @@ from infini_local.core.runtime_authoring.vocabulary import (
 )
 from infini_local.core.runtime_executor_vocabulary import EFFECTS, MOVEMENTS, ONHITS
 
-ENGINE_RUNTIME_API_VERSION = "v0.4.51"
+ENGINE_RUNTIME_API_VERSION = "v0.4.52"
 
 def _intish(field: str, value: float) -> int | float:
     return int(round(value)) if field in INT_FIELDS or field.endswith("Ticks") else round(value, 3)

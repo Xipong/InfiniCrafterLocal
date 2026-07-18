@@ -164,10 +164,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             rotation *= -1f;
 
         Color lightColor = Lighting.GetColor((int)(player.Center.X / 16f), (int)(player.Center.Y / 16f));
-        if (data is not null)
-            GeneratedItem.AddSoulDrawData(drawInfo.DrawDataCache, texture, position, source, lightColor, rotation, origin, drawScale, effects, data, 1.15f);
-        else
-            drawInfo.DrawDataCache.Add(new DrawData(texture, position, source, lightColor, rotation, origin, drawScale, effects, 0));
+        drawInfo.DrawDataCache.Add(new DrawData(texture, position, source, lightColor, rotation, origin, drawScale, effects, 0));
     }
 
     public static void MaybeBroadcastLocalHeldItem(Player player, ref int lastSyncTick, ref string lastSyncKey)

@@ -74,6 +74,15 @@ def _runtime_validation_error_details(
             selected = next((row for row in indexed_calls if row[0] == wanted_index), None)
             field = str(indexed_match.group(2) or "")
         if selected is None:
+            leading = [
+                row
+                for row in indexed_calls
+                if str(row[1].get("fn") or "").strip()
+                and text.startswith(str(row[1].get("fn") or "").strip())
+            ]
+            if len(leading) == 1:
+                selected = leading[0]
+        if selected is None:
             named = [
                 row
                 for row in indexed_calls
@@ -82,6 +91,21 @@ def _runtime_validation_error_details(
             ]
             if len(named) == 1:
                 selected = named[0]
+        if selected is None:
+            family_match = re.search(r"runtimeFamily=([A-Za-z0-9_]+)", text)
+            family = _norm_name(family_match.group(1)) if family_match else ""
+            family_owned = []
+            if family:
+                for row in indexed_calls:
+                    params_candidate = row[1].get("params")
+                    params = params_candidate if isinstance(params_candidate, dict) else {}
+                    authored_family = _norm_name(
+                        row[1].get("runtimeFamily") or params.get("runtimeFamily")
+                    )
+                    if authored_family == family:
+                        family_owned.append(row)
+            if len(family_owned) == 1:
+                selected = family_owned[0]
         if selected is None and "primary action" in text:
             selected = next(
                 (row for row in indexed_calls if str(row[1].get("fn") or "") == "shoot_projectile"),
@@ -133,6 +157,37 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     calls_candidate = rp.get("engineCalls")
     calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
     errors: list[str] = list(boundary.get("errors") or [])
+    semantic_error_details: list[dict[str, Any]] = []
+
+    def reject_call_params(message: str, fn: str, fields: list[str]) -> None:
+        errors.append(message)
+        selected: tuple[int, dict[str, Any]] | None = None
+        for normalized_index, raw_call in enumerate(calls):
+            if not isinstance(raw_call, dict):
+                continue
+            raw_fn = str(raw_call.get("_rawFn") or raw_call.get("fn") or "").strip()
+            normalized_fn = str(raw_call.get("fn") or "").strip()
+            if raw_fn == fn or normalized_fn == fn:
+                authored_index = raw_call.get("_index")
+                selected = (
+                    authored_index if isinstance(authored_index, int) else normalized_index,
+                    raw_call,
+                )
+                break
+        if selected is None:
+            return
+        index, raw_call = selected
+        call_id = str(raw_call.get("_callId") or raw_call.get("callId") or "").strip()
+        raw_fn = str(raw_call.get("_rawFn") or raw_call.get("fn") or fn).strip()
+        for field in fields:
+            semantic_error_details.append({
+                "kind": "runtime_validation",
+                "path": f"$.runtimePlan.engineCalls[{index}].params.{field}",
+                "callId": call_id,
+                "fn": raw_fn,
+                "reason": message,
+                "repairParamNames": [field],
+            })
     warnings: list[str] = []
     fns = q.get("functions") or []
     counts = q.get("functionCounts") if isinstance(q.get("functionCounts"), dict) else {}
@@ -149,8 +204,7 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         warnings.append("some engineCalls were dropped as unknown/non-object")
     if norm.get("rejectedEngineCalls"):
         warnings.append("some engineCalls were hard-rejected by safety policy")
-    if "state_meter" in fns or "triggered_action" in fns:
-        warnings.append("state_meter/triggered_action are preserved as authored runtime state intent; current gameplay requires concrete executable calls too")
+
     stats_kind = _norm_name(find_call(rp, "set_item_stats").get("resultKind"))
     plan_kind = _norm_name(rp.get("resultKind"))
     authored_category = _norm_name(data.get("category"))
@@ -163,6 +217,25 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             f"category={authored_category} disagrees with canonical category={projected_category} for authored runtime resultKind={runtime_kind}"
         )
     plan_kind = runtime_kind
+    combat_call_functions = sorted({
+        str(fn)
+        for fn in fns
+        if str(fn) in {
+            "shoot_projectile",
+            "apply_on_hit_effect",
+            "spawn_secondary_projectiles",
+        }
+    })
+    if (
+        plan_kind
+        and plan_kind not in {"weapon", "consumable_weapon"}
+        and combat_call_functions
+    ):
+        errors.append(
+            "executor_not_representable: "
+            + f"resultKind={plan_kind} cannot execute combat engine calls: "
+            + ",".join(combat_call_functions)
+        )
     combatish = (
         str(data.get("category") or data.get("gameplay", {}).get("kind") or plan_kind or "").lower() in {"weapon", "summon"}
         or bool((data.get("attack") or {}).get("enabled") if isinstance(data.get("attack"), dict) else False)
@@ -197,6 +270,7 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             for field in ("delivery", "movement", "speed", "rangeTiles", "lifetimeTicks", "shotCount", "spreadRadians", "pierce"):
                 if field not in compiled_patch:
                     errors.append(f"combat primary action requires explicit {field}")
+
             compiled_family = _norm_name(compiled_patch.get("runtimeFamily"))
             family_required: dict[str, tuple[str, ...]] = {
                 "beam": ("beamWidthPx", "beamChargeTicks", "immunityCooldown"),
@@ -233,7 +307,11 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
                 errors.append(f"combat set_item_stats requires explicit {field}")
         damage = _num(stats_call.get("damage"))
         if damage is not None and damage <= 0:
-            errors.append("combat set_item_stats requires positive damage; use a non-combat resultKind for pure utility")
+            reject_call_params(
+                "combat set_item_stats requires positive damage; use a non-combat resultKind for pure utility",
+                "set_item_stats",
+                ["damage"],
+            )
     for secondary in all_calls(rp, "spawn_secondary_projectiles"):
         count = _num(secondary.get("count"), 0) or 0
         trigger = normalize_secondary_trigger(secondary.get("trigger"))
@@ -263,6 +341,13 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
     result_kind = _norm_name(stats.get("resultKind"))
     max_stack = _num(stats.get("maxStack"), 0) or 0
     craft_yield = _num(stats.get("craftYield"), 0) or 0
+    consume_call = find_call(rp, "consumption_behavior")
+    authored_consumable = stats.get("consumable") is True
+    stack_consumption_authored = (
+        authored_consumable
+        or max_stack > 1
+        or (_num(consume_call.get("consumeChancePercent"), 0) or 0) > 0
+    )
     has_primary = bool(all_calls(rp, "shoot_projectile"))
     if result_kind in {"weapon", "consumable_weapon"} and not has_primary:
         errors.append(f"{result_kind} result requires a primary executable action")
@@ -270,14 +355,46 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         errors.append("accessory result requires accessory_effect")
     if result_kind == "armor" and not all_calls(rp, "armor_effect"):
         errors.append("armor result requires armor_effect")
+    if result_kind in {"armor", "accessory"} and all_calls(rp, "emit_light"):
+        owner = "armor_effect.stats" if result_kind == "armor" else "accessory_effect.stats"
+        errors.append(
+            f"emit_light is not executable for resultKind={result_kind}; author equipment light in {owner}"
+        )
     if result_kind in {"ammo", "consumable_weapon"}:
         if max_stack <= 0 or craft_yield <= 0:
-            errors.append(f"{result_kind} result requires explicit positive maxStack and craftYield")
+            stack_message = f"{result_kind} result requires explicit positive maxStack and craftYield"
+            stack_fields: list[str] = []
+            if max_stack <= 0:
+                stack_fields.append("maxStack")
+            if craft_yield <= 0:
+                stack_fields.append("craftYield")
+            reject_call_params(stack_message, "set_item_stats", stack_fields)
         elif max(max_stack, craft_yield) < 25:
             warnings.append("ammo output has low stack/yield; playable ammo should usually output 25+")
+    if result_kind == "weapon" and stack_consumption_authored:
+        errors.append(
+            "invalid_result_kind: set_item_stats stack-consumed weapon requires explicit resultKind=consumable_weapon"
+        )
+    if result_kind == "consumable_weapon":
+        if not authored_consumable:
+            reject_call_params(
+                "consumable_weapon set_item_stats requires explicit consumable=true",
+                "set_item_stats",
+                ["consumable"],
+            )
+        if max_stack <= 1:
+            reject_call_params(
+                "consumable_weapon set_item_stats requires explicit maxStack > 1",
+                "set_item_stats",
+                ["maxStack"],
+            )
     ammo_behavior = find_call(rp, "ammo_behavior")
     ammo_for = _norm_name(stats.get("ammoFor") or ammo_behavior.get("ammoFor"))
-    if result_kind == "ammo" and ammo_for in {"arrow", "arrows", "bullet", "bullets"}:
+    if result_kind == "ammo":
+        if ammo_for not in {"arrow", "bullet"}:
+            errors.append("ammo result requires vanilla arrow or bullet identity; custom projectile stacks use consumable_weapon")
+        if has_primary:
+            errors.append("actual ammo cannot author a generated primary action; use consumable_weapon or weapon")
         if "damageClass" not in stats or not str(stats.get("damageClass") or "").strip():
             errors.append("actual ammo requires explicit damageClass")
         if "damage" not in stats or (_num(stats.get("damage"), -1) or 0) < 0:
@@ -368,13 +485,27 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
             errors.append("tool result lacks explicit executable tool_capability")
     elif result_kind == "accessory":
         accessory = find_call(rp, "accessory_effect")
-        stats_obj = accessory.get("stats") if isinstance(accessory.get("stats"), dict) else {}
+        stats_obj_candidate = accessory.get("stats")
+        stats_obj: dict[str, Any] = stats_obj_candidate if isinstance(stats_obj_candidate, dict) else {}
+        if (_num(stats_obj.get("lightStrength"), 0) or 0) > 0 and not str(stats_obj.get("lightColorName") or "").strip():
+            reject_call_params(
+                "accessory_effect stats.lightStrength requires explicit lightColorName",
+                "accessory_effect",
+                ["stats.lightColorName"],
+            )
         if not any(value not in (None, "", 0, 0.0, False) for value in stats_obj.values()):
             errors.append("accessory result lacks explicit executable accessory_effect.stats")
     elif result_kind == "armor":
         armor = find_call(rp, "armor_effect")
         slot = _norm_name(armor.get("armorSlot") or stats.get("armorSlot"))
-        armor_stats = armor.get("stats") if isinstance(armor.get("stats"), dict) else {}
+        armor_stats_candidate = armor.get("stats")
+        armor_stats: dict[str, Any] = armor_stats_candidate if isinstance(armor_stats_candidate, dict) else {}
+        if (_num(armor_stats.get("lightStrength"), 0) or 0) > 0 and not str(armor_stats.get("lightColorName") or "").strip():
+            reject_call_params(
+                "armor_effect stats.lightStrength requires explicit lightColorName",
+                "armor_effect",
+                ["stats.lightColorName"],
+            )
         set_bonus = armor.get("setBonus") if isinstance(armor.get("setBonus"), dict) else {}
         defense = _num(armor.get("defense", stats.get("defense")), 0) or 0
         if slot not in {"head", "body", "legs"}:
@@ -387,11 +518,30 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
         buff_type = _num(stats.get("buffType"), 0) or 0
         if heal <= 0 and buff_type <= 0 and not use_calls:
             errors.append("potion result lacks an explicit executable use effect")
+    semantic_reasons = {
+        str(detail.get("reason") or "")
+        for detail in semantic_error_details
+    }
+    derived_error_details = [
+        detail
+        for detail in _runtime_validation_error_details(errors, calls)
+        if str(detail.get("reason") or "") not in semantic_reasons
+    ]
+    error_details = semantic_error_details + derived_error_details
+    detailed_reasons = {str(detail.get("reason") or "") for detail in error_details}
+    for message in errors:
+        if message in detailed_reasons:
+            continue
+        error_details.append({
+            "kind": "runtime_validation",
+            "path": "$.runtimePlan.engineCalls",
+            "reason": message,
+        })
     return {
         "api": ENGINE_RUNTIME_API_VERSION,
         "ok": not errors,
         "errors": errors,
-        "errorDetails": _runtime_validation_error_details(errors, calls),
+        "errorDetails": error_details,
         "warnings": warnings,
         "quality": q,
         "normalization": norm,
@@ -673,8 +823,7 @@ def _compiled_field_source_map() -> dict[str, dict[str, str | tuple[str, ...]]]:
                 "spread", "jitter", "startTick", "repeatEvery", "importance", "note",
             ),
         },
-        "state_meter": {"runtimeState": "kind"},
-        "triggered_action": {"runtimeState": "trigger"},
+
         "use_affordance": {
             "itemScale": "itemScale",
             "holdoutOffsetX": "holdoutOffsetX",
@@ -883,9 +1032,7 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
         values = norm.get(key) if key in norm else (patch or {}).get(key)
         if isinstance(values, list):
             unsupported.extend(values)
-    future_disabled = []
-    if (patch or {}).get("runtimeState"):
-        future_disabled.append({"field": "runtimeState", "reason": "preserved_authored_intent_not_executed"})
+
     return {
         "api": ENGINE_RUNTIME_API_VERSION,
         "engineFunctions": fns,
@@ -917,7 +1064,7 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
             "note": "Pure VFX/dust/trails do not imply damaging child projectiles."
         },
         "unsupported": unsupported[:24],
-        "futureDisabled": future_disabled,
+        "futureDisabled": [],
         "fieldSources": field_sources,
         "normalization": norm,
     }
@@ -937,8 +1084,7 @@ def compiled_runtime_contract(data: dict[str, Any], patch: dict[str, Any] | None
         "notes": [
             "runtimeFamily is explicit; missing or conflicting primary families fail validation",
             "splitCount/maxChildProjectiles represent gameplay children only, not VFX motes",
-            "state_meter/triggered_action are preserved as explicit authored intent; they do not spawn bosses/NPCs/mobs and do not execute unsupported gameplay by prose",
-            "runtimeContract is model-authored public meaning; unsupported engine calls remain explicit and inert",
+            "runtimeContract is model-authored public meaning; unsupported engine calls are rejected before final wire",
         ],
     }
     if isinstance(data.get("runtimeContract"), dict):
