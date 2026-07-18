@@ -915,11 +915,29 @@ def _contract_check_visual_director_payload_contains_raw_parent_facts_and_real_s
     assert "impact, child, and field" in baked_guide
     assert "never an array" in baked_guide
     assert '"projectile":{"mode":"baked_sprite"' in baked_guide.replace(" ", "")
+    vfx_guide = payload["fieldGuide"]["vfxFields"].casefold()
+    assert "vfxscalehint is exactly one enum string" in vfx_guide
+    assert "vfxrhythmhint is exactly one enum string" in vfx_guide
+    assert "vfxavoid is exactly one string" in vfx_guide
+    assert "never arrays" in vfx_guide
+    lists_guide = payload["fieldGuide"]["lists"].casefold()
+    assert "vfxmaterialhints is the only vfx hint field that is an array" in lists_guide
 
     response_format = req["response_format"]
     schema = response_format["json_schema"]["schema"]
     assert schema["additionalProperties"] is False
     assert schema["required"] == ["visualKit"]
+    visual_properties = schema["properties"]["visualKit"]["properties"]
+    for field in ("vfxScaleHint", "vfxRhythmHint"):
+        field_schema = visual_properties[field]
+        assert field_schema["type"] == "string"
+        description = field_schema["description"].casefold()
+        assert "exactly one enum string" in description
+        assert "never an array" in description
+    vfx_avoid_schema = visual_properties["vfxAvoid"]
+    assert vfx_avoid_schema["type"] == "string"
+    assert "exactly one string" in vfx_avoid_schema["description"].casefold()
+    assert "never an array" in vfx_avoid_schema["description"].casefold()
     baked_properties = schema["$defs"]["BakedAssetBoundary"]["properties"]
     mode_schema = baked_properties["mode"]
     assert set(mode_schema["enum"]) == {"baked_sprite", "particle_vfx", "reuse_item_sprite", "none"}

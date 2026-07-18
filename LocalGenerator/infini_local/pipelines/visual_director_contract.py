@@ -204,14 +204,29 @@ def visual_kit_response_schema() -> dict[str, Any]:
         "The VisualKit value nested under the required root key visualKit. "
         "These fields must never be emitted directly at the response root."
     )
-    role_descriptions = {
+    property_descriptions = {
         "itemIconPrompt": "Canonical appearance prompt for the required item inventory/held sprite.",
         "projectileSpritePrompt": "Canonical appearance prompt for the projectile role when that role is relevant.",
         "impactSpritePrompt": "Canonical appearance prompt for the impact role when that role is relevant.",
         "childSpritePrompt": "Canonical appearance prompt for the child role when that role is relevant.",
         "fieldSpritePrompt": "Canonical appearance prompt for the field role when that role is relevant.",
+        "vfxScaleHint": (
+            "Exactly one enum string: tiny, small, normal, large, or huge. "
+            "This field is never an array and never contains multiple choices."
+        ),
+        "vfxRhythmHint": (
+            "Exactly one enum string: slow, normal, snappy, delayed, or pulsing. "
+            "This field is never an array and never contains multiple choices."
+        ),
+        "vfxMaterialHints": (
+            "The only VFX hint field that is an array; return zero or more material strings."
+        ),
+        "vfxAvoid": (
+            "Exactly one string containing the complete concise avoid instruction. "
+            "This field is never an array; combine multiple avoid concepts into this one string."
+        ),
     }
-    for field, description in role_descriptions.items():
+    for field, description in property_descriptions.items():
         field_schema = kit_properties.get(field)
         if isinstance(field_schema, dict):
             field_schema["description"] = description
