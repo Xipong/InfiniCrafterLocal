@@ -168,6 +168,11 @@ def visual_director_output_contract() -> dict[str, Any]:
         "roleFields": copy.deepcopy(_VISUAL_DIRECTOR_ROLE_FIELDS),
         "bakedAssetRoleKeys": ["projectile", "impact", "child", "field"],
         "forbiddenBakedAssetKeys": ["item", "vfx"],
+        "fieldPlacementRule": (
+            "Role prompt and VFX fields belong directly inside visualKit; "
+            "never inside bakedAssets and never inside a vfx object. "
+            "Each bakedAssets role object contains only mode, reason, and projectile-only distinctFromItem."
+        ),
         "assetDemandRule": (
             "A role prompt describes appearance but never requests a PNG by itself; "
             "only bakedAssets.<role>.mode=baked_sprite requests one."
@@ -215,7 +220,8 @@ def visual_kit_response_schema() -> dict[str, Any]:
             "type": "object",
             "description": (
                 "bakedAssets may contain only projectile, impact, child, and field; never item. "
-                "The required item sprite is described by itemIconPrompt outside bakedAssets."
+                "The required item sprite is described by itemIconPrompt outside bakedAssets. "
+                "Role prompt fields are direct visualKit properties and must never be nested in a bakedAssets role."
             ),
             "additionalProperties": False,
             "properties": {

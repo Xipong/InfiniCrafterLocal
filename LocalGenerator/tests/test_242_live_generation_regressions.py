@@ -328,6 +328,10 @@ def _contract_check_initial_visual_director_request_enforces_root_and_baked_role
     requests: list[dict] = []
     required_phrase = 'root object must contain exactly one key named "visualkit"'
     baked_role_phrase = "bakedassets may contain only projectile, impact, child, and field; never item"
+    flat_field_phrase = (
+        "role prompt and vfx fields belong directly inside visualkit; "
+        "never inside bakedassets and never inside a vfx object"
+    )
 
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
@@ -347,6 +351,14 @@ def _contract_check_initial_visual_director_request_enforces_root_and_baked_role
         kit: dict[str, object] = {"itemIconPrompt": "one connected copper crescent tool"}
         if baked_role_phrase not in request_text:
             kit["bakedAssets"] = {"item": {"mode": "baked_sprite"}}
+        elif flat_field_phrase not in request_text:
+            kit["bakedAssets"] = {
+                "projectile": {
+                    "mode": "baked_sprite",
+                    "projectileSpritePrompt": "one copper crescent projectile",
+                }
+            }
+            kit["vfx"] = {"projectileVfx": "short copper spark trail"}
         content = {"visualKit": kit} if required_phrase in request_text else kit
         return {"choices": [{"message": {"content": json.dumps(content)}}]}
 
@@ -362,6 +374,7 @@ def _contract_check_initial_visual_director_request_enforces_root_and_baked_role
     ).casefold()
     assert required_phrase in initial_text
     assert baked_role_phrase in initial_text
+    assert flat_field_phrase in initial_text
     schema = requests[0]["response_format"]["json_schema"]["schema"]
     assert schema["required"] == ["visualKit"]
     assert schema["additionalProperties"] is False
