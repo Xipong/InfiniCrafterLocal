@@ -27,6 +27,30 @@ def _contract_check_mp_server_authoritative_craft_spends_real_server_inventory_s
     assert "Generator.Prepare(itemA, itemB, player)" in request_body
 
 
+def _contract_check_mp_station_selection_does_not_destroy_client_inventory_before_server_reservation():
+    station = read("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Station.cs")
+    start = station.index("public bool TryPutMouseItemIntoInput")
+    end = station.index("public bool TryTakeInputToMouse", start)
+    block = station[start:end]
+    mp_guard = block.index("Main.netMode == NetmodeID.MultiplayerClient")
+    local_debit = block.index("Main.mouseItem.stack--")
+    assert mp_guard < local_debit
+    mp_branch = block[mp_guard:local_debit]
+    assert "target = Main.mouseItem.Clone();" in mp_branch
+    assert "target.stack = 1;" in mp_branch
+    assert "return true;" in mp_branch
+    assert "server-reserved selection" in mp_branch
+
+    craft_state = read("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.CraftState.cs")
+    save_start = craft_state.index("private List<TagCompound> PendingRefundTagsForSave()")
+    save_end = craft_state.index("private static void AddRefundTag", save_start)
+    save_block = craft_state[save_start:save_end]
+    mp_non_owning_guard = save_block.index("Main.netMode == NetmodeID.MultiplayerClient")
+    station_refund = save_block.index("if (HasInputA) AddRefundTag")
+    assert mp_non_owning_guard < station_refund
+    assert "return refunds;" in save_block[mp_non_owning_guard:station_refund]
+
+
 def _contract_check_client_timeout_cancels_host_request_without_local_refund_dup_path():
     src = read("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.cs")
     timeout_block = src[src.index("if (_awaitingServerCommit)"):src.index("if (_request is null && _task is null)")]
@@ -35,6 +59,13 @@ def _contract_check_client_timeout_cancels_host_request_without_local_refund_dup
     result_body = src[src.index("public void HandleCraftCommitResult"):src.index("private static void RunLocalCraftReveal")]
     assert "server is authoritative for ingredient ownership" in result_body
     assert "RefundIngredients();" not in result_body
+
+    station = read("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Station.cs")
+    refund_start = station.index("private void RefundOne(Item original)")
+    refund_block = station[refund_start:]
+    assert refund_block.count("SyncRefundedInventorySlot(i);") >= 2
+    assert "MessageID.SyncEquipment" in refund_block
+    assert "Player.whoAmI, slotIndex" in refund_block
 def _contract_check_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs():
     env_utils = read("LocalGenerator/infini_local/core/env_utils.py")
     assert "def env_int" in env_utils
@@ -102,6 +133,7 @@ def test_218_mp_env_migration_ci_contract_module_contract(request):
         request,
         (
             '_contract_check_mp_server_authoritative_craft_spends_real_server_inventory_slots',
+            '_contract_check_mp_station_selection_does_not_destroy_client_inventory_before_server_reservation',
             '_contract_check_client_timeout_cancels_host_request_without_local_refund_dup_path',
             '_contract_check_env_parsing_is_centralized_for_endpoint_and_main_pipeline_configs',
             '_contract_check_generated_json_compat_migration_code_is_removed_for_test_worlds_only',

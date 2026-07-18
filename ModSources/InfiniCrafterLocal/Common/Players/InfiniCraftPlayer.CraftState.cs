@@ -116,6 +116,12 @@ public sealed partial class InfiniCraftPlayer
             return refunds;
         }
 
+        // Multiplayer station slots are non-owning selections. The actual items
+        // remain in vanilla inventory until the server reserves them, so serializing
+        // these clones as exit refunds would duplicate them on the next join.
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+            return refunds;
+
         if (HasInputA) AddRefundTag(refunds, InputA);
         if (HasInputB) AddRefundTag(refunds, InputB);
         return refunds;

@@ -140,7 +140,9 @@ class CraftStateSimulator:
             if slot.stack <= 0:
                 slot.is_air = True
                 slot.type = 0
-            excluded.add(i)
+            # One stack may reserve both identical inputs while units remain.
+            if slot.is_air:
+                excluded.add(i)
             return True, ingredient, ""
         if saw_favorite:
             return False, None, "совпадающий предмет находится в favorite-слоте"

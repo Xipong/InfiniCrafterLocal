@@ -79,6 +79,33 @@ def _contract_check_server_craft_dedupe_and_cancel_caches_are_bounded() -> None:
     assert re.search(r"while \(ServerCancelledCraftRequestOrder\.Count > MaxServerCraftRequestCacheEntries\)", multiplayer)
 
 
+def _contract_check_generated_utility_sync_consumes_payload_before_every_reject() -> None:
+    source = _text("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
+    handler = _method(source, "public static void HandleGeneratedUtilityBuffSyncPacket", "public void RequestGeneratedAltUseFromServer")
+    assert handler.count("DiscardGeneratedBuffState(reader);") >= 4
+    for reason in [
+        "playerId >= Main.maxPlayers",
+        "Main.netMode == NetmodeID.Server && playerId != whoAmI",
+        "player is null || !player.active",
+    ]:
+        branch = handler[handler.index(reason):]
+        assert branch.index("DiscardGeneratedBuffState(reader);") < branch.index("return;")
+
+
+def _contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots() -> None:
+    source = _text("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
+    request = _method(source, "public static void HandleRequestServerCraftPacket", "public static void HandleCancelServerCraftPacket")
+    result = _method(source, "private void SendServerAuthoritativeResultIfNeeded", "public void HandleCraftCommitResult")
+    assert "private static void LogServerCraftTransaction" in source
+    assert "[InfiniCraftTx]" in source
+    assert '"received"' in request
+    assert '"reserve_rejected"' in request
+    assert '"reserved"' in request
+    assert "out int sourceSlotA" in request
+    assert "out int sourceSlotB" in request
+    assert 'success ? "committed" : "refunded"' in result
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
     from contract_checks import run_contract_checks
@@ -92,5 +119,7 @@ def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
             '_contract_check_projectile_relay_validates_live_sender_owned_projectile_and_canonicalizes_payload',
             '_contract_check_projectile_pending_and_request_maps_are_expiring_and_bounded',
             '_contract_check_server_craft_dedupe_and_cancel_caches_are_bounded',
+            '_contract_check_generated_utility_sync_consumes_payload_before_every_reject',
+            '_contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots',
         ),
     )

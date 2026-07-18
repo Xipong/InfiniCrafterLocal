@@ -789,9 +789,14 @@ def check_network_read_write_shape() -> None:
     for phase_field in ["ActiveUse", "AnimationRemaining"]:
         if phase_field not in held_transport:
             err(f"GeneratedHeldItemDrawLayer.cs: v4 held presentation payload missing `{phase_field}`")
-    for needle in ["registry.TryGet(payload.GeneratedItemId, out var registryData)", "RequestHeldItemCatchup(payload.GeneratedItemId, null)"]:
+    for needle in [
+        "ResolveHeldPresentationData(held, remotePayload)",
+        "GeneratedItemData.IsPlayerSaveReferenceOnly(gi.Data)",
+        "registry.TryGet(id, out var canonical)",
+        "RequestHeldItemCatchup(payload.GeneratedItemId, null)",
+    ]:
         if needle not in held_layer:
-            err(f"GeneratedHeldItemDrawLayer.cs: missing registry catch-up guard `{needle}`")
+            err(f"GeneratedHeldItemDrawLayer.cs: missing canonical compact-reference catch-up guard `{needle}`")
     item_source = read(SRC / "Content/Items/GeneratedItem.cs")
     for needle in ["private void EnsureRuntimeHydration(Player? player = null)", "_lastRuntimeHydrationTouchTick", "GeneratedItems?.RegisterLocal(Data, persist: false, ensureAssets: true)", "GeneratedItems?.RequestOneFromServer(id, forceAssetRetry: false)"]:
         if needle not in item_source:

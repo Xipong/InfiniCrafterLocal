@@ -42,8 +42,9 @@ def _check_held_draw_does_not_double_apply_item_scale() -> None:
 
 def _check_world_draw_anchors_scaled_sprite_bottom_and_clamps_visual_scales() -> None:
     src = ITEM.read_text(encoding="utf-8")
-    assert "Math.Clamp(Data.Visual.InventoryScale, 0.55f, 1.55f)" in src
-    assert "Math.Clamp(Data.Visual.WorldScale, 0.55f, 1.75f)" in src
+    assert "Math.Clamp(drawData.Visual.InventoryScale, 0.55f, 1.55f)" in src
+    assert "Math.Clamp(drawData.Visual.WorldScale, 0.55f, 1.75f)" in src
+    assert "GeneratedItemData drawData = ResolveRuntimeDataForPresentation();" in src
     assert "drawOrigin.Y * finalScale" in src
     assert "drawOrigin.Y);" not in src
 

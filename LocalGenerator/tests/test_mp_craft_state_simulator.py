@@ -175,6 +175,16 @@ def _contract_check_pending_craft_blocks_new_request():
     assert "уже есть активный" in msg
 
 
+def _contract_check_identical_inputs_reserve_two_units_from_one_server_stack():
+    sim = CraftStateSimulator()
+    sim.set_inventory(0, _inv(_slot(75, 2)))
+    rid = sim.begin_client_craft_request(0)
+    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(75))
+    assert ok is True, msg
+    assert sim.get_player(0).inventory[0].stack == 0
+    assert sim.get_player(0).inventory[0].is_air is True
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_mp_craft_state_simulator_module_contract(request):
     from contract_checks import run_contract_checks
@@ -193,5 +203,6 @@ def test_mp_craft_state_simulator_module_contract(request):
             '_contract_check_server_invalid_generated_items_are_not_spent',
             '_contract_check_duplicate_request_returns_committed_name',
             '_contract_check_pending_craft_blocks_new_request',
+            '_contract_check_identical_inputs_reserve_two_units_from_one_server_stack',
         ),
     )

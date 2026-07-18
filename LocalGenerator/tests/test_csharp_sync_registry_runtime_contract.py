@@ -208,7 +208,8 @@ def _check_projectile_visual_sync_packet_is_id_only_registry_catchup() -> None:
 def _check_held_item_presentation_sync_packet_is_id_pose_animation_phase_registry_catchup() -> None:
     held = _read(MOD / "Common" / "Players" / "GeneratedHeldItemDrawLayer.cs")
     assert "private const int HeldItemPresentationSyncVersion = 4" in held
-    assert "registry.TryGet(payload.GeneratedItemId, out var registryData)" in held
+    assert "ResolveHeldPresentationData(held, remotePayload)" in held
+    assert "registry.TryGet(id, out var canonical)" in held
     assert "RequestHeldItemCatchup(payload.GeneratedItemId, null)" in held
     start = held.index("private sealed class HeldItemPresentationPayload")
     end = held.index("private static readonly Dictionary", start)
@@ -262,6 +263,40 @@ def _check_generated_item_hooks_drive_registry_hydration_not_projectile_only() -
         assert "EnsureRuntimeHydration(player);" in block
 
 
+def _check_remote_compact_item_reference_resolves_before_ground_inventory_and_held_draw() -> None:
+    item = _read(ITEM_PATH)
+    held = _read(MOD / "Common" / "Players" / "GeneratedHeldItemDrawLayer.cs")
+
+    net_receive = item[item.index("public override void NetReceive"):item.index("public override bool CanStack")]
+    assert "EnsureRuntimeHydration();" in net_receive
+
+    for hook in ["public override bool PreDrawInInventory", "public override bool PreDrawInWorld"]:
+        start = item.index(hook)
+        end = item.find("\n    public override", start + len(hook))
+        if end < 0:
+            end = len(item)
+        block = item[start:end]
+        assert "EnsureRuntimeHydration();" in block
+        assert "GeneratedItemData drawData = ResolveRuntimeDataForPresentation();" in block
+        assert "drawData.Visual.SpritePath" in block
+
+    assert "private GeneratedItemData ResolveRuntimeDataForPresentation()" in item
+    resolver = item[item.index("private GeneratedItemData ResolveRuntimeDataForPresentation()"):
+                    item.index("public override void NetSend", item.index("private GeneratedItemData ResolveRuntimeDataForPresentation()"))]
+    assert "GeneratedItemData.IsPlayerSaveReferenceOnly(Data)" in resolver
+    assert "registry.TryGet(id, out var canonical)" in resolver
+
+    assert "private static GeneratedItemData? ResolveHeldPresentationData" in held
+    held_resolver = held[held.index("private static GeneratedItemData? ResolveHeldPresentationData"):
+                         held.index("private static bool ShouldDrawHeldSprite")]
+    assert "GeneratedItemData.IsPlayerSaveReferenceOnly(gi.Data)" in held_resolver
+    held_identity = 'id = (gi.Data.Id ?? "").Trim();'
+    assert held_identity in held_resolver
+    held_prefix = held_resolver[:held_resolver.index(held_identity) + len(held_identity)]
+    assert "if (string.IsNullOrWhiteSpace(id))" not in held_prefix
+    assert "registry.TryGet(id, out var canonical)" in held_resolver
+
+
 def _check_asset_download_hydration_is_deduped_cached_and_counted() -> None:
     asset_sync = _read(ASSET_SYNC_PATH)
     assert "CacheHitCount" in asset_sync
@@ -269,6 +304,26 @@ def _check_asset_download_hydration_is_deduped_cached_and_counted() -> None:
     assert "RetryCount" in asset_sync
     assert "DuplicateSuppressedCount" in asset_sync
     assert "DownloadStartedCount" in asset_sync
+
+
+def _check_cached_item_and_projectile_use_hot_path_performs_zero_http_downloads() -> None:
+    item = _read(ITEM_PATH)
+    projectile = _read(PROJECTILE_PATH)
+    asset_sync = _read(ASSET_SYNC_PATH)
+
+    shoot = item[item.index("public override bool Shoot("):item.index("private static string AttackRuntimeFamily", item.index("public override bool Shoot("))]
+    for forbidden in ["HttpClient", "QueueDownloads", "RequestOneFromServer", "ToNetworkJson", "SpritePath"]:
+        assert forbidden not in shoot
+
+    send_extra = projectile[projectile.index("public override void SendExtraAI"):projectile.index("public override void ReceiveExtraAI")]
+    for forbidden in ["SpritePath", "AssetBaseUrl", "ToNetworkJson", "VfxManifestJson"]:
+        assert forbidden not in send_extra
+
+    queue = asset_sync[asset_sync.index("public void QueueDownloads"):asset_sync.index("private async Task DownloadOneAsync")]
+    cache_hit = queue.index("if (File.Exists(local))")
+    cache_hit_continue = queue.index("continue;", cache_hit)
+    schedule_download = queue.index("Task.Run", cache_hit)
+    assert cache_hit < cache_hit_continue < schedule_download
     assert "_inFlight.ContainsKey(key)" in asset_sync
     assert "MaxInFlightDownloads" in asset_sync
     assert "HttpCompletionOption.ResponseHeadersRead" in asset_sync
@@ -366,7 +421,9 @@ def _run_coarse_contracts(tmp_path):
     '_check_projectile_visual_sync_packet_is_id_only_registry_catchup',
     '_check_held_item_presentation_sync_packet_is_id_pose_animation_phase_registry_catchup',
     '_check_generated_item_hooks_drive_registry_hydration_not_projectile_only',
+    '_check_remote_compact_item_reference_resolves_before_ground_inventory_and_held_draw',
     '_check_asset_download_hydration_is_deduped_cached_and_counted',
+    '_check_cached_item_and_projectile_use_hot_path_performs_zero_http_downloads',
     '_check_projectile_runtime_state_reset_is_single_helper_not_three_near_duplicate_blocks',
     '_check_csharp_client_does_not_cache_poll_after_structured_fatal_combine_failure',
     '_check_local_cache_preserves_python_authoring_extensions_but_network_strips_them',

@@ -292,10 +292,22 @@ public sealed partial class InfiniCraftPlayer
     public static void HandleGeneratedUtilityBuffSyncPacket(System.IO.BinaryReader reader, int whoAmI)
     {
         byte playerId = reader.ReadByte();
-        if (playerId >= Main.maxPlayers) return;
-        if (Main.netMode == NetmodeID.Server && playerId != whoAmI) return;
+        if (playerId >= Main.maxPlayers)
+        {
+            DiscardGeneratedBuffState(reader);
+            return;
+        }
+        if (Main.netMode == NetmodeID.Server && playerId != whoAmI)
+        {
+            DiscardGeneratedBuffState(reader);
+            return;
+        }
         Player player = Main.player[playerId];
-        if (player is null || !player.active) return;
+        if (player is null || !player.active)
+        {
+            DiscardGeneratedBuffState(reader);
+            return;
+        }
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
         if (Main.netMode == NetmodeID.Server)
         {
@@ -452,6 +464,11 @@ public sealed partial class InfiniCraftPlayer
             return;
         if (success)
             RememberServerCraftCommit(ServerCraftKey(Player.whoAmI, _serverRequestId), string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName);
+        LogServerCraftTransaction(
+            Player.whoAmI,
+            _serverRequestId,
+            success ? "committed" : "refunded",
+            success ? $"item={SafeCraftLogValue(itemName, 80)}" : $"reason={SafeCraftLogValue(message, 120)}");
         SendCraftCommitResult(Player.whoAmI, _serverRequestId, success, itemName ?? "", message ?? "");
     }
 
@@ -508,8 +525,10 @@ public sealed partial class InfiniCraftPlayer
         string requestId = reader.ReadString();
         CraftItemRef aRef = ReadCraftItemRef(reader);
         CraftItemRef bRef = ReadCraftItemRef(reader);
+        LogServerCraftTransaction(whoAmI, requestId, "received", $"aType={aRef.Type} bType={bRef.Type}");
         if (string.IsNullOrWhiteSpace(requestId))
         {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=empty_request_id");
             SendCraftCommitResult(whoAmI, requestId, false, "", "пустой requestId");
             return;
         }
@@ -519,6 +538,7 @@ public sealed partial class InfiniCraftPlayer
         {
             if (ServerCommittedCraftRequests.TryGetValue(dedupeKey, out string? knownName))
             {
+                LogServerCraftTransaction(whoAmI, requestId, "committed", "result=duplicate_ack");
                 SendCraftCommitResult(whoAmI, requestId, true, knownName ?? "", "duplicate ack");
                 return;
             }
@@ -527,6 +547,7 @@ public sealed partial class InfiniCraftPlayer
         Player player = Main.player[whoAmI];
         if (player is null || !player.active)
         {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=inactive_player");
             SendCraftCommitResult(whoAmI, requestId, false, "", "игрок неактивен");
             return;
         }
@@ -534,27 +555,32 @@ public sealed partial class InfiniCraftPlayer
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
         if (modPlayer.HasPendingCraft)
         {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=already_pending");
             SendCraftCommitResult(whoAmI, requestId, false, "", "у игрока уже есть активный InfiniCraft");
             return;
         }
         if (IsServerCraftCancelled(whoAmI, requestId))
         {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=already_cancelled");
             SendCraftCommitResult(whoAmI, requestId, false, "", "запрос уже отменён клиентом");
             return;
         }
 
         var spentSlots = new HashSet<int>();
-        if (!TryTakeServerSideIngredient(player, aRef, spentSlots, out Item itemA, out string errorA))
+        if (!TryTakeServerSideIngredient(player, aRef, spentSlots, out Item itemA, out int sourceSlotA, out string errorA))
         {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=a reason={SafeCraftLogValue(errorA, 120)}");
             SendCraftCommitResult(whoAmI, requestId, false, "", "сервер не нашёл первый ингредиент: " + errorA);
             return;
         }
-        if (!TryTakeServerSideIngredient(player, bRef, spentSlots, out Item itemB, out string errorB))
+        if (!TryTakeServerSideIngredient(player, bRef, spentSlots, out Item itemB, out int sourceSlotB, out string errorB))
         {
             modPlayer.RefundOne(itemA);
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=b aSlot={sourceSlotA} aRefunded=true reason={SafeCraftLogValue(errorB, 120)}");
             SendCraftCommitResult(whoAmI, requestId, false, "", "сервер не нашёл второй ингредиент: " + errorB);
             return;
         }
+        LogServerCraftTransaction(whoAmI, requestId, "reserved", $"aSlot={sourceSlotA} bSlot={sourceSlotB} aType={itemA.type} bType={itemB.type}");
 
         GeneratorClient.PreparedGenerationRequest request;
         try
@@ -565,6 +591,7 @@ public sealed partial class InfiniCraftPlayer
         {
             modPlayer.RefundOne(itemA);
             modPlayer.RefundOne(itemB);
+            LogServerCraftTransaction(whoAmI, requestId, "refunded", $"reason=prepare_failed detail={SafeCraftLogValue(ex.Message, 120)}");
             SendCraftCommitResult(whoAmI, requestId, false, "", "хост не подготовил запрос: " + ex.Message);
             return;
         }
@@ -572,6 +599,7 @@ public sealed partial class InfiniCraftPlayer
         {
             modPlayer.RefundOne(itemA);
             modPlayer.RefundOne(itemB);
+            LogServerCraftTransaction(whoAmI, requestId, "refunded", "reason=begin_failed");
             SendCraftCommitResult(whoAmI, requestId, false, "", "хост не начал server-authoritative craft");
             return;
         }
@@ -627,6 +655,29 @@ public sealed partial class InfiniCraftPlayer
 
     private static string ServerCraftKey(int playerId, string requestId)
         => "servercraft:" + playerId + ":" + NormalizeCraftRequestId(requestId);
+
+    private static string SafeCraftLogValue(string? value, int maxLength)
+    {
+        string safe = (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (safe.Length > maxLength)
+            safe = safe[..maxLength];
+        return safe;
+    }
+
+    private static void LogServerCraftTransaction(int playerId, string requestId, string phase, string details)
+    {
+        if (Main.netMode != NetmodeID.Server)
+            return;
+        try
+        {
+            string rid = SafeCraftLogValue(requestId, 64);
+            string safePhase = SafeCraftLogValue(phase, 32);
+            string safeDetails = SafeCraftLogValue(details, 240);
+            global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger.Info(
+                $"[InfiniCraftTx] player={playerId} request={rid} phase={safePhase} {safeDetails}");
+        }
+        catch { }
+    }
 
     private static void RememberServerCraftCommit(string key, string itemName)
     {
@@ -768,10 +819,11 @@ public sealed partial class InfiniCraftPlayer
     }
 
 
-    private static bool TryTakeServerSideIngredient(Player player, CraftItemRef itemRef, HashSet<int> excludedSlots, out Item ingredient, out string error)
+    private static bool TryTakeServerSideIngredient(Player player, CraftItemRef itemRef, HashSet<int> excludedSlots, out Item ingredient, out int sourceSlot, out string error)
     {
         ingredient = new Item();
         ingredient.TurnToAir();
+        sourceSlot = -1;
         error = "";
         if (player is null || !player.active)
         {
@@ -814,7 +866,11 @@ public sealed partial class InfiniCraftPlayer
             slot.NetStateChanged();
             if (Main.netMode == NetmodeID.Server)
                 NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, player.whoAmI, i);
-            excludedSlots.Add(i);
+            // One stack can legitimately provide both identical station inputs.
+            // Only exclude a slot after it has actually been exhausted.
+            if (slot.IsAir)
+                excludedSlots.Add(i);
+            sourceSlot = i;
             return true;
         }
 

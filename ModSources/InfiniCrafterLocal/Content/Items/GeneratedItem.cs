@@ -189,6 +189,23 @@ public partial class GeneratedItem : ModItem
         }
     }
 
+    private GeneratedItemData ResolveRuntimeDataForPresentation()
+    {
+        GeneratedItemData current = Data ?? GeneratedItemData.Placeholder();
+        if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
+            return current;
+
+        string id = (Data?.Id ?? "").Trim();
+        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+        if (!string.IsNullOrWhiteSpace(id)
+            && registry is not null
+            && registry.TryGet(id, out var canonical)
+            && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+            return canonical;
+
+        return current;
+    }
+
     public override void NetSend(BinaryWriter writer)
     {
         writer.Write(GeneratedItemNetPayloadVersion);
@@ -216,6 +233,10 @@ public partial class GeneratedItem : ModItem
                 && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
                 resolved = canonical;
             SetData(resolved, ensureAssets: false, registerLocal: false, notifyNetState: false);
+            // Item/container sync is allowed to carry only the compact id. Kick one
+            // deduplicated registry hydration now so ground/inventory/held drawing
+            // does not remain on the static placeholder until the item is used.
+            EnsureRuntimeHydration();
         }
         catch { try { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); } catch { } }
     }
@@ -1296,25 +1317,29 @@ public partial class GeneratedItem : ModItem
     // comment this method out; generated items will still function with the placeholder texture.
     public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
     {
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(Data.Visual.SpritePath);
+        EnsureRuntimeHydration();
+        GeneratedItemData drawData = ResolveRuntimeDataForPresentation();
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(drawData.Visual.SpritePath);
         if (texture is null) return true;
         var source = new Rectangle(0, 0, texture.Width, texture.Height);
         var drawOrigin = source.Size() / 2f;
-        float finalScale = scale * Math.Clamp(Data.Visual.InventoryScale, 0.55f, 1.55f);
-        Vector2 finalPos = position + new Vector2(Data.Visual.DrawOffsetX, Data.Visual.DrawOffsetY);
+        float finalScale = scale * Math.Clamp(drawData.Visual.InventoryScale, 0.55f, 1.55f);
+        Vector2 finalPos = position + new Vector2(drawData.Visual.DrawOffsetX, drawData.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, finalPos, source, drawColor, 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
     }
 
     public override bool PreDrawInWorld(SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI)
     {
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(Data.Visual.SpritePath);
+        EnsureRuntimeHydration();
+        GeneratedItemData drawData = ResolveRuntimeDataForPresentation();
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(drawData.Visual.SpritePath);
         if (texture is null) return true;
         var source = new Rectangle(0, 0, texture.Width, texture.Height);
         var drawOrigin = source.Size() / 2f;
-        float finalScale = scale * Math.Clamp(Data.Visual.WorldScale, 0.55f, 1.75f);
+        float finalScale = scale * Math.Clamp(drawData.Visual.WorldScale, 0.55f, 1.75f);
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0, drawOrigin.Y * finalScale);
-        drawPosition += new Vector2(Data.Visual.DrawOffsetX, Data.Visual.DrawOffsetY);
+        drawPosition += new Vector2(drawData.Visual.DrawOffsetX, drawData.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, drawPosition, source, lightColor, rotation, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
     }

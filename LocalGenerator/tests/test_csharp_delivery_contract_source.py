@@ -439,7 +439,9 @@ def _check_runtime_state_cleanup_bounce_and_child_depth_policy_is_centralized() 
 
 def _check_generated_buff_sync_rejects_client_spoof_and_clamps_network_state() -> None:
     player = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Players" / "InfiniCraftPlayer.cs")
-    assert "if (Main.netMode == NetmodeID.Server && playerId != whoAmI) return" in player
+    handler = player.split("public static void HandleGeneratedUtilityBuffSyncPacket", 1)[1].split("public void RequestGeneratedAltUseFromServer", 1)[0]
+    spoof_branch = handler.split("Main.netMode == NetmodeID.Server && playerId != whoAmI", 1)[1]
+    assert spoof_branch.index("DiscardGeneratedBuffState(reader);") < spoof_branch.index("return;")
     assert "ClampGeneratedBuffState" in player
     assert "_generatedBuffTicks = Math.Clamp(_generatedBuffTicks, 0, 21600)" in player
     assert "_generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000)" in player

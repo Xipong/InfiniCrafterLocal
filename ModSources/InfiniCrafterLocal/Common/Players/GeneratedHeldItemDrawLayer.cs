@@ -63,13 +63,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             return false;
 
         Item held = player.HeldItem;
-        GeneratedItemData? data = null;
-        if (held is not null && !held.IsAir && TryGetGeneratedHeldData(held, out var gi) && gi?.Data is not null)
-            data = gi.Data;
-        if (data is null && remotePayload is not null && !string.IsNullOrWhiteSpace(remotePayload.GeneratedItemId)
-            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems is { } registry
-            && registry.TryGet(remotePayload.GeneratedItemId, out var registryData))
-            data = registryData;
+        GeneratedItemData? data = ResolveHeldPresentationData(held, remotePayload);
 
         if (data is not null && !ShouldDrawHeldSprite(data, player, remotePayload))
             return false;
@@ -80,6 +74,30 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         if (!string.IsNullOrWhiteSpace(data.Visual?.SpritePath))
             return held.noUseGraphic || held.useStyle > ItemUseStyleID.None;
         return false;
+    }
+
+    private static GeneratedItemData? ResolveHeldPresentationData(Item? held, HeldItemPresentationPayload? payload)
+    {
+        GeneratedItemData? compact = null;
+        string payloadId = (payload?.GeneratedItemId ?? "").Trim();
+        string id = payloadId;
+        if (held is not null && !held.IsAir && TryGetGeneratedHeldData(held, out var gi) && gi?.Data is not null)
+        {
+            compact = gi.Data;
+            id = (gi.Data.Id ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(id))
+                id = payloadId;
+            if (!GeneratedItemData.IsPlayerSaveReferenceOnly(gi.Data))
+                return gi.Data;
+        }
+
+        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+        if (!string.IsNullOrWhiteSpace(id) && registry is not null && registry.TryGet(id, out var canonical))
+            return canonical;
+
+        if (!string.IsNullOrWhiteSpace(id))
+            RequestHeldItemCatchup(id, null);
+        return compact;
     }
 
     private static bool ShouldDrawHeldSprite(GeneratedItemData data, Player player, HeldItemPresentationPayload? payload)
@@ -110,13 +128,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         if (!hasHeld && payload is null)
             return;
 
-        GeneratedItemData? data = null;
-        if (held is not null && !held.IsAir && TryGetGeneratedHeldData(held, out var gi) && gi?.Data is not null)
-            data = gi.Data;
-        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-        if (data is null && payload is not null && !string.IsNullOrWhiteSpace(payload.GeneratedItemId)
-            && registry is not null && registry.TryGet(payload.GeneratedItemId, out var registryData))
-            data = registryData;
+        GeneratedItemData? data = ResolveHeldPresentationData(held, payload);
 
         string spritePath = data?.Visual?.SpritePath ?? "";
         if (string.IsNullOrWhiteSpace(spritePath))
