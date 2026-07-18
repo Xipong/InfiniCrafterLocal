@@ -328,6 +328,10 @@ def repair_llm_combat_genome_if_needed(data: dict[str, Any], a: dict[str, Any], 
     defects = genome_defects(data)
     if defects:
         debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
+        debug["authorRepairRejectedDomains"] = [{
+            "path": "$.runtimePlan.engineCalls",
+            "kind": "genome_non_executable",
+        }]
         raise PlannerUnavailable("LLM planner did not complete attack.genome after repair loop (" + "; ".join(defects) + "); craft failed and ingredients must be refunded")
     debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
     return data
@@ -375,7 +379,15 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     # LLM repair loop for missing/malformed fields. Any remaining defect is a hard failure.
     defects = genome_defects(data)
     if defects:
-        raise PlannerUnavailable("LLM planner did not author a complete attack.genome after repair (" + "; ".join(defects) + "); craft failed and ingredients must be refunded")
+        raise PlannerUnavailable(
+            "LLM planner did not author a complete attack.genome after repair ("
+            + "; ".join(defects)
+            + "); craft failed and ingredients must be refunded",
+            author_repair_rejected_domains=[{
+                "path": "$.runtimePlan.engineCalls",
+                "kind": "genome_non_executable",
+            }],
+        )
 
     debug: dict[str, Any] = {}
     delivery, _ = _require_authored_enum(proposed, "delivery", DELIVERIES)
@@ -443,6 +455,8 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     # These values already came from typed engineCalls; replacing them with DTO
     # defaults here would silently re-author the item after validation.
     for field, lo, hi, integer in [
+        ("aoeDamageRadiusPx", 0, 160, True),
+        ("projectileHitBudget", -1, 10, True),
         ("debuffTime", 0, 600, True),
         ("secondaryDamageMultiplier", 0, 1, False),
         ("secondarySpreadRadians", 0, 1.2, False),
@@ -462,7 +476,9 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         if proposed.get(field) not in (None, ""):
             value = clamp_float(proposed.get(field), lo, hi, lo)
             g[field] = int(round(value)) if integer else round(value, 3)
-    for field in ("primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial"):
+    for field in (
+        "debuffHint", "primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial",
+    ):
         if proposed.get(field) not in (None, ""):
             g[field] = str(proposed.get(field))[:120]
 

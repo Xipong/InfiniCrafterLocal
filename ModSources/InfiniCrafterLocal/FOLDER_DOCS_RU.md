@@ -23,6 +23,7 @@ Charge/sentry owners:
 - `Content/Projectiles/GeneratedProjectile.ChargeRelease.cs` — held charge and ordinary projectile release.
 - `Content/Items/GeneratedItem.Sentry.cs` — sentry placement and maxTurrets.
 - `Content/Projectiles/GeneratedProjectile.Sentry.cs` — target scan, bounded fire lifecycle and non-recursive shot spec.
-- `Content/Projectiles/GeneratedProjectile.NetSync.cs` — protocol 14 scalar state.
+- `Content/Projectiles/GeneratedChildSpecPolicy.cs` — finite runtime-variant vocabulary and deterministic reconstruction from the registry-owned root `AttackSpec`.
+- `Content/Projectiles/GeneratedProjectile.NetSync.cs` — protocol 20: generated id + runtime variant + bounded per-instance scalar state; no full `AttackSpec` in combat packets.
 
 Do not set sentry-only `ProjectileID.Sets.*` globally on the shared GeneratedProjectile type.

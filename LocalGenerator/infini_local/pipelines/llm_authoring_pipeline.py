@@ -5,7 +5,7 @@ import json
 import re
 from typing import Any
 
-from infini_local.core.env_utils import env_float, env_int, env_str
+from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
@@ -23,13 +23,26 @@ from infini_local.core.runtime_contracts import (
     validate_structural_planner_contract,
 )
 from infini_local.pipelines.author_item_contract import (
+    author_item_prompt_shape_card,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
+    author_item_provider_targeted_repair_delta_schema,
     author_item_repair_response_schema,
+    author_item_targeted_repair_delta_schema,
     project_provider_author_item_to_local,
     strict_author_item_repair_report,
+    strict_author_item_targeted_repair_delta_report,
 )
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import (
+    EQUIPMENT_LIGHT_ENCODING,
+    PULL_ON_HIT_ENCODING,
+    PRIMARY_FUNCTION_AUTHOR_RULES,
+    RUNTIME_PLAN_METADATA_TYPES,
+    VISUAL_TOPOLOGY_RULES,
+    VISIBLE_ENGINE_FUNCTIONS,
+    build_llm_author_payload,
+    engine_runtime_capability_contract_for_llm,
+)
 
 
 _AUTHOR_STRUCTURAL_WIRE_RULES = (
@@ -39,7 +52,6 @@ _AUTHOR_STRUCTURAL_WIRE_RULES = (
     "Do not return compiler provenance, receipts, signatures, or final DTO paths."
 )
 from infini_local.pipelines.llm_transport import (
-    LLM_MODEL_OVERRIDE_KEY,
     active_llm_provider,
     apply_llm_common_options,
     llm_chat_json,
@@ -229,6 +241,7 @@ def _failure_rejection_sources(failure_report: dict[str, Any]) -> list[Any]:
         "errorDetails",
         "invalidTargets",
         "identityError",
+        "authorRepairRejectedDomains",
     }
 
     def collect(value: Any) -> None:
@@ -260,10 +273,10 @@ def _failure_rejection_sources(failure_report: dict[str, Any]) -> list[Any]:
     return []
 
 
-def _repair_targets(failure_report: dict[str, Any]) -> list[dict[str, str]]:
+def _repair_targets(failure_report: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract bounded structural evidence without interpreting authored prose."""
-    targets: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    targets: list[dict[str, Any]] = []
+    seen: set[str] = set()
 
     def add(
         *,
@@ -271,19 +284,33 @@ def _repair_targets(failure_report: dict[str, Any]) -> list[dict[str, str]]:
         call_id: Any = "",
         fn: Any = "",
         reason: Any = "",
+        provenance: dict[str, Any] | None = None,
     ) -> None:
-        row = {
+        row: dict[str, Any] = {
             "path": str(path or "").strip(),
             "callId": str(call_id or "").strip(),
             "fn": str(fn or "").strip(),
             "reason": str(reason or "").strip(),
         }
+        provenance_keys = (
+            "authoredParam", "authoredValue", "compiledField", "compiledValue",
+            "finalPath", "finalActual",
+        )
+        for key in provenance_keys:
+            if isinstance(provenance, dict) and key in provenance:
+                value = provenance[key]
+                if isinstance(value, (str, bool, int, float)) or value is None:
+                    row[key] = value
         if not any(row.values()):
             return
-        key = (row["path"], row["callId"], row["fn"], row["reason"])
+        key = json.dumps(row, ensure_ascii=False, sort_keys=True, default=str)
         if key not in seen and len(targets) < 24:
             seen.add(key)
-            targets.append({key: value for key, value in row.items() if value})
+            targets.append({
+                field: value
+                for field, value in row.items()
+                if value or field in provenance_keys
+            })
 
     def visit(value: Any) -> None:
         if isinstance(value, list):
@@ -316,6 +343,7 @@ def _repair_targets(failure_report: dict[str, Any]) -> list[dict[str, str]]:
                 or value.get("kind")
                 or value.get("status")
             ),
+            provenance=value,
         )
         for child in value.values():
             if isinstance(child, (dict, list)):
@@ -361,6 +389,12 @@ def _rejected_call_ids(
 
     def visit(value: Any) -> None:
         if isinstance(value, dict):
+            if str(value.get("path") or "").strip() == "$.runtimePlan.engineCalls":
+                rejected.update(
+                    str(call.get("callId") or "").strip()
+                    for call in calls
+                    if isinstance(call, dict) and str(call.get("callId") or "").strip()
+                )
             call_id = value.get("callId")
             if isinstance(call_id, str) and call_id.strip():
                 rejected.add(call_id.strip())
@@ -371,8 +405,8 @@ def _rejected_call_ids(
             for child in value:
                 visit(child)
             return
-        text = str(value or "")
-        indexed = re.search(r"engineCalls(?:\[(\d+)\]|\.(\d+))(?:\.|\]|$)", text)
+        text_value = str(value or "")
+        indexed = re.search(r"engineCalls(?:\[(\d+)\]|\.(\d+))(?:\.|\]|$)", text_value)
         if indexed is None:
             return
         index = int(indexed.group(1) or indexed.group(2))
@@ -392,6 +426,177 @@ def _rejected_call_ids(
             if key not in {"finalWireReceipts", "contract"}
         })
     return rejected
+
+
+def _whole_engine_call_domain_rejected(failure_report: dict[str, Any]) -> bool:
+    found = False
+
+    def visit(value: Any) -> None:
+        nonlocal found
+        if found:
+            return
+        if isinstance(value, dict):
+            if str(value.get("path") or "").strip() == "$.runtimePlan.engineCalls":
+                found = True
+                return
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    for source in _failure_rejection_sources(failure_report):
+        visit(source)
+    return found
+
+
+def _apply_targeted_repair_delta(
+    current_item: dict[str, Any],
+    delta: dict[str, Any],
+    failure_report: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply sparse same-author leaf edits without whole-object merge semantics."""
+    candidate = copy.deepcopy(current_item)
+    plan_candidate = candidate.get("runtimePlan")
+    plan: dict[str, Any] = plan_candidate if isinstance(plan_candidate, dict) else {}
+    calls_candidate = plan.get("engineCalls")
+    calls: list[dict[str, Any]] = (
+        [call for call in calls_candidate if isinstance(call, dict)]
+        if isinstance(calls_candidate, list)
+        else []
+    )
+    plan["engineCalls"] = calls
+    candidate["runtimePlan"] = plan
+
+    allowed_patch_keys = set(_repair_allowed_patch_keys(failure_report, True))
+    rejected_call_ids = _rejected_call_ids(failure_report, plan)
+    whole_engine_domain = _whole_engine_call_domain_rejected(failure_report)
+
+    identity = delta.get("identity")
+    if isinstance(identity, dict):
+        category = str(identity.get("category") or "").strip()
+        result_kind = str(identity.get("resultKind") or "").strip()
+        current_category = str(candidate.get("category") or "").strip()
+        current_result_kind = str(plan.get("resultKind") or "").strip()
+        if category != current_category and "category" not in allowed_patch_keys:
+            raise PlannerUnavailable("targeted repair delta contains out_of_scope_identity_category")
+        if result_kind != current_result_kind and "runtimePlan" not in allowed_patch_keys:
+            raise PlannerUnavailable("targeted repair delta contains out_of_scope_identity_result_kind")
+        candidate["category"] = category
+        plan["resultKind"] = result_kind
+
+    author_fields = delta.get("authorFields")
+    if isinstance(author_fields, dict):
+        concept_candidate = candidate.setdefault("concept", {})
+        concept: dict[str, Any] = concept_candidate if isinstance(concept_candidate, dict) else {}
+        candidate["concept"] = concept
+        contract_candidate = candidate.setdefault("runtimeContract", {})
+        runtime_contract: dict[str, Any] = contract_candidate if isinstance(contract_candidate, dict) else {}
+        candidate["runtimeContract"] = runtime_contract
+        targets: dict[str, tuple[str, dict[str, Any]]] = {
+            "name": ("name", candidate),
+            "fantasy": ("fantasy", concept),
+            "mergeLogic": ("mergeLogic", concept),
+            "coreMechanic": ("coreMechanic", concept),
+            "primaryVerb": ("primaryVerb", runtime_contract),
+            "controlStyle": ("controlStyle", runtime_contract),
+            "playerViewTimeline": ("playerViewTimeline", runtime_contract),
+            "sourceRolePreservation": ("sourceRolePreservation", plan),
+            "visualIntent": ("visualIntent", plan),
+        }
+        for field, value in author_fields.items():
+            if field not in allowed_patch_keys:
+                raise PlannerUnavailable(
+                    f"targeted repair delta contains out_of_scope_author_field:{field}"
+                )
+            target_key, target = targets[field]
+            target[target_key] = copy.deepcopy(value)
+
+    runtime_metadata = delta.get("runtimeMetadata")
+    if isinstance(runtime_metadata, dict):
+        if "runtimePlan" not in allowed_patch_keys:
+            raise PlannerUnavailable("targeted repair delta contains out_of_scope_runtime_metadata")
+        for field, value in runtime_metadata.items():
+            plan[field] = copy.deepcopy(value)
+
+    index_by_call_id = {
+        str(call.get("callId") or "").strip(): index
+        for index, call in enumerate(calls)
+        if str(call.get("callId") or "").strip()
+    }
+    seen_call_ids: set[str] = set()
+    for param_patch in delta.get("engineCallParamPatches") or []:
+        call_id = str(param_patch.get("callId") or "").strip()
+        if call_id in seen_call_ids:
+            raise PlannerUnavailable(f"targeted repair delta repeats callId:{call_id}")
+        seen_call_ids.add(call_id)
+        if call_id not in rejected_call_ids:
+            raise PlannerUnavailable(
+                f"targeted repair delta contains out_of_scope_engine_call_param_patch:{call_id}"
+            )
+        index = index_by_call_id.get(call_id)
+        if index is None:
+            raise PlannerUnavailable(f"targeted repair delta references unknown callId:{call_id}")
+        current_call = calls[index]
+        patch_fn = str(param_patch.get("fn") or "").strip()
+        current_fn = str(current_call.get("fn") or "").strip()
+        if patch_fn != current_fn:
+            raise PlannerUnavailable(
+                f"targeted repair delta params patch cannot change fn:{call_id}:{current_fn}->{patch_fn}"
+            )
+        params_candidate = current_call.get("params")
+        params = copy.deepcopy(params_candidate) if isinstance(params_candidate, dict) else {}
+        params.update(copy.deepcopy(param_patch.get("params") or {}))
+        current_call["params"] = params
+
+    for replacement in delta.get("engineCallReplacements") or []:
+        call_id = str(replacement.get("callId") or "").strip()
+        if call_id in seen_call_ids:
+            raise PlannerUnavailable(f"targeted repair delta repeats callId:{call_id}")
+        seen_call_ids.add(call_id)
+        if call_id not in rejected_call_ids:
+            raise PlannerUnavailable(
+                f"targeted repair delta contains out_of_scope_engine_call_replacement:{call_id}"
+            )
+        index = index_by_call_id.get(call_id)
+        if index is None:
+            raise PlannerUnavailable(f"targeted repair delta replacement references unknown callId:{call_id}")
+        calls[index] = copy.deepcopy(replacement)
+
+    removal_ids = [str(call_id or "").strip() for call_id in delta.get("engineCallRemovals") or []]
+    for call_id in removal_ids:
+        if call_id in seen_call_ids:
+            raise PlannerUnavailable(f"targeted repair delta repeats callId:{call_id}")
+        seen_call_ids.add(call_id)
+        if call_id not in rejected_call_ids:
+            raise PlannerUnavailable(
+                f"targeted repair delta contains out_of_scope_engine_call_removal:{call_id}"
+            )
+        if call_id not in index_by_call_id:
+            raise PlannerUnavailable(f"targeted repair delta removal references unknown callId:{call_id}")
+    if removal_ids:
+        removal_set = set(removal_ids)
+        calls[:] = [
+            call for call in calls
+            if str(call.get("callId") or "").strip() not in removal_set
+        ]
+
+    additions = delta.get("engineCallAdditions") or []
+    if additions and not whole_engine_domain:
+        raise PlannerUnavailable("targeted repair delta contains out_of_scope_engine_call_addition")
+    existing_ids = {
+        str(call.get("callId") or "").strip()
+        for call in calls
+        if str(call.get("callId") or "").strip()
+    }
+    for addition in additions:
+        call_id = str(addition.get("callId") or "").strip()
+        if call_id in existing_ids:
+            raise PlannerUnavailable(f"targeted repair delta adds duplicate callId:{call_id}")
+        existing_ids.add(call_id)
+        calls.append(copy.deepcopy(addition))
+
+    return candidate
 
 
 def _preserve_accepted_engine_calls(
@@ -454,18 +659,23 @@ def _preserve_accepted_authoring(
         "category_result_kind_mismatch",
         "result_kind_mismatch",
     )
-    category_invalid = identity_mismatch or _failure_mentions(
-        failure_report,
-        "invalid_category",
-        "$.category",
-    )
     result_kind_invalid = identity_mismatch or _failure_mentions(
         failure_report,
         "invalid_result_kind",
         "runtimeplan.resultkind",
+        "resultkind",
     )
-    if not gameplay_redesign and not category_invalid and current.get("category"):
-        preserved["category"] = copy.deepcopy(current["category"])
+    category_explicitly_invalid = identity_mismatch or _failure_mentions(
+        failure_report,
+        "invalid_category",
+        "$.category",
+    )
+    category_repair_allowed = category_explicitly_invalid or result_kind_invalid
+    if current.get("category"):
+        if not category_repair_allowed:
+            preserved["category"] = copy.deepcopy(current["category"])
+        elif "category" not in preserved and not category_explicitly_invalid:
+            preserved["category"] = copy.deepcopy(current["category"])
     current_concept = current.get("concept")
     if isinstance(current_concept, dict):
         concept = preserved.setdefault("concept", {})
@@ -595,6 +805,8 @@ def _repair_allowed_patch_keys(failure_report: dict[str, Any], targeted: bool) -
         for target in _repair_targets(failure_report)
     )
     keys: list[str] = []
+    if any(str(target.get("callId") or "").strip() for target in _repair_targets(failure_report)):
+        keys.append("runtimePlan")
     mappings = (
         (("runtimeplan.enginecalls", "runtime_plan", "executor", "engine_call"), ["runtimePlan"]),
         (("$.name", "invalid_item_name", "invalid_identity"), ["name"]),
@@ -622,7 +834,7 @@ def build_same_author_repair_request(
     a: dict[str, Any],
     b: dict[str, Any],
     failure_report: dict[str, Any],
-) -> tuple[dict[str, Any], str, str, bool, str, dict[str, Any]]:
+) -> tuple[dict[str, Any], str, str, bool, dict[str, Any]]:
     """Build one bounded, concept-preserving same-author repair request."""
     current_item = _author_item_snapshot(data)
     current_runtime_plan, preserved_context = _scoped_repair_context(current_item)
@@ -632,8 +844,32 @@ def build_same_author_repair_request(
         "unsupported_mechanic_family",
         "unrepresentable_mechanic",
     )
-    model_override = env_str("INFINI_LLM_REAUTHOR_MODEL")
-    model_name = model_override or resolve_llm_model()
+    model_name = resolve_llm_model()
+    allowed_patch_keys = _repair_allowed_patch_keys(failure_report, targeted_repair)
+    capability = engine_runtime_capability_contract_for_llm(a, b)
+    available_function_cards = capability.get("availableFunctions")
+    available_cards: dict[str, Any] = (
+        available_function_cards if isinstance(available_function_cards, dict) else {}
+    )
+    current_calls_candidate = current_runtime_plan.get("engineCalls")
+    current_calls: list[Any] = current_calls_candidate if isinstance(current_calls_candidate, list) else []
+    current_functions = {
+        str(call.get("fn") or "").strip()
+        for call in current_calls
+        if isinstance(call, dict) and str(call.get("fn") or "").strip()
+    }
+    repair_function_names = set(VISIBLE_ENGINE_FUNCTIONS) if not targeted_repair else current_functions
+    repair_function_cards = {
+        fn: copy.deepcopy(available_cards[fn])
+        for fn in sorted(repair_function_names)
+        if fn in available_cards
+    }
+    metadata_shape = author_item_prompt_shape_card().get("runtimeContract")
+    visual_intent_rule = (
+        "visualIntent is a top-level patch key; never place it inside runtimePlan."
+        if "visualIntent" in allowed_patch_keys
+        else "Do not return visualIntent because it is not in allowedPatchKeys."
+    )
     system = (
         "You are the scoped repair pass of the SAME ITEM AUTHOR ROLE. "
         "Return only a compact JSON patch using allowedPatchKeys; never repeat the full AuthorItem. "
@@ -654,7 +890,22 @@ def build_same_author_repair_request(
         ),
         "repairMode": "targeted_domain_repair" if targeted_repair else "full_redesign",
         "contextOnlyParentNames": {"itemA": name_of(a), "itemB": name_of(b)},
-        "allowedPatchKeys": _repair_allowed_patch_keys(failure_report, targeted_repair),
+        "allowedPatchKeys": allowed_patch_keys,
+        "allowedEngineFunctions": list(VISIBLE_ENGINE_FUNCTIONS),
+        "primaryFunctionRules": dict(PRIMARY_FUNCTION_AUTHOR_RULES),
+        "runtimePlanMetadataTypes": dict(RUNTIME_PLAN_METADATA_TYPES),
+        "pullOnHitEncoding": dict(PULL_ON_HIT_ENCODING),
+        "visualTopologyRules": copy.deepcopy(VISUAL_TOPOLOGY_RULES),
+        "equipmentLightEncoding": copy.deepcopy(EQUIPMENT_LIGHT_ENCODING),
+        "repairFunctionCards": repair_function_cards,
+        "repairMetadataShape": copy.deepcopy(metadata_shape) if isinstance(metadata_shape, dict) else {},
+        "patchRules": [
+            visual_intent_rule,
+            "Every runtimePlan patch must include resultKind; it must match set_item_stats.params.resultKind and category when category is repairable.",
+            "Every runtimePlan.engineCalls replacement entry is a complete call with callId, fn, and params.",
+            "Every fn must be one of allowedEngineFunctions; never invent or alias an engine function.",
+            "Keep exactly one primary function; temporary helpers cannot fire or act as turrets; deploy_sentry is the only turret function.",
+        ],
         "invalidTargets": _repair_targets(failure_report),
         "currentRuntimePlan": current_runtime_plan,
         "currentCoreMechanic": (
@@ -669,6 +920,58 @@ def build_same_author_repair_request(
         ),
         "preservedConceptContext": preserved_context,
     }
+    response_schema = author_item_provider_repair_response_schema()
+    response_schema_name = "infini_author_item_scoped_repair_v1"
+    if targeted_repair:
+        system = (
+            "You are the SAME item_planner who authored the accepted item below. "
+            "The item is a finished accepted product except for the exact rejected leaves. "
+            "Calibrate only those leaves against the complete accepted item. "
+            "Return only a TargetedRepairDelta JSON object: changed params only, never a runtimePlan wrapper, never a repeated AuthorItem, and never unchanged calls or params. "
+            "Use engineCallParamPatches for ordinary value fixes. Use engineCallReplacements only when the rejected function or complete call shape must change. "
+            "Do not change accepted callId/fn pairs, identity, concept, visual topology, or metadata. "
+            "No reasoning, markdown, proof graph, receipts, or DTO paths."
+            + llm_reasoning_system_suffix(model_name)
+        )
+        rejected_call_ids = sorted(_rejected_call_ids(failure_report, current_runtime_plan))
+        dossier = {
+            "task": "Repair only the exact rejected leaves in your otherwise accepted finished item.",
+            "agentHandoff": agent_handoff(
+                previous_speaker="authoring_contract_gate",
+                current_speaker="item_planner",
+                next_speaker="authoring_contract_gate",
+                cause_by="exact_authored_leaves_rejected",
+                artifact_source="acceptedAuthorItem",
+            ),
+            "repairMode": "targeted_leaf_delta",
+            "acceptedAuthorItem": current_item,
+            "invalidTargets": _repair_targets(failure_report),
+            "rejectedCallIds": rejected_call_ids,
+            "allowedAuthorDomains": allowed_patch_keys,
+            "repairFunctionCards": repair_function_cards,
+            "targetedRepairDeltaShape": {
+                "identity": {"category": "required with resultKind", "resultKind": "required with category"},
+                "authorFields": "only changed allowed scalar author fields",
+                "runtimeMetadata": "only changed allowed runtime metadata leaves",
+                "engineCallParamPatches": [{
+                    "callId": "existing rejected callId",
+                    "fn": "same accepted fn",
+                    "params": {"changedParamOnly": "new typed value"},
+                }],
+                "engineCallReplacements": ["complete typed call; rejected callId only"],
+                "engineCallAdditions": ["complete typed call; whole engine-call domain rejection only"],
+                "engineCallRemovals": ["rejected callId only"],
+            },
+            "deltaRules": [
+                "Return the smallest sufficient delta; omit every unchanged top-level key.",
+                "Each engineCallParamPatches.params object contains changed leaves only.",
+                "A params patch must repeat the existing callId and fn exactly.",
+                "If identity changes, return identity.category and identity.resultKind together and keep set_item_stats.params.resultKind equal.",
+                "Do not add, remove, replace, or repeat accepted calls.",
+            ],
+        }
+        response_schema = author_item_provider_targeted_repair_delta_schema()
+        response_schema_name = "infini_author_item_targeted_repair_delta_v1"
     user_content = json.dumps(dossier, ensure_ascii=False, separators=(",", ":"))
     req = {
         "model": model_name,
@@ -683,20 +986,17 @@ def build_same_author_repair_request(
             hi=1.2,
         ),
         "response_format": llm_json_response_format(
-            "infini_author_item_scoped_repair_v1",
-            schema=author_item_provider_repair_response_schema(),
+            response_schema_name,
+            schema=response_schema,
             strict=True,
             auto_preference="json_object",
         ),
     }
-    if model_override:
-        req[LLM_MODEL_OVERRIDE_KEY] = model_override
     return (
         apply_llm_common_options(req, model_name=model_name),
         user_content,
         system,
         targeted_repair,
-        model_override,
         current_item,
     )
 
@@ -714,13 +1014,13 @@ def repair_author_item_after_failure(
     """Give one exact domain rejection to the same item-author role before abort.
 
     The compiler remains evidence-only: it neither chooses nor edits a mechanic.
-    The configured author returns only a bounded patch, which is merged into the
-    rejected authored object before ordinary source validation and recompilation.
+    Ordinary rejection uses a typed leaf delta. Full gameplay redesign remains a
+    separate complete-patch contract. Both return to source validation and compile.
     """
     if not USE_LLM:
         raise PlannerUnavailable("same-author scoped repair requires the configured item author")
 
-    req, user_content, system, _, model_override, current_item = (
+    req, user_content, system, targeted_repair, current_item = (
         build_same_author_repair_request(data, a, b, failure_report)
     )
     model_name = str(req.get("model") or resolve_llm_model())
@@ -751,27 +1051,34 @@ def repair_author_item_after_failure(
         response=content,
     )
     raw_patch = parse_first_valid_llm_json(content)
-    patch = project_provider_author_item_to_local(
-        raw_patch,
-        author_item_repair_response_schema(),
-    )
-    patch_report = strict_author_item_repair_report(patch)
-    targeted_repair = not _failure_mentions(
-        failure_report,
-        "executor_not_representable",
-        "unsupported_mechanic_family",
-        "unrepresentable_mechanic",
-    )
-    allowed_patch_keys = set(_repair_allowed_patch_keys(failure_report, targeted_repair))
-    unexpected_patch_keys = sorted(set(patch) - allowed_patch_keys)
-    if unexpected_patch_keys:
-        patch_report.setdefault("errors", []).append({
-            "path": "$",
-            "kind": "out_of_scope_repair_keys",
-            "keys": unexpected_patch_keys,
-        })
-        patch_report["ok"] = False
-    if not targeted_repair:
+    if targeted_repair:
+        patch = project_provider_author_item_to_local(
+            raw_patch,
+            author_item_targeted_repair_delta_schema(),
+        )
+        patch_report = strict_author_item_targeted_repair_delta_report(patch)
+        if not patch_report.get("ok"):
+            raise PlannerUnavailable(
+                "same-author targeted repair returned an invalid delta: "
+                + bounded_json_dumps(patch_report, max_chars=4000)
+            )
+        parsed = _apply_targeted_repair_delta(current_item, patch, failure_report)
+        repair_kind = "same_author_role_targeted_leaf_delta"
+    else:
+        patch = project_provider_author_item_to_local(
+            raw_patch,
+            author_item_repair_response_schema(),
+        )
+        patch_report = strict_author_item_repair_report(patch)
+        allowed_patch_keys = set(_repair_allowed_patch_keys(failure_report, targeted_repair))
+        unexpected_patch_keys = sorted(set(patch) - allowed_patch_keys)
+        if unexpected_patch_keys:
+            patch_report.setdefault("errors", []).append({
+                "path": "$",
+                "kind": "out_of_scope_repair_keys",
+                "keys": unexpected_patch_keys,
+            })
+            patch_report["ok"] = False
         required_patch_keys = {"category", "coreMechanic", "primaryVerb", "controlStyle", "runtimePlan"}
         missing_patch_keys = sorted(required_patch_keys - set(patch))
         plan = patch.get("runtimePlan") if isinstance(patch.get("runtimePlan"), dict) else {}
@@ -788,16 +1095,17 @@ def repair_author_item_after_failure(
                 "missingRuntimePlanKeys": missing_plan_keys,
             })
             patch_report["ok"] = False
-    if not patch_report.get("ok"):
-        raise PlannerUnavailable(
-            "same-author scoped repair returned an invalid patch: "
-            + bounded_json_dumps(patch_report, max_chars=4000)
+        if not patch_report.get("ok"):
+            raise PlannerUnavailable(
+                "same-author scoped repair returned an invalid patch: "
+                + bounded_json_dumps(patch_report, max_chars=4000)
+            )
+        parsed = _preserve_accepted_authoring(
+            _scoped_repair_candidate(patch),
+            current_item,
+            failure_report,
         )
-    parsed = _preserve_accepted_authoring(
-        _scoped_repair_candidate(patch),
-        current_item,
-        failure_report,
-    )
+        repair_kind = "same_author_role_full_gameplay_redesign"
     obj = _prepare_parsed_author_item(parsed)
     source_gate = planner_runtime_promise_gate(copy.deepcopy(obj))
     if not source_gate.get("ok"):
@@ -814,9 +1122,8 @@ def repair_author_item_after_failure(
     obj["debug"]["planner"] = "llm_author_first"
     obj["debug"]["plannerPromiseGate"] = source_gate
     obj["debug"]["model"] = model_name
-    obj["debug"]["authorRepair"] = "same_author_role_scoped_patch"
+    obj["debug"]["authorRepair"] = repair_kind
     obj["debug"]["repairPatchKeys"] = sorted(patch)
-    obj["debug"]["repairModelMayDiffer"] = bool(model_override)
     obj["debug"]["authorRepairTransport"] = copy.deepcopy(transport_debug)
     obj["debug"]["llmRawOutput"] = str(content)[:12000]
     obj["_llmHistory"] = attributed_planner_history(system, user_content, content)

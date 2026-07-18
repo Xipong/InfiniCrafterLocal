@@ -332,10 +332,12 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
     schema = author_item_response_schema()
     properties = schema["properties"]
 
-    def enum_or_type(node: dict[str, Any]) -> str:
+    def enum_or_type(node: dict[str, Any]) -> Any:
         enum = node.get("enum")
-        if isinstance(enum, list):
-            return "|".join(str(value) for value in enum)
+        if isinstance(enum, list) and enum:
+            if all(isinstance(value, str) for value in enum):
+                return "|".join(enum)
+            return copy.deepcopy(enum[0])
         return str(node.get("type") or "value")
 
     def value_card(node: dict[str, Any]) -> Any:
@@ -343,10 +345,15 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             child_candidate = node.get("properties")
             child_properties: dict[str, Any] = child_candidate if isinstance(child_candidate, dict) else {}
             required = {str(key) for key in node.get("required") or []}
-            return {
-                key: value_card(child) if key in required else f"optional {value_card(child)}"
-                for key, child in child_properties.items()
-            }
+            out: dict[str, Any] = {}
+            for key, child in child_properties.items():
+                child_card = value_card(child)
+                out[key] = (
+                    child_card
+                    if key in required or not isinstance(child_card, str)
+                    else f"optional {child_card}"
+                )
+            return out
         if node.get("type") == "array":
             return "array"
         return enum_or_type(node)
@@ -447,8 +454,10 @@ def author_item_repair_response_schema() -> dict[str, Any]:
             "balanceIntent", "anomalyFlags",
         )
     }
-    plan["required"] = []
+    plan["required"] = ["resultKind"]
     runtime_contract = properties["runtimeContract"]["properties"]
+    visual_patch = copy.deepcopy(properties["runtimePlan"]["properties"]["visualIntent"])
+    visual_patch["required"] = []
     return {
         "$schema": full["$schema"],
         "$defs": copy.deepcopy(full.get("$defs") or {}),
@@ -466,7 +475,7 @@ def author_item_repair_response_schema() -> dict[str, Any]:
             "sourceRolePreservation": copy.deepcopy(
                 properties["runtimePlan"]["properties"]["sourceRolePreservation"]
             ),
-            "visualIntent": copy.deepcopy(properties["runtimePlan"]["properties"]["visualIntent"]),
+            "visualIntent": visual_patch,
             "runtimePlan": plan,
         },
     }
@@ -474,6 +483,129 @@ def author_item_repair_response_schema() -> dict[str, Any]:
 
 def author_item_provider_repair_response_schema() -> dict[str, Any]:
     return _provider_strict_projection(author_item_repair_response_schema())
+
+
+def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
+    """Sparse, typed leaf edits for ordinary same-author repair.
+
+    This schema is derived from the AuthorItem function branches. It deliberately
+    keeps structural call replacement separate from the common params-only path.
+    """
+    full = author_item_response_schema()
+    properties = full["properties"]
+    runtime_plan = properties["runtimePlan"]["properties"]
+    runtime_contract = properties["runtimeContract"]["properties"]
+    engine_items = runtime_plan["engineCalls"]["items"]
+    call_branches = engine_items.get("oneOf") or []
+    param_patch_branches: list[dict[str, Any]] = []
+    for call_branch in call_branches:
+        call_properties = call_branch.get("properties") if isinstance(call_branch, dict) else None
+        if not isinstance(call_properties, dict):
+            continue
+        params = copy.deepcopy(call_properties.get("params") or {})
+        params["required"] = []
+        param_patch_branches.append({
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "callId": copy.deepcopy(call_properties["callId"]),
+                "fn": copy.deepcopy(call_properties["fn"]),
+                "params": params,
+            },
+            "required": ["callId", "fn", "params"],
+        })
+
+    author_fields = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "name": copy.deepcopy(properties["name"]),
+            "fantasy": copy.deepcopy(properties["concept"]["properties"]["fantasy"]),
+            "mergeLogic": copy.deepcopy(properties["concept"]["properties"]["mergeLogic"]),
+            "coreMechanic": copy.deepcopy(properties["concept"]["properties"]["coreMechanic"]),
+            "primaryVerb": copy.deepcopy(runtime_contract["primaryVerb"]),
+            "controlStyle": copy.deepcopy(runtime_contract["controlStyle"]),
+            "playerViewTimeline": copy.deepcopy(runtime_contract["playerViewTimeline"]),
+            "sourceRolePreservation": copy.deepcopy(runtime_plan["sourceRolePreservation"]),
+            "visualIntent": copy.deepcopy(runtime_plan["visualIntent"]),
+        },
+        "required": [],
+    }
+    runtime_metadata = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            key: copy.deepcopy(runtime_plan[key])
+            for key in (
+                "runtimeStateIntent", "sourceReading", "balanceIntent", "anomalyFlags",
+            )
+        },
+        "required": [],
+    }
+    return {
+        "$schema": full["$schema"],
+        "$defs": copy.deepcopy(full.get("$defs") or {}),
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "identity": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "category": copy.deepcopy(properties["category"]),
+                    "resultKind": copy.deepcopy(runtime_plan["resultKind"]),
+                },
+                "required": ["category", "resultKind"],
+            },
+            "authorFields": author_fields,
+            "runtimeMetadata": runtime_metadata,
+            "engineCallParamPatches": {
+                "type": "array",
+                "items": {"oneOf": param_patch_branches},
+                "maxItems": 24,
+            },
+            "engineCallReplacements": {
+                "type": "array",
+                "items": copy.deepcopy(engine_items),
+                "maxItems": 24,
+            },
+            "engineCallAdditions": {
+                "type": "array",
+                "items": copy.deepcopy(engine_items),
+                "maxItems": 24,
+            },
+            "engineCallRemovals": {
+                "type": "array",
+                "items": copy.deepcopy(call_branches[0]["properties"]["callId"]),
+                "maxItems": 24,
+            },
+        },
+        "required": [],
+    }
+
+
+def author_item_provider_targeted_repair_delta_schema() -> dict[str, Any]:
+    return _provider_strict_projection(author_item_targeted_repair_delta_schema())
+
+
+def strict_author_item_targeted_repair_delta_report(value: Any) -> dict[str, Any]:
+    schema = author_item_targeted_repair_delta_schema()
+    errors = _strict_schema_errors(value, schema, root=schema, path="$")
+    if isinstance(value, dict) and not value:
+        errors.append({"path": "$", "kind": "empty_repair_delta"})
+    if isinstance(value, dict):
+        for index, patch in enumerate(value.get("engineCallParamPatches") or []):
+            params = patch.get("params") if isinstance(patch, dict) else None
+            if isinstance(params, dict) and not params:
+                errors.append({
+                    "path": f"$.engineCallParamPatches[{index}].params",
+                    "kind": "empty_engine_call_params_patch",
+                })
+    return {
+        "schema": "infini.author-item-v3-targeted-repair-delta.v1",
+        "ok": not errors,
+        "errors": errors,
+    }
 
 
 def strict_author_item_repair_report(value: Any) -> dict[str, Any]:

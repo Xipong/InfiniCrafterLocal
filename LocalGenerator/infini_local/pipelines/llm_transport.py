@@ -1306,13 +1306,17 @@ def _llm_json_single_context_with_length_retry(
     message = raw_message if isinstance(raw_message, dict) else {}
     content = str(message.get("content") or "")
     malformed_json = False
-    if isinstance(payload.get("response_format"), dict):
+    complete_json = False
+    json_response_expected = isinstance(payload.get("response_format"), dict)
+    if json_response_expected or finish_reason == "length":
         try:
             parse_first_valid_llm_json(content)
+            complete_json = True
         except (ValueError, TypeError, json.JSONDecodeError):
-            malformed_json = True
+            malformed_json = json_response_expected
     gemini_length = (
         finish_reason == "length"
+        and not complete_json
         and "gemini-3.1-flash" in model_name.lower()
         and _is_google_openai_compat_reasoning_model(model_name, context)
     )

@@ -370,7 +370,11 @@ def compile_and_validate_authored_runtime(
     run_stage: Callable[..., Any],
 ) -> dict[str, Any]:
     """Run one strict author transaction plus at most one scoped repair patch."""
-    state: dict[str, Any] = {"data": data, "stage": "strict_author_validation"}
+    state: dict[str, Any] = {
+        "data": data,
+        "authorSource": deepcopy(data),
+        "stage": "strict_author_validation",
+    }
 
     def domain_pass(item: dict[str, Any], *, repaired: bool) -> dict[str, Any]:
         labels = (
@@ -395,6 +399,7 @@ def compile_and_validate_authored_runtime(
         state["stage"] = "strict_author_validation"
         item = run_stage(labels["validate"], strict_validate_authored_item, item, a, b)
         state["data"] = item
+        state["authorSource"] = deepcopy(item)
         state["stage"] = "result_envelope_projection"
         item = validate_and_repair(item, a, b, ca, cb, key)
         state["data"] = item
@@ -428,6 +433,10 @@ def compile_and_validate_authored_runtime(
             "errorType": type(exc).__name__,
             "error": str(exc)[:2000],
         }
+        if exc.author_repair_rejected_domains:
+            failure_report["authorRepairRejectedDomains"] = deepcopy(
+                exc.author_repair_rejected_domains
+            )
         if failure_report["stage"] == "final_wire":
             failure_report["finalWire"] = final_runtime_promise_report(failed)
         else:
@@ -436,7 +445,13 @@ def compile_and_validate_authored_runtime(
             )
         debug_candidate = failed.get("debug")
         debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
-        for field in ("plannerPromiseGate", "authorItemV3LocalStrictBoundary", "runtimePlanValidationBeforeRepair", "runtimePlanRawStrictBoundary"):
+        for field in (
+            "plannerPromiseGate",
+            "authorItemV3LocalStrictBoundary",
+            "runtimePlanValidationBeforeRepair",
+            "runtimePlanRawStrictBoundary",
+            "authorRepairRejectedDomains",
+        ):
             if field in debug:
                 diagnostic = debug[field]
                 if isinstance(diagnostic, str):
@@ -446,10 +461,16 @@ def compile_and_validate_authored_runtime(
                         pass
                 failure_report[field] = diagnostic
 
+    author_source_candidate = state.get("authorSource")
+    author_source: dict[str, Any] = (
+        author_source_candidate
+        if isinstance(author_source_candidate, dict)
+        else data
+    )
     repaired_item = run_stage(
         "04e_same_author_scoped_repair",
         repair_author_item_after_failure,
-        failed,
+        author_source,
         a,
         b,
         ca,

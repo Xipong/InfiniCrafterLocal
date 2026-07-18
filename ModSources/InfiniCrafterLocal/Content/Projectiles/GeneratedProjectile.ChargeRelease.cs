@@ -106,7 +106,11 @@ public sealed partial class GeneratedProjectile
             int idx = Projectile.NewProjectile(Projectile.GetSource_FromThis(), Projectile.Center + direction * 12f, velocity, Type, damage, knockback, Projectile.owner, released.MovementCode, released.EffectCode, released.OnHitCode);
             if (idx >= 0 && idx < Main.maxProjectiles && Main.projectile[idx].ModProjectile is GeneratedProjectile generated)
             {
-                generated.ApplyGeneratedSpec(released.CloneForRuntimeSpawn(), _vfxManifest, _generatedItemId);
+                generated.ApplyGeneratedSpec(
+                    released.CloneForRuntimeSpawn(),
+                    _vfxManifest,
+                    _generatedItemId,
+                    GeneratedProjectileRuntimeVariant.ChargeReleasedShot);
                 Main.projectile[idx].netUpdate = true;
                 generated.BroadcastVisualSync();
             }

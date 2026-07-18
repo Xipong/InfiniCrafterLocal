@@ -44,6 +44,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private VfxManifestSpec _vfxManifest = new();
     private InfiniVfxState _vfxState = new();
     private bool _configured;
+    private bool _runtimeSpecEverApplied;
     private bool _statsApplied;
     private int _remainingBounces;
     private bool _returningPhase;
@@ -52,11 +53,12 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private float _orbitStartRadius;
     private bool _procced;
     private bool _expireSecondariesSpawned;
+    private bool _applyingAuthoredAoeDamage;
     private int _spawnedGameplayChildCount;
     private bool _stuckToTile;
     private bool _impactMobilityUsed;
     private string _generatedItemId = "";
-    private string _lastReceivedVfxManifestJson = "";
+    private GeneratedProjectileRuntimeVariant _runtimeVariant = GeneratedProjectileRuntimeVariant.Root;
     private int _spawnIgnoreNpc = -1;
     private int _spawnIgnoreTicks = 0;
     private int _lastImpactSoundLocalTick = -9999;
