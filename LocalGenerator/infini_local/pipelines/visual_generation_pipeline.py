@@ -339,6 +339,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "imageBackendContract": backend_contract,
             "rules": [
                 'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}}; never emit VisualKit fields directly at the root.',
+                "bakedAssets may contain only projectile, impact, child, and field; never item. itemIconPrompt owns the required item sprite.",
                 "Return one JSON object matching the supplied schema; no markdown or analysis.",
                 "Do not change gameplay, delivery, runtime families, counts, timing, or stats.",
                 "The planner's authored final-item topology is authoritative. Preserve its physical class, subject count, continuous bodies, attachments, and intentional separations exactly as authored.",
@@ -368,7 +369,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "palette": "foreground named colors only",
                 "itemSilhouetteContract": "one compact positive sentence stating global silhouette, part count, proportions, attachment points, and which bodies are continuous or intentionally separate",
                 "rolePrompts": "itemIconPrompt, projectileSpritePrompt, impactSpritePrompt, childSpritePrompt, fieldSpritePrompt",
-                "bakedAssets": "exact JSON object of role objects, never an array and never a string mode. Example: {\"projectile\":{\"mode\":\"baked_sprite\",\"reason\":\"distinct moving body\",\"distinctFromItem\":true},\"impact\":{\"mode\":\"particle_vfx\",\"reason\":\"momentary sparks\"}}. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. Role prompts above are canonical",
+                "bakedAssets": "may contain only projectile, impact, child, and field; never item. It is an exact JSON object of role objects, never an array and never a string mode. Example: {\"projectile\":{\"mode\":\"baked_sprite\",\"reason\":\"distinct moving body\",\"distinctFromItem\":true},\"impact\":{\"mode\":\"particle_vfx\",\"reason\":\"momentary sparks\"}}. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. itemIconPrompt owns the required item sprite; role prompts above are canonical",
                 "vfx": "concise vfxIntent/projectileVfx/impactVfx/childVfx/fieldVfx plus scale, rhythm, materials, and avoid notes",
                 "lists": "animationPlan, assetDependencies, qualityNotes, vfxMaterialHints must remain JSON arrays",
                 "negativePrompt": "one optional shared backend negative prompt; keep empty for Z-Image",
@@ -393,7 +394,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "The visual_director_context payload.item is the authoritative current accepted item truth. "
             "Write coherent subject-first visual descriptions, not legacy SD tag recipes. Establish physical class, count, silhouette, view, and connected functional parts before materials, decoration, light, style, and background. "
             "Preserve authored subject, state, colors, materials, and topology. Use only authored glow, magic, energy, child motes, and material effects. "
-            'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}} and never place itemIconPrompt, bakedAssets, or other VisualKit fields at the root.'
+            'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}} and never place itemIconPrompt, bakedAssets, or other VisualKit fields at the root. '
+            "bakedAssets may contain only projectile, impact, child, and field; never item."
         )
         visual_user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         messages = [

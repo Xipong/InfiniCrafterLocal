@@ -53,7 +53,10 @@ _VISUAL_CONTEXT_KEYS = (
 _VISUAL_DIRECTOR_ROLE_FIELDS = {
     "item": {
         "promptField": "itemIconPrompt",
-        "assetDecision": "the item icon is always the required generated inventory/held sprite",
+        "assetDecision": (
+            "the item icon is always the required generated inventory/held sprite; "
+            "it is never represented by a bakedAssets.item entry"
+        ),
         "requiredWhen": "always",
     },
     "projectile": {
@@ -163,6 +166,8 @@ def visual_director_output_contract() -> dict[str, Any]:
             "Never return itemIconPrompt, bakedAssets, or any other VisualKit field at the root."
         ),
         "roleFields": copy.deepcopy(_VISUAL_DIRECTOR_ROLE_FIELDS),
+        "bakedAssetRoleKeys": ["projectile", "impact", "child", "field"],
+        "forbiddenBakedAssetKeys": ["item", "vfx"],
         "assetDemandRule": (
             "A role prompt describes appearance but never requests a PNG by itself; "
             "only bakedAssets.<role>.mode=baked_sprite requests one."
@@ -208,6 +213,10 @@ def visual_kit_response_schema() -> dict[str, Any]:
     if "bakedAssets" in kit_properties:
         kit_properties["bakedAssets"] = {
             "type": "object",
+            "description": (
+                "bakedAssets may contain only projectile, impact, child, and field; never item. "
+                "The required item sprite is described by itemIconPrompt outside bakedAssets."
+            ),
             "additionalProperties": False,
             "properties": {
                 "projectile": {"$ref": "#/$defs/BakedAssetBoundary"},

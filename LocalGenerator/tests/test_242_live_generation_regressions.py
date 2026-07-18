@@ -324,9 +324,10 @@ def _contract_check_visual_kit_rejects_singleton_text_aliases_without_leaking_in
     assert "visualKit" not in transport_failure_data
 
 
-def _contract_check_initial_visual_director_request_enforces_visual_kit_root_without_retry(monkeypatch) -> None:
+def _contract_check_initial_visual_director_request_enforces_root_and_baked_role_boundary_without_retry(monkeypatch) -> None:
     requests: list[dict] = []
     required_phrase = 'root object must contain exactly one key named "visualkit"'
+    baked_role_phrase = "bakedassets may contain only projectile, impact, child, and field; never item"
 
     monkeypatch.setattr(VISUAL, "USE_LLM", True)
     monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
@@ -343,7 +344,9 @@ def _contract_check_initial_visual_director_request_enforces_visual_kit_root_wit
             for message in req.get("messages") or []
             if isinstance(message, dict)
         ).casefold()
-        kit = {"itemIconPrompt": "one connected copper crescent tool"}
+        kit: dict[str, object] = {"itemIconPrompt": "one connected copper crescent tool"}
+        if baked_role_phrase not in request_text:
+            kit["bakedAssets"] = {"item": {"mode": "baked_sprite"}}
         content = {"visualKit": kit} if required_phrase in request_text else kit
         return {"choices": [{"message": {"content": json.dumps(content)}}]}
 
@@ -358,6 +361,7 @@ def _contract_check_initial_visual_director_request_enforces_visual_kit_root_wit
         str(message.get("content") or "") for message in requests[0]["messages"]
     ).casefold()
     assert required_phrase in initial_text
+    assert baked_role_phrase in initial_text
     schema = requests[0]["response_format"]["json_schema"]["schema"]
     assert schema["required"] == ["visualKit"]
     assert schema["additionalProperties"] is False
