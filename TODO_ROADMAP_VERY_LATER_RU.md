@@ -45,10 +45,10 @@ routing идёт только из structured `authoringModules`, не из prom
 Текущий pipeline уже получил менее радикальные anti-error улучшения и пока должен оставаться на них:
 
 ```text
-transient attributed Planner provenance (`role/name/content`) как integrity gate
-self-contained Name/Genome/Runtime/Visual/VFX dossiers с stage-specific system authority
-latest accepted stage packet = authoritative current truth; Planner transcript не replay'ится
-standalone только для explicit legacy/no-history data; malformed live history fail-closed
+- transient attributed Planner provenance (`role/name/content`) сохраняется только там, где он нужен для bounded author repair, но не является correctness gate downstream presentation stages
+- self-contained Name/Genome/Runtime/Visual/VFX dossiers с stage-specific system authority
+- latest accepted stage packet = authoritative current truth; Planner transcript не replay'ится
+- Visual/VFX имеют один self-contained stage request; malformed/absent history не создаёт standalone author path
 exact validation errors returned to the repair model
 repair-patch adoption gate
 rejected candidates remain feedback-only and never mutate accepted baseline

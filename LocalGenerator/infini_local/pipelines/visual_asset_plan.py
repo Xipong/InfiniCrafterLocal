@@ -47,20 +47,12 @@ _ROLE_KIT_PROMPT_FIELDS = {
 
 
 def _role_asset_prompt(data: dict[str, Any], role: str) -> str:
-    """Resolve the one canonical role prompt or its already-projected runtime field."""
+    """Resolve the one canonical VisualKit role prompt."""
     role = (role or "").strip().lower()
     kit = _visual_kit(data)
     prompt_field = _ROLE_KIT_PROMPT_FIELDS.get(role, "")
     canonical_prompt = str(kit.get(prompt_field) or "").strip() if prompt_field else ""
-    if canonical_prompt:
-        return canonical_prompt
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    return str(
-        visual.get(f"{role}ImagePrompt")
-        or attack.get(f"{role}SpritePrompt")
-        or ""
-    ).strip()
+    return canonical_prompt
 
 def _asset_mode_from_value(value: Any) -> str:
     raw = str(value or "").strip()

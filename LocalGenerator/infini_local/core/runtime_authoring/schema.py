@@ -132,7 +132,7 @@ ENGINE_FN_CATALOG_V2 = {
     "spawn_temporary_helper_projectile": {
         "meaning": "Not a persistent Terraria minion or sentry; short orbit/drift only.",
         "params": {
-            "family": "|".join(sorted(TEMPORARY_HELPER_FAMILIES)), "movement": "orbit|slow_homing|drift|straight", "speed": "3..18", "rangeTiles": "8..120 target/orbit radius", "lifetimeTicks": "25..900 ticks; 60=1s", "shotCount": "1..4 simultaneous helpers", "pierce": "0/1 one hit; 2..10 total hits", "projectileShape": "temporary helper body"
+            "family": "|".join(sorted(TEMPORARY_HELPER_FAMILIES)), "movement": "orbit|slow_homing|drift|straight", "speed": "3..18", "rangeTiles": "8..120 target/orbit radius", "lifetimeTicks": "25..900 ticks; 60=1s", "shotCount": "1..4 simultaneous helpers", "spreadRadians": "0..0.75 total helper spread", "pierce": "0/1 one hit; 2..10 total hits", "projectileShape": "temporary helper body"
         },
     },
     "spawn_secondary_projectiles": {
@@ -171,14 +171,7 @@ ENGINE_FN_CATALOG_V2 = {
         "meaning": "Bounded movement: recall, blink to cursor, or blink to projectile impact; needs safe tile/cooldown.",
         "params": {"mode": "recall_home|blink_to_cursor|blink_to_projectile_impact", "rangeTiles": "0..80", "cooldownTicks": "0..3600", "safeTileOnly": "true"},
     },
-    "state_meter": {
-        "meaning": "Preserved state intent: charges/heat/modes/cooldowns. Immediate gameplay still needs executable calls.",
-        "params": {"id": "short stable meter id", "label": "short display/debug name", "maxValue": "1..20", "initialValue": "0..20", "gainOnUse": "0..20", "gainOnHit": "0..20", "gainOnKill": "0..20", "spendOnUse": "0..20", "spendOnAltUse": "0..20", "decayPerSecond": "0..20", "cooldownTicks": "0..3600", "modeCount": "0..8"},
-    },
-    "triggered_action": {
-        "meaning": "Future trigger/action intent. Must use safe trigger/action; boss/NPC/mob spawn is hard-rejected.",
-        "params": {"trigger": "on_use|on_alt_use|on_hit_npc|on_kill_npc|on_projectile_impact|while_held|while_equipped|on_low_life|after_not_hit_for_ticks|while_moving|while_airborne|while_in_water", "action": "grant_charge|spend_charge|apply_generated_buff|apply_vanilla_buff|emit_light|spawn_secondary_projectiles|mobility_effect|temporary_stat_boost|spawn_particles|set_mode|cycle_mode", "meterId": "optional state_meter id", "requiredValue": "0..20", "spendValue": "0..20", "cooldownTicks": "0..3600", "note": "short identity/debug"},
-    },
+
     "accessory_effect": {
         "meaning": "Equippable accessory stats, not temporary use effects.",
         "params": {"archetype": "mobility|defense|damage|utility|hybrid", "defense": "0..20", "stats": "object, not string; keys include maxLife,maxMana,lifeRegen,manaRegen,movementSpeed,jumpSpeed,genericDamage,genericCrit,attackSpeed,lightStrength"},
@@ -214,10 +207,7 @@ ENGINE_FN_CATALOG_V2 = {
     },
 }
 
-# Accepted by normalization for old/debug payloads, but intentionally omitted from
-# the active planner prompt until a finite C# executor exists. Keeping this list next
-# to the engine catalog makes the distinction obvious instead of hiding it in prompt code.
-PLANNER_HIDDEN_ENGINE_FUNCTIONS = frozenset({"state_meter", "triggered_action"})
+PLANNER_HIDDEN_ENGINE_FUNCTIONS = frozenset()
 
 
 
@@ -231,13 +221,7 @@ FORBIDDEN_WORLD_ENTITY_FAMILIES = {
     "slime", "zombie", "skeleton", "demon", "goblin", "worm", "boss_npc",
 }
 SAFE_SUMMON_FAMILIES = set(TEMPORARY_HELPER_FAMILIES) | {"minion", "sentry", "turret", "light_pet"}
-STATE_METER_TRIGGERS = {"on_use", "on_alt_use", "on_hit_npc", "on_kill_npc", "on_projectile_impact", "while_held", "while_equipped"}
-TRIGGERED_ACTION_TRIGGERS = STATE_METER_TRIGGERS | {"on_low_life", "after_not_hit_for_ticks", "while_moving", "while_airborne", "while_in_water"}
-TRIGGERED_ACTION_KINDS = {
-    "grant_charge", "spend_charge", "apply_generated_buff", "apply_vanilla_buff",
-    "emit_light", "spawn_secondary_projectiles", "mobility_effect", "temporary_stat_boost",
-    "spawn_particles", "set_mode", "cycle_mode",
-}
+
 
 
 # Exact cross-card fields accepted on primary attack calls.  They are documented
@@ -302,9 +286,7 @@ __all__ = [
     "FORBIDDEN_WORLD_ENTITY_FN_NAMES",
     "FORBIDDEN_WORLD_ENTITY_FAMILIES",
     "SAFE_SUMMON_FAMILIES",
-    "STATE_METER_TRIGGERS",
-    "TRIGGERED_ACTION_TRIGGERS",
-    "TRIGGERED_ACTION_KINDS",
+
     "NUMERIC_LIMITS",
     "INT_FIELDS",
 ]

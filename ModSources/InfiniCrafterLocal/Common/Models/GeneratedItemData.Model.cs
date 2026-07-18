@@ -277,42 +277,7 @@ public sealed class GameplaySpec
     public string UseConditionMode { get; set; } = ""; // none|grounded|not_wet|life_above|mana_above
     public int UseConditionMinLife { get; set; } = 0;
     public int UseConditionMinMana { get; set; } = 0;
-    public RuntimeStateSpec RuntimeState { get; set; } = new();
     public RejectedEngineCallSpec[] RejectedEngineCalls { get; set; } = Array.Empty<RejectedEngineCallSpec>();
-}
-
-public sealed class RuntimeStateSpec
-{
-    public string ExecutionStatus { get; set; } = "";
-    public StateMeterSpec[] StateMeters { get; set; } = Array.Empty<StateMeterSpec>();
-    public TriggeredActionSpec[] TriggeredActions { get; set; } = Array.Empty<TriggeredActionSpec>();
-}
-
-public sealed class StateMeterSpec
-{
-    public string Id { get; set; } = "";
-    public string Label { get; set; } = "";
-    public int MaxValue { get; set; } = 3;
-    public int InitialValue { get; set; } = 0;
-    public int GainOnUse { get; set; } = 0;
-    public int GainOnHit { get; set; } = 0;
-    public int GainOnKill { get; set; } = 0;
-    public int SpendOnUse { get; set; } = 0;
-    public int SpendOnAltUse { get; set; } = 0;
-    public float DecayPerSecond { get; set; } = 0f;
-    public int CooldownTicks { get; set; } = 0;
-    public int ModeCount { get; set; } = 0;
-}
-
-public sealed class TriggeredActionSpec
-{
-    public string Trigger { get; set; } = "";
-    public string Action { get; set; } = "";
-    public string MeterId { get; set; } = "";
-    public int RequiredValue { get; set; } = 0;
-    public int SpendValue { get; set; } = 0;
-    public int CooldownTicks { get; set; } = 0;
-    public string Note { get; set; } = "";
 }
 
 public sealed class RejectedEngineCallSpec

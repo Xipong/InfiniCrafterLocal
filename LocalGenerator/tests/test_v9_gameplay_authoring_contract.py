@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from infini_local.core.runtime_authoring import (
@@ -210,10 +211,15 @@ def _contract_check_no_wiki_weapon_alias_router_and_csharp_beam_contract_is_exac
     assert "ownedProjectileCounts" not in active_guard
     assert "Collision.LaserScan" in projectile_source
     assert "effective_hit_cadence_ticks" in (ROOT / "LocalGenerator/infini_local/pipelines/engine_pressure_metrics.py").read_text(encoding="utf-8")
-    assert "ProjectileSyncVersion = 19" in net_source
+    sync_version = re.search(r"ProjectileSyncVersion\s*=\s*(\d+)", net_source)
+    assert sync_version is not None and int(sync_version.group(1)) >= 20
+    send_extra_ai = net_source.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "_spec." not in send_extra_ai
+    assert "TryGetAttack(_generatedItemId)" in net_source
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in net_source
     for field in ("RangeTiles", "HomingStrength", "BeamWidthPx", "BeamChargeTicks"):
         assert f"public" in model_source and field in model_source
-        assert f"_spec.{field}" in net_source
+        assert f"_spec.{field}" in projectile_source
 
 
 def _contract_check_channel_beam_pays_authored_mana_and_respects_player_lockout() -> None:

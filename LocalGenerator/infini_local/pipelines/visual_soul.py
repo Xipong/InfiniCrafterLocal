@@ -43,54 +43,6 @@ def _rgb_to_hsv01(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
     return hue / 360.0, sat, mx
 
 
-def visual_soul_archetype(rgb: tuple[int, int, int], coverage: float, edge_density: float) -> str:
-    hue, sat, val = _rgb_to_hsv01(rgb)
-    deg = hue * 360.0
-    if coverage < 0.10 and val > 0.45:
-        return "wisp"
-    if val < 0.18:
-        return "void"
-    if sat < 0.18:
-        return "silver" if val > 0.52 else "ashen"
-    if deg < 18 or deg >= 345:
-        return "crimson"
-    if deg < 46:
-        return "ember"
-    if deg < 72:
-        return "solar"
-    if deg < 154:
-        return "verdant"
-    if deg < 196:
-        return "aqua"
-    if deg < 232:
-        return "frost"
-    if deg < 282:
-        return "arcane"
-    if deg < 330:
-        return "rose"
-    return "crimson"
-
-
-def visual_soul_tooltip(archetype: str, glow: float, coverage: float, edge_density: float) -> str:
-    tone = {
-        "ember": "ember-forged",
-        "solar": "sunlit",
-        "verdant": "verdant",
-        "aqua": "tidal",
-        "frost": "frost-cut",
-        "arcane": "arcane",
-        "rose": "roseglass",
-        "crimson": "crimson",
-        "void": "void-touched",
-        "silver": "silvered",
-        "ashen": "ashen",
-        "wisp": "wisp-light",
-    }.get(archetype, archetype or "unknown")
-    body = "dense" if coverage >= 0.46 else "clear" if coverage >= 0.22 else "thin"
-    edge = "jagged" if edge_density >= 0.36 else "etched" if edge_density >= 0.20 else "smooth"
-    pulse = "bright" if glow >= 0.66 else "soft" if glow >= 0.34 else "quiet"
-    return f"Visual soul: {tone}, {body} {edge} silhouette, {pulse} aura"
-
 
 def _rgba_pixels(image: Any) -> list[tuple[int, int, int, int]]:
     """Return flattened RGBA pixels without Pillow deprecated Image.getdata()."""
@@ -99,12 +51,8 @@ def _rgba_pixels(image: Any) -> list[tuple[int, int, int, int]]:
 
 
 def analyze_visual_soul_from_sprite(path: str, *, score: float = 0.0) -> dict[str, Any]:
-    """Extract a tiny runtime personality from the finished Z-Image sprite.
-
-    This intentionally reads the final postprocessed PNG, not LLM prose.  The generated
-    art becomes gameplay presentation data: palette, glow, aura archetype, and a stable
-    signature for tooltips/reveal effects.
-    """
+    """Measure the finished PNG for diagnostics; never author runtime presentation."""
+    _ = score
     if Image is None:
         return {}
     sprite_path = Path(path)
@@ -149,24 +97,20 @@ def analyze_visual_soul_from_sprite(path: str, *, score: float = 0.0) -> dict[st
                     if alpha[idx + w] != alpha[idx]:
                         edges += 1
         edge_density = _clamp01(edges / float(max(1, checks)) * 2.0)
-        _, sat, val = _rgb_to_hsv01(accent_rgb)
-        glow = _clamp01(0.08 + sat * 0.38 + val * 0.16 + coverage * 0.18 + edge_density * 0.20 + _clamp01(score) * 0.10)
-        pulse = _clamp01(0.15 + sat * 0.35 + edge_density * 0.35 + _clamp01(score) * 0.15)
-        archetype = visual_soul_archetype(accent_rgb, coverage, edge_density)
+        hue, saturation, brightness = _rgb_to_hsv01(accent_rgb)
         try:
             signature = hashlib.sha1(sprite_path.read_bytes()).hexdigest()[:10]
         except Exception:
             signature = hashlib.sha1(str(sprite_path).encode("utf-8", "ignore")).hexdigest()[:10]
         return {
-            "visualSoulSignature": signature,
-            "visualSoulArchetype": archetype,
+            "spriteSignature": signature,
             "dominantColorHex": _hex_from_rgb(avg),
             "accentColorHex": _hex_from_rgb(accent_rgb),
-            "visualSoulGlow": round(glow, 3),
-            "visualSoulPulse": round(pulse, 3),
-            "visualSoulCoverage": round(_clamp01(coverage), 3),
-            "visualSoulEdgeDensity": round(edge_density, 3),
-            "visualSoulTooltip": visual_soul_tooltip(archetype, glow, coverage, edge_density),
+            "coverage": round(_clamp01(coverage), 3),
+            "edgeDensity": round(edge_density, 3),
+            "accentHue": round(hue, 3),
+            "accentSaturation": round(saturation, 3),
+            "accentBrightness": round(brightness, 3),
         }
     except Exception as e:
         log_event("warn", "visual soul analysis failed", {"path": str(path), "error": repr(e)})
@@ -174,19 +118,13 @@ def analyze_visual_soul_from_sprite(path: str, *, score: float = 0.0) -> dict[st
 
 
 def attach_visual_soul_from_sprite(data: dict[str, Any], path: str, *, validation: dict[str, Any] | None = None, score: float = 0.0) -> dict[str, Any]:
-    visual = data.setdefault("visual", {})
-    soul = analyze_visual_soul_from_sprite(path, score=score)
-    if not soul:
+    metrics = analyze_visual_soul_from_sprite(path, score=score)
+    if not metrics:
         return data
-    visual.update(soul)
-    data.setdefault("debug", {})["visualSoul"] = json.dumps({**soul, "validationOk": bool((validation or {}).get("ok", True))}, ensure_ascii=False)
-    # Make later visual-director/VFX debug screens show what the final PNG actually contributed.
-    palette = [str(x) for x in visual.get("palette", []) if str(x).strip()]
-    for color_key in ("accentColorHex", "dominantColorHex"):
-        color = soul.get(color_key)
-        if color and color not in palette:
-            palette.insert(0, str(color))
-    visual["palette"] = list(dict.fromkeys(palette))[:8]
+    data.setdefault("debug", {})["spritePixelMetrics"] = json.dumps(
+        {**metrics, "validationOk": bool((validation or {}).get("ok", True))},
+        ensure_ascii=False,
+    )
     return data
 
 
@@ -194,8 +132,7 @@ __all__ = [
     "_clamp01",
     "_hex_from_rgb",
     "_rgb_to_hsv01",
-    "visual_soul_archetype",
-    "visual_soul_tooltip",
+
     "_rgba_pixels",
     "analyze_visual_soul_from_sprite",
     "attach_visual_soul_from_sprite",

@@ -75,20 +75,22 @@ def proposed_attack_genome(data: dict[str, Any]) -> dict[str, Any]:
         merged.update(runtime_plan_to_attack_genome_patch(data))
     return merged
 
-def genome_defects(data: dict[str, Any]) -> list[str]:
-    """Describe missing/malformed required LLM-authored genome fields.
-
-    This function intentionally does not judge fun, novelty, or balance. It only checks
-    whether the genome is complete enough to become executable without code inventing
-    creative mechanics.
-    """
+def genome_defect_details(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return finite validator reasons with the compiled fields that own each defect."""
     proposed = proposed_attack_genome(data)
-    defects: list[str] = []
+    details: list[dict[str, Any]] = []
+
+    def reject(reason: str, compiled_fields: list[str]) -> None:
+        details.append({
+            "kind": "genome_non_executable",
+            "reason": reason,
+            "compiledFields": list(dict.fromkeys(compiled_fields)),
+        })
+
     for field in LLM_REQUIRED_GENOME_FIELDS:
         if field not in proposed or proposed.get(field) in (None, ""):
-            defects.append(f"missing attack.genome.{field}")
+            reject(f"missing attack.genome.{field}", [field])
 
-    # Enum fields must be chosen by the LLM from the grammar.
     enum_checks: list[tuple[str, dict[str, int] | AbstractSet[str]]] = [
         ("delivery", DELIVERIES),
         ("runtimeFamily", RUNTIME_FAMILIES),
@@ -101,14 +103,11 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         if field not in proposed or proposed.get(field) in (None, ""):
             continue
         value = _normalize_authored_enum_value(proposed.get(field), field)
-        if isinstance(allowed, dict):
-            ok = value in allowed
-        else:
-            ok = value in allowed
+        ok = value in allowed
         if field == "runtimeFamily" and value == "none":
             ok = False
         if not ok:
-            defects.append(f"unsupported attack.genome.{field}={proposed.get(field)!r}")
+            reject(f"unsupported attack.genome.{field}={proposed.get(field)!r}", [field])
 
     try:
         pull_strength = float(proposed.get("pullStrength") or 0.0)
@@ -116,12 +115,13 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         pull_strength = 0.0
     pull_mode = str(proposed.get("pullMode") or "none").strip().lower()
     if pull_strength > 0.0 and pull_mode == "none":
-        defects.append("attack.genome.pullStrength>0 requires pullMode=target_to_owner|owner_to_target|target_to_projectile")
+        reject(
+            "attack.genome.pullStrength>0 requires pullMode=target_to_owner|owner_to_target|target_to_projectile",
+            ["pullStrength", "pullMode"],
+        )
     if pull_strength <= 0.0 and pull_mode != "none":
-        defects.append("attack.genome.pullMode requires pullStrength>0")
+        reject("attack.genome.pullMode requires pullStrength>0", ["pullMode", "pullStrength"])
 
-    # Required numeric fields must be parseable numbers. Out-of-range numbers are later
-    # hard-clamped for engine safety; non-numeric values require LLM repair.
     for field in [
         "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles", "lifetimeTicks",
         "rangeTiles", "spreadRadians", "speed",
@@ -129,14 +129,12 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         if field not in proposed or proposed.get(field) in (None, ""):
             continue
         try:
-            x = float(proposed.get(field))
-            if not math.isfinite(x):
+            value = float(proposed.get(field))
+            if not math.isfinite(value):
                 raise ValueError("not finite")
         except Exception:
-            defects.append(f"non-numeric attack.genome.{field}={proposed.get(field)!r}")
+            reject(f"non-numeric attack.genome.{field}={proposed.get(field)!r}", [field])
 
-    # Reject unsafe combinations instead of silently rewriting authored numbers.
-    # Legal individual maxima can still multiply into a projectile/network flood.
     try:
         stage_value = data.get("gameplay")
         stage: dict[str, Any] = stage_value if isinstance(stage_value, dict) else {}
@@ -145,18 +143,19 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         max_active = 22.0 + power * 8.0
         max_sync = 26.0 + power * 8.0
         if metrics["activeProjectileEstimate"] > max_active or metrics["networkSyncPressureEstimate"] > max_sync:
-            defects.append(
+            reject(
                 "composite projectile pressure exceeds runtime safety envelope: "
                 f"active={metrics['activeProjectileEstimate']}>{round(max_active, 3)} or "
                 f"sync={metrics['networkSyncPressureEstimate']}>{round(max_sync, 3)}; "
-                "author lower shotCount/extraUpdates/lifetime or slower useTimeTicks"
+                "author lower shotCount/extraUpdates/lifetime or slower useTimeTicks",
+                ["shotCount", "extraUpdates", "lifetimeTicks", "useTimeTicks"],
             )
     except (TypeError, ValueError, OverflowError):
-        defects.append("composite projectile pressure could not be evaluated from authored numbers")
+        reject(
+            "composite projectile pressure could not be evaluated from authored numbers",
+            ["shotCount", "extraUpdates", "lifetimeTicks", "useTimeTicks"],
+        )
 
-    # Families with dedicated Terraria lifecycle executors must be paired with their
-    # exact movement opcode. Otherwise the item affordance says flail/yoyo/whip while
-    # the projectile silently executes as an unrelated free shot.
     family = _normalize_authored_enum_value(proposed.get("runtimeFamily"), "runtimeFamily")
     movement = _normalize_authored_enum_value(proposed.get("movement"), "movement")
     required_movement = {
@@ -165,18 +164,79 @@ def genome_defects(data: dict[str, Any]) -> list[str]:
         "whip": "whip_lash",
     }
     if family == "returning" and movement not in {"boomerang", "returning_glaive"}:
-        defects.append(f"runtimeFamily=returning requires movement=boomerang|returning_glaive, got {movement or '<empty>'}")
+        reject(
+            f"runtimeFamily=returning requires movement=boomerang|returning_glaive, got {movement or '<empty>'}",
+            ["runtimeFamily", "movement"],
+        )
     elif family in required_movement and movement != required_movement[family]:
-        defects.append(f"runtimeFamily={family} requires movement={required_movement[family]}, got {movement or '<empty>'}")
+        reject(
+            f"runtimeFamily={family} requires movement={required_movement[family]}, got {movement or '<empty>'}",
+            ["runtimeFamily", "movement"],
+        )
     movement_owner = {
         "flail_tether": "flail",
         "yoyo_hover": "yoyo",
         "whip_lash": "whip",
     }
     if movement in movement_owner and family != movement_owner[movement]:
-        defects.append(f"movement={movement} requires runtimeFamily={movement_owner[movement]}, got {family or '<empty>'}")
+        reject(
+            f"movement={movement} requires runtimeFamily={movement_owner[movement]}, got {family or '<empty>'}",
+            ["movement", "runtimeFamily"],
+        )
+    return details
 
-    return defects
+
+def genome_defects(data: dict[str, Any]) -> list[str]:
+    """Compatibility view of structured genome defects."""
+    return [str(row.get("reason") or "") for row in genome_defect_details(data)]
+
+
+def _genome_author_repair_targets(
+    data: dict[str, Any],
+    defect_details: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Map rejected compiled genome fields to their actual authored call owners."""
+    plan = runtime_plan(data)
+    calls_candidate = plan.get("engineCalls")
+    calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
+    targets: list[dict[str, Any]] = []
+    for detail in defect_details:
+        compiled_fields = {
+            str(field).strip()
+            for field in detail.get("compiledFields") or []
+            if str(field).strip()
+        }
+        reason = str(detail.get("reason") or "").strip()
+        matched = False
+        for normalized_index, call in enumerate(calls):
+            if not isinstance(call, dict):
+                continue
+            params_candidate = call.get("params")
+            params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
+            owned_fields = sorted(compiled_fields.intersection(str(key) for key in params))
+            if not owned_fields:
+                continue
+            authored_index = call.get("_index")
+            index = authored_index if isinstance(authored_index, int) else normalized_index
+            targets.append({
+                "kind": "genome_non_executable",
+                "path": f"$.runtimePlan.engineCalls[{index}]",
+                "callId": str(call.get("_callId") or call.get("callId") or "").strip(),
+                "fn": str(call.get("_rawFn") or call.get("fn") or "").strip(),
+                "reason": reason,
+                "compiledFields": owned_fields,
+            })
+            matched = True
+        if not matched:
+            targets.append({
+                "kind": "genome_non_executable",
+                "path": "$.runtimePlan.engineCalls",
+                "reason": reason,
+                "compiledFields": sorted(compiled_fields),
+            })
+    return targets
+
+
 def merge_genome_repair(data: dict[str, Any], patch: dict[str, Any]) -> None:
     """Merge a repair response into data.attack.genome.
 
@@ -328,6 +388,10 @@ def repair_llm_combat_genome_if_needed(data: dict[str, Any], a: dict[str, Any], 
     defects = genome_defects(data)
     if defects:
         debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
+        debug["authorRepairRejectedDomains"] = [{
+            "path": "$.runtimePlan.engineCalls",
+            "kind": "genome_non_executable",
+        }]
         raise PlannerUnavailable("LLM planner did not complete attack.genome after repair loop (" + "; ".join(defects) + "); craft failed and ingredients must be refunded")
     debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
     return data
@@ -373,9 +437,15 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     proposed = proposed_attack_genome(data)
     # By the time this function runs, validate_and_repair() has already run the
     # LLM repair loop for missing/malformed fields. Any remaining defect is a hard failure.
-    defects = genome_defects(data)
+    defect_details = genome_defect_details(data)
+    defects = [str(row.get("reason") or "") for row in defect_details]
     if defects:
-        raise PlannerUnavailable("LLM planner did not author a complete attack.genome after repair (" + "; ".join(defects) + "); craft failed and ingredients must be refunded")
+        raise PlannerUnavailable(
+            "LLM planner did not author a complete attack.genome after repair ("
+            + "; ".join(defects)
+            + "); craft failed and ingredients must be refunded",
+            author_repair_targets=_genome_author_repair_targets(data, defect_details),
+        )
 
     debug: dict[str, Any] = {}
     delivery, _ = _require_authored_enum(proposed, "delivery", DELIVERIES)
@@ -443,6 +513,8 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     # These values already came from typed engineCalls; replacing them with DTO
     # defaults here would silently re-author the item after validation.
     for field, lo, hi, integer in [
+        ("aoeDamageRadiusPx", 0, 160, True),
+        ("projectileHitBudget", -1, 10, True),
         ("debuffTime", 0, 600, True),
         ("secondaryDamageMultiplier", 0, 1, False),
         ("secondarySpreadRadians", 0, 1.2, False),
@@ -462,7 +534,9 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         if proposed.get(field) not in (None, ""):
             value = clamp_float(proposed.get(field), lo, hi, lo)
             g[field] = int(round(value)) if integer else round(value, 3)
-    for field in ("primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial"):
+    for field in (
+        "debuffHint", "primaryColorName", "runtimeLightColorName", "secondaryMaterial", "vfxMaterial",
+    ):
         if proposed.get(field) not in (None, ""):
             g[field] = str(proposed.get(field))[:120]
 

@@ -22,6 +22,16 @@ public sealed partial class GeneratedItemData
     private static string AttackRuntimeFamily(AttackSpec? attack)
         => GeneratedRuntimeFamilyPolicy.Normalize(attack?.RuntimeFamily);
 
+    internal static (bool IsArmor, bool IsAccessory) ResolveEquipmentRoles(
+        GameplaySpec gameplay,
+        AccessorySpec accessory,
+        ArmorSpec armor)
+    {
+        bool isArmor = gameplay.Kind == "armor" || armor.Enabled;
+        bool isAccessory = !isArmor && (gameplay.Kind == "accessory" || accessory.Enabled);
+        return (isArmor, isAccessory);
+    }
+
     public void ApplyToItem(Item item)
     {
         Normalize();
@@ -52,8 +62,7 @@ public sealed partial class GeneratedItemData
         item.pick = Math.Max(0, Gameplay.PickPower);
         item.axe = Math.Max(0, Gameplay.AxePower);
         item.hammer = Math.Max(0, Gameplay.HammerPower);
-        bool isArmor = Gameplay.Kind == "armor" || Category == "armor" || Armor.Enabled;
-        bool isAccessory = !isArmor && (Gameplay.Kind == "accessory" || Category == "accessory" || Accessory.Enabled);
+        (bool isArmor, bool isAccessory) = ResolveEquipmentRoles(Gameplay, Accessory, Armor);
         item.accessory = isAccessory;
         if (isArmor)
         {
@@ -234,8 +243,10 @@ public sealed partial class GeneratedItemData
 
         RecordAppliedItemTrace(item, isArmor, isAccessory, actualAmmo);
     }
-    private Terraria.Audio.SoundStyle UseSoundForCatalog(string runtimeFamily, string effect)
+    private Terraria.Audio.SoundStyle? UseSoundForCatalog(string runtimeFamily, string effect)
     {
+        if (!InfiniSoundLibrary.IsBuiltInCatalogId(Attack.SoundUseCatalogId))
+            return null;
         return InfiniSoundLibrary.ForUse(
             runtimeFamily,
             Attack.Delivery,

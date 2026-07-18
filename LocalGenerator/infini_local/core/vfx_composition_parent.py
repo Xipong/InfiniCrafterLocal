@@ -47,8 +47,6 @@ def _vfx_manifest_from_parent_item(item: dict[str, Any]) -> dict[str, Any]:
     raw = ""
     if isinstance(attack, dict):
         raw = str(attack.get("vfxManifestJson") or attack.get("VfxManifestJson") or "")
-    if not raw and isinstance(item.get("debug"), dict):
-        raw = str(item["debug"].get("vfxManifest") or "")
     if raw.strip().startswith("{"):
         try:
             parsed = json.loads(raw)
@@ -133,14 +131,7 @@ def _vfx_parent_profile_from_item(item: dict[str, Any], index: int = 0) -> dict[
             ch = str(slot.get("channel") or "")
             if ch:
                 effect_tags.add("channel_" + ch)
-    runtime_signals = item.get("parentVfxSignals") if isinstance(item.get("parentVfxSignals"), dict) else {}
-    # Do not infer VFX inheritance from parent names/tokens. Names still go to LLM/art prompts,
-    # but parent VFX inheritance is driven by mechanical/runtime facts only.
-    if isinstance(runtime_signals, dict) and runtime_signals:
-        for t in runtime_signals.get("effectTags") or []:
-            if str(t): effect_tags.add("runtime_" + str(t))
-        for r in runtime_signals.get("suggestedRenderers") or []:
-            if str(r): suggested.add(str(r))
+
     score = 0.0
     score += min(0.28, damage / 180.0)
     score += min(0.20, max(0, rarity) / 30.0)
@@ -159,17 +150,7 @@ def _vfx_parent_profile_from_item(item: dict[str, Any], index: int = 0) -> dict[
         if proj_bool(projectile, "usesLocalNPCImmunity") or proj_bool(projectile, "usesIDStaticNPCImmunity"): score += 0.06
     if manifest_slots:
         score += min(0.42, 0.16 + manifest_mag * 0.24 + len(manifest_slots) * 0.015)
-    if isinstance(runtime_signals, dict) and runtime_signals:
-        try:
-            score = max(score, float(runtime_signals.get("specialScore") or 0.0))
-        except Exception:
-            pass
-        if runtime_signals.get("hasProjectileEmission"):
-            score += 0.05
-        if runtime_signals.get("hasSustainedUse") or runtime_signals.get("hasBeamLikeProfile"):
-            score += 0.06
-        if runtime_signals.get("hasGeneratedManifest"):
-            score += 0.12
+
     score = max(0.0, min(1.0, score))
     return {
         "index": index,
@@ -183,7 +164,6 @@ def _vfx_parent_profile_from_item(item: dict[str, Any], index: int = 0) -> dict[
         "notable": bool(score >= VFX_PARENT_EFFECT_STRONG_THRESHOLD or manifest_slots),
         "effectTags": sorted(effect_tags)[:48],
         "suggestedRenderers": sorted(suggested)[:20],
-        "parentRuntimeSignals": runtime_signals if isinstance(runtime_signals, dict) else {},
         "weaponProfile": {k: prof.get(k) for k in ["damage", "damageClass", "shoot", "shootSpeed", "channel", "aiStyle", "piercePotential", "lifetime", "extraUpdates", "localImmunity", "effectiveDpsSignal"] if k in prof},
         "manifestSummary": {
             "hasManifest": bool(manifest_slots),

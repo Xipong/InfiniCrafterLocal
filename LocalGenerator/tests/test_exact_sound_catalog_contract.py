@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
+from infini_local.core.runtime_authoring.reports import runtime_plan_validation_report
 from infini_local.core.sound_catalog import (
     ALL_SOUND_IDS,
     IMPACT_SOUND_IDS,
@@ -49,7 +50,8 @@ def _contract_check_llm_card_exposes_exact_sound_ids_and_controls() -> None:
     assert "impact_electric" in sound["impactCatalogIds"]["elemental"]
     assert sound["authoringFields"]["soundVolume"].startswith("0.05..1.0")
     assert sound["placement"] == "Put audio fields in params of the primary attack call."
-    assert "not a generic default" in sound["selectionRule"]
+    assert "silence" in sound["selectionRule"]
+    assert "no fallback" in sound["selectionRule"]
     assert "no names/prose/taxonomy" in sound["selectionRule"]
 
 
@@ -95,15 +97,15 @@ def _contract_check_compiler_preserves_exact_authored_audio_and_rejects_unknown_
         }
     }
     rejected = compile_runtime_plan_to_genome_patch(invalid)
-    assert rejected["soundUseCatalogId"] == "melee_swing"
-    assert rejected["soundImpactCatalogId"] == "impact_soft"
+    assert "soundUseCatalogId" not in rejected
+    assert "soundImpactCatalogId" not in rejected
     assert {x["field"] for x in rejected["rejectedSoundCatalogIds"]} == {
         "soundUseCatalogId",
         "soundImpactCatalogId",
     }
 
 
-def _contract_check_sound_fallback_ignores_name_tooltip_and_taxonomy_prose() -> None:
+def _contract_check_missing_sound_is_explicit_inert_wire_state() -> None:
     base = {
         "name": "Completely Different Name",
         "tooltip": "laser shotgun zenith last prism explosion",
@@ -121,16 +123,35 @@ def _contract_check_sound_fallback_ignores_name_tooltip_and_taxonomy_prose() -> 
     }
     normalized = attach_presentation_and_sound(base)
     attack = normalized["attack"]
-    assert attack["soundUseCatalogId"] == "melee_thrust"
-    assert attack["soundImpactCatalogId"] == "impact_electric"
+    assert attack["soundUseCatalogId"] == ""
+    assert attack["soundImpactCatalogId"] == ""
     assert attack["soundPitchVariance"] == 0.18
     assert "soundProfile" not in normalized
+
+    report = runtime_plan_validation_report({
+        "category": "weapon",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {"callId": "stats", "fn": "set_item_stats", "params": {
+                    "resultKind": "weapon", "damageClass": "melee", "damage": 20,
+                    "useTimeTicks": 24,
+                }},
+                {"callId": "primary", "fn": "shoot_projectile", "params": {
+                    "runtimeFamily": "shoot", "delivery": "shoot", "movement": "straight",
+                    "speed": 8, "rangeTiles": 35, "lifetimeTicks": 90,
+                    "shotCount": 1, "spreadRadians": 0, "pierce": 0,
+                }},
+            ],
+        },
+    })
+    assert report["ok"] is True
 
 
 def _contract_check_csharp_call_sites_do_not_feed_taxonomy_into_sound_resolution() -> None:
     apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     impact = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs").read_text(encoding="utf-8")
-    helper = apply.split("private Terraria.Audio.SoundStyle UseSoundForCatalog", 1)[1]
+    helper = apply.split("private Terraria.Audio.SoundStyle? UseSoundForCatalog", 1)[1]
     play = impact.split("private void PlayImpactSound", 1)[1].split("public override void OnKill", 1)[0]
     for forbidden in ["WeaponSubfamily", "ProjectileFamily", "AttackPatternTags", "taxonomy"]:
         assert forbidden not in helper
@@ -172,7 +193,7 @@ def test_exact_sound_catalog_contract_module_contract(request):
             '_contract_check_python_and_csharp_exact_catalogs_match_and_have_real_sound_diversity',
             '_contract_check_llm_card_exposes_exact_sound_ids_and_controls',
             '_contract_check_compiler_preserves_exact_authored_audio_and_rejects_unknown_id',
-            '_contract_check_sound_fallback_ignores_name_tooltip_and_taxonomy_prose',
+            '_contract_check_missing_sound_is_explicit_inert_wire_state',
             '_contract_check_csharp_call_sites_do_not_feed_taxonomy_into_sound_resolution',
             '_contract_check_sound_contract_has_no_text_query_side_channel',
         ),

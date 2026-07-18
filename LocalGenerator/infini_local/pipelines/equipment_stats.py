@@ -302,7 +302,12 @@ def accessory_stats_for(tags: set[str], stage: dict[str, Any]) -> dict[str, Any]
         stats["waterWalk"] = True
     return stats
 
-def armor_slot_from_authoring(data: dict[str, Any], tags: set[str], runtime_stats: dict[str, Any]) -> str:
+def armor_slot_from_authoring(
+    data: dict[str, Any],
+    runtime_stats: dict[str, Any],
+    *,
+    default: str = "",
+) -> str:
     raw = str(runtime_stats.get("armorSlot") or (data.get("armor") or {}).get("slot") or "").strip().lower().replace("-", "_").replace(" ", "_")
     if raw in {"head", "helmet", "helm", "hood", "hat", "mask"}:
         return "head"
@@ -310,13 +315,7 @@ def armor_slot_from_authoring(data: dict[str, Any], tags: set[str], runtime_stat
         return "legs"
     if raw in {"body", "chest", "chestplate", "breastplate", "shirt", "robe", "torso"}:
         return "body"
-    name = str(data.get("name") or "").lower()
-    all_text = name + " " + " ".join(sorted(tags))
-    if any(x in all_text for x in ["helmet", "helm", "hood", "hat", "mask"]):
-        return "head"
-    if any(x in all_text for x in ["leggings", "greaves", "pants", "boots"]):
-        return "legs"
-    return "body"
+    return default if default in {"head", "body", "legs"} else ""
 
 def armor_stats_for(tags: set[str], stage: dict[str, Any], slot: str) -> dict[str, Any]:
     power = float(stage.get("powerBudget", 1.0))

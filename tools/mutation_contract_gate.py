@@ -89,10 +89,11 @@ def build_report() -> dict[str, Any]:
     child = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs"
     dto = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs"
     executor = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ChargeRelease.cs"
+    runtime = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs"
 
     net_source = net.read_text(encoding="utf-8-sig")
-    old_pair = "_spec.ChargeTicks = reader.ReadInt32();\n            _spec.ChargePowerMultiplier = reader.ReadSingle();"
-    new_pair = "_spec.ChargePowerMultiplier = reader.ReadSingle();\n            _spec.ChargeTicks = reader.ReadInt32();"
+    old_pair = "_chargeTicksAccumulated = reader.ReadInt32();\n            _sentryFireTimer = reader.ReadInt32();"
+    new_pair = "_sentryFireTimer = reader.ReadInt32();\n            _chargeTicksAccumulated = reader.ReadInt32();"
     if old_pair not in net_source:
         raise RuntimeError("network mutation anchor missing")
 
@@ -141,16 +142,107 @@ def build_report() -> dict[str, Any]:
         _run_mutation(
             "projectile_network_read_order_swapped",
             {net: net_source.replace(old_pair, new_pair, 1)},
-            lambda r: any("network order mismatch" in e for e in r["errors"]),
+            lambda r: any("compact projectile network read order/type mismatch" in e for e in r["errors"]),
         ),
         _run_mutation(
             "projectile_network_extra_read_added",
             {net: net_source.replace(
-                "_spec.ChargePowerMultiplier = reader.ReadSingle();",
-                "_spec.ChargePowerMultiplier = reader.ReadSingle();\n            _spec.ChargeTicks = reader.ReadInt32();",
+                "_beamLengthPx = reader.ReadSingle();",
+                "_beamLengthPx = reader.ReadSingle();\n            _chargeTicksAccumulated = reader.ReadInt32();",
                 1,
             )},
-            lambda r: any("network order mismatch" in e or "network field count mismatch" in e for e in r["errors"]),
+            lambda r: any("compact projectile network read order/type mismatch" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_network_attack_spec_field_added",
+            {net: net_source.replace(
+                "writer.Write(_beamLengthPx);",
+                "writer.Write(_beamLengthPx);\n        writer.Write(_spec.ChargeTicks);",
+                1,
+            )},
+            lambda r: any("AttackSpec" in e or "write order mismatch" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_registry_lookup_removed",
+            {net: net_source.replace("TryGetAttack(_generatedItemId)", "TryGetAttackBROKEN(_generatedItemId)")},
+            lambda r: any("registryLookup" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_variant_reconstruction_removed",
+            {net: _replace_once(
+                net,
+                "GeneratedChildSpecPolicy.TryCreateRuntimeVariant(parent, _runtimeVariant, out AttackSpec resolved)",
+                "GeneratedChildSpecPolicy.CreateRuntimeVariantBROKEN(parent, _runtimeVariant, out AttackSpec resolved)",
+            )},
+            lambda r: any("variantReconstruction" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_variant_authorization_bypassed",
+            {child: _replace_once(
+                child,
+                "if (!IsVariantAllowedForParent(parent, variant))",
+                "if (false)",
+            )},
+            lambda r: any("variantAuthorization" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_variant_byte_bound_made_uncompilable",
+            {child: _replace_once(
+                child,
+                "(byte)variant <= (byte)GeneratedProjectileRuntimeVariant.SwingOverheadSecondary",
+                "variant <= GeneratedProjectileRuntimeVariant.SwingOverheadSecondary",
+            )},
+            lambda r: any("finiteVariantCheck" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_missing_registry_request_removed",
+            {net: net_source.replace(
+                "RequestOneGeneratedItemForMissingProjectile(_generatedItemId)",
+                "RequestOneGeneratedItemForMissingProjectileBROKEN(_generatedItemId)",
+            )},
+            lambda r: any("missingDataRequest" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_unconfigured_packet_no_longer_defers",
+            {net: _replace_once(net, "if (!packetConfigured)", "if (packetConfigured)")},
+            lambda r: any("unconfiguredDefersHarmlessly" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_deferred_state_becomes_damaging",
+            {net: _replace_once(net, "Projectile.damage = 0;", "Projectile.damage = 1;")},
+            lambda r: any("harmlessDamage" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_deferral_keeps_stale_resolved_spec",
+            {net: _replace_once(
+                net,
+                "ClearResolvedRuntimeSpec(Math.Max(_pendingNetworkSpecTicks, 45));",
+                "_pendingNetworkSpecTicks = 45;",
+            )},
+            lambda r: any("deferClearsResolvedSpec" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_received_charge_state_unbounded",
+            {net: _replace_once(
+                net,
+                "Math.Clamp(chargeTicks, 0, Math.Clamp(resolved.ChargeTicks, 1, 300))",
+                "chargeTicks",
+            )},
+            lambda r: any("chargeStateBounded" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_ai_hydration_retry_removed",
+            {runtime: _replace_once(runtime, "TryHydrateRuntimeVariantFromRegistry()", "TryHydrateRuntimeVariantFromRegistryBROKEN()")},
+            lambda r: any("aiRetry" in e for e in r["errors"]),
+        ),
+        _run_mutation(
+            "projectile_visual_relay_assumes_root_variant",
+            {net: _replace_once(
+                net,
+                "restoredFromRegistry = true;",
+                "TryHydrateRuntimeVariantFromRegistry();\n                restoredFromRegistry = true;",
+            )},
+            lambda r: any("visualRelayPresentationOnly" in e for e in r["errors"]),
         ),
         _run_mutation(
             "dust_explicit_zero_destroyed",

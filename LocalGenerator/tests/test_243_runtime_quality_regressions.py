@@ -130,9 +130,16 @@ def _check_live_combine_spine_reaches_cache_without_visual_fields_in_attack(
     monkeypatch.setattr(COMBINE, "USE_LLM", True)
     monkeypatch.setattr(COMBINE, "cache_get", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(COMBINE, "try_llm_plan", lambda *_args, **_kwargs: _plan())
-    monkeypatch.setattr(COMBINE, "apply_visual_director", lambda data, *_args, **_kwargs: data)
+    def degraded_visual(data: dict, *_args, **_kwargs) -> dict:
+        data.setdefault("debug", {})["visualDirectorStatus"] = "visual_director_degraded"
+        data["visualKit"] = {"itemIconPrompt": "stale kit must not survive a failed Director"}
+        return data
+
+    monkeypatch.setattr(COMBINE, "apply_visual_director", degraded_visual)
+    asset_calls: list[str] = []
 
     def fake_assets(data: dict) -> dict:
+        asset_calls.append("called")
         visual = data.setdefault("visual", {})
         visual["spriteStatus"] = "generated"
         visual["spritePath"] = str(generated_sprite)
@@ -148,9 +155,24 @@ def _check_live_combine_spine_reaches_cache_without_visual_fields_in_attack(
     monkeypatch.setattr(COMBINE.generation_debug, "clear_combine_failure", lambda _reason: None)
     monkeypatch.setattr(COMBINE.generation_debug, "record_combine_failure", lambda *_args, **_kwargs: None)
 
+    with pytest.raises(COMBINE.PlannerUnavailable, match="Visual Director"):
+        COMBINE.combine({"itemA": item_a, "itemB": item_b, "worldId": "quality-test"})
+    assert asset_calls == []
+
+    def accepted_visual(data: dict, *_args, **_kwargs) -> dict:
+        data["visualKit"] = {
+            "itemIconPrompt": "one rectangular workbench bolted sideways to a wooden sword",
+        }
+        data.setdefault("visual", {})["imagePrompt"] = data["visualKit"]["itemIconPrompt"]
+        data.setdefault("debug", {})["visualDirectorStatus"] = "validated_and_applied"
+        return data
+
+    monkeypatch.setattr(COMBINE, "apply_visual_director", accepted_visual)
+
     result = COMBINE.combine({"itemA": item_a, "itemB": item_b, "worldId": "quality-test"})
 
     assert cached["data"] is result
+    assert asset_calls == ["called"]
     assert result["name"] == "Workbench-on-a-Stick"
     assert "rectangular workbench" in result["visual"]["imagePrompt"].lower()
     assert "itemPrompt" not in result["visual"]

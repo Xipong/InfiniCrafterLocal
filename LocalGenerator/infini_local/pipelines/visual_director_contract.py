@@ -95,8 +95,7 @@ def compact_visual_parent_card(item: dict[str, Any], canonical: dict[str, Any] |
     canonical_facts = {
         key: _bounded_visual_value(canonical.get(key))
         for key in (
-            "category", "headNoun", "shapeAnchors", "visualAnchors", "hardTags",
-            "softTags", "sourceMod", "internalName",
+            "category", "sourceMod", "internalName",
         )
         if _nonempty(canonical.get(key))
     }
@@ -111,17 +110,19 @@ def compact_visual_parent_card(item: dict[str, Any], canonical: dict[str, Any] |
             for key in _VISUAL_CONTEXT_KEYS
             if _nonempty(authored_visual.get(key))
         }
-        summary = generated.get("generatedParentSummary") if isinstance(generated.get("generatedParentSummary"), dict) else {}
-        summary_context = {
-            key: _bounded_visual_value(summary.get(key))
-            for key in ("name", "fantasy", "visualIdentity", "notableEffects")
-            if _nonempty(summary.get(key))
+        visual_kit_candidate = generated.get("visualKit")
+        visual_kit: dict[str, Any] = (
+            visual_kit_candidate if isinstance(visual_kit_candidate, dict) else {}
+        )
+        accepted_visual_kit = {
+            field: _bounded_visual_value(visual_kit[field])
+            for field in VisualKitBoundary.model_fields
+            if field in visual_kit
         }
-        if visual_context:
+        if accepted_visual_kit:
+            card["previouslyAcceptedVisualAssetKit"] = accepted_visual_kit
+        elif visual_context:
             card["previouslyAuthoredVisual"] = visual_context
-        if summary_context:
-            card["generatedParentSummary"] = summary_context
-
     return card
 
 
@@ -196,10 +197,7 @@ def visual_director_context(
     concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
     runtime_plan = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
     planner_visual_intent = runtime_plan.get("visualIntent") if isinstance(runtime_plan.get("visualIntent"), dict) else {}
-    source_role_preservation = runtime_plan.get("sourceRolePreservation") if isinstance(runtime_plan.get("sourceRolePreservation"), dict) else {}
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
 
     attack_facts = {
         key: copy.deepcopy(attack.get(key))
@@ -212,30 +210,10 @@ def visual_director_context(
         )
         if _nonempty(attack.get(key))
     }
-    prompt_source = str(debug.get("visualPromptSource") or "unknown")
-    existing_visual_keys = [
-        "objectType", "requiredAnchors", "parentVisualContext", "palette",
-        "itemPrompt", "projectilePrompt", "impactPrompt", "notes",
-        "projectileImagePrompt", "impactImagePrompt", "childImagePrompt", "fieldImagePrompt",
-        "itemSilhouetteContract",
-    ]
-    # A code fallback is useful to the image backend, but it is not authored evidence
-    # for the Visual Director. Only expose imagePrompt as an authored decision when
-    # provenance says it came from the planner.
-    if prompt_source == "planner_authored":
-        existing_visual_keys.append("imagePrompt")
-    existing_visual = {
-        key: _bounded_visual_value(visual.get(key))
-        for key in existing_visual_keys
-        if _nonempty(visual.get(key))
-    }
-    final_canonical_raw = data.get("canonical")
-    final_canonical: dict[str, Any] = final_canonical_raw if isinstance(final_canonical_raw, dict) else {}
-    final_identity = {
-        key: _bounded_visual_value(final_canonical.get(key))
-        for key in ("category", "headNoun", "shapeAnchors", "visualAnchors", "hardTags", "softTags")
-        if _nonempty(final_canonical.get(key))
-    }
+
+    final_identity: dict[str, Any] = {}
+    if _nonempty(data.get("category")):
+        final_identity["category"] = _bounded_visual_value(data.get("category"))
     result_kind = runtime_plan.get("resultKind")
     if _nonempty(result_kind):
         final_identity = {"resultKind": _bounded_visual_value(result_kind), **final_identity}
@@ -246,7 +224,6 @@ def visual_director_context(
         "category": data.get("category"),
         "finalIdentity": final_identity,
         "concept": _bounded_visual_value(concept),
-        "sourceRolePreservation": _bounded_visual_value(source_role_preservation),
         "plannerVisualIntent": _bounded_visual_value(planner_visual_intent),
         "runtimeAffordance": copy.deepcopy(data.get("runtimeAffordance")) if isinstance(data.get("runtimeAffordance"), dict) else {},
         "attackFacts": attack_facts,
@@ -254,13 +231,6 @@ def visual_director_context(
             compact_visual_parent_card(parent_a, canonical_a),
             compact_visual_parent_card(parent_b, canonical_b),
         ],
-        "existingVisual": existing_visual,
-        "existingVisualProvenance": {
-            "imagePrompt": prompt_source,
-            "palette": str(debug.get("visualPaletteSource") or "unknown"),
-            "requiredAnchors": str(debug.get("visualRequiredAnchorsSource") or "unknown"),
-            "parentVisualContext": "raw_parent_facts_and_nonbinding_context",
-        },
     }
 
 

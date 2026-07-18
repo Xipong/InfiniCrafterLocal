@@ -81,7 +81,8 @@ public sealed partial class GeneratedProjectile
 
     private void FireChargedPrimaryShots(Vector2 direction)
     {
-        if (Main.netMode != Terraria.ID.NetmodeID.Server)
+        if (Main.netMode != Terraria.ID.NetmodeID.Server
+            && InfiniSoundLibrary.IsBuiltInCatalogId(_spec.SoundUseCatalogId))
         {
             SoundStyle releaseSound = InfiniSoundLibrary.ForUse(
                 _spec.RuntimeFamily, _spec.Delivery, _spec.Effect,
@@ -106,7 +107,11 @@ public sealed partial class GeneratedProjectile
             int idx = Projectile.NewProjectile(Projectile.GetSource_FromThis(), Projectile.Center + direction * 12f, velocity, Type, damage, knockback, Projectile.owner, released.MovementCode, released.EffectCode, released.OnHitCode);
             if (idx >= 0 && idx < Main.maxProjectiles && Main.projectile[idx].ModProjectile is GeneratedProjectile generated)
             {
-                generated.ApplyGeneratedSpec(released.CloneForRuntimeSpawn(), _vfxManifest, _generatedItemId);
+                generated.ApplyGeneratedSpec(
+                    released.CloneForRuntimeSpawn(),
+                    _vfxManifest,
+                    _generatedItemId,
+                    GeneratedProjectileRuntimeVariant.ChargeReleasedShot);
                 Main.projectile[idx].netUpdate = true;
                 generated.BroadcastVisualSync();
             }

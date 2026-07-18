@@ -505,6 +505,46 @@ def _contract_check_vfx_debug_post_routes_require_an_exact_parsed_path() -> None
     assert handler.json_payload == {"payload": {"x": 1}}
 
 
+def _contract_check_vfx_debug_force_recipe_never_crosses_or_persists_authority_boundary(monkeypatch) -> None:
+    from infini_local.web import vfx_debug_routes as vfx_routes
+
+    attached_meta: list[dict[str, Any]] = []
+    written_meta: list[dict[str, Any]] = []
+
+    def attach(data, *_args, **_kwargs):
+        attached_meta.append(dict(data.get("recipeMeta") or {}))
+        data.setdefault("attack", {})["vfxManifestJson"] = "{}"
+        data["vfxManifest"] = {"slots": []}
+        return data
+
+    routes = VfxDebugRoutes(
+        app_version="test",
+        normalize_world_id_from_payload=lambda _payload: "world",
+        read_world_recipe_cache=lambda *_args, **_kwargs: {
+            "id": "cached",
+            "recipeMeta": {"recipeKey": "cached", "vfxForcedRecipeId": "stale-force"},
+            "attack": {"enabled": True},
+        },
+        write_world_recipe_cache=lambda _key, _world, data, **_kwargs: written_meta.append(
+            dict(data.get("recipeMeta") or {})
+        ),
+        final_normalize=lambda data: data,
+    )
+    monkeypatch.setattr(vfx_routes, "attach_hybrid_vfx_manifest", attach)
+
+    routes.select_manifest({
+        "data": {"id": "probe", "recipeMeta": {}, "attack": {"enabled": True}},
+        "forceRecipeId": "debug-force",
+    })
+    routes.reroll_cached_manifest({
+        "recipeKey": "cached",
+        "forceRecipeId": "debug-force",
+        "rerollSalt": "next",
+    })
+
+    assert all("vfxForcedRecipeId" not in meta for meta in attached_meta)
+    assert all("vfxForcedRecipeId" not in meta for meta in written_meta)
+
 
 def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tmp_path: Path) -> None:
     routes = _build_shutdown_routes(tmp_path)
@@ -608,6 +648,7 @@ def test_240_http_boundary_bugfixes_module_contract(request):
             '_contract_check_post_body_read_timeout_uses_bounded_timeout_and_returns_408',
             '_contract_check_vfx_debug_get_routes_require_an_exact_parsed_path',
             '_contract_check_vfx_debug_post_routes_require_an_exact_parsed_path',
+            '_contract_check_vfx_debug_force_recipe_never_crosses_or_persists_authority_boundary',
             '_contract_check_recipe_debug_views_derive_from_authoritative_recipe_files',
             '_contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outage',
         ),

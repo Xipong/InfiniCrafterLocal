@@ -18,7 +18,6 @@ from infini_local.pipelines.result_identity_policy import (
     coerce_category_by_policy,
     inh_for_parent,
     normalize_category,
-    palette_from,
     required_anchors_from_tags,
     bad_result_name,
     rep_for_parent,
@@ -213,13 +212,8 @@ def validate_and_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, An
         visual["palette"] = [str(x) for x in raw_palette if str(x).strip()][:8]
         data["debug"]["visualPaletteSource"] = "planner_authored"
     else:
-        # Runtime-authoring deliberately does not inject parent semantic tags into the
-        # result item, but visual grounding still needs the physical parent materials.
-        # Using result tags alone made ordinary Wood + Work Bench fall back to gray/white
-        # and pushed the image model toward a generic steel sword.
-        visual_grounding_tags = tags | tags_of(a) | tags_of(b)
-        visual["palette"] = palette_from(visual_grounding_tags)
-        data["debug"]["visualPaletteSource"] = "result_and_parent_grounding_tags"
+        visual["palette"] = []
+        data["debug"]["visualPaletteSource"] = "none"
     visual.setdefault("objectType", slug(data.get("name", "generated_item")))
     if isinstance(data.get("attack"), dict) and data["attack"].get("genome") is None:
         data["attack"]["genome"] = {}

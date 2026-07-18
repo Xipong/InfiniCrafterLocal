@@ -27,6 +27,7 @@ from infini_local.core.runtime_contracts import STRUCTURAL_RUNTIME_CONTRACT_SCHE
 from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
+from infini_local.pipelines.combine_genome_contract import is_llm_planner
 from infini_local.pipelines.combine_validation import strict_validate_authored_item, validate_and_repair
 from infini_local.pipelines.executable_boundary_projection import project_attack_presentation_fields
 from infini_local.pipelines.final_normalize import final_normalize
@@ -370,7 +371,11 @@ def compile_and_validate_authored_runtime(
     run_stage: Callable[..., Any],
 ) -> dict[str, Any]:
     """Run one strict author transaction plus at most one scoped repair patch."""
-    state: dict[str, Any] = {"data": data, "stage": "strict_author_validation"}
+    state: dict[str, Any] = {
+        "data": data,
+        "authorSource": deepcopy(data),
+        "stage": "strict_author_validation",
+    }
 
     def domain_pass(item: dict[str, Any], *, repaired: bool) -> dict[str, Any]:
         labels = (
@@ -395,6 +400,7 @@ def compile_and_validate_authored_runtime(
         state["stage"] = "strict_author_validation"
         item = run_stage(labels["validate"], strict_validate_authored_item, item, a, b)
         state["data"] = item
+        state["authorSource"] = deepcopy(item)
         state["stage"] = "result_envelope_projection"
         item = validate_and_repair(item, a, b, ca, cb, key)
         state["data"] = item
@@ -428,6 +434,12 @@ def compile_and_validate_authored_runtime(
             "errorType": type(exc).__name__,
             "error": str(exc)[:2000],
         }
+        if exc.author_repair_rejected_domains:
+            failure_report["authorRepairRejectedDomains"] = deepcopy(
+                exc.author_repair_rejected_domains
+            )
+        if exc.author_repair_targets:
+            failure_report["authorRepairTargets"] = deepcopy(exc.author_repair_targets)
         if failure_report["stage"] == "final_wire":
             failure_report["finalWire"] = final_runtime_promise_report(failed)
         else:
@@ -436,7 +448,13 @@ def compile_and_validate_authored_runtime(
             )
         debug_candidate = failed.get("debug")
         debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
-        for field in ("plannerPromiseGate", "authorItemV3LocalStrictBoundary", "runtimePlanValidationBeforeRepair", "runtimePlanRawStrictBoundary"):
+        for field in (
+            "plannerPromiseGate",
+            "authorItemV3LocalStrictBoundary",
+            "runtimePlanValidationBeforeRepair",
+            "runtimePlanRawStrictBoundary",
+            "authorRepairRejectedDomains",
+        ):
             if field in debug:
                 diagnostic = debug[field]
                 if isinstance(diagnostic, str):
@@ -446,10 +464,16 @@ def compile_and_validate_authored_runtime(
                         pass
                 failure_report[field] = diagnostic
 
+    author_source_candidate = state.get("authorSource")
+    author_source: dict[str, Any] = (
+        author_source_candidate
+        if isinstance(author_source_candidate, dict)
+        else data
+    )
     repaired_item = run_stage(
         "04e_same_author_scoped_repair",
         repair_author_item_after_failure,
-        failed,
+        author_source,
         a,
         b,
         ca,
@@ -555,6 +579,26 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("06_result_card_after_runtime_stats", attach_result_knowledge_card, data, a, b)
         data = step("07_item_visual_brief_preserve_author", attach_visual, data, a, b, ca, cb)
         data = step("08_visual_director_asset_pack", apply_visual_director, data, a, b, ca, cb)
+        if not isinstance(data, dict):
+            raise PlannerUnavailable("Visual Director returned a non-object product")
+        if is_llm_planner(data):
+            visual_debug_candidate = data.get("debug")
+            visual_debug: dict[str, Any] = (
+                visual_debug_candidate if isinstance(visual_debug_candidate, dict) else {}
+            )
+            if visual_debug.get("visualDirectorStatus") != "validated_and_applied":
+                raise PlannerUnavailable(
+                    "Visual Director did not complete a validated transaction; "
+                    "refusing stale or code-authored visual fallback"
+                )
+            visual_kit = data.get("visualKit")
+            if not isinstance(visual_kit, dict) or not str(
+                visual_kit.get("itemIconPrompt") or ""
+            ).strip():
+                raise PlannerUnavailable(
+                    "Visual Director did not produce an accepted itemIconPrompt; "
+                    "refusing code-authored visual fallback"
+                )
         data = step("08b_project_presentation_out_of_attack", project_attack_presentation_fields, data, source="post_visual_director")
         step("08c_strict_executable_preflight", validate_executable_item_boundary, data)
         data = step("08d_hybrid_vfx_manifest", attach_hybrid_vfx_manifest, data, key, "", a, b, call_llm_vfx_director if USE_LLM else None)

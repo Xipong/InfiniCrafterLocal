@@ -367,7 +367,7 @@ def _vfx_compute_effect_magnitude(recipe: dict[str, Any], power: float, seed: in
 
     v0.3.26 deliberately separates item effect magnitude from render quality.
     Terraria does not need Low/Medium/High/Ultra as an art axis; magnitude is
-    derived from item power/recipe cost/novelty-ish debug hints plus stable seed.
+    derived from accepted item power, recipe cost and stable seed.
     """
     cost = str(recipe.get("cost") or "medium").lower()
     cost_bias = {"tiny": -0.18, "low": -0.12, "medium": 0.0, "normal": 0.0, "high": 0.13, "signature": 0.24, "ultra": 0.30}.get(cost, 0.0)
@@ -377,9 +377,11 @@ def _vfx_compute_effect_magnitude(recipe: dict[str, Any], power: float, seed: in
         pwr = 1.0
     # powerBudget in this project is not a Terraria damage number; keep it soft and capped.
     power_bias = max(-0.16, min(0.28, (pwr - 1.0) * 0.18))
-    debug = (data or {}).get("debug") if isinstance((data or {}).get("debug"), dict) else {}
-    gameplay = (data or {}).get("gameplay") if isinstance((data or {}).get("gameplay"), dict) else {}
-    novelty_raw = debug.get("novelty") or debug.get("noveltyScore") or gameplay.get("novelty") or gameplay.get("noveltyScore") or 0.0
+    gameplay: dict[str, Any] = {}
+    gameplay_value = (data or {}).get("gameplay")
+    if isinstance(gameplay_value, dict):
+        gameplay = gameplay_value
+    novelty_raw = gameplay.get("novelty") or gameplay.get("noveltyScore") or 0.0
     try:
         novelty_bias = max(0.0, min(0.14, float(novelty_raw) * 0.08))
     except Exception:

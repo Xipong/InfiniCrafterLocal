@@ -128,8 +128,7 @@ def generation_depth(item: dict[str, Any]) -> int:
     if not gd:
         return 0
     meta_raw = dict_get_ci(gd, "recipeMeta", {})
-    debug_raw = dict_get_ci(gd, "debug", {})
-    for source in (meta_raw if isinstance(meta_raw, dict) else {}, debug_raw if isinstance(debug_raw, dict) else {}):
+    for source in (meta_raw if isinstance(meta_raw, dict) else {},):
         for key in ("generationDepth", "depth"):
             try:
                 if key in source:

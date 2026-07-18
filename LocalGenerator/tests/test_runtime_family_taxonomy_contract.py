@@ -129,9 +129,9 @@ def _contract_check_executor_vocabulary_has_one_injective_owner() -> None:
     assert "dust" not in EFFECTS
     assert normalize_authoring_enum("dust", "effect") == "smoke"
 
-    from infini_local.pipelines.presentation_sound import _EFFECT_PRESENTATION
-
-    assert set(_EFFECT_PRESENTATION) == EFFECTS
+    presentation_owner = _read(PY_ROOT / "pipelines" / "presentation_sound.py")
+    assert "_EFFECT_PRESENTATION" not in presentation_owner
+    assert "runtime_color_for_effect" not in presentation_owner
 
     owner = PY_ROOT / "core" / "runtime_executor_vocabulary.py"
     old_owners = [

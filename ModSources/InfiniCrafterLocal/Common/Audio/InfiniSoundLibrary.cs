@@ -128,6 +128,9 @@ public static class InfiniSoundLibrary
 
     public static int BuiltInCatalogCount => BuiltInCatalog.Count;
 
+    public static bool IsBuiltInCatalogId(string? catalogId)
+        => !string.IsNullOrWhiteSpace(catalogId) && BuiltInCatalog.ContainsKey(catalogId);
+
     public static SoundStyle ForUse(
         string runtimeFamily,
         string delivery,

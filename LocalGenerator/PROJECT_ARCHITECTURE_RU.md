@@ -122,7 +122,7 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 - `pipelines/llm_authoring_prompt.py` advertises only executable finite calls. `spawn_temporary_helper_projectile` is temporary projectile behavior; removed function names are rejected, not migrated.
 - `pipelines/visual_asset_plan.py` and `pipelines/visual_generation_pipeline.py` canonicalize visual decisions into `visualKit.bakedAssets`; old aliases are read and removed at the boundary.
 - `pipelines/visual_prompt_contracts.py` owns final role framing. Exact resultKind may shape inventory-icon composition but never selects gameplay.
-- `core/vfx_director_prompt.py` passes compiled runtime facts to the VFX Director.
+- `core/vfx_director_prompt.py` passes a self-contained clean accepted product dossier to the VFX+Sound Director: concept/gameplay/attack/audio facts, full canonical `VisualAssetKit`, clean parent facts, and the bounded VFX/sound-slot surface. It does not pass classifier/tag/provenance/debug packets or raw stage transcripts.
 - `../docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` is the required negative-example map before extending these contracts.
 
 ## Charge-release + sentry v15

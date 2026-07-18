@@ -41,11 +41,7 @@ def generated_parent_summary_from_data(data: dict[str, Any]) -> dict[str, Any]:
 
     if int(gameplay.get("consumeChancePercent") or 100) < 100:
         effects.append("custom consume chance")
-    runtime_state = gameplay.get("runtimeState") if isinstance(gameplay.get("runtimeState"), dict) else {}
-    if runtime_state.get("stateMeters"):
-        effects.append("runtime state: meters")
-    if runtime_state.get("triggeredActions"):
-        effects.append("runtime state: triggers")
+
     if gameplay.get("rejectedEngineCalls"):
         effects.append("rejected unsupported calls")
     try:

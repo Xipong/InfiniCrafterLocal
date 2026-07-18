@@ -190,9 +190,6 @@ class VfxDebugRoutes:
             }
         key = str(payload.get("recipeKey") or data.get("recipeMeta", {}).get("recipeKey") or data.get("id") or "debug_vfx")
         salt = str(payload.get("rerollSalt") or payload.get("salt") or "")
-        force_recipe = str(payload.get("forceRecipeId") or payload.get("recipeId") or "").strip()
-        if force_recipe:
-            data.setdefault("recipeMeta", {})["vfxForcedRecipeId"] = force_recipe
         out = attach_hybrid_vfx_manifest(dict(data), key, salt, payload.get("itemA") if isinstance(payload.get("itemA"), dict) else None, payload.get("itemB") if isinstance(payload.get("itemB"), dict) else None)
         return {
             "ok": True,
@@ -216,11 +213,7 @@ class VfxDebugRoutes:
         salt = str(payload.get("rerollSalt") or payload.get("salt") or int(time.time() * 1000))
         meta = data.setdefault("recipeMeta", {})
         meta["vfxRerollSalt"] = salt
-        if payload.get("clearForcedRecipe"):
-            meta.pop("vfxForcedRecipeId", None)
-        forced_recipe = str(payload.get("forceRecipeId") or payload.get("recipeId") or "").strip()
-        if forced_recipe:
-            meta["vfxForcedRecipeId"] = forced_recipe
+        meta.pop("vfxForcedRecipeId", None)
         data.setdefault("debug", {})["vfxRerollRequestedAt"] = time.time()
         data = attach_hybrid_vfx_manifest(data, recipe_key_value, salt)
         data = self.final_normalize(data)
@@ -417,7 +410,6 @@ class VfxDebugRoutes:
                 continue
             data = {
                 "id": f"audit_{recipe.get('id')}",
-                "recipeMeta": {"vfxForcedRecipeId": recipe.get("id")},
                 "attack": {"enabled": True, "attackPattern": (pattern or (recipe.get("compatiblePatterns") or ["thrown_simple"])[0]), "projectileSpritePath": "debug_projectile.png", "impactSpritePath": "debug_impact.png", "childSpritePath": "debug_child.png", "fieldSpritePath": "debug_field.png"},
                 "visual": {"vfxIntent": "budget audit"},
                 "debug": {},

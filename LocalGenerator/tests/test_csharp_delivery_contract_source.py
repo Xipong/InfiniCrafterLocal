@@ -10,7 +10,7 @@ def _check_csharp_generated_item_data_keeps_runtime_api_and_debug_delivery_guard
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "public string RuntimeApiVersion" in source
     limits = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "InfiniRuntimeLimits.cs").read_text(encoding="utf-8")
-    assert "RuntimeApiCurrent = \"v0.4.51\"" in limits
+    assert "RuntimeApiCurrent = \"v0.4.52\"" in limits
     assert "RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in source
     assert "v0.4.23" not in source and "v0.4.30" not in source
     assert "RuntimeApiCurrent" in source
@@ -28,10 +28,13 @@ def _check_csharp_projectile_runtime_is_authored_only_and_logs_network_failures(
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
     assert "Legacy non-runtime-authored generated projectile is no longer supported" in source
     assert "RuntimeCodesSupported" in source
-    assert "Legacy lean projectile packets are no longer supported" in source
+    assert "Unsupported GeneratedProjectile sync version" in source
+    assert "invalid registry identity or runtime variant" in source
+    assert "Projectile network payload could not be read" in source
     assert "Logger?.Warn" in source
     assert "DrawRuntimePlanFallback" in source
-    assert "PresentationColor" in source and "_spec.EffectCode switch" in source
+    assert "PresentationColor" in source and "RuntimeColorPolicy.Resolve(_spec.PrimaryColorName" in source
+    assert "_spec.EffectCode switch" not in source
     assert "PlayImpactSound" in source and "InfiniSoundLibrary.ForImpact" in source
     # Runtime-authored drawing no longer reaches legacy shape-string heuristics.
     assert "shape.Contains" not in source
@@ -54,15 +57,23 @@ def _check_unmanifested_projectiles_do_not_get_unrelated_magicpixel_laser_trails
 
 def _check_csharp_generated_item_no_legacy_toy_string_routing() -> None:
     source = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Items" / "GeneratedItem.cs").read_text(encoding="utf-8")
+    model = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
+    selftest = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Systems" / "InfiniAgentContractSelfTestSystem.cs").read_text(encoding="utf-8-sig")
     assert "toy.Contains" not in source
     assert "pattern.Contains" not in source
     assert "visualMode.Contains" not in source
     assert "InfiniToy" not in source
     assert "RuntimePlanAuthored" in source
+    assert 'Category == "armor"' not in model
+    assert 'Category == "accessory"' not in model
+    assert "data.Category" not in source[source.index("private static bool HasVanillaItemHitboxDamage"):source.index("private static string DamagePathSummary")]
+    assert "category-cannot-select-equipment-role" in selftest
+    assert "GeneratedItemData.ResolveEquipmentRoles" in selftest
 
 
 def _check_csharp_projectile_no_legacy_noop_or_free_text_runtime_tables() -> None:
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
+    child_policy = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedChildSpecPolicy.cs").read_text(encoding="utf-8")
     for removed in [
         "ApplyScriptedToyTick",
         "ApplyToyMotion",
@@ -79,7 +90,9 @@ def _check_csharp_projectile_no_legacy_noop_or_free_text_runtime_tables() -> Non
         assert removed not in source
     assert "shapeText.Contains" not in source
     assert "rotText.Contains" not in source
-    assert "DebuffHint" not in source or "writer.Write(ShortNet(_spec.DebuffHint" in source or "writer.Write(Short(_spec.DebuffHint" in source
+    send_extra_ai = source.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "DebuffHint = \"\"" in child_policy
+    assert "ShortNet(_spec.DebuffHint" not in send_extra_ai
 
 
 def _check_csharp_projectile_children_keep_authored_presentation_without_prompt_inheritance() -> None:
@@ -124,13 +137,12 @@ def _check_server_source_has_family_movement_codes_for_runtime_validation() -> N
 
 def _check_projectile_network_carries_family_state_not_prose_scripts() -> None:
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
-    assert "writer.Write(ShortNet(_spec.RuntimeFamily" in source
-    assert "ReadStringKeepBase(reader, _spec.RuntimeFamily" in source
-    assert "writer.Write(ShortNet(_spec.WeaponFamily" in source
-    assert "writer.Write(ShortNet(_spec.ProjectileFamily" in source
-    assert "writer.Write(ShortNet(_spec.AmmoKind" in source
-    assert "writer.Write(_spec.UseStyleCode)" in source
-    assert "writer.Write(_spec.OwnerHitCheck)" in source
+    send_extra_ai = source.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "writer.Write(ShortNet(_generatedItemId, 96))" in send_extra_ai
+    assert "writer.Write((byte)_runtimeVariant)" in send_extra_ai
+    assert "_spec." not in send_extra_ai
+    assert "TryGetAttack(_generatedItemId)" in source
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in source
     for removed in ["ToyIdentity", "SpecialRule", "BehaviorActions", "BehaviorTimeline", "OnUseScript", "OnTickScript", "OnHitScript", "OnExpireScript", "ProjectileChild"]:
         assert removed not in source
     assert "writer.Write(Short(_spec.ToyIdentity" not in source
@@ -264,11 +276,15 @@ def _check_multiplayer_network_json_is_ready_state_only_for_radmin() -> None:
 
 def _check_projectile_empty_first_mp_packet_defers_instead_of_killing_as_legacy() -> None:
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Content" / "Projectiles" / "GeneratedProjectile.cs")
+    receive = source.split("public override void ReceiveExtraAI", 1)[1].split("private bool TryHydrateRuntimeVariantFromRegistry", 1)[0]
+    ai = source.split("public override void AI()", 1)[1].split("private static int DefaultBounceBudgetForMovement", 1)[0]
     assert "_pendingNetworkSpecTicks" in source
     assert "DeferUnconfiguredNetworkProjectile" in source
     assert "initial projectile entity before the mod" in source
     assert "Projectile.damage = 0" in source
-    assert "if (!_configured)" in source and "DeferUnconfiguredNetworkProjectile();" in source
+    assert "if (!packetConfigured)" in receive and "DeferUnconfiguredNetworkProjectile();" in receive
+    assert "if (!_configured && _pendingNetworkSpecTicks > 0)" in ai
+    assert "TryHydrateRuntimeVariantFromRegistry()" in ai
 
 
 def _check_swing_secondary_projectiles_are_explicit_and_capped() -> None:
@@ -287,8 +303,11 @@ def _check_csharp_projectile_executes_blink_to_projectile_impact_from_authored_f
     assert "public int MobilityRangeTiles" in data_source
     assert "public int MobilityCooldownTicks" in data_source
     assert "public bool MobilitySafeTileOnly" in data_source
-    assert "writer.Write(ShortNet(_spec.MobilityMode" in projectile_source
-    assert "_spec.MobilityMode = reader.ReadString()" in projectile_source
+    send_extra_ai = projectile_source.split("public override void SendExtraAI", 1)[1].split("public override void ReceiveExtraAI", 1)[0]
+    assert "_spec." not in send_extra_ai
+    assert "TryGetAttack(_generatedItemId)" in projectile_source
+    assert "GeneratedChildSpecPolicy.TryCreateRuntimeVariant" in projectile_source
+    assert "_spec.MobilityMode" in projectile_source
     assert "TryRunImpactMobility(target.Center)" in projectile_source
     assert "TryRunImpactMobility(Projectile.Center)" in projectile_source
     assert 'mode != "blink_to_projectile_impact"' in projectile_source
@@ -308,8 +327,9 @@ def _check_network_authority_versioned_sync_and_public_api_contract() -> None:
     assert "SyncTeleport" in authority
     assert "ProjectileSyncVersion" in projectile
     assert "writer.Write(ProjectileSyncVersion)" in projectile
-    assert "reader.ReadUInt16()" in projectile
-    assert "SyncFlagMobility" in projectile
+    assert "(GeneratedProjectileRuntimeVariant)reader.ReadByte()" in projectile
+    assert "TryHydrateRuntimeVariantFromRegistry()" in projectile
+    assert "GeneratedChildSpecPolicy.IsKnownVariant" in projectile
     assert "InfiniRuntimeAuthority.ShouldRunProjectileGameplay" in projectile
     assert "GeneratedItemNetPayloadVersion" in item
     assert "Item.NetStateChanged()" in item

@@ -362,24 +362,7 @@ public sealed partial class GeneratedProjectile
 
     private Color PresentationColor(int alpha = 255)
     {
-        Color color = _spec.EffectCode switch
-        {
-            1 => new Color(80, 235, 255),
-            2 => new Color(95, 255, 120),
-            3 => new Color(255, 235, 90),
-            4 => new Color(255, 150, 45),
-            5 => new Color(120, 210, 255),
-            6 => new Color(110, 220, 95),
-            7 => new Color(190, 80, 255),
-            8 => new Color(95, 255, 120),
-            9 => new Color(255, 70, 55),
-            10 => new Color(255, 210, 110),
-            11 => new Color(225, 190, 120),
-            12 => new Color(185, 110, 255),
-            13 => new Color(120, 255, 190),
-            14 => new Color(255, 245, 185),
-            _ => new Color(150, 135, 110)
-        };
+        Color color = RuntimeColorPolicy.Resolve(_spec.PrimaryColorName, Color.White);
         color.A = (byte)Math.Clamp(alpha, 0, 255);
         return color;
     }
@@ -387,9 +370,8 @@ public sealed partial class GeneratedProjectile
 
     private bool AllowsPresentationLight()
     {
-        if (_spec.RuntimeLightStrength > 0.001f)
-            return _spec.RuntimeLightDurationTicks <= 0 || RuntimeAgeTicks() <= _spec.RuntimeLightDurationTicks;
-        return _spec.EffectCode is 1 or 3 or 4 or 5 or 7 or 12 or 13 or 14;
+        return _spec.RuntimeLightStrength > 0.001f
+            && (_spec.RuntimeLightDurationTicks <= 0 || RuntimeAgeTicks() <= _spec.RuntimeLightDurationTicks);
     }
 
 
@@ -400,11 +382,7 @@ public sealed partial class GeneratedProjectile
         float lightMul = InfiniVfxClientOptions.PresentationLightMultiplier;
         if (lightMul <= 0f) return;
         Color c = RuntimeColorPolicy.Resolve(_spec.PrimaryColorName, PresentationColor());
-        bool authoredActive = _spec.RuntimeLightStrength > 0.001f
-            && (_spec.RuntimeLightDurationTicks <= 0 || RuntimeAgeTicks() <= _spec.RuntimeLightDurationTicks);
-        float baseStrength = authoredActive
-            ? Math.Clamp(_spec.RuntimeLightStrength, 0.04f, 0.75f)
-            : Math.Clamp(0.08f + _spec.ProjectileScale * 0.04f + _spec.PowerBudget * 0.015f, 0.04f, 0.32f);
+        float baseStrength = Math.Clamp(_spec.RuntimeLightStrength, 0.04f, 0.75f);
         float strength = baseStrength * lightMul;
         Lighting.AddLight(Projectile.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
     }

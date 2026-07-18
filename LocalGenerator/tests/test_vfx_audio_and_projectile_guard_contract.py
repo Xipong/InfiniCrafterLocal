@@ -33,6 +33,61 @@ def _contract_check_vfx_sound_cues_are_rate_limited_and_use_authored_audio_field
     assert "spec.SoundVolume" in src
     assert "spec.SoundPitch" in src
     assert "InfiniSoundLibrary.ForVfxCue" in src
+    play = src.split("private static void PlaySlotSound", 1)[1].split("private static void DrawLine", 1)[0]
+    assert play.index("IsBuiltInCatalogId") < play.index("ForVfxCue")
+    loop = (ROOT / "ModSources/InfiniCrafterLocal/Common/Audio/InfiniLuminanceSoundBridge.cs").read_text(encoding="utf-8")
+    update = loop.split("public static bool TryUpdateLiveSoundCue", 1)[1].split("private static bool ShouldLoop", 1)[0]
+    assert update.index("IsBuiltInCatalogId(spec.SoundUseCatalogId)") < update.index("ForVfxCue")
+
+
+def _contract_check_vfx_director_sound_timing_survives_manifest_compilation():
+    from infini_local.core.vfx_director_contract import vfx_director_surface
+    from infini_local.core.vfx_manifest import _vfx_validate_director_output
+
+    surface = vfx_director_surface()
+    slot = {
+        "event": "travel",
+        "rendererKind": "soundCue",
+        "backend": surface["backend"][0],
+        "textureRole": surface["textureRole"][0],
+        "particleRole": surface["particleRole"][0],
+        "anchor": surface["anchor"][0],
+        "channel": "sound",
+        "lane": surface["lane"][0],
+        "emissionMode": surface["emissionMode"][0],
+        "blend": surface["blend"][0],
+        "particleSystemId": surface["particleSystemId"][0],
+        "scale": 1.0,
+        "density": 0.25,
+        "duration": 40,
+        "alpha": 0.0,
+        "spread": 0.0,
+        "jitter": 0.0,
+        "budgetWeight": 1.0,
+        "signatureWeight": 0.4,
+        "visualCost": 0.0,
+        "fadeIn": 0.0,
+        "fadeOut": 0.0,
+        "startTick": 20,
+        "repeatEvery": 60,
+    }
+    manifest = _vfx_validate_director_output(
+        {
+            "identity": "bounded travel audio",
+            "effectMagnitude": 0.4,
+            "visualBudgetClass": "small",
+            "slots": [slot],
+        },
+        {
+            "id": "sound_timing_contract",
+            "gameplay": {"powerBudget": 1.0},
+            "attack": {"enabled": True, "pattern": "basic", "runtimeFamily": "shoot"},
+        },
+        "sound_timing_contract",
+    )
+    assert manifest is not None
+    assert manifest["slots"][0]["startTick"] == 20
+    assert manifest["slots"][0]["repeatEvery"] == 60
 
 
 def _contract_check_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier():
@@ -104,6 +159,7 @@ def test_vfx_audio_and_projectile_guard_contract_module_contract(request):
             '_contract_check_chain_projectiles_uses_runtime_child_count_cap',
             '_contract_check_projectile_impact_sound_uses_authored_volume_pitch_and_cooldown',
             '_contract_check_vfx_sound_cues_are_rate_limited_and_use_authored_audio_fields',
+            '_contract_check_vfx_director_sound_timing_survives_manifest_compilation',
             '_contract_check_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier',
             '_contract_check_generated_item_use_sound_resolves_through_library',
             '_contract_check_vfx_fallback_dust_uses_effect_before_color_guess',
