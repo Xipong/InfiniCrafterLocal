@@ -38,6 +38,7 @@ from infini_local.pipelines.visual_prompt_contracts import (
 )
 
 from infini_local.pipelines.visual_director_contract import (
+    visual_director_output_contract,
     visual_director_context,
     visual_kit_projection_errors,
     visual_kit_response_schema,
@@ -337,6 +338,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "imageBackend": backend_name,
             "imageBackendContract": backend_contract,
             "rules": [
+                'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}}; never emit VisualKit fields directly at the root.',
                 "Return one JSON object matching the supplied schema; no markdown or analysis.",
                 "Do not change gameplay, delivery, runtime families, counts, timing, or stats.",
                 "The planner's authored final-item topology is authoritative. Preserve its physical class, subject count, continuous bodies, attachments, and intentional separations exactly as authored.",
@@ -371,6 +373,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "lists": "animationPlan, assetDependencies, qualityNotes, vfxMaterialHints must remain JSON arrays",
                 "negativePrompt": "one optional shared backend negative prompt; keep empty for Z-Image",
             },
+            "outputContract": visual_director_output_contract(),
         }
         if anime_opportunity in {"subtle", "strong"}:
             payload["fieldGuide"]["animeReference"] = (
@@ -389,7 +392,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             f"You direct pixel-art assets for {backend_name} in a Terraria-like generated-item mod. "
             "The visual_director_context payload.item is the authoritative current accepted item truth. "
             "Write coherent subject-first visual descriptions, not legacy SD tag recipes. Establish physical class, count, silhouette, view, and connected functional parts before materials, decoration, light, style, and background. "
-            "Preserve authored subject, state, colors, materials, and topology. Use only authored glow, magic, energy, child motes, and material effects. Return one JSON object."
+            "Preserve authored subject, state, colors, materials, and topology. Use only authored glow, magic, energy, child motes, and material effects. "
+            'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}} and never place itemIconPrompt, bakedAssets, or other VisualKit fields at the root.'
         )
         visual_user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         messages = [

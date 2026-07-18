@@ -50,6 +50,34 @@ _VISUAL_CONTEXT_KEYS = (
     "requiredAnchors",
 )
 
+_VISUAL_DIRECTOR_ROLE_FIELDS = {
+    "item": {
+        "promptField": "itemIconPrompt",
+        "assetDecision": "the item icon is always the required generated inventory/held sprite",
+        "requiredWhen": "always",
+    },
+    "projectile": {
+        "promptField": "projectileSpritePrompt",
+        "assetModeField": "bakedAssets.projectile.mode",
+        "requiredWhen": "the role is visually relevant; a non-empty prompt is mandatory when mode=baked_sprite",
+    },
+    "impact": {
+        "promptField": "impactSpritePrompt",
+        "assetModeField": "bakedAssets.impact.mode",
+        "requiredWhen": "the role is visually relevant; a non-empty prompt is mandatory when mode=baked_sprite",
+    },
+    "child": {
+        "promptField": "childSpritePrompt",
+        "assetModeField": "bakedAssets.child.mode",
+        "requiredWhen": "the accepted runtime has a child role; a non-empty prompt is mandatory when mode=baked_sprite",
+    },
+    "field": {
+        "promptField": "fieldSpritePrompt",
+        "assetModeField": "bakedAssets.field.mode",
+        "requiredWhen": "the accepted runtime has a field role; a non-empty prompt is mandatory when mode=baked_sprite",
+    },
+}
+
 
 def _nonempty(value: Any) -> bool:
     if value in (None, "", [], {}):
@@ -126,6 +154,22 @@ def compact_visual_parent_card(item: dict[str, Any], canonical: dict[str, Any] |
     return card
 
 
+def visual_director_output_contract() -> dict[str, Any]:
+    """Describe the one root wrapper and the canonical field for every visual role."""
+    return {
+        "rootKey": "visualKit",
+        "rootRule": (
+            'The root object must contain exactly one key named "visualKit". '
+            "Never return itemIconPrompt, bakedAssets, or any other VisualKit field at the root."
+        ),
+        "roleFields": copy.deepcopy(_VISUAL_DIRECTOR_ROLE_FIELDS),
+        "assetDemandRule": (
+            "A role prompt describes appearance but never requests a PNG by itself; "
+            "only bakedAssets.<role>.mode=baked_sprite requests one."
+        ),
+    }
+
+
 def visual_kit_response_schema() -> dict[str, Any]:
     """OpenAI-compatible wrapper schema for the Visual Director response."""
     kit_schema = copy.deepcopy(VisualKitBoundary.model_json_schema())
@@ -146,6 +190,21 @@ def visual_kit_response_schema() -> dict[str, Any]:
         effect_def["title"] = "EffectBakedAssetBoundary"
         defs["EffectBakedAssetBoundary"] = effect_def
     kit_properties = kit_schema.get("properties") if isinstance(kit_schema.get("properties"), dict) else {}
+    kit_schema["description"] = (
+        "The VisualKit value nested under the required root key visualKit. "
+        "These fields must never be emitted directly at the response root."
+    )
+    role_descriptions = {
+        "itemIconPrompt": "Canonical appearance prompt for the required item inventory/held sprite.",
+        "projectileSpritePrompt": "Canonical appearance prompt for the projectile role when that role is relevant.",
+        "impactSpritePrompt": "Canonical appearance prompt for the impact role when that role is relevant.",
+        "childSpritePrompt": "Canonical appearance prompt for the child role when that role is relevant.",
+        "fieldSpritePrompt": "Canonical appearance prompt for the field role when that role is relevant.",
+    }
+    for field, description in role_descriptions.items():
+        field_schema = kit_properties.get(field)
+        if isinstance(field_schema, dict):
+            field_schema["description"] = description
     if "bakedAssets" in kit_properties:
         kit_properties["bakedAssets"] = {
             "type": "object",
@@ -159,6 +218,10 @@ def visual_kit_response_schema() -> dict[str, Any]:
         }
     schema: dict[str, Any] = {
         "type": "object",
+        "description": (
+            'The root object must contain exactly one key named "visualKit"; '
+            "VisualKit fields are forbidden at the root."
+        ),
         "additionalProperties": False,
         "properties": {"visualKit": kit_schema},
         "required": ["visualKit"],
@@ -206,7 +269,9 @@ def visual_director_context(
             "projectileShape", "projectileMotion", "projectileRotation", "projectileTrail", "projectileImpact",
             "secondaryProjectileShape", "secondaryMaterial", "secondaryTrigger", "effect", "onHit", "movement",
             "shotCount", "spreadRadians", "splitCount", "chainCount", "channelUse", "beamWidthPx",
-            "beamChargeTicks", "immunityCooldown",
+            "beamChargeTicks", "immunityCooldown", "aoeRadiusTiles", "secondaryLifetimeTicks",
+            "maxChildProjectiles", "maxChildDepth", "trailLength", "vfxFieldLifetimeTicks",
+            "vfxFieldRadiusTiles", "vfxFieldTickRate",
         )
         if _nonempty(attack.get(key))
     }
@@ -276,6 +341,7 @@ def visual_kit_projection_errors(kit: dict[str, Any], data: dict[str, Any]) -> l
 
 __all__ = [
     "compact_visual_parent_card",
+    "visual_director_output_contract",
     "visual_kit_response_schema",
     "visual_kit_usefulness_errors",
     "visual_kit_projection_errors",

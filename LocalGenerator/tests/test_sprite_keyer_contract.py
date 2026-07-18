@@ -181,7 +181,7 @@ def _check_nearest_downscale_is_not_a_supported_runtime_or_gui_path(monkeypatch)
     assert "pixel_strict" not in gui
 
 
-def _check_item_topology_rejects_multiple_disconnected_significant_bodies(tmp_path) -> None:
+def _check_item_without_authored_topology_keeps_disconnected_components_nonfatal(tmp_path) -> None:
     path = tmp_path / "disconnected_item.png"
     img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -194,40 +194,68 @@ def _check_item_topology_rejects_multiple_disconnected_significant_bodies(tmp_pa
     assert "missing_authored_topology" in validation["warnings"]
 
 
-def _check_authored_multipart_topology_is_not_forced_into_one_body(tmp_path) -> None:
-    path = tmp_path / "authored_multipart_item.png"
+def _check_disconnected_component_shape_is_diagnostic_only_for_every_authored_topology(tmp_path) -> None:
+    path = tmp_path / "disconnected_item.png"
     img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     draw.rectangle((5, 12, 20, 35), fill=(190, 90, 30, 255))
     draw.rectangle((28, 12, 43, 35), fill=(70, 150, 220, 255))
     img.save(path)
 
-    separated = validate_processed_sprite(
-        str(path), "item", topology="multipart_separated", part_count_min=2, part_count_max=2
-    )
-    touching = validate_processed_sprite(
-        str(path), "item", topology="multipart_touching", part_count_min=2, part_count_max=2
-    )
+    validations = [
+        validate_processed_sprite(
+            str(path), "item", topology="connected", part_count_min=1, part_count_max=1
+        ),
+        validate_processed_sprite(
+            str(path), "item", topology="multipart_touching", part_count_min=2, part_count_max=2
+        ),
+        validate_processed_sprite(
+            str(path), "item", topology="multipart_separated", part_count_min=2, part_count_max=2
+        ),
+        validate_processed_sprite(
+            str(path), "item", topology="multipart_separated", part_count_min=3, part_count_max=3
+        ),
+    ]
 
-    assert separated["ok"], separated
-    assert separated["topology"] == "multipart_separated"
-    assert touching["ok"] is False
-    assert "multipart_touching_requires_connected_body" in touching["reasons"]
-    assert sprite_validation_fatal(touching)
+    for validation in validations:
+        assert validation["ok"], validation
+        assert validation["bboxStats"]["significantAlphaComponents"] == 2
+        assert not any(
+            token in reason
+            for reason in validation["reasons"]
+            for token in (
+                "multiple_disconnected_",
+                "multipart_touching_requires_connected_body",
+                "multipart_separated_too_few_bodies",
+                "multipart_separated_too_many_bodies",
+            )
+        )
+        assert not sprite_validation_fatal(validation)
 
-    wrong_count = validate_processed_sprite(
-        str(path), "item", topology="multipart_separated", part_count_min=3, part_count_max=3
-    )
-    assert wrong_count["ok"] is False
-    assert any(reason.startswith("multipart_separated_too_few_bodies") for reason in wrong_count["reasons"])
-    assert sprite_validation_fatal(wrong_count)
 
-    draw.rectangle((20, 12, 28, 35), fill=(190, 90, 30, 255))
-    img.save(path)
-    touching_authored = validate_processed_sprite(
-        str(path), "item", topology="multipart_touching", part_count_min=2, part_count_max=2
-    )
-    assert touching_authored["ok"], touching_authored
+def _check_legacy_disconnected_reasons_cannot_trigger_fatal_or_retry_policy() -> None:
+    validation = {
+        "ok": False,
+        "reasons": [
+            "multiple_disconnected_item_bodies:2",
+            "multipart_touching_requires_connected_body",
+            "multipart_separated_too_few_bodies:1<2",
+            "multipart_separated_too_many_bodies:4>2",
+        ],
+        "warnings": [],
+    }
+
+    assert sprite_validation_fatal(validation) is False
+    retry_prompt = SPRITE_POSTPROCESS.build_retry_prompt_from_validation(
+        "one authored item sprite", validation, "item", 1, 32
+    ).casefold()
+    for forbidden in (
+        "do not detach significant components",
+        "keep authored multipart components visibly touching",
+        "minimum number of visibly separated bodies",
+        "maximum number of visibly separated bodies",
+    ):
+        assert forbidden not in retry_prompt
 
 
 def _check_multipart_part_list_supplies_default_component_count_contract() -> None:

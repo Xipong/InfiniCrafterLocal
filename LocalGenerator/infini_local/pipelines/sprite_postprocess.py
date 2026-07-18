@@ -567,17 +567,9 @@ def validate_processed_sprite(
         normalized_topology = "unconstrained"
     if normalized_topology == "unconstrained" and role == "item":
         warnings.append("missing_authored_topology")
-    if normalized_topology == "connected" and len(significant_components) > 1:
-        reasons.append(f"multiple_disconnected_{role}_bodies:{len(significant_components)}")
-    elif normalized_topology == "multipart_touching" and len(significant_components) > 1:
-        reasons.append("multipart_touching_requires_connected_body")
-    elif normalized_topology == "multipart_separated":
-        minimum = max(2, int(part_count_min or 0))
-        maximum = max(minimum, int(part_count_max or 8))
-        if len(significant_components) < minimum:
-            reasons.append(f"multipart_separated_too_few_bodies:{len(significant_components)}<{minimum}")
-        if len(significant_components) > maximum:
-            reasons.append(f"multipart_separated_too_many_bodies:{len(significant_components)}>{maximum}")
+    # Component count/connectivity is diagnostic only. Authored topology still guides
+    # the Image model prompt, but Python must not retry or reject a usable PNG merely
+    # because alpha islands do not match a code-side interpretation of the artwork.
     if not effect_bbox or not core_bbox:
         reasons.append("empty_alpha_bbox")
     else:
@@ -658,10 +650,6 @@ def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
         "almost_no_transparency_after_bg_removal",
         "too_few_opaque_pixels",
         "very_dense_opaque_area",
-        "multiple_disconnected_",
-        "multipart_touching_requires_connected_body",
-        "multipart_separated_too_few_bodies",
-        "multipart_separated_too_many_bodies",
         "pillow_unavailable_required",
     )
     return any(any(tok in reason for tok in fatal_tokens) for reason in reasons)
@@ -681,10 +669,6 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         ("almost_no_transparency_after_bg_removal", "keep the background perfectly flat magenta with a cleanly separated object"),
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
         ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the magenta key"),
-        ("multiple_disconnected_", "follow the authored connected topology; do not detach significant components"),
-        ("multipart_touching_requires_connected_body", "keep authored multipart components visibly touching"),
-        ("multipart_separated_too_few_bodies", "keep at least the authored minimum number of visibly separated bodies"),
-        ("multipart_separated_too_many_bodies", "keep no more than the authored maximum number of visibly separated bodies"),
         ("empty_alpha_bbox", "draw the authored role asset, not an empty image"),
     ]
     for raw, msg in mapping:

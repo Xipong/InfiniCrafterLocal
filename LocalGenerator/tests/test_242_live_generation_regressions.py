@@ -324,6 +324,129 @@ def _contract_check_visual_kit_rejects_singleton_text_aliases_without_leaking_in
     assert "visualKit" not in transport_failure_data
 
 
+def _contract_check_initial_visual_director_request_enforces_visual_kit_root_without_retry(monkeypatch) -> None:
+    requests: list[dict] = []
+    required_phrase = 'root object must contain exactly one key named "visualkit"'
+
+    monkeypatch.setattr(VISUAL, "USE_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(VISUAL, "is_llm_planner", lambda _data: True)
+    monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "visual-root-contract-model")
+    monkeypatch.setattr(VISUAL, "anime_reference_opportunity", lambda _data: "none")
+
+    def wrapper_sensitive_visual_model(req, timeout=None):
+        del timeout
+        requests.append(copy.deepcopy(req))
+        request_text = "\n".join(
+            str(message.get("content") or "")
+            for message in req.get("messages") or []
+            if isinstance(message, dict)
+        ).casefold()
+        kit = {"itemIconPrompt": "one connected copper crescent tool"}
+        content = {"visualKit": kit} if required_phrase in request_text else kit
+        return {"choices": [{"message": {"content": json.dumps(content)}}]}
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", wrapper_sensitive_visual_model)
+    data = _compiled_carpentry_item()
+    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+
+    assert result["debug"]["visualDirectorStatus"] == "validated_and_applied"
+    assert result["debug"]["visualDirectorRetryCount"] == 0
+    assert len(requests) == 1
+    initial_text = "\n".join(
+        str(message.get("content") or "") for message in requests[0]["messages"]
+    ).casefold()
+    assert required_phrase in initial_text
+    schema = requests[0]["response_format"]["json_schema"]["schema"]
+    assert schema["required"] == ["visualKit"]
+    assert schema["additionalProperties"] is False
+
+
+def _contract_check_visual_director_role_contract_reaches_every_canonical_asset_slot(monkeypatch) -> None:
+    requests: list[dict] = []
+    role_prompts = {
+        "item": "one connected bronze launcher with a cyan core",
+        "projectile": "one cyan bronze dart in right-facing flight",
+        "impact": "one compact cyan bronze impact star",
+        "child": "one small cyan bronze child mote body",
+        "field": "one circular cyan bronze field rune decal",
+    }
+    role_prompt_fields = {
+        "item": "itemIconPrompt",
+        "projectile": "projectileSpritePrompt",
+        "impact": "impactSpritePrompt",
+        "child": "childSpritePrompt",
+        "field": "fieldSpritePrompt",
+    }
+
+    monkeypatch.setattr(VISUAL, "USE_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(VISUAL, "is_llm_planner", lambda _data: True)
+    monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "visual-role-contract-model")
+    monkeypatch.setattr(VISUAL, "anime_reference_opportunity", lambda _data: "none")
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_IMPACT_IMAGES", True)
+    monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_CHILD_FIELD_IMAGES", True)
+
+    full_kit = {
+        **{field: role_prompts[role] for role, field in role_prompt_fields.items()},
+        "bakedAssets": {
+            "projectile": {"mode": "baked_sprite", "reason": "distinct moving body", "distinctFromItem": True},
+            "impact": {"mode": "baked_sprite", "reason": "persistent authored impact decal"},
+            "child": {"mode": "baked_sprite", "reason": "compiled child body"},
+            "field": {"mode": "baked_sprite", "reason": "compiled persistent field decal"},
+        },
+        "projectileVfx": "short cyan dart streak",
+        "impactVfx": "compact bronze chip burst",
+        "childVfx": "one restrained cyan child trail",
+        "fieldVfx": "slow circular field pulse",
+    }
+
+    def full_role_visual_model(req, timeout=None):
+        del timeout
+        requests.append(copy.deepcopy(req))
+        return {"choices": [{"message": {"content": json.dumps({"visualKit": full_kit})}}]}
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", full_role_visual_model)
+    data = _compiled_carpentry_item()
+    data["attack"].update({
+        "enabled": True,
+        "runtimeFamily": "shoot",
+        "delivery": "shoot",
+        "maxChildProjectiles": 1,
+        "vfxFieldRadiusTiles": 4,
+        "vfxFieldLifetimeTicks": 90,
+    })
+    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+
+    dossier = json.loads(requests[0]["messages"][1]["content"])
+    output_contract = dossier["outputContract"]
+    assert output_contract["rootKey"] == "visualKit"
+    for role, field in role_prompt_fields.items():
+        assert output_contract["roleFields"][role]["promptField"] == field
+    attack_facts = dossier["item"]["attackFacts"]
+    assert attack_facts["maxChildProjectiles"] == 1
+    assert attack_facts["vfxFieldRadiusTiles"] == 4
+    assert attack_facts["vfxFieldLifetimeTicks"] == 90
+
+    assert result["debug"]["visualDirectorRetryCount"] == 0
+    assert role_prompts["item"] in result["visual"]["imagePrompt"]
+    for role, field in role_prompt_fields.items():
+        assert role_prompts[role] in result["visualKit"][field]
+    for role in ("projectile", "impact", "child", "field"):
+        assert result["visualKit"]["bakedAssets"][role]["mode"] == "baked_sprite"
+        assert result["visual"][f"{role}Vfx"] == full_kit[f"{role}Vfx"]
+
+    plan_by_role = {row["role"]: row for row in ASSET_PLAN.build_visual_asset_plan(result)}
+    assert set(plan_by_role) == {"item", "projectile", "impact", "child", "field"}
+    assert role_prompts["item"] in plan_by_role["item"]["prompt"]
+    for role in ("projectile", "impact", "child", "field"):
+        assert plan_by_role[role]["assetMode"] == "baked_sprite"
+        assert role_prompts[role] in plan_by_role[role]["prompt"]
+
+
 def _contract_check_visual_director_traces_named_request_and_raw_response(monkeypatch) -> None:
     events: list[tuple] = []
 
