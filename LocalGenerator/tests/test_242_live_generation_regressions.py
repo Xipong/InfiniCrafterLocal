@@ -380,6 +380,60 @@ def _contract_check_initial_visual_director_request_enforces_root_and_baked_role
     assert schema["additionalProperties"] is False
 
 
+def _contract_check_visual_director_retries_extra_root_sibling(monkeypatch) -> None:
+    requests: list[dict] = []
+    responses = iter((
+        {
+            "visualKit": {"itemIconPrompt": "one connected copper crescent tool"},
+            "extraField": "must not be silently ignored",
+        },
+        {"visualKit": {"itemIconPrompt": "one connected copper crescent tool"}},
+    ))
+
+    monkeypatch.setattr(VISUAL, "USE_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(VISUAL, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(VISUAL, "is_llm_planner", lambda _data: True)
+    monkeypatch.setattr(VISUAL, "resolve_llm_model", lambda: "visual-exact-root-model")
+    monkeypatch.setattr(VISUAL, "anime_reference_opportunity", lambda _data: "none")
+
+    def extra_root_then_exact(req, timeout=None):
+        del timeout
+        requests.append(copy.deepcopy(req))
+        return {"choices": [{"message": {"content": json.dumps(next(responses))}}]}
+
+    monkeypatch.setattr(VISUAL, "llm_chat_json", extra_root_then_exact)
+    data = _compiled_carpentry_item()
+    result = VISUAL.apply_visual_director(data, _wooden_sword(), _workbench(), {}, {})
+
+    assert result["debug"]["visualDirectorStatus"] == "validated_and_applied"
+    assert result["debug"]["visualDirectorRetryCount"] == 1
+    assert len(requests) == 2
+    correction = json.loads(requests[1]["messages"][-1]["content"])
+    assert "exactly ['visualKit']" in correction["validationError"]
+
+
+def _contract_check_baked_role_requires_canonical_visual_kit_prompt_not_legacy_mirror() -> None:
+    data = _compiled_carpentry_item()
+    data["visual"]["projectileImagePrompt"] = "legacy visual mirror must not satisfy a new baked decision"
+    data["attack"]["projectileSpritePrompt"] = "legacy attack mirror must not satisfy a new baked decision"
+    kit: dict[str, object] = {
+        "bakedAssets": {
+            "projectile": {
+                "mode": "baked_sprite",
+                "reason": "new distinct projectile body",
+                "distinctFromItem": True,
+            }
+        }
+    }
+
+    assert VISUAL.visual_kit_projection_errors(kit, data) == [
+        "bakedAssets.projectile: mode=baked_sprite requires a role prompt"
+    ]
+    kit["projectileSpritePrompt"] = "one newly authored copper crescent projectile"
+    assert VISUAL.visual_kit_projection_errors(kit, data) == []
+
+
 def _contract_check_visual_director_role_contract_reaches_every_canonical_asset_slot(monkeypatch) -> None:
     requests: list[dict] = []
     role_prompts = {

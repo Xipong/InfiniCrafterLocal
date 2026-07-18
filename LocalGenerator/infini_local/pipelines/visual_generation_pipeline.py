@@ -240,6 +240,11 @@ def _validated_visual_director_kit(
     obj = parse_first_valid_llm_json(content)
     if not isinstance(obj, dict):
         raise ValueError("visual director returned a non-object JSON value")
+    root_keys = sorted(str(key) for key in obj)
+    if root_keys != ["visualKit"]:
+        raise ValueError(
+            f"visual director root keys must be exactly ['visualKit']; got {root_keys}"
+        )
     obj = project_provider_nullable_optionals_to_local(
         obj,
         visual_kit_response_schema(),

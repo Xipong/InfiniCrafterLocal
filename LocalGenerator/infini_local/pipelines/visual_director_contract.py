@@ -320,35 +320,22 @@ _ROLE_PROMPT_FIELDS = {
     "child": "childSpritePrompt",
     "field": "fieldSpritePrompt",
 }
-_ROLE_FALLBACK_FIELDS = {
-    "projectile": ("projectileImagePrompt", "projectileSpritePrompt"),
-    "impact": ("impactImagePrompt", "impactSpritePrompt"),
-    "child": ("childImagePrompt", "childSpritePrompt"),
-    "field": ("fieldImagePrompt", "fieldSpritePrompt"),
-}
 
 
 def visual_kit_projection_errors(kit: dict[str, Any], data: dict[str, Any]) -> list[str]:
     """Check only whether authored asset decisions can be projected technically.
 
     This does not judge visual quality or parent fusion. It prevents an asset-mode
-    decision from requesting a PNG when no canonical or pre-existing prompt exists.
+    decision from requesting a PNG when the same canonical VisualKit has no role prompt.
     """
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    del data  # Kept in the public seam for caller stability; legacy mirrors are not evidence.
     baked = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
     errors: list[str] = []
     for role, spec in baked.items():
         if not isinstance(spec, dict) or str(spec.get("mode") or "") != "baked_sprite":
             continue
         prompt_field = _ROLE_PROMPT_FIELDS.get(role, "")
-        visual_field, attack_field = _ROLE_FALLBACK_FIELDS.get(role, ("", ""))
-        prompt = str(
-            kit.get(prompt_field)
-            or visual.get(visual_field)
-            or attack.get(attack_field)
-            or ""
-        ).strip()
+        prompt = str(kit.get(prompt_field) or "").strip()
         if not prompt:
             errors.append(f"bakedAssets.{role}: mode=baked_sprite requires a role prompt")
     return errors
