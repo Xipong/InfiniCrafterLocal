@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -28,7 +29,7 @@ from infini_local.core.runtime_authoring.function_contract_registry import (
 )
 
 CORPUS_SCHEMA = "infini.runtime-contract-replay-corpus.v1"
-CONTRACT_FINGERPRINT_SCHEMA = "infini.runtime-contract-fingerprints.v1"
+CONTRACT_FINGERPRINT_SCHEMA = "infini.runtime-contract-fingerprints.v2"
 DEFAULT_CORPUS_PATH = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -56,6 +57,64 @@ def canonical_json(value: Any) -> str:
 
 def _sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _runtime_implementation_fingerprints() -> dict[str, str]:
+    """Fingerprint executable owners that registry-only diffs cannot represent.
+
+    Contract declarations remain form-local through ``functions`` below.  These
+    hashes cover code that consumes the declarations.  A mixed patch that changes
+    one form *and* compiler/lowering/provenance code must therefore run the whole
+    corpus instead of hiding the implementation change behind a one-case selector.
+    """
+
+    project_root = Path(__file__).resolve().parents[3]
+    owners = {
+        "contract_types": project_root / "LocalGenerator/infini_local/core/runtime_authoring/function_contract_types.py",
+        "semantics": project_root / "LocalGenerator/infini_local/core/runtime_authoring/semantics.py",
+        "normalize": project_root / "LocalGenerator/infini_local/core/runtime_authoring/normalize.py",
+        "compiler": project_root / "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
+        "reports": project_root / "LocalGenerator/infini_local/core/runtime_authoring/reports.py",
+        "final_projection": project_root / "LocalGenerator/infini_local/core/runtime_authoring/final_projection.py",
+        "runtime_contracts": project_root / "LocalGenerator/infini_local/core/runtime_contracts.py",
+        "historical_replay": Path(__file__).resolve(),
+        "historical_replay_gate": project_root / "tools/check_runtime_contract_replay.py",
+    }
+    fingerprints = {
+        name: _sha256_bytes(path.read_bytes())
+        for name, path in sorted(owners.items())
+    }
+
+    # Registry declarations and helper implementation live in one Python file.
+    # Hash only the projection/traversal helpers here; declaration changes are
+    # already represented by exact function/form fingerprints and stay local.
+    from infini_local.core.runtime_authoring import function_contract_registry as registry
+
+    helper_names = (
+        "lowerer_contract",
+        "engine_function_impact_names",
+        "engine_function_form_impacts",
+        "lowerer_passthrough_param_names",
+        "lowerer_output_param_names",
+        "lowerer_target_source_map",
+        "validate_lowerer_output",
+        "compiled_fields_for_authored_path",
+        "compiled_fields_for_function_identity",
+        "compiled_fields_for_lowered_compatibility_path",
+        "engine_function_contract_surface",
+        "compiled_field_source_map",
+    )
+    helper_source = "\n\n".join(
+        inspect.getsource(getattr(registry, name)) for name in helper_names
+    )
+    fingerprints["registry_projection_helpers"] = _sha256_bytes(
+        helper_source.encode("utf-8")
+    )
+    return dict(sorted(fingerprints.items()))
 
 
 def runtime_contract_fingerprint_manifest() -> dict[str, Any]:
@@ -149,6 +208,7 @@ def runtime_contract_fingerprint_manifest() -> dict[str, Any]:
     payload = {
         "schema": CONTRACT_FINGERPRINT_SCHEMA,
         "functions": functions,
+        "implementationFingerprints": _runtime_implementation_fingerprints(),
     }
     payload["registryFingerprint"] = _sha256_json(payload)
     return payload
@@ -168,6 +228,7 @@ def diff_runtime_contract_fingerprints(
             "fullReplay": True,
             "changedFunctions": [],
             "changedForms": [],
+            "changedImplementations": [],
             "reason": "missing_or_incompatible_fingerprint_schema",
         }
     old_functions = baseline.get("functions")
@@ -177,7 +238,32 @@ def diff_runtime_contract_fingerprints(
             "fullReplay": True,
             "changedFunctions": [],
             "changedForms": [],
+            "changedImplementations": [],
             "reason": "invalid_fingerprint_function_map",
+        }
+
+    old_implementations = baseline.get("implementationFingerprints")
+    new_implementations = current.get("implementationFingerprints")
+    if not isinstance(old_implementations, Mapping) or not isinstance(new_implementations, Mapping):
+        return {
+            "fullReplay": True,
+            "changedFunctions": [],
+            "changedForms": [],
+            "changedImplementations": [],
+            "reason": "invalid_implementation_fingerprint_map",
+        }
+    changed_implementations = sorted(
+        str(name)
+        for name in set(old_implementations) | set(new_implementations)
+        if old_implementations.get(name) != new_implementations.get(name)
+    )
+    if changed_implementations:
+        return {
+            "fullReplay": True,
+            "changedFunctions": [],
+            "changedForms": [],
+            "changedImplementations": changed_implementations,
+            "reason": "runtime_implementation_changed",
         }
 
     changed_functions: set[str] = set()
@@ -188,6 +274,7 @@ def diff_runtime_contract_fingerprints(
             "fullReplay": True,
             "changedFunctions": [],
             "changedForms": [],
+            "changedImplementations": [],
             "reason": f"removed_functions:{sorted(removed_functions)}",
         }
 
@@ -199,6 +286,7 @@ def diff_runtime_contract_fingerprints(
                 "fullReplay": True,
                 "changedFunctions": [],
                 "changedForms": [],
+                "changedImplementations": [],
                 "reason": f"invalid_current_function_fingerprint:{fn}",
             }
         if not isinstance(old, Mapping):
@@ -229,6 +317,7 @@ def diff_runtime_contract_fingerprints(
         "fullReplay": False,
         "changedFunctions": sorted(changed_functions),
         "changedForms": sorted(changed_forms),
+        "changedImplementations": [],
         "reason": "contract_diff" if changed_functions or changed_forms else "no_contract_diff",
     }
 

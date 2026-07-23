@@ -504,6 +504,18 @@
       "metaFingerprint": "388206989af55301fe506cc89c3e293c1cfaa59f2450591ec9ca3597f2f89b0f"
     }
   },
-  "registryFingerprint": "b392c0c2cd7be9bdfc0d6914d9a993c51f9527a30a7b1ebb3c3bf5ff29098ce3",
-  "schema": "infini.runtime-contract-fingerprints.v1"
+  "implementationFingerprints": {
+    "compiler": "0f40132b66fc5b9a44d6daedfcc67300bbd84609095e81e0f98dcd0fcafa80be",
+    "contract_types": "348512bdcf16fa63431b864f9043bcd6d1ac7906eb613e6b5276dc67b09d0de5",
+    "final_projection": "85a3bdda947b15c6133aa191053bf05ceeff55a6fe514cf2780a8c71b4b69f8c",
+    "historical_replay": "319056cde9aef49229f737457e022eb5e045b6027f39d3de6ab7e278665d6574",
+    "historical_replay_gate": "99d7652e8d23dfcd71ffcbbbf57e2131eb036f1fb6ea3f67b75dfa3b61e07590",
+    "normalize": "c5aee7b762f2ecb2c60917ae5bcc3dc70f0b3acf5db0cac73dee17a6854ca61d",
+    "registry_projection_helpers": "e1ce953e983e9c3da662925f0d6abc02ce2c747d225b1b14edbdbce832087336",
+    "reports": "cbc870ac65ca3d5ec8e7a29fc25c541434d3468ebb2e04fd093ff30023d45ec4",
+    "runtime_contracts": "2bf254a00d352a86b14001556fe5e1bf40122b433784a821d1151139fd3e61c6",
+    "semantics": "3ee807ead1e8b3a9964bbc893a979609457d079ce495b6e5fb8a4799e03a00a2"
+  },
+  "registryFingerprint": "b698962bec0ff9fa1240f60a97abf8870c35d2f1431f2388bce45be3c7482495",
+  "schema": "infini.runtime-contract-fingerprints.v2"
 }

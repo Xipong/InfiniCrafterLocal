@@ -248,6 +248,39 @@ def test_lowerer_source_must_be_root_when_target_is_root() -> None:
     assert any("source must be root_executor" in error for error in errors)
 
 
+def test_lowerer_target_must_be_terminal_until_normalization_supports_chains() -> None:
+    terminal = _fn(name="terminal", root_executor=True)
+    middle = _fn(
+        name="middle",
+        root_executor=True,
+        params=(_param(compiled_fields=(), provenance_via_lowerer=True),),
+        lowerers=(
+            EngineLowererContract(
+                target_function="terminal",
+                bindings=(LoweredParamBinding("damage", ("damage",)),),
+            ),
+        ),
+    )
+    source = _fn(
+        name="source",
+        root_executor=True,
+        params=(_param(compiled_fields=(), provenance_via_lowerer=True),),
+        lowerers=(
+            EngineLowererContract(
+                target_function="middle",
+                bindings=(LoweredParamBinding("damage", ("damage",)),),
+            ),
+        ),
+    )
+
+    errors = validate_engine_function_contracts((source, middle, terminal))
+    assert any(
+        "lowerer target 'middle' must be terminal" in error
+        and "chained lowerers are unsupported" in error
+        for error in errors
+    )
+
+
 def test_lowerer_unknown_target_and_output_fail_closed() -> None:
     from infini_local.core.runtime_authoring.function_contract_registry import (
         validate_lowerer_output,

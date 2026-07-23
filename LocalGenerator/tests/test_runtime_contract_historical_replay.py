@@ -526,6 +526,7 @@ def test_contract_fingerprint_diff_is_form_local_and_fail_closed_on_removal() ->
         "fullReplay": False,
         "changedFunctions": [],
         "changedForms": [],
+        "changedImplementations": [],
         "reason": "no_contract_diff",
     }
 
@@ -541,6 +542,18 @@ def test_contract_fingerprint_diff_is_form_local_and_fail_closed_on_removal() ->
     diff = replay.diff_runtime_contract_fingerprints(current, removed)
     assert diff["changedFunctions"] == ["deploy_sentry"]
     assert diff["changedForms"] == []
+
+    mixed = deepcopy(current)
+    mixed["functions"]["deploy_sentry"]["formFingerprints"]["placement"] = "changed"
+    mixed["implementationFingerprints"]["compiler"] = "changed"
+    diff = replay.diff_runtime_contract_fingerprints(current, mixed)
+    assert diff == {
+        "fullReplay": True,
+        "changedFunctions": [],
+        "changedForms": [],
+        "changedImplementations": ["compiler"],
+        "reason": "runtime_implementation_changed",
+    }
 
 
 def test_committed_fingerprints_are_derived_and_cli_routes_exact_contract_diff(
@@ -574,3 +587,17 @@ def test_committed_fingerprints_are_derived_and_cli_routes_exact_contract_diff(
     assert report["selectedCaseCount"] == 1
     assert report["selection"]["mode"] == "affected"
     assert report["selection"]["forms"] == ["deploy_sentry:placement"]
+
+    mixed_baseline = deepcopy(current)
+    mixed_baseline["functions"]["deploy_sentry"]["formFingerprints"]["placement"] = "old"
+    mixed_baseline["implementationFingerprints"]["compiler"] = "old"
+    monkeypatch.setattr(
+        checker, "_baseline_fingerprints", lambda _ref, _path: mixed_baseline
+    )
+    mixed_report = checker.build_report(args)
+    assert mixed_report["ok"] is True
+    assert mixed_report["selectedCaseCount"] == mixed_report["corpusCaseCount"]
+    assert mixed_report["selection"]["mode"] == "all"
+    assert mixed_report["selection"]["contractDiff"]["changedImplementations"] == [
+        "compiler"
+    ]

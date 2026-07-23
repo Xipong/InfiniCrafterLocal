@@ -470,6 +470,11 @@ def validate_engine_function_contracts(
                 errors.append(
                     f"{l_label}: source must be root_executor because target {target_name!r} is root_executor"
                 )
+            if target_spec.lowerers:
+                errors.append(
+                    f"{l_label}: lowerer target {target_name!r} must be terminal; "
+                    "chained lowerers are unsupported by normalization"
+                )
             target_paths = _declared_normalized_paths(target_spec)
             for binding in lowerer.bindings if isinstance(lowerer.bindings, tuple) else ():
                 if not isinstance(binding, LoweredParamBinding):
