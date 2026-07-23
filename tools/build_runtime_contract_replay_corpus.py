@@ -372,13 +372,18 @@ def build_corpus(
     try:
         dump_root_label = dump_root.resolve().relative_to(ROOT.parent.resolve()).as_posix()
     except ValueError:
-        dump_root_label = dump_root.name or "external-tool-runs"
+        # External rebuilds commonly use a random temporary directory.  Persisting
+        # that basename makes a byte-identical corpus dirty on every rebuild.
+        dump_root_label = "external-tool-runs"
     corpus = {
         "schema": CORPUS_SCHEMA,
         "source": {
             "dumpRoot": dump_root_label,
             "glob": "**/image_boundary.ndjson",
-            "selector": "function+callShape+resultKind cover; dedupe by canonical runtimePlan",
+            "selector": (
+                "function+authoredForm+callShape+resultKind cover; "
+                "dedupe by canonical runtimePlan+authored provenance"
+            ),
         },
         "coverage": coverage,
         "cases": sorted(cases, key=lambda c: str(c["caseId"])),

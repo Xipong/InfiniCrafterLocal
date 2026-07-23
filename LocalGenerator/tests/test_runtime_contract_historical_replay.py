@@ -117,7 +117,9 @@ def test_corpus_is_deterministic_and_has_no_prose() -> None:
     corpus = replay.load_corpus(CORPUS_PATH)
     cases = corpus["cases"]
     assert isinstance(cases, list) and len(cases) >= 8
-    assert not Path(str((corpus.get("source") or {}).get("dumpRoot") or "")).is_absolute()
+    dump_root_label = str((corpus.get("source") or {}).get("dumpRoot") or "")
+    assert not Path(dump_root_label).is_absolute()
+    assert not dump_root_label.startswith("icl-replay-rebuild-")
 
     # Stable ordering + unique case ids.
     case_ids = [case["caseId"] for case in cases]
@@ -215,7 +217,7 @@ def test_specialized_author_function_selects_exact_authored_witness() -> None:
         ["fire_ranged_weapon"],
     )
     assert len(selected) == 1
-    assert selected[0].get("authoredFunctions") == ["fire_ranged_weapon"]
+    assert "fire_ranged_weapon" in set(selected[0].get("authoredFunctions") or [])
     assert "fire_ranged_weapon" in selected[0]["functions"]
 
 
@@ -341,7 +343,7 @@ def test_select_exact_changed_form_uses_typed_lowerer_graph() -> None:
         ["deploy_sentry:placement"],
     )
     assert len(selected) == 1
-    assert selected[0].get("authoredFunctions") == ["deploy_sentry"]
+    assert "deploy_sentry" in set(selected[0].get("authoredFunctions") or [])
     assert any(
         call.get("fn") == "deploy_sentry"
         and "placement" in (call.get("params") or {})
@@ -503,6 +505,10 @@ def test_corpus_preserves_engine_function_coverage_report() -> None:
     assert coverage.get("authoredFunctionInventoryAvailable") is True
     assert int(coverage.get("deterministicWitnessCount") or 0) == 9
     assert coverage.get("missingRegistryFunctions") == []
+    authored_forms = set(coverage.get("authoredForms") or [])
+    assert int(coverage.get("authoredFormCount") or 0) == len(authored_forms)
+    assert "deploy_sentry:placement" in authored_forms
+    assert "fire_ranged_weapon:ammoFor" in authored_forms
     lowerer_functions = {
         name
         for name, spec in ENGINE_FUNCTION_CONTRACT_BY_NAME.items()

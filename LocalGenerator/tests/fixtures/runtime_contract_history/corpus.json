@@ -14,10 +14,11 @@
         "set_item_stats:resultKind"
       ],
       "authoredFunctions": [
-        "ammo_behavior"
+        "ammo_behavior",
+        "set_item_stats"
       ],
       "case": "ammo_behavior",
-      "caseId": "deterministic-contract-witness-v1__ammo_behavior__2031f31a73",
+      "caseId": "deterministic-contract-witness-v1__ammo_behavior__53668aa330",
       "category": "ammo",
       "expectedFinalSectionsFingerprint": "49c687be5539358404ff499bfa6517debba9c9d4ab51fdc7e6d6353f8f45aa38",
       "functions": [
@@ -77,10 +78,11 @@
         "set_item_stats:useTimeTicks"
       ],
       "authoredFunctions": [
-        "cast_magic_weapon"
+        "cast_magic_weapon",
+        "set_item_stats"
       ],
       "case": "cast_magic_weapon",
-      "caseId": "deterministic-contract-witness-v1__cast_magic_weapon__1d7eb6c63c",
+      "caseId": "deterministic-contract-witness-v1__cast_magic_weapon__f18ad5fd18",
       "category": "weapon",
       "expectedFinalSectionsFingerprint": "cffd89a859204d64078d713657d5ac38c7e909eacefdbf952b45fb1cc70860e2",
       "functions": [
@@ -154,10 +156,11 @@
         "set_item_stats:useTimeTicks"
       ],
       "authoredFunctions": [
-        "deploy_sentry"
+        "deploy_sentry",
+        "set_item_stats"
       ],
       "case": "deploy_sentry",
-      "caseId": "deterministic-contract-witness-v1__deploy_sentry__2d8c770c09",
+      "caseId": "deterministic-contract-witness-v1__deploy_sentry__77f1a7f74d",
       "category": "weapon",
       "expectedFinalSectionsFingerprint": "f45dab7983657238038837568bab2544ad9bea67dc23d786c6722d740c756b52",
       "functions": [
@@ -225,10 +228,12 @@
         "tool_capability:pickPower"
       ],
       "authoredFunctions": [
-        "emit_light"
+        "emit_light",
+        "set_item_stats",
+        "tool_capability"
       ],
       "case": "emit_light",
-      "caseId": "deterministic-contract-witness-v1__emit_light__87b2aa055e",
+      "caseId": "deterministic-contract-witness-v1__emit_light__d893555da2",
       "category": "tool",
       "expectedFinalSectionsFingerprint": "e9b949bcc1eb8a4ffa3dd63926175d49581e7a79ac0202df1c0144c49cc466ac",
       "functions": [
@@ -300,10 +305,11 @@
         "set_item_stats:useTimeTicks"
       ],
       "authoredFunctions": [
-        "fire_ranged_weapon"
+        "fire_ranged_weapon",
+        "set_item_stats"
       ],
       "case": "fire_ranged_weapon",
-      "caseId": "deterministic-contract-witness-v1__fire_ranged_weapon__197dfece64",
+      "caseId": "deterministic-contract-witness-v1__fire_ranged_weapon__3dcae4de38",
       "category": "weapon",
       "expectedFinalSectionsFingerprint": "be7071107c2499b7fb3ed12bae6d79aa4f80573ac3e4fbdf0752192750903a16",
       "functions": [
@@ -381,10 +387,12 @@
         "shoot_projectile:weaponFamily"
       ],
       "authoredFunctions": [
-        "leave_trail_or_field"
+        "leave_trail_or_field",
+        "set_item_stats",
+        "shoot_projectile"
       ],
       "case": "leave_trail_or_field",
-      "caseId": "deterministic-contract-witness-v1__leave_trail_or_field__7aa4a6d9c5",
+      "caseId": "deterministic-contract-witness-v1__leave_trail_or_field__e1ec45be2d",
       "category": "weapon",
       "expectedFinalSectionsFingerprint": "3ef9739568ab126c389ab377670f32811fefb4b1fd4542341a566608c79b9ddf",
       "functions": [
@@ -465,10 +473,11 @@
         "set_item_stats:useTimeTicks"
       ],
       "authoredFunctions": [
-        "perform_melee_attack"
+        "perform_melee_attack",
+        "set_item_stats"
       ],
       "case": "perform_melee_attack",
-      "caseId": "deterministic-contract-witness-v1__perform_melee_attack__271f139596",
+      "caseId": "deterministic-contract-witness-v1__perform_melee_attack__c3ad341b9a",
       "category": "weapon",
       "expectedFinalSectionsFingerprint": "9150f8662d08f0c036ab467a094d93106ab50f13805e9f7424715bffcc202900",
       "functions": [
@@ -537,10 +546,11 @@
         "spawn_temporary_helper_projectile:useTimeTicks"
       ],
       "authoredFunctions": [
+        "set_item_stats",
         "spawn_temporary_helper_projectile"
       ],
       "case": "spawn_temporary_helper_projectile",
-      "caseId": "deterministic-contract-witness-v1__spawn_temporary_helper_projectile__8dfdf65eab",
+      "caseId": "deterministic-contract-witness-v1__spawn_temporary_helper_projectile__7a6041b267",
       "category": "weapon",
       "expectedFinalSectionsFingerprint": "6679f2a235bd77c7f2d449f171e6481db6b6f1f470f87fc306b8bc5d09c97268",
       "functions": [
@@ -604,10 +614,12 @@
         "use_condition:mode"
       ],
       "authoredFunctions": [
+        "set_item_stats",
+        "tool_capability",
         "use_condition"
       ],
       "case": "use_condition",
-      "caseId": "deterministic-contract-witness-v1__use_condition__d8f4c723d6",
+      "caseId": "deterministic-contract-witness-v1__use_condition__288a2cbd72",
       "category": "tool",
       "expectedFinalSectionsFingerprint": "89087557c6b23c59003827850d39ce2ed2b1f5ac2b30c95ba6d2ac2a1f3712b7",
       "functions": [
@@ -6195,7 +6207,7 @@
       "use_condition:minMana",
       "use_condition:mode"
     ],
-    "authoredFunctionCount": 9,
+    "authoredFunctionCount": 12,
     "authoredFunctionInventoryAvailable": true,
     "authoredFunctions": [
       "ammo_behavior",
@@ -6205,7 +6217,10 @@
       "fire_ranged_weapon",
       "leave_trail_or_field",
       "perform_melee_attack",
+      "set_item_stats",
+      "shoot_projectile",
       "spawn_temporary_helper_projectile",
+      "tool_capability",
       "use_condition"
     ],
     "callShapeCount": 148,
@@ -6339,8 +6354,8 @@
   },
   "schema": "infini.runtime-contract-replay-corpus.v1",
   "source": {
-    "dumpRoot": "icl-replay-rebuild-E6lu1d",
+    "dumpRoot": "artifacts/tool-runs",
     "glob": "**/image_boundary.ndjson",
-    "selector": "function+callShape+resultKind cover; dedupe by canonical runtimePlan"
+    "selector": "function+authoredForm+callShape+resultKind cover; dedupe by canonical runtimePlan+authored provenance"
   }
 }

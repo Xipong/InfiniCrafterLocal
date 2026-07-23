@@ -1,13 +1,10 @@
 # runtime_contract_history
 
-Deterministic replay corpus extracted from historical accepted runtime-plan artifacts.
+Детерминированный replay-корпус executable runtime contracts без LLM и HTTP.
 
-- `corpus.json` stores normalized executable cases and expected final-wire fingerprints.
-- The committed v1 snapshot predates preserved `_rawFn` inventories, so its coverage
-  explicitly reports `authoredFunctionInventoryAvailable=false`; specialized typed
-  changes are conservatively mapped to their normalized lowerer target.
-- A rebuilt corpus records `authoredFunctions` separately and dedupes by normalized
-  plan plus that authored inventory. Missing function coverage must fail closed.
-- Rebuild only with `tools/build_runtime_contract_replay_corpus.py`.
-- Tests must not call an LLM or image backend; they compile through the production runtime authoring path.
-- This directory contains fixtures only, never live credentials, caches, generated media, or per-machine absolute paths.
+- `corpus.json` хранит исторические normalized plans, девять минимальных deterministic witnesses и ожидаемые fingerprints финального wire.
+- Исторические строки v1 не содержат typed Author provenance. Для функций, которые lowerятся в другой executor, точное покрытие дают witnesses; selector не подменяет их всеми чужими `shoot_projectile` cases.
+- Новые dumps могут сохранять `_authoredFn`/`_authoredParams`; builder выносит из них `authoredFunctions` и `authoredForms`, не оставляя internal keys в executable plan.
+- `coverage.json` обязан покрывать все функции registry. Неизвестная или непокрытая function/form завершает affected replay ошибкой, а не пустым PASS.
+- Пересборка выполняется только `tools/build_runtime_contract_replay_corpus.py`.
+- Fixtures не должны содержать credentials, caches, media, prose envelopes или абсолютные machine paths.

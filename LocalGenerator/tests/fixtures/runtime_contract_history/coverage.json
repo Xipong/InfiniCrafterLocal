@@ -103,7 +103,7 @@
     "use_condition:minMana",
     "use_condition:mode"
   ],
-  "authoredFunctionCount": 9,
+  "authoredFunctionCount": 12,
   "authoredFunctionInventoryAvailable": true,
   "authoredFunctions": [
     "ammo_behavior",
@@ -113,7 +113,10 @@
     "fire_ranged_weapon",
     "leave_trail_or_field",
     "perform_melee_attack",
+    "set_item_stats",
+    "shoot_projectile",
     "spawn_temporary_helper_projectile",
+    "tool_capability",
     "use_condition"
   ],
   "callShapeCount": 148,
