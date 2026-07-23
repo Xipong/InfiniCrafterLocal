@@ -1,12 +1,14 @@
 # Каузальная археология: стабилизация prompt/function 21–23 июля 2026
 
-**Тип документа:** verified causal archaeology (не proposal / не implementation plan).
+**Тип документа:** verified causal archaeology + implemented remediation + post-implementation audit.
 **Дата сборки отчёта:** 2026-07-23.
 **Репозиторий:** `InfiniCrafterLocal_v0_4_234_secondary_refit_noise_cleanup`.
-**HEAD git:** `61bab5e` (2026-07-19 01:58:07 +0300) — *Add debug minimum yield for attack consumables*.
-**Коммитов после 19 июля:** **0** (проверено `git log --after='2026-07-19'`, `git rev-list --count 61bab5e..HEAD` → 0).
-**Состояние 21–23 июля:** **грязное working tree** (`gitClean: false` во всех live-summary; на момент отчёта ~131 dirty path).
-**Метод:** только read-only доказательства — git/reflog, `git diff HEAD`, `agent_reports/tmod_use_driver_multi_lane_research_20260721.md`, `artifacts/tool-runs/**/{summary.json,results.ndjson,logical_llm.ndjson,cache/prompt_trace.ndjson,ab_report.md}`, audits, делегат-логи `deleg_37a7fe02/task-0.log` и `task-1.log`. Live/LLM не запускались.
+**Baseline HEAD исследуемого окна:** `61bab5e` (2026-07-19 01:58:07 +0300) — *Add debug minimum yield for attack consumables*.
+**Коммитов в исследуемом окне после 19 июля:** **0** (проверено `git log --after='2026-07-19'`, `git rev-list --count 61bab5e..HEAD` → 0 до closing commit).
+**Состояние 21–23 июля:** **грязное working tree** (`gitClean: false` во всех live-summary; на момент исходной археологии ~131 dirty path).
+**Метод sections 1–10:** только read-only доказательства — git/reflog, `git diff HEAD`, `agent_reports/tmod_use_driver_multi_lane_research_20260721.md`, `artifacts/tool-runs/**/{summary.json,results.ndjson,logical_llm.ndjson,cache/prompt_trace.ndjson,ab_report.md}`, audits, делегат-логи `deleg_37a7fe02/task-0.log` и `task-1.log`. Реализация и diagnostic Live описаны отдельно в sections 11–16.
+
+**Корректная рамка стоимости:** сообщённые пользователем **≈100M токенов** — это расход на Hermes/этого агента и связанные developer/audit циклы при повторной стабилизации архитектуры. Из них основная часть — порядка **≈90M** — ушла не на добавление самих функций, а на устранение каскадных отказов после изменений средней значимости. Локальная Gemini Live-телеметрия не является оценкой этой суммы и не используется для её уменьшения или опровержения.
 
 ---
 
@@ -18,9 +20,16 @@
 4. [Хронологическая таблица прогонов](#4-хронологическая-таблица-прогонов)
 5. [Классы отказов и поздние generic-фиксы](#5-классы-отказов-и-поздние-generic-фиксы)
 6. [Метрика contract fingerprint](#6-метрика-contract-fingerprint)
-7. [Стоимость: локальные Gemini-логи vs оценка разработчика](#7-стоимость-локальные-gemini-логи-vs-оценка-разработчика)
-8. [Почему стабилизация дорогая и почему mid-batch ≈ large-batch](#8-почему-стабилизация-дорогая-и-почему-mid-batch--large-batch)
+7. [Стоимость архитектурной нестабильности](#7-стоимость-архитектурной-нестабильности)
+8. [Почему среднее изменение вызвало глобальную стабилизацию](#8-почему-среднее-изменение-вызвало-глобальную-стабилизацию)
 9. [Пути доказательств и пределы верификации](#9-пути-доказательств-и-пределы-верификации)
+10. [Сжатый каузальный итог](#10-сжатый-каузальный-итог)
+11. [Реализованная архитектура после археологии](#11-реализованная-архитектура-после-археологии)
+12. [Diagnostic Live20 23.07.2026](#12-diagnostic-live20-23072026)
+13. [Final artifact audit](#13-final-artifact-audit)
+14. [Финальные local gates post-audit](#14-финальные-local-gates-post-audit)
+15. [Как теперь делать partial extension без нового semantic spaghetti](#15-как-теперь-делать-partial-extension-без-нового-semantic-spaghetti)
+16. [Итог](#16-итог)
 
 ---
 
@@ -257,12 +266,25 @@ Tokens — сумма `logical_llm.ndjson` → `response.usage` где посч�
 
 ---
 
-## 7. Стоимость: локальные Gemini-логи vs оценка разработчика
+## 7. Стоимость архитектурной нестабильности
 
-### 7.1. Локальные Gemini artifact usage (verified)
+### 7.1. Основная величина: ≈100M токенов Hermes-разработки
+
+Пользователь сообщил, что изменения 21 июля в итоге потребовали порядка **≈100M токенов работы этого агента/Hermes и связанных developer/audit циклов**. Существенно, что большая часть расхода — ориентировочно **≈90M** — пришлась уже не на исходное улучшение prompt и добавление функций, а на последующую стабилизацию и попытки снова получить безошибочное исполнение LLM.
+
+Это не внешний «непроверенный биллинг», который нужно сопоставить с Live runner. Это исходная стоимость проекта, сообщённая владельцем, и главный архитектурный симптом отчёта:
+
+> Изменение средней значимости не осталось локальным. Оно вызвало каскад по prompt, provider schema, repair authorization, compiler, provenance, final projection, Visual/VFX handoff и C# runtime, после чего агент многократно искал и закрывал очередной разрыв на следующем owner.
+
+Поэтому вопрос отчёта — не «действительно ли Live израсходовал 100M», а **почему архитектура заставила потратить около 100M agent tokens на повторную глобальную стабилизацию после сравнительно ограниченного feature diff**.
+
+Точный provider/session split этой суммы локально не реконструирован: в него входили длинные Hermes-сессии, вызовы инструментов, аудиты, контекстные повторения, Spark/Grok/другие developer-модели и итерационные исправления. Это ограничивает бухгалтерскую детализацию, но не меняет причинную постановку.
+
+### 7.2. Локальная Gemini Live-телеметрия — вторичный диагностический канал
 
 Источник: `logical_llm.ndjson` → `response.usage.{prompt,completion,total}_tokens` (Gemini via Google OpenAI-compat).
-Это **не** полный биллинг всех провайдеров и **не** developer-tooling (Spark/Grok/etc.).
+
+Эти числа описывают только item-generation requests. Они **не измеряют** Hermes-разработку и не должны сравниваться с ≈100M как с альтернативной оценкой. Их роль уже: показать количество повторных кампаний, repair density и то, что каждое изменение contract fingerprint снова оплачивало крупный regression signal.
 
 | Охват | files (logical) | usage rows | prompt | completion | **total** |
 |---|---:|---:|---:|---:|---:|
@@ -286,35 +308,30 @@ Tokens — сумма `logical_llm.ndjson` → `response.usage` где посч�
 | reset 145929 FAIL1 | 383 328 | 1.00× |
 | reset 031309 FAIL4 | 371 030 | 0.97× |
 
-**Mean initial_author prompt:** jul18 ≈ **7420** → live21 ≈ **7693** (+~3.7% на author stage; не объясняет всю стоимость — объясняет **число attempts/repairs/reruns**).
+**Mean initial_author prompt:** jul18 ≈ **7420** → live21 ≈ **7693** (+~3.7%). Этот рост слишком мал, чтобы объяснить ≈100M developer cost. Причина — не размер одного запроса, а количество agent iterations, audits, repairs, reruns и повторных проходов через связанные owners.
 
-A/B `gemini31-flash-lite-current-pipeline-low-medium-ab-20260721-224404`: medium **не** дал quality gain; residual reasoning stochastic; low выбран default. Это **дешёвый** локальный Gemini-артефакт, не оценка multi-model dev loop.
-
-### 7.2. Оценка пользователя 5.6 / Spark / Grok developer tokens
-
-- Пользовательская оценка порядка **5.6** (sol-class / multi-model developer spend: Spark, Grok и др.) **не отрицается**.
-- Локальные Gemini `tool-runs` usage — **другой контур доказательств**: только то, что записано runner’ом InfiniCrafterLocal в `logical_llm.ndjson` для generate-кампаний.
-- Локально **не** видно 100M/90M token proof (task-1: all-time ~23.5M logical). Это **не опровергает** внешний developer spend вне этих логов (агенты, чаты, другие провайдеры, незалогированные прогоны).
-- Итоговая формулировка: **два непересекающихся evidence channel** — (A) artifact Gemini usage ≈ 9M за 21–23 в tool-runs, (B) user-observed developer multi-model estimate; A ⊄ B.
+A/B `gemini31-flash-lite-current-pipeline-low-medium-ab-20260721-224404` показал, что medium не дал quality gain, а low имел лучший first-author результат. Это полезная настройка Live-контура, но не решение архитектурного blast radius.
 
 ---
 
-## 8. Почему стабилизация дорогая и почему mid-batch ≈ large-batch
+## 8. Почему среднее изменение вызвало глобальную стабилизацию
 
 ### 8.1. Каузальная цепочка стоимости
 
 ```
-research oneRoot multi-lane (21.07)
-  → dirty rename primary→root + family matrix + repair extract
-    → canary tool/armor FAIL
-      → Live20 partial fail (repair branches / provenance / projection)
-        → generic fix in owner N  ⇒  contract fingerprint changes
-          → re-run Live20 / parallel3 / reset   (оплата ≈ full batch)
-            → новый класс fail на owner N+1
-              → …
-                → placeable_behavior 24→25 + API 0.4.53
-                  → ещё reset waves
+средний feature diff: oneRoot multi-lane + новые функции + repair extract
+  → одно изменение вручную отражается в нескольких shadow contracts
+    → prompt/provider принимают одно, repair разрешает другое,
+      compiler/provenance/final projection/C# ожидают третье
+        → первый canary/audit/test показывает только ближайший разрыв owner N
+          → агент исследует, исправляет owner N и меняет contract fingerprint
+            → повторные tests/audits/Live/context показывают разрыв owner N+1
+              → новая длинная итерация агента и новый глобальный regression net
+                → … 21 contract segment / 81 Author-containing run
+                  → около 90M из 100M agent tokens уходит на стабилизацию
 ```
+
+Live20/parallel/reset waves были измеримым проявлением цикла, но не всей его стоимостью. Основной расход создавали длинные Hermes-итерации: повторное чтение связанных слоёв, восстановление контекста, локальные и независимые аудиты, изменение нескольких владельцев, повторные gates и разбор нового класса ошибки. Поэтому ≈100M — стоимость **глобального blast radius для агента**, а не сумма строк `response.usage`.
 
 ### 8.2. Почему intermediate batch (live1/live3/live6/live7, smokes) ≈ large Live20
 
@@ -337,6 +354,18 @@ research oneRoot multi-lane (21.07)
 - mid-batch реально валидировал бы **тот же** contract surface, что large-batch.
 
 Фактически catalog оставался inventory+cards, а стабилизация шла **по периметру владельцев** — отсюда cost structure «много large-equivalent runs».
+
+### 8.4. Правильный критерий исправления
+
+Архитектура считается исправленной не потому, что один Live20 стал дешевле на несколько процентов. Нужна **change locality**:
+
+1. изменение одной функции/параметра начинается в одном typed owner;
+2. prompt/provider/repair/provenance surfaces выводятся из него либо имеют явный compile-time parity gate;
+3. deterministic affected replay проверяет только затронутые functions/forms до нового LLM spend;
+4. unrelated gameplay/Visual/VFX/C# owners не требуют ручной синхронизации;
+5. full Live используется как финальная приёмка, а не как следующий debugger архитектуры.
+
+Именно неспособность выполнить эти пять условий до рефакторинга объясняет основную часть ≈100M расхода.
 
 ---
 
@@ -362,24 +391,25 @@ research oneRoot multi-lane (21.07)
 
 ### 9.2. Verified limits (что нельзя честно утверждать)
 
-1. **Точный byte-for-byte source snapshot на каждый run** — нет commit; только gitHead=61bab5e + dirty + runner/stageAccounting hashes.
-2. **User developer spend (5.6 / Spark / Grok)** — нет локального ledger; не сливаем с Gemini tool-runs.
+1. **Точный byte-for-byte source snapshot на каждый ранний run** — до closing commit его не было; сохранялись gitHead=61bab5e + dirty flag + runner/stageAccounting hashes.
+2. **Точный provider/session split ≈100M agent tokens** — локальный единый ledger всех Hermes-сессий, контекстов, Spark/Grok и tool calls не реконструирован. Это не превращает сообщённую пользователем общую стоимость в «неподтверждённую Live-оценку»; неизвестна детализация, а не смысл величины.
 3. **Unique FP = 19 vs 20** — зависит от включения short-ts quota probes; segments=21 и runs=81 стабильны.
-4. **Полная токен-сумма всех 250 logical files** — task-1 дал ~23.5M; точечный пересчёт 21–23 ≈8.93–9.08M (методика mtime vs name-date чуть расходится).
-5. **Каузальность «этот diff строка → этот fail case»** для каждой из 21 FP-сегментов — не полная; таблица классов fail↔fix — level of evidence выше, чем line-bisect.
-6. **Не анализировались** (out of scope): semantic-router recommendations; proposal новой архитектуры; live re-runs.
+4. **Gemini item-generation usage** — task-1 дал all-time ~23.5M, точечный пересчёт 21–23 ≈8.93–9.08M. Это наблюдаемая подсистема и она не измеряет общий расход агента на разработку/стабилизацию.
+5. **Каузальность «этот diff строка → этот fail case»** для каждой из 21 FP-сегментов — не полная; таблица классов fail↔fix надёжнее, чем неподтверждённый line-bisect.
+6. Sections 1–10 фиксируют исходную археологию; sections 11–16 отдельно описывают последующую реализацию, diagnostic Live и post-Live audit.
 
 ---
 
 ## 10. Сжатый каузальный итог
 
-1. После 19.07 **не было коммитов**; 21–23.07 — **dirty WT** поверх baseline `fa01d50`/`61bab5e`.
-2. 21.07 ввели **one root executor / multi damage lane** и вынесли repair — правильный product direction, но на **semi-canonical** `ENGINE_FN_CATALOG_V2`.
-3. Сразу пошли canary/Live20 fails: repair authorization, provenance, projection, roles, placeable.
-4. 22–23.07 — generic fixes + **единственный** inventory bump **24→25** (`placeable_behavior` / v0.4.53), при **21 contract segments** и **81 Author runs**.
-5. Локальный Gemini artifact spend 21–23 ≈ **9M tokens**; full-20 runs держатся около **0.33–0.39M** each — как large batch.
-6. User 5.6-sol/Spark/Grok estimate — **отдельный** evidence channel; не отрицается.
-7. Дороговизна = **fingerprint thrash × fat author prefix × multi-owner gates after pay**, не «слишком много functions».
+1. После 19.07 **не было коммитов**; 21–23.07 работа шла в **dirty WT** поверх baseline `fa01d50`/`61bab5e`.
+2. 21.07 ввели **one root executor / multi damage lane**, новые функции и вынесли repair — правильный product direction, реализованный поверх semi-canonical catalog и нескольких ручных shadow contracts.
+3. Изменение средней значимости разошлось между prompt/provider, repair, compiler, provenance, final projection, Visual/VFX и C#, поэтому последующие failures появлялись последовательно, а не одним ранним gate.
+4. Агент многократно исследовал и исправлял следующий owner: **21 contract segment**, около 20 fingerprints, **81 Author-containing run**, дополнительные audits/context/tool cycles.
+5. Сообщённая стоимость этого цикла — **≈100M Hermes/agent tokens**, причём основная часть, порядка **≈90M**, пришлась на стабилизацию после feature work.
+6. Локальные ≈9M Gemini item-generation tokens — только вторичная телеметрия regression campaigns; они не являются нижней оценкой и не опровергают общий agent spend.
+7. Главный cost multiplier: **medium diff × scattered ownership × late detection × repeated global regression/context**, а не количество функций и не несколько процентов размера prompt.
+8. Правильная цель рефакторинга — **change locality**: одна typed точка изменения, derived/parity surfaces, affected historical replay и full Live только как финальная приёмка.
 
 ---
 
@@ -502,7 +532,7 @@ Artifact: `/home/xipong/agent-work-main/projects/InfiniCrafterLocal/artifacts/to
 | Reported tokens | **332,108** |
 | Runner exit | **0**, `ok=true` |
 
-Относительно v6 accounting (74 logical / 79 HTTP) это −5 logical (−6.76%) и −10 HTTP (−12.66%). Относительно clean fa01d50 baseline 383,292 tokens — −51,184 (−13.35%); главная экономия всё равно достигается не урезанием prompt, а прекращением fingerprint/rerun thrash.
+Относительно v6 accounting (74 logical / 79 HTTP) это −5 logical (−6.76%) и −10 HTTP (−12.66%). Относительно clean fa01d50 baseline 383,292 tokens — −51,184 (−13.35%). Это подтверждает чистоту transport/accounting конкретного Live, но **не измеряет возврат ≈100M agent spend и не доказывает change locality**. Для основной проблемы важнее, потребуется ли после следующего medium-size contract diff снова глобально стабилизировать все стадии.
 
 Два downstream repair были точными и полезными:
 
@@ -589,9 +619,11 @@ Live был полезен как диагностический corpus и вы�
 
 ## 16. Итог
 
-Цель архитектурной части достигнута: prompt/runtime contract больше не является одной неразделимой текстовой плитой. Function, provider schema, repair, compiler/provenance/final wire, Visual roles, VFX events и historical replay имеют явных владельцев и frozen gates. Это не гарантирует отсутствие stochastic Author mistakes, но переводит их из многомиллионной Live-стабилизации в deterministic preflight/replay либо один bounded stage repair.
+Архитектурная миграция реализована, а текущий tree стабилизирован: prompt/runtime contract больше не является одной неразделимой текстовой плитой. Function, provider schema, repair, compiler/provenance/final wire, Visual roles, VFX events и historical replay имеют явных владельцев и frozen gates. Это адресует установленную причину ≈100M расхода — ручную синхронизацию нескольких shadow contracts и позднее обнаружение очередного owner drift.
 
-Открытая граница только одна: post-audit delta не имеет нового Live confirmation, потому что запуск без явного разрешения запрещён.
+Однако отчёт не должен подменять цель более дешёвым Live. Окончательное практическое доказательство — следующий реальный medium-size feature/contract diff должен остаться локальным: один typed owner, минимальный frozen diff, affected replay и отсутствие глобальной рестабилизации. Последние post-Live fixes уже дали малое подтверждение локальности, но не заменяют такой будущий change test.
+
+Открыты две verification boundaries: post-audit delta не имеет нового Live confirmation без явного разрешения пользователя; предотвращение повторного ≈100M blast radius окончательно проверяется только следующей содержательной частичной модификацией.
 
 ---
 
