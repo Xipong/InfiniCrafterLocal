@@ -7,8 +7,9 @@
 1. Добавь функцию и параметры в immutable registry:
    `core/runtime_authoring/function_contract_registry.py` с primitives из
    `function_contract_types.py`. Одновременно задай provider type/enum,
-   prompt-card visibility, wire/provenance obligation, repair group и
-   `lowered_function_names`, если high-level call понижается в другой executor.
+   prompt-card visibility, wire/provenance obligation и repair group. Если
+   high-level call понижается в другой executor, сразу опиши typed `lowerers`:
+   target function, source paths и закрытый набор target paths.
 2. Проверь generated raw boundary:
 
 ```bash
@@ -19,16 +20,18 @@ PYTHONPATH=LocalGenerator python -c "from infini_local.core.runtime_authoring.en
 authored строки остаются открытыми только когда это намеренный contract
 (например, modded identity), а не потому что finite vocabulary забыли закрыть.
 
-3. Добавь semantic lowering/normalization в профильного Python-owner. Если call
-   понижается, registry metadata и production lowerer должны указывать один и тот
-   же canonical executor; frozen surface/replay tests обязаны это проверять.
+3. Добавь semantic lowering/normalization в профильного Python-owner. Production
+   lowerer обязан пройти `validate_lowerer_output`: emitted target params не могут
+   выходить за typed edge. Provenance берётся из того же binding graph, а не из
+   отдельной ручной карты.
 4. Добавь compiler projection в final `AttackSpec`/`GameplaySpec` и явную
-   provenance/final-wire обязанность. Applicability пока остаётся в
-   `reports.py`/runtime-family policy: `allowed_result_kinds` в registry зарезервирован
-   и не является действующей политикой.
-5. Обнови frozen function surface, affected historical replay coverage и
-   property/E2E golden case. Пустая replay-выборка для известной изменённой функции
-   должна fail-closed, а не считаться зелёным результатом.
+   provenance/final-wire обязанность. Applicability имеет одного отдельного owner в
+   `reports.py`/runtime-family policy; не заводи её зеркало в function registry.
+5. Обнови affected historical replay coverage и один contract-invariant/E2E case.
+   Не добавляй огромный frozen JSON snapshot реализации: parity gate должен
+   проверять target closure, final-wire reachability и provider/prompt projection
+   непосредственно из canonical registry. Пустая replay-выборка для известной
+   изменённой функции должна fail-closed, а не считаться зелёным результатом.
 
 Не нужно редактировать общий validator для каждой новой функции, если тип выразим
 registry. Ручной код boundary нужен только для новой структурной формы параметра.

@@ -56,7 +56,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     root_params = set(accepted_extras["rootExecutorParams"])
     assert root_functions == {
         "shoot_projectile", "perform_melee_attack", "fire_ranged_weapon", "cast_magic_weapon",
-        "deploy_sentry",
+        "deploy_sentry", "spawn_temporary_helper_projectile",
     }
     for fn in root_functions:
         assert set(functions[fn]["params"]) | root_params == set(accepted_engine_param_names(fn))

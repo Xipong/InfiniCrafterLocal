@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from csharp_partial_reader import read_text_with_partial_bundles
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ENGINE_FUNCTION_CONTRACT_BY_NAME,
+)
 ROOT = Path(__file__).resolve().parents[2]
 MOD = ROOT / "ModSources" / "InfiniCrafterLocal"
 LOCAL = ROOT / "LocalGenerator"
@@ -15,14 +18,13 @@ def read(path: Path) -> str:
 def _contract_check_generated_tool_mining_speed_and_alt_light_are_executable():
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
     authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "__init__.py")
-    function_registry = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "function_contract_registry.py")
     assert "ApplyAuthoredToolMiningSpeed" in item
     assert "gp.MiningSpeedScale" in item
     assert "player.pickSpeed /= scale" in item
     assert "from infini_local.core.runtime_authoring.function_contract_registry import" in authoring
-    assert "tool_capability" in function_registry
-    assert "miningSpeedScale" in function_registry
-    assert "executable held-tool mining speed multiplier" in function_registry
+    tool_contract = ENGINE_FUNCTION_CONTRACT_BY_NAME["tool_capability"]
+    mining_speed = next(param for param in tool_contract.params if param.name == "miningSpeedScale")
+    assert mining_speed.compiled_fields == ("miningSpeedScale",)
     assert "AltLightStrength" in item
     assert "mode == \"light\"" in item
     assert "ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork:" in item

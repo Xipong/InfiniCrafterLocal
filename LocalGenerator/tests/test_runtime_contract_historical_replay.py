@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LOCAL_GENERATOR = ROOT / "LocalGenerator"
 QA_MODULE = LOCAL_GENERATOR / "infini_local" / "qa" / "runtime_contract_replay.py"
 BUILDER = ROOT / "tools" / "build_runtime_contract_replay_corpus.py"
+CHECKER = ROOT / "tools" / "check_runtime_contract_replay.py"
 FIXTURE_DIR = LOCAL_GENERATOR / "tests" / "fixtures" / "runtime_contract_history"
 CORPUS_PATH = FIXTURE_DIR / "corpus.json"
 
@@ -72,12 +73,13 @@ def _collect_string_keys(obj, out: set[str]) -> None:
 
 
 def _module_source_paths() -> list[Path]:
-    return [QA_MODULE, BUILDER]
+    return [QA_MODULE, BUILDER, CHECKER]
 
 
 def test_replay_modules_exist() -> None:
     assert QA_MODULE.is_file(), f"missing QA module: {QA_MODULE}"
     assert BUILDER.is_file(), f"missing corpus builder: {BUILDER}"
+    assert CHECKER.is_file(), f"missing replay gate: {CHECKER}"
     assert CORPUS_PATH.is_file(), f"missing corpus fixture: {CORPUS_PATH}"
 
 
@@ -286,6 +288,33 @@ def test_dump_builder_recovers_authored_function_provenance_without_leaking_inte
     ]
 
 
+def test_select_exact_changed_form_uses_typed_lowerer_graph() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    corpus = replay.load_corpus(CORPUS_PATH)
+    selected = replay.select_cases_by_changed_forms(
+        corpus,
+        ["deploy_sentry:placement"],
+    )
+    assert selected
+    expected = [
+        case
+        for case in corpus["cases"]
+        if any(
+            call.get("fn") == "shoot_projectile"
+            and "sentryPlacement" in (call.get("params") or {})
+            for call in case["runtimePlan"]["engineCalls"]
+        )
+    ]
+    assert [case["caseId"] for case in selected] == [
+        case["caseId"] for case in expected
+    ]
+    with pytest.raises(ValueError, match="unknown or unbound"):
+        replay.select_cases_by_changed_forms(corpus, ["deploy_sentry:invented"])
+    with pytest.raises(ValueError, match="no coverage"):
+        replay.select_cases_by_changed_forms(corpus, ["emit_light:strength"])
+
+
 def test_select_medium_changed_set_is_union_once() -> None:
     import infini_local.qa.runtime_contract_replay as replay
 
@@ -337,21 +366,11 @@ def test_replay_cases_succeed_and_expected_fingerprint_matches() -> None:
     import infini_local.qa.runtime_contract_replay as replay
 
     corpus = replay.load_corpus(CORPUS_PATH)
-    # Replay a representative slice plus full if small.
+    # The corpus is deliberately small and deterministic.  Sampling made this gate
+    # green while three sentry rows had dropped wire receipts, so every committed
+    # case is now part of the contract gate.
     cases = corpus["cases"]
-    sample = cases if len(cases) <= 24 else cases[:: max(1, len(cases) // 16)][:16]
-    # Always include one case per function for coverage confidence.
-    by_fn: dict[str, dict] = {}
-    for case in cases:
-        for fn in case["functions"]:
-            by_fn.setdefault(fn, case)
-    sample_ids = {c["caseId"] for c in sample}
-    for case in by_fn.values():
-        if case["caseId"] not in sample_ids:
-            sample.append(case)
-            sample_ids.add(case["caseId"])
-
-    reports = [replay.replay_case(case) for case in sample]
+    reports = [replay.replay_case(case) for case in cases]
     assert reports
     for report in reports:
         assert report.get("ok") is True, report

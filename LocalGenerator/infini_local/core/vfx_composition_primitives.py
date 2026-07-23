@@ -27,7 +27,7 @@ VFX_CUE_CHANNEL_VALUES = (
     "impactParticles", "decaySmoke", "light", "sound",
 )
 VFX_CUE_LANE_VALUES = ("primary", "support", "accent", "ornament", "cue")
-VFX_CUE_ROLE_VALUES = ("projectile", "impact", "child", "field")
+VFX_CUE_ROLE_VALUES = ("item", "projectile", "impact", "child", "field")
 VFX_CUE_EMISSION_MODE_VALUES = (
     "wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point",
 )

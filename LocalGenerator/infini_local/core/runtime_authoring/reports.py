@@ -22,7 +22,10 @@ from infini_local.core.runtime_authoring.structural import all_calls, find_call
 from infini_local.core.runtime_authoring.result_identity import effective_runtime_result_kind
 from infini_local.core.runtime_authoring.function_contract_registry import (
     ENGINE_FUNCTION_CATALOG,
-    compiled_field_source_map,
+    compiled_fields_for_authored_path,
+    compiled_fields_for_lowered_compatibility_path,
+    lowerer_contract,
+    lowerer_target_source_map,
 )
 from infini_local.core.runtime_authoring.schema import (
     COMBAT_EXECUTOR_RESULT_KINDS,
@@ -1059,99 +1062,129 @@ def runtime_plan_validation_report(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def compiled_fields_for_authored_param(fn: str, authored_param: str) -> frozenset[str]:
-    """Return exact compiler fields structurally attributed to one authored param."""
-    normalized_fn = _norm_name(fn)
-    return frozenset(
-        compiled_field
-        for compiled_field, source_params in compiled_field_source_map().get(normalized_fn, {}).items()
-        if authored_param in (source_params if isinstance(source_params, tuple) else (source_params,))
-    )
+    """Return compiler fields attributed by the canonical typed contract."""
+
+    return compiled_fields_for_authored_path(fn, authored_param)
 
 
 def compiled_fields_for_authored_call(
     fn: str,
     params: dict[str, Any],
     authored_param: str,
+    *,
+    normalized_fn: str = "",
+    normalized_params: dict[str, Any] | None = None,
 ) -> frozenset[str]:
-    """Resolve a raw typed call through canonical lowering before provenance lookup."""
-    from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call
+    """Resolve exact per-call ownership from typed lowerer bindings.
 
-    def nested(value: dict[str, Any], path: str) -> tuple[bool, Any]:
-        current: Any = value
-        for part in str(path or "").split("."):
-            if not part or not isinstance(current, dict) or part not in current:
-                return False, None
-            current = current[part]
-        return True, current
+    This executes the declared lowerer at most once when a normalized row is not
+    already available.  It never mutates values or probes counterfactual calls.
+    """
 
-    present, authored_value = nested(params, authored_param)
-    if not present:
-        return frozenset()
-    resolved = set(compiled_fields_for_authored_param(fn, authored_param))
-    baseline = _lower_typed_engine_call(fn, params)
-    for canonical_fn, canonical_params in baseline:
-        canonical_present, canonical_value = nested(canonical_params, authored_param)
-        if canonical_present and canonical_value == authored_value:
-            resolved.update(compiled_fields_for_authored_param(canonical_fn, authored_param))
+    canonical_fn = _norm_name(fn)
+    if lowerer_contract(canonical_fn) is None:
+        direct = compiled_fields_for_authored_path(canonical_fn, authored_param)
+        if direct:
+            return direct
+        # Corpus v1 and old accepted dumps sometimes persisted a post-lowering
+        # target call with source aliases still present.  Resolve those aliases from
+        # the canonical incoming lowerer graph rather than keeping a manual shadow
+        # map in provenance.
+        return compiled_fields_for_lowered_compatibility_path(
+            canonical_fn,
+            authored_param,
+            normalized_params if isinstance(normalized_params, dict) else params,
+        )
 
-    probe_params = deepcopy(params)
-    probe_parent: Any = probe_params
-    probe_parts = str(authored_param or "").split(".")
-    for part in probe_parts[:-1]:
-        if not isinstance(probe_parent, dict) or not isinstance(probe_parent.get(part), dict):
-            return frozenset(resolved)
-        probe_parent = probe_parent[part]
-    if not isinstance(probe_parent, dict) or not probe_parts:
-        return frozenset(resolved)
-    if isinstance(authored_value, bool):
-        probe_value: Any = not authored_value
-    elif isinstance(authored_value, int):
-        probe_value = authored_value + 1
-    elif isinstance(authored_value, float):
-        probe_value = authored_value + 0.5
-    elif isinstance(authored_value, str):
-        probe_value = authored_value + "__icl_provenance_probe__"
+    lowered_rows: list[tuple[str, dict[str, Any]]]
+    if normalized_fn and isinstance(normalized_params, dict):
+        lowered_rows = [(_norm_name(normalized_fn), normalized_params)]
     else:
-        probe_value = "__icl_provenance_probe__"
-    probe_parent[probe_parts[-1]] = probe_value
-    counterfactual = _lower_typed_engine_call(fn, probe_params)
-    for index, (canonical_fn, canonical_params) in enumerate(baseline):
-        if index >= len(counterfactual) or counterfactual[index][0] != canonical_fn:
-            changed_fields = set(canonical_params)
-        else:
-            counterfactual_params = counterfactual[index][1]
-            changed_fields = {
-                field
-                for field in set(canonical_params) | set(counterfactual_params)
-                if canonical_params.get(field) != counterfactual_params.get(field)
-            }
-        for canonical_field in changed_fields:
-            resolved.update(compiled_fields_for_authored_param(canonical_fn, canonical_field))
+        from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call
+        lowered_rows = _lower_typed_engine_call(canonical_fn, params)
+
+    resolved: set[str] = set()
+    for target_fn, target_params in lowered_rows:
+        owners = lowerer_target_source_map(canonical_fn, target_fn, params, target_params)
+        for target_path, source_path in owners.items():
+            if source_path == authored_param:
+                resolved.update(compiled_fields_for_authored_path(target_fn, target_path))
     return frozenset(resolved)
 
 
+def _iter_authored_param_leaves(params: dict[str, Any]) -> list[tuple[str, Any]]:
+    pending: list[tuple[str, Any]] = [(str(key), value) for key, value in params.items()]
+    out: list[tuple[str, Any]] = []
+    while pending:
+        param_path, authored_value = pending.pop(0)
+        if str(param_path).startswith("_"):
+            continue
+        if isinstance(authored_value, dict):
+            pending[0:0] = [
+                (f"{param_path}.{child_key}", child_value)
+                for child_key, child_value in authored_value.items()
+            ]
+            continue
+        if authored_value is None:
+            continue
+        if isinstance(authored_value, str) and not authored_value.strip():
+            continue
+        if isinstance(authored_value, list) and not authored_value:
+            continue
+        if isinstance(authored_value, (str, bool, int, float, list)):
+            out.append((param_path, authored_value))
+    return out
+
+
+def _authored_call_identity(raw: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Return the exact public call before typed lowering, when available."""
+
+    normalized_fn = _norm_name(raw.get("fn"))
+    authored_fn = _norm_name(raw.get("_authoredFn") or raw.get("_rawFn") or normalized_fn)
+    authored_params_candidate = raw.get("_authoredParams")
+    if isinstance(authored_params_candidate, dict):
+        authored_params = authored_params_candidate
+    else:
+        params_candidate = raw.get("params")
+        authored_params = params_candidate if isinstance(params_candidate, dict) else {}
+    return authored_fn, authored_params
+
+
 def _authored_field_map(data_or_plan: dict[str, Any]) -> tuple[dict[str, str], dict[str, list[str]]]:
-    """Map compiled field names to the engine call that explicitly authored them."""
+    """Map compiled fields to the original typed function and public params."""
+
     rp = data_or_plan if isinstance(data_or_plan.get("engineCalls"), list) else runtime_plan(data_or_plan)
     authored: dict[str, str] = {}
     authored_by_fn: dict[str, list[str]] = {}
-    maps = compiled_field_source_map()
     calls_candidate = rp.get("engineCalls")
     calls: list[Any] = calls_candidate if isinstance(calls_candidate, list) else []
     for raw in calls:
         if not isinstance(raw, dict):
             continue
-        fn = _norm_name(raw.get("fn"))
-        authored_fn = _norm_name(raw.get("_rawFn") or fn)
-        param_obj = raw.get("params") if isinstance(raw.get("params"), dict) else raw
-        if not isinstance(param_obj, dict):
+        authored_fn, authored_params = _authored_call_identity(raw)
+        if not authored_fn:
             continue
-        authored_keys = {str(k) for k, v in param_obj.items() if not str(k).startswith("_") and v not in (None, "", [], {})}
-        for compiled_field, authored_param in maps.get(fn, {}).items():
-            params = authored_param if isinstance(authored_param, tuple) else (authored_param,)
-            if any(param in authored_keys for param in params):
-                authored[compiled_field] = authored_fn
-                authored_by_fn.setdefault(authored_fn, []).append(compiled_field)
+        normalized_fn = _norm_name(raw.get("fn"))
+        normalized_params_candidate = raw.get("params")
+        normalized_params = normalized_params_candidate if isinstance(normalized_params_candidate, dict) else {}
+        fields = set(compiled_fields_for_authored_call(
+            authored_fn,
+            authored_params,
+            "$function",
+            normalized_fn=normalized_fn,
+            normalized_params=normalized_params,
+        ))
+        for param_path, _ in _iter_authored_param_leaves(authored_params):
+            fields.update(compiled_fields_for_authored_call(
+                authored_fn,
+                authored_params,
+                param_path,
+                normalized_fn=normalized_fn,
+                normalized_params=normalized_params,
+            ))
+        for compiled_field in fields:
+            authored[compiled_field] = authored_fn
+            authored_by_fn.setdefault(authored_fn, []).append(compiled_field)
     authored_by_fn = {fn: sorted(set(fields)) for fn, fields in authored_by_fn.items()}
     return authored, authored_by_fn
 
@@ -1169,31 +1202,22 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
     for call_index, raw_call in enumerate(calls):
         if not isinstance(raw_call, dict):
             continue
-        fn = _norm_name(raw_call.get("fn"))
+        authored_fn, authored_params = _authored_call_identity(raw_call)
         call_id = str(raw_call.get("callId") or f"call_{call_index}")
-        params_candidate = raw_call.get("params")
-        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
-        pending: list[tuple[str, Any]] = [(str(key), value) for key, value in params.items()]
-        while pending:
-            param_path, authored_value = pending.pop(0)
-            if isinstance(authored_value, dict):
-                pending[0:0] = [
-                    (f"{param_path}.{child_key}", child_value)
-                    for child_key, child_value in authored_value.items()
-                ]
-                continue
-            if authored_value is None:
-                continue
-            if isinstance(authored_value, str) and not authored_value.strip():
-                continue
-            if isinstance(authored_value, list) and not authored_value:
-                continue
-            if not isinstance(authored_value, (str, bool, int, float, list)):
-                continue
-            compiled_fields = sorted(compiled_fields_for_authored_call(fn, params, param_path))
+        for param_path, authored_value in _iter_authored_param_leaves(authored_params):
+            normalized_fn = _norm_name(raw_call.get("fn"))
+            normalized_params_candidate = raw_call.get("params")
+            normalized_params = normalized_params_candidate if isinstance(normalized_params_candidate, dict) else {}
+            compiled_fields = sorted(compiled_fields_for_authored_call(
+                authored_fn,
+                authored_params,
+                param_path,
+                normalized_fn=normalized_fn,
+                normalized_params=normalized_params,
+            ))
             authored_parameters.append({
                 "callId": call_id,
-                "fn": fn,
+                "fn": authored_fn,
                 "param": param_path,
                 "authoredValue": deepcopy(authored_value),
                 "compiledFields": compiled_fields,
@@ -1232,7 +1256,7 @@ def runtime_plan_provenance_report(data: dict[str, Any], patch: dict[str, Any] |
     particle_calls = all_calls(rp, "spawn_contact_particles")
     trail_calls = all_calls(rp, "leave_trail_or_field")
     normalized_calls = [
-        {"index": c.get("_index"), "fn": c.get("fn"), "paramKeys": sorted(list((c.get("params") or {}).keys())) if isinstance(c.get("params"), dict) else []}
+        {"index": c.get("_index"), "fn": c.get("fn"), "authoredFn": c.get("_authoredFn") or c.get("_rawFn"), "paramKeys": sorted(list((c.get("params") or {}).keys())) if isinstance(c.get("params"), dict) else []}
         for c in calls if isinstance(c, dict)
     ]
     child_onhits = {"chain", "lightning_arc", "mini_missiles", "vortex_spawn", "radial_beams", "starburst", "overhead_barrage", "spore_cloud"}

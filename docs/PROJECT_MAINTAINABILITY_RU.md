@@ -19,7 +19,7 @@
 
 | Boundary | Owner modules |
 |---|---|
-| Runtime authoring | `core/runtime_authoring/schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `compiler.py`, `reports.py` |
+| Runtime authoring | `core/runtime_authoring/function_contract_registry.py` (function/param/lowerer contract), `schema.py` (cross-param policy), `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `compiler.py`, `reports.py` |
 | Web/HTTP | `web/server.py`, `server_handler.py`, `server_utility_routes.py`, `vfx_debug_routes.py`, `server_trace_snapshot.py` |
 | Combine | `combine_pipeline.py`, `combine_balance.py`, `combine_genome.py`, `combine_genome_contract.py`, `combine_validation.py`, `combine_gameplay.py` |
 | LLM authoring | `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` |

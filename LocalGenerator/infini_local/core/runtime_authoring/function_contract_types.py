@@ -1,7 +1,8 @@
-"""Immutable Author engine function/parameter wire-contract primitives.
+"""Immutable Author and normalized-runtime function contract primitives.
 
-Typed registry descriptors only. No compiler behavior, item/name/prose routing,
-generic trigger/action runtime, provider logic, or cross-version adapter.
+The registry owns public provider/prompt parameters plus the narrow normalized IR
+used between typed lowerers and the finite compiler.  Gameplay value transforms stay
+in ``semantics.py``; this module only describes and validates their boundaries.
 """
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ from typing import Any, Iterable, Sequence
 
 
 _TOKEN_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+FUNCTION_SOURCE_PATH = "$function"
 
 
 class WireObligation(str, Enum):
@@ -44,11 +47,32 @@ class NestedWirePathContract:
 
 
 @dataclass(frozen=True, slots=True)
-class CompiledFieldSourceOverride:
-    """Exact compiler/lowerer-owned source paths for one compiled field."""
+class NormalizedParamContract:
+    """Compiler-visible IR parameter that is never accepted from the Author.
 
-    compiled_field: str
-    source_paths: tuple[str, ...]
+    These names are emitted only by a declared typed lowerer.  Keeping them separate
+    from ``EngineParamContract`` prevents internal aliases from silently expanding the
+    provider schema.
+    """
+
+    name: str
+    compiled_fields: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredParamBinding:
+    """Authored source path(s) that may produce normalized target parameter(s)."""
+
+    source_path: str
+    target_param_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EngineLowererContract:
+    """One typed Author function lowering edge into the normalized compiler IR."""
+
+    target_function: str
+    bindings: tuple[LoweredParamBinding, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,23 +105,27 @@ class RepairGroupContract:
 
 @dataclass(frozen=True, slots=True)
 class EngineFunctionContract:
-    """Immutable wire-contract descriptor for one Author engine function."""
+    """Immutable contract descriptor for one Author engine function."""
 
     name: str
     meaning: str
     params: tuple[EngineParamContract, ...]
     root_executor: bool
     requires_root_executor: bool
-    # Reserved metadata. Current production applicability is still owned by
-    # reports/runtime-family policy; registry entries intentionally leave it empty.
-    allowed_result_kinds: tuple[str, ...]
     repair_groups: tuple[RepairGroupContract, ...]
-    compiled_source_overrides: tuple[CompiledFieldSourceOverride, ...] = ()
-    lowered_function_names: tuple[str, ...] = ()
+    normalized_only_params: tuple[NormalizedParamContract, ...] = ()
+    lowerers: tuple[EngineLowererContract, ...] = ()
 
 
 def _blank(value: Any) -> bool:
     return not str(value or "").strip()
+
+
+def _valid_path(value: object, *, allow_function: bool = False) -> bool:
+    path = str(value or "").strip()
+    if allow_function and path == FUNCTION_SOURCE_PATH:
+        return True
+    return bool(path) and all(_PATH_SEGMENT_RE.fullmatch(segment) for segment in path.split("."))
 
 
 def _as_wire_obligation(raw: WireObligation | str) -> WireObligation | None:
@@ -129,9 +157,7 @@ def _example_is_immutable(value: Any) -> bool:
 def _normalize_compiled_fields(raw: Any) -> tuple[str, ...] | None:
     if raw is None:
         return ()
-    if isinstance(raw, (str, bytes)):
-        return None
-    if not isinstance(raw, (tuple, list)):
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, (tuple, list)):
         return None
     out: list[str] = []
     for item in raw:
@@ -141,14 +167,34 @@ def _normalize_compiled_fields(raw: Any) -> tuple[str, ...] | None:
     return tuple(out)
 
 
+def _declared_authored_paths(spec: EngineFunctionContract) -> set[str]:
+    paths: set[str] = set()
+    for param in spec.params if isinstance(spec.params, tuple) else ():
+        if not isinstance(param, EngineParamContract):
+            continue
+        name = str(param.name or "").strip()
+        if not name:
+            continue
+        paths.add(name)
+        for nested in param.nested_wire_paths if isinstance(param.nested_wire_paths, tuple) else ():
+            if isinstance(nested, NestedWirePathContract) and str(nested.path or "").strip():
+                paths.add(f"{name}.{str(nested.path).strip()}")
+    return paths
+
+
+def _declared_normalized_paths(spec: EngineFunctionContract) -> set[str]:
+    paths = _declared_authored_paths(spec)
+    for param in spec.normalized_only_params if isinstance(spec.normalized_only_params, tuple) else ():
+        if isinstance(param, NormalizedParamContract) and str(param.name or "").strip():
+            paths.add(str(param.name).strip())
+    return paths
+
+
 def validate_engine_function_contracts(
     specs: Sequence[EngineFunctionContract] | Iterable[EngineFunctionContract],
 ) -> tuple[str, ...]:
-    """Validate a collection of function contracts.
+    """Validate the registry and every cross-function lowering edge."""
 
-    Returns a deterministic tuple of human-readable error strings (empty when
-    the registry is structurally sound). Does not compile or execute gameplay.
-    """
     errors: list[str] = []
     seen_function_names: dict[str, int] = {}
     ordered = list(specs)
@@ -165,6 +211,8 @@ def validate_engine_function_contracts(
         else:
             fn_label = f"function[{index}]({name.strip()})"
             key = name.strip()
+            if not _TOKEN_RE.fullmatch(key):
+                errors.append(f"{fn_label}: invalid function name {key!r}")
             if key in seen_function_names:
                 errors.append(
                     f"{fn_label}: duplicate function name {key!r} "
@@ -175,72 +223,29 @@ def validate_engine_function_contracts(
 
         if _blank(spec.meaning):
             errors.append(f"{fn_label}: blank function meaning")
-
         if spec.root_executor and spec.requires_root_executor:
-            errors.append(
-                f"{fn_label}: root_executor and requires_root_executor cannot both be true"
-            )
+            errors.append(f"{fn_label}: root_executor and requires_root_executor cannot both be true")
 
         if not isinstance(spec.params, tuple):
             errors.append(f"{fn_label}: params must be a tuple")
             param_iter: Sequence[Any] = ()
         else:
             param_iter = spec.params
-
-        if not isinstance(spec.allowed_result_kinds, tuple):
-            errors.append(f"{fn_label}: allowed_result_kinds must be a tuple")
-
         if not isinstance(spec.repair_groups, tuple):
             errors.append(f"{fn_label}: repair_groups must be a tuple")
             group_iter: Sequence[Any] = ()
         else:
             group_iter = spec.repair_groups
-
-        if not isinstance(spec.compiled_source_overrides, tuple):
-            errors.append(f"{fn_label}: compiled_source_overrides must be a tuple")
-            source_overrides: Sequence[Any] = ()
+        if not isinstance(spec.normalized_only_params, tuple):
+            errors.append(f"{fn_label}: normalized_only_params must be a tuple")
+            normalized_iter: Sequence[Any] = ()
         else:
-            source_overrides = spec.compiled_source_overrides
-
-        if not isinstance(spec.lowered_function_names, tuple):
-            errors.append(f"{fn_label}: lowered_function_names must be a tuple")
-            lowered_function_names: Sequence[Any] = ()
+            normalized_iter = spec.normalized_only_params
+        if not isinstance(spec.lowerers, tuple):
+            errors.append(f"{fn_label}: lowerers must be a tuple")
+            lowerer_iter: Sequence[Any] = ()
         else:
-            lowered_function_names = spec.lowered_function_names
-
-        seen_lowered_names: set[str] = set()
-        for target in lowered_function_names:
-            target_name = str(target or "").strip()
-            if not target_name or not _TOKEN_RE.fullmatch(target_name):
-                errors.append(f"{fn_label}: invalid lowered function name {target!r}")
-                continue
-            if target_name == name.strip():
-                errors.append(f"{fn_label}: lowered function name cannot reference itself")
-            if target_name in seen_lowered_names:
-                errors.append(f"{fn_label}: duplicate lowered function name {target_name!r}")
-            seen_lowered_names.add(target_name)
-
-        seen_override_fields: set[str] = set()
-        for override in source_overrides:
-            if not isinstance(override, CompiledFieldSourceOverride):
-                errors.append(f"{fn_label}: compiled_source_overrides contains a non-contract value")
-                continue
-            field = str(override.compiled_field or "").strip()
-            if not field:
-                errors.append(f"{fn_label}: compiled source override has a blank field")
-            if field in seen_override_fields:
-                errors.append(f"{fn_label}: duplicate compiled source override for {field!r}")
-            seen_override_fields.add(field)
-            if not isinstance(override.source_paths, tuple) or not override.source_paths:
-                errors.append(f"{fn_label}.{field}: source_paths must be a non-empty tuple")
-                continue
-            for source_path in override.source_paths:
-                path = str(source_path or "").strip()
-                if not path or any(
-                    not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", segment)
-                    for segment in path.split(".")
-                ):
-                    errors.append(f"{fn_label}.{field}: invalid compiler source path {source_path!r}")
+            lowerer_iter = spec.lowerers
 
         param_names: set[str] = set()
         seen_params: dict[str, int] = {}
@@ -256,6 +261,8 @@ def validate_engine_function_contracts(
             else:
                 pkey = pname.strip()
                 p_label = f"{fn_label}.params[{p_index}]({pkey})"
+                if not _PATH_SEGMENT_RE.fullmatch(pkey):
+                    errors.append(f"{p_label}: invalid param name {pkey!r}")
                 if pkey in seen_params:
                     errors.append(
                         f"{p_label}: duplicate param name {pkey!r} "
@@ -290,13 +297,11 @@ def validate_engine_function_contracts(
                 pattern = str(param.string_pattern or "")
                 if pattern and value_kind is not ParamValueKind.STRING:
                     errors.append(f"{p_label}: string_pattern is valid only for string value_kind")
-
                 if value_kind is ParamValueKind.OBJECT:
                     if not isinstance(param.object_model, type):
                         errors.append(f"{p_label}: object value_kind requires object_model")
                 elif param.object_model is not None:
                     errors.append(f"{p_label}: object_model is valid only for object value_kind")
-
                 if value_kind is ParamValueKind.LIST:
                     if not isinstance(param.list_item_model, type):
                         errors.append(f"{p_label}: list value_kind requires list_item_model")
@@ -324,10 +329,7 @@ def validate_engine_function_contracts(
                     errors.append(f"{p_label}: nested_wire_paths contains a non-contract value")
                     continue
                 path = str(nested.path or "").strip()
-                if not path or any(
-                    not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", segment)
-                    for segment in path.split(".")
-                ):
+                if not _valid_path(path):
                     errors.append(f"{p_label}: invalid nested wire path {nested.path!r}")
                 if path in seen_nested_paths:
                     errors.append(f"{p_label}: duplicate nested wire path {path!r}")
@@ -338,86 +340,204 @@ def validate_engine_function_contracts(
 
             obligation = _as_wire_obligation(param.wire_obligation)
             if obligation is None:
-                errors.append(
-                    f"{p_label}: unknown wire_obligation {param.wire_obligation!r}"
-                )
+                errors.append(f"{p_label}: unknown wire_obligation {param.wire_obligation!r}")
                 continue
-
             compiled = _normalize_compiled_fields(param.compiled_fields)
             if compiled is None:
                 errors.append(f"{p_label}: compiled_fields must be a tuple of strings")
                 continue
-
-            if obligation in (WireObligation.FINAL_WIRE, WireObligation.CONTROL_DERIVED):
+            if obligation is WireObligation.FINAL_WIRE:
                 if not compiled and not param.provenance_via_lowerer:
                     errors.append(
-                        f"{p_label}: {obligation.value} param requires non-empty compiled_fields "
+                        f"{p_label}: final_wire param requires non-empty compiled_fields "
                         "or provenance_via_lowerer"
                     )
                 if compiled and param.provenance_via_lowerer:
                     errors.append(
-                        f"{p_label}: static compiled_fields and provenance_via_lowerer "
-                        "are mutually exclusive owners"
+                        f"{p_label}: static compiled_fields and provenance_via_lowerer are mutually exclusive owners"
                     )
-            else:
-                if compiled:
-                    if obligation is WireObligation.NON_WIRE:
-                        errors.append(
-                            f"{p_label}: non_wire param must not declare compiled_fields {compiled!r}"
-                        )
+            elif obligation is WireObligation.CONTROL_DERIVED:
                 if param.provenance_via_lowerer:
                     errors.append(
-                        f"{p_label}: {obligation.value} param must not use provenance_via_lowerer"
+                        f"{p_label}: control_derived param is a compiler control, not a lowerer-owned final field"
                     )
+            else:
+                if compiled and obligation is WireObligation.NON_WIRE:
+                    errors.append(f"{p_label}: non_wire param must not declare compiled_fields {compiled!r}")
+                if param.provenance_via_lowerer:
+                    errors.append(f"{p_label}: {obligation.value} param must not use provenance_via_lowerer")
+
+        seen_normalized: set[str] = set()
+        for n_index, normalized in enumerate(normalized_iter):
+            n_label = f"{fn_label}.normalized_only_params[{n_index}]"
+            if not isinstance(normalized, NormalizedParamContract):
+                errors.append(f"{n_label}: expected NormalizedParamContract, got {type(normalized).__name__}")
+                continue
+            nname = str(normalized.name or "").strip()
+            if not nname or not _PATH_SEGMENT_RE.fullmatch(nname):
+                errors.append(f"{n_label}: invalid normalized param name {normalized.name!r}")
+            if nname in param_names:
+                errors.append(f"{n_label}: normalized-only param {nname!r} duplicates public param")
+            if nname in seen_normalized:
+                errors.append(f"{n_label}: duplicate normalized-only param {nname!r}")
+            seen_normalized.add(nname)
+            compiled = _normalize_compiled_fields(normalized.compiled_fields)
+            if not compiled or any(_blank(field) for field in compiled):
+                errors.append(f"{n_label}: compiled_fields must be a non-empty tuple")
+
+        seen_lowerer_targets: set[str] = set()
+        for l_index, lowerer in enumerate(lowerer_iter):
+            l_label = f"{fn_label}.lowerers[{l_index}]"
+            if not isinstance(lowerer, EngineLowererContract):
+                errors.append(f"{l_label}: expected EngineLowererContract, got {type(lowerer).__name__}")
+                continue
+            target = str(lowerer.target_function or "").strip()
+            if not target or not _TOKEN_RE.fullmatch(target):
+                errors.append(f"{l_label}: invalid target function {lowerer.target_function!r}")
+            if target == name.strip():
+                errors.append(f"{l_label}: lowerer target cannot reference itself")
+            if target in seen_lowerer_targets:
+                errors.append(f"{l_label}: duplicate lowerer target {target!r}")
+            seen_lowerer_targets.add(target)
+            if not isinstance(lowerer.bindings, tuple) or not lowerer.bindings:
+                errors.append(f"{l_label}: bindings must be a non-empty tuple")
+                bindings: Sequence[Any] = ()
+            else:
+                bindings = lowerer.bindings
+            seen_bindings: set[tuple[str, tuple[str, ...]]] = set()
+            for b_index, binding in enumerate(bindings):
+                b_label = f"{l_label}.bindings[{b_index}]"
+                if not isinstance(binding, LoweredParamBinding):
+                    errors.append(f"{b_label}: expected LoweredParamBinding, got {type(binding).__name__}")
+                    continue
+                source = str(binding.source_path or "").strip()
+                if not _valid_path(source, allow_function=True):
+                    errors.append(f"{b_label}: invalid source path {binding.source_path!r}")
+                targets = binding.target_param_paths
+                if not isinstance(targets, tuple) or not targets:
+                    errors.append(f"{b_label}: target_param_paths must be a non-empty tuple")
+                    targets = ()
+                for target_path in targets:
+                    if not _valid_path(target_path):
+                        errors.append(f"{b_label}: invalid target param path {target_path!r}")
+                identity = (source, tuple(str(path) for path in targets))
+                if identity in seen_bindings:
+                    errors.append(f"{b_label}: duplicate lowerer binding {identity!r}")
+                seen_bindings.add(identity)
 
         for g_index, group in enumerate(group_iter):
             g_label = f"{fn_label}.repair_groups[{g_index}]"
             if not isinstance(group, RepairGroupContract):
                 errors.append(f"{g_label}: expected RepairGroupContract, got {type(group).__name__}")
                 continue
-
             if not isinstance(group.members, tuple):
                 errors.append(f"{g_label}: members must be a tuple")
                 members: Sequence[Any] = ()
             else:
                 members = group.members
-
-            owner = str(group.policy_owner) if group.policy_owner is not None else ""
-            if _blank(owner):
+            if _blank(group.policy_owner):
                 errors.append(f"{g_label}: blank policy_owner")
-
             for member in members:
-                member_s = str(member) if member is not None else ""
-                if _blank(member_s):
+                mkey = str(member or "").strip()
+                if not mkey:
                     errors.append(f"{g_label}: blank repair group member")
-                    continue
-                mkey = member_s.strip()
-                if mkey not in param_names:
-                    errors.append(
-                        f"{g_label}: repair member {mkey!r} is not in params"
-                    )
+                elif mkey not in param_names:
+                    errors.append(f"{g_label}: repair member {mkey!r} is not in params")
 
-    known_function_names = set(seen_function_names)
+    by_name = {
+        str(spec.name).strip(): spec
+        for spec in ordered
+        if isinstance(spec, EngineFunctionContract) and str(spec.name or "").strip()
+    }
     for index, spec in enumerate(ordered):
         if not isinstance(spec, EngineFunctionContract):
             continue
         fn_name = str(spec.name or "").strip()
         fn_label = f"function[{index}]({fn_name})" if fn_name else f"function[{index}]"
-        targets = spec.lowered_function_names if isinstance(spec.lowered_function_names, tuple) else ()
-        for target in targets:
-            target_name = str(target or "").strip()
-            if target_name and _TOKEN_RE.fullmatch(target_name) and target_name not in known_function_names:
+        authored_paths = _declared_authored_paths(spec)
+        lowerers = spec.lowerers if isinstance(spec.lowerers, tuple) else ()
+        bound_source_paths: set[str] = set()
+        for l_index, lowerer in enumerate(lowerers):
+            if not isinstance(lowerer, EngineLowererContract):
+                continue
+            target_name = str(lowerer.target_function or "").strip()
+            target_spec = by_name.get(target_name)
+            l_label = f"{fn_label}.lowerers[{l_index}]"
+            if target_spec is None:
+                errors.append(f"{l_label}: lowerer target {target_name!r} is not in registry")
+                continue
+            if target_spec.root_executor and not spec.root_executor:
                 errors.append(
-                    f"{fn_label}: lowered function target {target_name!r} is not in registry"
+                    f"{l_label}: source must be root_executor because target {target_name!r} is root_executor"
                 )
+            target_paths = _declared_normalized_paths(target_spec)
+            for binding in lowerer.bindings if isinstance(lowerer.bindings, tuple) else ():
+                if not isinstance(binding, LoweredParamBinding):
+                    continue
+                source = str(binding.source_path or "").strip()
+                if source != FUNCTION_SOURCE_PATH:
+                    bound_source_paths.add(source)
+                    if source not in authored_paths:
+                        errors.append(f"{l_label}: source path {source!r} is not declared by {fn_name!r}")
+                for target_path in binding.target_param_paths:
+                    path = str(target_path or "").strip()
+                    if path not in target_paths:
+                        errors.append(
+                            f"{l_label}: target path {path!r} is not in normalized grammar for {target_name!r}"
+                        )
+        if lowerers:
+            for param in spec.params if isinstance(spec.params, tuple) else ():
+                if not isinstance(param, EngineParamContract) or not param.provenance_via_lowerer:
+                    continue
+                name = str(param.name or "").strip()
+                nested = {
+                    f"{name}.{str(row.path).strip()}"
+                    for row in param.nested_wire_paths
+                    if isinstance(row, NestedWirePathContract)
+                }
+                if name not in bound_source_paths and not nested.intersection(bound_source_paths):
+                    errors.append(
+                        f"{fn_label}: lowerer-owned param {name!r} has no typed lowerer binding"
+                    )
 
-    return tuple(errors)
+    # Reject cycles independently of declaration order.
+    edges = {
+        name: tuple(
+            str(lowerer.target_function or "").strip()
+            for lowerer in spec.lowerers
+            if isinstance(lowerer, EngineLowererContract)
+        )
+        for name, spec in by_name.items()
+    }
+    for origin in sorted(edges):
+        active: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(node: str) -> None:
+            if node in active:
+                errors.append(f"function({origin}): lowerer cycle reaches {node!r}")
+                return
+            if node in visited:
+                return
+            active.add(node)
+            for target in edges.get(node, ()):
+                if target in edges:
+                    visit(target)
+            active.remove(node)
+            visited.add(node)
+
+        visit(origin)
+
+    return tuple(dict.fromkeys(errors))
 
 
 __all__ = [
+    "FUNCTION_SOURCE_PATH",
     "ParamValueKind",
     "NestedWirePathContract",
-    "CompiledFieldSourceOverride",
+    "NormalizedParamContract",
+    "LoweredParamBinding",
+    "EngineLowererContract",
     "WireObligation",
     "EngineParamContract",
     "RepairGroupContract",

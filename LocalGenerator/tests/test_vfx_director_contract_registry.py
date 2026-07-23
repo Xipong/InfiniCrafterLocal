@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from dataclasses import FrozenInstanceError
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -19,28 +17,37 @@ from infini_local.core.vfx_director_contract import (
 from infini_local.core.vfx_director_prompt import build_vfx_director_prompt
 
 
-def test_vfx_surface_and_prompt_shape_match_frozen_baseline() -> None:
-    expected = json.loads(
-        (
-            Path(__file__).resolve().parent
-            / "fixtures"
-            / "vfx_director_contract_surface_v1.json"
-        ).read_text(encoding="utf-8")
+def test_vfx_surface_prompt_and_author_contract_share_canonical_roles() -> None:
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ENGINE_FUNCTION_CONTRACT_BY_NAME,
     )
-    actual = {
-        "schema": "infini.vfx-director-contract-surface.v1",
-        "surface": vfx_director_surface(),
-        "requiredJsonShape": vfx_director_required_json_shape(),
-    }
-    assert actual == expected
+    from infini_local.core.vfx_composition_primitives import VFX_CUE_ROLE_VALUES
+
+    surface = vfx_director_surface()
+    required_shape = vfx_director_required_json_shape()
     prompt_shape = build_vfx_director_prompt(
         None,
         None,
         {},
-        actual["surface"],
+        surface,
         {"slots": [2, 6]},
     )["requiredJsonShape"]
-    assert prompt_shape == actual["requiredJsonShape"]
+    assert prompt_shape == required_shape
+
+    enum_fields = {field.name: field for field in VFX_SLOT_ENUM_FIELDS}
+    author_params = {
+        param.name: param
+        for param in ENGINE_FUNCTION_CONTRACT_BY_NAME["visual_effect_cue"].params
+    }
+    canonical_roles = list(VFX_CUE_ROLE_VALUES)
+    assert canonical_roles == surface["textureRole"] == surface["particleRole"]
+    assert tuple(author_params["textureRole"].enum_values) == VFX_CUE_ROLE_VALUES
+    assert tuple(author_params["particleRole"].enum_values) == VFX_CUE_ROLE_VALUES
+    assert enum_fields["textureRole"].values is VFX_CUE_ROLE_VALUES
+    assert enum_fields["particleRole"].values is VFX_CUE_ROLE_VALUES
+    assert "item" in VFX_CUE_ROLE_VALUES
+    assert required_shape["slots"]["enumFields"]["textureRole"] == "one vfxSurface.textureRole value"
+    assert required_shape["slots"]["enumFields"]["particleRole"] == "one vfxSurface.particleRole value"
 
 
 def test_vfx_field_contracts_are_closed_unique_and_well_bounded() -> None:

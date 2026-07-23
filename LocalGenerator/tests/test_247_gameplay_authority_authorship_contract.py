@@ -2224,37 +2224,28 @@ def _contract_check_compiler_provenance_covers_active_noncombat_and_downstream_v
 
 def _contract_check_every_active_engine_param_has_a_provenance_policy() -> None:
     from infini_local.core.runtime_authoring.engine_call_contracts import engine_params_model
-    from infini_local.core.runtime_authoring.function_contract_registry import compiled_field_source_map
-    from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ENGINE_FUNCTION_CATALOG,
+        ENGINE_FUNCTION_CONTRACT_BY_NAME,
+        compiled_fields_for_authored_path,
+    )
     from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
     from infini_local.core.runtime_contracts import authored_param_requires_final_wire_provenance
 
-    field_map = compiled_field_source_map()
-    primary_family_cards = {
-        "perform_melee_attack",
-        "fire_ranged_weapon",
-        "cast_magic_weapon",
-        "deploy_sentry",
-        "spawn_temporary_helper_projectile",
-    }
     failures: dict[str, list[str]] = {}
     for fn in ENGINE_FUNCTION_CATALOG:
         if fn in PLANNER_HIDDEN_ENGINE_FUNCTIONS:
             continue
-        policy = field_map.get("shoot_projectile", {}) if fn in primary_family_cards else field_map.get(fn, {})
-        source_roots = {
-            source.split(".", 1)[0]
-            for sources in policy.values()
-            for source in (sources if isinstance(sources, tuple) else (sources,))
-        }
-        if fn in primary_family_cards:
-            source_roots.add("family")
-        missing = [
-            name
-            for name in engine_params_model(fn).model_fields
-            if authored_param_requires_final_wire_provenance(fn, name)
-            and name not in source_roots
-        ]
+        spec = ENGINE_FUNCTION_CONTRACT_BY_NAME[fn]
+        contracts = {param.name: param for param in spec.params}
+        missing: list[str] = []
+        for name in engine_params_model(fn).model_fields:
+            if not authored_param_requires_final_wire_provenance(fn, name):
+                continue
+            param = contracts[name]
+            paths = (name, *(f"{name}.{row.path}" for row in param.nested_wire_paths))
+            if not any(compiled_fields_for_authored_path(fn, path) for path in paths):
+                missing.append(name)
         if missing:
             failures[fn] = sorted(missing)
     assert failures == {}

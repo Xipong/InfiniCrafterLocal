@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.runtime_authoring.common import _norm_name
+from infini_local.core.runtime_authoring.function_contract_registry import lowerer_passthrough_param_names
 from infini_local.core.runtime_authoring.schema import (
     TERRARIA_WEAPON_FAMILY_GROUPS,
     _family_group,
@@ -36,14 +37,13 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
     fn = _norm_name(fn)
     p = dict(params or {})
     family = _norm_name(p.get("family") or p.get("weaponFamily") or p.get("projectileFamily") or p.get("archetype"))
-    common = _semantic_param_copy(p, [
-        "movement", "effect", "speed", "rangeTiles", "lifetimeTicks", "shotCount", "spreadRadians",
-        "pierce", "extraUpdates", "homingStrength", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "immunityCooldown", "useTimeTicks", "useAnimationTicks",
-        "projectileShape", "projectileMotion",
-        "projectileTrail", "projectileImpact", "damageMultiplier", "runtimeFamily",
-        "secondaryDamageMultiplier", "secondaryLifetimeTicks",
-        "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance",
-    ])
+    # The registry owns every unchanged pass-through.  Specialized branches below
+    # own only finite value transforms (family -> runtime fields).  This prevents a
+    # new provider param from being accepted but silently omitted by a stale list.
+    common = _semantic_param_copy(
+        p,
+        list(lowerer_passthrough_param_names(fn, "shoot_projectile")),
+    )
 
     if fn == "perform_melee_attack":
         group = _family_group(family)
@@ -148,7 +148,9 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
         return [("shoot_projectile", common)]
 
     if fn == "deploy_sentry":
-        sentry = _semantic_param_copy(p, ["placement", "attackIntervalTicks", "targetRangeTiles", "helperLifetimeTicks", "shotCount", "speed", "spreadRadians", "pierce", "movement", "effect", "onHit", "projectileShape", "secondaryProjectileShape", "secondaryLifetimeTicks", "projectileTrail", "projectileImpact", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance"])
+        # ``common`` contains only canonical same-name output params.  Authored
+        # convenience names are translated once and are not retained as shadow IR.
+        sentry = dict(common)
         sentry.update({"runtimeFamily": "sentry", "delivery": "summon", "weaponFamily": "sentry", "projectileFamily": "sentry"})
         if p.get("placement") not in (None, ""):
             sentry["sentryPlacement"] = p.get("placement")

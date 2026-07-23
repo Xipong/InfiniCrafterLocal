@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_plan_to_genome_patch
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ENGINE_FUNCTION_CONTRACT_BY_NAME,
+    lowerer_contract,
+)
 from infini_local.core.runtime_executor_vocabulary import MOVEMENT_CODE
 from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES
 from infini_local.pipelines.combine_balance import item_power_score, stat_profile_for
@@ -219,7 +223,6 @@ def _contract_check_remaining_finite_families_keep_structural_native_boundaries(
     sentry = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8")
     sentry_item = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.Sentry.cs").read_text(encoding="utf-8")
     overhead = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs").read_text(encoding="utf-8")
-    function_registry = (ROOT / "LocalGenerator/infini_local/core/runtime_authoring/function_contract_registry.py").read_text(encoding="utf-8")
 
     orbit = runtime[runtime.index("private void Orbitish"):runtime.index("private void SpiralOut")]
     assert "_spec.RangeTiles * 16f" in orbit and "owner.MountedCenter" in orbit
@@ -233,7 +236,10 @@ def _contract_check_remaining_finite_families_keep_structural_native_boundaries(
         ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs"
     ).read_text(encoding="utf-8")
     assert "ShouldRunProjectileGameplay" in overhead and "Projectile.Kill()" in overhead
-    assert "not a persistent terraria minion" in function_registry.lower()
+    helper = ENGINE_FUNCTION_CONTRACT_BY_NAME["spawn_temporary_helper_projectile"]
+    assert helper.root_executor is True
+    helper_lowerer = lowerer_contract(helper.name, "shoot_projectile")
+    assert helper_lowerer is not None and helper_lowerer.target_function == "shoot_projectile"
 
 
 def _contract_check_python_v3_author_contract_does_not_cross_csharp_wire() -> None:

@@ -152,15 +152,29 @@ def _final_wire_value(data: dict[str, Any], path: str) -> tuple[bool, Any]:
     return _nested_path_value(data, path)
 
 
+def _authored_call_identity(raw_call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Return the original Author-visible function and params after normalization.
+
+    Typed lowerers preserve these private fields on normalized rows.  Final-wire
+    receipts must be reconciled against that source contract, not against compiler
+    IR fields introduced by lowering.
+    """
+
+    fn = str(raw_call.get("_authoredFn") or raw_call.get("_rawFn") or raw_call.get("fn") or "")
+    authored_candidate = raw_call.get("_authoredParams")
+    if isinstance(authored_candidate, dict):
+        return fn, authored_candidate
+    params_candidate = raw_call.get("params")
+    return fn, params_candidate if isinstance(params_candidate, dict) else {}
+
+
 def _authored_scalar_param_identities(calls: list[Any]) -> set[tuple[str, str]]:
     identities: set[tuple[str, str]] = set()
     for raw_call in calls:
         if not isinstance(raw_call, dict):
             continue
         call_id = str(raw_call.get("callId") or "").strip()
-        fn = str(raw_call.get("fn") or "")
-        params_candidate = raw_call.get("params")
-        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
+        fn, params = _authored_call_identity(raw_call)
         pending: list[tuple[str, Any]] = [(str(key), value) for key, value in params.items()]
         while pending:
             path, value = pending.pop(0)
@@ -311,9 +325,8 @@ def structural_final_wire_report(data: dict[str, Any]) -> dict[str, Any]:
         authored_param = str(receipt.get("authoredParam") or "")
         authored_value = receipt.get("authoredValue")
         source_call = calls_by_id.get(call_id)
-        params_candidate = source_call.get("params") if isinstance(source_call, dict) else None
-        params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
-        source_present, source_actual = _nested_path_value(params, authored_param)
+        _, source_params = _authored_call_identity(source_call) if isinstance(source_call, dict) else ("", {})
+        source_present, source_actual = _nested_path_value(source_params, authored_param)
         if not source_present or not _backing_values_match(source_actual, authored_value):
             reject("sourceIdentity", {"kind": "compiler_provenance_source_mismatch", **receipt})
 

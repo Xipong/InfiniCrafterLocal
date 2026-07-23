@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION, _clamp, _norm_name
-from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ENGINE_FUNCTION_CATALOG,
+    lowerer_contract,
+    validate_lowerer_output,
+)
 from infini_local.core.runtime_authoring.schema import (
     FORBIDDEN_WORLD_ENTITY_FAMILIES,
     FORBIDDEN_WORLD_ENTITY_FN_NAMES,
@@ -45,9 +49,15 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
             continue
         current_fn = str(raw.get("fn") or "").strip()
         call_id = str(raw.get("callId") or "").strip()
-        original_fn = str(raw.get("_rawFn") or current_fn).strip()
+        authored_fn = str(raw.get("_authoredFn") or raw.get("_rawFn") or current_fn).strip()
+        original_fn = authored_fn
         fn = _norm_name(current_fn)
         params: dict[str, Any] = dict(raw.get("params") or {}) if isinstance(raw.get("params"), dict) else {}
+        authored_params = (
+            dict(raw.get("_authoredParams") or {})
+            if isinstance(raw.get("_authoredParams"), dict)
+            else dict(params)
+        )
         hard_reject = _forbidden_world_entity_rejection(raw, fn or original_fn, params, i)
         if hard_reject:
             rejected.append(hard_reject)
@@ -63,7 +73,26 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
             if expanded_fn not in ENGINE_FUNCTION_CATALOG:
                 dropped.append({"index": i, "reason": "typed_lowering_unknown_fn", "fn": expanded_fn, "from": original_fn})
                 continue
-            row = {"fn": expanded_fn, "params": expanded_params, "_index": i, "_rawFn": original_fn}
+            typed_lowerer = lowerer_contract(fn, expanded_fn) if expanded_fn != fn else None
+            if typed_lowerer is not None:
+                output_errors = validate_lowerer_output(fn, expanded_fn, expanded_params)
+                if output_errors:
+                    rejected.append({
+                        "index": i,
+                        "fn": original_fn,
+                        "loweredFn": expanded_fn,
+                        "reason": "typed_lowerer_output_contract",
+                        "errors": list(output_errors),
+                    })
+                    continue
+            row = {
+                "fn": expanded_fn,
+                "params": expanded_params,
+                "_index": raw.get("_index") if isinstance(raw.get("_index"), int) else i,
+                "_rawFn": original_fn,
+                "_authoredFn": original_fn,
+                "_authoredParams": authored_params,
+            }
             if call_id:
                 row["callId"] = call_id
             out.append(row)

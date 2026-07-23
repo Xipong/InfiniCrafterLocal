@@ -21,6 +21,7 @@ from infini_local.core.runtime_authoring.final_projection import (
 )
 from infini_local.core.runtime_authoring.function_contract_registry import (
     ENGINE_FUNCTION_CONTRACT_BY_NAME,
+    engine_function_form_impacts,
     engine_function_impact_names,
 )
 
@@ -110,6 +111,49 @@ def authored_functions_from_runtime_plan(
         authored = _normalize_function_name(call.get("_rawFn") or call.get("authoredFn"))
         if authored:
             out.add(authored)
+    return frozenset(out)
+
+
+def _iter_param_paths(params: Mapping[str, Any]) -> frozenset[str]:
+    """Return top-level and nested object paths present in one call."""
+
+    out: set[str] = set()
+    pending: list[tuple[str, Any]] = [
+        (str(key), value) for key, value in params.items() if not str(key).startswith("_")
+    ]
+    while pending:
+        path, value = pending.pop(0)
+        out.add(path)
+        if isinstance(value, Mapping):
+            pending[0:0] = [
+                (f"{path}.{child}", child_value)
+                for child, child_value in value.items()
+                if not str(child).startswith("_")
+            ]
+    return frozenset(out)
+
+
+def function_forms_from_runtime_plan(
+    runtime_plan: Mapping[str, Any] | None,
+) -> frozenset[tuple[str, str]]:
+    """Return normalized function identity and exact present parameter forms."""
+
+    if not isinstance(runtime_plan, Mapping):
+        return frozenset()
+    calls = runtime_plan.get("engineCalls")
+    if not isinstance(calls, list):
+        return frozenset()
+    out: set[tuple[str, str]] = set()
+    for call in calls:
+        if not isinstance(call, Mapping):
+            continue
+        fn = _normalize_function_name(call.get("fn"))
+        if not fn:
+            continue
+        out.add((fn, "$function"))
+        params = call.get("params")
+        if isinstance(params, Mapping):
+            out.update((fn, path) for path in _iter_param_paths(params))
     return frozenset(out)
 
 
@@ -203,7 +247,7 @@ def select_cases_by_changed_functions(
             uncovered: list[str] = []
             for fn in sorted(changed):
                 spec = ENGINE_FUNCTION_CONTRACT_BY_NAME[fn]
-                if spec.lowered_function_names and authored_inventory_available:
+                if spec.lowerers and authored_inventory_available:
                     # New corpora retain exact typed Author identity.  Falling back
                     # to every normalized shoot_projectile case here would hide a
                     # missing typed-family fixture behind unrelated executor cases.
@@ -233,6 +277,68 @@ def select_cases_by_changed_functions(
 
     selected.sort(key=lambda case: str(case.get("caseId") or ""))
     return selected
+
+
+def select_cases_by_changed_forms(
+    corpus: Mapping[str, Any],
+    changed_forms: Iterable[str] | None,
+) -> list[dict[str, Any]]:
+    """Select exact ``function:param.path`` impacts and fail closed on gaps.
+
+    Typed source forms are lowered through ``engine_function_form_impacts``.  Legacy
+    corpus rows therefore remain selectable without a hand-written source/target map.
+    Empty/None forms mean full replay, matching the changed-function selector.
+    """
+
+    cases_raw = corpus.get("cases")
+    cases: list[dict[str, Any]] = [
+        dict(case) for case in cases_raw if isinstance(case, Mapping)
+    ] if isinstance(cases_raw, list) else []
+    if changed_forms is None:
+        return sorted(cases, key=lambda case: str(case.get("caseId") or ""))
+
+    raw_forms = [str(form or "").strip() for form in changed_forms if str(form or "").strip()]
+    if not raw_forms:
+        return sorted(cases, key=lambda case: str(case.get("caseId") or ""))
+
+    case_forms = {
+        str(case.get("caseId") or ""): function_forms_from_runtime_plan(
+            case.get("runtimePlan") if isinstance(case.get("runtimePlan"), Mapping) else {}
+        )
+        for case in cases
+    }
+    selected_by_id: dict[str, dict[str, Any]] = {}
+    uncovered: list[str] = []
+    for raw_form in sorted(set(raw_forms)):
+        if ":" not in raw_form:
+            raise ValueError(
+                f"changed form must use 'function:param.path' syntax: {raw_form!r}"
+            )
+        raw_fn, raw_path = raw_form.split(":", 1)
+        fn = _normalize_function_name(raw_fn)
+        path = raw_path.strip()
+        if fn not in ENGINE_FUNCTION_CONTRACT_BY_NAME:
+            raise ValueError(f"unknown changed engine function in form: {fn!r}")
+        impacts = engine_function_form_impacts(fn, path)
+        if not impacts:
+            raise ValueError(f"unknown or unbound changed engine form: {fn}:{path}")
+        matches = [
+            case
+            for case in cases
+            if case_forms[str(case.get("caseId") or "")].intersection(impacts)
+        ]
+        if not matches:
+            uncovered.append(f"{fn}:{path}")
+            continue
+        for case in matches:
+            selected_by_id[str(case.get("caseId") or "")] = case
+
+    if uncovered:
+        raise ValueError(
+            "historical replay corpus has no coverage for changed engine forms: "
+            f"{uncovered}"
+        )
+    return sorted(selected_by_id.values(), key=lambda case: str(case.get("caseId") or ""))
 
 
 def stable_final_sections_fingerprint(compile_result: Mapping[str, Any]) -> str:
@@ -395,10 +501,12 @@ __all__ = [
     "executable_runtime_plan_from_dump",
     "authored_functions_from_runtime_plan",
     "functions_from_runtime_plan",
+    "function_forms_from_runtime_plan",
     "load_corpus",
     "make_case_id",
     "replay_case",
     "replay_cases",
     "select_cases_by_changed_functions",
+    "select_cases_by_changed_forms",
     "stable_final_sections_fingerprint",
 ]

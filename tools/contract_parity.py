@@ -15,6 +15,20 @@ LOCAL_GENERATOR = ROOT / "LocalGenerator"
 if str(LOCAL_GENERATOR) not in sys.path:
     sys.path.insert(0, str(LOCAL_GENERATOR))
 
+from infini_local.core.runtime_authoring.function_contract_registry import (  # noqa: E402
+    ENGINE_FUNCTION_CONTRACTS,
+    ROOT_EXECUTOR_SHARED_PARAM_NAMES,
+    accepted_engine_param_names,
+    compiled_fields_for_authored_path,
+    lowerer_output_param_names,
+    validate_lowerer_output,
+)
+from infini_local.core.runtime_authoring.function_contract_types import (  # noqa: E402
+    WireObligation,
+    validate_engine_function_contracts,
+)
+from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call  # noqa: E402
+
 from infini_local.core.boundary_models import (  # noqa: E402
     AttackSpecBoundary,
     BuffEntryBoundary,
@@ -513,6 +527,83 @@ def _compare_model_pair(
     }, pair_errors
 
 
+def _typed_runtime_contract() -> dict[str, Any]:
+    """Check executable lowerers and provenance without freezing implementation snapshots."""
+
+    errors = list(validate_engine_function_contracts(ENGINE_FUNCTION_CONTRACTS))
+    lowerer_rows: dict[str, Any] = {}
+    provenance_rows: dict[str, Any] = {}
+    root_rows: dict[str, Any] = {}
+
+    for spec in ENGINE_FUNCTION_CONTRACTS:
+        if spec.root_executor:
+            accepted = accepted_engine_param_names(spec.name)
+            missing = sorted(ROOT_EXECUTOR_SHARED_PARAM_NAMES - accepted)
+            root_rows[spec.name] = {"ok": not missing, "missingSharedParams": missing}
+            errors.extend(
+                f"{spec.name}: root executor misses shared param {name!r}"
+                for name in missing
+            )
+
+        missing_paths: list[str] = []
+        for param in spec.params:
+            if param.wire_obligation is not WireObligation.FINAL_WIRE:
+                continue
+            paths = (
+                tuple(f"{param.name}.{nested.path}" for nested in param.nested_wire_paths)
+                if param.nested_wire_paths
+                else (param.name,)
+            )
+            for path in paths:
+                if not compiled_fields_for_authored_path(spec.name, path):
+                    missing_paths.append(path)
+        provenance_rows[spec.name] = {"ok": not missing_paths, "missingCompiledPaths": missing_paths}
+        errors.extend(
+            f"{spec.name}.{path}: final-wire authored path has no compiled destination"
+            for path in missing_paths
+        )
+
+        if not spec.lowerers:
+            continue
+        examples = {param.name: param.example_value for param in spec.params}
+        actual = _lower_typed_engine_call(spec.name, examples)
+        expected_targets = {lowerer.target_function for lowerer in spec.lowerers}
+        actual_targets = {target for target, _ in actual}
+        edge_errors: list[str] = []
+        if actual_targets != expected_targets:
+            edge_errors.append(
+                f"target mismatch expected={sorted(expected_targets)} actual={sorted(actual_targets)}"
+            )
+        outputs: dict[str, Any] = {}
+        for target, params in actual:
+            output_errors = list(validate_lowerer_output(spec.name, target, params))
+            declared = sorted(lowerer_output_param_names(spec.name, target))
+            emitted = sorted(str(name) for name in params if not str(name).startswith("_"))
+            edge_errors.extend(output_errors)
+            outputs[target] = {
+                "ok": not output_errors,
+                "declaredParams": declared,
+                "emittedParams": emitted,
+                "errors": output_errors,
+            }
+        errors.extend(f"{spec.name}: {error}" for error in edge_errors)
+        lowerer_rows[spec.name] = {
+            "ok": not edge_errors,
+            "expectedTargets": sorted(expected_targets),
+            "actualTargets": sorted(actual_targets),
+            "outputs": outputs,
+            "errors": edge_errors,
+        }
+
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "rootExecutors": root_rows,
+        "provenance": provenance_rows,
+        "lowerers": lowerer_rows,
+    }
+
+
 def build_report() -> dict[str, Any]:
     source = _read(MODEL_CS)
     csharp_attack = _class_properties(source, "AttackSpec")
@@ -618,6 +709,8 @@ def build_report() -> dict[str, Any]:
 
     family_rows, family_errors = _family_separation(manifest)
     errors.extend(family_errors)
+    typed_runtime = _typed_runtime_contract()
+    errors.extend(typed_runtime["errors"])
     return {
         "schema": "infini.contract-parity.v2",
         "ok": not errors,
@@ -635,6 +728,7 @@ def build_report() -> dict[str, Any]:
         "nestedContracts": nested_report,
         "lifecycle": lifecycle_rows,
         "familySeparation": family_rows,
+        "typedRuntimeContract": typed_runtime,
     }
 
 

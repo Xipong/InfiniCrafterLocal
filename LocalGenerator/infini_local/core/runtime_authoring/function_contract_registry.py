@@ -1,13 +1,14 @@
 """Canonical immutable Author engine function contracts.
 
 This module owns provider grammar, prompt-visible function metadata, wire/provenance
-obligations, repair groups, and typed lowerer identity. Specialized compiler lowerers
-remain the gameplay semantics owners. Result-kind applicability is still enforced by
-``reports.py`` / runtime-family policy; the reserved ``allowed_result_kinds`` field is
-empty for the current production registry and must not be described as active policy.
+obligations, repair groups, normalized-only IR parameters, and typed lowerer edges.
+Specialized compiler lowerers remain the gameplay value-transform owners. Result-kind
+applicability remains solely in ``reports.py`` / runtime-family policy.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Any
 
@@ -18,7 +19,9 @@ from infini_local.core.runtime_authoring.engine_param_boundaries import (
     GeneratedBuffParamBoundary,
 )
 from infini_local.core.runtime_authoring.function_contract_types import (
-    CompiledFieldSourceOverride,
+    EngineLowererContract,
+    LoweredParamBinding,
+    NormalizedParamContract,
     EngineFunctionContract,
     EngineParamContract,
     NestedWirePathContract,
@@ -28,6 +31,7 @@ from infini_local.core.runtime_authoring.function_contract_types import (
     validate_engine_function_contracts,
 )
 from infini_local.core.runtime_executor_vocabulary import EFFECT_CODE, ONHIT_CODE
+from infini_local.core.sound_catalog import IMPACT_SOUND_IDS, USE_SOUND_IDS
 from infini_local.core.runtime_sentry_policy import SENTRY_CHILD_ONHIT
 from infini_local.core.vfx_composition_primitives import (
     VFX_CUE_CHANNEL_VALUES,
@@ -54,6 +58,159 @@ _ARMOR_SLOT_VALUES = ("head", "body", "legs")
 
 def _param(**kwargs: Any) -> EngineParamContract:
     return EngineParamContract(**kwargs)
+
+
+def _internal(name: str, *compiled_fields: str) -> NormalizedParamContract:
+    return NormalizedParamContract(name=name, compiled_fields=tuple(compiled_fields))
+
+
+def _bind(source_path: str, *target_param_paths: str) -> LoweredParamBinding:
+    return LoweredParamBinding(source_path=source_path, target_param_paths=tuple(target_param_paths))
+
+
+def _direct_bindings(*names: str) -> tuple[LoweredParamBinding, ...]:
+    return tuple(_bind(name, name) for name in names)
+
+
+def _lowerer(*bindings: LoweredParamBinding) -> EngineLowererContract:
+    return EngineLowererContract(target_function="shoot_projectile", bindings=tuple(bindings))
+
+
+# One canonical owner for parameters accepted by every root executor.  The direct
+# normalized executor owns compiled fields; typed source functions receive a derived
+# lowerer-owned view with optional prompt-only visibility/description overrides.
+_ROOT_EXECUTOR_SHARED_TARGET_PARAMS: tuple[EngineParamContract, ...] = (
+    _param(
+        name="effect",
+        prompt_description="|".join(_EXECUTOR_EFFECT_VALUES),
+        value_kind=ParamValueKind.ENUM,
+        example_value="none",
+        compiled_fields=("effect",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        enum_values=_EXECUTOR_EFFECT_VALUES,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="secondaryDamageMultiplier",
+        prompt_description="Shared secondary damage multiplier.",
+        value_kind=ParamValueKind.NUMBER,
+        example_value=1.0,
+        compiled_fields=("secondaryDamageMultiplier",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="secondaryLifetimeTicks",
+        prompt_description="Shared secondary lifetime in ticks.",
+        value_kind=ParamValueKind.INTEGER,
+        example_value=1,
+        compiled_fields=("secondaryLifetimeTicks",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="soundImpactCatalogId",
+        prompt_description="Exact impact sound catalog id.",
+        value_kind=ParamValueKind.ENUM,
+        example_value="impact_blade",
+        compiled_fields=("soundImpactCatalogId",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        enum_values=tuple(sorted(IMPACT_SOUND_IDS)),
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="soundPitch",
+        prompt_description="Authored sound pitch.",
+        value_kind=ParamValueKind.NUMBER,
+        example_value=1.0,
+        compiled_fields=("soundPitch",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="soundPitchVariance",
+        prompt_description="Authored sound pitch variance.",
+        value_kind=ParamValueKind.NUMBER,
+        example_value=1.0,
+        compiled_fields=("soundPitchVariance",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="soundUseCatalogId",
+        prompt_description="Exact use sound catalog id.",
+        value_kind=ParamValueKind.ENUM,
+        example_value="bow_release",
+        compiled_fields=("soundUseCatalogId",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        enum_values=tuple(sorted(USE_SOUND_IDS)),
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="soundVolume",
+        prompt_description="Authored sound volume.",
+        value_kind=ParamValueKind.NUMBER,
+        example_value=1.0,
+        compiled_fields=("soundVolume",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="useAnimationTicks",
+        prompt_description="Shared root item animation time in ticks.",
+        value_kind=ParamValueKind.INTEGER,
+        example_value=1,
+        compiled_fields=("useAnimationTicks",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+    _param(
+        name="useTimeTicks",
+        prompt_description="Shared root item use time in ticks.",
+        value_kind=ParamValueKind.INTEGER,
+        example_value=1,
+        compiled_fields=("useTimeTicks",),
+        wire_obligation=WireObligation.FINAL_WIRE,
+        function_card_visible=False,
+        prompt_group="root_executor",
+    ),
+)
+
+
+def _lowered_root_shared_params(
+    *,
+    visible: frozenset[str] = frozenset(),
+    prompt_overrides: Mapping[str, str] | None = None,
+) -> tuple[EngineParamContract, ...]:
+    overrides = prompt_overrides or {}
+    return tuple(
+        replace(
+            param,
+            prompt_description=overrides.get(param.name, param.prompt_description),
+            compiled_fields=(),
+            provenance_via_lowerer=True,
+            function_card_visible=param.name in visible,
+        )
+        for param in _ROOT_EXECUTOR_SHARED_TARGET_PARAMS
+    )
+
+
+_ROOT_SHARED_LOWERED_PARAMS = tuple(
+    param.name for param in _ROOT_EXECUTOR_SHARED_TARGET_PARAMS
+)
+_ROOT_PROJECTILE_DIRECT_PARAMS = (
+    "speed", "rangeTiles", "lifetimeTicks", "shotCount", "spreadRadians", "pierce",
+    "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact",
+)
 
 
 ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
@@ -87,7 +244,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -117,57 +273,63 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='projectileMotion', prompt_description='visual motion', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=('projectileMotion',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='projectileTrail', prompt_description='visual trail', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=('projectileTrail',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='projectileImpact', prompt_description='visual impact', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=('projectileImpact',), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='effect', prompt_description='|'.join(_EXECUTOR_EFFECT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=('effect',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=_EXECUTOR_EFFECT_VALUES, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='secondaryDamageMultiplier', prompt_description='Shared secondary damage multiplier.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('secondaryDamageMultiplier',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='secondaryLifetimeTicks', prompt_description='Shared secondary lifetime in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('secondaryLifetimeTicks',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundImpactCatalogId', prompt_description='Exact impact sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='impact_blade', compiled_fields=('soundImpactCatalogId',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('impact_blade', 'impact_bubble', 'impact_construct', 'impact_creature_meow', 'impact_crystal', 'impact_earth', 'impact_electric', 'impact_explosion', 'impact_fire', 'impact_frost', 'impact_harpoon', 'impact_heal', 'impact_heavy', 'impact_inferno', 'impact_insect', 'impact_laser', 'impact_magic', 'impact_meteor', 'impact_nail', 'impact_nature', 'impact_portal', 'impact_rocket', 'impact_shadow', 'impact_slime', 'impact_soft', 'impact_spectral', 'impact_star', 'impact_summon', 'impact_toxic', 'impact_void', 'impact_water', 'impact_wind_vortex'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitch', prompt_description='Authored sound pitch.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('soundPitch',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitchVariance', prompt_description='Authored sound pitch variance.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('soundPitchVariance',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundUseCatalogId', prompt_description='Exact use sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='bow_release', compiled_fields=('soundUseCatalogId',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('bow_release', 'bow_volley', 'creature_meow', 'dart_pistol', 'dart_rifle', 'firearm_burst', 'firearm_clockwork', 'firearm_light', 'flail_chain', 'flame_stream', 'insect_swarm', 'laser_heavy', 'laser_machine', 'laser_short', 'laser_space', 'laser_zap', 'launcher_grenade', 'launcher_rocket', 'magic_bolt', 'magic_bubble', 'magic_cosmic', 'magic_crystal_burst', 'magic_earth', 'magic_electric', 'magic_frost', 'magic_gem', 'magic_harp', 'magic_inferno', 'magic_meteor', 'magic_phase', 'magic_shadow', 'magic_spectral', 'magic_star', 'magic_stream', 'magic_toxic', 'magic_void', 'magic_water', 'magic_wind_vortex', 'melee_energy_slash', 'melee_heavy', 'melee_prismatic_shred', 'melee_swing', 'melee_thrust', 'nailgun', 'potion_use', 'returning_boomerang', 'shotgun_heavy', 'shotgun_tactical', 'sniper_heavy', 'summon_fiery', 'summon_general', 'summon_insect', 'summon_lightning', 'summon_mechanical', 'summon_portal', 'summon_sentry', 'summon_skittering', 'throw_light', 'whip_lash', 'yoyo_launch'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundVolume', prompt_description='Authored sound volume.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('soundVolume',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useAnimationTicks', prompt_description='Shared root item animation time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('useAnimationTicks',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useTimeTicks', prompt_description='Shared root item use time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('useTimeTicks',), wire_obligation=WireObligation.FINAL_WIRE, function_card_visible=False, prompt_group='root_executor'),
+        *_ROOT_EXECUTOR_SHARED_TARGET_PARAMS,
         ),
         root_executor=True,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(
             RepairGroupContract(members=('delivery', 'movement', 'runtimeFamily'), policy_owner='infini_local.core.runtime_authoring.schema.repair_param_allowed_combinations'),
         ),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='ammoFor', source_paths=('ammoFor',)), CompiledFieldSourceOverride(compiled_field='channelUse', source_paths=('channelUse',)), CompiledFieldSourceOverride(compiled_field='disableItemMeleeHitbox', source_paths=('disableItemMeleeHitbox',)), CompiledFieldSourceOverride(compiled_field='hideUseGraphic', source_paths=('hideUseGraphic',)), CompiledFieldSourceOverride(compiled_field='onHit', source_paths=('onHit',)), CompiledFieldSourceOverride(compiled_field='ownerHitCheck', source_paths=('ownerHitCheck',)), CompiledFieldSourceOverride(compiled_field='secondaryProjectileShape', source_paths=('secondaryProjectileShape',)), CompiledFieldSourceOverride(compiled_field='sentryAttackIntervalTicks', source_paths=('sentryAttackIntervalTicks', 'attackIntervalTicks')), CompiledFieldSourceOverride(compiled_field='sentryLifetimeTicks', source_paths=('sentryLifetimeTicks', 'helperLifetimeTicks')), CompiledFieldSourceOverride(compiled_field='sentryPlacement', source_paths=('sentryPlacement', 'placement')), CompiledFieldSourceOverride(compiled_field='sentryTargetRangeTiles', source_paths=('sentryTargetRangeTiles', 'targetRangeTiles')), CompiledFieldSourceOverride(compiled_field='useStyleCode', source_paths=('useStyleCode',)),),
+        normalized_only_params=(
+            _internal('ammoFor', 'ammoFor'),
+            _internal('channelUse', 'channelUse'),
+            _internal('onHit', 'onHit'),
+            _internal('secondaryProjectileShape', 'secondaryProjectileShape'),
+            _internal('sentryAttackIntervalTicks', 'sentryAttackIntervalTicks'),
+            _internal('sentryLifetimeTicks', 'sentryLifetimeTicks'),
+            _internal('sentryPlacement', 'sentryPlacement'),
+            _internal('sentryTargetRangeTiles', 'sentryTargetRangeTiles'),
+        ),
     ),
     EngineFunctionContract(
         name='perform_melee_attack',
         meaning='Body-owned melee/tool swing or explicit projectile-owned melee-family executor.',
         params=(
         _param(name='family', prompt_description='broadsword|sword|pickaxe|axe|hammer|shortsword|rapier|dagger|spear|lance|pike|trident|halberd|naginata|jousting_lance|boomerang|chakram|flail|mace|anchor|yoyo|whip', value_kind=ParamValueKind.ENUM, example_value='broadsword', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('broadsword', 'sword', 'pickaxe', 'axe', 'hammer', 'shortsword', 'rapier', 'dagger', 'spear', 'lance', 'pike', 'trident', 'halberd', 'naginata', 'jousting_lance', 'boomerang', 'chakram', 'flail', 'mace', 'anchor', 'yoyo', 'whip')),
-        _param(name='runtimeFamily', prompt_description='omit; derived', value_kind=ParamValueKind.ENUM, example_value='swing', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('swing', 'thrust', 'returning', 'flail', 'yoyo', 'whip', 'shoot', 'cast', 'beam', 'charge_release', 'overhead_barrage', 'throw', 'summon')),
         _param(name='speed', prompt_description='3..18', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='rangeTiles', prompt_description='2..80', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='lifetimeTicks', prompt_description='10..900', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='pierce', prompt_description='-1 infinite; 0/1 one total; 2..10 total', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='useTimeTicks', prompt_description='10..150', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, prompt_group='root_executor'),
         _param(name='shotCount', prompt_description='1..8 simultaneous emitted; not swing count', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='spreadRadians', prompt_description='0..0.75', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileShape', prompt_description='body', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileMotion', prompt_description='motion', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileTrail', prompt_description='trail', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileImpact', prompt_description='impact', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='effect', prompt_description='|'.join(_EXECUTOR_EFFECT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=_EXECUTOR_EFFECT_VALUES, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='secondaryDamageMultiplier', prompt_description='Shared secondary damage multiplier.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='secondaryLifetimeTicks', prompt_description='Shared secondary lifetime in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundImpactCatalogId', prompt_description='Exact impact sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='impact_blade', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('impact_blade', 'impact_bubble', 'impact_construct', 'impact_creature_meow', 'impact_crystal', 'impact_earth', 'impact_electric', 'impact_explosion', 'impact_fire', 'impact_frost', 'impact_harpoon', 'impact_heal', 'impact_heavy', 'impact_inferno', 'impact_insect', 'impact_laser', 'impact_magic', 'impact_meteor', 'impact_nail', 'impact_nature', 'impact_portal', 'impact_rocket', 'impact_shadow', 'impact_slime', 'impact_soft', 'impact_spectral', 'impact_star', 'impact_summon', 'impact_toxic', 'impact_void', 'impact_water', 'impact_wind_vortex'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitch', prompt_description='Authored sound pitch.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitchVariance', prompt_description='Authored sound pitch variance.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundUseCatalogId', prompt_description='Exact use sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='bow_release', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('bow_release', 'bow_volley', 'creature_meow', 'dart_pistol', 'dart_rifle', 'firearm_burst', 'firearm_clockwork', 'firearm_light', 'flail_chain', 'flame_stream', 'insect_swarm', 'laser_heavy', 'laser_machine', 'laser_short', 'laser_space', 'laser_zap', 'launcher_grenade', 'launcher_rocket', 'magic_bolt', 'magic_bubble', 'magic_cosmic', 'magic_crystal_burst', 'magic_earth', 'magic_electric', 'magic_frost', 'magic_gem', 'magic_harp', 'magic_inferno', 'magic_meteor', 'magic_phase', 'magic_shadow', 'magic_spectral', 'magic_star', 'magic_stream', 'magic_toxic', 'magic_void', 'magic_water', 'magic_wind_vortex', 'melee_energy_slash', 'melee_heavy', 'melee_prismatic_shred', 'melee_swing', 'melee_thrust', 'nailgun', 'potion_use', 'returning_boomerang', 'shotgun_heavy', 'shotgun_tactical', 'sniper_heavy', 'summon_fiery', 'summon_general', 'summon_insect', 'summon_lightning', 'summon_mechanical', 'summon_portal', 'summon_sentry', 'summon_skittering', 'throw_light', 'whip_lash', 'yoyo_launch'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundVolume', prompt_description='Authored sound volume.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useAnimationTicks', prompt_description='Shared root item animation time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
+        *_lowered_root_shared_params(
+            visible=frozenset({"useTimeTicks"}),
+            prompt_overrides={"useTimeTicks": "10..150"},
+        ),
         ),
         root_executor=True,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        lowered_function_names=('shoot_projectile',),
+        lowerers=(
+            _lowerer(
+                _bind(
+                    "family",
+                    "runtimeFamily",
+                    "delivery",
+                    "movement",
+                    "weaponFamily",
+                    "projectileMotion",
+                ),
+                *_direct_bindings(
+                    *_ROOT_PROJECTILE_DIRECT_PARAMS,
+                    *_ROOT_SHARED_LOWERED_PARAMS,
+                ),
+            ),
+        ),
     ),
     EngineFunctionContract(
         name='fire_ranged_weapon',
@@ -183,8 +345,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='spreadRadians', prompt_description='0..0.75', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='pierce', prompt_description='-1 infinite; 0/1 one total; 2..10 total', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='delayTicks', prompt_description='0..300; barrage 0=immediate', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='secondaryDamageMultiplier', prompt_description='0.01..1 barrage damage', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, prompt_group='root_executor'),
-        _param(name='secondaryLifetimeTicks', prompt_description='5..180 barrage life', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, prompt_group='root_executor'),
         _param(name='projectileFamily', prompt_description='visual form; launcher+empty=custom rocket', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='chargeTicks', prompt_description='1..300 charge_release hold', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='chargePowerMultiplier', prompt_description='1..3 max power', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
@@ -192,20 +352,39 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='projectileMotion', prompt_description='motion', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileTrail', prompt_description='trail', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileImpact', prompt_description='impact', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='effect', prompt_description='|'.join(_EXECUTOR_EFFECT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=_EXECUTOR_EFFECT_VALUES, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundImpactCatalogId', prompt_description='Exact impact sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='impact_blade', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('impact_blade', 'impact_bubble', 'impact_construct', 'impact_creature_meow', 'impact_crystal', 'impact_earth', 'impact_electric', 'impact_explosion', 'impact_fire', 'impact_frost', 'impact_harpoon', 'impact_heal', 'impact_heavy', 'impact_inferno', 'impact_insect', 'impact_laser', 'impact_magic', 'impact_meteor', 'impact_nail', 'impact_nature', 'impact_portal', 'impact_rocket', 'impact_shadow', 'impact_slime', 'impact_soft', 'impact_spectral', 'impact_star', 'impact_summon', 'impact_toxic', 'impact_void', 'impact_water', 'impact_wind_vortex'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitch', prompt_description='Authored sound pitch.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitchVariance', prompt_description='Authored sound pitch variance.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundUseCatalogId', prompt_description='Exact use sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='bow_release', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('bow_release', 'bow_volley', 'creature_meow', 'dart_pistol', 'dart_rifle', 'firearm_burst', 'firearm_clockwork', 'firearm_light', 'flail_chain', 'flame_stream', 'insect_swarm', 'laser_heavy', 'laser_machine', 'laser_short', 'laser_space', 'laser_zap', 'launcher_grenade', 'launcher_rocket', 'magic_bolt', 'magic_bubble', 'magic_cosmic', 'magic_crystal_burst', 'magic_earth', 'magic_electric', 'magic_frost', 'magic_gem', 'magic_harp', 'magic_inferno', 'magic_meteor', 'magic_phase', 'magic_shadow', 'magic_spectral', 'magic_star', 'magic_stream', 'magic_toxic', 'magic_void', 'magic_water', 'magic_wind_vortex', 'melee_energy_slash', 'melee_heavy', 'melee_prismatic_shred', 'melee_swing', 'melee_thrust', 'nailgun', 'potion_use', 'returning_boomerang', 'shotgun_heavy', 'shotgun_tactical', 'sniper_heavy', 'summon_fiery', 'summon_general', 'summon_insect', 'summon_lightning', 'summon_mechanical', 'summon_portal', 'summon_sentry', 'summon_skittering', 'throw_light', 'whip_lash', 'yoyo_launch'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundVolume', prompt_description='Authored sound volume.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useAnimationTicks', prompt_description='Shared root item animation time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useTimeTicks', prompt_description='Shared root item use time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
+        *_lowered_root_shared_params(
+            visible=frozenset({"secondaryDamageMultiplier", "secondaryLifetimeTicks"}),
+            prompt_overrides={
+                "secondaryDamageMultiplier": "0.01..1 barrage damage",
+                "secondaryLifetimeTicks": "5..180 barrage life",
+            },
+        ),
         ),
         root_executor=True,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        lowered_function_names=('shoot_projectile',),
+        lowerers=(
+            _lowerer(
+                _bind("$function", "delivery"),
+                _bind(
+                    "family",
+                    "runtimeFamily",
+                    "movement",
+                    "weaponFamily",
+                    "projectileFamily",
+                ),
+                _bind("projectileFamily", "projectileFamily"),
+                *_direct_bindings(
+                    "movement",
+                    "ammoFor",
+                    "chargeTicks",
+                    "chargePowerMultiplier",
+                    "delayTicks",
+                    *_ROOT_PROJECTILE_DIRECT_PARAMS,
+                    *_ROOT_SHARED_LOWERED_PARAMS,
+                ),
+            ),
+        ),
     ),
     EngineFunctionContract(
         name='cast_magic_weapon',
@@ -226,31 +405,51 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='beamChargeTicks', prompt_description='0..300; 0=full immediately', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='chargeTicks', prompt_description='1..300 charge_release', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='delayTicks', prompt_description='0..300; barrage 0=immediate', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='secondaryDamageMultiplier', prompt_description='0.01..1 barrage damage', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, prompt_group='root_executor'),
-        _param(name='secondaryLifetimeTicks', prompt_description='5..180 barrage life', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, prompt_group='root_executor'),
         _param(name='immunityCooldown', prompt_description='4..60', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileShape', prompt_description='body', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileMotion', prompt_description='motion', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileTrail', prompt_description='trail', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileImpact', prompt_description='impact', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='effect', prompt_description='|'.join(_EXECUTOR_EFFECT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=_EXECUTOR_EFFECT_VALUES, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundImpactCatalogId', prompt_description='Exact impact sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='impact_blade', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('impact_blade', 'impact_bubble', 'impact_construct', 'impact_creature_meow', 'impact_crystal', 'impact_earth', 'impact_electric', 'impact_explosion', 'impact_fire', 'impact_frost', 'impact_harpoon', 'impact_heal', 'impact_heavy', 'impact_inferno', 'impact_insect', 'impact_laser', 'impact_magic', 'impact_meteor', 'impact_nail', 'impact_nature', 'impact_portal', 'impact_rocket', 'impact_shadow', 'impact_slime', 'impact_soft', 'impact_spectral', 'impact_star', 'impact_summon', 'impact_toxic', 'impact_void', 'impact_water', 'impact_wind_vortex'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitch', prompt_description='Authored sound pitch.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitchVariance', prompt_description='Authored sound pitch variance.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundUseCatalogId', prompt_description='Exact use sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='bow_release', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('bow_release', 'bow_volley', 'creature_meow', 'dart_pistol', 'dart_rifle', 'firearm_burst', 'firearm_clockwork', 'firearm_light', 'flail_chain', 'flame_stream', 'insect_swarm', 'laser_heavy', 'laser_machine', 'laser_short', 'laser_space', 'laser_zap', 'launcher_grenade', 'launcher_rocket', 'magic_bolt', 'magic_bubble', 'magic_cosmic', 'magic_crystal_burst', 'magic_earth', 'magic_electric', 'magic_frost', 'magic_gem', 'magic_harp', 'magic_inferno', 'magic_meteor', 'magic_phase', 'magic_shadow', 'magic_spectral', 'magic_star', 'magic_stream', 'magic_toxic', 'magic_void', 'magic_water', 'magic_wind_vortex', 'melee_energy_slash', 'melee_heavy', 'melee_prismatic_shred', 'melee_swing', 'melee_thrust', 'nailgun', 'potion_use', 'returning_boomerang', 'shotgun_heavy', 'shotgun_tactical', 'sniper_heavy', 'summon_fiery', 'summon_general', 'summon_insect', 'summon_lightning', 'summon_mechanical', 'summon_portal', 'summon_sentry', 'summon_skittering', 'throw_light', 'whip_lash', 'yoyo_launch'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundVolume', prompt_description='Authored sound volume.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useAnimationTicks', prompt_description='Shared root item animation time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useTimeTicks', prompt_description='Shared root item use time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
+        *_lowered_root_shared_params(
+            visible=frozenset({"secondaryDamageMultiplier", "secondaryLifetimeTicks"}),
+            prompt_overrides={
+                "secondaryDamageMultiplier": "0.01..1 barrage damage",
+                "secondaryLifetimeTicks": "5..180 barrage life",
+            },
+        ),
         ),
         root_executor=True,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        lowered_function_names=('shoot_projectile',),
+        lowerers=(
+            _lowerer(
+                _bind("$function", "delivery", "weaponFamily"),
+                _bind(
+                    "family",
+                    "runtimeFamily",
+                    "movement",
+                    "projectileFamily",
+                    "channelUse",
+                ),
+                _bind("projectileFamily", "projectileFamily"),
+                *_direct_bindings(
+                    "movement",
+                    "homingStrength",
+                    "beamWidthPx",
+                    "beamChargeTicks",
+                    "chargeTicks",
+                    "chargePowerMultiplier",
+                    "delayTicks",
+                    "immunityCooldown",
+                    *_ROOT_PROJECTILE_DIRECT_PARAMS,
+                    *_ROOT_SHARED_LOWERED_PARAMS,
+                ),
+            ),
+        ),
     ),
     EngineFunctionContract(
         name='deploy_sentry',
-        meaning='Bounded Terraria sentry at cursor; stationary, targets NPCs, fires generated shots; not a minion.',
+        meaning='Stationary sentry firing at NPCs; not a minion.',
         params=(
         _param(name='placement', prompt_description='grounded|floating', value_kind=ParamValueKind.ENUM, example_value='grounded', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('grounded', 'floating')),
         _param(name='attackIntervalTicks', prompt_description='12..180 ticks/volley', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
@@ -261,25 +460,54 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='spreadRadians', prompt_description='0..0.75', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='pierce', prompt_description='-1 infinite; 0/1 one total; 2..10 total', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='movement', prompt_description='shot movement', value_kind=ParamValueKind.ENUM, example_value='accelerate', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('accelerate', 'blackhole_pull', 'boomerang', 'bounce', 'drift', 'expanding_wave', 'flail_tether', 'gravity_arc', 'orbit', 'phase', 'proximity_missile', 'returning_glaive', 'sine_homing', 'slow_homing', 'spiral', 'straight', 'vortex_orb', 'whip_lash', 'yoyo_hover')),
-        _param(name='effect', prompt_description='|'.join(_EXECUTOR_EFFECT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=_EXECUTOR_EFFECT_VALUES, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='onHit', prompt_description='|'.join(_SENTRY_ONHIT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=_SENTRY_ONHIT_VALUES),
+        _param(name='onHit', prompt_description='non-child effect only: ' + '|'.join(_SENTRY_ONHIT_VALUES), value_kind=ParamValueKind.ENUM, example_value='none', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=_SENTRY_ONHIT_VALUES),
         _param(name='projectileShape', prompt_description='sentry body', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='secondaryProjectileShape', prompt_description='shot body', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
-        _param(name='secondaryLifetimeTicks', prompt_description='5..180 shot lifetime', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, prompt_group='root_executor'),
-        _param(name='secondaryDamageMultiplier', prompt_description='Shared secondary damage multiplier.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundImpactCatalogId', prompt_description='Exact impact sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='impact_blade', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('impact_blade', 'impact_bubble', 'impact_construct', 'impact_creature_meow', 'impact_crystal', 'impact_earth', 'impact_electric', 'impact_explosion', 'impact_fire', 'impact_frost', 'impact_harpoon', 'impact_heal', 'impact_heavy', 'impact_inferno', 'impact_insect', 'impact_laser', 'impact_magic', 'impact_meteor', 'impact_nail', 'impact_nature', 'impact_portal', 'impact_rocket', 'impact_shadow', 'impact_slime', 'impact_soft', 'impact_spectral', 'impact_star', 'impact_summon', 'impact_toxic', 'impact_void', 'impact_water', 'impact_wind_vortex'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitch', prompt_description='Authored sound pitch.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundPitchVariance', prompt_description='Authored sound pitch variance.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundUseCatalogId', prompt_description='Exact use sound catalog id.', value_kind=ParamValueKind.ENUM, example_value='bow_release', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, enum_values=('bow_release', 'bow_volley', 'creature_meow', 'dart_pistol', 'dart_rifle', 'firearm_burst', 'firearm_clockwork', 'firearm_light', 'flail_chain', 'flame_stream', 'insect_swarm', 'laser_heavy', 'laser_machine', 'laser_short', 'laser_space', 'laser_zap', 'launcher_grenade', 'launcher_rocket', 'magic_bolt', 'magic_bubble', 'magic_cosmic', 'magic_crystal_burst', 'magic_earth', 'magic_electric', 'magic_frost', 'magic_gem', 'magic_harp', 'magic_inferno', 'magic_meteor', 'magic_phase', 'magic_shadow', 'magic_spectral', 'magic_star', 'magic_stream', 'magic_toxic', 'magic_void', 'magic_water', 'magic_wind_vortex', 'melee_energy_slash', 'melee_heavy', 'melee_prismatic_shred', 'melee_swing', 'melee_thrust', 'nailgun', 'potion_use', 'returning_boomerang', 'shotgun_heavy', 'shotgun_tactical', 'sniper_heavy', 'summon_fiery', 'summon_general', 'summon_insect', 'summon_lightning', 'summon_mechanical', 'summon_portal', 'summon_sentry', 'summon_skittering', 'throw_light', 'whip_lash', 'yoyo_launch'), function_card_visible=False, prompt_group='root_executor'),
-        _param(name='soundVolume', prompt_description='Authored sound volume.', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useAnimationTicks', prompt_description='Shared root item animation time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
-        _param(name='useTimeTicks', prompt_description='Shared root item use time in ticks.', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True, function_card_visible=False, prompt_group='root_executor'),
+        *_lowered_root_shared_params(
+            visible=frozenset({"secondaryLifetimeTicks"}),
+            prompt_overrides={
+                "secondaryLifetimeTicks": "5..180 shot lifetime; not sentry lifetime",
+            },
+        ),
         ),
         root_executor=True,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        lowered_function_names=('shoot_projectile',),
+        lowerers=(
+            _lowerer(
+                _bind(
+                    "$function",
+                    "runtimeFamily",
+                    "delivery",
+                    "weaponFamily",
+                    "projectileFamily",
+                ),
+                _bind("placement", "sentryPlacement"),
+                _bind("attackIntervalTicks", "sentryAttackIntervalTicks"),
+                _bind("targetRangeTiles", "sentryTargetRangeTiles", "rangeTiles"),
+                _bind("helperLifetimeTicks", "sentryLifetimeTicks", "lifetimeTicks"),
+                *_direct_bindings(
+                    "shotCount",
+                    "speed",
+                    "spreadRadians",
+                    "pierce",
+                    "movement",
+                    "effect",
+                    "onHit",
+                    "projectileShape",
+                    "secondaryProjectileShape",
+                    "secondaryDamageMultiplier",
+                    "secondaryLifetimeTicks",
+                    "soundUseCatalogId",
+                    "soundImpactCatalogId",
+                    "soundVolume",
+                    "soundPitch",
+                    "soundPitchVariance",
+                    "useAnimationTicks",
+                    "useTimeTicks",
+                ),
+            ),
+        ),
     ),
     EngineFunctionContract(
         name='spawn_temporary_helper_projectile',
@@ -294,12 +522,28 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='spreadRadians', prompt_description='0..0.75 total helper spread', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='pierce', prompt_description='0/1 one hit; 2..10 total hits', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
         _param(name='projectileShape', prompt_description='temporary helper body', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=(), wire_obligation=WireObligation.FINAL_WIRE, provenance_via_lowerer=True),
+        *_lowered_root_shared_params(),
         ),
-        root_executor=False,
+        root_executor=True,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        lowered_function_names=('shoot_projectile',),
+        lowerers=(
+            _lowerer(
+                _bind("$function", "runtimeFamily", "delivery"),
+                _bind("family", "movement", "weaponFamily", "projectileFamily"),
+                *_direct_bindings(
+                    "movement",
+                    "speed",
+                    "rangeTiles",
+                    "lifetimeTicks",
+                    "shotCount",
+                    "spreadRadians",
+                    "pierce",
+                    "projectileShape",
+                    *_ROOT_SHARED_LOWERED_PARAMS,
+                ),
+            ),
+        ),
     ),
     EngineFunctionContract(
         name='spawn_secondary_projectiles',
@@ -316,9 +560,7 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='maxChildProjectiles', source_paths=('maxChildProjectiles', 'count')), CompiledFieldSourceOverride(compiled_field='primaryColorName', source_paths=('primaryColorName',)), CompiledFieldSourceOverride(compiled_field='secondaryDamageMultiplier', source_paths=('secondaryDamageMultiplier', 'damageMultiplier')), CompiledFieldSourceOverride(compiled_field='secondaryLifetimeTicks', source_paths=('secondaryLifetimeTicks', 'lifetimeTicks')), CompiledFieldSourceOverride(compiled_field='secondaryMaterial', source_paths=('secondaryMaterial', 'material')), CompiledFieldSourceOverride(compiled_field='secondaryProjectileShape', source_paths=('secondaryProjectileShape', 'projectileShape')), CompiledFieldSourceOverride(compiled_field='secondarySpreadRadians', source_paths=('secondarySpreadRadians', 'spreadRadians')), CompiledFieldSourceOverride(compiled_field='splitCount', source_paths=('splitCount', 'count')),),
     ),
     EngineFunctionContract(
         name='apply_on_hit_effect',
@@ -337,9 +579,7 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='immunityCooldown', source_paths=('immunityCooldown',)),),
     ),
     EngineFunctionContract(
         name='spawn_contact_particles',
@@ -353,7 +593,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=True,
-        allowed_result_kinds=(),
         repair_groups=(
             RepairGroupContract(members=('effect', 'material'), policy_owner='infini_local.core.runtime_authoring.schema.repair_param_allowed_combinations'),
         ),
@@ -366,13 +605,11 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='fieldLifetimeTicks', prompt_description='0..240', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('vfxFieldLifetimeTicks',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='fieldRadiusTiles', prompt_description='0..6', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('fieldRadius', 'vfxFieldRadiusTiles'), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='tickRate', prompt_description='1..60', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('vfxFieldTickRate',), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='visualOnly', prompt_description='true only', value_kind=ParamValueKind.BOOLEAN, example_value=False, compiled_fields=(), wire_obligation=WireObligation.CONTROL_DERIVED, provenance_via_lowerer=True),
+        _param(name='visualOnly', prompt_description='true only', value_kind=ParamValueKind.BOOLEAN, example_value=False, compiled_fields=(), wire_obligation=WireObligation.CONTROL_DERIVED),
         ),
         root_executor=False,
         requires_root_executor=True,
-        allowed_result_kinds=(),
         repair_groups=(),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='fieldRadius', source_paths=('fieldRadiusTiles', 'fieldRadius')), CompiledFieldSourceOverride(compiled_field='vfxFieldRadiusTiles', source_paths=('fieldRadiusTiles', 'fieldRadius')),),
     ),
     EngineFunctionContract(
         name='visual_effect_cue',
@@ -399,7 +636,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(
             RepairGroupContract(members=('channel', 'event', 'rendererKind'), policy_owner='infini_local.core.runtime_authoring.schema.repair_param_allowed_combinations'),
         ),
@@ -418,7 +654,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -432,7 +667,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -445,7 +679,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -458,9 +691,7 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='primaryColorName', source_paths=('lightColorName', 'color')), CompiledFieldSourceOverride(compiled_field='runtimeLightColorName', source_paths=('lightColorName', 'color')),),
     ),
     EngineFunctionContract(
         name='mobility_effect',
@@ -473,7 +704,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -486,7 +716,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -502,9 +731,7 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='slot', source_paths=('armorSlot', 'slot')),),
     ),
     EngineFunctionContract(
         name='set_alt_use_mode',
@@ -520,11 +747,9 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(
             RepairGroupContract(members=('mobilityMode', 'mode'), policy_owner='infini_local.core.runtime_authoring.schema.repair_param_allowed_combinations'),
         ),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='altMobilityMode', source_paths=('mobilityMode', 'mode')),),
     ),
     EngineFunctionContract(
         name='hold_item_effect',
@@ -536,9 +761,7 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
-        compiled_source_overrides=(CompiledFieldSourceOverride(compiled_field='holdLightColorName', source_paths=('lightColorName', 'color')),),
     ),
     EngineFunctionContract(
         name='use_affordance',
@@ -558,7 +781,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -569,7 +791,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -580,7 +801,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
     EngineFunctionContract(
@@ -593,7 +813,6 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     ),
 )
@@ -605,16 +824,33 @@ if _CONTRACT_ERRORS:
 ENGINE_FUNCTION_CONTRACT_BY_NAME = MappingProxyType({spec.name: spec for spec in ENGINE_FUNCTION_CONTRACTS})
 
 
+def _normalize_function_name(fn: object) -> str:
+    return str(fn or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def lowerer_contract(
+    source_fn: str,
+    target_fn: str | None = None,
+) -> EngineLowererContract | None:
+    """Return the canonical typed lowering edge, if one exists."""
+
+    source = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(_normalize_function_name(source_fn))
+    if source is None:
+        return None
+    wanted = _normalize_function_name(target_fn) if target_fn is not None else ""
+    matches = tuple(
+        lowerer for lowerer in source.lowerers
+        if not wanted or lowerer.target_function == wanted
+    )
+    if len(matches) > 1 and not wanted:
+        raise RuntimeError(f"ambiguous lowerer for {source.name!r}; specify target_fn")
+    return matches[0] if matches else None
+
+
 def engine_function_impact_names(fn: str) -> frozenset[str]:
-    """Return the function names whose executable replay covers ``fn``.
+    """Return authored function plus every canonical lowerer target transitively."""
 
-    Typed Author functions may lower to a smaller runtime executor.  Historical
-    corpora built from normalized runtime plans therefore need the canonical
-    lowerer target as well as the authored function name.  Unknown functions
-    deliberately return an empty set so callers can fail closed.
-    """
-
-    normalized = str(fn or "").strip().lower().replace("-", "_").replace(" ", "_")
+    normalized = _normalize_function_name(fn)
     if normalized not in ENGINE_FUNCTION_CONTRACT_BY_NAME:
         return frozenset()
     impacted: set[str] = set()
@@ -624,10 +860,236 @@ def engine_function_impact_names(fn: str) -> frozenset[str]:
         if current in impacted:
             continue
         impacted.add(current)
-        spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(current)
-        if spec is not None:
-            pending.extend(spec.lowered_function_names)
+        spec = ENGINE_FUNCTION_CONTRACT_BY_NAME[current]
+        pending.extend(lowerer.target_function for lowerer in spec.lowerers)
     return frozenset(impacted)
+
+
+def engine_function_form_impacts(fn: str, param_path: str) -> frozenset[tuple[str, str]]:
+    """Map one Author function/param form to normalized replay forms.
+
+    The mapping is projected from the same typed lowerer edge used by normalization.
+    It lets affected replay select a narrow case set without maintaining a second
+    function-family or alias table. ``$function`` means the function identity itself.
+    """
+
+    normalized = _normalize_function_name(fn)
+    path = str(param_path or "").strip()
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(normalized)
+    if spec is None or not path:
+        return frozenset()
+    if path == "$function":
+        return frozenset((name, "$function") for name in engine_function_impact_names(normalized))
+    if spec.lowerers:
+        impacts = {
+            (lowerer.target_function, target_path)
+            for lowerer in spec.lowerers
+            for binding in lowerer.bindings
+            if binding.source_path == path
+            for target_path in binding.target_param_paths
+        }
+        return frozenset(impacts)
+
+    declared = {param.name for param in spec.params}
+    declared.update(
+        f"{param.name}.{nested.path}"
+        for param in spec.params
+        for nested in param.nested_wire_paths
+    )
+    return frozenset({(normalized, path)}) if path in declared else frozenset()
+
+
+def lowerer_passthrough_param_names(source_fn: str, target_fn: str) -> tuple[str, ...]:
+    """Top-level source params copied unchanged to the same target param."""
+
+    lowerer = lowerer_contract(source_fn, target_fn)
+    if lowerer is None:
+        return ()
+    return tuple(
+        binding.source_path
+        for binding in lowerer.bindings
+        if binding.source_path != "$function"
+        and binding.target_param_paths == (binding.source_path,)
+        and "." not in binding.source_path
+    )
+
+
+def lowerer_output_param_names(source_fn: str, target_fn: str) -> frozenset[str]:
+    """Closed top-level output grammar emitted by one typed lowerer."""
+
+    lowerer = lowerer_contract(source_fn, target_fn)
+    if lowerer is None:
+        return frozenset()
+    return frozenset(
+        str(path).split(".", 1)[0]
+        for binding in lowerer.bindings
+        for path in binding.target_param_paths
+    )
+
+
+def _path_present(data: dict[str, Any], path: str) -> bool:
+    current: Any = data
+    for segment in str(path or "").split("."):
+        if not segment or not isinstance(current, dict) or segment not in current:
+            return False
+        current = current[segment]
+    return current not in (None, "", [], {})
+
+
+def lowerer_target_source_map(
+    source_fn: str,
+    target_fn: str,
+    authored_params: dict[str, Any],
+    target_params: dict[str, Any],
+) -> dict[str, str]:
+    """Resolve the actual source owner for each emitted normalized target path.
+
+    Direct same-name parameters win over broader family transforms.  Remaining
+    authored bindings win in declaration order; ``$function`` is the final owner for
+    invariant fields introduced by selecting the typed function itself.
+    """
+
+    lowerer = lowerer_contract(source_fn, target_fn)
+    if lowerer is None:
+        return {}
+    candidates: dict[str, list[str]] = {}
+    for binding in lowerer.bindings:
+        source = binding.source_path
+        if source != "$function" and not _path_present(authored_params, source):
+            continue
+        for target_path in binding.target_param_paths:
+            if not _path_present(target_params, target_path):
+                continue
+            candidates.setdefault(target_path, []).append(source)
+
+    owners: dict[str, str] = {}
+    for target_path, sources in candidates.items():
+        direct = next((source for source in sources if source == target_path), None)
+        non_function = next((source for source in sources if source != "$function"), None)
+        owner = direct or non_function or ("$function" if "$function" in sources else "")
+        if owner:
+            owners[target_path] = owner
+    return owners
+
+
+def validate_lowerer_output(
+    source_fn: str,
+    target_fn: str,
+    params: dict[str, Any],
+) -> tuple[str, ...]:
+    """Fail closed when executable lowerer code emits outside its typed grammar."""
+
+    allowed = lowerer_output_param_names(source_fn, target_fn)
+    if not allowed:
+        return (f"no typed lowerer contract for {source_fn!r}->{target_fn!r}",)
+    return tuple(
+        f"undeclared lowerer output param {name!r} for {source_fn!r}->{target_fn!r}"
+        for name in sorted(str(key) for key in params if not str(key).startswith("_") and str(key) not in allowed)
+    )
+
+
+def _compiled_fields_for_normalized_path(fn: str, param_path: str) -> tuple[str, ...]:
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(_normalize_function_name(fn))
+    path = str(param_path or "").strip()
+    if spec is None or not path:
+        return ()
+    top, dot, child = path.partition(".")
+    for param in spec.params:
+        if param.name != top:
+            continue
+        if not dot:
+            return tuple(param.compiled_fields)
+        return tuple(
+            field
+            for nested in param.nested_wire_paths
+            if nested.path == child
+            for field in nested.compiled_fields
+        )
+    if not dot:
+        for param in spec.normalized_only_params:
+            if param.name == top:
+                return tuple(param.compiled_fields)
+    return ()
+
+
+def compiled_fields_for_authored_path(fn: str, param_path: str) -> frozenset[str]:
+    """Resolve one public authored path through the canonical typed lowerer graph."""
+
+    normalized = _normalize_function_name(fn)
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(normalized)
+    path = str(param_path or "").strip()
+    if spec is None or not path:
+        return frozenset()
+    if not spec.lowerers:
+        return frozenset(_compiled_fields_for_normalized_path(normalized, path))
+
+    resolved: set[str] = set()
+    for lowerer in spec.lowerers:
+        for binding in lowerer.bindings:
+            if binding.source_path != path:
+                continue
+            for target_path in binding.target_param_paths:
+                resolved.update(_compiled_fields_for_normalized_path(lowerer.target_function, target_path))
+    return frozenset(resolved)
+
+
+def compiled_fields_for_function_identity(fn: str) -> frozenset[str]:
+    """Fields selected by choosing a typed function, independent of its params."""
+
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(_normalize_function_name(fn))
+    if spec is None:
+        return frozenset()
+    resolved: set[str] = set()
+    for lowerer in spec.lowerers:
+        for binding in lowerer.bindings:
+            if binding.source_path != "$function":
+                continue
+            for target_path in binding.target_param_paths:
+                resolved.update(_compiled_fields_for_normalized_path(lowerer.target_function, target_path))
+    return frozenset(resolved)
+
+
+def compiled_fields_for_lowered_compatibility_path(
+    target_fn: str,
+    legacy_source_path: str,
+    target_params: dict[str, Any],
+) -> frozenset[str]:
+    """Resolve provenance for legacy dumps that stored post-lowering aliases.
+
+    Older committed replay rows predate ``_authoredFn``/``_authoredParams`` and may
+    therefore contain a normalized target function together with both the canonical
+    target fields and source aliases left by the old lowerer (for example
+    ``shoot_projectile.attackIntervalTicks`` beside
+    ``sentryAttackIntervalTicks``).  The compatibility mapping is *derived from the
+    incoming typed lowerer graph*; it is not an Author/provider surface and does not
+    create a second list of aliases.
+    """
+
+    normalized_target = _normalize_function_name(target_fn)
+    source_path = str(legacy_source_path or "").strip()
+    if not normalized_target or not source_path or source_path == "$function":
+        return frozenset()
+
+    # A real target-owned parameter always wins.  This helper is only a fallback for
+    # legacy source aliases that are not part of the target contract.
+    if _compiled_fields_for_normalized_path(normalized_target, source_path):
+        return frozenset()
+
+    resolved: set[str] = set()
+    for source_spec in ENGINE_FUNCTION_CONTRACTS:
+        for lowerer in source_spec.lowerers:
+            if _normalize_function_name(lowerer.target_function) != normalized_target:
+                continue
+            for binding in lowerer.bindings:
+                if binding.source_path != source_path:
+                    continue
+                for target_path in binding.target_param_paths:
+                    if not _path_present(target_params, target_path):
+                        continue
+                    resolved.update(
+                        _compiled_fields_for_normalized_path(normalized_target, target_path)
+                    )
+    return frozenset(resolved)
 
 
 def _model_contract_name(model: type[Any] | None) -> str | None:
@@ -645,22 +1107,14 @@ def _json_contract_value(value: Any) -> Any:
 
 
 def engine_function_contract_surface() -> dict[str, dict[str, Any]]:
-    """Project the complete immutable registry metadata for frozen drift gates."""
+    """Project the public Author contract plus the narrow typed lowering boundary."""
 
     out: dict[str, dict[str, Any]] = {}
     for spec in ENGINE_FUNCTION_CONTRACTS:
         params: dict[str, dict[str, Any]] = {}
         for param in spec.params:
-            value_kind = (
-                param.value_kind.value
-                if isinstance(param.value_kind, ParamValueKind)
-                else str(param.value_kind)
-            )
-            obligation = (
-                param.wire_obligation.value
-                if isinstance(param.wire_obligation, WireObligation)
-                else str(param.wire_obligation)
-            )
+            value_kind = param.value_kind.value if isinstance(param.value_kind, ParamValueKind) else str(param.value_kind)
+            obligation = param.wire_obligation.value if isinstance(param.wire_obligation, WireObligation) else str(param.wire_obligation)
             params[param.name] = {
                 "promptDescription": param.prompt_description,
                 "valueKind": value_kind,
@@ -675,36 +1129,39 @@ def engine_function_contract_surface() -> dict[str, dict[str, Any]]:
                 "functionCardVisible": param.function_card_visible,
                 "promptGroup": param.prompt_group,
                 "nestedWirePaths": [
-                    {
-                        "path": nested.path,
-                        "compiledFields": list(nested.compiled_fields),
-                    }
+                    {"path": nested.path, "compiledFields": list(nested.compiled_fields)}
                     for nested in param.nested_wire_paths
                 ],
             }
         out[spec.name] = {
             "rootExecutor": spec.root_executor,
             "requiresRootExecutor": spec.requires_root_executor,
-            "allowedResultKinds": list(spec.allowed_result_kinds),
-            "loweredFunctionNames": list(spec.lowered_function_names),
             "paramOrder": [param.name for param in spec.params],
             "params": params,
             "repairGroups": [
-                {
-                    "members": list(group.members),
-                    "policyOwner": group.policy_owner,
-                }
+                {"members": list(group.members), "policyOwner": group.policy_owner}
                 for group in spec.repair_groups
             ],
-            "compiledSourceOverrides": [
+            "normalizedOnlyParams": {
+                param.name: list(param.compiled_fields)
+                for param in spec.normalized_only_params
+            },
+            "lowerers": [
                 {
-                    "compiledField": override.compiled_field,
-                    "sourcePaths": list(override.source_paths),
+                    "targetFunction": lowerer.target_function,
+                    "bindings": [
+                        {
+                            "sourcePath": binding.source_path,
+                            "targetParamPaths": list(binding.target_param_paths),
+                        }
+                        for binding in lowerer.bindings
+                    ],
                 }
-                for override in spec.compiled_source_overrides
+                for lowerer in spec.lowerers
             ],
         }
     return out
+
 
 def engine_function_catalog() -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
@@ -718,20 +1175,21 @@ def engine_function_catalog() -> dict[str, dict[str, Any]]:
         out[spec.name] = card
     return out
 
+
 def accepted_engine_param_names(fn: str) -> frozenset[str]:
-    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(str(fn or ""))
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(_normalize_function_name(fn))
     return frozenset(param.name for param in spec.params) if spec is not None else frozenset()
 
 
 def engine_param_wire_obligation(fn: str, param_path: str) -> WireObligation | None:
     """Return the canonical top-level provenance obligation for one authored leaf."""
 
-    normalized_fn = str(fn or "").strip().lower().replace("-", "_").replace(" ", "_")
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(_normalize_function_name(fn))
     param_name = str(param_path or "").strip().split(".", 1)[0]
-    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(normalized_fn)
     if spec is None or not param_name:
         return None
     return next((param.wire_obligation for param in spec.params if param.name == param_name), None)
+
 
 def accepted_param_extras() -> dict[str, frozenset[str]]:
     return {
@@ -739,6 +1197,7 @@ def accepted_param_extras() -> dict[str, frozenset[str]]:
         for spec in ENGINE_FUNCTION_CONTRACTS
         if any(param.prompt_group for param in spec.params)
     }
+
 
 def repair_dependency_groups() -> dict[str, tuple[frozenset[str], ...]]:
     return {
@@ -748,25 +1207,31 @@ def repair_dependency_groups() -> dict[str, tuple[frozenset[str], ...]]:
     }
 
 
+def _authored_paths(spec: EngineFunctionContract) -> tuple[str, ...]:
+    return tuple(
+        path
+        for param in spec.params
+        for path in (
+            (param.name,)
+            if not param.nested_wire_paths
+            else (param.name, *(f"{param.name}.{nested.path}" for nested in param.nested_wire_paths))
+        )
+    )
+
+
 def compiled_field_source_map() -> dict[str, dict[str, str | tuple[str, ...]]]:
-    """Project exact static provenance from immutable parameter contracts."""
+    """Project public authored provenance; lowerer/internal aliases are derived."""
 
     out: dict[str, dict[str, str | tuple[str, ...]]] = {}
     for spec in ENGINE_FUNCTION_CONTRACTS:
         sources_by_field: dict[str, list[str]] = {}
-        for param in spec.params:
-            for field in param.compiled_fields:
-                sources_by_field.setdefault(field, []).append(param.name)
-            for nested in param.nested_wire_paths:
-                source_path = f"{param.name}.{nested.path}"
-                for field in nested.compiled_fields:
-                    sources_by_field.setdefault(field, []).append(source_path)
-        for override in spec.compiled_source_overrides:
-            sources_by_field[override.compiled_field] = list(override.source_paths)
+        for source_path in _authored_paths(spec):
+            for field in compiled_fields_for_authored_path(spec.name, source_path):
+                sources_by_field.setdefault(field, []).append(source_path)
         if sources_by_field:
             out[spec.name] = {
-                field: sources[0] if len(sources) == 1 else tuple(sources)
-                for field, sources in sources_by_field.items()
+                field: sources[0] if len(sources) == 1 else tuple(dict.fromkeys(sources))
+                for field, sources in sorted(sources_by_field.items())
             }
     return out
 
@@ -776,11 +1241,7 @@ ENGINE_FUNCTION_CATALOG = MappingProxyType(engine_function_catalog())
 ACCEPTED_PARAM_EXTRAS_BY_FUNCTION = MappingProxyType(accepted_param_extras())
 REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION = MappingProxyType(repair_dependency_groups())
 ROOT_EXECUTOR_SHARED_PARAM_NAMES = frozenset(
-    param.name
-    for spec in ENGINE_FUNCTION_CONTRACTS
-    if spec.root_executor
-    for param in spec.params
-    if param.prompt_group == "root_executor"
+    param.name for param in _ROOT_EXECUTOR_SHARED_TARGET_PARAMS
 )
 
 __all__ = [
@@ -791,7 +1252,16 @@ __all__ = [
     "REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION",
     "ROOT_EXECUTOR_FUNCTION_NAMES",
     "ROOT_EXECUTOR_SHARED_PARAM_NAMES",
+    "lowerer_contract",
+    "lowerer_passthrough_param_names",
+    "lowerer_output_param_names",
+    "lowerer_target_source_map",
+    "validate_lowerer_output",
     "engine_function_impact_names",
+    "engine_function_form_impacts",
+    "compiled_fields_for_authored_path",
+    "compiled_fields_for_function_identity",
+    "compiled_fields_for_lowered_compatibility_path",
     "engine_function_contract_surface",
     "engine_function_catalog",
     "accepted_engine_param_names",

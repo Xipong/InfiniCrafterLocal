@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from csharp_partial_reader import read_text_with_partial_bundles
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    compiled_fields_for_authored_path,
+)
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -448,10 +451,11 @@ def _check_generated_buff_sync_rejects_client_spoof_and_clamps_network_state() -
     assert "_generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000)" in player
     model = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     runtime_authoring = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "__init__.py").read_text(encoding="utf-8")
-    function_registry = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "function_contract_registry.py").read_text(encoding="utf-8")
     assert "OreSenseEnabled => OreSenseRadiusTiles > 0" in model
     assert "bool-backed" in model and "findTreasure" in player
-    assert "radius debug-only" in function_registry
+    assert compiled_fields_for_authored_path(
+        "apply_player_effect_on_use", "generatedBuff.oreSenseRadiusTiles"
+    ) == {"generatedBuff.oreSenseRadiusTiles"}
     assert "from infini_local.core.runtime_authoring.function_contract_registry import" in runtime_authoring
 
 
