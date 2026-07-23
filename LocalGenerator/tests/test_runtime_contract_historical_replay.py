@@ -10,6 +10,7 @@ from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -585,6 +586,33 @@ def test_registry_function_fingerprint_excludes_data_rows_but_tracks_helper_code
     fingerprint = replay._semantic_python_module_functions_fingerprint  # type: ignore[attr-defined]
     assert fingerprint(first) == fingerprint(second)
     assert fingerprint(first) != fingerprint(changed)
+
+
+def test_semantic_python_fingerprint_ignores_empty_python_minor_ast_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    source = "def project(value):\n    return value + 1\n"
+    baseline = replay._semantic_python_source_fingerprint(source)  # type: ignore[attr-defined]
+    original_parse = replay.ast.parse
+    original_fields = replay.ast.FunctionDef._fields
+
+    def parse_with_empty_type_params(*args: Any, **kwargs: Any) -> ast.AST:
+        tree = original_parse(*args, **kwargs)
+        for node in replay.ast.walk(tree):
+            if isinstance(node, replay.ast.FunctionDef):
+                node.type_params = []
+        return tree
+
+    monkeypatch.setattr(
+        replay.ast.FunctionDef,
+        "_fields",
+        original_fields + ("type_params",),
+    )
+    monkeypatch.setattr(replay.ast, "parse", parse_with_empty_type_params)
+
+    assert replay._semantic_python_source_fingerprint(source) == baseline  # type: ignore[attr-defined]
 
 
 def test_contract_fingerprint_diff_is_form_local_and_fail_closed_on_removal() -> None:

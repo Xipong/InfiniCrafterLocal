@@ -84,18 +84,47 @@ def _strip_python_docstrings(tree: ast.AST) -> ast.AST:
     return tree
 
 
+_VERSION_NEUTRAL_EMPTY_AST_FIELDS = frozenset({"type_params"})
+
+
+def _stable_ast_payload(value: Any) -> Any:
+    """Serialize executable AST semantics without Python-minor dump drift.
+
+    ``ast.dump`` includes every field known by the running interpreter. Python
+    3.12 added empty ``type_params`` fields to several nodes, so identical source
+    produced different committed fingerprints under 3.11/3.12/3.13. Preserve
+    meaningful non-empty metadata, but omit version-added empty fields and encode
+    the remaining tree explicitly.
+    """
+
+    if isinstance(value, ast.AST):
+        fields: list[list[Any]] = []
+        for field_name in value._fields:
+            field_value = getattr(value, field_name, None)
+            if (
+                field_name in _VERSION_NEUTRAL_EMPTY_AST_FIELDS
+                and field_value in (None, [])
+            ):
+                continue
+            fields.append([field_name, _stable_ast_payload(field_value)])
+        return {"node": type(value).__name__, "fields": fields}
+    if isinstance(value, (list, tuple)):
+        return [_stable_ast_payload(item) for item in value]
+    return value
+
+
 def _semantic_python_source_fingerprint(source: str) -> str:
     """Hash executable Python structure, not whitespace/comments/docstrings.
 
     The replay selector must react to implementation changes without turning a
-    formatter or documentation edit into a global regression run.  AST dumps keep
-    names, constants, control flow, decorators and imports while ignoring source
-    layout and comments.
+    formatter or documentation edit into a global regression run. Stable AST
+    payloads keep names, constants, control flow, decorators and imports while
+    ignoring source layout, comments and Python-minor-only empty metadata.
     """
 
     tree = ast.parse(textwrap.dedent(source))
     normalized = _strip_python_docstrings(tree)
-    payload = ast.dump(normalized, annotate_fields=True, include_attributes=False)
+    payload = canonical_json(_stable_ast_payload(normalized))
     return _sha256_bytes(payload.encode("utf-8"))
 
 
@@ -114,7 +143,7 @@ def _semantic_python_module_functions_fingerprint(path: Path) -> str:
     ]
     function_module = ast.Module(body=function_nodes, type_ignores=[])
     normalized = _strip_python_docstrings(function_module)
-    payload = ast.dump(normalized, annotate_fields=True, include_attributes=False)
+    payload = canonical_json(_stable_ast_payload(normalized))
     return _sha256_bytes(payload.encode("utf-8"))
 
 
