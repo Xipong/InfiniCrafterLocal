@@ -1,13 +1,6 @@
 {
   "alwaysChecks": [
     "compileall",
-    "schema_check",
-    "config_registry",
-    "contract_parity",
-    "delivery_contract",
-    "mutation_gate",
-    "semantic_runtime_diff",
-    "runtime_impact",
     "project_hygiene"
   ],
   "canonicalOwners": {
@@ -94,6 +87,44 @@
     "semantic_runtime_diff": [
       "python",
       "tools/semantic_runtime_diff.py"
+    ],
+    "historical_replay": [
+      "python",
+      "tools/check_runtime_contract_replay.py",
+      "--quiet"
+    ],
+    "runtime_contract_tests": [
+      "python",
+      "tools/run_focused_pytests.py",
+      "LocalGenerator/tests/test_runtime_function_contract_registry.py",
+      "LocalGenerator/tests/test_runtime_contract_historical_replay.py",
+      "LocalGenerator/tests/test_planner_prompt_usability_contract.py",
+      "LocalGenerator/tests/test_247_gameplay_authority_authorship_contract.py",
+      "LocalGenerator/tests/test_248_use_driver_equipment_visual_contract.py",
+      "LocalGenerator/tests/test_v18_contract_safety_stack.py",
+      "LocalGenerator/tests/test_vfx_director_contract_registry.py"
+    ],
+    "vfx_contract_tests": [
+      "python",
+      "tools/run_focused_pytests.py",
+      "LocalGenerator/tests/test_233_gameplay_truth_visual_discipline_contract.py",
+      "LocalGenerator/tests/test_248_use_driver_equipment_visual_contract.py",
+      "LocalGenerator/tests/test_vfx_audio_and_projectile_guard_contract.py",
+      "LocalGenerator/tests/test_vfx_director_contract_registry.py",
+      "LocalGenerator/tests/test_vfx_morph_recipes_contract.py",
+      "LocalGenerator/tests/test_visual_asset_modes_contract.py",
+      "LocalGenerator/tests/test_visual_delivery_gate_contract.py",
+      "LocalGenerator/tests/test_visual_role_contract_registry.py",
+      "LocalGenerator/tests/test_visual_soul_contract.py"
+    ],
+    "agent_tooling_tests": [
+      "python",
+      "tools/run_focused_pytests.py",
+      "LocalGenerator/tests/test_v18_contract_safety_stack.py"
+    ],
+    "changed_pytests": [
+      "python",
+      "tools/run_changed_pytests.py"
     ]
   },
   "contractSafetyVersion": "v18",
@@ -106,6 +137,7 @@
     "delivery_contract",
     "mutation_gate",
     "semantic_runtime_diff",
+    "historical_replay",
     "runtime_impact",
     "csharp_contracts",
     "project_hygiene",

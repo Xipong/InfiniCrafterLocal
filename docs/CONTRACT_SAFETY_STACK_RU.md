@@ -4,8 +4,9 @@
 
 ## Канонические владельцы
 
-- `core/runtime_authoring/schema.py` — список engine calls и параметров.
-- `core/runtime_authoring/engine_call_contracts.py` — строгие raw-LLM модели, динамически построенные из каталога.
+- `core/runtime_authoring/function_contract_registry.py` — канонический список engine calls, public параметров, normalized-only IR, wire/provenance obligations, repair groups и typed lowerer edges.
+- `core/runtime_authoring/schema.py` — family/affordance/numeric и cross-param policy; не дублирует каталог.
+- `core/runtime_authoring/engine_call_contracts.py` — строгие raw-LLM модели, динамически построенные из registry.
 - `core/boundary_models.py` — strict compiled/wire boundaries.
 - `contracts/field_lifecycle.json` — только политика обязательных стадий, child/network/zero semantics.
 - `GeneratedItemData.Model.cs` — C# DTO.
@@ -57,7 +58,7 @@ Mutation gate обязан поймать как минимум:
 
 Сырые вызовы LLM валидируются **до repair/normalization**. Неизвестные функции, параметры, enum и неверные типы не могут исчезнуть и превратиться в зелёный canonical plan.
 
-После semantic lowering повторно не применяется raw-LLM схема: внутренние canonical calls могут свободно рефакториться, если сохраняют compiled contract.
+После semantic lowering повторно не применяется raw-LLM provider schema. Вместо этого normalized output обязан уложиться в закрытый typed lowerer edge из registry; provenance использует тот же binding graph. Внутренние canonical calls могут рефакториться, если сохраняют этот IR и compiled contract.
 
 Финальный boundary:
 
@@ -85,12 +86,27 @@ C#-специфичное свойство «sentry shot не становитс
 
 Минимальный контрпример Hypothesis становится regression fixture/test.
 
+## Locality-aware test routing
+
+`agentctl verify --changed` не запускает весь test universe после каждого leaf diff.
+Глобально обязательны только `compileall` и project hygiene; runtime-authoring diff
+получает компактный invariant-набор + parity/mutation/semantic/replay gates, а
+Visual/VFX diff — свой focused contract-набор. Изменённые test modules запускаются
+отдельно через `tools/run_changed_pytests.py`; shared fixture/helper change честно
+переходит на полный suite. Полный sharded pytest остаётся release/final-acceptance
+gate, а не обязательным inner-loop после каждого патча.
+
 ## Replay и semantic baseline
 
 ```bash
+PYTHONPATH=LocalGenerator python tools/check_runtime_contract_replay.py
+PYTHONPATH=LocalGenerator python tools/check_runtime_contract_replay.py --function deploy_sentry
+PYTHONPATH=LocalGenerator python tools/check_runtime_contract_replay.py --form deploy_sentry:placement
 python tools/replay_generation_case.py replay <case> --strict
 python tools/replay_generation_case.py replay <case> --strict --rerun --replay-raw <fixture>
 ```
+
+Committed historical gate всегда прогоняет весь зафиксированный corpus, если affected function/form не задан явно. Выбор по `function:param.path` выводится из typed lowerer graph и fail-closed завершает работу, если для изменённой формы нет corpus coverage. Это короткий gate production compiler/final projection, а не frozen snapshot implementation details.
 
 Strict replay:
 

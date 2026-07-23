@@ -115,7 +115,6 @@ def _contract_check_dynamic_engine_models_follow_the_canonical_catalog() -> None
         ),
         root_executor=False,
         requires_root_executor=False,
-        allowed_result_kinds=(),
         repair_groups=(),
     )
     assert validate_engine_function_contracts((extension,)) == ()
@@ -717,9 +716,16 @@ def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> 
             check=False,
             timeout=30,
         )
-        assert proc.returncode == 0, proc.stdout
         payload = json.loads(proc.stdout)
         assert payload["schema"].startswith("infini.agent-")
+        if args == ["doctor"]:
+            # Doctor is a readiness report, not a self-contained unit test. A weak
+            # container must remain machine-readable and honestly non-ready instead
+            # of making the entire source suite environment-dependent.
+            assert proc.returncode in {0, 1}, proc.stdout
+            assert bool(payload.get("ok")) is (proc.returncode == 0)
+        else:
+            assert proc.returncode == 0, proc.stdout
 
     rules = json.loads((ROOT / ".agent/impact_rules.json").read_text(encoding="utf-8"))
     csharp = next(row for row in rules["rules"] if row["id"] == "csharp-runtime-contract")
@@ -728,11 +734,21 @@ def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> 
     assert "delivery_contract" in csharp["checks"]
     assert "mutation_gate" in csharp["checks"]
 
+    runtime_rule = next(row for row in rules["rules"] if row["id"] == "python-runtime-contract")
+    tests_rule = next(row for row in rules["rules"] if row["id"] == "tests-only")
+    visual_rule = next(row for row in rules["rules"] if row["id"] == "visual-authoring-contract")
+    assert "runtime_contract_tests" in runtime_rule["checks"]
+    assert "pytest" not in runtime_rule["checks"]
+    assert tests_rule["checks"] == ["changed_pytests"]
+    assert "vfx_contract_tests" in visual_rule["checks"]
+    assert "pytest" not in visual_rule["checks"]
+
     manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
     assert manifest["runtimeApiVersion"] == ENGINE_RUNTIME_API_VERSION
-    assert "delivery_contract" in manifest["alwaysChecks"]
+    assert manifest["alwaysChecks"] == ["compileall", "project_hygiene"]
     assert "delivery_contract" in manifest["fullChecks"]
     assert manifest["checks"]["delivery_contract"] == ["python", "tools/check_delivery_contract.py"]
+    assert manifest["checks"]["changed_pytests"] == ["python", "tools/run_changed_pytests.py"]
 
 
 def _contract_check_delivery_parser_ignores_comment_and_string_phantoms(tmp_path: Path) -> None:
@@ -814,8 +830,10 @@ def _contract_check_agent_task_contract_enforces_revision_boundaries_and_build_f
         check=False,
         timeout=30,
     )
-    assert doctor.returncode == 0, doctor.stdout
-    revision = json.loads(doctor.stdout)["gitBaseline"]
+    assert doctor.returncode in {0, 1}, doctor.stdout
+    doctor_payload = json.loads(doctor.stdout)
+    assert bool(doctor_payload.get("ok")) is (doctor.returncode == 0)
+    revision = doctor_payload["gitBaseline"]
     task = {
         "taskId": "v18-contract-safety",
         "goal": "verify agent-safe contract stack",

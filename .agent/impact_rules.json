@@ -5,6 +5,17 @@
       "id": "python-runtime-contract",
       "patterns": [
         "LocalGenerator/infini_local/core/runtime_authoring/**",
+        "LocalGenerator/infini_local/core/runtime_contracts.py",
+        "LocalGenerator/infini_local/qa/runtime_contract_replay.py",
+        "LocalGenerator/tests/fixtures/runtime_contract_history/**",
+        "tools/check_runtime_contract_replay.py",
+        "tools/contract_parity.py",
+        "tools/check_delivery_contract.py",
+        "tools/mutation_contract_gate.py",
+        "tools/semantic_runtime_diff.py",
+        "tools/runtime_impact_report.py",
+        "tools/check_planner_prompt_usability.py",
+        "tools/export_contract_schemas.py",
         "LocalGenerator/infini_local/core/boundary_models.py",
         "LocalGenerator/infini_local/pipelines/combine_gameplay.py",
         "LocalGenerator/infini_local/pipelines/llm_authoring_*.py",
@@ -20,18 +31,21 @@
         "LocalGenerator/infini_local/web/server_utility_routes.py"
       ],
       "checks": [
-        "pytest",
+        "runtime_contract_tests",
         "schema_check",
         "contract_parity",
         "delivery_contract",
         "mutation_gate",
         "semantic_runtime_diff",
         "planner_prompt",
-        "pyright"
+        "pyright",
+        "historical_replay",
+        "runtime_impact"
       ],
       "context": [
         "AGENTS.md",
         "docs/CONTRACT_SAFETY_STACK_RU.md",
+        "LocalGenerator/infini_local/core/runtime_authoring/function_contract_registry.py",
         "LocalGenerator/infini_local/core/runtime_authoring/schema.py",
         "LocalGenerator/infini_local/core/boundary_models.py",
         "contracts/field_lifecycle.json",
@@ -92,7 +106,7 @@
         "contracts/schemas/vfx_manifest.schema.json"
       ],
       "checks": [
-        "pytest",
+        "vfx_contract_tests",
         "schema_check",
         "contract_parity",
         "semantic_runtime_diff"
@@ -107,14 +121,15 @@
       "patterns": [
         ".agent/**",
         "tools/agentctl.py",
-        "tools/*validation*",
-        "tools/*contract*"
+        "tools/validate_release.py",
+        "tools/validate_sandbox.py",
+        "tools/validate_release.sh",
+        "tools/render_validation_report.py",
+        "tools/run_changed_pytests.py",
+        "tools/run_focused_pytests.py"
       ],
       "checks": [
-        "pytest",
-        "compileall",
-        "delivery_contract",
-        "project_hygiene",
+        "agent_tooling_tests",
         "ruff",
         "pyright"
       ],
@@ -138,7 +153,7 @@
         "contracts/schemas/visual_kit.schema.json"
       ],
       "checks": [
-        "pytest",
+        "vfx_contract_tests",
         "schema_check",
         "project_hygiene",
         "ruff",
@@ -175,7 +190,7 @@
         "LocalGenerator/tests/**"
       ],
       "checks": [
-        "pytest"
+        "changed_pytests"
       ],
       "context": [
         "AGENTS.md"

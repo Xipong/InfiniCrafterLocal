@@ -3,7 +3,9 @@
 The operator ``config.env`` may enable live LLM/image services.  Unit and
 contract tests must instead start from the shipped code defaults while keeping
 all external services inert.  Live configuration experiments are explicit via
-``INFINI_TEST_USE_PROJECT_CONFIG=1``.
+``INFINI_TEST_USE_PROJECT_CONFIG=1``. Impact-focused agent checks may set
+``INFINI_FOCUSED_PYTEST=1``; missing optional modules then fail only tests that
+actually import them, while the full suite keeps its dependency gate.
 """
 from __future__ import annotations
 
@@ -25,6 +27,8 @@ _FULL_SUITE_MODULES = {
 
 
 def _stop_dependency_poor_collection() -> None:
+    if os.environ.get("INFINI_FOCUSED_PYTEST", "").strip().lower() in _TRUE_VALUES:
+        return
     missing = [
         label
         for label, import_name in _FULL_SUITE_MODULES.items()

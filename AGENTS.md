@@ -140,10 +140,11 @@ python tools/validate_sandbox.py
 ## Contract safety stack (v18)
 
 - Raw LLM calls валидируются до repair через `core/runtime_authoring/engine_call_contracts.py`; compiled/wire JSON — через `core/boundary_models.py`.
-- `core/runtime_authoring/function_contract_registry.py` — canonical owner function/param inventory, provider/prompt projection, wire obligations, repair groups and typed lowerer identity. `schema.py` owns family/affordance/numeric and cross-param policies, not the catalog.
+- `core/runtime_authoring/function_contract_registry.py` — canonical owner function/param inventory, provider/prompt projection, wire obligations, repair groups, normalized IR grammar and typed lowerer edges. `schema.py` owns family/affordance/numeric and cross-param policies, not the catalog.
 - `contracts/schemas/` и `contracts/config_registry.json` — generated evidence, не writable gameplay contract и не C# codegen.
 - Critical field policy живёт в `contracts/field_lifecycle.json`; фактические compiler/projection/DTO/normalize/network/executor/child stages извлекает `tools/contract_parity.py`.
-- При runtime-contract правке обязательны `contract_parity`, `mutation_contract_gate`, `semantic_runtime_diff` и `runtime_impact_report`.
+- При runtime-contract правке обязательны `contract_parity`, `mutation_contract_gate`, `semantic_runtime_diff`, `historical_replay` и `runtime_impact_report`.
+- `agentctl verify --changed` использует impact-focused pytest-наборы; полный sharded pytest оставлен для финальной/release-проверки. Не возвращай full suite в `alwaysChecks`.
 - Hypothesis tests проверяют общие invariants, не библиотеку примеров оружия. Тест нельзя привязывать к старому façade/partial-файлу, если canonical owner и результат сохраняются.
 - `tools/agentctl.py verify --changed` выбирает gates по diff. C#-чувствительная правка без реального tML build остаётся `blocked`; её нельзя назвать runtime-ready.
 - Новый engine call должен расширяться через canonical catalog; новый executable field — через полный применимый lifecycle. См. `docs/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md`.

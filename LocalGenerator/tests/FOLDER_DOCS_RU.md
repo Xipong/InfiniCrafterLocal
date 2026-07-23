@@ -9,3 +9,8 @@ Contract/regression tests for Python authoring, C# surface assumptions, MP craft
 In a dependency-poor ChatGPT/web sandbox, do not collect this suite first. Run `python tools/validate_sandbox.py` from the repository root and only use full pytest when its JSON reports `fullSuiteAvailable=true`.
 
 Do not trust test names as architecture proof; read the tested source path and assertions. When changing runtime fields, add/update tests that fail on old ad-hoc/prose/router behavior.
+
+For dirty-tree agent feedback, `tools/run_focused_pytests.py` sets
+`INFINI_FOCUSED_PYTEST=1`: only the explicitly selected modules are collected, so an
+unrelated missing optional property-test dependency does not block local contract
+checks. The ordinary/full pytest entry point keeps the complete dependency gate.
