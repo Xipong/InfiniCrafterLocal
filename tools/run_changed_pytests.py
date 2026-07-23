@@ -15,6 +15,8 @@ import subprocess
 import sys
 from typing import Any
 
+from run_pytest_shards import missing_full_test_dependencies
+
 ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = ROOT / "LocalGenerator" / "tests"
 
@@ -84,8 +86,23 @@ def main() -> int:
 
     selected = [ROOT / relative for relative in plan["selected"]]
     if not selected:
+        plan["status"] = "passed"
         print(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
+
+    if plan["mode"] == "full_due_to_shared_test_surface":
+        missing = missing_full_test_dependencies()
+        if missing:
+            plan.update({
+                "ok": False,
+                "status": "unavailable",
+                "fullSuiteAvailable": False,
+                "missingDependencies": missing,
+                "portableCommand": f"{sys.executable} tools/validate_sandbox.py",
+                "errors": ["full pytest dependencies are unavailable; collection was not started"],
+            })
+            print(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True))
+            return 2
 
     env = dict(os.environ)
     env["PYTHONPATH"] = str(ROOT / "LocalGenerator")
@@ -102,6 +119,7 @@ def main() -> int:
     )
     plan.update({
         "ok": proc.returncode == 0,
+        "status": "passed" if proc.returncode == 0 else "failed",
         "exitCode": proc.returncode,
         "command": command,
         "outputTail": proc.stdout[-12000:],

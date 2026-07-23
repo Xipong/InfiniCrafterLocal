@@ -179,9 +179,10 @@ def _run_check(name: str, command: list[str]) -> dict[str, Any]:
     # runner creates its own isolated LocalGenerator working directories.
     cwd = ROOT
     proc = subprocess.run(command, cwd=cwd, env=_environment(), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    structured_unavailable = proc.returncode == 2 and '"status": "unavailable"' in proc.stdout
     return {
         "name": name,
-        "status": "passed" if proc.returncode == 0 else "failed",
+        "status": "unavailable" if structured_unavailable else ("passed" if proc.returncode == 0 else "failed"),
         "exitCode": proc.returncode,
         "command": command,
         "durationSeconds": round(time.monotonic() - start, 3),

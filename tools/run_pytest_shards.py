@@ -54,7 +54,7 @@ def _test_files() -> list[Path]:
     return sorted(path for path in TEST_ROOT.glob("test_*.py") if path.is_file())
 
 
-def _missing_test_dependencies() -> list[str]:
+def missing_full_test_dependencies() -> list[str]:
     missing: list[str] = []
     for label, import_name in FULL_TEST_MODULES.items():
         try:
@@ -149,7 +149,7 @@ def _run_pytest_command(
 
 
 def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int = 60) -> dict[str, Any]:
-    missing = _missing_test_dependencies()
+    missing = missing_full_test_dependencies()
     if missing:
         return {
             "schema": "infini.pytest-shards.v3",

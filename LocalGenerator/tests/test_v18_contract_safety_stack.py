@@ -1025,6 +1025,61 @@ def _contract_check_source_snapshot_index_excludes_hidden_tool_state(tmp_path: P
     assert module._ignored_repository_path(".gitignore") is False
 
 
+def _contract_check_changed_pytests_reports_missing_full_suite_as_unavailable(monkeypatch, capsys) -> None:
+    import importlib.util
+
+    module_path = ROOT / "tools/run_changed_pytests.py"
+    tools_path = str(ROOT / "tools")
+    inserted = tools_path not in sys.path
+    if inserted:
+        sys.path.insert(0, tools_path)
+    try:
+        spec = importlib.util.spec_from_file_location("changed_pytests_unavailable_test", module_path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        if inserted:
+            sys.path.remove(tools_path)
+
+    monkeypatch.setattr(
+        module,
+        "_changed_test_paths",
+        lambda: ([], ["LocalGenerator/tests/fixtures/runtime_contract_history/corpus.json"]),
+    )
+    monkeypatch.setattr(module, "missing_full_test_dependencies", lambda: ["Hypothesis"])
+
+    assert module.main() == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "unavailable"
+    assert report["fullSuiteAvailable"] is False
+    assert report["missingDependencies"] == ["Hypothesis"]
+    assert "command" not in report
+
+
+def _contract_check_agentctl_preserves_structured_unavailable_check_status(monkeypatch) -> None:
+    import importlib.util
+
+    module_path = ROOT / "tools/agentctl.py"
+    spec = importlib.util.spec_from_file_location("agentctl_unavailable_test", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outputs = iter((
+        subprocess.CompletedProcess([sys.executable], 2, stdout='{\n  "status": "unavailable"\n}\n', stderr=""),
+        subprocess.CompletedProcess([sys.executable], 2, stdout="usage error\n", stderr=""),
+    ))
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_kwargs: next(outputs))
+
+    unavailable = module._run_check("changed_pytests", [sys.executable])
+    syntax_error = module._run_check("changed_pytests", [sys.executable])
+
+    assert unavailable["status"] == "unavailable"
+    assert unavailable["exitCode"] == 2
+    assert syntax_error["status"] == "failed"
+
+
 def _contract_check_agentctl_resolves_pyright_from_current_python_environment(monkeypatch, tmp_path: Path) -> None:
     import importlib.util
 
@@ -1141,6 +1196,8 @@ def test_v18_agent_tooling_contract(request):
             '_contract_check_runtime_impact_gate_proves_tooling_is_not_loaded_by_game',
             '_contract_check_source_only_agent_diff_uses_file_index_before_git_bootstrap',
             '_contract_check_source_snapshot_index_excludes_hidden_tool_state',
+            '_contract_check_changed_pytests_reports_missing_full_suite_as_unavailable',
+            '_contract_check_agentctl_preserves_structured_unavailable_check_status',
             '_contract_check_agentctl_resolves_pyright_from_current_python_environment',
             '_contract_check_agentctl_resolves_windows_pyright_entrypoint_next_to_python',
             '_contract_check_pyright_overlay_binds_selected_environment_without_changing_target_version',
