@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-import json
 import math
 from typing import AbstractSet, Any
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_executor_vocabulary import EFFECT_CODE, MOVEMENT_CODE, ONHIT_CODE
 from infini_local.core.effect_catalog import resolve_attack_pattern
 from infini_local.core.item_identity_tools import item_num
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json
-from infini_local.core.llm_stage_messages import agent_handoff, planner_history_state, stage_chat_message
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.core.runtime_authoring.reports import infer_attack_pattern_from_runtime
-from infini_local.core.runtime_authoring.schema import _runtime_family_affordances
+from infini_local.core.runtime_authoring.compiler import (
+    COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS,
+    COMPILED_COMBAT_GENOME_REQUIRED_FIELDS,
+)
+from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
 from infini_local.core.runtime_family_policy import (
     CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES,
     exclusive_movement_owner,
@@ -29,31 +30,16 @@ from infini_local.pipelines.engine_pressure_metrics import (
     projectile_pressure_envelope_report,
     sanitize_genome_engine,
 )
-from infini_local.pipelines.pipeline_runtime_constants import (
-    LLM_NUMERIC_GENOME_LIMITS,
-    LLM_OPTIONAL_GENOME_DEFAULTS,
-    LLM_REQUIRED_GENOME_FIELDS,
-    LLM_RUNTIME_AUTHORING,
-)
-from infini_local.storage.trace_runtime import log_event
+from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING
 from infini_local.pipelines.presentation_sound import (
     effect_for,
     movement_for,
     onhit_for,
 )
 from infini_local.core.runtime_authoring.final_projection import runtime_final_patch
-from infini_local.pipelines.llm_transport import (
-    llm_chat_json,
-    llm_json_response_format,
-    resolve_llm_model,
-)
-from infini_local.pipelines.parent_context_pipeline import (
-    llm_parent_card,
-    parent_weapon_profiles,
-)
+from infini_local.pipelines.parent_context_pipeline import parent_weapon_profiles
 
 from infini_local.pipelines.combine_balance import apply_family_locks_to_genome, balanced_damage, clamp_vanilla_like_weapon_damage
-from infini_local.pipelines.combine_genome_contract import combat_genome_required_for
 
 def _normalize_authored_enum_value(value: Any, field: str) -> str:
     return normalize_authoring_enum(value, field)
@@ -90,7 +76,7 @@ def genome_defect_details(data: dict[str, Any]) -> list[dict[str, Any]]:
             "compiledFields": list(dict.fromkeys(compiled_fields)),
         })
 
-    for field in LLM_REQUIRED_GENOME_FIELDS:
+    for field in COMPILED_COMBAT_GENOME_REQUIRED_FIELDS:
         if field not in proposed or proposed.get(field) in (None, ""):
             reject(f"missing attack.genome.{field}", [field])
 
@@ -221,165 +207,6 @@ def _genome_author_repair_targets(
     return targets
 
 
-def merge_genome_repair(data: dict[str, Any], patch: dict[str, Any]) -> None:
-    """Merge a repair response into data.attack.genome.
-
-    The repair model may return {"attack":{"genome":{...}}}, {"genome":{...}}, or a flat
-    object containing genome fields. Only known genome fields are merged.
-    """
-    attack = data.setdefault("attack", {})
-    if not isinstance(attack, dict):
-        data["attack"] = attack = {}
-    genome = attack.setdefault("genome", {})
-    if not isinstance(genome, dict):
-        attack["genome"] = genome = {}
-
-    src: Any = patch
-    if isinstance(patch.get("attack"), dict) and isinstance(patch["attack"].get("genome"), dict):
-        src = patch["attack"]["genome"]
-    elif isinstance(patch.get("genome"), dict):
-        src = patch["genome"]
-    if not isinstance(src, dict):
-        return
-
-    known = set(LLM_REQUIRED_GENOME_FIELDS) | set(LLM_OPTIONAL_GENOME_DEFAULTS) | {"spreadRadians", "homingStrength", "extraUpdates", "beamWidthPx", "beamChargeTicks", "chargeTicks", "chargePowerMultiplier", "delayTicks", "sentryPlacement", "sentryAttackIntervalTicks", "sentryTargetRangeTiles", "sentryLifetimeTicks", "immunityCooldown", "useAnimationTicks", "secondaryTrigger"}
-    for key, value in src.items():
-        if key in known:
-            genome[key] = value
-    attack["enabled"] = True
-
-def try_llm_genome_repair(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str, defects: list[str], attempt: int) -> dict[str, Any] | None:
-    """Repair combat genome from one rich authoritative v3.1 stage dossier."""
-    try:
-        history_state = planner_history_state(data)
-        live_planner = str((data.get("debug") or {}).get("planner") or "") == "llm_author_first"
-        if history_state == "malformed" or (history_state == "absent" and live_planner):
-            data.setdefault("debug", {})["genomeRepairHistoryStatus"] = (
-                "malformed_fail_closed" if history_state == "malformed" else "missing_live_planner_history_fail_closed"
-            )
-            return None
-        model_name = resolve_llm_model()
-        existing = proposed_attack_genome(data)
-        user = {
-            "task": "Repair only missing/malformed attack.genome fields. Return JSON only.",
-            "agentHandoff": agent_handoff(
-                previous_speaker="item_planner",
-                current_speaker="genome_validator",
-                next_speaker="genome_repairer",
-                cause_by="genome_validation",
-                artifact_source="currentItem",
-            ),
-            "important": [
-                "Keep name, tooltip, category, parents, and visual concept.",
-                "Pick concrete mechanics now; code will not invent them.",
-                "Use weapon-family fields and executable numbers, not prose tags.",
-                "Strong ideas must pay through executable fields: slower useTime, finite range/lifetime, lower pierce/shotCount, or no AoE/homing.",
-            ],
-            "defects": defects,
-            "attempt": attempt,
-            "currentItem": {
-                "name": data.get("name"),
-                "tooltip": data.get("tooltip"),
-                "category": data.get("category"),
-                "tags": data.get("tags"),
-                "attackGenomeCurrent": existing,
-            },
-            "allowed": {
-                "delivery": ["swing", "thrust", "spear", "stab", "rapier", "shortsword", "shoot", "bow", "gun", "launcher", "cast", "staff", "wand", "book", "throw", "boomerang", "summon", "minion", "sentry"],
-                "movement": "straight|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|returning_glaive|expanding_wave|flail_tether|yoyo_hover|whip_lash",
-                "effect": "none|dust|electric|slime|star|flame|frost|leaf|shadow|poison|blood|honey|sand|lunar|heal|holy|smoke",
-                "onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal",
-                "requiredFields": list(LLM_REQUIRED_GENOME_FIELDS),
-                "numericRanges": LLM_NUMERIC_GENOME_LIMITS,
-                "optionalFields": LLM_OPTIONAL_GENOME_DEFAULTS,
-            },
-            "required_json_shape": {
-                "attack": {
-                    "enabled": True,
-                    "genome": {
-                        "delivery": "swing|thrust|spear|stab|rapier|shortsword|shoot|bow|gun|launcher|cast|staff|wand|book|throw|boomerang|summon|minion|sentry",
-                        "movement": "one of allowed.movement",
-                        "effect": "one of allowed.effect",
-                        "onHit": "one of allowed.onHit",
-                        "useTimeTicks": 24,
-                        "shotCount": 1,
-                        "pierce": 0,
-                        "aoeRadiusTiles": 0,
-                        "rangeTiles": 35,
-                        "lifetimeTicks": 90,
-                        "reliability": 1.0,
-                        "selfLockTicks": 0,
-                        "missPunish": 0,
-                        "homingStrength": 0,
-                        "extraUpdates": 0,
-                        "spreadRadians": 0
-                    }
-                }
-            }
-        }
-        user["parents"] = [
-            llm_parent_card(a, ca),
-            llm_parent_card(b, cb),
-        ]
-        system = (
-            "You are the Genome Repairer for this Terraria-like item generator. "
-            "The latest genome_validator currentItem is the authoritative current combat truth; any earlier item_planner response is provenance only. "
-            "Return JSON only and fill only missing/malformed fields with concrete executable values."
-        )
-        user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
-        messages = [
-            stage_chat_message("system", "genome_repair_contract", system),
-            stage_chat_message("user", "genome_validator", user_content),
-        ]
-        message_mode = (
-            "authoritative_stage_dossier_v31"
-            if history_state == "valid"
-            else "legacy_authoritative_stage_dossier_v31"
-        )
-        req = {
-            "model": model_name,
-            "messages": messages,
-            "temperature": 0.15,
-            "max_tokens": 900,
-            "response_format": llm_json_response_format("infini_genome_repair"),
-        }
-        raw = llm_chat_json(req, timeout=16)
-        content = raw["choices"][0]["message"]["content"]
-        data.setdefault("debug", {})["genomeRepairMessageMode"] = message_mode
-        return parse_first_valid_llm_json(content)
-    except Exception as e:
-        log_event("warn", "LLM genome repair failed", {"error": repr(e), "attempt": attempt})
-        return None
-
-def repair_llm_combat_genome_if_needed(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
-    if not combat_genome_required_for(data):
-        return data
-
-    debug = data.setdefault("debug", {})
-    repair_log: list[dict[str, Any]] = []
-    for attempt in range(1, 3):
-        defects = genome_defects(data)
-        if not defects:
-            if repair_log:
-                debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
-            return data
-        patch = try_llm_genome_repair(data, a, b, ca, cb, key, defects, attempt)
-        repair_log.append({"attempt": attempt, "defects": defects, "gotPatch": bool(patch)})
-        if not patch:
-            break
-        merge_genome_repair(data, patch)
-
-    defects = genome_defects(data)
-    if defects:
-        debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
-        debug["authorRepairRejectedDomains"] = [{
-            "path": "$.runtimePlan.engineCalls",
-            "kind": "genome_non_executable",
-        }]
-        raise PlannerUnavailable("LLM planner did not complete attack.genome after repair loop (" + "; ".join(defects) + "); craft failed and ingredients must be refunded")
-    debug["genomeRepair"] = json.dumps(repair_log, ensure_ascii=False)
-    return data
-
 def _parse_required_float(value: Any, field: str) -> float:
     try:
         x = float(value)
@@ -391,7 +218,7 @@ def _parse_required_float(value: Any, field: str) -> float:
 
 def _hard_clamp_authored_number(value: Any, field: str, debug: dict[str, Any]) -> float:
     x = _parse_required_float(value, field)
-    lo, hi = LLM_NUMERIC_GENOME_LIMITS[field]
+    lo, hi = NUMERIC_LIMITS[field]
     y = max(lo, min(hi, x))
     if y != x:
         debug.setdefault("llmGenomeHardClamps", []).append({"field": field, "from": x, "to": y})
@@ -411,16 +238,16 @@ def _require_authored_enum(proposed: dict[str, Any], field: str, allowed: dict[s
 def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], stage: dict[str, Any]) -> dict[str, Any]:
     """Use the LLM's concrete combat genome as the source of truth.
 
-    This is the opposite of the old v2.16 behavior where code/random defaults created most
-    knobs and the LLM merely nudged them. If the first LLM response is incomplete, the
-    server asks the same LLM to choose the missing mechanics in a repair loop. Only if
-    that repair still fails does the craft refund. The validator hard-clamps engine/
-    progression outliers and derives execution caps; it does not invent cadence, AoE,
-    pierce, delivery, or on-hit fantasy.
+    The runtime-plan compiler is authoritative. Missing or malformed fields are reported
+    back to the same Author transaction through structured ``author_repair_targets``;
+    there is no second genome-specific model role.  After the one bounded Author repair,
+    any remaining defect refunds the craft.  The validator hard-clamps engine/progression
+    outliers and derives execution caps; it does not invent cadence, AoE, pierce,
+    delivery, or on-hit fantasy.
     """
     proposed = proposed_attack_genome(data)
-    # By the time this function runs, validate_and_repair() has already run the
-    # LLM repair loop for missing/malformed fields. Any remaining defect is a hard failure.
+    # compile_and_validate_authored_runtime() owns the single bounded Author repair.
+    # Any defect still visible here is a hard executable-boundary failure.
     defect_details = genome_defect_details(data)
     defects = [str(row.get("reason") or "") for row in defect_details]
     if defects:
@@ -460,7 +287,7 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
         g[field] = val
 
     # Optional numeric fields may be omitted. These are not creative core; they are execution detail.
-    for field, default in LLM_OPTIONAL_GENOME_DEFAULTS.items():
+    for field, default in COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS.items():
         if field in proposed and proposed.get(field) not in (None, ""):
             val = _hard_clamp_authored_number(proposed.get(field), field, debug)
         else:
@@ -566,8 +393,8 @@ def llm_authored_weapon_genome(data: dict[str, Any], a: dict[str, Any], b: dict[
     g["parentProfiles"] = []
     g["llmAuthored"] = True
     g["authoringCoverage"] = {
-        "requiredFields": list(LLM_REQUIRED_GENOME_FIELDS),
-        "optionalDefaultsUsed": sorted([f for f in LLM_OPTIONAL_GENOME_DEFAULTS if f not in proposed]),
+        "requiredFields": list(COMPILED_COMBAT_GENOME_REQUIRED_FIELDS),
+        "optionalDefaultsUsed": sorted([f for f in COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS if f not in proposed]),
         "hardClampCount": len(debug.get("llmGenomeHardClamps", [])),
     }
     g = sanitize_genome_engine(g, stage)
@@ -903,9 +730,6 @@ __all__ = [
     "safe_enum",
     "proposed_attack_genome",
     "genome_defects",
-    "merge_genome_repair",
-    "try_llm_genome_repair",
-    "repair_llm_combat_genome_if_needed",
     "_parse_required_float",
     "_hard_clamp_authored_number",
     "_require_authored_enum",

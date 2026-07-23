@@ -208,7 +208,7 @@ NUMERIC_LIMITS = {
     "aoeRadiusTiles": (0.0, 10.0), "homingStrength": (0.0, 1.0), "lifetimeTicks": (25.0, 900.0),
     "extraUpdates": (0.0, 3.0), "rangeTiles": (4.0, 120.0),
     "spreadRadians": (0.0, 0.75),
-    "speed": (3.0, 18.0), "beamWidthPx": (2.0, 96.0), "beamChargeTicks": (0.0, 300.0), "chargeTicks": (1.0, 300.0), "chargePowerMultiplier": (1.0, 3.0), "delayTicks": (0.0, 300.0), "sentryAttackIntervalTicks": (12.0, 180.0), "sentryTargetRangeTiles": (8.0, 60.0), "sentryLifetimeTicks": (120.0, 36000.0), "immunityCooldown": (4.0, 60.0), "splitCount": (0.0, 8.0), "chainCount": (0.0, 6.0), "pullStrength": (0.0, 1.0),
+    "speed": (3.0, 18.0), "beamWidthPx": (2.0, 96.0), "beamChargeTicks": (0.0, 300.0), "chargeTicks": (1.0, 300.0), "chargePowerMultiplier": (1.0, 3.0), "delayTicks": (0.0, 300.0), "sentryAttackIntervalTicks": (12.0, 180.0), "sentryTargetRangeTiles": (8.0, 60.0), "sentryLifetimeTicks": (120.0, 36000.0), "immunityCooldown": (0.0, 60.0), "splitCount": (0.0, 8.0), "chainCount": (0.0, 6.0), "pullStrength": (0.0, 1.0),
     "trailLength": (0.0, 24.0), "burstDustCap": (0.0, 40.0), "fieldRadiusTiles": (0.0, 6.0),
     "fieldLifetimeTicks": (0.0, 240.0), "tickRate": (1.0, 60.0), "secondaryDamageMultiplier": (0.0, 1.0),
     "secondarySpreadRadians": (0.0, 1.2), "secondaryLifetimeTicks": (5.0, 180.0), "sameTargetBias": (0.0, 1.0),

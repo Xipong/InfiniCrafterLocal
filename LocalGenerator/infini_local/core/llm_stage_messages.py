@@ -29,9 +29,6 @@ STAGE_MESSAGE_NAMES = frozenset({
     "vfx_validator",
     "pipeline_orchestrator",
 
-    "genome_repair_contract",
-    "genome_validator",
-    "genome_repairer",
 })
 
 ATTRIBUTED_PLANNER_HISTORY_KIND = "attributed_planner_history_v1"

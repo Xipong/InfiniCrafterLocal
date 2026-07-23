@@ -58,7 +58,7 @@ BAD_NAME_PATTERNS = [
 
 
 # Product invariants: the live /combine pipeline has one strict runtime-authoring path.
-# Offline deterministic harnesses may disable USE_LLM, but cannot re-enable legacy genome repair.
+# Offline deterministic harnesses may disable USE_LLM, but cannot introduce a second genome-repair model role.
 LLM_RUNTIME_AUTHORING = True
 LLM_RUNTIME_PLAN_REQUIRED = True
 LLM_RUNTIME_STRICT_VALIDATION = True
@@ -133,50 +133,6 @@ STAGE_PROFILES = [
 ]
 
 
-LLM_REQUIRED_GENOME_FIELDS = [
-    "runtimeFamily", "delivery", "movement",
-    "useTimeTicks", "shotCount", "pierce", "aoeRadiusTiles",
-    "lifetimeTicks", "rangeTiles", "spreadRadians", "speed",
-]
-
-LLM_OPTIONAL_GENOME_DEFAULTS = {
-    "homingStrength": 0.0,
-    "beamChargeTicks": 0,
-    "delayTicks": 30,
-    "immunityCooldown": 0,
-    "extraUpdates": 0,
-    "splitCount": 0,
-    "chainCount": 0,
-    "pullStrength": 0.0,
-    "trailLength": 0,
-    "burstDustCap": 0,
-}
-
-LLM_NUMERIC_GENOME_LIMITS = {
-    "useTimeTicks": (10.0, 150.0),
-    "shotCount": (1.0, 8.0),
-    "pierce": (-1.0, 10.0),
-    "aoeRadiusTiles": (0.0, 10.0),
-    "homingStrength": (0.0, 1.0),
-    "beamChargeTicks": (0.0, 300.0),
-    "chargeTicks": (1.0, 300.0),
-    "chargePowerMultiplier": (1.0, 3.0),
-    "delayTicks": (0.0, 300.0),
-    "sentryAttackIntervalTicks": (12.0, 180.0),
-    "sentryTargetRangeTiles": (8.0, 60.0),
-    "sentryLifetimeTicks": (120.0, 36000.0),
-    "immunityCooldown": (0.0, 60.0),
-    "lifetimeTicks": (25.0, 900.0),
-    "extraUpdates": (0.0, 3.0),
-    "rangeTiles": (4.0, 120.0),
-    "spreadRadians": (0.0, 0.75),
-    "speed": (3.0, 18.0),
-    "splitCount": (0.0, 8.0),
-    "chainCount": (0.0, 6.0),
-    "pullStrength": (0.0, 1.0),
-    "trailLength": (0.0, 24.0),
-    "burstDustCap": (0.0, 40.0),
-}
 
 
 __all__ = [
@@ -192,7 +148,4 @@ __all__ = [
     "LLM_AMMO_ITEM_KEYS",
     "STAGE_PROFILES",
 
-    "LLM_REQUIRED_GENOME_FIELDS",
-    "LLM_OPTIONAL_GENOME_DEFAULTS",
-    "LLM_NUMERIC_GENOME_LIMITS",
 ]

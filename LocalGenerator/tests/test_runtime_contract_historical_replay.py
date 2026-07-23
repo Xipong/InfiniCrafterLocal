@@ -474,6 +474,33 @@ def test_replay_fails_closed_on_dropped_receipt_or_rejected_call(monkeypatch) ->
     assert "rejected" in str(rejected_report["error"]).lower()
 
 
+def test_deterministic_root_witnesses_follow_canonical_required_bindings() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ROOT_EXECUTOR_FUNCTION_NAMES,
+        normalized_root_required_authored_param_names,
+    )
+
+    candidates = replay.deterministic_contract_witness_candidates()
+    calls_by_function: dict[str, list[dict[str, object]]] = {}
+    for candidate in candidates:
+        runtime_plan = candidate.get("runtimePlan") or {}
+        for call in runtime_plan.get("engineCalls") or []:
+            if not isinstance(call, dict):
+                continue
+            calls_by_function.setdefault(str(call.get("fn") or ""), []).append(call)
+
+    for fn in sorted(ROOT_EXECUTOR_FUNCTION_NAMES):
+        required_sources = set(normalized_root_required_authored_param_names(fn))
+        assert required_sources, fn
+        witnesses = calls_by_function.get(fn) or []
+        assert witnesses, f"missing deterministic root witness for {fn}"
+        assert any(
+            required_sources <= set((call.get("params") or {}).keys())
+            for call in witnesses
+        ), (fn, sorted(required_sources))
+
+
 def test_corpus_preserves_engine_function_coverage_report() -> None:
     import infini_local.qa.runtime_contract_replay as replay
     from infini_local.core.runtime_authoring.function_contract_registry import (

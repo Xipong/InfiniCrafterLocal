@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 
 
 from infini_local.core.runtime_overhead_barrage_policy import apply_overhead_barrage_contract
@@ -29,6 +30,9 @@ from infini_local.core.vfx_composition_primitives import (
     VFX_CUE_RENDERERS,
     VFX_CUE_ROLES,
 )
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+)
 from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
 from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 from infini_local.core.runtime_authoring.equipment import apply_accessory_calls, apply_armor_calls
@@ -41,6 +45,28 @@ from infini_local.core.runtime_authoring.structural import _first_non_empty, _me
 
 
 TERRARIA_TILE_SIZE_PX = 16
+
+# Canonical post-compiler combat-genome surface.  The terminal root grammar is
+# projected from the typed function registry; only compiler-owned derived/defaulted
+# fields are added here.  Downstream validation must consume these constants instead
+# of maintaining an LLM-era mirror in pipeline configuration.
+COMPILED_COMBAT_GENOME_REQUIRED_FIELDS: tuple[str, ...] = tuple(dict.fromkeys((
+    *NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+    "useTimeTicks",
+    "aoeRadiusTiles",
+)))
+COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS: Mapping[str, int | float] = MappingProxyType({
+    "homingStrength": 0.0,
+    "beamChargeTicks": 0,
+    "delayTicks": 30,
+    "immunityCooldown": 0,
+    "extraUpdates": 0,
+    "splitCount": 0,
+    "chainCount": 0,
+    "pullStrength": 0.0,
+    "trailLength": 0,
+    "burstDustCap": 0,
+})
 
 
 def project_aoe_radius_tiles_to_damage_pixels(value: Any) -> int:

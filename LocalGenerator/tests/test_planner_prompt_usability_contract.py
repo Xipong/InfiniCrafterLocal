@@ -114,7 +114,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
 
 
 def _check_planner_payload_keeps_all_static_contract_bytes_before_recipe_data() -> None:
-    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_structural_final_wire_v4_v0.4.242"
+    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_structural_final_wire_v5_v0.4.243"
     other_a = {"name": "Magic Mirror", "type": 50, "damage": 0, "useTime": 90, "value": 5000}
     other_b = {"name": "Fallen Star", "type": 75, "damage": 0, "maxStack": 9999, "value": 5}
     first = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_prefix_a")

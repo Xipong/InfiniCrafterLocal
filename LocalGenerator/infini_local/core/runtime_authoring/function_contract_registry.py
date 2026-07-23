@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring.engine_param_boundaries import (
     GeneratedBuffParamBoundary,
 )
 from infini_local.core.runtime_authoring.function_contract_types import (
+    FUNCTION_SOURCE_PATH,
     EngineLowererContract,
     LoweredParamBinding,
     NormalizedParamContract,
@@ -56,8 +57,18 @@ _PARTICLE_EFFECT_VALUES = (
 )
 _ARMOR_SLOT_VALUES = ("head", "body", "legs")
 
+# Stable wire name of the sole terminal combat executor. Specialized Author
+# functions lower into this function through typed registry edges.
+NORMALIZED_ROOT_FUNCTION_NAME = "shoot_projectile"
+
 def _param(**kwargs: Any) -> EngineParamContract:
     return EngineParamContract(**kwargs)
+
+
+def _root_required_param(**kwargs: Any) -> EngineParamContract:
+    """Declare one mandatory field of the terminal normalized root grammar."""
+
+    return EngineParamContract(required_on_normalized_root=True, **kwargs)
 
 
 def _internal(name: str, *compiled_fields: str) -> NormalizedParamContract:
@@ -73,7 +84,7 @@ def _direct_bindings(*names: str) -> tuple[LoweredParamBinding, ...]:
 
 
 def _lowerer(*bindings: LoweredParamBinding) -> EngineLowererContract:
-    return EngineLowererContract(target_function="shoot_projectile", bindings=tuple(bindings))
+    return EngineLowererContract(target_function=NORMALIZED_ROOT_FUNCTION_NAME, bindings=tuple(bindings))
 
 
 # One canonical owner for parameters accepted by every root executor.  The direct
@@ -213,19 +224,6 @@ _ROOT_PROJECTILE_DIRECT_PARAMS = (
 )
 
 
-NORMALIZED_ROOT_REQUIRED_PARAM_NAMES: tuple[str, ...] = (
-    "runtimeFamily",
-    "delivery",
-    "movement",
-    "speed",
-    "rangeTiles",
-    "lifetimeTicks",
-    "shotCount",
-    "spreadRadians",
-    "pierce",
-)
-
-
 ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
     EngineFunctionContract(
         name='set_item_stats',
@@ -260,17 +258,17 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         repair_groups=(),
     ),
     EngineFunctionContract(
-        name='shoot_projectile',
+        name=NORMALIZED_ROOT_FUNCTION_NAME,
         meaning='Low-level root executor; runtimeFamily required. Exactly one root executor owns a use, but delivery=swing with runtimeFamily=shoot keeps the item/tool body hitbox and also emits the projectile.',
         params=(
-        _param(name='delivery', prompt_description='swing|thrust|flail|yoyo|whip|shoot|cast|throw|summon; pair with runtimeFamily', value_kind=ParamValueKind.ENUM, example_value='swing', compiled_fields=('delivery',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('swing', 'thrust', 'flail', 'yoyo', 'whip', 'shoot', 'cast', 'throw', 'summon')),
-        _param(name='movement', prompt_description='straight|slow_homing|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|vortex_orb|blackhole_pull|proximity_missile|returning_glaive|expanding_wave|flail_tether|yoyo_hover|whip_lash; phase passes tiles', value_kind=ParamValueKind.ENUM, example_value='straight', compiled_fields=('movement',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('straight', 'slow_homing', 'gravity_arc', 'drift', 'orbit', 'boomerang', 'bounce', 'sine_homing', 'phase', 'accelerate', 'spiral', 'vortex_orb', 'blackhole_pull', 'proximity_missile', 'returning_glaive', 'expanding_wave', 'flail_tether', 'yoyo_hover', 'whip_lash')),
-        _param(name='speed', prompt_description='3..18', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('speed',), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='rangeTiles', prompt_description='4..120', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('range', 'rangeTiles'), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='lifetimeTicks', prompt_description='25..900', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('lifetime', 'lifetimeTicks'), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='shotCount', prompt_description='1..8 simultaneous', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('shotCount',), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='spreadRadians', prompt_description='0..0.75', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('spreadRadians',), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='pierce', prompt_description='-1=infinite hits; 0 or 1=one target total; 2..10=total NPC hits', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('pierce',), wire_obligation=WireObligation.FINAL_WIRE),
+        _root_required_param(name='delivery', prompt_description='swing|thrust|flail|yoyo|whip|shoot|cast|throw|summon; pair with runtimeFamily', value_kind=ParamValueKind.ENUM, example_value='swing', compiled_fields=('delivery',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('swing', 'thrust', 'flail', 'yoyo', 'whip', 'shoot', 'cast', 'throw', 'summon')),
+        _root_required_param(name='movement', prompt_description='straight|slow_homing|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|vortex_orb|blackhole_pull|proximity_missile|returning_glaive|expanding_wave|flail_tether|yoyo_hover|whip_lash; phase passes tiles', value_kind=ParamValueKind.ENUM, example_value='straight', compiled_fields=('movement',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('straight', 'slow_homing', 'gravity_arc', 'drift', 'orbit', 'boomerang', 'bounce', 'sine_homing', 'phase', 'accelerate', 'spiral', 'vortex_orb', 'blackhole_pull', 'proximity_missile', 'returning_glaive', 'expanding_wave', 'flail_tether', 'yoyo_hover', 'whip_lash')),
+        _root_required_param(name='speed', prompt_description='3..18', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('speed',), wire_obligation=WireObligation.FINAL_WIRE),
+        _root_required_param(name='rangeTiles', prompt_description='4..120', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('range', 'rangeTiles'), wire_obligation=WireObligation.FINAL_WIRE),
+        _root_required_param(name='lifetimeTicks', prompt_description='25..900', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('lifetime', 'lifetimeTicks'), wire_obligation=WireObligation.FINAL_WIRE),
+        _root_required_param(name='shotCount', prompt_description='1..8 simultaneous', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('shotCount',), wire_obligation=WireObligation.FINAL_WIRE),
+        _root_required_param(name='spreadRadians', prompt_description='0..0.75', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('spreadRadians',), wire_obligation=WireObligation.FINAL_WIRE),
+        _root_required_param(name='pierce', prompt_description='-1=infinite hits; 0 or 1=one target total; 2..10=total NPC hits', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('pierce',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='extraUpdates', prompt_description='0..3', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('extraUpdates',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='homingStrength', prompt_description='0..1', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('homingStrength',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='beamWidthPx', prompt_description='2..96', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('beamWidthPx',), wire_obligation=WireObligation.FINAL_WIRE),
@@ -279,7 +277,7 @@ ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
         _param(name='chargePowerMultiplier', prompt_description='1..3', value_kind=ParamValueKind.NUMBER, example_value=1.0, compiled_fields=('chargePowerMultiplier',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='delayTicks', prompt_description='0..300; overhead_barrage 0=immediate', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('delayTicks',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='immunityCooldown', prompt_description='4..60', value_kind=ParamValueKind.INTEGER, example_value=1, compiled_fields=('immunityCooldown',), wire_obligation=WireObligation.FINAL_WIRE),
-        _param(name='runtimeFamily', prompt_description='swing|thrust|returning|flail|yoyo|whip|shoot|cast|beam|charge_release|overhead_barrage|throw|summon; sentry uses deploy_sentry', value_kind=ParamValueKind.ENUM, example_value='swing', compiled_fields=('runtimeFamily',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('swing', 'thrust', 'returning', 'flail', 'yoyo', 'whip', 'shoot', 'cast', 'beam', 'charge_release', 'overhead_barrage', 'throw', 'summon')),
+        _root_required_param(name='runtimeFamily', prompt_description='swing|thrust|returning|flail|yoyo|whip|shoot|cast|beam|charge_release|overhead_barrage|throw|summon; sentry uses deploy_sentry', value_kind=ParamValueKind.ENUM, example_value='swing', compiled_fields=('runtimeFamily',), wire_obligation=WireObligation.FINAL_WIRE, enum_values=('swing', 'thrust', 'returning', 'flail', 'yoyo', 'whip', 'shoot', 'cast', 'beam', 'charge_release', 'overhead_barrage', 'throw', 'summon')),
         _param(name='weaponFamily', prompt_description='exact optional', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=('weaponFamily',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='projectileFamily', prompt_description='visual form', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=('projectileFamily',), wire_obligation=WireObligation.FINAL_WIRE),
         _param(name='projectileShape', prompt_description='visual body', value_kind=ParamValueKind.STRING, example_value='value', compiled_fields=('projectileShape',), wire_obligation=WireObligation.FINAL_WIRE),
@@ -836,6 +834,17 @@ if _CONTRACT_ERRORS:
 
 ENGINE_FUNCTION_CONTRACT_BY_NAME = MappingProxyType({spec.name: spec for spec in ENGINE_FUNCTION_CONTRACTS})
 
+# Derived from the terminal normalized root grammar. Adding/removing a mandatory
+# root field is therefore one typed registry edit: prompt, repair, validation and
+# lowerer parity all consume this projection.
+NORMALIZED_ROOT_REQUIRED_PARAM_NAMES: tuple[str, ...] = tuple(
+    param.name
+    for param in ENGINE_FUNCTION_CONTRACT_BY_NAME[NORMALIZED_ROOT_FUNCTION_NAME].params
+    if param.required_on_normalized_root
+)
+if not NORMALIZED_ROOT_REQUIRED_PARAM_NAMES:
+    raise RuntimeError("normalized root contract declares no required parameters")
+
 
 def _normalize_function_name(fn: object) -> str:
     return str(fn or "").strip().lower().replace("-", "_").replace(" ", "_")
@@ -938,6 +947,34 @@ def lowerer_output_param_names(source_fn: str, target_fn: str) -> frozenset[str]
         for binding in lowerer.bindings
         for path in binding.target_param_paths
     )
+
+
+def normalized_root_required_authored_param_names(fn: str) -> tuple[str, ...]:
+    """Project authored source params needed by the normalized root grammar.
+
+    Function-identity bindings (``$function``) represent finite lowerer decisions and
+    therefore do not create an Author parameter requirement.  Nested source paths
+    return their public top-level parameter owner.
+    """
+
+    normalized = _normalize_function_name(fn)
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(normalized)
+    if spec is None or not spec.root_executor:
+        return ()
+    required_targets = set(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)
+    if normalized == NORMALIZED_ROOT_FUNCTION_NAME:
+        required_sources = required_targets
+    else:
+        lowerer = lowerer_contract(normalized, NORMALIZED_ROOT_FUNCTION_NAME)
+        if lowerer is None:
+            return ()
+        required_sources = {
+            binding.source_path.split(".", 1)[0]
+            for binding in lowerer.bindings
+            if binding.source_path != FUNCTION_SOURCE_PATH
+            and required_targets.intersection(binding.target_param_paths)
+        }
+    return tuple(param.name for param in spec.params if param.name in required_sources)
 
 
 def _path_present(data: dict[str, Any], path: str) -> bool:
@@ -1128,7 +1165,7 @@ def engine_function_contract_surface() -> dict[str, dict[str, Any]]:
         for param in spec.params:
             value_kind = param.value_kind.value if isinstance(param.value_kind, ParamValueKind) else str(param.value_kind)
             obligation = param.wire_obligation.value if isinstance(param.wire_obligation, WireObligation) else str(param.wire_obligation)
-            params[param.name] = {
+            param_row = {
                 "promptDescription": param.prompt_description,
                 "valueKind": value_kind,
                 "exampleValue": _json_contract_value(param.example_value),
@@ -1146,6 +1183,9 @@ def engine_function_contract_surface() -> dict[str, dict[str, Any]]:
                     for nested in param.nested_wire_paths
                 ],
             }
+            if param.required_on_normalized_root:
+                param_row["requiredOnNormalizedRoot"] = True
+            params[param.name] = param_row
         out[spec.name] = {
             "rootExecutor": spec.root_executor,
             "requiresRootExecutor": spec.requires_root_executor,
@@ -1265,10 +1305,12 @@ __all__ = [
     "REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION",
     "ROOT_EXECUTOR_FUNCTION_NAMES",
     "ROOT_EXECUTOR_SHARED_PARAM_NAMES",
+    "NORMALIZED_ROOT_FUNCTION_NAME",
     "NORMALIZED_ROOT_REQUIRED_PARAM_NAMES",
     "lowerer_contract",
     "lowerer_passthrough_param_names",
     "lowerer_output_param_names",
+    "normalized_root_required_authored_param_names",
     "lowerer_target_source_map",
     "validate_lowerer_output",
     "engine_function_impact_names",

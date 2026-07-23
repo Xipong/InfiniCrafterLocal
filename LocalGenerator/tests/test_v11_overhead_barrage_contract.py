@@ -243,10 +243,25 @@ def _contract_check_overhead_barrage_csharp_preserves_effect_and_selects_item_af
     assert "parent.ProjectileShape" in barrage_policy
 
 
-def _contract_check_llm_repair_prompt_advertises_only_canonical_overhead_name() -> None:
-    repair_source = (ROOT / "LocalGenerator/infini_local/pipelines/combine_genome.py").read_text(encoding="utf-8")
-    assert "starburst|overhead_barrage|aura_pulse" in repair_source
-    assert "starburst|starfall|aura_pulse" not in repair_source
+def _contract_check_author_provider_uses_only_canonical_overhead_name() -> None:
+    from infini_local.core.runtime_authoring.engine_call_contracts import (
+        engine_param_enum_values,
+    )
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        engine_function_catalog,
+    )
+
+    on_hit_values = engine_param_enum_values("apply_on_hit_effect", "onHit")
+    ranged_families = engine_param_enum_values("fire_ranged_weapon", "family")
+    root_families = engine_param_enum_values("shoot_projectile", "runtimeFamily")
+    assert "overhead_barrage" in on_hit_values
+    assert "overhead_barrage" in ranged_families
+    assert "overhead_barrage" in root_families
+    assert "starfall" not in on_hit_values + ranged_families + root_families
+
+    cards = engine_function_catalog()
+    assert "overhead_barrage" in cards["apply_on_hit_effect"]["params"]["onHit"]
+    assert "starfall" not in cards["apply_on_hit_effect"]["params"]["onHit"]
 
 
 # One collected item per contract module; individual checks keep source order and tracebacks.
@@ -266,6 +281,6 @@ def test_v11_overhead_barrage_contract_module_contract(request):
             '_contract_check_starfury_like_swing_keeps_authored_star_theme_and_zero_delay',
             '_contract_check_starfury_like_star_theme_survives_full_pipeline',
             '_contract_check_overhead_barrage_csharp_preserves_effect_and_selects_item_affordance_from_delivery',
-            '_contract_check_llm_repair_prompt_advertises_only_canonical_overhead_name',
+            '_contract_check_author_provider_uses_only_canonical_overhead_name',
         ),
     )

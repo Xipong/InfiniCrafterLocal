@@ -1949,7 +1949,7 @@ def _contract_check_runtime_validation_errors_always_publish_structured_targets(
     assert set(cards["armor"]["params"]) == {"stats"}
 
 
-def _contract_check_global_genome_defect_structurally_rejects_whole_engine_call_domain(monkeypatch) -> None:
+def _contract_check_global_genome_defect_routes_back_to_the_same_author_domain() -> None:
     from infini_local.pipelines import combine_genome
 
     current_plan = {
@@ -1958,27 +1958,25 @@ def _contract_check_global_genome_defect_structurally_rejects_whole_engine_call_
             {"callId": "primary", "fn": "shoot_projectile", "params": {"lifetimeTicks": 900}},
         ],
     }
-    data = {"runtimePlan": deepcopy(current_plan), "debug": {}}
-    monkeypatch.setattr(combine_genome, "combat_genome_required_for", lambda _data: True)
-    monkeypatch.setattr(
-        combine_genome,
-        "genome_defects",
-        lambda _data: ["composite projectile pressure exceeds runtime safety envelope"],
+    data = {"runtimePlan": deepcopy(current_plan)}
+    targets = combine_genome._genome_author_repair_targets(
+        data,
+        [{
+            "kind": "genome_non_executable",
+            "reason": "composite projectile pressure exceeds runtime safety envelope",
+            "compiledFields": ["aggregateProjectilePressure"],
+        }],
     )
-    monkeypatch.setattr(combine_genome, "try_llm_genome_repair", lambda *_args, **_kwargs: None)
-
-    with pytest.raises(PlannerUnavailable, match="composite projectile pressure"):
-        combine_genome.repair_llm_combat_genome_if_needed(data, {}, {}, {}, {}, "recipe-key")
-
-    rejected_domains = data["debug"]["authorRepairRejectedDomains"]
-    assert rejected_domains == [{
-        "path": "$.runtimePlan.engineCalls",
+    assert targets == [{
         "kind": "genome_non_executable",
+        "path": "$.runtimePlan.engineCalls",
+        "reason": "composite projectile pressure exceeds runtime safety envelope",
+        "compiledFields": ["aggregateProjectilePressure"],
     }]
-    failure_report = {"authorRepairRejectedDomains": rejected_domains}
-    assert author_item_repair_scope._rejected_call_ids(failure_report, current_plan) == {
-        "stats", "primary",
-    }
+
+    failure_report = {"authorRepairTargets": targets}
+    rejected = author_item_repair_scope._rejected_call_ids(failure_report, current_plan)
+    assert rejected == {"stats", "primary"}
 
     replacement = {
         "engineCalls": [
@@ -1989,11 +1987,13 @@ def _contract_check_global_genome_defect_structurally_rejects_whole_engine_call_
     author_item_repair_delta._preserve_accepted_engine_calls(
         replacement,
         current_plan,
-        author_item_repair_scope._rejected_call_ids(failure_report, current_plan),
+        rejected,
     )
     assert replacement["engineCalls"][0]["params"]["useTimeTicks"] == 30
     assert replacement["engineCalls"][1]["params"]["lifetimeTicks"] == 120
 
+    # Keep one production-path integration assertion: the compiled-genome boundary
+    # must publish the same structured targets consumed by the single Author repair.
     pressure_data = {
         "gameplay": {"powerBudget": 1.0},
         "runtimePlan": {"engineCalls": [
@@ -2021,17 +2021,46 @@ def _contract_check_global_genome_defect_structurally_rejects_whole_engine_call_
     }
     with pytest.raises(PlannerUnavailable) as raised:
         combine_genome.llm_authored_weapon_genome(pressure_data, {}, {}, {})
-    targets = raised.value.author_repair_targets
-    assert {str(target.get("callId") or "") for target in targets} == {"stats", "primary"}
-    assert all("composite projectile pressure" in str(target.get("reason") or "") for target in targets)
+    published_targets = raised.value.author_repair_targets
+    assert {str(target.get("callId") or "") for target in published_targets} == {
+        "stats", "primary",
+    }
+    assert all(
+        "composite projectile pressure" in str(target.get("reason") or "")
+        for target in published_targets
+    )
     compiled_by_call = {
         str(target.get("callId") or ""): set(target.get("compiledFields") or [])
-        for target in targets
+        for target in published_targets
     }
     assert compiled_by_call["stats"] == {"useTimeTicks"}
     assert compiled_by_call["primary"] == {
         "extraUpdates", "lifetimeTicks", "shotCount", "useTimeTicks",
     }
+
+
+def _contract_check_compiled_genome_surface_has_one_executable_owner() -> None:
+    from infini_local.core.runtime_authoring.compiler import (
+        COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS,
+        COMPILED_COMBAT_GENOME_REQUIRED_FIELDS,
+    )
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+    )
+    from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS
+    from infini_local.pipelines import pipeline_runtime_constants
+
+    root_count = len(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)
+    assert tuple(COMPILED_COMBAT_GENOME_REQUIRED_FIELDS[:root_count]) == tuple(
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES
+    )
+    assert {"useTimeTicks", "aoeRadiusTiles"} <= set(
+        COMPILED_COMBAT_GENOME_REQUIRED_FIELDS
+    )
+    assert set(COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS) <= set(NUMERIC_LIMITS)
+    assert not hasattr(pipeline_runtime_constants, "LLM_REQUIRED_GENOME_FIELDS")
+    assert not hasattr(pipeline_runtime_constants, "LLM_OPTIONAL_GENOME_DEFAULTS")
+    assert not hasattr(pipeline_runtime_constants, "LLM_NUMERIC_GENOME_LIMITS")
 
 
 def _contract_check_active_engine_cards_execute_authored_visual_and_summon_fields() -> None:

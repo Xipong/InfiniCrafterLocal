@@ -4,7 +4,7 @@ from typing import Any
 
 # Version names are intentionally semantic, not only numeric.  Generated recipes can be
 # inspected later without guessing which prompt/runtime/visual contract authored them.
-PLANNER_PROMPT_PROFILE_VERSION = "planner_prompt_structural_final_wire_v4_v0.4.242"
+PLANNER_PROMPT_PROFILE_VERSION = "planner_prompt_structural_final_wire_v5_v0.4.243"
 VISUAL_ROLE_CONTRACT_VERSION = "projectile_local_forward_axis_visual_contract_v0.4.242"
 RUNTIME_AFFORDANCE_SCHEMA_VERSION = "infini.runtime-affordance.v2"
 FAILURE_UX_CONTRACT_VERSION = "structured_failure_player_message_v0.4.174"

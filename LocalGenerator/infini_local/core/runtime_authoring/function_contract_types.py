@@ -92,6 +92,7 @@ class EngineParamContract:
     list_item_model: type[Any] | None = None
     function_card_visible: bool = True
     prompt_group: str = ""
+    required_on_normalized_root: bool = False
     nested_wire_paths: tuple[NestedWirePathContract, ...] = ()
 
 
@@ -315,6 +316,16 @@ def validate_engine_function_contracts(
                 errors.append(f"{p_label}: hidden params require prompt_group")
             if prompt_group and not _TOKEN_RE.fullmatch(prompt_group):
                 errors.append(f"{p_label}: invalid prompt_group {prompt_group!r}")
+            if not isinstance(param.required_on_normalized_root, bool):
+                errors.append(f"{p_label}: required_on_normalized_root must be bool")
+            elif param.required_on_normalized_root and not spec.root_executor:
+                errors.append(
+                    f"{p_label}: only root executors may declare required_on_normalized_root"
+                )
+            elif param.required_on_normalized_root and lowerer_iter:
+                errors.append(
+                    f"{p_label}: normalized-root required metadata belongs only to a terminal root"
+                )
 
             if not isinstance(param.nested_wire_paths, tuple):
                 errors.append(f"{p_label}: nested_wire_paths must be a tuple")
@@ -355,6 +366,12 @@ def validate_engine_function_contracts(
                 if compiled and param.provenance_via_lowerer:
                     errors.append(
                         f"{p_label}: static compiled_fields and provenance_via_lowerer are mutually exclusive owners"
+                    )
+                if param.required_on_normalized_root and (
+                    not compiled or param.provenance_via_lowerer
+                ):
+                    errors.append(
+                        f"{p_label}: normalized-root required params must be direct compiled fields"
                     )
             elif obligation is WireObligation.CONTROL_DERIVED:
                 if param.provenance_via_lowerer:
@@ -449,6 +466,40 @@ def validate_engine_function_contracts(
         for spec in ordered
         if isinstance(spec, EngineFunctionContract) and str(spec.name or "").strip()
     }
+    normalized_root_owners = [
+        spec
+        for spec in by_name.values()
+        if any(
+            isinstance(param, EngineParamContract)
+            and param.required_on_normalized_root
+            for param in spec.params
+        )
+    ]
+    if len(normalized_root_owners) > 1:
+        errors.append(
+            "registry: normalized-root required metadata has multiple owners "
+            f"{sorted(spec.name for spec in normalized_root_owners)!r}"
+        )
+    normalized_root_owner = normalized_root_owners[0] if len(normalized_root_owners) == 1 else None
+    if normalized_root_owner is not None:
+        if not normalized_root_owner.root_executor or normalized_root_owner.lowerers:
+            errors.append(
+                f"function({normalized_root_owner.name}): normalized root owner must be a terminal root executor"
+            )
+        for spec in by_name.values():
+            if not spec.root_executor or spec.name == normalized_root_owner.name:
+                continue
+            targets = tuple(
+                str(lowerer.target_function or "").strip()
+                for lowerer in spec.lowerers
+                if isinstance(lowerer, EngineLowererContract)
+            )
+            if targets != (normalized_root_owner.name,):
+                errors.append(
+                    f"function({spec.name}): root executor must lower exactly once to "
+                    f"normalized root {normalized_root_owner.name!r}; got {targets!r}"
+                )
+
     for index, spec in enumerate(ordered):
         if not isinstance(spec, EngineFunctionContract):
             continue
@@ -476,6 +527,13 @@ def validate_engine_function_contracts(
                     "chained lowerers are unsupported by normalization"
                 )
             target_paths = _declared_normalized_paths(target_spec)
+            required_target_paths = {
+                str(param.name).strip()
+                for param in target_spec.params
+                if isinstance(param, EngineParamContract)
+                and param.required_on_normalized_root
+            }
+            bound_target_paths: set[str] = set()
             for binding in lowerer.bindings if isinstance(lowerer.bindings, tuple) else ():
                 if not isinstance(binding, LoweredParamBinding):
                     continue
@@ -486,10 +544,17 @@ def validate_engine_function_contracts(
                         errors.append(f"{l_label}: source path {source!r} is not declared by {fn_name!r}")
                 for target_path in binding.target_param_paths:
                     path = str(target_path or "").strip()
+                    bound_target_paths.add(path)
                     if path not in target_paths:
                         errors.append(
                             f"{l_label}: target path {path!r} is not in normalized grammar for {target_name!r}"
                         )
+            missing_required_targets = sorted(required_target_paths - bound_target_paths)
+            if missing_required_targets:
+                errors.append(
+                    f"{l_label}: lowerer does not bind normalized-root required paths "
+                    f"{missing_required_targets!r}"
+                )
         if lowerers:
             for param in spec.params if isinstance(spec.params, tuple) else ():
                 if not isinstance(param, EngineParamContract) or not param.provenance_via_lowerer:

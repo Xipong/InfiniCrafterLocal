@@ -42,6 +42,7 @@ def _param(
     list_item_model: type[Any] | None = None,
     function_card_visible: bool = True,
     prompt_group: str = "",
+    required_on_normalized_root: bool = False,
     nested_wire_paths: tuple[NestedWirePathContract, ...] = (),
 ) -> EngineParamContract:
     return EngineParamContract(
@@ -58,6 +59,7 @@ def _param(
         list_item_model=list_item_model,
         function_card_visible=function_card_visible,
         prompt_group=prompt_group,
+        required_on_normalized_root=required_on_normalized_root,
         nested_wire_paths=nested_wire_paths,
     )
 
@@ -156,14 +158,19 @@ def test_normalized_root_required_fields_are_closed_and_reachable() -> None:
     from infini_local.core.runtime_authoring.function_contract_registry import (
         ENGINE_FUNCTION_CONTRACTS,
         ENGINE_FUNCTION_CONTRACT_BY_NAME,
+        NORMALIZED_ROOT_FUNCTION_NAME,
         NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+        normalized_root_required_authored_param_names,
     )
 
     required = tuple(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)
     assert required
     assert len(required) == len(set(required))
 
-    target = ENGINE_FUNCTION_CONTRACT_BY_NAME["shoot_projectile"]
+    target = ENGINE_FUNCTION_CONTRACT_BY_NAME[NORMALIZED_ROOT_FUNCTION_NAME]
+    assert required == tuple(
+        param.name for param in target.params if param.required_on_normalized_root
+    )
     target_grammar = {param.name for param in target.params} | {
         param.name for param in target.normalized_only_params
     }
@@ -189,6 +196,49 @@ def test_normalized_root_required_fields_are_closed_and_reachable() -> None:
             spec.name,
             sorted(set(required) - reachable),
         )
+        required_sources = set(normalized_root_required_authored_param_names(spec.name))
+        assert required_sources <= {param.name for param in spec.params}
+        if spec.name == target.name:
+            assert required_sources == set(required)
+
+
+def test_registry_rejects_multiple_normalized_root_metadata_owners() -> None:
+    first = _fn(
+        name="first_root",
+        root_executor=True,
+        params=(_param(name="speed", required_on_normalized_root=True),),
+    )
+    second = _fn(
+        name="second_root",
+        root_executor=True,
+        params=(_param(name="rangeTiles", required_on_normalized_root=True),),
+    )
+    errors = validate_engine_function_contracts((first, second))
+    assert any("multiple owners" in error for error in errors)
+
+
+def test_registry_rejects_root_lowerer_that_omits_a_required_target_field() -> None:
+    target = _fn(
+        name="target_root",
+        root_executor=True,
+        params=(
+            _param(name="speed", required_on_normalized_root=True),
+            _param(name="movement", compiled_fields=("movement",)),
+        ),
+    )
+    source = _fn(
+        name="source_root",
+        root_executor=True,
+        params=(_param(name="movement", compiled_fields=(), provenance_via_lowerer=True),),
+        lowerers=(
+            EngineLowererContract(
+                "target_root",
+                (LoweredParamBinding("movement", ("movement",)),),
+            ),
+        ),
+    )
+    errors = validate_engine_function_contracts((target, source))
+    assert any("required paths ['speed']" in error for error in errors)
 
 
 def test_lowerer_graph_matches_semantics_and_declares_every_output_key() -> None:

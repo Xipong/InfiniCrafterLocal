@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.runtime_authoring.common import _norm_name
-from infini_local.core.runtime_authoring.function_contract_registry import lowerer_passthrough_param_names
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    NORMALIZED_ROOT_FUNCTION_NAME,
+    lowerer_passthrough_param_names,
+)
 from infini_local.core.runtime_authoring.schema import (
     TERRARIA_WEAPON_FAMILY_GROUPS,
     _family_group,
@@ -42,7 +45,7 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
     # new provider param from being accepted but silently omitted by a stale list.
     common = _semantic_param_copy(
         p,
-        list(lowerer_passthrough_param_names(fn, "shoot_projectile")),
+        list(lowerer_passthrough_param_names(fn, NORMALIZED_ROOT_FUNCTION_NAME)),
     )
 
     if fn == "perform_melee_attack":
@@ -63,7 +66,7 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
             common.setdefault("projectileMotion", "summon whip lash")
         else:
             common.update({"runtimeFamily": "swing", "delivery": "swing", "movement": common.get("movement") or "straight", "weaponFamily": family or "broadsword"})
-        return [("shoot_projectile", common)]
+        return [(NORMALIZED_ROOT_FUNCTION_NAME, common)]
 
     if fn == "fire_ranged_weapon":
         # Keep delivery mechanics separate from projectile theme.  The exact
@@ -98,7 +101,7 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
             })
         if p.get("ammoFor") not in (None, ""):
             common["ammoFor"] = p.get("ammoFor")
-        return [("shoot_projectile", common)]
+        return [(NORMALIZED_ROOT_FUNCTION_NAME, common)]
 
     if fn == "cast_magic_weapon":
         raw_projectile_family = _norm_name(p.get("projectileFamily"))
@@ -145,7 +148,7 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
                 common["immunityCooldown"] = p.get("immunityCooldown")
         elif charge_release:
             common["channelUse"] = True
-        return [("shoot_projectile", common)]
+        return [(NORMALIZED_ROOT_FUNCTION_NAME, common)]
 
     if fn == "deploy_sentry":
         # ``common`` contains only canonical same-name output params.  Authored
@@ -162,12 +165,12 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
         if p.get("helperLifetimeTicks") not in (None, ""):
             sentry["sentryLifetimeTicks"] = p.get("helperLifetimeTicks")
             sentry["lifetimeTicks"] = p.get("helperLifetimeTicks")
-        return [("shoot_projectile", sentry)]
+        return [(NORMALIZED_ROOT_FUNCTION_NAME, sentry)]
 
     if fn == "spawn_temporary_helper_projectile":
         common.setdefault("movement", "orbit" if family in {"orbiter", "wisp", "pet_attack"} else "drift")
         common.update({"runtimeFamily": "summon", "delivery": "summon", "weaponFamily": family or "orbiter", "projectileFamily": family or "temporary_helper"})
-        return [("shoot_projectile", common)]
+        return [(NORMALIZED_ROOT_FUNCTION_NAME, common)]
 
     return [(fn, p)]
 

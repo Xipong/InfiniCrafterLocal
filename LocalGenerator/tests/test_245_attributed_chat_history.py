@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import sys
 from pathlib import Path
@@ -388,38 +389,26 @@ def _contract_check_explicit_empty_vfx_director_manifest_is_accepted_without_fal
     assert json.loads(out["attack"]["vfxManifestJson"])["slots"] == []
 
 
-def _contract_check_genome_repair_retargets_history_and_uses_delta(monkeypatch):
-    data = _planner_child()
-    data["attack"]["genome"] = {"delivery": "shoot"}
-    data["debug"] = {"planner": "llm_author_first"}
-    captured = {}
+def _contract_check_compiled_genome_has_no_second_llm_role() -> None:
+    source_path = Path(genome.__file__)
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    imported_modules = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert not {
+        "infini_local.core.llm_json_tools",
+        "infini_local.core.llm_stage_messages",
+        "infini_local.pipelines.llm_transport",
+    }.intersection(imported_modules)
+    assert not hasattr(genome, "try_llm_genome_repair")
+    assert not hasattr(genome, "repair_llm_combat_genome_if_needed")
 
-    def fake_chat(req, timeout=10):
-        captured["request"] = req
-        return {"choices": [{"message": {"content": '{"attack":{"genome":{"delivery":"shoot"}}}'}}]}
-
-    monkeypatch.setattr(genome, "resolve_llm_model", lambda: "genome-test-model")
-    monkeypatch.setattr(genome, "llm_chat_json", fake_chat)
-
-    out = genome.try_llm_genome_repair(
-        data,
-        {"name": "Silver Bullet"},
-        {"name": "Fallen Star"},
-        {},
-        {},
-        "r_genome_retarget",
-        ["missing movement"],
-        1,
-    )
-
-    assert out is not None
-    messages = captured["request"]["messages"]
-    assert [message["name"] for message in messages] == ["genome_repair_contract", "genome_validator"]
-    assert "authoritative current" in messages[0]["content"].lower()
-    packet = json.loads(messages[-1]["content"])
-    assert packet["agentHandoff"]["nextSpeaker"] == "genome_repairer"
-    assert packet["currentItem"]["attackGenomeCurrent"]["delivery"] == "shoot"
-    assert [parent["name"] for parent in packet["parents"]] == ["Silver Bullet", "Fallen Star"]
+    from infini_local.core.llm_stage_messages import STAGE_MESSAGE_NAMES
+    assert {
+        "genome_repair_contract", "genome_validator", "genome_repairer",
+    }.isdisjoint(STAGE_MESSAGE_NAMES)
 
 
 def _contract_check_post_author_visual_stages_are_stateless_and_use_accepted_product(monkeypatch):
@@ -473,13 +462,6 @@ def _contract_check_post_author_visual_stages_are_stateless_and_use_accepted_pro
     assert missing_live_calls
     assert "vfxLlmDirectorHistoryFallbackReason" not in missing_live_vfx["debug"]
 
-    genome_child = _planner_child()
-    genome_child.update({"debug": {"planner": "llm_author_first"}, "_llmHistory": malformed})
-    genome_calls = []
-    monkeypatch.setattr(genome, "llm_chat_json", lambda *a, **k: genome_calls.append(True))
-    assert genome.try_llm_genome_repair(genome_child, {}, {}, {}, {}, "r_bad_genome_history", ["missing movement"], 1) is None
-    assert genome_calls == []
-
     visual_child = _planner_child()
     visual_child.update({"debug": {"planner": "stale_debug_must_not_route"}, "_llmHistory": malformed})
     visual_calls = []
@@ -509,7 +491,7 @@ def test_245_attributed_chat_history_module_contract(request):
             '_contract_check_missing_vfx_authority_freezes_empty_manifest',
             '_contract_check_explicit_empty_vfx_director_manifest_is_accepted_without_fallback',
 
-            '_contract_check_genome_repair_retargets_history_and_uses_delta',
+            '_contract_check_compiled_genome_has_no_second_llm_role',
             '_contract_check_post_author_visual_stages_are_stateless_and_use_accepted_product',
         ),
     )
