@@ -33,6 +33,7 @@
 15. [Как теперь делать partial extension без нового semantic spaghetti](#15-как-теперь-делать-partial-extension-без-нового-semantic-spaghetti)
 16. [Итог](#16-итог)
 17. [Независимый audit snapshot `c82d168`](#17-независимый-audit-snapshot-c82d168)
+18. [Финальная проверка change locality](#18-финальная-проверка-change-locality)
 
 ---
 
@@ -443,9 +444,9 @@ Author → Visual Director → VFX Director
 - repair dependency groups;
 - typed lowerer identity для affected replay.
 
-Applicability пока **не** полностью принадлежит registry: `allowed_result_kinds` является reserved metadata и пуст во всех production entries; фактическая family/result-kind policy остаётся в `reports.py` и runtime-family policy. Это остаточный multi-owner seam, а не завершённая canonicalization.
+Applicability намеренно не смешана с inventory registry: result-kind/family policy имеет отдельного semantic owner в `reports.py` и `runtime_family_policy.py`. Неактивное `allowed_result_kinds` удалено из `EngineFunctionContract`, поэтому пустого второго applicability owner больше нет. Это разделение responsibilities, а не требование вручную поддерживать две одинаковые таблицы.
 
-Исходный frozen surface `engine_function_contract_surface_v1.json` фиксировал catalog/provider/accepted params/repair groups, но не всю per-param wire/prompt/lowerer metadata. Независимый audit расширил fixture полным `typedContracts`, чтобы изменения `wireObligation`, `compiledFields`, prompt visibility/group, nested wire paths и lowerer mapping давали явный frozen diff. Ранее audit также убрал non-executable `set_alt_use_mode.mode=none` из Author-visible enum; defensive compiler normalization старых данных оставлена отдельно и не расширяет новый contract.
+Большие frozen implementation snapshots `engine_function_contract_surface_v1.json`, `compiled_field_source_map_v1.json` и `vfx_director_contract_surface_v1.json` удалены. Вместо них direct parity tests читают canonical registry, а компактный `.agent/runtime_contract_fingerprints.json` выводится из полной per-function/per-param metadata и executable consumer AST. Form metadata даёт локальный diff; изменение compiler/lowerer/replay implementation консервативно требует full corpus. `set_alt_use_mode.mode=none` удалён из Author-visible enum; defensive normalization старых данных не расширяет новый contract.
 
 ### 11.3. Compiler/final-wire ownership
 
@@ -455,6 +456,8 @@ Applicability пока **не** полностью принадлежит regist
 - `CONTROL_DERIVED`, `DEFERRED_VFX`, `NON_WIRE` отличены от настоящих final-wire полей;
 - report и apply paths разделены: проверка не должна скрыто мутировать gameplay DTO;
 - C# остаётся finite executor и строгим конечным boundary, а не semantic repair layer.
+
+После commits `3e310dc` и `74056b4` terminal root grammar также имеет один owner: `NORMALIZED_ROOT_FUNCTION_NAME`, `required_on_normalized_root` и `NORMALIZED_ROOT_REQUIRED_PARAM_NAMES` выводятся из `shoot_projectile` row registry. Compiler публикует derived `COMPILED_COMBAT_GENOME_REQUIRED_FIELDS`/optional defaults; `combine_genome.py` их потребляет вместо ручных `LLM_*GENOME*` mirrors. Отдельный `genome_repairer`/двухпроходный repair loop удалён: incomplete genome возвращается в единственную bounded Author repair transaction.
 
 Это устранило классы ложных `compiler_provenance_dropped`, missing tool/equipment fields и «prompt принял — wire потерял».
 
@@ -467,13 +470,15 @@ Applicability пока **не** полностью принадлежит regist
 `qa/runtime_contract_replay.py`, `tools/build_runtime_contract_replay_corpus.py` и frozen corpus позволяют:
 
 - replay старых runtime plans через production compiler/final projection без LLM;
-- выбирать affected cases по changed functions;
+- выбирать affected cases по changed functions **и exact `function:param.path` forms**;
 - сохранять authored function provenance отдельно от executable normalized plan в новых corpus;
 - сравнивать canonical final-section fingerprints;
 - fail-closed на unknown/uncovered function, rejected calls, validation.ok=false и dropped provenance;
 - не хранить machine-specific absolute paths.
 
-В snapshot `c82d168` selector имел false-green gap: typed functions, понижаемые в `shoot_projectile`, могли выбрать 0 cases в legacy corpus. Независимый audit добавил lowerer metadata и две честные стратегии: exact authored-function selection для provenance-aware corpus и консервативный canonical-lowerer fallback для legacy corpus. Отдельного selector по form нет; call-shape/result-kind используются при построении representative corpus.
+В snapshot `c82d168` selector имел false-green gap: typed functions, понижаемые в `shoot_projectile`, могли выбрать 0 cases в legacy corpus. Финальная ветка добавила typed lowerer metadata, exact authored function/form sidecars, deterministic witnesses и две честные стратегии: exact source selection для provenance-aware corpus и conservative canonical-lowerer fallback для legacy rows. Unknown/uncovered functions/forms fail-closed. Текущий corpus содержит 91 case; form selector реально выбирает минимальный affected subset.
+
+Implementation fingerprints больше не строятся через version-dependent `ast.dump`: commit `39f2089` использует собственный stable AST payload и regression для пустых Python-minor `type_params`. До этого clean `74056b4` был RED на Python 3.12 (`269 passed / 1 failed`), хотя function metadata совпадала; простая регенерация baseline скрыла бы environment-dependent gate.
 
 Это основной механизм для будущей частичной модификации: сначала contract diff + affected replay + local gates; Live не является первым отладчиком.
 
@@ -597,7 +602,7 @@ Audit clean snapshot `c82d168` воспроизвёл ещё два общих �
 1. invented finite VFX tokens проходили Author provider boundary, а compiler мог сохранить частичный cue;
 2. changed typed lowerer function (`fire_ranged_weapon` и аналоги) выбирала 0 historical cases, потому что frozen corpus содержал только normalized `shoot_projectile`.
 
-Оба исправлены generic/fail-closed в ветке `audit/verify-contract-stabilization`. Full committed corpus после правок: 82 cases, 0 fingerprint failures; legacy selection для `fire_ranged_weapon`: 68 conservative executor cases вместо пустого PASS. Новый Live не запускался.
+Оба были исправлены generic/fail-closed в первом audit commit `af1ed82`. Следующие commits `02e5c68..74056b4` удалили giant frozen mirrors, добавили exact form selection, mixed implementation fail-closed, impact-routed verification и single-owner terminal compilation. Финальный corpus содержит 91 case и deterministic typed witnesses. Новый Live не запускался.
 
 ---
 
@@ -627,7 +632,7 @@ Audit clean snapshot `c82d168` воспроизвёл ещё два общих �
 
 Эти результаты относятся к исходной рабочей среде, описанной автором отчёта. Переданный archive не содержит external harness/ledger и не позволяет независимо повторить весь набор. Ошибочные side invocations с неверным cwd/nonexistent Pyright config не считаются gates в исходном отчёте.
 
-### 14.2. Независимое воспроизведение из clean archive после audit fixes
+### 14.2. Первое независимое воспроизведение в restricted audit container
 
 Подтверждено в portable sandbox:
 
@@ -641,17 +646,34 @@ Audit clean snapshot `c82d168` воспроизвёл ещё два общих �
 - finite VFX negative checks: 9 fields rejected/inert;
 - historical replay: 82 cases, 0 failures.
 
-Не воспроизведены: full pytest/255 (в sandbox нет Hypothesis), Ruff, Pyright, tML Debug/Release и новый Live. Поэтому в этой среде `releaseReady=false`; это честная dependency/verification boundary, а не обнаруженный runtime regression.
+Не были воспроизведены именно в том restricted container: full pytest/255 (не было Hypothesis), Ruff, Pyright, tML Debug/Release и новый Live. Поэтому его локальный `releaseReady=false` был честной environment boundary, а не runtime regression.
+
+### 14.3. Финальное воспроизведение перед интеграцией
+
+В dependency-complete WSL/Windows environment на candidate `74056b4` обнаружен один реальный blocker: committed implementation fingerprints зависели от Python-minor AST layout. Clean tree дал `269 passed / 1 failed`; `export_runtime_contract_fingerprints.py --check` также вернул `ok=false`. После generic fix `39f2089`:
+
+- portable sandbox: `ok=true`, `fullSuiteAvailable=true`, 286 Python + 14 JSON;
+- full Python: **271 passed**;
+- focused runtime-contract lane: **124 passed**;
+- Ruff: PASS;
+- Pyright: **0 errors / 0 warnings / 0 informations**;
+- historical replay: **91/91**, 0 failures;
+- schema export, config registry, contract parity, delivery contract, mutation gate, semantic runtime diff, runtime-impact, project hygiene: PASS;
+- tML Debug build: **0 warnings / 0 errors**;
+- tML Release build: **0 warnings / 0 errors**;
+- `agentctl verify --changed`: `ok=true`, `releaseReady=true`, 16/16 selected checks passed.
+
+Новый Live не запускался: текущего отдельного разрешения «запускай» не было, и change-locality proof не требует LLM inference.
 
 ---
 
 ## 15. Как теперь делать partial extension без нового semantic spaghetti
 
 1. **Сначала typed contract diff.** Новая функция/param начинается в immutable registry, не с prompt prose.
-2. **Одновременно определить lifecycle:** provider type, compiler fields, provenance obligation, final DTO/C# executor и repair group; applicability до отдельной migration синхронизируется с её текущими owners в `reports.py`/runtime-family policy.
+2. **Одновременно определить lifecycle:** provider type, compiler fields, provenance obligation, final DTO/C# executor и repair group; applicability меняется только в её отдельном semantic owner (`reports.py`/`runtime_family_policy.py`), а не копируется в inventory registry.
 3. **Prompt только проецируется** из registry/role/event policy; не писать второй список enum/params вручную.
-4. **Frozen surface test** должен показать минимальный ожидаемый diff.
-5. **Affected historical replay** выбирается по changed functions и проходит без LLM; новый corpus обязан сохранять authored function provenance. Call-shape/form coverage проверяется builder-ом, а не несуществующим form selector.
+4. **Derived fingerprint diff** должен показать минимальный ожидаемый function/form diff; implementation change намеренно переводит replay в conservative full mode.
+5. **Affected historical replay** выбирается по changed functions/forms и проходит без LLM; corpus сохраняет authored function/form provenance и fail-closed deterministic witnesses.
 6. **Mutation/parity/delivery/C# gates** доказывают весь wire до оплаты модели.
 7. **Targeted canary/Live** возможен только после gates и только по явной текущей команде пользователя; batch/config являются ограничениями запуска, а не разрешением.
 8. **Full Live20 — acceptance, не debugger.** Если он находит general seam, исправляется canonical owner; item-name exception запрещён.
@@ -661,11 +683,11 @@ Audit clean snapshot `c82d168` воспроизвёл ещё два общих �
 
 ## 16. Итог
 
-Архитектурная миграция существенно реализована: prompt/runtime contract больше не является одной неразделимой текстовой плитой. Function/provider/prompt/wire metadata, repair, final projection, Visual roles, VFX policy и historical replay имеют более явных владельцев и deterministic gates. Однако closing snapshot `c82d168` ещё содержал воспроизводимые VFX и replay false-PASS seam, поэтому прежняя формулировка «текущий tree стабилизирован» была слишком сильной.
+Архитектурная миграция завершена в заявленном scope: prompt/runtime contract больше не является одной неразделимой текстовой плитой. Function/provider/prompt/wire/lowerer metadata, terminal root grammar, bounded repair, compiler/final projection, Visual/VFX policy и historical replay имеют явных владельцев и deterministic gates. Closing snapshot `c82d168` действительно содержал false-PASS seam; audit chain `af1ed82..74056b4` и финальный fix `39f2089` их закрыл и устранил найденный при полном воспроизведении environment-dependent fingerprint gate.
 
-Независимый audit закрыл эти два seam, расширил frozen typed surface и исправил source-of-truth maps. Applicability пока остаётся отдельной policy surface, legacy replay corpus не имеет authored provenance, а post-audit tree не имеет нового Live confirmation. Поэтому корректный статус текущей ветки — **offline deterministic contract candidate**, не безусловно Live-confirmed/release-ready snapshot в любой среде.
+Текущий статус после финальных gates — **change locality demonstrated для representative one-form contract mutation и snapshot stabilized offline/build-complete**. Это не переименовывается в новый Live-confirmed 20/20: последний Live относится к более раннему frozen snapshot, а новый Live не был разрешён. Applicability остаётся отдельной policy responsibility по дизайну, но не дублируется пустым registry metadata; corpus уже содержит authored provenance/deterministic witnesses.
 
-Отчёт не должен подменять цель более дешёвым Live. Окончательное практическое доказательство — следующий реальный medium-size feature/contract diff должен остаться локальным: один typed owner, минимальный frozen diff, affected replay и отсутствие глобальной рестабилизации. Owner-reported ≈100M cost framing остаётся архитектурной мотивацией, но не измеренной этим archive величиной.
+Отчёт не подменяет цель более дешёвым Live. Практическое доказательство теперь есть: synthetic contract diff затронул одну canonical source row + один derived manifest, выбрал 1/91 replay case и прошёл impact-routed lane без full pytest/Live. Следующее реальное gameplay capability всё равно должно подтвердить тот же bounded pattern; executable compiler/lowerer change по правилам останется conservative full-replay. Owner-reported ≈100M cost framing остаётся архитектурной мотивацией, но не измеренной этим archive величиной.
 
 ---
 
@@ -673,16 +695,89 @@ Audit clean snapshot `c82d168` воспроизвёл ещё два общих �
 
 Полный отдельный документ: `agent_reports/prompt_contract_stabilization_independent_audit_20260723_RU.md`.
 
-Сжатый результат:
+Сжатый результат именно первого restricted audit:
 
 - основное архитектурное направление подтверждено кодом и не является выдумкой;
 - external Live/token facts не могут быть independently reconstructed из переданного архива;
 - на исходном `c82d168` воспроизведены два false-PASS: open finite VFX tokens и empty affected replay для typed lowerers;
-- fixes сделаны generic/fail-closed в `audit/verify-contract-stabilization`;
-- deterministic gates и 82-case replay зелёные;
-- full pytest/Pyright/Ruff/tML/Live в audit environment не подтверждены;
-- applicability и legacy authored-provenance corpus остаются честно отмеченными residual boundaries.
+- fixes начались generic/fail-closed в `af1ed82`;
+- его deterministic gates и 82-case replay были зелёными;
+- full pytest/Pyright/Ruff/tML/Live в том audit environment не подтверждались.
+
+Это историческая граница первого audit, а не текущий verdict после commits `02e5c68..74056b4`, fix `39f2089` и финального воспроизведения section 14.3.
 
 ---
 
-*Конец скорректированного отчёта. Sections 1–10 — historical causal archaeology; sections 11–16 — implemented architecture/Live narrative with corrected verification status; section 17 — independent code audit of the distributed snapshot.*
+## 18. Финальная проверка change locality
+
+### 18.1. Вход и commit chain
+
+Переданный ZIP `InfiniCrafterLocal_change_locality_final_74056b4.zip`:
+
+- SHA-256: `18df7e5942dbbf39a0f42ef97daba79ba91ce6def6a5381c2a7b2980d45af82c`;
+- Git fsck: PASS (dangling predecessor object не входит в branch history);
+- merge-base с target `main`: exact `c82d16814b56ba62f008ddcd9e81a432e2aaf280`;
+- branch chain: 10 linear commits `af1ed82..74056b4`, без merge и без source divergence;
+- executable bits в самом ZIP сохранены; первоначальный dirty status четырёх tools был только следствием Python ZIP extraction, после восстановления index modes tree стал clean.
+
+Commit-by-commit verdict:
+
+| Commit | Роль | Verdict |
+|---|---|---|
+| `af1ed82` | finite VFX + initial replay false-PASS fixes | корректное generic начало; позднее дополнено |
+| `02e5c68` | canonical typed lowerer; удаление giant frozen mirrors | OK |
+| `62bc11f`, `e871219` | impact-routed Python/C# verification | OK |
+| `86015fb`, `2404825`, `a345992` | fail-closed function/form/mixed-change replay | OK |
+| `1f62c65` | честная unavailable/full-suite reporting | OK |
+| `3e310dc` | runtime contract locality hardening | OK |
+| `74056b4` | single-owner terminal root/compiler contract | OK после cumulative gates |
+| `39f2089` | Python-version-neutral implementation fingerprints | обязательный финальный fix |
+
+Подмножество commits отдельно не принимается: последующие commits намеренно заменяют промежуточные mirrors/ограничения. Принимается cumulative tree.
+
+Три дополнительные Hermes read-only delegation попытки (architecture, replay/tests, top-down report) не дали review evidence: все три завершились немедленным Grok HTTP 403 `personal-team-blocked:spending-limit` до чтения кода. Они не считаются ни PASS, ни FAIL. Финальный verdict ниже основан на прямом source/diff audit в этой сессии, воспроизводимых gates и независимом Pro audit, который создал переданную branch chain.
+
+### 18.2. Реальный blocker, найденный при проверке
+
+Clean `74056b4` не был готов к интеграции:
+
+- full pytest: `269 passed / 1 failed`;
+- failing test: `test_committed_fingerprints_are_derived_and_cli_routes_exact_contract_diff`;
+- `export_runtime_contract_fingerprints.py --check`: `ok=false`;
+- 25/25 function metadata rows совпадали, но 30/30 implementation AST fingerprints отличались между Python-minor environments.
+
+Причина: `ast.dump` сериализует version-specific node fields (`type_params` и аналогичную minor metadata). Исправление `39f2089` заменило его explicit stable AST payload, который исключает только пустую version-added metadata, но сохраняет meaningful executable structure. Regression искусственно добавляет пустой `type_params` field и доказывает неизменность fingerprint. Baseline обновлён только после RED/GREEN доказательства.
+
+### 18.3. Representative blast-radius proof
+
+На detached temporary worktree от `39f2089` выполнена одна synthetic contract-visible mutation: изменено только описание существующей typed формы `deploy_sentry:placement`. Mutation не коммитилась и была удалена после проверки.
+
+Фактический результат:
+
+- canonical source touch: 1 row в `function_contract_registry.py`;
+- derived touch: 1 файл `.agent/runtime_contract_fingerprints.json`;
+- contract diff: `changedForms=["deploy_sentry:placement"]`;
+- `changedFunctions=[]`, `changedImplementations=[]`, `fullReplay=false`;
+- affected replay: **1/91 case**, 0 failures;
+- `agentctl verify --changed`: 16/16 selected checks PASS;
+- focused runtime-contract tests: **124 passed**;
+- full pytest и Live не потребовались для этого form-local inner loop.
+
+Это прямое доказательство требуемого свойства для one-form contract diff, а не вывод из одного зелёного snapshot. При изменении compiler/lowerer implementation система намеренно выбирает full 91-case replay: это conservative safety boundary, а не скрытая локальность.
+
+### 18.4. Финальный verdict
+
+Цель выполнена в согласованном scope:
+
+1. причины исходного ≈100M agent-token stabilization cycle описаны как `medium diff × scattered ownership × late detection × repeated global regression/context`;
+2. canonical function/lowerer/root/compiler/replay ownership реально улучшено, а не только задокументировано;
+3. найденные VFX/replay/root/compiler false-PASS seam закрыты generic contracts без item hardcases, prose routers, новых LLM-ролей или code-authored gameplay;
+4. representative typed form change остался локальным и прошёл affected lane;
+5. dependency-complete Python/static/C# gates зелёные;
+6. новый Live не запускался и не заявляется: последний 20/20 остаётся historical evidence предыдущего frozen snapshot.
+
+Точная формулировка статуса: **change locality demonstrated for a representative typed form edit; cumulative tree offline/build-complete; new Live not run**.
+
+---
+
+*Конец финального отчёта. Sections 1–10 — historical causal archaeology; sections 11–16 — implemented architecture and corrected evidence; section 17 — first restricted audit boundary; section 18 — final commit/gate/change-locality verification.*
