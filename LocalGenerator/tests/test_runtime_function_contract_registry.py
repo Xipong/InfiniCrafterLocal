@@ -181,6 +181,57 @@ def test_lowerer_graph_matches_semantics_and_declares_every_output_key() -> None
                 )
 
 
+def test_every_declared_family_branch_stays_inside_lowerer_output_grammar() -> None:
+    """Exercise finite family branches, not one happy-path example per function.
+
+    Enum families come directly from the canonical provider contract.  Magic keeps
+    an open exact-family string for visual/form identity, so its prompt card's finite
+    pipe tokens are the branch witnesses and one arbitrary value covers the default.
+    """
+
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ENGINE_FUNCTION_CONTRACTS,
+        validate_lowerer_output,
+    )
+    from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call
+
+    for spec in ENGINE_FUNCTION_CONTRACTS:
+        if not spec.lowerers:
+            continue
+        authored = {param.name: deepcopy(param.example_value) for param in spec.params}
+        family = next((param for param in spec.params if param.name == "family"), None)
+        branch_values: tuple[str, ...] = ()
+        if family is not None and family.enum_values:
+            branch_values = tuple(family.enum_values)
+        elif family is not None:
+            prompt_tokens = tuple(
+                token.strip()
+                for token in family.prompt_description.split("|")
+                if token.strip().replace("_", "").isalnum()
+                and " " not in token.strip()
+            )
+            branch_values = tuple(dict.fromkeys((*prompt_tokens, "custom_exact_family")))
+        else:
+            branch_values = ("",)
+
+        assert branch_values, spec.name
+        for branch in branch_values:
+            params = deepcopy(authored)
+            if family is not None:
+                params["family"] = branch
+            actual = _lower_typed_engine_call(spec.name, params)
+            assert tuple(target for target, _ in actual if target != spec.name) == tuple(
+                lowerer.target_function for lowerer in spec.lowerers
+            ), (spec.name, branch)
+            for target, lowered in actual:
+                if target != spec.name:
+                    assert validate_lowerer_output(spec.name, target, lowered) == (), (
+                        spec.name,
+                        branch,
+                        lowered,
+                    )
+
+
 def test_lowerer_source_must_be_root_when_target_is_root() -> None:
     target = _fn(name="executor", root_executor=True)
     source = _fn(

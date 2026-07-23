@@ -28,7 +28,9 @@
         "LocalGenerator/infini_local/services/combine_endpoint.py",
         "LocalGenerator/infini_local/services/sdcpp_service.py",
         "LocalGenerator/infini_local/web/server_handler.py",
-        "LocalGenerator/infini_local/web/server_utility_routes.py"
+        "LocalGenerator/infini_local/web/server_utility_routes.py",
+        ".agent/runtime_contract_fingerprints.json",
+        "tools/export_runtime_contract_fingerprints.py"
       ],
       "checks": [
         "runtime_contract_tests",
@@ -39,6 +41,7 @@
         "semantic_runtime_diff",
         "planner_prompt",
         "pyright",
+        "contract_fingerprints",
         "historical_replay",
         "runtime_impact"
       ],
@@ -125,7 +128,8 @@
         "tools/validate_release.sh",
         "tools/render_validation_report.py",
         "tools/run_changed_pytests.py",
-        "tools/run_focused_pytests.py"
+        "tools/run_focused_pytests.py",
+        "tools/export_runtime_contract_fingerprints.py"
       ],
       "checks": [
         "agent_tooling_tests",

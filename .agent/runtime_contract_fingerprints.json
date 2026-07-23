@@ -1,0 +1,509 @@
+{
+  "functions": {
+    "accessory_effect": {
+      "formFingerprints": {
+        "archetype": "e2bd4ecdddf0f0ca9ddf060a0824ac266370bb0255481f621d515b9f4d09773c",
+        "defense": "7f5d94813716a2a188368b20f43853e0112491016b1521a1f349796ce4420ffc",
+        "stats": "b0585bc9126c8e07f4a42476b77b106e601677ab8471828335ca40fe9c1a510f",
+        "stats.aggro": "5c6349ddd02e1abf6275144e4d70f21cf5fc84a46d1f543c6ad7660588fbeb15",
+        "stats.ammoSaveChance": "c9be87e2a90525fc98d1889246fae772cecf4c59702edcb1841fa4299830a241",
+        "stats.armorPenetration": "58ba99ec55c9d141ee844fd28dd9eb6d4be1b9843b3c0af8500ab2b6593f889d",
+        "stats.attackSpeed": "6d5d36a0cd34641eeb15df2be40db1663e1ca193ead4f6e91632acde9646a4ed",
+        "stats.endurance": "c9347edd06bb9b35cec3c6a485dc20e44dcb38bac95b27459e51d4a020f8bbfe",
+        "stats.fallDamageImmune": "06b116563aedd85fbc3c67ac09fb60fd7fd221ff216c19ae06720f5232834068",
+        "stats.genericCrit": "971ab80ab6ff8443435615f316237f197e52328a8e4f6e03f34c541e5347564c",
+        "stats.genericDamage": "4c352de4dd2b1b114777996b312e630330cd73a563ff7900eb19d118503f2428",
+        "stats.jumpSpeed": "124249a52b9df0aa31809d13c1089b509569faf699dd72f08c1dd5378798750a",
+        "stats.knockback": "2979777aa0414c75c449499fe11774293892c6fff5833c4d7ee1e6ed44da854e",
+        "stats.lavaImmune": "e192cb97e286b2fc27b775a8921480bc1ec3c44e1065b7fe72548ddbdab42896",
+        "stats.lifeRegen": "85e333c57020036d4210a268114f48a48c830b7d0107b023d0364e9c73c50165",
+        "stats.lightColorName": "4561eec54e4248689eddbd3bea210b4a0dc7a58e986ae36ecd65a44b8cf2d80c",
+        "stats.lightStrength": "bb9f52f9146e2f856d18c484def1a86d47f2be56e375cf88a25b5612d4d226ef",
+        "stats.magicDamage": "0af60d573b9e64c51ae0075e99eda13d91e9429086fc1222b6b4a97aecea6247",
+        "stats.manaCostReduction": "497a44ba14e72abb2c545b27c004f256cea79dfa81adf8a5a971c32df325f50b",
+        "stats.manaRegen": "7c58e445e0dc7c190ae85890d450111ce588ab0d86240f238a15ebf3d4f1821f",
+        "stats.maxLife": "797ffa84ec28b39fff3fd15c5d502fe66dd622a7d2d804694477719725a014a7",
+        "stats.maxMana": "33f1bf27dfe43defaba1513637ef26ca672e665ccd8c3d3b23ab0b8170984cc5",
+        "stats.maxRunSpeed": "8917ed831b31d24d9bc9ea012d5b9e4f8b6d81923e38279fe62e989b580f6757",
+        "stats.meleeDamage": "c3c880f8b0a88c052f261341c5270545f1ab38a7e7394144ff1efa3c136828ac",
+        "stats.minionSlots": "633647f87099847e7c6bdab5887ea30bff28a0a97f6b55bfec872f2e537017fe",
+        "stats.movementSpeed": "85b2d5ef0c232ab62b3af3a5b8ba1515eae4f6b24cc860c7109790e9a47353a3",
+        "stats.rangedDamage": "bdd4f3647afbdcee61e0de1291352da9ba0b4826afeeecf7767eb823e6fa4817",
+        "stats.sentrySlots": "36c7c15332f52cd4b1ed5113f8fafb29865dc9cd8a4ab5350741677986dacf85",
+        "stats.summonDamage": "3e5c9ae99860fd97c50f6baf59b864acbcef1214cb0722a51c066708679577a1",
+        "stats.summonTagDamage": "05fc2bdde286d80530060663d9f3d1dd6957deeb4a1fd9d741767cdc9af3b647",
+        "stats.waterWalk": "8d339700516a317b0752ee520abb147f8d443f18e45692573af37660f1a67ee6",
+        "stats.whipRange": "d135aeef65eb33e647bbecda0e3951631b0079f556ecd9632465075b1381f4f1"
+      },
+      "metaFingerprint": "d6d757b3f3ade13e1674bc82db2da7853475f5ef85b22724a35d0ed0a5f67113"
+    },
+    "ammo_behavior": {
+      "formFingerprints": {
+        "ammoFor": "a078c5dd3a944a7d23ffe402d99f9d4612dd44eaf01372e44440ef5bd49b28f8"
+      },
+      "metaFingerprint": "ff2382df5728463099e15da62eedc6ab94e67c2e23680e511b9922f85747d8ac"
+    },
+    "apply_on_hit_effect": {
+      "formFingerprints": {
+        "aoeRadiusTiles": "e9c8424b8e7f156b39ab2f9cc5043cce638519db07788a4f03790f4c560e99b5",
+        "chainCount": "41f4ea43b08e83a73ab426e3e748881fd22c5bc140fc519ce23520b29e6eaaff",
+        "count": "d5b7fa3365571660a6474a165e7426c8d8e3364673d2d1d86d04c56de302a491",
+        "debuffHint": "55179a0bfa414c93bc125836abe9e1c65284840cde162037d3474b672ad0e5fc",
+        "debuffTime": "ce406dcac8bf431aa17dfe60d158610e19e8787adb0a6deecfb3518eff579626",
+        "onHit": "f7c304d39437acdc0aa6060aa57ff04d1169fc1012184de46a6be4127f6ca10d",
+        "pullMode": "c1b59896865f6845a767bf415f3fbbd7d4bcf43e41449cadbe638ef4db9d190e",
+        "pullStrength": "358333b1d90e4571ea774f1d756a1a20c8582c2949ac7a2c89af873f677af604",
+        "secondaryDamageMultiplier": "658045eaaff02f4ac35a89a2181d4e53b3888b994ce2507d695a24ec2810313e",
+        "secondaryLifetimeTicks": "b6e2821e6d6ff3ea68b5c7dc6e9f8f974184fc45732a4972b78d7c35e5120d39"
+      },
+      "metaFingerprint": "5ba9e6f6ec69da53412a4f2030f3d7a050dd6ba7f732c7a334ada11a15855d35"
+    },
+    "apply_player_effect_on_use": {
+      "formFingerprints": {
+        "buffTime": "07a1dced1e779ad3ce6a38f975edfcfc410271f387156718e703f1c31f2601b1",
+        "buffType": "9347388144cfe2d54971eea063e247847b5621bd760402f84cd712a9a7691d96",
+        "buffs": "301ae729fadc9041a7aff3a39cc032c9ef89b9a3987ec548c30ef98d68c006a3",
+        "generatedBuff": "7132cb70b7878ce3da07dc92be1f49b5d22e575cb7fd2940e08f61db4eee14a4",
+        "generatedBuff.durationTicks": "e1b671a44f1519dba36eef0c5d00fe832a9eb5dbd66ce039c856b64ecde14b57",
+        "generatedBuff.emitLightStrength": "a5e444976648bb4910f119f60731c3da4bdd11307c7f13bf71c47bba33601a66",
+        "generatedBuff.jumpBoost": "eb47d9150657be4ceba5746fbb64198aff2559e46067ff6ce6f74c757ca47e5d",
+        "generatedBuff.lifeRegen": "4a8c9e5015da6df9cc74530b19c8e9f09f28da8fd5eebdae50f622ed4beef2cb",
+        "generatedBuff.lightColorName": "a8f62fb1b266fae23faf824ed1980865cde15d592183082a44a07ac1aa6b0808",
+        "generatedBuff.manaRegen": "a27578d94009d3eda60a10659b30697f8ce39a2a684b1ef1552f0db992042602",
+        "generatedBuff.miningSpeedMultiplier": "7ab1358baa5cbefe7df6951155f8b217725918b0ea6d9ed3e1415387e92d9950",
+        "generatedBuff.movementSpeed": "430580aef2e767c495822e6c326ff6e359af4d682c9e41239495cc7b8a714cdd",
+        "generatedBuff.oreSenseRadiusTiles": "87e05b2fec8079d4afc517a97fdddcc4302d5415af9d0d68153f2ea895728685",
+        "healLife": "550c096b6deed286e261356e1a7ae89d5dd1c7507e0cdb15b1d1143d3100aeba",
+        "healMana": "80099a234804b5de4ba77957c823f5e911e1990215263f29b42a7539b4321504",
+        "note": "e934fbb1ed0882e2d38db35edb289892dd098ba8c560a6f5f29942b879e82c74"
+      },
+      "metaFingerprint": "df4c21e40b3c0d2886ef818a6dd57f18ed4ba3a7b2b98bb550e79425d6a76fa2"
+    },
+    "armor_effect": {
+      "formFingerprints": {
+        "archetype": "db51d1286e71d384e42d83077240139ac75bc0843d3a326ff1f6206aea5c6224",
+        "armorSlot": "3690b70b771b0d3e4f798ab9fa52623fba1bea44dae9cf768bd50a91f73fdf12",
+        "defense": "1661811ce48b5c8dce69aea283e18fab1a8e531fa3fa6f05c2beaf2a841cfdfd",
+        "setBonus": "25a138b30e87e9c4b2e6006fe01078c2d6dfff466f50c78c023afef8cb7a5b90",
+        "setBonus.aggro": "f94bf8bd7fecdee382cf727aa00e306902d766c4f7b82f0120163aecef328615",
+        "setBonus.ammoSaveChance": "0b0f58f71d510a68811ba84b036a175ed94814dc3f5d0d0788216ef9c73a76a5",
+        "setBonus.armorPenetration": "f653b43d4e453eb4e3f73a43ebea3e9f28905c0c802ebd28c73506c77f4453e5",
+        "setBonus.endurance": "4ae1c9425092fc3d8ef97a243e4445774c23fb209dc86378b75d19bd278ffbf6",
+        "setBonus.genericCrit": "e458b694ed3e1ec89f241a7a6b19e7d7292bbf194092ddccf6d39a0acc7f795b",
+        "setBonus.genericDamage": "a39eaae661cb6f691a7a2c2bd10a0b196cdb0366eac3b45f6f5ae832ea451872",
+        "setBonus.lifeRegen": "47b5e99b9d1aaa28e8998616c31706304269c04819192f8eb1272a6136749fbb",
+        "setBonus.magicDamage": "17778e4c4c0f29a1600fe461b5e01ea2f247888a45060ce5200d2e80830c7b4c",
+        "setBonus.manaCostReduction": "3c773b8ee033c9cc87611e9d916b691291c12c5afc151ce045b106d4d5ee131e",
+        "setBonus.manaRegen": "4ed112851cb9d7b3ebb396f9278a90a52096ef96274241c4bfe9e93ae9fcf863",
+        "setBonus.meleeDamage": "f405ddb7a6e23211705d7c68c20f2336eb4a1ca1b520f5b69ac1077cf2c59cbe",
+        "setBonus.minionSlots": "ec0f3037ef7ae8491cc7a16a442c8763e15cb9f08853f2f05bc95ae716397bb9",
+        "setBonus.movementSpeed": "0950247776c2387932ae3c1290d3646db1d766b6b800d778f22572a5d1f5371f",
+        "setBonus.rangedDamage": "601b6a0fb34c71367a1cf4aaf9daeac8f4c2c0d1225ef71a5bdafc7707d868c5",
+        "setBonus.sentrySlots": "903f3e492b6f77a49fa5273321961fc470c549a65390383543fc10de63960710",
+        "setBonus.summonDamage": "0a876064c8c36d4d85d92751392fc8c6b3c4a296e1f1faf9c058e2275ca7f851",
+        "setBonus.text": "73616c0170a318b543f6c7eb78b44bb4c09ec7f8033273f6e13a962c8fa87edb",
+        "setKey": "6d521dafaaa9023855705068b32a8d1f2145261a9ed8df6fed7e49a9a41ab0e9",
+        "stats": "df4480768e6d7ccac80dd6257514e9dcb2528d473b9d1d183f8d769dfba7efa4",
+        "stats.aggro": "5c6349ddd02e1abf6275144e4d70f21cf5fc84a46d1f543c6ad7660588fbeb15",
+        "stats.ammoSaveChance": "c9be87e2a90525fc98d1889246fae772cecf4c59702edcb1841fa4299830a241",
+        "stats.armorPenetration": "58ba99ec55c9d141ee844fd28dd9eb6d4be1b9843b3c0af8500ab2b6593f889d",
+        "stats.attackSpeed": "6d5d36a0cd34641eeb15df2be40db1663e1ca193ead4f6e91632acde9646a4ed",
+        "stats.endurance": "c9347edd06bb9b35cec3c6a485dc20e44dcb38bac95b27459e51d4a020f8bbfe",
+        "stats.fallDamageImmune": "06b116563aedd85fbc3c67ac09fb60fd7fd221ff216c19ae06720f5232834068",
+        "stats.genericCrit": "971ab80ab6ff8443435615f316237f197e52328a8e4f6e03f34c541e5347564c",
+        "stats.genericDamage": "4c352de4dd2b1b114777996b312e630330cd73a563ff7900eb19d118503f2428",
+        "stats.jumpSpeed": "124249a52b9df0aa31809d13c1089b509569faf699dd72f08c1dd5378798750a",
+        "stats.knockback": "2979777aa0414c75c449499fe11774293892c6fff5833c4d7ee1e6ed44da854e",
+        "stats.lavaImmune": "e192cb97e286b2fc27b775a8921480bc1ec3c44e1065b7fe72548ddbdab42896",
+        "stats.lifeRegen": "85e333c57020036d4210a268114f48a48c830b7d0107b023d0364e9c73c50165",
+        "stats.lightColorName": "4561eec54e4248689eddbd3bea210b4a0dc7a58e986ae36ecd65a44b8cf2d80c",
+        "stats.lightStrength": "bb9f52f9146e2f856d18c484def1a86d47f2be56e375cf88a25b5612d4d226ef",
+        "stats.magicDamage": "0af60d573b9e64c51ae0075e99eda13d91e9429086fc1222b6b4a97aecea6247",
+        "stats.manaCostReduction": "497a44ba14e72abb2c545b27c004f256cea79dfa81adf8a5a971c32df325f50b",
+        "stats.manaRegen": "7c58e445e0dc7c190ae85890d450111ce588ab0d86240f238a15ebf3d4f1821f",
+        "stats.maxLife": "797ffa84ec28b39fff3fd15c5d502fe66dd622a7d2d804694477719725a014a7",
+        "stats.maxMana": "33f1bf27dfe43defaba1513637ef26ca672e665ccd8c3d3b23ab0b8170984cc5",
+        "stats.maxRunSpeed": "8917ed831b31d24d9bc9ea012d5b9e4f8b6d81923e38279fe62e989b580f6757",
+        "stats.meleeDamage": "c3c880f8b0a88c052f261341c5270545f1ab38a7e7394144ff1efa3c136828ac",
+        "stats.minionSlots": "633647f87099847e7c6bdab5887ea30bff28a0a97f6b55bfec872f2e537017fe",
+        "stats.movementSpeed": "85b2d5ef0c232ab62b3af3a5b8ba1515eae4f6b24cc860c7109790e9a47353a3",
+        "stats.rangedDamage": "bdd4f3647afbdcee61e0de1291352da9ba0b4826afeeecf7767eb823e6fa4817",
+        "stats.sentrySlots": "36c7c15332f52cd4b1ed5113f8fafb29865dc9cd8a4ab5350741677986dacf85",
+        "stats.summonDamage": "3e5c9ae99860fd97c50f6baf59b864acbcef1214cb0722a51c066708679577a1",
+        "stats.summonTagDamage": "05fc2bdde286d80530060663d9f3d1dd6957deeb4a1fd9d741767cdc9af3b647",
+        "stats.waterWalk": "8d339700516a317b0752ee520abb147f8d443f18e45692573af37660f1a67ee6",
+        "stats.whipRange": "d135aeef65eb33e647bbecda0e3951631b0079f556ecd9632465075b1381f4f1"
+      },
+      "metaFingerprint": "70be675fe01403e32fa073c4abb740487152bba86e572fd57aa1dd42b76e5e17"
+    },
+    "cast_magic_weapon": {
+      "formFingerprints": {
+        "beamChargeTicks": "bfe018f4888e2b8a1d5d028cca8f9d6f575564611bbdf02ec71ce919495f25f3",
+        "beamWidthPx": "c93e6d260dd320b13cf848f544eae8537d215336b59ed038149ad09d8df84359",
+        "chargePowerMultiplier": "ffd7472b0cd8b8157e2e8b7a3ddd15cc29f0920f64a3ed7a2ee28e4a7a12e485",
+        "chargeTicks": "587be7d8c804b6210515c761e208b504c2baf1137f4872fc2103387e5ab36668",
+        "delayTicks": "95247fa2005e3b46d656b45a2341e5f3807d77f00b4a5917f73c3331d7c7bdc2",
+        "effect": "e2f51c4b24648b0388b8ea84fde684d1d75b8eaf47a2bbbe8abcfafc4fd054fa",
+        "family": "8eb88cd6696d5173737437700c569a1d4734a10439a80f2c6e63948a2c161a25",
+        "homingStrength": "7a2ae4298aaebe44db9c4fc2b197874d41d6530042e11ffa05137e06a623d038",
+        "immunityCooldown": "ef7646751e6f30ae13b384e2949819d3b2ce9e37b493ce2ff4948d75ea175b5b",
+        "lifetimeTicks": "5946b2699e6ea1880bd1ca3b576b29e54168a50e11dca1065aaf810a22c8ace1",
+        "movement": "bdc0902cbb4bf46bd0e3f23e7141616bcd2ed619828bc1ec28b829ebe2dede7d",
+        "pierce": "1f2bf2b42c3d4a0d293abd265b0d0e6f56d9355b5772a9438dbab69d5c02d76f",
+        "projectileFamily": "90981f12342acd0f5943d53ea40e7db880781eee24b43b7dceb0a25b7d3ccf1f",
+        "projectileImpact": "c45e1976116ff09e73a3a742a9ef976f764ad9861196ba8d99aae3c8bee462b2",
+        "projectileMotion": "cd7cf308ef8c80bd7f5d4afd52aecfcf8c076427205bc6c2efc849dbf1346b96",
+        "projectileShape": "698242245ed21a4be6bbb4d0abce448edd80c50725a3eb922ee1400bb5cfe2ba",
+        "projectileTrail": "561734f9f9f04eb14b446ce4c3729ecc35b0acef819dbddccbc0fe62acd6d8b0",
+        "rangeTiles": "4962a0e1b7fafd726e4f09c9b7eb61e73aaabff3c04badaa1977db4786d027b6",
+        "secondaryDamageMultiplier": "004baaf70e2ffc091670bf72fb981814e017aad2c959200a3419d86c13cd5e04",
+        "secondaryLifetimeTicks": "593abfe46c0de3f82ea6a63984ea82d7fc67951dc7960e560e2aed9ace064aaa",
+        "shotCount": "e83748a2530a1fdc42e2b5c91e0d2667b64a2186093d3cba99339c73d60de556",
+        "soundImpactCatalogId": "675a41e9fd454a1afa5c8bacd6a13d678e20508bd00851d2ebb4b2bbbe5f030c",
+        "soundPitch": "22c110540f2dfc4559173ce22fc82cf73a65fdecec517f85719c64cde7b42aa7",
+        "soundPitchVariance": "5bb4392c7e1d4978414981fa754aed3bd647081ab28e9b2c77544d3ab59a1122",
+        "soundUseCatalogId": "d7fcf710360193d542042bd12a3ed166ee90262b92c5f53439341c9ce5c77554",
+        "soundVolume": "7d7dbd26437963df5ead50222926fb05e80909c36b7f2dbab8cfd9425c8fe1ba",
+        "speed": "2e85e38d4ee0d67e4c8832251ac870f79c8190ddc16107df9649adbf8d646726",
+        "spreadRadians": "639bf577efc91b76c14eee446f9f6ceaf6d1ec049e8c76e838a789287f22d0b6",
+        "useAnimationTicks": "8a6003853a3a4d6689f5916b9fde945417ee95262aac262e3dd9ce4c2b2720d1",
+        "useTimeTicks": "8521979ca77440ebef828d1f6b672406305a3fa8490a4459059d5c2f51389a62"
+      },
+      "metaFingerprint": "cfa9d4f3d54499a926aabdef7846db2f5a3536c804251ca12371c6398380fe04"
+    },
+    "consumption_behavior": {
+      "formFingerprints": {
+        "consumeChancePercent": "ae0f93d1244b1547b37fe68540d5216424c4f68af53f4e38c273ed12f24ba9a9"
+      },
+      "metaFingerprint": "01b412ca5b39213f24146feb35322c02e597f366b4f239c68a45d3bf32f626cc"
+    },
+    "deploy_sentry": {
+      "formFingerprints": {
+        "attackIntervalTicks": "c9c1e71f2381190bec11d5553cb0ba5856164de3a09d612703c1e555d01b991f",
+        "effect": "e2f51c4b24648b0388b8ea84fde684d1d75b8eaf47a2bbbe8abcfafc4fd054fa",
+        "helperLifetimeTicks": "1de827ebf7ccb6637b989efd1617c1bc56c7738acca6a0a014093fdec13b524d",
+        "movement": "37c53c78d9f83cda813304e96086b9166dc5b7f3be1277a4adfdc9a9746099ff",
+        "onHit": "f5701a131a67af66ebc7cc9bdf434ed4f932ca964e3a2233a9889c689cacecaa",
+        "pierce": "1f2bf2b42c3d4a0d293abd265b0d0e6f56d9355b5772a9438dbab69d5c02d76f",
+        "placement": "ddec36bfe00d3000033f0d660e296c158c0686e6cef94d27ac7cfd569094e62b",
+        "projectileShape": "af28142403b8abd0d13ce8d6027108d2af22f31bbad6c7b5340362ed22ffdf79",
+        "secondaryDamageMultiplier": "00512ae37468178a4f806ac0df25ee7b86c4f3e87ed32d52a2a6d003830ae71a",
+        "secondaryLifetimeTicks": "5d4f70fb772c471228031690089db1d28fd930e7c1ac6374f9cfce0ab9af140e",
+        "secondaryProjectileShape": "cfcfdd4e33a861ee090df02b92c9a13a4d7ab2e2d0a164e52c187a32f81469a3",
+        "shotCount": "cd5c3f59755cbc0d7aa1b5f2310e930f394966fa0e8d2af7b0c53f29371661d6",
+        "soundImpactCatalogId": "675a41e9fd454a1afa5c8bacd6a13d678e20508bd00851d2ebb4b2bbbe5f030c",
+        "soundPitch": "22c110540f2dfc4559173ce22fc82cf73a65fdecec517f85719c64cde7b42aa7",
+        "soundPitchVariance": "5bb4392c7e1d4978414981fa754aed3bd647081ab28e9b2c77544d3ab59a1122",
+        "soundUseCatalogId": "d7fcf710360193d542042bd12a3ed166ee90262b92c5f53439341c9ce5c77554",
+        "soundVolume": "7d7dbd26437963df5ead50222926fb05e80909c36b7f2dbab8cfd9425c8fe1ba",
+        "speed": "2e85e38d4ee0d67e4c8832251ac870f79c8190ddc16107df9649adbf8d646726",
+        "spreadRadians": "639bf577efc91b76c14eee446f9f6ceaf6d1ec049e8c76e838a789287f22d0b6",
+        "targetRangeTiles": "461903dbee2e992c34b3b7e91ea01cd5a218ee335d2c32e30d01b9e1de64ed13",
+        "useAnimationTicks": "8a6003853a3a4d6689f5916b9fde945417ee95262aac262e3dd9ce4c2b2720d1",
+        "useTimeTicks": "8521979ca77440ebef828d1f6b672406305a3fa8490a4459059d5c2f51389a62"
+      },
+      "metaFingerprint": "4038a5f728c6338d2832f17f56519d2686e8f0c2b252edb7561488f3cc48ceae"
+    },
+    "emit_light": {
+      "formFingerprints": {
+        "color": "2b416b0bca6c5e73e299e449c68ec50d83b0d1713282826423c8241c711b9290",
+        "durationTicks": "3cd06a4072cc8fee6d6b94916bbfa4c07157b01733e56ccd41319be0e296344b",
+        "strength": "3c33f5bb110a0bf74289f27480656c87515e85e0ac2afaa9f79e38e26e470647"
+      },
+      "metaFingerprint": "a3fed15c73996ed3f83a21c550e9a0de2b7b21c88cddea870206433d8924d155"
+    },
+    "fire_ranged_weapon": {
+      "formFingerprints": {
+        "ammoFor": "9d920e0a09f05fe9610bc5f8a9e08d530855125cd00f3078fb8ed718d62d4635",
+        "chargePowerMultiplier": "a757e3241afe90f69f688f6b9a76947d0cd47c73a2c59b311f50f8b4e2d52e76",
+        "chargeTicks": "b27ce84993d5b28498ee4446948b97053a9d65a20f4c189e778ed1df92d99bc3",
+        "delayTicks": "95247fa2005e3b46d656b45a2341e5f3807d77f00b4a5917f73c3331d7c7bdc2",
+        "effect": "e2f51c4b24648b0388b8ea84fde684d1d75b8eaf47a2bbbe8abcfafc4fd054fa",
+        "family": "0e08fa0e11485fa4a3096289fe82eb483f6b9a040086f2aa417aacd117465d0f",
+        "lifetimeTicks": "5946b2699e6ea1880bd1ca3b576b29e54168a50e11dca1065aaf810a22c8ace1",
+        "movement": "780f1a293d332aa2961ab97c2600685e5a3a5fe689414f6360cb3af7f9cbafff",
+        "pierce": "1f2bf2b42c3d4a0d293abd265b0d0e6f56d9355b5772a9438dbab69d5c02d76f",
+        "projectileFamily": "179c358a2fdd97f41487fccd08045ea261cf6bbdc9bc8f54a85f967062fe5637",
+        "projectileImpact": "c45e1976116ff09e73a3a742a9ef976f764ad9861196ba8d99aae3c8bee462b2",
+        "projectileMotion": "cd7cf308ef8c80bd7f5d4afd52aecfcf8c076427205bc6c2efc849dbf1346b96",
+        "projectileShape": "698242245ed21a4be6bbb4d0abce448edd80c50725a3eb922ee1400bb5cfe2ba",
+        "projectileTrail": "561734f9f9f04eb14b446ce4c3729ecc35b0acef819dbddccbc0fe62acd6d8b0",
+        "rangeTiles": "9ee8286ea2f51156311dbd747adb4b5630b7f826ed86edef8325eb706e85e5c3",
+        "secondaryDamageMultiplier": "004baaf70e2ffc091670bf72fb981814e017aad2c959200a3419d86c13cd5e04",
+        "secondaryLifetimeTicks": "593abfe46c0de3f82ea6a63984ea82d7fc67951dc7960e560e2aed9ace064aaa",
+        "shotCount": "e83748a2530a1fdc42e2b5c91e0d2667b64a2186093d3cba99339c73d60de556",
+        "soundImpactCatalogId": "675a41e9fd454a1afa5c8bacd6a13d678e20508bd00851d2ebb4b2bbbe5f030c",
+        "soundPitch": "22c110540f2dfc4559173ce22fc82cf73a65fdecec517f85719c64cde7b42aa7",
+        "soundPitchVariance": "5bb4392c7e1d4978414981fa754aed3bd647081ab28e9b2c77544d3ab59a1122",
+        "soundUseCatalogId": "d7fcf710360193d542042bd12a3ed166ee90262b92c5f53439341c9ce5c77554",
+        "soundVolume": "7d7dbd26437963df5ead50222926fb05e80909c36b7f2dbab8cfd9425c8fe1ba",
+        "speed": "2e85e38d4ee0d67e4c8832251ac870f79c8190ddc16107df9649adbf8d646726",
+        "spreadRadians": "639bf577efc91b76c14eee446f9f6ceaf6d1ec049e8c76e838a789287f22d0b6",
+        "useAnimationTicks": "8a6003853a3a4d6689f5916b9fde945417ee95262aac262e3dd9ce4c2b2720d1",
+        "useTimeTicks": "8521979ca77440ebef828d1f6b672406305a3fa8490a4459059d5c2f51389a62"
+      },
+      "metaFingerprint": "e8a5ebfa5902682a3c88be42ceaa189f5c9a26c5837e72e64faf7e78f07e6e26"
+    },
+    "hold_item_effect": {
+      "formFingerprints": {
+        "generatedBuff": "dd721a217e7d1fe0afabe8efe944202fcc1175835aef468a803999ad6537a04e",
+        "generatedBuff.durationTicks": "1caa1325062bca056970ef199d735612a074bfacc7ea03037b8984b6f49291dd",
+        "generatedBuff.emitLightStrength": "b56a7d7c511c705ed34f6365d066304fb50ed3efde6b8e8915073a498e2a31aa",
+        "generatedBuff.jumpBoost": "2e9dda50a561a9797ea05495d3a93bbf97848f3f6373c4fdbcf18a532ccbf436",
+        "generatedBuff.lifeRegen": "afd2cef73376402a759c890c0e0815f2998e6d7571bb689c526e333a3a37e804",
+        "generatedBuff.lightColorName": "99345525454353fbcefeae75aea37a288cf419a4d73d11e0abda1801842784c2",
+        "generatedBuff.manaRegen": "b27e2802b5b8ce6834a4c2bbf397c9f8ba99cc32bfc55a55a66150153c2ee354",
+        "generatedBuff.miningSpeedMultiplier": "b8562ed475848b667ae2f31e8af8e9a7f97b1c4692d3e6e6a09a254b85165c5c",
+        "generatedBuff.movementSpeed": "75e0c12c0ff1f83317009f7412e35d41c44b4da51c3115309fc0b629f0aab0ae",
+        "generatedBuff.oreSenseRadiusTiles": "c792c5a7c3fda5e9799e8f5ac06b487375364a25e8b68704ab14c9a5b52d2c9d",
+        "lightColorName": "677e120aa6776b1c13ac52dbc88560294f71ce737bffb7b3031347d73d72ea9f",
+        "lightStrength": "5e85e51c3c9a2aa100862f9a6d4f698d3b703a146e118f0ef475b0b147f4a293"
+      },
+      "metaFingerprint": "6e0e87c6f962f070287493cf113052dfe58c2ef1abf9ebeae990388cce42344c"
+    },
+    "leave_trail_or_field": {
+      "formFingerprints": {
+        "fieldLifetimeTicks": "eea6bbdabccf2634f70429f75c7dc41dadcc185ad5ea3a0e499ccefcd980d1f6",
+        "fieldRadiusTiles": "b39ecc3d19e63523ef64522cf0acdbc9ce5ab55b232fe3c68f038d3e481c5825",
+        "tickRate": "4097165b7561497718e03261a0ce098d9ae58deb9759ca1a38c7ad368d278618",
+        "trailLength": "429c7b870816df494f9f49425d8b80bf695ac7a3fb289ce4548410f3c8c1ec10",
+        "visualOnly": "99e05fe6a779974f65326ecea67e19b496247e18f4fa89a5f1864c0b7457b5fc"
+      },
+      "metaFingerprint": "976f5225e9f2c1293afd9552c02e2dfb2f59642763aba0cead95b1477d531fda"
+    },
+    "mobility_effect": {
+      "formFingerprints": {
+        "cooldownTicks": "616495756d9b7e9427644f360b924a9a777ba7f0c8481b8b4870b3e40b52fd8b",
+        "mode": "2cf72155ec87ba75ba57c5666db02826374acac4e2b6c52e1da3f16ec2c2e093",
+        "rangeTiles": "6ba65ae263c7dc9e1f4efbbb56ed2db9af423447bcf5456aa041f60626d0c16b",
+        "safeTileOnly": "5c8b9e38d860f5c17e346147f6c25ec6fa68aab55d9be2f346155babd2865d2b"
+      },
+      "metaFingerprint": "1e682a2bbcda86f175e53b8b491c38cb42eaa23622b3b22964b2c28a5ca9d05d"
+    },
+    "perform_melee_attack": {
+      "formFingerprints": {
+        "effect": "e2f51c4b24648b0388b8ea84fde684d1d75b8eaf47a2bbbe8abcfafc4fd054fa",
+        "family": "2b9517d71beafcdb7b1b34476a67e04b18681073955f3f9798236c9f85a48fca",
+        "lifetimeTicks": "d4fd3ea1c7e21ddce4764f826444c991efdcf427528104dc085c8f248f7327f8",
+        "pierce": "1f2bf2b42c3d4a0d293abd265b0d0e6f56d9355b5772a9438dbab69d5c02d76f",
+        "projectileImpact": "c45e1976116ff09e73a3a742a9ef976f764ad9861196ba8d99aae3c8bee462b2",
+        "projectileMotion": "cd7cf308ef8c80bd7f5d4afd52aecfcf8c076427205bc6c2efc849dbf1346b96",
+        "projectileShape": "698242245ed21a4be6bbb4d0abce448edd80c50725a3eb922ee1400bb5cfe2ba",
+        "projectileTrail": "561734f9f9f04eb14b446ce4c3729ecc35b0acef819dbddccbc0fe62acd6d8b0",
+        "rangeTiles": "7fd78c540f69614be6d1efcd95b539ea2b7fb04a04b86865389f628994a09026",
+        "secondaryDamageMultiplier": "00512ae37468178a4f806ac0df25ee7b86c4f3e87ed32d52a2a6d003830ae71a",
+        "secondaryLifetimeTicks": "9b13d988b887cbed7723bdda261706adf6f5e252ca3f166608be44742d5daa49",
+        "shotCount": "50325aeec21299492bf24f7adc184758929e77c6f71b7d39cb087dffaa6c822f",
+        "soundImpactCatalogId": "675a41e9fd454a1afa5c8bacd6a13d678e20508bd00851d2ebb4b2bbbe5f030c",
+        "soundPitch": "22c110540f2dfc4559173ce22fc82cf73a65fdecec517f85719c64cde7b42aa7",
+        "soundPitchVariance": "5bb4392c7e1d4978414981fa754aed3bd647081ab28e9b2c77544d3ab59a1122",
+        "soundUseCatalogId": "d7fcf710360193d542042bd12a3ed166ee90262b92c5f53439341c9ce5c77554",
+        "soundVolume": "7d7dbd26437963df5ead50222926fb05e80909c36b7f2dbab8cfd9425c8fe1ba",
+        "speed": "2e85e38d4ee0d67e4c8832251ac870f79c8190ddc16107df9649adbf8d646726",
+        "spreadRadians": "639bf577efc91b76c14eee446f9f6ceaf6d1ec049e8c76e838a789287f22d0b6",
+        "useAnimationTicks": "8a6003853a3a4d6689f5916b9fde945417ee95262aac262e3dd9ce4c2b2720d1",
+        "useTimeTicks": "05afdb909837d234a7d8f18e81b6d0d663d1b34edc6f4366d614895c140782d9"
+      },
+      "metaFingerprint": "48610025f39933e16ff2427c8f084b9d386bc7dd3221bbb30b5b425c289f2e2f"
+    },
+    "placeable_behavior": {
+      "formFingerprints": {
+        "createTile": "9fabbdf5135f4295b4b067d9c2acb461bf010d53d52dc8022cc6b9708e53675b",
+        "createWall": "cc4ba3aa0113491c4305bb9ea7bc835c1a2da578f5284ba762ca969835d5bc2b",
+        "placeStyle": "c400420f86ae82b8831831dbff1406dff9beb46ba3eab68e93b07c9d90e940b3"
+      },
+      "metaFingerprint": "4d4abdb0a6e6f603668762e88a54798fa0eaf81cd1419ecce67902093f0d03a0"
+    },
+    "set_alt_use_mode": {
+      "formFingerprints": {
+        "cooldownTicks": "5c7b1176ce4675e7d9e8a3ecfb93fff3d2226b7b48520792b42feb8956aa7ce9",
+        "durationTicks": "b04b48289e8940129355c58247bdd1dc6708c452280d8fdf0fcc16a7ad7504c8",
+        "generatedBuff": "851731aefde40b061099cff6d26815081323e7e006febf4c74717eb2170f20f6",
+        "generatedBuff.durationTicks": "5764248ee0b0723be1f49a9ac4f3e28244c5c33ed273d32a10a22055e2204863",
+        "generatedBuff.emitLightStrength": "38303b0c93a44a3a200389fad8f29a960a4cbd9143146dc808f26e977e47b41a",
+        "generatedBuff.jumpBoost": "dad21038f781bafba291997efabab4b158b39543a2b06bfab7263e224205a1e4",
+        "generatedBuff.lifeRegen": "5c22a1eb309af745adc334d4b4bfa4e31472b7c685c4b336568730a1339b6265",
+        "generatedBuff.lightColorName": "6eefd36be93714fdc5b5453c4ed3c4668470319cd6ec23fac11c7af43f535f0b",
+        "generatedBuff.manaRegen": "1dac3c6a37a1ed48511ea2a300da4b9c9e9591b906bbd7e15ffdf2246936a015",
+        "generatedBuff.miningSpeedMultiplier": "60867119faf7bde5e1240e7a18b4ff4fbe5b98a70fd7bb91236f50cf11c3871c",
+        "generatedBuff.movementSpeed": "4878685373354a8611237ccfc7340eea39b62228647ca65599b30deb5e0aa85b",
+        "generatedBuff.oreSenseRadiusTiles": "d7ec39a51ee0a557feb20a77ae7c8edaec616dd63dc9cd203878973438b4d4da",
+        "mobilityMode": "e56fa685deac60e3ad48ef161a7b50354462fa4ed94c16cc30ea8582a218e741",
+        "mode": "9b7ae9c460c0fef5d2cfc386ac115b03b9a43d43a3aa949b916ff175ecbde450",
+        "rangeTiles": "fd2e042717abf4e133ae109c5b6540ebf0d7d45f06146acb7910d0656e790288",
+        "safeTileOnly": "00c6880ba421644435ad47e75d4c23237c074a1486ed5e6f7020386b02f85134"
+      },
+      "metaFingerprint": "34ecda451baaf8f5f015b5b3b83d73795268625885267db9491ce72449407be5"
+    },
+    "set_item_stats": {
+      "formFingerprints": {
+        "ammoFor": "89bb9861de638e049251a0d49795f016932f8a352ac387b2e80bb667ab0e4020",
+        "armorSlot": "39c5563b2769404c74a557e03e7970dc441ee949b840b5212f3d079c82fc980d",
+        "autoReuse": "2a6ee87db7f1225d676c5ef2e4624dd2cd33b7be484219365bdf4a2954f6ea63",
+        "axePower": "a20ed8716068a6ac6be43b233b5566ae1eb606fc743ca8fc839cdc1847e5290e",
+        "buffTime": "4604ccff2ab072e628852e2d60b5ba5706ac6686ac7fef97f8d44790576e57c7",
+        "buffType": "9347388144cfe2d54971eea063e247847b5621bd760402f84cd712a9a7691d96",
+        "consumable": "9d4cfe395a596e93a2c65abdfdec0b3db688b8a690682b128c2ea2ba8eb0e91b",
+        "craftYield": "dd08f3a4df3c05f69e15a2d7587f1b89d38142de05c65862bcc3a0e4c9cafb5a",
+        "damage": "6060510c2f4144d1930285ea55b97f5ca087dafe414daa500dcb9391abaf0281",
+        "damageClass": "45a9e972ec20d8b2a2f67c889b7bac0b73512fd40a2b03ff4e0855ec32ffd20a",
+        "defense": "767b4a30f7fe4e5a16989fa701535b33b459a9414166701017ae9059d8580bae",
+        "hammerPower": "3823ee94c167ae5695e1e8b324537cfc440761afce41815486dbac46c454e639",
+        "healLife": "4473c563a7d53c237b043feab46dd3d23bdc7d03709a8ab05b23792ed9a43b69",
+        "healMana": "50344ac1d2cec793b8afbbc25ed5c547be58c16d4b56b074aaf4d8bf4a659ffc",
+        "knockback": "1ba5f7cb6754d732efa0cfc715f7af030b823d40f2c5641ada3e1ee4a0bf2d1f",
+        "manaCost": "41828d53d3446205e524028915a5387afad9c2098cba0f06f7cd00dd5145229d",
+        "maxStack": "3ace85c256d690c345ad61c8949a5d6dcf6e6bc91aef9b5f44d1d39d07e8ea02",
+        "pickPower": "b870fbb5e1da502bf5ba2717d319c6f45c4764cd1d409992c624a40fdab25509",
+        "rarity": "6df066750e5a7f069bc9d19e8411dd78879a8a241affa719384ec62ec4f40d1c",
+        "resultKind": "84b361aed67212647cbe9192ecfa29620987d7f226c68f9d067cce21ca073dba",
+        "useAnimationTicks": "f9739c77ea243387250aa22795fb16907e77fbcfaf25d0a96f4d565a3b72eba0",
+        "useTimeTicks": "5e8d27888ff38daebd512ed0946d137184ac0ddb66774b093a138a879b40bbc7",
+        "value": "46330adad07f9fb6a08c6215584cc91e89e5d7241fc24283f765e5a60de5e862"
+      },
+      "metaFingerprint": "aea2e02e3c8a58dcdc2ae27a674099f3d5db6f171915af505851d0d6436e265f"
+    },
+    "shoot_projectile": {
+      "formFingerprints": {
+        "beamChargeTicks": "35edc07ae354cb260fa68ddf426e79fa9e2c3460ce5ec3fae17d443de3ebf85b",
+        "beamWidthPx": "9d3df5da0d733307b2496a5248be79a0f7590c1c2f957e9bfbd57eaa43f23385",
+        "chargePowerMultiplier": "df408f2f5f0807b39de8f620fbb2ab15ed2c8df47961413089d2b171548efe03",
+        "chargeTicks": "04b9c2073a780e0d6a5a2bd0f3dceb17246e75b3b72e0bd3935c0d8a19c6af60",
+        "delayTicks": "2fc13154ffcba41bbf7265f844771a5c09e3e98fd2392dbfeeaca929dc118186",
+        "delivery": "1291738a49e99c3a85f89975ebdf1c92586b702bf6f97aa10349fea33d4ccf6e",
+        "effect": "74687c9934d3c2eb26e535d82de7a779d8e282203a516a90a56e18ddadbeb00c",
+        "extraUpdates": "c3c1b3fe6c8e897e685004cbc79fee947825388b9267e6c2dc4ba868efd745da",
+        "homingStrength": "5dc3bc830f47aba78c5c0722a9ec4ce3214cd3d0c2d19d54b1080022f6dfcb96",
+        "immunityCooldown": "d6810ee1412b296f274d971f5d2db010f5e878e9bc342b697b691add2af84175",
+        "lifetimeTicks": "5764becce2dbd6fa8637d2d063c30a7271a7a1c1a38739ab9d766951702b8344",
+        "movement": "f89eae15269d3bf93912c1277493c723e7f66e3f79476f04193b0f41607a657f",
+        "pierce": "d49113dc5ebb1b32b1da9bb9f7af4149ae5dd755f4b0a0b277031f27b22a75a0",
+        "projectileFamily": "dfe88d0b1b896145417b24383e8559a3f39adffff6a2fbcedcd239f3ebf15af6",
+        "projectileImpact": "0c78b1304842aadb93f3e1ce748a5601b5d6441cc7959e1b30cf1359ebd7d403",
+        "projectileMotion": "5f7a3930201b21a0c23e8e32027bb9040b5c2555b7b02199e693fc7b0cb75eb9",
+        "projectileShape": "058cb2fdb2eb80a16046188ded543613139645f2880b2b7da0c302a6c478aed6",
+        "projectileTrail": "532881a6a7c783fe29c55c60834073403011f735eff6b8b89c4668a600c12f50",
+        "rangeTiles": "eebdfc318b32f0c57800eb8ddd93e2b6ebd771b530cf64a8fb9408fd11baf721",
+        "runtimeFamily": "950b73896b1552b5a2b64355b29510946d8bb0b660107621872917a9e9cbd6bf",
+        "secondaryDamageMultiplier": "08fb9903ce7b7704c4d5b577168f9f6d523e4edf13df83abd534ad14e0117b29",
+        "secondaryLifetimeTicks": "9237e3eb0393e83a3f2f5e74d1babf9a9a628cd3ad75ac05ea9f4517ab2390ed",
+        "shotCount": "87c16ade004c35d54b69d96c351a68e26b9b674600a89222fbbd4ee01be93631",
+        "soundImpactCatalogId": "4ad4e6931ee8e90e924b8c5833c81952c9d2e9dace29558390b6964f6d6dad84",
+        "soundPitch": "3edd3c9d6e63c0315526ad5e0f515288afbee5d737d1b6036085d3a91d1690cf",
+        "soundPitchVariance": "be644c1590a051c0ec65cfcb634280a4725514f6e93f95fcad1aa455eb50a9a3",
+        "soundUseCatalogId": "fb15509a839fe262da2ac6487f1710646ed6755e0ff37067d66245f19da62b71",
+        "soundVolume": "5adf35c193f3bc4767e664ca653ba36741fc2184bda29db73b6a52b8db7e278b",
+        "speed": "b00edafd8f0c8dfd2730a59d9070461105571fa16b6f19e5e52598f927e6a043",
+        "spreadRadians": "2e48e8685dce73160f62a05d9c6680b5bb3f9120b2bfeb34e1e02c39a6dfa955",
+        "useAnimationTicks": "69e8101cc1e864d507d2b803f077f6c4e0df3a24670b6bfacddb260457fc06a1",
+        "useTimeTicks": "331011af5ea0a86078226106fd058a3c6d4027171456f8f40cc9bff1d228bf66",
+        "weaponFamily": "65c53420af2c87bd1b069c7dc400d0ee364fe836b00be0f0c0616a449f52f3a5"
+      },
+      "metaFingerprint": "5cea0d4cabda54e874acb91963e3a06dcc419a16be69ed1bbf6ef054dbbceebd"
+    },
+    "spawn_contact_particles": {
+      "formFingerprints": {
+        "amount": "44759da421a743bf37590fbf9771dd55c8ea8ff6f5853a57f2e2b556498ff232",
+        "durationTicks": "dbdea4e61c4d2259ec92c08b61b56b0b371a00d62a52b9981299cc386395f108",
+        "effect": "7f3af47053f73485bbfb3424df3a12e4c34f97e07683c228ccdeb1ee63b395df",
+        "material": "9fb77372eea0baf1bcdeadaee78adf9ea283833dc6f9f5d4d2f01b19d1530b05",
+        "scale": "a7f93974f713414584869505f930c8369809caaa353c84f3b85221b9340e9f83"
+      },
+      "metaFingerprint": "c1d1bc570e4b6c95890f1fddda5f34e8961edfad9834c7af7e4da4e38ba2af3c"
+    },
+    "spawn_secondary_projectiles": {
+      "formFingerprints": {
+        "count": "c1c8ea1788af3ca44ec19b0af71fec9d53937e84e214ea8612a7dadf7fa7cc93",
+        "damageMultiplier": "6e3166f4c33707335a2380abb444a80dcecf7edbc8fa8fd5ddd8041fa260c221",
+        "lifetimeTicks": "cc26a50f6b29ab6ecdfc1d22bd5349ded6298d762d968c2eba63b004025695de",
+        "material": "ed25575ac93f869de1339457497fad7e2d35c412c01dc2f27a280a89d423262f",
+        "projectileShape": "a845489a4329382a9dbbe28af22d3177cc307b94a5f75761e8ea11f30288eb17",
+        "sameTargetBias": "a63c2862078c97be7190f9d8afbcadfcc38bc4454c047814c243e00af1902ba7",
+        "spreadRadians": "1c42a995730b433451e997fa56c2288bd288bcd412e5b8252f0ffd599a71372f",
+        "trigger": "627dceedd8f93924ed48ece9b6d0ef250c9777c100f8067ebf43c910de20f7d3"
+      },
+      "metaFingerprint": "2a55c7c94aa3ff161007ea617e087329e85a9cc4ed982c6f0ed05031f74a97af"
+    },
+    "spawn_temporary_helper_projectile": {
+      "formFingerprints": {
+        "effect": "e2f51c4b24648b0388b8ea84fde684d1d75b8eaf47a2bbbe8abcfafc4fd054fa",
+        "family": "5414aace13c96651d27fac52a76da8544265c16f05fe00df2953e052f181c6c6",
+        "lifetimeTicks": "fff780b0bbd594a8aaf8c6fc58a6a7f3201da7d9663b3090a3263974872e1bc9",
+        "movement": "4f74312be41c6a0827182e0cd7b7a51f19159a69e0a1ba1d71270d507bb42377",
+        "pierce": "01ee472d96184c2363d87245dbdcfe03f927ce29607ae490edb54d4f85db31ad",
+        "projectileShape": "8df0b5727eb666e9c6cfb7e9eac70edc0f8b6f63da93decde0a22ad5a45b0101",
+        "rangeTiles": "a0894ad62ac0efc5925dda3634b1416c5a075f1851421668218fd3aa8e41cb5d",
+        "secondaryDamageMultiplier": "00512ae37468178a4f806ac0df25ee7b86c4f3e87ed32d52a2a6d003830ae71a",
+        "secondaryLifetimeTicks": "9b13d988b887cbed7723bdda261706adf6f5e252ca3f166608be44742d5daa49",
+        "shotCount": "c0ce2e1766974fc23e367bccd4a88797e6de32cc5ac2d656c64e35f404fc907a",
+        "soundImpactCatalogId": "675a41e9fd454a1afa5c8bacd6a13d678e20508bd00851d2ebb4b2bbbe5f030c",
+        "soundPitch": "22c110540f2dfc4559173ce22fc82cf73a65fdecec517f85719c64cde7b42aa7",
+        "soundPitchVariance": "5bb4392c7e1d4978414981fa754aed3bd647081ab28e9b2c77544d3ab59a1122",
+        "soundUseCatalogId": "d7fcf710360193d542042bd12a3ed166ee90262b92c5f53439341c9ce5c77554",
+        "soundVolume": "7d7dbd26437963df5ead50222926fb05e80909c36b7f2dbab8cfd9425c8fe1ba",
+        "speed": "2e85e38d4ee0d67e4c8832251ac870f79c8190ddc16107df9649adbf8d646726",
+        "spreadRadians": "4b60ed214b76333af81791a865e6db875d36c3c39dbffe2275afaf90b977eae6",
+        "useAnimationTicks": "8a6003853a3a4d6689f5916b9fde945417ee95262aac262e3dd9ce4c2b2720d1",
+        "useTimeTicks": "8521979ca77440ebef828d1f6b672406305a3fa8490a4459059d5c2f51389a62"
+      },
+      "metaFingerprint": "016fe223e7a35fef006f09bbb682e811c737c16a312cede93d47cf4533192f07"
+    },
+    "tool_capability": {
+      "formFingerprints": {
+        "axePower": "8f0da7bfe7ece15d0cb1153897bdce1f97e1950d2e0cc3af234c7c75c8de540a",
+        "hammerPower": "cad7e75d41e8c6fefde304ab3eae5fd187c882be6ca0ab96bd215a0899624902",
+        "miningSpeedScale": "029c43def6b17361fefe3d6e90404bfd9691c0e37f194953060555888ebbffe8",
+        "pickPower": "410cabd57697e30046cfc4b55e62ee9ab7d9def11cb54a898a22cb6e77bcbd61"
+      },
+      "metaFingerprint": "5fbea43060b5aa2e2a8ff9ced3be4ba77f5a105cf3410eb54b406c25cc2f8b40"
+    },
+    "use_affordance": {
+      "formFingerprints": {
+        "autoReuse": "2a6ee87db7f1225d676c5ef2e4624dd2cd33b7be484219365bdf4a2954f6ea63",
+        "channelUse": "4f406aa74b5d8a57fb9bd8e7b585c68f9f35187af0d71830734bf853b040cf4d",
+        "handPose": "d4e09f4ca44a611b6eaf8da5762d53a07cfcc0189b332b6c6b8225d4f44ebccb",
+        "heldVisibility": "1709767f76df749499319721a971f7e149a4c3352b82a80a3b853716c5ecdc73",
+        "holdoutOffsetX": "6cd62ba262b2d9a97d7c599944463896222e42236c430316d0e349e61db23dde",
+        "holdoutOffsetY": "18827dd75ef6b94d1e5ee218a45025b305e3e47114504d64833cdf12f7b932cd",
+        "initialOffsetPx": "e038c8634f0a17a27e6703a4f27a9e84e1102b9c5e1f6abd347ee8de456e8830",
+        "itemScale": "fa5f71ab45a2f9cb4fd0827a25cc931a8a32d2bfce36ef1246ebaa960c101895",
+        "releaseTiming": "f9ccac7f2b66695006dbe556a7cabc499178c8a5d7ebb1064e0c154aec9ca3e7",
+        "useTurn": "c6118a30cb8626bbd9ef959a55e3e1c348c95e1e6c42e6d441d543bf10088df6"
+      },
+      "metaFingerprint": "c92cad8b0f082d4d3b4f3327f56493b8d92862e4a77a5bc594f8dc0a3994f30f"
+    },
+    "use_condition": {
+      "formFingerprints": {
+        "minLife": "84653cebd3f2d11d6806d8d46ea65ed3383949bfe105c2e841539f353721a189",
+        "minMana": "e800b5d42f960bf9b116c7e62b572fe81019b611cbe14ee55347022518354de4",
+        "mode": "2c98d9c44a209dd789cc339207f375eb83cf779cd5e6eb7ef2da99e473e1819e"
+      },
+      "metaFingerprint": "fd576d503dfe01a0e9901b920e9bfa7f2e9e2b2c25ed39c352211da559cb1de7"
+    },
+    "visual_effect_cue": {
+      "formFingerprints": {
+        "alpha": "eee9a04d0ba62ce8c019dceb8a833b106268ff58bd1a38a69f5551e925c9a6a1",
+        "channel": "d968a02790128075db79ef9cd9d01d2dc479763ee09cc72a4ebc2d8c2b2b6930",
+        "density": "eee9a04d0ba62ce8c019dceb8a833b106268ff58bd1a38a69f5551e925c9a6a1",
+        "duration": "3ee5f7538b96e25f7c3a11b0dd33c1035e0aece108cb81f4db373e741b64f6e6",
+        "emissionMode": "f32acefcd01811f35a03097be63aac15c998f2d93feb38a6c693e6a7e9c89342",
+        "event": "673ca1424aaa5d92d47a2c681f7f4d3aa59ee4508d6a8deb6a715ddd783a5ac0",
+        "importance": "df996fce104511945f7b32450f9c85bdce7881cec7a50cb79d205e5791d0d6b1",
+        "jitter": "dc3eaf5e999e0d52e1b7805d4bf94e0b7ca152e9f7248e5b6930599b6c66e7cc",
+        "lane": "0bc8a061c032aa02b4ed7cd67cb413e3d3f07ce9a68d8a0ea94e80dcbc47759d",
+        "note": "e004da8e39f9a853c1c35a3f22d2fc99b73537e05e21f7bfe49ebee8f9b92904",
+        "particleRole": "39d8f80305c531be2eb3003c8e51fe7c6ab819751887704237ce02c9d7ddf8e4",
+        "particleSystemId": "49f13562cf01d5d5912b5c8e655f03890a0e3b1cdc01445284142858926edae0",
+        "rendererKind": "25f521ee04ffe867899c3b6e595f85a0697043dbba16f18c09a69dd61690462d",
+        "repeatEvery": "0abd56819937107d494ba7395a2d74ce899adca511de09889275c8806f8f9ef8",
+        "scale": "3bd09c5b14e0ad6c1930cc4c77c03335c9b9fd0f43abb1be5b3a7fc3274aca49",
+        "spread": "0af0473c938b91506eef07a52d39f05719abe30930b96eb3b40953cfd4807ffb",
+        "startTick": "0abd56819937107d494ba7395a2d74ce899adca511de09889275c8806f8f9ef8",
+        "textureRole": "39d8f80305c531be2eb3003c8e51fe7c6ab819751887704237ce02c9d7ddf8e4"
+      },
+      "metaFingerprint": "388206989af55301fe506cc89c3e293c1cfaa59f2450591ec9ca3597f2f89b0f"
+    }
+  },
+  "registryFingerprint": "b392c0c2cd7be9bdfc0d6914d9a993c51f9527a30a7b1ebb3c3bf5ff29098ce3",
+  "schema": "infini.runtime-contract-fingerprints.v1"
+}

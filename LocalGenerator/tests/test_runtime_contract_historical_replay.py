@@ -5,6 +5,9 @@ No LLM, no HTTP: mechanical accepted-wire replay only.
 from __future__ import annotations
 
 import ast
+import argparse
+from copy import deepcopy
+import importlib.util
 import json
 from pathlib import Path
 
@@ -15,6 +18,8 @@ LOCAL_GENERATOR = ROOT / "LocalGenerator"
 QA_MODULE = LOCAL_GENERATOR / "infini_local" / "qa" / "runtime_contract_replay.py"
 BUILDER = ROOT / "tools" / "build_runtime_contract_replay_corpus.py"
 CHECKER = ROOT / "tools" / "check_runtime_contract_replay.py"
+FINGERPRINT_EXPORTER = ROOT / "tools" / "export_runtime_contract_fingerprints.py"
+FINGERPRINT_PATH = ROOT / ".agent" / "runtime_contract_fingerprints.json"
 FIXTURE_DIR = LOCAL_GENERATOR / "tests" / "fixtures" / "runtime_contract_history"
 CORPUS_PATH = FIXTURE_DIR / "corpus.json"
 
@@ -73,13 +78,15 @@ def _collect_string_keys(obj, out: set[str]) -> None:
 
 
 def _module_source_paths() -> list[Path]:
-    return [QA_MODULE, BUILDER, CHECKER]
+    return [QA_MODULE, BUILDER, CHECKER, FINGERPRINT_EXPORTER]
 
 
 def test_replay_modules_exist() -> None:
     assert QA_MODULE.is_file(), f"missing QA module: {QA_MODULE}"
     assert BUILDER.is_file(), f"missing corpus builder: {BUILDER}"
     assert CHECKER.is_file(), f"missing replay gate: {CHECKER}"
+    assert FINGERPRINT_EXPORTER.is_file(), f"missing fingerprint exporter: {FINGERPRINT_EXPORTER}"
+    assert FINGERPRINT_PATH.is_file(), f"missing fingerprint manifest: {FINGERPRINT_PATH}"
     assert CORPUS_PATH.is_file(), f"missing corpus fixture: {CORPUS_PATH}"
 
 
@@ -199,7 +206,7 @@ def test_select_one_changed_function_only_touching_cases() -> None:
         assert len(selected) < len(corpus["cases"])
 
 
-def test_specialized_author_function_selects_canonical_lowerer_cases() -> None:
+def test_specialized_author_function_selects_exact_authored_witness() -> None:
     import infini_local.qa.runtime_contract_replay as replay
 
     corpus = replay.load_corpus(CORPUS_PATH)
@@ -207,11 +214,9 @@ def test_specialized_author_function_selects_canonical_lowerer_cases() -> None:
         corpus,
         ["fire_ranged_weapon"],
     )
-    expected = replay.select_cases_by_changed_functions(corpus, ["shoot_projectile"])
-    assert selected
-    assert [case["caseId"] for case in selected] == [
-        case["caseId"] for case in expected
-    ]
+    assert len(selected) == 1
+    assert selected[0].get("authoredFunctions") == ["fire_ranged_weapon"]
+    assert "fire_ranged_weapon" in selected[0]["functions"]
 
 
 def test_provenance_aware_selector_uses_exact_typed_function_identity() -> None:
@@ -257,8 +262,9 @@ def test_selector_fails_closed_for_unknown_or_uncovered_function() -> None:
     corpus = replay.load_corpus(CORPUS_PATH)
     with pytest.raises(ValueError, match="unknown changed engine functions"):
         replay.select_cases_by_changed_functions(corpus, ["invented_function"])
+    uncovered = {"coverage": {"authoredFunctionInventoryAvailable": True}, "cases": []}
     with pytest.raises(ValueError, match="no coverage"):
-        replay.select_cases_by_changed_functions(corpus, ["emit_light"])
+        replay.select_cases_by_changed_functions(uncovered, ["emit_light"])
 
 
 def test_dump_builder_recovers_authored_function_provenance_without_leaking_internal_keys() -> None:
@@ -270,13 +276,26 @@ def test_dump_builder_recovers_authored_function_provenance_without_leaking_inte
             {
                 "callId": "ranged_root",
                 "fn": "shoot_projectile",
-                "_rawFn": "fire_ranged_weapon",
+                "_authoredFn": "fire_ranged_weapon",
+                "_authoredParams": {
+                    "family": "bow",
+                    "ammoFor": "arrow",
+                    "projectileFamily": "arrow",
+                },
                 "params": {"runtimeFamily": "shoot", "_internal": "drop"},
             }
         ],
     }
     assert replay.authored_functions_from_runtime_plan(dumped) == frozenset(
         {"fire_ranged_weapon"}
+    )
+    assert replay.authored_function_forms_from_runtime_plan(dumped) == frozenset(
+        {
+            ("fire_ranged_weapon", "$function"),
+            ("fire_ranged_weapon", "family"),
+            ("fire_ranged_weapon", "ammoFor"),
+            ("fire_ranged_weapon", "projectileFamily"),
+        }
     )
     executable = replay.executable_runtime_plan_from_dump(dumped)
     assert executable["engineCalls"] == [
@@ -288,6 +307,31 @@ def test_dump_builder_recovers_authored_function_provenance_without_leaking_inte
     ]
 
 
+def test_authored_form_extraction_does_not_guess_from_legacy_normalized_calls() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    legacy = {
+        "engineCalls": [
+            {
+                "callId": "root",
+                "fn": "shoot_projectile",
+                "params": {"runtimeFamily": "sentry", "sentryPlacement": "grounded"},
+            }
+        ]
+    }
+    assert replay.authored_function_forms_from_runtime_plan(legacy) == frozenset()
+    assert replay.authored_function_forms_from_runtime_plan(
+        legacy,
+        assume_current_is_authored=True,
+    ) == frozenset(
+        {
+            ("shoot_projectile", "$function"),
+            ("shoot_projectile", "runtimeFamily"),
+            ("shoot_projectile", "sentryPlacement"),
+        }
+    )
+
+
 def test_select_exact_changed_form_uses_typed_lowerer_graph() -> None:
     import infini_local.qa.runtime_contract_replay as replay
 
@@ -296,23 +340,18 @@ def test_select_exact_changed_form_uses_typed_lowerer_graph() -> None:
         corpus,
         ["deploy_sentry:placement"],
     )
-    assert selected
-    expected = [
-        case
-        for case in corpus["cases"]
-        if any(
-            call.get("fn") == "shoot_projectile"
-            and "sentryPlacement" in (call.get("params") or {})
-            for call in case["runtimePlan"]["engineCalls"]
-        )
-    ]
-    assert [case["caseId"] for case in selected] == [
-        case["caseId"] for case in expected
-    ]
+    assert len(selected) == 1
+    assert selected[0].get("authoredFunctions") == ["deploy_sentry"]
+    assert any(
+        call.get("fn") == "deploy_sentry"
+        and "placement" in (call.get("params") or {})
+        for call in selected[0]["runtimePlan"]["engineCalls"]
+    )
     with pytest.raises(ValueError, match="unknown or unbound"):
         replay.select_cases_by_changed_forms(corpus, ["deploy_sentry:invented"])
+    uncovered = {"coverage": {"authoredFunctionInventoryAvailable": True}, "cases": []}
     with pytest.raises(ValueError, match="no coverage"):
-        replay.select_cases_by_changed_forms(corpus, ["emit_light:strength"])
+        replay.select_cases_by_changed_forms(uncovered, ["emit_light:strength"])
 
 
 def test_select_medium_changed_set_is_union_once() -> None:
@@ -441,20 +480,91 @@ def test_corpus_preserves_engine_function_coverage_report() -> None:
 
     corpus = replay.load_corpus(CORPUS_PATH)
     functions = replay.corpus_function_set(corpus)
-    # Historical dumps currently exercise a broad closed catalog subset.
-    assert len(functions) >= 10
+    # Historical rows plus nine deterministic mechanical witnesses cover the
+    # complete canonical function inventory without new LLM spend.
+    assert functions == set(ENGINE_FUNCTION_CONTRACT_BY_NAME)
     assert "set_item_stats" in functions
     coverage = corpus.get("coverage") or {}
     assert int(coverage.get("caseCount") or 0) == len(corpus["cases"])
     assert set(coverage.get("functions") or []) == set(functions)
-    assert set(coverage.get("normalizedFunctions") or []) == set(functions)
-    assert int(coverage.get("normalizedFunctionCount") or 0) == len(functions)
+    normalized_functions = {
+        fn
+        for case in corpus["cases"]
+        for fn in replay.normalized_functions_from_runtime_plan(case["runtimePlan"])
+    }
+    assert set(coverage.get("normalizedFunctions") or []) == normalized_functions
+    assert int(coverage.get("normalizedFunctionCount") or 0) == len(normalized_functions)
     registry_functions = set(ENGINE_FUNCTION_CONTRACT_BY_NAME)
     assert set(coverage.get("registryFunctions") or []) == registry_functions
     assert int(coverage.get("registryFunctionCount") or 0) == len(registry_functions)
     assert set(coverage.get("missingRegistryFunctions") or []) == (
         registry_functions - set(coverage.get("effectiveFunctions") or [])
     )
-    # This frozen v1 corpus was built before raw typed function provenance was kept.
-    assert coverage.get("authoredFunctionInventoryAvailable") is False
-    assert coverage.get("authoredFunctions") == []
+    assert coverage.get("authoredFunctionInventoryAvailable") is True
+    assert int(coverage.get("deterministicWitnessCount") or 0) == 9
+    assert coverage.get("missingRegistryFunctions") == []
+    lowerer_functions = {
+        name
+        for name, spec in ENGINE_FUNCTION_CONTRACT_BY_NAME.items()
+        if spec.lowerers
+    }
+    assert lowerer_functions <= set(coverage.get("authoredFunctions") or [])
+
+
+def test_contract_fingerprint_diff_is_form_local_and_fail_closed_on_removal() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    current = replay.runtime_contract_fingerprint_manifest()
+    same = replay.diff_runtime_contract_fingerprints(current, current)
+    assert same == {
+        "fullReplay": False,
+        "changedFunctions": [],
+        "changedForms": [],
+        "reason": "no_contract_diff",
+    }
+
+    changed = deepcopy(current)
+    changed["functions"]["deploy_sentry"]["formFingerprints"]["placement"] = "changed"
+    diff = replay.diff_runtime_contract_fingerprints(current, changed)
+    assert diff["fullReplay"] is False
+    assert diff["changedFunctions"] == []
+    assert diff["changedForms"] == ["deploy_sentry:placement"]
+
+    removed = deepcopy(current)
+    del removed["functions"]["deploy_sentry"]["formFingerprints"]["placement"]
+    diff = replay.diff_runtime_contract_fingerprints(current, removed)
+    assert diff["changedFunctions"] == ["deploy_sentry"]
+    assert diff["changedForms"] == []
+
+
+def test_committed_fingerprints_are_derived_and_cli_routes_exact_contract_diff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    committed = json.loads(FINGERPRINT_PATH.read_text(encoding="utf-8"))
+    current = replay.runtime_contract_fingerprint_manifest()
+    assert committed == current
+
+    spec = importlib.util.spec_from_file_location("runtime_replay_checker_test", CHECKER)
+    assert spec and spec.loader
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+
+    baseline = deepcopy(current)
+    baseline["functions"]["deploy_sentry"]["formFingerprints"]["placement"] = "old"
+    monkeypatch.setattr(checker, "_baseline_fingerprints", lambda _ref, _path: baseline)
+    args = argparse.Namespace(
+        corpus=CORPUS_PATH,
+        functions=[],
+        form=[],
+        out=None,
+        changed_contracts_from="BASE",
+        fingerprints=FINGERPRINT_PATH,
+        quiet=True,
+    )
+    report = checker.build_report(args)
+    assert report["ok"] is True
+    assert report["selectedCaseCount"] == 1
+    assert report["selection"]["mode"] == "affected"
+    assert report["selection"]["forms"] == ["deploy_sentry:placement"]

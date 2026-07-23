@@ -25,13 +25,16 @@ if str(LOCAL_GENERATOR) not in sys.path:
 
 from infini_local.qa.runtime_contract_replay import (  # noqa: E402
     CORPUS_SCHEMA,
+    authored_function_forms_from_runtime_plan,
     authored_functions_from_runtime_plan,
     call_shapes_from_plan,
     canonical_json,
     default_corpus_path,
+    deterministic_contract_witness_candidates,
     executable_runtime_plan_from_dump,
     functions_from_runtime_plan,
     make_case_id,
+    normalized_functions_from_runtime_plan,
     replay_case,
     stable_final_sections_fingerprint,
 )
@@ -99,6 +102,10 @@ def _extract_candidate(
     if not functions:
         return None
     authored_functions = sorted(authored_functions_from_runtime_plan(runtime_plan))
+    authored_forms = sorted(
+        f"{fn}:{path}"
+        for fn, path in authored_function_forms_from_runtime_plan(runtime_plan)
+    )
 
     case_name = row.get("case")
     if case_name is None or case_name == "":
@@ -109,6 +116,7 @@ def _extract_candidate(
         {
             "runtimePlan": plan,
             "authoredFunctions": authored_functions,
+            "authoredForms": authored_forms,
         }
     )
     case_id = make_case_id(str(source_run), str(case_name), plan_key)
@@ -121,6 +129,7 @@ def _extract_candidate(
         "resultKind": str(result_kind) if result_kind is not None else None,
         "functions": functions,
         "authoredFunctions": authored_functions,
+        "authoredForms": authored_forms,
         "runtimePlan": plan,
         "_planKey": plan_key,
         "_shapes": call_shapes_from_plan(plan),
@@ -153,14 +162,16 @@ def _select_representative(
     *,
     max_cases: int | None,
 ) -> list[dict[str, Any]]:
-    """Greedy cover: every observed authored/normalized function + call-shape + kind."""
+    """Greedy cover: every observed function/form + call-shape + kind."""
     all_fns: set[str] = set()
     all_shapes: set[tuple[str, tuple[str, ...]]] = set()
+    all_authored_forms: set[str] = set()
     all_kinds: set[str] = set()
     for cand in unique:
         all_fns.update(cand["functions"])
         all_fns.update(cand.get("authoredFunctions") or [])
         all_shapes.update(cand["_shapes"])
+        all_authored_forms.update(cand.get("authoredForms") or [])
         rk = str(cand.get("resultKind") or "")
         if rk:
             all_kinds.add(rk)
@@ -169,17 +180,23 @@ def _select_representative(
     selected: list[dict[str, Any]] = []
     cov_fn: set[str] = set()
     cov_shape: set[tuple[str, tuple[str, ...]]] = set()
+    cov_authored_form: set[str] = set()
     cov_kind: set[str] = set()
 
     def novelty(cand: dict[str, Any]) -> tuple[int, int, str]:
         candidate_functions = set(cand["functions"]) | set(cand.get("authoredFunctions") or [])
         new_fn = len(candidate_functions - cov_fn)
         new_shape = len(set(cand["_shapes"]) - cov_shape)
+        new_authored_form = len(set(cand.get("authoredForms") or []) - cov_authored_form)
         rk = str(cand.get("resultKind") or "")
         new_kind = 1 if rk and rk not in cov_kind else 0
         # Prefer higher novelty; tie-break by shorter plan then stable key.
         plan_len = len(cand.get("runtimePlan", {}).get("engineCalls") or [])
-        return (new_fn * 100 + new_shape * 10 + new_kind, -plan_len, str(cand.get("_planKey") or ""))
+        return (
+            new_fn * 1000 + new_authored_form * 100 + new_shape * 10 + new_kind,
+            -plan_len,
+            str(cand.get("_planKey") or ""),
+        )
 
     # Pass 1: cover until no more novelty (or max).
     while remaining:
@@ -197,10 +214,16 @@ def _select_representative(
         cov_fn.update(cand["functions"])
         cov_fn.update(cand.get("authoredFunctions") or [])
         cov_shape.update(cand["_shapes"])
+        cov_authored_form.update(cand.get("authoredForms") or [])
         rk = str(cand.get("resultKind") or "")
         if rk:
             cov_kind.add(rk)
-        if cov_fn == all_fns and cov_shape == all_shapes and cov_kind == all_kinds:
+        if (
+            cov_fn == all_fns
+            and cov_authored_form == all_authored_forms
+            and cov_shape == all_shapes
+            and cov_kind == all_kinds
+        ):
             break
 
     # If max_cases is None or generous, keep full unique when small enough.
@@ -236,6 +259,8 @@ def _attach_fingerprints(cases: list[dict[str, Any]]) -> tuple[list[dict[str, An
         }
         if cand.get("authoredFunctions"):
             case["authoredFunctions"] = list(cand["authoredFunctions"])
+        if cand.get("authoredForms"):
+            case["authoredForms"] = list(cand["authoredForms"])
         try:
             data = compile_input_from_case(case)
             result = compile_runtime_plan_to_final_result(data)
@@ -275,11 +300,22 @@ def build_corpus(
         if cand is not None:
             candidates.append(cand)
 
+    historical_candidate_count = len(candidates)
+    witnesses = deterministic_contract_witness_candidates()
+    candidates.extend(witnesses)
+
     unique = _dedupe_candidates(candidates)
     selected = _select_representative(unique, max_cases=max_cases)
     cases, compile_stats = _attach_fingerprints(selected)
 
-    normalized_fns = sorted({fn for case in cases for fn in case["functions"]})
+    stored_fns = sorted({fn for case in cases for fn in case["functions"]})
+    normalized_fns = sorted(
+        {
+            fn
+            for case in cases
+            for fn in normalized_functions_from_runtime_plan(case["runtimePlan"])
+        }
+    )
     authored_fns = sorted(
         {
             fn
@@ -287,25 +323,40 @@ def build_corpus(
             for fn in (case.get("authoredFunctions") or [])
         }
     )
-    effective_fns = sorted(set(normalized_fns) | set(authored_fns))
+    authored_forms = sorted(
+        {
+            form
+            for case in cases
+            for form in (case.get("authoredForms") or [])
+        }
+    )
+    effective_fns = sorted(set(stored_fns) | set(normalized_fns) | set(authored_fns))
     registry_fns = sorted(ENGINE_FUNCTION_CONTRACT_BY_NAME)
     all_shapes: set[str] = set()
     for case in cases:
         for fn, keys in call_shapes_from_plan(case["runtimePlan"]):
             all_shapes.add(f"{fn}::{','.join(keys)}")
 
+    lowerer_functions = {
+        name
+        for name, spec in ENGINE_FUNCTION_CONTRACT_BY_NAME.items()
+        if spec.lowerers
+    }
     coverage = {
         "caseCount": len(cases),
         "uniquePlanCount": len(unique),
-        "rawRowCount": len(candidates),
+        "rawRowCount": historical_candidate_count,
+        "deterministicWitnessCount": len(witnesses),
         # Legacy keys remain normalized-runtime coverage for v1 readers.
-        "functions": normalized_fns,
-        "functionCount": len(normalized_fns),
+        "functions": stored_fns,
+        "functionCount": len(stored_fns),
         "normalizedFunctions": normalized_fns,
         "normalizedFunctionCount": len(normalized_fns),
         "authoredFunctions": authored_fns,
         "authoredFunctionCount": len(authored_fns),
-        "authoredFunctionInventoryAvailable": bool(authored_fns),
+        "authoredForms": authored_forms,
+        "authoredFormCount": len(authored_forms),
+        "authoredFunctionInventoryAvailable": lowerer_functions <= set(authored_fns),
         "effectiveFunctions": effective_fns,
         "effectiveFunctionCount": len(effective_fns),
         "registryFunctions": registry_fns,

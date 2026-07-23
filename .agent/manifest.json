@@ -88,9 +88,16 @@
       "python",
       "tools/semantic_runtime_diff.py"
     ],
+    "contract_fingerprints": [
+      "python",
+      "tools/export_runtime_contract_fingerprints.py",
+      "--check"
+    ],
     "historical_replay": [
       "python",
       "tools/check_runtime_contract_replay.py",
+      "--changed-contracts-from",
+      "HEAD",
       "--quiet"
     ],
     "runtime_contract_tests": [
