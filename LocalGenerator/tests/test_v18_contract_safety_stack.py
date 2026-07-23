@@ -733,6 +733,8 @@ def _contract_check_agent_control_plane_is_machine_readable_and_diff_aware() -> 
     assert "contract_parity" in csharp["checks"]
     assert "delivery_contract" in csharp["checks"]
     assert "mutation_gate" in csharp["checks"]
+    assert "csharp_contracts" in csharp["checks"]
+    assert "pytest" not in csharp["checks"]
 
     runtime_rule = next(row for row in rules["rules"] if row["id"] == "python-runtime-contract")
     tests_rule = next(row for row in rules["rules"] if row["id"] == "tests-only")

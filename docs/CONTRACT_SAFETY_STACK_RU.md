@@ -91,10 +91,13 @@ C#-специфичное свойство «sentry shot не становитс
 `agentctl verify --changed` не запускает весь test universe после каждого leaf diff.
 Глобально обязательны только `compileall` и project hygiene; runtime-authoring diff
 получает компактный invariant-набор + parity/mutation/semantic/replay gates, а
-Visual/VFX diff — свой focused contract-набор. Изменённые test modules запускаются
-отдельно через `tools/run_changed_pytests.py`; shared fixture/helper change честно
-переходит на полный suite. Полный sharded pytest остаётся release/final-acceptance
-gate, а не обязательным inner-loop после каждого патча.
+Visual/VFX diff — свой focused contract-набор. C# diff проверяется прямыми
+parity/delivery/mutation/static-C# gates и обязательным настоящим build, а не полным
+Python suite: source-string тесты не заменяют компилятор и не должны тормозить каждую
+правку executor-а. Изменённые test modules запускаются отдельно через
+`tools/run_changed_pytests.py`; shared fixture/helper change честно переходит на полный
+suite. Полный sharded pytest остаётся release/final-acceptance gate, а не обязательным
+inner-loop после каждого патча.
 
 ## Replay и semantic baseline
 
