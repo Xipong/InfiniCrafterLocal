@@ -109,11 +109,6 @@
     "altGeneratedBuff": {
       "$ref": "#/$defs/GeneratedBuffBoundary"
     },
-    "altMobilityCooldownTicks": {
-      "default": 0,
-      "title": "Altmobilitycooldownticks",
-      "type": "integer"
-    },
     "altMobilityMode": {
       "default": "",
       "title": "Altmobilitymode",
@@ -128,6 +123,11 @@
       "default": true,
       "title": "Altmobilitysafetileonly",
       "type": "boolean"
+    },
+    "altUseCooldownTicks": {
+      "default": 0,
+      "title": "Altusecooldownticks",
+      "type": "integer"
     },
     "altUseMode": {
       "default": "",
@@ -177,6 +177,16 @@
     "craftYield": {
       "default": 1,
       "title": "Craftyield",
+      "type": "integer"
+    },
+    "createTile": {
+      "default": -1,
+      "title": "Createtile",
+      "type": "integer"
+    },
+    "createWall": {
+      "default": -1,
+      "title": "Createwall",
       "type": "integer"
     },
     "damage": {
@@ -310,6 +320,11 @@
     "pickPower": {
       "default": 0,
       "title": "Pickpower",
+      "type": "integer"
+    },
+    "placeStyle": {
+      "default": 0,
+      "title": "Placestyle",
       "type": "integer"
     },
     "powerBudget": {

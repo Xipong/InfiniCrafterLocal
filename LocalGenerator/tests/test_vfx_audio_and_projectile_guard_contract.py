@@ -53,7 +53,7 @@ def _contract_check_vfx_director_sound_timing_survives_manifest_compilation():
         "particleRole": surface["particleRole"][0],
         "anchor": surface["anchor"][0],
         "channel": "sound",
-        "lane": surface["lane"][0],
+        "lane": "cue",
         "emissionMode": surface["emissionMode"][0],
         "blend": surface["blend"][0],
         "particleSystemId": surface["particleSystemId"][0],
@@ -88,6 +88,60 @@ def _contract_check_vfx_director_sound_timing_survives_manifest_compilation():
     assert manifest is not None
     assert manifest["slots"][0]["startTick"] == 20
     assert manifest["slots"][0]["repeatEvery"] == 60
+
+
+def _contract_check_vfx_cue_renderer_channel_lane_rules_are_explicit_and_enforced():
+    from infini_local.core.vfx_director_contract import (
+        _vfx_director_validation_report,
+        vfx_director_surface,
+    )
+    from infini_local.core.vfx_director_prompt import VFX_DIRECTOR_SYSTEM
+
+    surface = vfx_director_surface()
+    assert surface["rendererRules"] == {
+        "soundCue": {"channel": "sound", "lane": "cue"},
+        "lightCue": {"channel": "light", "lane": "cue"},
+    }
+    assert "obey vfxSurface.rendererRules as hard cross-field constraints" in VFX_DIRECTOR_SYSTEM
+    assert "soundCue requires channel=sound" not in VFX_DIRECTOR_SYSTEM
+
+    slot = {
+        "event": "on_use",
+        "rendererKind": "soundCue",
+        "backend": "Realtime",
+        "textureRole": "projectile",
+        "particleRole": "projectile",
+        "anchor": "self",
+        "channel": "motionTrail",
+        "lane": "primary",
+        "emissionMode": "point",
+        "blend": "alpha",
+        "particleSystemId": "dust",
+        "scale": 1.0,
+        "density": 0.25,
+        "duration": 20,
+        "alpha": 1.0,
+        "spread": 0.0,
+        "jitter": 0.0,
+        "budgetWeight": 1.0,
+        "signatureWeight": 0.2,
+        "visualCost": 0.1,
+        "fadeIn": 0.0,
+        "fadeOut": 0.2,
+    }
+    report = _vfx_director_validation_report({
+        "effectMagnitude": 0.3,
+        "visualBudgetClass": "small",
+        "slots": [slot],
+    })
+    assert report["valid"] is False
+    assert {
+        (error["path"], error["error"], error["expected"])
+        for error in report["errors"]
+    } == {
+        ("slots[0].channel", "renderer_field_mismatch", "sound"),
+        ("slots[0].lane", "renderer_field_mismatch", "cue"),
+    }
 
 
 def _contract_check_infini_sound_library_has_large_exact_catalog_without_weapon_name_classifier():

@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 113,
+  "documentedFieldCount": 114,
   "entries": [
     {
       "declarations": [
@@ -2569,7 +2569,7 @@
           "default": {
             "expression": "env_float(\"INFINI_LLM_TEMPERATURE\", 0.38, lo=0.0, hi=1.2)"
           },
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author_item_repair.py",
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -2585,7 +2585,7 @@
       "minimum": 0.0,
       "name": "INFINI_LLM_REAUTHOR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/author_item_repair.py"
       ],
       "secret": false,
       "type": "number",
@@ -2668,7 +2668,7 @@
       "declarations": [
         {
           "default": 0.38,
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author_item_repair.py",
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -2689,6 +2689,7 @@
       "minimum": 0.0,
       "name": "INFINI_LLM_TEMPERATURE",
       "owners": [
+        "LocalGenerator/infini_local/pipelines/author_item_repair.py",
         "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
       ],
       "secret": false,
@@ -2811,6 +2812,30 @@
       ],
       "secret": false,
       "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "native",
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "native",
+      "documented": true,
+      "example": "native",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_MP_ASSET_TRANSPORT",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py"
+      ],
+      "secret": false,
+      "type": "string",
       "visibility": "gui"
     },
     {
@@ -5827,18 +5852,14 @@
     {
       "declarations": [
         {
-          "default": {
-            "expression": "1800 if image_backend_is_zimage() else 2200"
-          },
+          "default": 1800,
           "file": "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         }
       ],
-      "default": {
-        "expression": "1800 if image_backend_is_zimage() else 2200"
-      },
+      "default": 1800,
       "documented": true,
       "example": "1800",
       "gui": false,
@@ -5878,15 +5899,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 239,
-  "fingerprint": "105d7cd5ba427e8bdc89669217dff9bfef6e78286bef2ccf1bd85b4af2c5fdc7",
+  "fieldCount": 240,
+  "fingerprint": "593095ad26d54897df9dd346eff6e5133358c482b88b0bed0a5edd8d8537a102",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 118,
+  "guiFieldCount": 119,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

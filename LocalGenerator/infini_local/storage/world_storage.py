@@ -42,6 +42,11 @@ VISUAL_DELIVERY_FIELDS = frozenset({
     "spriteRawPath",
     "spriteStatus",
     "spriteUrl",
+    "equipOverlayPrompt",
+    "equipOverlayStatus",
+    "equipOverlayPath",
+    "equipOverlayUrl",
+    "equipOverlayScore",
     "style",
     "spriteTechnicalScore",
     "semanticReviewStatus",
@@ -80,6 +85,7 @@ PARENT_ITEM_CARD_DELIVERY_FIELDS = frozenset({
 RECIPE_META_DELIVERY_FIELDS = frozenset({
     "assetBaseUrl",
     "assetFiles",
+    "assetTransport",
     "chaosBudget",
     "generationDepth",
     "noveltyBudget",
@@ -264,7 +270,7 @@ def build_recipe_health(
     pure_vfx = runtime_provenance.get("pureVfx") if isinstance(runtime_provenance.get("pureVfx"), dict) else {}
 
     slots: dict[str, Any] = {}
-    for role in ["item", "projectile", "impact", "child", "field"]:
+    for role in ["item", "projectile", "impact", "child", "field", "equip_overlay"]:
         slot = _role_slot_from_visual_report(visual_report, role)
         slots[role] = {
             "required": bool(slot.get("required")),
@@ -284,7 +290,18 @@ def build_recipe_health(
     if runtime_validation:
         runtime_valid = bool(runtime_validation.get("ok", True))
     elif data.get("runtimePlan"):
-        runtime_valid = bool(runtime_quality.get("hasStats", True) and runtime_quality.get("hasPrimaryAction", True)) if runtime_quality else True
+        runtime_plan_raw = data.get("runtimePlan")
+        runtime_plan: dict[str, Any] = runtime_plan_raw if isinstance(runtime_plan_raw, dict) else {}
+        gameplay_raw = data.get("gameplay")
+        gameplay: dict[str, Any] = gameplay_raw if isinstance(gameplay_raw, dict) else {}
+        attack_raw = data.get("attack")
+        attack: dict[str, Any] = attack_raw if isinstance(attack_raw, dict) else {}
+        result_kind = str(runtime_plan.get("resultKind") or gameplay.get("kind") or data.get("category") or "").strip().lower()
+        root_required = result_kind in {"weapon", "consumable_weapon", "summon"} or bool(attack.get("enabled"))
+        runtime_valid = bool(
+            runtime_quality.get("hasStats", True)
+            and (not root_required or runtime_quality.get("hasRootExecutor", False))
+        ) if runtime_quality else True
 
     deliverable = is_deliverable_recipe_payload(data)
     visual_ok = bool(visual_report.get("ok", True))

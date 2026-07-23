@@ -47,7 +47,9 @@ public static class VfxRendererRegistry
         => ToWireName(ParseKind(rendererKind));
 
     public static string NormalizeEventGroup(string? eventGroup, string? eventName)
-        => eventGroup is "live" or "hit" or "kill" ? eventGroup : VfxCanonicalVocabulary.EventGroup(eventName);
+        => eventGroup is "live" or "hit" or "kill" or "item_live" or "item_use"
+            ? eventGroup
+            : VfxCanonicalVocabulary.EventGroup(eventName);
 
     public static string ToWireName(InfiniVfxRendererKind kind) => kind switch
     {

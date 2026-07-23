@@ -39,6 +39,46 @@ _RUNTIME_FAMILY_PROFILES: Final[dict[str, RuntimeFamilyProfile]] = {
     "sentry": RuntimeFamilyProfile("sentry", True, False, False, "magic", "staff", "on_release", "summon"),
 }
 
+# A root executor owns one item-use lifecycle, not necessarily the only damage
+# source.  These exact carriers keep Terraria's item/tool body active while the
+# same use also emits a generated projectile.  Do not broaden this into a free-form
+# owner graph: every other projectile family remains projectile-only.
+_ITEM_BODY_PLUS_PROJECTILE_CARRIERS: Final[frozenset[tuple[str, str]]] = frozenset({
+    ("shoot", "swing"),
+    ("overhead_barrage", "swing"),
+})
+
+_RUNTIME_FAMILY_DELIVERIES: Final[dict[str, frozenset[str]]] = {
+    "none": frozenset({"none"}),
+    "swing": frozenset({"swing"}),
+    "thrust": frozenset({"thrust"}),
+    "returning": frozenset({"throw"}),
+    "flail": frozenset({"flail"}),
+    "yoyo": frozenset({"yoyo"}),
+    "whip": frozenset({"whip"}),
+    "shoot": frozenset({"shoot", "swing"}),
+    "cast": frozenset({"cast"}),
+    "beam": frozenset({"cast"}),
+    "charge_release": frozenset({"shoot", "cast", "throw"}),
+    "overhead_barrage": frozenset({"shoot", "cast", "swing"}),
+    "throw": frozenset({"throw"}),
+    "summon": frozenset({"summon"}),
+    "sentry": frozenset({"summon"}),
+}
+
+_RUNTIME_FAMILY_REQUIRED_MOVEMENTS: Final[dict[str, frozenset[str]]] = {
+    "returning": frozenset({"boomerang", "returning_glaive"}),
+    "flail": frozenset({"flail_tether"}),
+    "yoyo": frozenset({"yoyo_hover"}),
+    "whip": frozenset({"whip_lash"}),
+}
+_EXCLUSIVE_MOVEMENT_OWNERS: Final[dict[str, str]] = {
+    movement: family
+    for family, movements in _RUNTIME_FAMILY_REQUIRED_MOVEMENTS.items()
+    if family in {"flail", "yoyo", "whip"}
+    for movement in movements
+}
+
 CANONICAL_RUNTIME_FAMILIES = frozenset(_RUNTIME_FAMILY_PROFILES)
 PROJECTILE_OWNED_RUNTIME_FAMILIES = frozenset(
     name for name, profile in _RUNTIME_FAMILY_PROFILES.items() if profile.projectile_owned
@@ -80,18 +120,60 @@ def is_item_bodied_projectile_family(value: Any) -> bool:
     return runtime_family_profile(value).item_bodied_projectile
 
 
+def runtime_family_accepts_delivery(value: Any, delivery: Any) -> bool:
+    family = canonical_runtime_family(value)
+    delivery_token = str(delivery or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return delivery_token in _RUNTIME_FAMILY_DELIVERIES.get(family, frozenset())
+
+
+def runtime_family_delivery_pairs() -> tuple[tuple[str, str], ...]:
+    """Return the canonical immutable family/delivery policy projection."""
+    return tuple(
+        (family, delivery)
+        for family in sorted(_RUNTIME_FAMILY_DELIVERIES)
+        if family != "none"
+        for delivery in sorted(_RUNTIME_FAMILY_DELIVERIES[family])
+    )
+
+
+def runtime_family_required_movements(value: Any) -> frozenset[str]:
+    return _RUNTIME_FAMILY_REQUIRED_MOVEMENTS.get(
+        canonical_runtime_family(value),
+        frozenset(),
+    )
+
+
+def exclusive_movement_owner(value: Any) -> str:
+    token = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return _EXCLUSIVE_MOVEMENT_OWNERS.get(token, "")
+
+
+def runtime_family_accepts_movement(value: Any, movement: Any) -> bool:
+    family = canonical_runtime_family(value)
+    token = str(movement or "").strip().lower().replace("-", "_").replace(" ", "_")
+    required = runtime_family_required_movements(family)
+    if required and token not in required:
+        return False
+    owner = exclusive_movement_owner(token)
+    return not owner or owner == family
+
+
+def keeps_item_body_damage_lane(value: Any, delivery: Any = "") -> bool:
+    family = canonical_runtime_family(value)
+    delivery_token = str(delivery or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return (family, delivery_token) in _ITEM_BODY_PLUS_PROJECTILE_CARRIERS
+
+
 def uses_projectile_only_item_affordance(value: Any, delivery: Any = "") -> bool:
     """Whether the item body/hitbox should be replaced by its runtime projectile.
 
-    Overhead barrage is delivery geometry, not a carrier class.  An explicit
-    swing carrier (Starfury-style) keeps its melee item body while still
-    spawning the overhead marker; shoot/cast carriers remain projectile-only.
+    A root executor may preserve one bounded item-body lane.  In particular,
+    ``shoot+swing`` covers Terraria shooting swords and tool+splash/shard uses,
+    while ``overhead_barrage+swing`` covers Starfury-style carriers.  The root
+    executor is still singular; the item hitbox is not a second controller.
     """
     family = canonical_runtime_family(value)
-    delivery_token = str(delivery or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if family == "overhead_barrage" and delivery_token == "swing":
-        return False
-    return runtime_family_profile(family).projectile_owned
+    return runtime_family_profile(family).projectile_owned and not keeps_item_body_damage_lane(family, delivery)
 
 
 __all__ = [
@@ -104,7 +186,11 @@ __all__ = [
     "is_canonical_runtime_family",
     "is_item_bodied_projectile_family",
     "is_projectile_owned_family",
+    "keeps_item_body_damage_lane",
     "runtime_family_profile",
+    "runtime_family_accepts_delivery",
+    "runtime_family_delivery_pairs",
+    "runtime_family_required_movements",
     "uses_held_projectile_family",
     "uses_projectile_only_item_affordance",
 ]

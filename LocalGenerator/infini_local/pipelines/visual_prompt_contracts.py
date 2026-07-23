@@ -36,6 +36,8 @@ def asset_negative_prompt(role: str = "item") -> str:
         return base + ", full weapon, held weapon, blade, hilt, handle, furniture object, inventory item icon, placed object, persistent object"
     if role in {"child", "field"}:
         return base + ", full weapon, inventory item icon"
+    if role == "equip_overlay":
+        return base + ", inventory icon, full armor sheet, character, mannequin, multiple poses, UI slot frame"
     return base
 
 def chroma_rgb() -> tuple[int, int, int]:
@@ -128,6 +130,8 @@ def zimage_role_description(role: str, canvas: int) -> str:
         return "A Terraria-like pixel-art secondary projectile sprite."
     if r == "field":
         return "A Terraria-like pixel-art field, rune, cloud, or trap-mark sprite."
+    if r == "equip_overlay":
+        return "A Terraria-like pixel-art single-pose wearable equipment overlay sprite."
     return "A Terraria-like pixel-art item sprite."
 
 def zimage_positive_guard_clause(role: str, data: dict[str, Any] | None = None) -> str:
@@ -146,13 +150,15 @@ def zimage_positive_guard_clause(role: str, data: dict[str, Any] | None = None) 
         "Use crisp hard pixel edges, a limited palette, and a clean silhouette."
     )
     if r == "projectile":
-        return base + " Preserve the authored projectile body or multipart arrangement without adding beam, tether, or trail geometry."
+        return base + " Preserve every explicitly authored projectile body, beam, tether, and trail; add no un-authored geometry."
     if r == "impact":
         return base + " Show the authored momentary impact effect only."
     if r == "field":
         return base + " Show the authored field, rune, cloud, or trap-mark texture only."
     if r == "child":
         return base + " Show the authored child-projectile body only."
+    if r == "equip_overlay":
+        return base + " Show one centered wearable overlay for the player draw layer, not an inventory icon or armor sheet."
     return base + " Show the authored item inventory sprite only."
 
 def _is_generated_usable_gear(data: dict[str, Any]) -> bool:
@@ -511,7 +517,7 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "marginPx": 1 if size <= 32 else 2,
             "cropPadPx": 1,
             "maxEdgeTouch": 0.10,
-            "promptFillWords": "the authored projectile body or multipart arrangement should span a readable portion of the canvas with a thin clear edge",
+            "promptFillWords": "the authored projectile geometry should span a readable portion of the canvas with a thin clear edge",
             "promptPoseWords": "compose the moving projectile in canonical local +X pose: leading tip or nose faces screen-right, tail or trail faces screen-left; this local texture is later rotated to any world-space travel direction",
         },
         "impact": {
@@ -547,6 +553,17 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptFillWords": "the authored field arrangement should span a readable portion of the canvas with a thin clear edge",
             "promptPoseWords": "compose it as the persistent field, rune, cloud, or trap-mark texture",
         },
+        "equip_overlay": {
+            "targetFill": visual_config.ITEM_ICON_TARGET_FILL,
+            "minFill": 0.48,
+            "maxFill": 0.92,
+            "coreAlphaThreshold": visual_config.SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
+            "marginPx": 2,
+            "cropPadPx": 1,
+            "maxEdgeTouch": 0.10,
+            "promptFillWords": "the authored wearable overlay should remain centered and readable with a thin clear edge",
+            "promptPoseWords": "compose one isolated single-pose equipment overlay for the player draw layer, not an inventory icon or armor sheet",
+        },
     }
     spec = dict(table.get(role, table["item"]))
     target_fill = max(0.40, min(0.98, float(spec["targetFill"])))
@@ -580,6 +597,8 @@ def role_style_prefix(role: str, canvas: int) -> str:
         return f"pixel art secondary projectile sprite, {bg}, child damaging body only, {contract}"
     if role == "field":
         return f"pixel art ground field/trap/rune/cloud sprite, {bg}, flat world effect, {contract}"
+    if role == "equip_overlay":
+        return f"pixel art single-pose wearable equipment overlay emblem for a Terraria-like player draw layer, {bg}, centered isolated overlay only, no character and no spritesheet, {contract}"
     return f"pixel art sprite asset, {bg}, {contract}"
 
 def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas: int) -> str:
@@ -596,8 +615,10 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     # contract already tells the image model that this file is one projectile texture;
     # an explicitly authored bundle or multi-part projectile remains allowed.
     prompt = sanitize_projectile_family_prompt(data, role, prompt)
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
+    visual_raw = data.get("visual")
+    kit_raw = data.get("visualKit")
+    visual: dict[str, Any] = visual_raw if isinstance(visual_raw, dict) else {}
+    kit: dict[str, Any] = kit_raw if isinstance(kit_raw, dict) else {}
     shared_style = compact_visual_words(kit.get("styleGuide") or visual.get("styleGuide") or "", 260)
     palette = sanitize_visual_palette(visual.get("palette") or [], limit=8)
     palette_words = ", ".join(str(x).replace("_", " ") for x in palette[:6] if str(x).strip())
@@ -617,6 +638,8 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
             prompt = build_child_image_prompt(data)
         elif role == "field":
             prompt = build_field_image_prompt(data)
+        elif role == "equip_overlay":
+            prompt = str(kit.get("equipOverlayPrompt") or "single wearable equipment overlay emblem")
         else:
             prompt = str(visual.get("imagePrompt") or data.get("name") or "generated item")
 
@@ -627,7 +650,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     if semantic_contract:
         # Modern Qwen-text-encoder flow models: feed one final objective visual
         # description, not a legacy Stable Diffusion comma-tag recipe.
-        semantic_limit = env_int("INFINI_ZIMAGE_PROMPT_LIMIT", 1800 if image_backend_is_zimage() else 2200)
+        semantic_limit = env_int("INFINI_ZIMAGE_PROMPT_LIMIT", 1800)
         if role == "item":
             return _semantic_item_prompt(
                 data,
@@ -657,7 +680,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         prompt,
         (f"shared authored art direction: {shared_style}" if shared_style else ""),
         f"palette: {palette_words}" if palette_words else "palette: limited high-contrast named colors",
-        ("preserve the authored projectile body or multipart arrangement; do not add beam, tether, or trail geometry" if role == "projectile" else ""),
+        ("preserve every explicitly authored projectile body, beam, tether, and trail; add no un-authored geometry" if role == "projectile" else ""),
         "crisp hard pixel edges, limited palette, no antialiasing look, no UI frame, no text, no character, no scenery, keep unused area pure magenta key (#ff00ff)",
     ]
     return compact_prompt_parts(parts, limit=2200, separator=", ")
@@ -702,7 +725,7 @@ def build_projectile_image_prompt(data: dict[str, Any]) -> str:
     return ", ".join([
         "pixel art projectile sprite for a Terraria-like mod",
         sprite_background_positive_clause(),
-        "authored moving projectile body or multipart arrangement only; no item card, player, scene, added beam, added tether, or added trail geometry",
+        "authored moving projectile geometry only; preserve explicitly authored body, beam, tether, and trail; add no un-authored geometry",
         f"readable projectile silhouette filling the useful area of a {projectile_canvas}x{projectile_canvas} sprite target",
         "limited palette, crisp hard edges",
         family_prompt_clause(data, "projectile", projectile_canvas),
@@ -742,7 +765,7 @@ def build_child_image_prompt(data: dict[str, Any]) -> str:
     return ", ".join([
         "pixel art child projectile sprite for a Terraria-like mod",
         sprite_background_positive_clause(),
-        "authored child-projectile body only; no item card, player, scene, added beam, added tether, or added trail geometry",
+        "authored child-projectile geometry only; preserve explicitly authored body, beam, tether, and trail; add no un-authored geometry",
         "readable 12x12 to 24x24 silhouette",
         "crisp hard pixels, limited palette",
         role_contract_prompt_clause("child", visual_config.CHILD_SPRITE_CANVAS),

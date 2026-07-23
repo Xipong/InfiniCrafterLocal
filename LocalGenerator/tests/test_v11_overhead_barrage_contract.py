@@ -234,7 +234,8 @@ def _contract_check_overhead_barrage_csharp_preserves_effect_and_selects_item_af
     barrage_policy = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedOverheadBarragePolicy.cs").read_text(encoding="utf-8")
 
     assert "UsesProjectileOnlyItemAffordance" in family_policy
-    assert 'family == OverheadBarrage && carrier == "swing"' in family_policy
+    assert "KeepsItemBodyDamageLane(family, carrier)" in family_policy
+    assert 'carrier == "swing" && family is Shoot or OverheadBarrage' in family_policy
     assert "UsesProjectileOnlyItemAffordance(runtimeFamily, Attack.Delivery)" in apply_source
     assert "EffectCode = parent.EffectCode" in child_policy
     assert "child.EffectCode =" not in barrage_policy

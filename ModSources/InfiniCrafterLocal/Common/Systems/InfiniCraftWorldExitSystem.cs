@@ -2,6 +2,7 @@
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Content.Projectiles;
+using InfiniCrafterLocal.Common.VFX;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -11,6 +12,8 @@ public sealed class InfiniCraftWorldExitSystem : ModSystem
 {
     public override void OnWorldLoad()
     {
+        InfiniItemVfxRuntime.ClearUseEventCaches();
+        GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         try { global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.ReloadLocalCacheForCurrentWorld(); }
         catch { }
     }
@@ -30,6 +33,10 @@ public sealed class InfiniCraftWorldExitSystem : ModSystem
         try { GeneratedProjectile.ClearPresentationSyncCaches(); }
         catch { }
         try { GeneratedHeldItemDrawLayer.ClearNetCaches(); }
+        catch { }
+        try { GeneratedEquipOverlayDrawLayerBase.ClearNetCaches(); }
+        catch { }
+        try { InfiniItemVfxRuntime.ClearUseEventCaches(); }
         catch { }
         try { global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.Dispose(); }
         catch { }

@@ -2,6 +2,7 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Projectiles;
 using Terraria.ModLoader;
 
@@ -33,9 +34,14 @@ public sealed class InfiniCrafterLocalMod : Mod
     public override void HandlePacket(System.IO.BinaryReader reader, int whoAmI)
     {
         byte packetType = reader.ReadByte();
-        if (packetType == InfiniNetPacketIds.NotifyGeneratedAssets)
+        if (packetType == InfiniNetPacketIds.RequestGeneratedAsset)
         {
-            AssetSync?.HandlePacket(reader, whoAmI);
+            AssetSync?.HandleAssetRequestPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedAssetChunk)
+        {
+            AssetSync?.HandleAssetChunkPacket(reader, whoAmI);
             return;
         }
         if (packetType == InfiniNetPacketIds.RequestServerCraft)
@@ -46,6 +52,16 @@ public sealed class InfiniCrafterLocalMod : Mod
         if (packetType == InfiniNetPacketIds.CancelServerCraft)
         {
             InfiniCraftPlayer.HandleCancelServerCraftPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestStationEscrow)
+        {
+            InfiniCraftPlayer.HandleStationEscrowRequestPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.StationEscrowResult)
+        {
+            InfiniCraftPlayer.HandleStationEscrowResultPacket(reader, whoAmI);
             return;
         }
         if (packetType == InfiniNetPacketIds.CraftCommitResult)
@@ -83,6 +99,11 @@ public sealed class InfiniCrafterLocalMod : Mod
             GeneratedHeldItemDrawLayer.HandleHeldItemPresentationSyncPacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.SyncGeneratedItemVfxEvent)
+        {
+            InfiniItemVfxRuntime.HandleUseEventPacket(reader, whoAmI);
+            return;
+        }
     }
 
 
@@ -112,6 +133,8 @@ public sealed class InfiniCrafterLocalMod : Mod
         InfiniCraftPlayer.ClearServerCommitCache();
         GeneratedProjectile.ClearPresentationSyncCaches();
         GeneratedHeldItemDrawLayer.ClearNetCaches();
+        GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
+        InfiniItemVfxRuntime.ClearUseEventCaches();
         GeneratedItems?.Dispose();
         AssetSync?.Dispose();
         Sprites?.Dispose();

@@ -31,7 +31,7 @@ def _contract_check_incompatible_projectile_after_swing_is_rejected_without_sema
 
     assert patch["runtimeFamily"] == "swing"
     assert patch["delivery"] == "swing"
-    assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
+    assert patch["rejectedRootExecutorCalls"][0]["reason"] == "runtime_one_root_executor"
     assert "recoveredPrimaryConflictAsSecondary" not in patch
     assert "secondaryProjectileShape" not in patch
     assert patch["onHit"] == "lifesteal"

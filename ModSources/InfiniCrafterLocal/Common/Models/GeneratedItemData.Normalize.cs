@@ -196,6 +196,9 @@ public sealed partial class GeneratedItemData
         Inheritance ??= Array.Empty<InheritanceSpec>();
         LossBudget ??= new LossBudgetSpec();
         RecipeMeta ??= new RecipeMetaSpec();
+        RecipeMeta.AssetTransport = string.Equals(RecipeMeta.AssetTransport?.Trim(), "http", StringComparison.OrdinalIgnoreCase)
+            ? "http"
+            : "native";
         ItemKnowledge ??= new ItemKnowledgeSpec();
         GeneratedParentSummary ??= new GeneratedParentSummarySpec();
         GeneratedParentSummary.Normalize();
@@ -251,14 +254,21 @@ public sealed partial class GeneratedItemData
         Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 1000);
         Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 200);
         Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 1000);
+        Gameplay.CreateTile = Gameplay.CreateTile >= 0 && Gameplay.CreateTile < TileLoader.TileCount
+            ? Gameplay.CreateTile
+            : -1;
+        Gameplay.CreateWall = Gameplay.CreateWall >= 0 && Gameplay.CreateWall < WallLoader.WallCount
+            ? Gameplay.CreateWall
+            : -1;
+        Gameplay.PlaceStyle = ClampInt(Gameplay.PlaceStyle, 0, 1000);
         Gameplay.MobilityMode = SafeText(Gameplay.MobilityMode, 32);
         Gameplay.MobilityRangeTiles = ClampInt(Gameplay.MobilityRangeTiles, 0, 80);
         Gameplay.MobilityCooldownTicks = ClampInt(Gameplay.MobilityCooldownTicks, 0, 36000);
         Gameplay.MiningSpeedScale = ClampFloat(Gameplay.MiningSpeedScale, 0.25f, 2f);
         Gameplay.AltUseMode = SafeText(Gameplay.AltUseMode, 32);
+        Gameplay.AltUseCooldownTicks = ClampInt(Gameplay.AltUseCooldownTicks, 0, 36000);
         Gameplay.AltMobilityMode = SafeText(Gameplay.AltMobilityMode, 32);
         Gameplay.AltMobilityRangeTiles = ClampInt(Gameplay.AltMobilityRangeTiles, 0, 80);
-        Gameplay.AltMobilityCooldownTicks = ClampInt(Gameplay.AltMobilityCooldownTicks, 0, 36000);
         // Held light is passive; alternate use remains explicit AltUseMode only.
         Gameplay.HoldLightStrength = ClampFloat(Gameplay.HoldLightStrength, 0f, 1.5f);
         Gameplay.HoldLightColorName = RuntimeColorPolicy.Normalize(Gameplay.HoldLightColorName);
@@ -457,6 +467,10 @@ public sealed partial class GeneratedItemData
         Visual.SpriteRawPath = NormalizeSpritePathForStatus(Visual.SpriteRawPath, Visual.SpriteStatus);
         if (string.IsNullOrWhiteSpace(Visual.SpritePath) && SpriteStatusAllowsRuntimePath(Visual.SpriteStatus))
             Visual.SpritePath = ConventionalAssetFileName(Id, "");
+        Visual.EquipOverlayStatus = NormalizeSpriteStatus(Visual.EquipOverlayStatus);
+        Visual.EquipOverlayPath = NormalizeSpritePathForStatus(Visual.EquipOverlayPath, Visual.EquipOverlayStatus);
+        if (string.IsNullOrWhiteSpace(Visual.EquipOverlayPath) && SpriteStatusAllowsRuntimePath(Visual.EquipOverlayStatus))
+            Visual.EquipOverlayPath = ConventionalAssetFileName(Id, "_equip_overlay");
         Attack.ProjectileSpriteStatus = NormalizeSpriteStatus(Attack.ProjectileSpriteStatus);
         Attack.ProjectileSpritePath = NormalizeSpritePathForStatus(Attack.ProjectileSpritePath, Attack.ProjectileSpriteStatus);
         if (string.IsNullOrWhiteSpace(Attack.ProjectileSpritePath) && SpriteStatusAllowsRuntimePath(Attack.ProjectileSpriteStatus))

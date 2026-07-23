@@ -5,6 +5,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from infini_local.core.visual_role_contracts import (
+    VISUAL_BAKED_ROLE_PROMPT_FIELDS,
+    VISUAL_ROLE_CONTRACT_BY_NAME,
+)
+
 
 class StrictBoundaryModel(BaseModel):
     """Strict JSON boundary only; never authors or derives gameplay."""
@@ -56,6 +61,7 @@ class VisualKitBoundary(StrictBoundaryModel):
     childSpritePrompt: str = ""
     impactSpritePrompt: str = ""
     fieldSpritePrompt: str = ""
+    equipOverlayPrompt: str = ""
     bakedAssets: dict[str, BakedAssetBoundary] = Field(default_factory=dict)
     vfxIntent: str = ""
     projectileVfx: str = ""
@@ -75,7 +81,7 @@ class VisualKitBoundary(StrictBoundaryModel):
     @field_validator("bakedAssets")
     @classmethod
     def validate_baked_roles(cls, value: dict[str, BakedAssetBoundary]) -> dict[str, BakedAssetBoundary]:
-        unknown = sorted(set(value) - {"projectile", "impact", "child", "field"})
+        unknown = sorted(set(value) - {"projectile", "impact", "child", "field", "equip_overlay"})
         if unknown:
             raise ValueError(f"unknown baked asset roles: {unknown}")
         return value
@@ -146,15 +152,18 @@ class GameplaySpecBoundary(StrictBoundaryModel):
     pickPower: int = 0
     axePower: int = 0
     hammerPower: int = 0
+    createTile: int = -1
+    createWall: int = -1
+    placeStyle: int = 0
     mobilityMode: str = ''
     mobilityRangeTiles: int = 0
     mobilityCooldownTicks: int = 0
     mobilitySafeTileOnly: bool = True
     miningSpeedScale: float = 1.0
     altUseMode: str = ''
+    altUseCooldownTicks: int = 0
     altMobilityMode: str = ''
     altMobilityRangeTiles: int = 0
-    altMobilityCooldownTicks: int = 0
     altMobilitySafeTileOnly: bool = True
     altGeneratedBuff: GeneratedBuffBoundary = Field(default_factory=GeneratedBuffBoundary)
     holdGeneratedBuff: GeneratedBuffBoundary = Field(default_factory=GeneratedBuffBoundary)
@@ -509,7 +518,7 @@ def runtime_plan_boundary_report(data_or_plan: Any) -> dict[str, Any]:
     # Lazy import avoids a package cycle: runtime_authoring.reports imports this
     # boundary module while runtime_authoring.__init__ imports reports.
     from infini_local.core.runtime_authoring.engine_call_contracts import validate_engine_call_params
-    from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2
+    from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
 
     plan = data_or_plan.get("runtimePlan") if isinstance(data_or_plan, dict) and "runtimePlan" in data_or_plan else data_or_plan
     plan = authored_runtime_plan_view(plan)
@@ -521,7 +530,7 @@ def runtime_plan_boundary_report(data_or_plan: Any) -> dict[str, Any]:
     unknown_params: list[dict[str, Any]] = []
     typed_params: list[dict[str, Any]] = []
     for index, call in enumerate(parsed.engineCalls):
-        if call.fn not in ENGINE_FN_CATALOG_V2:
+        if call.fn not in ENGINE_FUNCTION_CATALOG:
             errors.append(f"engineCalls.{index}.fn: unknown function {call.fn}")
             continue
         validated, param_errors = validate_engine_call_params(call.fn, call.params)
@@ -539,18 +548,6 @@ def runtime_plan_boundary_report(data_or_plan: Any) -> dict[str, Any]:
     return {"ok": not errors, "errors": errors, "unknownParams": unknown_params, "typedCalls": typed_params}
 
 
-_VISUAL_ROLE_PROMPT_FIELDS = {
-    "projectile": "projectileSpritePrompt",
-    "impact": "impactSpritePrompt",
-    "child": "childSpritePrompt",
-    "field": "fieldSpritePrompt",
-}
-_VISUAL_PROJECTED_PROMPT_FIELDS = {
-    "projectile": ("projectileImagePrompt", "projectileSpritePrompt"),
-    "impact": ("impactImagePrompt", "impactSpritePrompt"),
-    "child": ("childImagePrompt", "childSpritePrompt"),
-    "field": ("fieldImagePrompt", "fieldSpritePrompt"),
-}
 _VISUAL_LIST_FIELDS = (
     "palette",
     "vfxMaterialHints",
@@ -570,26 +567,41 @@ def canonical_visual_kit_view(value: Any, *, repairs: list[str] | None = None) -
     if baked_value is not None and not isinstance(baked_value, dict):
         raise TypeError("visualKit.bakedAssets must be a JSON object")
     baked: dict[str, Any] = dict(baked_value) if isinstance(baked_value, dict) else {}
-    unknown_roles = sorted(set(baked) - set(_VISUAL_ROLE_PROMPT_FIELDS))
-    if unknown_roles:
-        raise ValueError(f"visualKit.bakedAssets contains unknown roles: {unknown_roles}")
+    unknown_roles = sorted(set(baked) - set(VISUAL_BAKED_ROLE_PROMPT_FIELDS))
     raw["bakedAssets"] = baked
 
-    parsed = VisualKitBoundary.model_validate(raw)
-    out: dict[str, Any] = parsed.model_dump(exclude_none=True)
-    out_baked_value = out.get("bakedAssets")
-    out_baked: dict[str, Any] = dict(out_baked_value) if isinstance(out_baked_value, dict) else {}
-    for role, spec in out_baked.items():
-        if not isinstance(spec, dict):
+    errors: list[str] = []
+    if unknown_roles:
+        errors.append(f"visualKit.bakedAssets contains unknown roles: {unknown_roles}")
+    for role, spec in baked.items():
+        if role not in VISUAL_ROLE_CONTRACT_BY_NAME or not isinstance(spec, dict):
             continue
         mode = str(spec.get("mode") or "")
         distinct = spec.get("distinctFromItem")
-        if mode == "reuse_item_sprite" and role != "projectile":
-            raise ValueError("reuse_item_sprite is valid only for the projectile role")
-        if distinct is not None and role != "projectile":
-            raise ValueError("distinctFromItem is valid only for the projectile role")
+        role_contract = VISUAL_ROLE_CONTRACT_BY_NAME[role]
+        if mode == "reuse_item_sprite" and not role_contract.reuse_item_sprite_allowed:
+            errors.append("reuse_item_sprite is valid only for the projectile role")
+        if distinct is not None and not role_contract.distinct_from_item_allowed:
+            errors.append("distinctFromItem is valid only for the projectile role")
         if distinct is True and mode != "baked_sprite":
-            raise ValueError("distinctFromItem=true requires projectile mode=baked_sprite")
+            errors.append("distinctFromItem=true requires projectile mode=baked_sprite")
+
+    non_schema_error_count = len(errors)
+    parsed: VisualKitBoundary | None = None
+    validation_error: ValidationError | None = None
+    try:
+        parsed = VisualKitBoundary.model_validate(raw)
+    except ValidationError as exc:
+        validation_error = exc
+        for row in exc.errors(include_url=False):
+            location = ".".join(str(part) for part in row.get("loc") or ())
+            errors.append(f"{location}: {row.get('msg') or 'invalid value'}")
+    if errors:
+        if validation_error is not None and non_schema_error_count == 0:
+            raise validation_error
+        raise ValueError("visualKit boundary rejected: " + "; ".join(dict.fromkeys(errors)))
+    assert parsed is not None
+    out: dict[str, Any] = parsed.model_dump(exclude_none=True)
     return out
 
 
@@ -629,7 +641,7 @@ def validate_visual_authoring_boundaries(data: dict[str, Any]) -> dict[str, Any]
         kit: dict[str, Any] = canonical_visual_kit_view(data.get("visualKit"))
         baked_value = kit.get("bakedAssets")
         baked: dict[str, Any] = dict(baked_value) if isinstance(baked_value, dict) else {}
-        for role, prompt_field in _VISUAL_ROLE_PROMPT_FIELDS.items():
+        for role, prompt_field in VISUAL_BAKED_ROLE_PROMPT_FIELDS.items():
             spec_value = baked.get(role)
             spec: dict[str, Any] = spec_value if isinstance(spec_value, dict) else {}
             if str(spec.get("mode") or "") != "baked_sprite":

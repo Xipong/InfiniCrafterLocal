@@ -129,7 +129,7 @@ Multiplayer client path:
 | `GeneratedItemData.Debug.cs` | applied trace/debug JSON для анализа applied-vs-authored |
 
 Ключевые поля:
-- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.52`); пустые и старые версии не мигрируются внутри runtime.
+- `RuntimeApiVersion` должен точно соответствовать `InfiniRuntimeLimits.RuntimeApiCurrent` (`v0.4.53`); пустые и старые версии не мигрируются внутри runtime.
 - `RecipeMeta.WorldScoped/WorldId` отделяет generated registry по миру.
 - `RecipeMeta.AssetBaseUrl/AssetFiles` — транспортные поля, не authorship.
 - `Gameplay` — concrete Terraria item stats/utility behavior: kind, damage, use times, use style, buffs, alt use, tools, mobility, extractinator, conditions.
@@ -142,7 +142,7 @@ Multiplayer client path:
 ### Runtime limits (`Common/InfiniRuntimeLimits.cs`)
 
 ```text
-RuntimeApiCurrent = v0.4.52
+RuntimeApiCurrent = v0.4.53
 MaxSupportedMovementCode = 18
 MaxSupportedEffectCode = 15
 MaxSupportedOnHitCode = 19
@@ -393,7 +393,7 @@ Commands are diagnostic/dev convenience, not the gameplay authority path.
 |---|---|---|
 | Item stats / equipment / tools | `GeneratedItemData.Model.cs`, `GeneratedItemData.Apply.cs`, `GeneratedItem.cs` | Python `set_item_stats` compile path, save/net JSON profiles, tooltips/debug trace |
 | Runtime attack family / movement / effect / onHit | `LocalGenerator/infini_local/core/runtime_authoring/`, `GeneratedProjectile*.cs`, `InfiniRuntimeLimits.cs` | Python contract enums, C# normalize/apply/runtime, projectile net sync, contract tests |
-| Multiplayer craft | `InfiniCraftPlayer.Multiplayer.cs`, `InfiniNetPacketIds.cs`, `InfiniCrafterLocal.HandlePacket()` | client sends only intent, server consumes slots, ACK/FAIL, cancel/timeout, registry catch-up |
+| Multiplayer craft | `InfiniCraftPlayer.Multiplayer.cs`, `InfiniNetPacketIds.cs`, `InfiniCrafterLocal.HandlePacket()` | client sends only intent, retries the same escrow `operationId`; server consumes A/B slots once, replays cached results, ACK/FAIL, cancel/timeout, registry catch-up |
 | Generated registry | `GeneratedItemRegistryService.cs`, `world_storage.py` | world id/scope, transport clones, no cross-world parent leakage |
 | Asset/sprite sync | `GeneratedAssetSyncService.cs`, `RuntimeSpriteCache.cs`, `asset_sync_service.py` | final-only filenames, `/get_asset`, PNG validation, max sizes, no raw intermediates in packets |
 | VFX/audio | `VfxManifestSpec.cs`, `InfiniVfxRuntime.cs`, `InfiniSoundLibrary.cs`, Python `vfx_manifest.py` | slot/channel/renderer normalization, sound ids, no effect-name gameplay routing |

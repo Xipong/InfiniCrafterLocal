@@ -236,8 +236,10 @@ def _contract_check_invalid_charge_or_sentry_runtime_contract_is_inert_in_csharp
     normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
     runtime = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs").read_text(encoding="utf-8")
     assert "HasValidExecutorContract(AttackSpec? spec)" in policy
-    assert 'return delivery is "shoot" or "cast" or "throw";' in policy
-    assert 'return delivery == "summon" && spec.SentryPlacement is "grounded" or "floating";' in policy
+    assert "!AcceptsDelivery(family, delivery)" in policy
+    assert 'ChargeRelease => carrier is "shoot" or "cast" or "throw"' in policy
+    assert 'Summon or Sentry => carrier == "summon"' in policy
+    assert 'return spec.SentryPlacement is "grounded" or "floating"' in policy
     assert "Attack.Enabled = false;" in normalize
     assert "GeneratedRuntimeFamilyPolicy.HasValidExecutorContract(_spec)" in runtime
 

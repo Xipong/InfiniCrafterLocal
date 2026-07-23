@@ -13,7 +13,7 @@ from infini_local.core.runtime_authoring.reports import (
     runtime_plan_quality_report,
     runtime_plan_validation_report,
 )
-from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2
+from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
 from infini_local.core.runtime_authoring.structural import (
     all_calls,
     find_call,
@@ -22,7 +22,7 @@ from infini_local.core.runtime_authoring.structural import (
 
 
 __all__ = [
-    "ENGINE_FN_CATALOG_V2",
+    "ENGINE_FUNCTION_CATALOG",
     "ENGINE_RUNTIME_API_VERSION",
     "all_calls",
     "compile_runtime_plan_to_genome_patch",

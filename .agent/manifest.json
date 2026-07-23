@@ -113,7 +113,7 @@
     "pyright"
   ],
   "project": "InfiniCrafterLocal",
-  "runtimeApiVersion": "v0.4.52",
+  "runtimeApiVersion": "v0.4.53",
   "schema": "infini.agent-manifest.v1",
   "testSuitePolicy": "Batched by default; isolate only reproduced subprocess/server/process-global pollution files.",
   "testSuiteVersion": "v19"

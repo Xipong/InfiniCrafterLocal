@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 from infini_local.core.vfx_manifest_config import VFX_LLM_DIRECTOR_MAX_SLOTS
@@ -10,44 +12,124 @@ from infini_local.core.vfx_manifest_config import VFX_LLM_DIRECTOR_MAX_SLOTS
 # This module defines the enum/range surface and validation report primitives only;
 # final slot compilation still happens in vfx_manifest.py.
 
+@dataclass(frozen=True, slots=True)
+class VfxEnumFieldContract:
+    name: str
+    surface_key: str
+    values: tuple[str, ...]
+    required: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class VfxNumericFieldContract:
+    name: str
+    minimum: float | int
+    maximum: float | int
+    integer: bool = False
+    required: bool = True
+
+
+VFX_SLOT_ENUM_FIELDS: tuple[VfxEnumFieldContract, ...] = (
+    VfxEnumFieldContract("event", "events", ("travel", "active", "tick", "hit", "kill", "expire", "while_held", "while_equipped", "on_use", "on_alt_use")),
+    VfxEnumFieldContract("rendererKind", "rendererKind", ("projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite", "childMotes", "lightCue", "soundCue")),
+    VfxEnumFieldContract("backend", "backend", ("Auto", "Realtime", "Primitive", "Sprite", "Particle")),
+    VfxEnumFieldContract("textureRole", "textureRole", ("projectile", "impact", "child", "field")),
+    VfxEnumFieldContract("particleRole", "particleRole", ("projectile", "impact", "child", "field")),
+    VfxEnumFieldContract("anchor", "anchor", ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")),
+    VfxEnumFieldContract("channel", "channel", ("motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound")),
+    VfxEnumFieldContract("lane", "lane", ("primary", "support", "accent", "ornament", "cue")),
+    VfxEnumFieldContract("emissionMode", "emissionMode", ("wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point")),
+    VfxEnumFieldContract("blend", "blend", ("alpha", "additive")),
+    VfxEnumFieldContract("particleSystemId", "particleSystemId", ("pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust")),
+)
+
+VFX_TOP_ENUM_FIELDS: tuple[VfxEnumFieldContract, ...] = (
+    VfxEnumFieldContract("visualBudgetClass", "", ("tiny", "small", "normal", "large", "signature")),
+)
+
+VFX_NUMERIC_FIELDS: tuple[VfxNumericFieldContract, ...] = (
+    VfxNumericFieldContract("effectMagnitude", 0.0, 1.0),
+    VfxNumericFieldContract("scale", 0.15, 5.0),
+    VfxNumericFieldContract("density", 0.0, 1.0),
+    VfxNumericFieldContract("duration", 3, 120, integer=True),
+    VfxNumericFieldContract("alpha", 0.0, 1.0),
+    VfxNumericFieldContract("spread", 0.0, 2.0),
+    VfxNumericFieldContract("jitter", 0.0, 1.5),
+    VfxNumericFieldContract("phaseOffset", -1.0, 1.0, required=False),
+    VfxNumericFieldContract("budgetWeight", 0.1, 4.0),
+    VfxNumericFieldContract("signatureWeight", 0.0, 1.0),
+    VfxNumericFieldContract("visualCost", 0.0, 1.0),
+    VfxNumericFieldContract("fadeIn", 0.0, 0.8),
+    VfxNumericFieldContract("fadeOut", 0.0, 0.8),
+    VfxNumericFieldContract("startTick", 0, 120, integer=True, required=False),
+    VfxNumericFieldContract("repeatEvery", 0, 120, integer=True, required=False),
+)
+
+VFX_RENDERER_RULES = MappingProxyType({
+    "soundCue": MappingProxyType({"channel": "sound", "lane": "cue"}),
+    "lightCue": MappingProxyType({"channel": "light", "lane": "cue"}),
+})
+
+
 def vfx_director_surface() -> dict[str, Any]:
     """Compact runtime surface for the optional Gemma VFX Director.
 
     This is intentionally a tiny enum/range contract, not the recipe library and not C# code.
     The LLM authors slots; Python validates/clamps and freezes them into the normal manifest.
     """
+    surface: dict[str, Any] = {
+        contract.surface_key: list(contract.values)
+        for contract in VFX_SLOT_ENUM_FIELDS[:8]
+    }
+    surface["rendererRules"] = {
+        renderer: dict(fields)
+        for renderer, fields in VFX_RENDERER_RULES.items()
+    }
+    for contract in VFX_SLOT_ENUM_FIELDS[8:]:
+        surface[contract.surface_key] = list(contract.values)
+    surface["numericRanges"] = {
+        contract.name: [contract.minimum, contract.maximum]
+        for contract in VFX_NUMERIC_FIELDS
+    }
+    return surface
+
+
+def vfx_director_required_json_shape() -> dict[str, Any]:
+    slot_numeric = [field for field in VFX_NUMERIC_FIELDS if field.name != "effectMagnitude"]
+    numeric_descriptions = {
+        field.name: (
+            f"{'optional ' if not field.required else ''}"
+            f"{'integer' if field.integer else 'float'} in vfxSurface.numericRanges.{field.name}"
+        )
+        for field in slot_numeric
+    }
     return {
-        "events": ["travel", "active", "tick", "hit", "kill", "expire"],
-        "rendererKind": [
-            "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
-            "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
-            "actorAfterimage", "impactRing", "impactSprite", "childMotes", "lightCue", "soundCue",
-        ],
-        "backend": ["Auto", "Realtime", "Primitive", "Sprite", "Particle"],
-        "textureRole": ["projectile", "impact", "child", "field"],
-        "particleRole": ["projectile", "impact", "child", "field"],
-        "anchor": ["self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field"],
-        "channel": ["motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound"],
-        "lane": ["primary", "support", "accent", "ornament", "cue"],
-        "emissionMode": ["wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point"],
-        "blend": ["alpha", "additive"],
-        "particleSystemId": ["pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust"],
-        "numericRanges": {
-            "effectMagnitude": [0.0, 1.0],
-            "scale": [0.15, 5.0],
-            "density": [0.0, 1.0],
-            "duration": [3, 120],
-            "alpha": [0.0, 1.0],
-            "spread": [0.0, 2.0],
-            "jitter": [0.0, 1.5],
-            "phaseOffset": [-1.0, 1.0],
-            "budgetWeight": [0.1, 4.0],
-            "signatureWeight": [0.0, 1.0],
-            "visualCost": [0.0, 1.0],
-            "fadeIn": [0.0, 0.8],
-            "fadeOut": [0.0, 0.8],
-            "startTick": [0, 120],
-            "repeatEvery": [0, 120],
+        "type": "object",
+        "requiredTopLevelFields": ["effectMagnitude", "visualBudgetClass", "slots"],
+        "optionalTopLevelFields": ["identity"],
+        "additionalTopLevelFields": "do not add keys outside this contract. Known forbidden fields are rejected; unknown extras are validation errors.",
+        "topLevelContract": {
+            "effectMagnitude": "float in vfxSurface.numericRanges.effectMagnitude",
+            "visualBudgetClass": "one of tiny|small|normal|large|signature",
+            "identity": "optional short debug note only; runtime must not parse it",
+        },
+        "slots": {
+            "type": "array",
+            "count": "between constraints.slots[0] and constraints.slots[1]",
+            "additionalSlotFields": "do not add keys outside this contract. Known forbidden fields are rejected; unknown extras are validation errors.",
+            "requiredSlotFields": [
+                *(field.name for field in VFX_SLOT_ENUM_FIELDS),
+                *(field.name for field in slot_numeric if field.required),
+            ],
+            "enumFields": {
+                field.name: (
+                    "one explicit vfxSurface.particleSystemId value: pl:glow, pl:shard, pl:smoke, pl:spark, or dust"
+                    if field.name == "particleSystemId"
+                    else f"one vfxSurface.{field.surface_key} value"
+                )
+                for field in VFX_SLOT_ENUM_FIELDS
+            },
+            "numericFields": numeric_descriptions,
         },
     }
 
@@ -160,13 +242,37 @@ def _vfx_director_validation_report(raw: Any, max_slots: int | None = None) -> d
         _vfx_director_error(errors, "", "invalid_type", actual=type(raw).__name__, expected="object")
         return {"valid": False, "errors": errors, "warnings": warnings}
 
-    allowed_top_fields = {"effectMagnitude", "visualBudgetClass", "identity", "slots"}
+    allowed_top_fields = {
+        *(field.name for field in VFX_TOP_ENUM_FIELDS),
+        "effectMagnitude",
+        "identity",
+        "slots",
+    }
     for field in sorted(raw.keys()):
         if field not in allowed_top_fields:
             _vfx_director_error(errors, field, "forbidden_field", actual=raw.get(field), expected={"allowed": sorted(allowed_top_fields)})
 
-    _vfx_director_check_number(errors, warnings, raw, "", "effectMagnitude", 0.0, 1.0)
-    _vfx_director_check_enum(errors, raw, "", "visualBudgetClass", ["tiny", "small", "normal", "large", "signature"])
+    effect_magnitude = next(field for field in VFX_NUMERIC_FIELDS if field.name == "effectMagnitude")
+    _vfx_director_check_number(
+        errors,
+        warnings,
+        raw,
+        "",
+        effect_magnitude.name,
+        effect_magnitude.minimum,
+        effect_magnitude.maximum,
+        integer=effect_magnitude.integer,
+        required=effect_magnitude.required,
+    )
+    for field in VFX_TOP_ENUM_FIELDS:
+        _vfx_director_check_enum(
+            errors,
+            raw,
+            "",
+            field.name,
+            list(field.values),
+            required=field.required,
+        )
 
     raw_slots = raw.get("slots")
     if not isinstance(raw_slots, list):
@@ -177,35 +283,19 @@ def _vfx_director_validation_report(raw: Any, max_slots: int | None = None) -> d
     if len(raw_slots) > max_slots:
         _vfx_director_error(errors, "slots", "out_of_range", actual=len(raw_slots), expected={"min": 0, "max": max_slots})
 
-    numeric_ranges = surface.get("numericRanges", {}) if isinstance(surface.get("numericRanges"), dict) else {}
     enum_fields = {
-        "event": surface["events"],
-        "rendererKind": surface["rendererKind"],
-        "backend": surface["backend"],
-        "textureRole": surface["textureRole"],
-        "particleRole": surface["particleRole"],
-        "anchor": surface["anchor"],
-        "channel": surface["channel"],
-        "lane": surface["lane"],
-        "emissionMode": surface["emissionMode"],
-        "blend": surface["blend"],
-        "particleSystemId": surface["particleSystemId"],
+        field.name: list(field.values)
+        for field in VFX_SLOT_ENUM_FIELDS
     }
     numeric_fields = {
-        "scale": (0.15, 5.0, False, True),
-        "density": (0.0, 1.0, False, True),
-        "duration": (3, 120, True, True),
-        "alpha": (0.0, 1.0, False, True),
-        "spread": (0.0, 2.0, False, True),
-        "jitter": (0.0, 1.5, False, True),
-        "budgetWeight": (0.1, 4.0, False, True),
-        "signatureWeight": (0.0, 1.0, False, True),
-        "visualCost": (0.0, 1.0, False, True),
-        "fadeIn": (0.0, 0.8, False, True),
-        "fadeOut": (0.0, 0.8, False, True),
-        "phaseOffset": (-1.0, 1.0, False, False),
-        "startTick": (0, 120, True, False),
-        "repeatEvery": (0, 120, True, False),
+        field.name: (
+            field.minimum,
+            field.maximum,
+            field.integer,
+            field.required,
+        )
+        for field in VFX_NUMERIC_FIELDS
+        if field.name != "effectMagnitude"
     }
 
     allowed_slot_fields = set(enum_fields.keys()) | set(numeric_fields.keys())
@@ -224,9 +314,22 @@ def _vfx_director_validation_report(raw: Any, max_slots: int | None = None) -> d
         for field, (lo, hi, integer, required) in numeric_fields.items():
             _vfx_director_check_number(errors, warnings, slot, path, field, lo, hi, integer=integer, required=required)
 
-        channel = normalized_enums.get("channel")
-        pid = normalized_enums.get("particleSystemId")
-        
+        renderer = normalized_enums.get("rendererKind")
+        renderer_rules = surface.get("rendererRules")
+        renderer_rules = renderer_rules if isinstance(renderer_rules, dict) else {}
+        required_fields = renderer_rules.get(renderer)
+        if isinstance(required_fields, dict):
+            for field, expected in required_fields.items():
+                actual = normalized_enums.get(field)
+                if actual is not None and actual != expected:
+                    _vfx_director_error(
+                        errors,
+                        f"{path}.{field}",
+                        "renderer_field_mismatch",
+                        actual=actual,
+                        expected=expected,
+                    )
+
     return {"valid": not errors, "errors": errors, "warnings": warnings}
 
 def _vfx_director_repair_prompt(previous_json: Any, validation_report: dict[str, Any], vfx_surface: dict[str, Any]) -> dict[str, Any]:
@@ -248,10 +351,18 @@ def _vfx_director_error_fields(report: dict[str, Any]) -> list[str]:
     return [str(e.get("path")) for e in report.get("errors", []) if isinstance(e, dict) and e.get("path")][:64]
 
 def _vfx_particle_id_is_explicit(value: str | None) -> bool:
-    return str(value or "").strip() in {"pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust"}
+    contract = next(field for field in VFX_SLOT_ENUM_FIELDS if field.name == "particleSystemId")
+    return str(value or "").strip() in contract.values
 
 __all__ = [
+    "VfxEnumFieldContract",
+    "VfxNumericFieldContract",
+    "VFX_SLOT_ENUM_FIELDS",
+    "VFX_TOP_ENUM_FIELDS",
+    "VFX_NUMERIC_FIELDS",
+    "VFX_RENDERER_RULES",
     "vfx_director_surface",
+    "vfx_director_required_json_shape",
     "_vfx_float",
     "_vfx_int",
     "_vfx_director_enum",

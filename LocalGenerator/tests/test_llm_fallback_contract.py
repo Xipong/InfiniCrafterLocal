@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import io
 import sys
+from typing import Any
 import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -212,7 +213,15 @@ def _check_malformed_json_response_retries_once_inside_logical_call(monkeypatch)
     def fake_single(payload, timeout, context):
         calls.append(payload)
         content = '{"broken":' if len(calls) == 1 else '{"ok":true}'
-        return {"choices": [{"finish_reason": "stop", "message": {"content": content}}]}
+        result: dict[str, Any] = {
+            "choices": [{"finish_reason": "stop", "message": {"content": content}}],
+        }
+        if len(calls) == 1:
+            result["_debug"] = {
+                "transportRetryCount": 1,
+                "transportRetryCauses": ["responses_to_chat_fallback"],
+            }
+        return result
 
     monkeypatch.setattr(lp, "_llm_json_single_context", fake_single)
     monkeypatch.setattr(lp, "log_event", lambda *_args, **_kwargs: None)
@@ -246,8 +255,11 @@ def _check_malformed_json_response_retries_once_inside_logical_call(monkeypatch)
     assert calls[1] == payload
     assert lease.call_count == 1
     assert len(lease.stages) == 1
-    assert out["_debug"]["transportRetryCount"] == 1
-    assert out["_debug"]["transportRetryCauses"] == ["malformed_json"]
+    assert out["_debug"]["transportRetryCount"] == 2
+    assert out["_debug"]["transportRetryCauses"] == [
+        "responses_to_chat_fallback",
+        "malformed_json",
+    ]
 
 
 # Coarse test bundle: the checks below used to be separate pytest items.

@@ -5,9 +5,11 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.pipelines.llm_authoring_prompt import llm_runtime_result_kind_policy
 from infini_local.core.runtime_authoring.compiler import project_authored_pierce_to_runtime_hit_budget
-from infini_local.pipelines.result_identity_policy import project_runtime_result_identity
+from infini_local.core.runtime_authoring.result_identity import (
+    effective_runtime_result_kind,
+    project_runtime_result_identity,
+)
 
 from csharp_partial_reader import read_text_with_partial_bundles
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,31 +27,30 @@ def _check_consumable_weapon_runtime_kind_keeps_weapon_executor_alive() -> None:
             ],
         },
     }
-    kind, policy = llm_runtime_result_kind_policy(data, "potion", {"potion", "bomb"}, {}, {}, "test")
+    result_kind = effective_runtime_result_kind(data)
     projection = project_runtime_result_identity(
-        "consumable_weapon",
-        has_primary=True,
+        result_kind,
+        has_root_executor=True,
     )
     assert projection.gameplay_kind == "weapon"
     assert projection.runtime_output_kind == "consumable_weapon"
-    assert kind == "weapon"
-    assert policy["runtimeResultKind"] == "consumable_weapon"
-    def assert_rejected(result_kind: str, *, ammo_for: str = "", has_primary: bool = False, reason: str) -> None:
+    assert result_kind == "consumable_weapon"
+    def assert_rejected(result_kind: str, *, ammo_for: str = "", has_root_executor: bool = False, reason: str) -> None:
         try:
-            project_runtime_result_identity(result_kind, ammo_for=ammo_for, has_primary=has_primary)
+            project_runtime_result_identity(result_kind, ammo_for=ammo_for, has_root_executor=has_root_executor)
         except ValueError as exc:
             assert reason in str(exc)
         else:
             raise AssertionError(f"expected {result_kind!r} identity to be rejected")
 
     for invalid_alias in ("thrown_stack", "stackable_weapon", "consumable_projectile", "consumable-weapon"):
-        assert_rejected(invalid_alias, has_primary=True, reason="unsupported_result_kind")
-    assert_rejected("ammo", has_primary=True, reason="ammo_result_requires_vanilla_identity")
+        assert_rejected(invalid_alias, has_root_executor=True, reason="unsupported_result_kind")
+    assert_rejected("ammo", has_root_executor=True, reason="ammo_result_requires_vanilla_identity")
     assert_rejected("ammo", ammo_for="arrows", reason="ammo_result_requires_vanilla_identity")
     assert_rejected("ammo", ammo_for="bullets", reason="ammo_result_requires_vanilla_identity")
     assert_rejected(
-        "ammo", ammo_for="arrow", has_primary=True,
-        reason="actual_ammo_cannot_author_generated_primary",
+        "ammo", ammo_for="arrow", has_root_executor=True,
+        reason="actual_ammo_cannot_author_generated_root_executor",
     )
 
 

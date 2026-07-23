@@ -72,6 +72,11 @@ public sealed partial class InfiniCraftPlayer
         _generatedMobilityCooldownTicks = Math.Clamp(cooldownTicks, 0, 36000);
     }
 
+    public void StartGeneratedAltUseCooldown(int cooldownTicks)
+    {
+        _generatedAltUseCooldownTicks = Math.Clamp(cooldownTicks, 0, 36000);
+    }
+
 
     public void ApplyGeneratedUtilityBuff(GeneratedBuffSpec? buff, bool syncNetwork = false)
     {
@@ -321,6 +326,8 @@ public sealed partial class InfiniCraftPlayer
     {
         if (_generatedMobilityCooldownTicks > 0)
             _generatedMobilityCooldownTicks--;
+        if (_generatedAltUseCooldownTicks > 0)
+            _generatedAltUseCooldownTicks--;
         if (_generatedAltUseRequestCooldownTicks > 0)
             _generatedAltUseRequestCooldownTicks--;
 

@@ -22,7 +22,7 @@ from infini_local.core.runtime_authoring.engine_call_contracts import (
     engine_params_model,
 )
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
-from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2
+from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
 from infini_local.qa.csharp_delivery_contract import load_csharp_contract_graph
 from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
 from infini_local.qa.runtime_proof import build_gameplay_seam_report
@@ -72,28 +72,53 @@ def _load_tool_module(module_name: str, relative: str):
 
 
 def _contract_check_dynamic_engine_models_follow_the_canonical_catalog() -> None:
+    import inspect
+
+    from infini_local.core.runtime_authoring import engine_call_contracts
+    from infini_local.core.runtime_authoring.function_contract_types import (
+        EngineFunctionContract,
+        EngineParamContract,
+        ParamValueKind,
+        WireObligation,
+        validate_engine_function_contracts,
+    )
+
     inventory = engine_contract_inventory()
-    assert set(inventory) == set(ENGINE_FN_CATALOG_V2)
-    for fn in ENGINE_FN_CATALOG_V2:
+    assert set(inventory) == set(ENGINE_FUNCTION_CATALOG)
+    for fn in ENGINE_FUNCTION_CATALOG:
         # Parameters are optional at the raw boundary: the compiler/semantic
         # validator, not Pydantic defaults, decides whether a call is executable.
         assert engine_params_model(fn).model_validate({}).model_dump(exclude_none=True) == {}
 
-    # A new function card is picked up without editing a parallel Pydantic union.
-    probe = "agent_extension_probe"
-    ENGINE_FN_CATALOG_V2[probe] = {
-        "params": {"material": "open runtime identity", "count": "integer"},
-        "description": "test-only dynamic catalog extension",
-    }
-    engine_params_model.cache_clear()
-    try:
-        parsed = engine_params_model(probe).model_validate({"material": "voidglass", "count": 2})
-        assert parsed.model_dump(exclude_none=True) == {"count": 2, "material": "voidglass"}
-        with pytest.raises(ValidationError):
-            engine_params_model(probe).model_validate({"material": "voidglass", "count": 2.5})
-    finally:
-        ENGINE_FN_CATALOG_V2.pop(probe, None)
-        engine_params_model.cache_clear()
+    with pytest.raises(TypeError):
+        ENGINE_FUNCTION_CATALOG["agent_extension_probe"] = {}  # type: ignore[index]
+
+    source = inspect.getsource(engine_call_contracts)
+    for removed_side_table in (
+        "_BOOL_PARAMS", "_INT_PARAMS", "_FLOAT_PARAMS", "_ENUM_PARAMS",
+        "_OBJECT_PARAMS", "_LIST_PARAMS", "_catalog_enum_values",
+    ):
+        assert removed_side_table not in source
+
+    extension = EngineFunctionContract(
+        name="agent_extension_probe",
+        meaning="Test-only structured extension contract.",
+        params=(
+            EngineParamContract(
+                name="count",
+                prompt_description="Exact integer count.",
+                value_kind=ParamValueKind.INTEGER,
+                example_value=2,
+                compiled_fields=("count",),
+                wire_obligation=WireObligation.FINAL_WIRE,
+            ),
+        ),
+        root_executor=False,
+        requires_root_executor=False,
+        allowed_result_kinds=(),
+        repair_groups=(),
+    )
+    assert validate_engine_function_contracts((extension,)) == ()
 
 
 def _contract_check_engine_call_boundary_rejects_wrong_types_and_unambiguous_unknown_enums() -> None:
@@ -482,6 +507,35 @@ def _contract_check_vfx_director_manifest_projects_missing_legacy_pattern_to_str
     assert manifest is not None
     assert manifest["debug"]["pattern"] == "basic"
     assert validate_vfx_manifest_boundary(manifest)["debug"]["pattern"] == "basic"
+
+
+def _contract_check_vfx_director_rejects_dead_runtime_events() -> None:
+    from infini_local.core import vfx_manifest as vfx
+
+    raw = {"slots": [{"event": "hit"}]}
+    furniture = {
+        "gameplay": {"kind": "furniture", "altUseMode": ""},
+        "attack": {"enabled": False, "runtimeFamily": ""},
+    }
+    furniture_errors = vfx._vfx_director_runtime_event_errors(raw, furniture)
+    assert furniture_errors == [{
+        "path": "slots[0].event",
+        "error": "event_not_executable",
+        "actual": "hit",
+        "allowed": ["on_use", "while_held"],
+    }]
+
+    swing = {
+        "gameplay": {"kind": "weapon"},
+        "attack": {"enabled": True, "runtimeFamily": "swing"},
+    }
+    assert vfx._vfx_director_runtime_event_errors(raw, swing)[0]["error"] == "event_not_executable"
+
+    projectile = {
+        "gameplay": {"kind": "weapon"},
+        "attack": {"enabled": True, "runtimeFamily": "shoot"},
+    }
+    assert vfx._vfx_director_runtime_event_errors(raw, projectile) == []
 
 
 def _contract_check_debug_novelty_cannot_change_frozen_vfx_magnitude() -> None:
@@ -1096,6 +1150,7 @@ def test_v18_runtime_boundary_contract(request):
             '_contract_check_vfx_director_precedes_runtime_direct_fallback',
             '_contract_check_debug_cannot_force_accepted_vfx_recipe',
             '_contract_check_vfx_director_manifest_projects_missing_legacy_pattern_to_string',
+            '_contract_check_vfx_director_rejects_dead_runtime_events',
             '_contract_check_debug_novelty_cannot_change_frozen_vfx_magnitude',
             '_contract_check_runtime_vfx_baked_commands_use_the_authored_item_palette',
             '_contract_check_all_golden_gameplay_cases_cross_the_final_strict_boundary',

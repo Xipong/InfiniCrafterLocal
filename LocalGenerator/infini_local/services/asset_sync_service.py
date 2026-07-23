@@ -40,10 +40,13 @@ def runtime_asset_files(data: dict[str, Any]) -> list[str]:
             seen.add(name)
             out.append(name)
 
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    visual_raw = data.get("visual")
+    attack_raw = data.get("attack")
+    visual: dict[str, Any] = visual_raw if isinstance(visual_raw, dict) else {}
+    attack: dict[str, Any] = attack_raw if isinstance(attack_raw, dict) else {}
     # Multiplayer clients only need final gameplay-facing assets, not raw generation intermediates.
     add(visual.get("spritePath"))
+    add(visual.get("equipOverlayPath"))
     add(visual.get("assetManifestPath"))
     for key in ["projectileSpritePath", "impactSpritePath", "childSpritePath", "fieldSpritePath"]:
         add(attack.get(key))

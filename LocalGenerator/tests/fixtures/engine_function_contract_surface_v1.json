@@ -1,0 +1,6508 @@
+{
+  "acceptedExtras": {
+    "apply_on_hit_effect": [
+      "debuffTime"
+    ],
+    "cast_magic_weapon": [
+      "effect",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "deploy_sentry": [
+      "effect",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "fire_ranged_weapon": [
+      "effect",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "perform_melee_attack": [
+      "effect",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "shoot_projectile": [
+      "effect",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ]
+  },
+  "acceptedParams": {
+    "accessory_effect": [
+      "archetype",
+      "defense",
+      "stats"
+    ],
+    "ammo_behavior": [
+      "ammoFor"
+    ],
+    "apply_on_hit_effect": [
+      "aoeRadiusTiles",
+      "chainCount",
+      "count",
+      "debuffHint",
+      "debuffTime",
+      "onHit",
+      "pullMode",
+      "pullStrength",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks"
+    ],
+    "apply_player_effect_on_use": [
+      "buffTime",
+      "buffType",
+      "buffs",
+      "generatedBuff",
+      "healLife",
+      "healMana",
+      "note"
+    ],
+    "armor_effect": [
+      "archetype",
+      "armorSlot",
+      "defense",
+      "setBonus",
+      "setKey",
+      "stats"
+    ],
+    "cast_magic_weapon": [
+      "beamChargeTicks",
+      "beamWidthPx",
+      "chargePowerMultiplier",
+      "chargeTicks",
+      "delayTicks",
+      "effect",
+      "family",
+      "homingStrength",
+      "immunityCooldown",
+      "lifetimeTicks",
+      "movement",
+      "pierce",
+      "projectileFamily",
+      "projectileImpact",
+      "projectileMotion",
+      "projectileShape",
+      "projectileTrail",
+      "rangeTiles",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "shotCount",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "speed",
+      "spreadRadians",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "consumption_behavior": [
+      "consumeChancePercent"
+    ],
+    "deploy_sentry": [
+      "attackIntervalTicks",
+      "effect",
+      "helperLifetimeTicks",
+      "movement",
+      "onHit",
+      "pierce",
+      "placement",
+      "projectileShape",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "secondaryProjectileShape",
+      "shotCount",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "speed",
+      "spreadRadians",
+      "targetRangeTiles",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "emit_light": [
+      "color",
+      "durationTicks",
+      "strength"
+    ],
+    "fire_ranged_weapon": [
+      "ammoFor",
+      "chargePowerMultiplier",
+      "chargeTicks",
+      "delayTicks",
+      "effect",
+      "family",
+      "lifetimeTicks",
+      "movement",
+      "pierce",
+      "projectileFamily",
+      "projectileImpact",
+      "projectileMotion",
+      "projectileShape",
+      "projectileTrail",
+      "rangeTiles",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "shotCount",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "speed",
+      "spreadRadians",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "hold_item_effect": [
+      "generatedBuff",
+      "lightColorName",
+      "lightStrength"
+    ],
+    "leave_trail_or_field": [
+      "fieldLifetimeTicks",
+      "fieldRadiusTiles",
+      "tickRate",
+      "trailLength",
+      "visualOnly"
+    ],
+    "mobility_effect": [
+      "cooldownTicks",
+      "mode",
+      "rangeTiles",
+      "safeTileOnly"
+    ],
+    "perform_melee_attack": [
+      "effect",
+      "family",
+      "lifetimeTicks",
+      "pierce",
+      "projectileImpact",
+      "projectileMotion",
+      "projectileShape",
+      "projectileTrail",
+      "rangeTiles",
+      "runtimeFamily",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "shotCount",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "speed",
+      "spreadRadians",
+      "useAnimationTicks",
+      "useTimeTicks"
+    ],
+    "placeable_behavior": [
+      "createTile",
+      "createWall",
+      "placeStyle"
+    ],
+    "set_alt_use_mode": [
+      "cooldownTicks",
+      "durationTicks",
+      "generatedBuff",
+      "mobilityMode",
+      "mode",
+      "rangeTiles",
+      "safeTileOnly"
+    ],
+    "set_item_stats": [
+      "ammoFor",
+      "armorSlot",
+      "autoReuse",
+      "axePower",
+      "buffTime",
+      "buffType",
+      "consumable",
+      "craftYield",
+      "damage",
+      "damageClass",
+      "defense",
+      "hammerPower",
+      "healLife",
+      "healMana",
+      "knockback",
+      "manaCost",
+      "maxStack",
+      "pickPower",
+      "rarity",
+      "resultKind",
+      "useAnimationTicks",
+      "useTimeTicks",
+      "value"
+    ],
+    "shoot_projectile": [
+      "beamChargeTicks",
+      "beamWidthPx",
+      "chargePowerMultiplier",
+      "chargeTicks",
+      "delayTicks",
+      "delivery",
+      "effect",
+      "extraUpdates",
+      "homingStrength",
+      "immunityCooldown",
+      "lifetimeTicks",
+      "movement",
+      "pierce",
+      "projectileFamily",
+      "projectileImpact",
+      "projectileMotion",
+      "projectileShape",
+      "projectileTrail",
+      "rangeTiles",
+      "runtimeFamily",
+      "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks",
+      "shotCount",
+      "soundImpactCatalogId",
+      "soundPitch",
+      "soundPitchVariance",
+      "soundUseCatalogId",
+      "soundVolume",
+      "speed",
+      "spreadRadians",
+      "useAnimationTicks",
+      "useTimeTicks",
+      "weaponFamily"
+    ],
+    "spawn_contact_particles": [
+      "amount",
+      "durationTicks",
+      "effect",
+      "material",
+      "scale"
+    ],
+    "spawn_secondary_projectiles": [
+      "count",
+      "damageMultiplier",
+      "lifetimeTicks",
+      "material",
+      "projectileShape",
+      "sameTargetBias",
+      "spreadRadians",
+      "trigger"
+    ],
+    "spawn_temporary_helper_projectile": [
+      "family",
+      "lifetimeTicks",
+      "movement",
+      "pierce",
+      "projectileShape",
+      "rangeTiles",
+      "shotCount",
+      "speed",
+      "spreadRadians"
+    ],
+    "tool_capability": [
+      "axePower",
+      "hammerPower",
+      "miningSpeedScale",
+      "pickPower"
+    ],
+    "use_affordance": [
+      "autoReuse",
+      "channelUse",
+      "handPose",
+      "heldVisibility",
+      "holdoutOffsetX",
+      "holdoutOffsetY",
+      "initialOffsetPx",
+      "itemScale",
+      "releaseTiming",
+      "useTurn"
+    ],
+    "use_condition": [
+      "minLife",
+      "minMana",
+      "mode"
+    ],
+    "visual_effect_cue": [
+      "alpha",
+      "channel",
+      "density",
+      "duration",
+      "emissionMode",
+      "event",
+      "importance",
+      "jitter",
+      "lane",
+      "note",
+      "particleRole",
+      "particleSystemId",
+      "rendererKind",
+      "repeatEvery",
+      "scale",
+      "spread",
+      "startTick",
+      "textureRole"
+    ]
+  },
+  "catalog": {
+    "accessory_effect": {
+      "meaning": "Equippable accessory stats, not temporary use effects.",
+      "params": {
+        "archetype": "mobility|defense|damage|utility|hybrid",
+        "defense": "0..20",
+        "stats": "object, not string; keys include maxLife,maxMana,lifeRegen,manaRegen,movementSpeed,maxRunSpeed,jumpSpeed,genericDamage,genericCrit,attackSpeed,lightStrength"
+      }
+    },
+    "ammo_behavior": {
+      "meaning": "Vanilla ammo identity for generated ammo stacks; projectile behavior belongs to weapon/projectile calls.",
+      "params": {
+        "ammoFor": "arrow|bullet|empty"
+      }
+    },
+    "apply_on_hit_effect": {
+      "meaning": "Real on-hit gameplay: debuffs, bursts, chained hits, child-producing effects, pull/heal/lifesteal. Visual-only impact belongs in spawn_contact_particles.",
+      "params": {
+        "aoeRadiusTiles": "0..10",
+        "chainCount": "0..6 for chain-like effects",
+        "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit",
+        "debuffHint": "short text or empty",
+        "debuffTime": "30..600 required for buff-applying onHit",
+        "onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal",
+        "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile",
+        "pullStrength": "0..1; values above 0 require explicit pullMode",
+        "secondaryDamageMultiplier": ">0..1 required for damaging child-producing onHit; authored damage*secondaryDamageMultiplier must round to at least 1",
+        "secondaryLifetimeTicks": "5..180 required for overhead_barrage children"
+      }
+    },
+    "apply_player_effect_on_use": {
+      "meaning": "Executable non-combat use effects: healing, vanilla buffs, and bounded generated utility buffs.",
+      "params": {
+        "buffTime": "ticks",
+        "buffType": "non-negative integer Terraria buff type ID; omit when generatedBuff owns the effect",
+        "buffs": "array of {buffType: integer Terraria ID, buffTime: ticks}; max 4",
+        "generatedBuff": "object with durationTicks, miningSpeedMultiplier, emitLightStrength, lightColorName, oreSenseRadiusTiles, movementSpeed, jumpBoost, manaRegen, lifeRegen; oreSense>0=findTreasure; radius debug-only",
+        "healLife": "0..500",
+        "healMana": "0..500",
+        "note": "short identity/debug only"
+      }
+    },
+    "armor_effect": {
+      "meaning": "Armor: slot, defense, equip/set bonuses.",
+      "params": {
+        "archetype": "melee|ranged|magic|summon|defense|mobility|utility|hybrid",
+        "armorSlot": "head|body|legs",
+        "defense": "0..80",
+        "setBonus": "text,genericDamage,meleeDamage,rangedDamage,magicDamage,summonDamage,genericCrit,movementSpeed,lifeRegen,manaRegen,minionSlots,sentrySlots,manaCostReduction,ammoSaveChance,aggro,endurance,armorPenetration",
+        "setKey": "same id for set or empty",
+        "stats": "life/mana/regen/move/jump/classDmg/crit/atkSpeed/kb/minions/light/immunities"
+      }
+    },
+    "cast_magic_weapon": {
+      "meaning": "Magic executor; beam channels, charge_release holds, overhead_barrage spawns above target.",
+      "params": {
+        "beamChargeTicks": "0..300; 0=full immediately",
+        "beamWidthPx": "2..96",
+        "chargePowerMultiplier": "1..3 charge_release",
+        "chargeTicks": "1..300 charge_release",
+        "delayTicks": "0..300; barrage 0=immediate",
+        "family": "staff|wand|rod|book|magic_gun|channelled_beam|charge_release|overhead_barrage|other exact family",
+        "homingStrength": "0..1",
+        "immunityCooldown": "4..60",
+        "lifetimeTicks": "25..900",
+        "movement": "straight|slow_homing|gravity_arc|phase|accelerate|vortex_orb|blackhole_pull|expanding_wave",
+        "pierce": "-1 infinite; 0/1 one total; 2..10 total",
+        "projectileFamily": "spear|bolt|beam|orb|etc",
+        "projectileImpact": "impact",
+        "projectileMotion": "motion",
+        "projectileShape": "body",
+        "projectileTrail": "trail",
+        "rangeTiles": "8..120",
+        "secondaryDamageMultiplier": "0.01..1 barrage damage",
+        "secondaryLifetimeTicks": "5..180 barrage life",
+        "shotCount": "1..8 simultaneous",
+        "speed": "3..18",
+        "spreadRadians": "0..0.75"
+      }
+    },
+    "consumption_behavior": {
+      "meaning": "Consumable-use behavior; consumeChancePercent controls stack spend; no loot/spawn.",
+      "params": {
+        "consumeChancePercent": "0..100; 100 normal consume; 0 never consume"
+      }
+    },
+    "deploy_sentry": {
+      "meaning": "Bounded Terraria sentry at cursor; stationary, targets NPCs, fires generated shots; not a minion.",
+      "params": {
+        "attackIntervalTicks": "12..180 ticks/volley",
+        "effect": "shot effect",
+        "helperLifetimeTicks": "120..36000 root",
+        "movement": "shot movement",
+        "onHit": "none|non-child effect only",
+        "pierce": "-1 infinite; 0/1 one total; 2..10 total",
+        "placement": "grounded|floating",
+        "projectileShape": "sentry body",
+        "secondaryLifetimeTicks": "5..180 shot lifetime; not sentry lifetime",
+        "secondaryProjectileShape": "shot body",
+        "shotCount": "1..4 simultaneous/volley",
+        "speed": "3..18",
+        "spreadRadians": "0..0.75",
+        "targetRangeTiles": "8..60"
+      }
+    },
+    "emit_light": {
+      "meaning": "Executable held/projectile/effect light.",
+      "params": {
+        "color": "named color",
+        "durationTicks": "1..240; held=continuous",
+        "strength": "0..1"
+      }
+    },
+    "fire_ranged_weapon": {
+      "meaning": "Ranged executor; charge_release holds, overhead_barrage spawns above target.",
+      "params": {
+        "ammoFor": "empty custom; arrow|bullet consume vanilla ammo",
+        "chargePowerMultiplier": "1..3 max power",
+        "chargeTicks": "1..300 charge_release hold",
+        "delayTicks": "0..300; barrage 0=immediate",
+        "family": "bow|repeater|gun|shotgun|launcher|rocket_launcher|dart|blowgun|harpoon|charge_release|overhead_barrage",
+        "lifetimeTicks": "25..900",
+        "movement": "straight|gravity_arc|slow_homing|phase|proximity_missile|boomerang; phase passes tiles",
+        "pierce": "-1 infinite; 0/1 one total; 2..10 total",
+        "projectileFamily": "visual form; launcher+empty=custom rocket",
+        "projectileImpact": "impact",
+        "projectileMotion": "motion",
+        "projectileShape": "body",
+        "projectileTrail": "trail",
+        "rangeTiles": "10..120",
+        "secondaryDamageMultiplier": "0.01..1 barrage damage",
+        "secondaryLifetimeTicks": "5..180 barrage life",
+        "shotCount": "1..8 simultaneous",
+        "speed": "3..18",
+        "spreadRadians": "0..0.75"
+      }
+    },
+    "hold_item_effect": {
+      "meaning": "Held-item utility: light or generated buff refreshed while held; generatedBuff.durationTicks must be at least 2.",
+      "params": {
+        "generatedBuff": "generated buff object",
+        "lightColorName": "white|gray|brown|tan|red|orange|yellow|gold|green|cyan|blue|purple|pink",
+        "lightStrength": "0..1.5"
+      }
+    },
+    "leave_trail_or_field": {
+      "meaning": "Visual-only projectile trail or bounded dust field; no gameplay. Requires one executable root executor.",
+      "params": {
+        "fieldLifetimeTicks": "0..240",
+        "fieldRadiusTiles": "0..6",
+        "tickRate": "1..60",
+        "trailLength": "0..24",
+        "visualOnly": "true only"
+      },
+      "requiresRootExecutor": true
+    },
+    "mobility_effect": {
+      "meaning": "Bounded movement: recall, blink to cursor, or blink to projectile impact; needs safe tile/cooldown.",
+      "params": {
+        "cooldownTicks": "0..3600",
+        "mode": "recall_home|blink_to_cursor|blink_to_projectile_impact",
+        "rangeTiles": "0..80",
+        "safeTileOnly": "true"
+      }
+    },
+    "perform_melee_attack": {
+      "meaning": "Body-owned melee/tool swing or explicit projectile-owned melee-family executor.",
+      "params": {
+        "family": "broadsword|sword|pickaxe|axe|hammer|shortsword|rapier|dagger|spear|lance|pike|trident|halberd|naginata|jousting_lance|boomerang|chakram|flail|mace|anchor|yoyo|whip",
+        "lifetimeTicks": "10..900",
+        "pierce": "-1 infinite; 0/1 one total; 2..10 total",
+        "projectileImpact": "impact",
+        "projectileMotion": "motion",
+        "projectileShape": "body",
+        "projectileTrail": "trail",
+        "rangeTiles": "2..80",
+        "runtimeFamily": "omit; derived",
+        "shotCount": "1..8 simultaneous emitted; not swing count",
+        "speed": "3..18",
+        "spreadRadians": "0..0.75",
+        "useTimeTicks": "10..150"
+      }
+    },
+    "placeable_behavior": {
+      "meaning": "Place exact raw parent tile/wall; requires furniture.",
+      "params": {
+        "createTile": "-1 off|exact raw id",
+        "createWall": "-1 off|exact raw id",
+        "placeStyle": "exact raw style"
+      }
+    },
+    "set_alt_use_mode": {
+      "meaning": "Right-click/alternate-use utility; normal use unchanged unless authored.",
+      "params": {
+        "cooldownTicks": "0..3600",
+        "durationTicks": "1..21600",
+        "generatedBuff": "same shape as apply_player_effect_on_use.generatedBuff",
+        "mobilityMode": "recall_home|blink_to_cursor",
+        "mode": "mobility|generated_buff|light",
+        "rangeTiles": "0..80",
+        "safeTileOnly": "true"
+      }
+    },
+    "set_item_stats": {
+      "meaning": "Base item stats and result type. Combat root executor also needs explicit shotCount and spreadRadians on its attack call. Reusable weapon/tool/armor/accessory must use consumable=false, maxStack=1, craftYield=1 and no consumption_behavior. Stack-spent weapons must use resultKind=consumable_weapon with consumable=true, maxStack>1, craftYield>0.",
+      "params": {
+        "ammoFor": "empty custom; arrow|bullet vanilla ammo identity",
+        "armorSlot": "head|body|legs for armor",
+        "autoReuse": "bool",
+        "axePower": "tool only",
+        "buffTime": "ticks paired with buffType",
+        "buffType": "non-negative integer Terraria buff type ID; omit when generatedBuff owns the effect",
+        "consumable": "true stack-spent; false gear",
+        "craftYield": "output count",
+        "damage": "0..cap",
+        "damageClass": "generic|melee|melee_no_speed|ranged|magic|summon|summon_melee_speed|exact ModName/DamageClassName",
+        "defense": "armor 0..80",
+        "hammerPower": "tool only",
+        "healLife": "potion only",
+        "healMana": "potion only",
+        "knockback": "0..12",
+        "manaCost": "0..80",
+        "maxStack": "1 gear; 25+ stacks",
+        "pickPower": "tool only",
+        "rarity": "-1..12",
+        "resultKind": "weapon|ammo|consumable_weapon|tool|accessory|armor|potion|material|furniture|generic",
+        "useAnimationTicks": "6..150; =useTime one action/click; >useTime may repeat",
+        "useTimeTicks": "10..150",
+        "value": ">=0"
+      }
+    },
+    "shoot_projectile": {
+      "meaning": "Low-level root executor; runtimeFamily required. Exactly one root executor owns a use, but delivery=swing with runtimeFamily=shoot keeps the item/tool body hitbox and also emits the projectile.",
+      "params": {
+        "beamChargeTicks": "0..300",
+        "beamWidthPx": "2..96",
+        "chargePowerMultiplier": "1..3",
+        "chargeTicks": "1..300",
+        "delayTicks": "0..300; overhead_barrage 0=immediate",
+        "delivery": "swing|thrust|flail|yoyo|whip|shoot|cast|throw|summon; pair with runtimeFamily",
+        "extraUpdates": "0..3",
+        "homingStrength": "0..1",
+        "immunityCooldown": "4..60",
+        "lifetimeTicks": "25..900",
+        "movement": "straight|slow_homing|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|vortex_orb|blackhole_pull|proximity_missile|returning_glaive|expanding_wave|flail_tether|yoyo_hover|whip_lash; phase passes tiles",
+        "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total NPC hits",
+        "projectileFamily": "visual form",
+        "projectileImpact": "visual impact",
+        "projectileMotion": "visual motion",
+        "projectileShape": "visual body",
+        "projectileTrail": "visual trail",
+        "rangeTiles": "4..120",
+        "runtimeFamily": "swing|thrust|returning|flail|yoyo|whip|shoot|cast|beam|charge_release|overhead_barrage|throw|summon; sentry uses deploy_sentry",
+        "shotCount": "1..8 simultaneous",
+        "speed": "3..18",
+        "spreadRadians": "0..0.75",
+        "weaponFamily": "exact optional"
+      }
+    },
+    "spawn_contact_particles": {
+      "meaning": "Pure projectile contact VFX/dust; no damage. Requires one executable root executor.",
+      "params": {
+        "amount": "0 off; 1..40",
+        "durationTicks": "1..80",
+        "effect": "none|dust|electric|slime|star|flame|frost|leaf|shadow|poison|blood|honey|sand|lunar|heal|holy|smoke",
+        "material": "none|wood|metal|stone|magic|fire|slime|frost|shadow; only with effect none/dust",
+        "scale": "0.15..2"
+      },
+      "requiresRootExecutor": true
+    },
+    "spawn_secondary_projectiles": {
+      "meaning": "Real secondary damaging projectiles, not VFX motes. Use only for actual child hits.",
+      "params": {
+        "count": "0 off; 1..8 children",
+        "damageMultiplier": "0..1 parent damage",
+        "lifetimeTicks": "5..180 child ticks",
+        "material": "optional child visual",
+        "projectileShape": "optional child visual",
+        "sameTargetBias": "0..1 chance aim at hit target",
+        "spreadRadians": "0..1.2 total spread",
+        "trigger": "on_expire|on_hit"
+      }
+    },
+    "spawn_temporary_helper_projectile": {
+      "meaning": "Not a persistent Terraria minion or sentry; short orbit/drift only.",
+      "params": {
+        "family": "drone|orbiter|pet_attack|temporary_turret|wisp",
+        "lifetimeTicks": "25..900 ticks; 60=1s",
+        "movement": "orbit|slow_homing|drift|straight",
+        "pierce": "0/1 one hit; 2..10 total hits",
+        "projectileShape": "temporary helper body",
+        "rangeTiles": "8..120 target/orbit radius",
+        "shotCount": "1..4 simultaneous helpers",
+        "speed": "3..18",
+        "spreadRadians": "0..0.75 total helper spread"
+      }
+    },
+    "tool_capability": {
+      "meaning": "Executable Terraria tool stats for real tools only.",
+      "params": {
+        "axePower": "0..200 internal Item.axe units",
+        "hammerPower": "0..1000",
+        "miningSpeedScale": "0.25..2 executable held-tool mining speed multiplier",
+        "pickPower": "0..1000"
+      }
+    },
+    "use_affordance": {
+      "meaning": "Executable item-use and held-draw affordance only.",
+      "params": {
+        "autoReuse": "bool",
+        "channelUse": "bool",
+        "handPose": "short_weapon|two_hand|overhead|throwing|staff|held_out|none",
+        "heldVisibility": "show_item|hide_item|show_projectile|show_both",
+        "holdoutOffsetX": "-80..80",
+        "holdoutOffsetY": "-80..80",
+        "initialOffsetPx": "-64..64",
+        "itemScale": "0.55..1.55",
+        "releaseTiming": "instant|early|mid_swing|on_contact|on_release",
+        "useTurn": "bool"
+      }
+    },
+    "use_condition": {
+      "meaning": "Side-effect-free CanUseItem condition; blocks use only.",
+      "params": {
+        "minLife": "0..5000",
+        "minMana": "0..5000",
+        "mode": "grounded|not_wet|life_above|mana_above"
+      }
+    },
+    "visual_effect_cue": {
+      "meaning": "Frozen VFX/audio slot; presentation only, no gameplay.",
+      "params": {
+        "alpha": "0..1",
+        "channel": "motionTrail|coreGlow|ambientParticles|impactShape|impactParticles|decaySmoke|light|sound",
+        "density": "0..1",
+        "duration": "3..120",
+        "emissionMode": "wake|orbit|residue|burst|cone|ring|spiral|point",
+        "event": "travel|active|tick|hit|kill|expire|while_held|while_equipped|on_use|on_alt_use",
+        "importance": "core|secondary|accent|luxury",
+        "jitter": "0..1.5",
+        "lane": "primary|support|accent|ornament|cue",
+        "note": "short debug",
+        "particleRole": "projectile|impact|child|field",
+        "particleSystemId": "pl:glow|pl:shard|pl:smoke|pl:spark|dust",
+        "rendererKind": "projectileAfterimage|spriteStampTrail|historyRibbon|tipTrail|ghostArc|wavyStrip|beamLine|fieldPulse|orbitingMotes|actorAfterimage|impactRing|impactSprite|childMotes|lightCue|soundCue",
+        "repeatEvery": "0..120",
+        "scale": "0.15..5",
+        "spread": "0..2",
+        "startTick": "0..120",
+        "textureRole": "projectile|impact|child|field"
+      }
+    }
+  },
+  "providerSchemas": {
+    "accessory_effect": {
+      "$defs": {
+        "EquipmentStatsParamBoundary": {
+          "additionalProperties": false,
+          "description": "Finite equipment-stat object flattened by the specialized compiler owner.",
+          "properties": {
+            "aggro": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Aggro"
+            },
+            "ammoSaveChance": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Ammosavechance"
+            },
+            "armorPenetration": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Armorpenetration"
+            },
+            "attackSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Attackspeed"
+            },
+            "endurance": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Endurance"
+            },
+            "fallDamageImmune": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Falldamageimmune"
+            },
+            "genericCrit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Genericcrit"
+            },
+            "genericDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Genericdamage"
+            },
+            "jumpSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Jumpspeed"
+            },
+            "knockback": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Knockback"
+            },
+            "lavaImmune": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lavaimmune"
+            },
+            "lifeRegen": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Liferegen"
+            },
+            "lightColorName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lightcolorname"
+            },
+            "lightStrength": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lightstrength"
+            },
+            "magicDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Magicdamage"
+            },
+            "manaCostReduction": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manacostreduction"
+            },
+            "manaRegen": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manaregen"
+            },
+            "maxLife": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Maxlife"
+            },
+            "maxMana": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Maxmana"
+            },
+            "maxRunSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Maxrunspeed"
+            },
+            "meleeDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Meleedamage"
+            },
+            "minionSlots": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Minionslots"
+            },
+            "movementSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Movementspeed"
+            },
+            "rangedDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rangeddamage"
+            },
+            "sentrySlots": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sentryslots"
+            },
+            "summonDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summondamage"
+            },
+            "summonTagDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summontagdamage"
+            },
+            "waterWalk": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Waterwalk"
+            },
+            "whipRange": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Whiprange"
+            }
+          },
+          "title": "EquipmentStatsParamBoundary",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "archetype": {
+          "anyOf": [
+            {
+              "enum": [
+                "damage",
+                "defense",
+                "hybrid",
+                "mobility",
+                "utility"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Archetype"
+        },
+        "defense": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defense"
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EquipmentStatsParamBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "EngineParams_AccessoryEffect",
+      "type": "object"
+    },
+    "ammo_behavior": {
+      "additionalProperties": false,
+      "properties": {
+        "ammoFor": {
+          "anyOf": [
+            {
+              "enum": [
+                "arrow",
+                "bullet",
+                "empty"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ammofor"
+        }
+      },
+      "title": "EngineParams_AmmoBehavior",
+      "type": "object"
+    },
+    "apply_on_hit_effect": {
+      "additionalProperties": false,
+      "properties": {
+        "aoeRadiusTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aoeradiustiles"
+        },
+        "chainCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chaincount"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        },
+        "debuffHint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Debuffhint"
+        },
+        "debuffTime": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Debufftime"
+        },
+        "onHit": {
+          "anyOf": [
+            {
+              "enum": [
+                "aura_pulse",
+                "blackhole",
+                "bleed",
+                "burn",
+                "burst",
+                "chain",
+                "frostburn",
+                "heal",
+                "lifesteal",
+                "lightning_arc",
+                "mini_missiles",
+                "none",
+                "overhead_barrage",
+                "poison",
+                "radial_beams",
+                "shadowflame",
+                "split",
+                "spore_cloud",
+                "starburst",
+                "vortex_spawn"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Onhit"
+        },
+        "pullMode": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "owner_to_target",
+                "target_to_owner",
+                "target_to_projectile"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pullmode"
+        },
+        "pullStrength": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pullstrength"
+        },
+        "secondaryDamageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarydamagemultiplier"
+        },
+        "secondaryLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarylifetimeticks"
+        }
+      },
+      "title": "EngineParams_ApplyOnHitEffect",
+      "type": "object"
+    },
+    "apply_player_effect_on_use": {
+      "$defs": {
+        "BuffParamBoundary": {
+          "additionalProperties": false,
+          "properties": {
+            "buffTime": {
+              "title": "Bufftime",
+              "type": "integer"
+            },
+            "buffType": {
+              "title": "Bufftype",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "buffType",
+            "buffTime"
+          ],
+          "title": "BuffParamBoundary",
+          "type": "object"
+        },
+        "GeneratedBuffParamBoundary": {
+          "additionalProperties": false,
+          "properties": {
+            "durationTicks": {
+              "default": 0,
+              "title": "Durationticks",
+              "type": "integer"
+            },
+            "emitLightStrength": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Emitlightstrength"
+            },
+            "jumpBoost": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Jumpboost"
+            },
+            "lifeRegen": {
+              "default": 0,
+              "title": "Liferegen",
+              "type": "integer"
+            },
+            "lightColorName": {
+              "default": "",
+              "title": "Lightcolorname",
+              "type": "string"
+            },
+            "manaRegen": {
+              "default": 0,
+              "title": "Manaregen",
+              "type": "integer"
+            },
+            "miningSpeedMultiplier": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 1.0,
+              "title": "Miningspeedmultiplier"
+            },
+            "movementSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Movementspeed"
+            },
+            "oreSenseRadiusTiles": {
+              "default": 0,
+              "title": "Oresenseradiustiles",
+              "type": "integer"
+            }
+          },
+          "title": "GeneratedBuffParamBoundary",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "buffTime": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bufftime"
+        },
+        "buffType": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bufftype"
+        },
+        "buffs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BuffParamBoundary"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Buffs"
+        },
+        "generatedBuff": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeneratedBuffParamBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "healLife": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heallife"
+        },
+        "healMana": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Healmana"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "title": "EngineParams_ApplyPlayerEffectOnUse",
+      "type": "object"
+    },
+    "armor_effect": {
+      "$defs": {
+        "ArmorSetBonusParamBoundary": {
+          "additionalProperties": false,
+          "properties": {
+            "aggro": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Aggro"
+            },
+            "ammoSaveChance": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Ammosavechance"
+            },
+            "armorPenetration": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Armorpenetration"
+            },
+            "endurance": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Endurance"
+            },
+            "genericCrit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Genericcrit"
+            },
+            "genericDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Genericdamage"
+            },
+            "lifeRegen": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Liferegen"
+            },
+            "magicDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Magicdamage"
+            },
+            "manaCostReduction": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manacostreduction"
+            },
+            "manaRegen": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manaregen"
+            },
+            "meleeDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Meleedamage"
+            },
+            "minionSlots": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Minionslots"
+            },
+            "movementSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Movementspeed"
+            },
+            "rangedDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rangeddamage"
+            },
+            "sentrySlots": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sentryslots"
+            },
+            "summonDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summondamage"
+            },
+            "text": {
+              "default": "",
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "title": "ArmorSetBonusParamBoundary",
+          "type": "object"
+        },
+        "EquipmentStatsParamBoundary": {
+          "additionalProperties": false,
+          "description": "Finite equipment-stat object flattened by the specialized compiler owner.",
+          "properties": {
+            "aggro": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Aggro"
+            },
+            "ammoSaveChance": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Ammosavechance"
+            },
+            "armorPenetration": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Armorpenetration"
+            },
+            "attackSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Attackspeed"
+            },
+            "endurance": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Endurance"
+            },
+            "fallDamageImmune": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Falldamageimmune"
+            },
+            "genericCrit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Genericcrit"
+            },
+            "genericDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Genericdamage"
+            },
+            "jumpSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Jumpspeed"
+            },
+            "knockback": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Knockback"
+            },
+            "lavaImmune": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lavaimmune"
+            },
+            "lifeRegen": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Liferegen"
+            },
+            "lightColorName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lightcolorname"
+            },
+            "lightStrength": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lightstrength"
+            },
+            "magicDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Magicdamage"
+            },
+            "manaCostReduction": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manacostreduction"
+            },
+            "manaRegen": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manaregen"
+            },
+            "maxLife": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Maxlife"
+            },
+            "maxMana": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Maxmana"
+            },
+            "maxRunSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Maxrunspeed"
+            },
+            "meleeDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Meleedamage"
+            },
+            "minionSlots": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Minionslots"
+            },
+            "movementSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Movementspeed"
+            },
+            "rangedDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rangeddamage"
+            },
+            "sentrySlots": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sentryslots"
+            },
+            "summonDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summondamage"
+            },
+            "summonTagDamage": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summontagdamage"
+            },
+            "waterWalk": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Waterwalk"
+            },
+            "whipRange": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Whiprange"
+            }
+          },
+          "title": "EquipmentStatsParamBoundary",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "archetype": {
+          "anyOf": [
+            {
+              "enum": [
+                "defense",
+                "hybrid",
+                "magic",
+                "melee",
+                "mobility",
+                "ranged",
+                "summon",
+                "utility"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Archetype"
+        },
+        "armorSlot": {
+          "anyOf": [
+            {
+              "enum": [
+                "body",
+                "head",
+                "legs"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Armorslot"
+        },
+        "defense": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defense"
+        },
+        "setBonus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArmorSetBonusParamBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "setKey": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setkey"
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EquipmentStatsParamBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "EngineParams_ArmorEffect",
+      "type": "object"
+    },
+    "cast_magic_weapon": {
+      "additionalProperties": false,
+      "properties": {
+        "beamChargeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Beamchargeticks"
+        },
+        "beamWidthPx": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Beamwidthpx"
+        },
+        "chargePowerMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chargepowermultiplier"
+        },
+        "chargeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chargeticks"
+        },
+        "delayTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delayticks"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "family": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Family"
+        },
+        "homingStrength": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Homingstrength"
+        },
+        "immunityCooldown": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Immunitycooldown"
+        },
+        "lifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifetimeticks"
+        },
+        "movement": {
+          "anyOf": [
+            {
+              "enum": [
+                "accelerate",
+                "blackhole_pull",
+                "expanding_wave",
+                "gravity_arc",
+                "phase",
+                "slow_homing",
+                "straight",
+                "vortex_orb"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Movement"
+        },
+        "pierce": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pierce"
+        },
+        "projectileFamily": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilefamily"
+        },
+        "projectileImpact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileimpact"
+        },
+        "projectileMotion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilemotion"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "projectileTrail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectiletrail"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "secondaryDamageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarydamagemultiplier"
+        },
+        "secondaryLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarylifetimeticks"
+        },
+        "shotCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shotcount"
+        },
+        "soundImpactCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "impact_blade",
+                "impact_bubble",
+                "impact_construct",
+                "impact_creature_meow",
+                "impact_crystal",
+                "impact_earth",
+                "impact_electric",
+                "impact_explosion",
+                "impact_fire",
+                "impact_frost",
+                "impact_harpoon",
+                "impact_heal",
+                "impact_heavy",
+                "impact_inferno",
+                "impact_insect",
+                "impact_laser",
+                "impact_magic",
+                "impact_meteor",
+                "impact_nail",
+                "impact_nature",
+                "impact_portal",
+                "impact_rocket",
+                "impact_shadow",
+                "impact_slime",
+                "impact_soft",
+                "impact_spectral",
+                "impact_star",
+                "impact_summon",
+                "impact_toxic",
+                "impact_void",
+                "impact_water",
+                "impact_wind_vortex"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundimpactcatalogid"
+        },
+        "soundPitch": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitch"
+        },
+        "soundPitchVariance": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitchvariance"
+        },
+        "soundUseCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "bow_release",
+                "bow_volley",
+                "creature_meow",
+                "dart_pistol",
+                "dart_rifle",
+                "firearm_burst",
+                "firearm_clockwork",
+                "firearm_light",
+                "flail_chain",
+                "flame_stream",
+                "insect_swarm",
+                "laser_heavy",
+                "laser_machine",
+                "laser_short",
+                "laser_space",
+                "laser_zap",
+                "launcher_grenade",
+                "launcher_rocket",
+                "magic_bolt",
+                "magic_bubble",
+                "magic_cosmic",
+                "magic_crystal_burst",
+                "magic_earth",
+                "magic_electric",
+                "magic_frost",
+                "magic_gem",
+                "magic_harp",
+                "magic_inferno",
+                "magic_meteor",
+                "magic_phase",
+                "magic_shadow",
+                "magic_spectral",
+                "magic_star",
+                "magic_stream",
+                "magic_toxic",
+                "magic_void",
+                "magic_water",
+                "magic_wind_vortex",
+                "melee_energy_slash",
+                "melee_heavy",
+                "melee_prismatic_shred",
+                "melee_swing",
+                "melee_thrust",
+                "nailgun",
+                "potion_use",
+                "returning_boomerang",
+                "shotgun_heavy",
+                "shotgun_tactical",
+                "sniper_heavy",
+                "summon_fiery",
+                "summon_general",
+                "summon_insect",
+                "summon_lightning",
+                "summon_mechanical",
+                "summon_portal",
+                "summon_sentry",
+                "summon_skittering",
+                "throw_light",
+                "whip_lash",
+                "yoyo_launch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundusecatalogid"
+        },
+        "soundVolume": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundvolume"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        },
+        "useAnimationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useanimationticks"
+        },
+        "useTimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usetimeticks"
+        }
+      },
+      "title": "EngineParams_CastMagicWeapon",
+      "type": "object"
+    },
+    "consumption_behavior": {
+      "additionalProperties": false,
+      "properties": {
+        "consumeChancePercent": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consumechancepercent"
+        }
+      },
+      "title": "EngineParams_ConsumptionBehavior",
+      "type": "object"
+    },
+    "deploy_sentry": {
+      "additionalProperties": false,
+      "properties": {
+        "attackIntervalTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attackintervalticks"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "helperLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helperlifetimeticks"
+        },
+        "movement": {
+          "anyOf": [
+            {
+              "enum": [
+                "accelerate",
+                "blackhole_pull",
+                "boomerang",
+                "bounce",
+                "drift",
+                "expanding_wave",
+                "flail_tether",
+                "gravity_arc",
+                "orbit",
+                "phase",
+                "proximity_missile",
+                "returning_glaive",
+                "sine_homing",
+                "slow_homing",
+                "spiral",
+                "straight",
+                "vortex_orb",
+                "whip_lash",
+                "yoyo_hover"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Movement"
+        },
+        "onHit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Onhit"
+        },
+        "pierce": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pierce"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "enum": [
+                "floating",
+                "grounded"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placement"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "secondaryDamageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarydamagemultiplier"
+        },
+        "secondaryLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarylifetimeticks"
+        },
+        "secondaryProjectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondaryprojectileshape"
+        },
+        "shotCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shotcount"
+        },
+        "soundImpactCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "impact_blade",
+                "impact_bubble",
+                "impact_construct",
+                "impact_creature_meow",
+                "impact_crystal",
+                "impact_earth",
+                "impact_electric",
+                "impact_explosion",
+                "impact_fire",
+                "impact_frost",
+                "impact_harpoon",
+                "impact_heal",
+                "impact_heavy",
+                "impact_inferno",
+                "impact_insect",
+                "impact_laser",
+                "impact_magic",
+                "impact_meteor",
+                "impact_nail",
+                "impact_nature",
+                "impact_portal",
+                "impact_rocket",
+                "impact_shadow",
+                "impact_slime",
+                "impact_soft",
+                "impact_spectral",
+                "impact_star",
+                "impact_summon",
+                "impact_toxic",
+                "impact_void",
+                "impact_water",
+                "impact_wind_vortex"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundimpactcatalogid"
+        },
+        "soundPitch": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitch"
+        },
+        "soundPitchVariance": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitchvariance"
+        },
+        "soundUseCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "bow_release",
+                "bow_volley",
+                "creature_meow",
+                "dart_pistol",
+                "dart_rifle",
+                "firearm_burst",
+                "firearm_clockwork",
+                "firearm_light",
+                "flail_chain",
+                "flame_stream",
+                "insect_swarm",
+                "laser_heavy",
+                "laser_machine",
+                "laser_short",
+                "laser_space",
+                "laser_zap",
+                "launcher_grenade",
+                "launcher_rocket",
+                "magic_bolt",
+                "magic_bubble",
+                "magic_cosmic",
+                "magic_crystal_burst",
+                "magic_earth",
+                "magic_electric",
+                "magic_frost",
+                "magic_gem",
+                "magic_harp",
+                "magic_inferno",
+                "magic_meteor",
+                "magic_phase",
+                "magic_shadow",
+                "magic_spectral",
+                "magic_star",
+                "magic_stream",
+                "magic_toxic",
+                "magic_void",
+                "magic_water",
+                "magic_wind_vortex",
+                "melee_energy_slash",
+                "melee_heavy",
+                "melee_prismatic_shred",
+                "melee_swing",
+                "melee_thrust",
+                "nailgun",
+                "potion_use",
+                "returning_boomerang",
+                "shotgun_heavy",
+                "shotgun_tactical",
+                "sniper_heavy",
+                "summon_fiery",
+                "summon_general",
+                "summon_insect",
+                "summon_lightning",
+                "summon_mechanical",
+                "summon_portal",
+                "summon_sentry",
+                "summon_skittering",
+                "throw_light",
+                "whip_lash",
+                "yoyo_launch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundusecatalogid"
+        },
+        "soundVolume": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundvolume"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        },
+        "targetRangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetrangetiles"
+        },
+        "useAnimationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useanimationticks"
+        },
+        "useTimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usetimeticks"
+        }
+      },
+      "title": "EngineParams_DeploySentry",
+      "type": "object"
+    },
+    "emit_light": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "durationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Durationticks"
+        },
+        "strength": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strength"
+        }
+      },
+      "title": "EngineParams_EmitLight",
+      "type": "object"
+    },
+    "fire_ranged_weapon": {
+      "additionalProperties": false,
+      "properties": {
+        "ammoFor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ammofor"
+        },
+        "chargePowerMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chargepowermultiplier"
+        },
+        "chargeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chargeticks"
+        },
+        "delayTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delayticks"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "family": {
+          "anyOf": [
+            {
+              "enum": [
+                "blowgun",
+                "bow",
+                "charge_release",
+                "dart",
+                "gun",
+                "harpoon",
+                "launcher",
+                "overhead_barrage",
+                "repeater",
+                "rocket_launcher",
+                "shotgun"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Family"
+        },
+        "lifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifetimeticks"
+        },
+        "movement": {
+          "anyOf": [
+            {
+              "enum": [
+                "boomerang",
+                "gravity_arc",
+                "phase",
+                "proximity_missile",
+                "slow_homing",
+                "straight"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Movement"
+        },
+        "pierce": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pierce"
+        },
+        "projectileFamily": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilefamily"
+        },
+        "projectileImpact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileimpact"
+        },
+        "projectileMotion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilemotion"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "projectileTrail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectiletrail"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "secondaryDamageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarydamagemultiplier"
+        },
+        "secondaryLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarylifetimeticks"
+        },
+        "shotCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shotcount"
+        },
+        "soundImpactCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "impact_blade",
+                "impact_bubble",
+                "impact_construct",
+                "impact_creature_meow",
+                "impact_crystal",
+                "impact_earth",
+                "impact_electric",
+                "impact_explosion",
+                "impact_fire",
+                "impact_frost",
+                "impact_harpoon",
+                "impact_heal",
+                "impact_heavy",
+                "impact_inferno",
+                "impact_insect",
+                "impact_laser",
+                "impact_magic",
+                "impact_meteor",
+                "impact_nail",
+                "impact_nature",
+                "impact_portal",
+                "impact_rocket",
+                "impact_shadow",
+                "impact_slime",
+                "impact_soft",
+                "impact_spectral",
+                "impact_star",
+                "impact_summon",
+                "impact_toxic",
+                "impact_void",
+                "impact_water",
+                "impact_wind_vortex"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundimpactcatalogid"
+        },
+        "soundPitch": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitch"
+        },
+        "soundPitchVariance": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitchvariance"
+        },
+        "soundUseCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "bow_release",
+                "bow_volley",
+                "creature_meow",
+                "dart_pistol",
+                "dart_rifle",
+                "firearm_burst",
+                "firearm_clockwork",
+                "firearm_light",
+                "flail_chain",
+                "flame_stream",
+                "insect_swarm",
+                "laser_heavy",
+                "laser_machine",
+                "laser_short",
+                "laser_space",
+                "laser_zap",
+                "launcher_grenade",
+                "launcher_rocket",
+                "magic_bolt",
+                "magic_bubble",
+                "magic_cosmic",
+                "magic_crystal_burst",
+                "magic_earth",
+                "magic_electric",
+                "magic_frost",
+                "magic_gem",
+                "magic_harp",
+                "magic_inferno",
+                "magic_meteor",
+                "magic_phase",
+                "magic_shadow",
+                "magic_spectral",
+                "magic_star",
+                "magic_stream",
+                "magic_toxic",
+                "magic_void",
+                "magic_water",
+                "magic_wind_vortex",
+                "melee_energy_slash",
+                "melee_heavy",
+                "melee_prismatic_shred",
+                "melee_swing",
+                "melee_thrust",
+                "nailgun",
+                "potion_use",
+                "returning_boomerang",
+                "shotgun_heavy",
+                "shotgun_tactical",
+                "sniper_heavy",
+                "summon_fiery",
+                "summon_general",
+                "summon_insect",
+                "summon_lightning",
+                "summon_mechanical",
+                "summon_portal",
+                "summon_sentry",
+                "summon_skittering",
+                "throw_light",
+                "whip_lash",
+                "yoyo_launch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundusecatalogid"
+        },
+        "soundVolume": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundvolume"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        },
+        "useAnimationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useanimationticks"
+        },
+        "useTimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usetimeticks"
+        }
+      },
+      "title": "EngineParams_FireRangedWeapon",
+      "type": "object"
+    },
+    "hold_item_effect": {
+      "$defs": {
+        "GeneratedBuffParamBoundary": {
+          "additionalProperties": false,
+          "properties": {
+            "durationTicks": {
+              "default": 0,
+              "title": "Durationticks",
+              "type": "integer"
+            },
+            "emitLightStrength": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Emitlightstrength"
+            },
+            "jumpBoost": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Jumpboost"
+            },
+            "lifeRegen": {
+              "default": 0,
+              "title": "Liferegen",
+              "type": "integer"
+            },
+            "lightColorName": {
+              "default": "",
+              "title": "Lightcolorname",
+              "type": "string"
+            },
+            "manaRegen": {
+              "default": 0,
+              "title": "Manaregen",
+              "type": "integer"
+            },
+            "miningSpeedMultiplier": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 1.0,
+              "title": "Miningspeedmultiplier"
+            },
+            "movementSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Movementspeed"
+            },
+            "oreSenseRadiusTiles": {
+              "default": 0,
+              "title": "Oresenseradiustiles",
+              "type": "integer"
+            }
+          },
+          "title": "GeneratedBuffParamBoundary",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "generatedBuff": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeneratedBuffParamBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lightColorName": {
+          "anyOf": [
+            {
+              "enum": [
+                "blue",
+                "brown",
+                "cyan",
+                "gold",
+                "gray",
+                "green",
+                "orange",
+                "pink",
+                "purple",
+                "red",
+                "tan",
+                "white",
+                "yellow"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lightcolorname"
+        },
+        "lightStrength": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lightstrength"
+        }
+      },
+      "title": "EngineParams_HoldItemEffect",
+      "type": "object"
+    },
+    "leave_trail_or_field": {
+      "additionalProperties": false,
+      "properties": {
+        "fieldLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fieldlifetimeticks"
+        },
+        "fieldRadiusTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fieldradiustiles"
+        },
+        "tickRate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tickrate"
+        },
+        "trailLength": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Traillength"
+        },
+        "visualOnly": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visualonly"
+        }
+      },
+      "title": "EngineParams_LeaveTrailOrField",
+      "type": "object"
+    },
+    "mobility_effect": {
+      "additionalProperties": false,
+      "properties": {
+        "cooldownTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cooldownticks"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "blink_to_cursor",
+                "blink_to_projectile_impact",
+                "recall_home"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "safeTileOnly": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safetileonly"
+        }
+      },
+      "title": "EngineParams_MobilityEffect",
+      "type": "object"
+    },
+    "perform_melee_attack": {
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "family": {
+          "anyOf": [
+            {
+              "enum": [
+                "anchor",
+                "axe",
+                "boomerang",
+                "broadsword",
+                "chakram",
+                "dagger",
+                "flail",
+                "halberd",
+                "hammer",
+                "jousting_lance",
+                "lance",
+                "mace",
+                "naginata",
+                "pickaxe",
+                "pike",
+                "rapier",
+                "shortsword",
+                "spear",
+                "sword",
+                "trident",
+                "whip",
+                "yoyo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Family"
+        },
+        "lifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifetimeticks"
+        },
+        "pierce": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pierce"
+        },
+        "projectileImpact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileimpact"
+        },
+        "projectileMotion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilemotion"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "projectileTrail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectiletrail"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "runtimeFamily": {
+          "anyOf": [
+            {
+              "enum": [
+                "beam",
+                "cast",
+                "charge_release",
+                "flail",
+                "overhead_barrage",
+                "returning",
+                "shoot",
+                "summon",
+                "swing",
+                "throw",
+                "thrust",
+                "whip",
+                "yoyo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtimefamily"
+        },
+        "secondaryDamageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarydamagemultiplier"
+        },
+        "secondaryLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarylifetimeticks"
+        },
+        "shotCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shotcount"
+        },
+        "soundImpactCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "impact_blade",
+                "impact_bubble",
+                "impact_construct",
+                "impact_creature_meow",
+                "impact_crystal",
+                "impact_earth",
+                "impact_electric",
+                "impact_explosion",
+                "impact_fire",
+                "impact_frost",
+                "impact_harpoon",
+                "impact_heal",
+                "impact_heavy",
+                "impact_inferno",
+                "impact_insect",
+                "impact_laser",
+                "impact_magic",
+                "impact_meteor",
+                "impact_nail",
+                "impact_nature",
+                "impact_portal",
+                "impact_rocket",
+                "impact_shadow",
+                "impact_slime",
+                "impact_soft",
+                "impact_spectral",
+                "impact_star",
+                "impact_summon",
+                "impact_toxic",
+                "impact_void",
+                "impact_water",
+                "impact_wind_vortex"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundimpactcatalogid"
+        },
+        "soundPitch": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitch"
+        },
+        "soundPitchVariance": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitchvariance"
+        },
+        "soundUseCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "bow_release",
+                "bow_volley",
+                "creature_meow",
+                "dart_pistol",
+                "dart_rifle",
+                "firearm_burst",
+                "firearm_clockwork",
+                "firearm_light",
+                "flail_chain",
+                "flame_stream",
+                "insect_swarm",
+                "laser_heavy",
+                "laser_machine",
+                "laser_short",
+                "laser_space",
+                "laser_zap",
+                "launcher_grenade",
+                "launcher_rocket",
+                "magic_bolt",
+                "magic_bubble",
+                "magic_cosmic",
+                "magic_crystal_burst",
+                "magic_earth",
+                "magic_electric",
+                "magic_frost",
+                "magic_gem",
+                "magic_harp",
+                "magic_inferno",
+                "magic_meteor",
+                "magic_phase",
+                "magic_shadow",
+                "magic_spectral",
+                "magic_star",
+                "magic_stream",
+                "magic_toxic",
+                "magic_void",
+                "magic_water",
+                "magic_wind_vortex",
+                "melee_energy_slash",
+                "melee_heavy",
+                "melee_prismatic_shred",
+                "melee_swing",
+                "melee_thrust",
+                "nailgun",
+                "potion_use",
+                "returning_boomerang",
+                "shotgun_heavy",
+                "shotgun_tactical",
+                "sniper_heavy",
+                "summon_fiery",
+                "summon_general",
+                "summon_insect",
+                "summon_lightning",
+                "summon_mechanical",
+                "summon_portal",
+                "summon_sentry",
+                "summon_skittering",
+                "throw_light",
+                "whip_lash",
+                "yoyo_launch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundusecatalogid"
+        },
+        "soundVolume": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundvolume"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        },
+        "useAnimationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useanimationticks"
+        },
+        "useTimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usetimeticks"
+        }
+      },
+      "title": "EngineParams_PerformMeleeAttack",
+      "type": "object"
+    },
+    "placeable_behavior": {
+      "additionalProperties": false,
+      "properties": {
+        "createTile": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Createtile"
+        },
+        "createWall": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Createwall"
+        },
+        "placeStyle": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placestyle"
+        }
+      },
+      "title": "EngineParams_PlaceableBehavior",
+      "type": "object"
+    },
+    "set_alt_use_mode": {
+      "$defs": {
+        "GeneratedBuffParamBoundary": {
+          "additionalProperties": false,
+          "properties": {
+            "durationTicks": {
+              "default": 0,
+              "title": "Durationticks",
+              "type": "integer"
+            },
+            "emitLightStrength": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Emitlightstrength"
+            },
+            "jumpBoost": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Jumpboost"
+            },
+            "lifeRegen": {
+              "default": 0,
+              "title": "Liferegen",
+              "type": "integer"
+            },
+            "lightColorName": {
+              "default": "",
+              "title": "Lightcolorname",
+              "type": "string"
+            },
+            "manaRegen": {
+              "default": 0,
+              "title": "Manaregen",
+              "type": "integer"
+            },
+            "miningSpeedMultiplier": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 1.0,
+              "title": "Miningspeedmultiplier"
+            },
+            "movementSpeed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "default": 0.0,
+              "title": "Movementspeed"
+            },
+            "oreSenseRadiusTiles": {
+              "default": 0,
+              "title": "Oresenseradiustiles",
+              "type": "integer"
+            }
+          },
+          "title": "GeneratedBuffParamBoundary",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "cooldownTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cooldownticks"
+        },
+        "durationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Durationticks"
+        },
+        "generatedBuff": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeneratedBuffParamBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mobilityMode": {
+          "anyOf": [
+            {
+              "enum": [
+                "blink_to_cursor",
+                "recall_home"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mobilitymode"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "generated_buff",
+                "light",
+                "mobility"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "safeTileOnly": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safetileonly"
+        }
+      },
+      "title": "EngineParams_SetAltUseMode",
+      "type": "object"
+    },
+    "set_item_stats": {
+      "additionalProperties": false,
+      "properties": {
+        "ammoFor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ammofor"
+        },
+        "armorSlot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Armorslot"
+        },
+        "autoReuse": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Autoreuse"
+        },
+        "axePower": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axepower"
+        },
+        "buffTime": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bufftime"
+        },
+        "buffType": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bufftype"
+        },
+        "consumable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consumable"
+        },
+        "craftYield": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Craftyield"
+        },
+        "damage": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Damage"
+        },
+        "damageClass": {
+          "anyOf": [
+            {
+              "pattern": "^(?:generic|melee|melee_no_speed|ranged|magic|summon|summon_melee_speed|[A-Za-z][A-Za-z0-9_]*/[A-Za-z][A-Za-z0-9_]*)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Damageclass"
+        },
+        "defense": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defense"
+        },
+        "hammerPower": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hammerpower"
+        },
+        "healLife": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heallife"
+        },
+        "healMana": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Healmana"
+        },
+        "knockback": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knockback"
+        },
+        "manaCost": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manacost"
+        },
+        "maxStack": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxstack"
+        },
+        "pickPower": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pickpower"
+        },
+        "rarity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rarity"
+        },
+        "resultKind": {
+          "anyOf": [
+            {
+              "enum": [
+                "accessory",
+                "ammo",
+                "armor",
+                "consumable_weapon",
+                "furniture",
+                "generic",
+                "material",
+                "potion",
+                "tool",
+                "weapon"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resultkind"
+        },
+        "useAnimationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useanimationticks"
+        },
+        "useTimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usetimeticks"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "EngineParams_SetItemStats",
+      "type": "object"
+    },
+    "shoot_projectile": {
+      "additionalProperties": false,
+      "properties": {
+        "beamChargeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Beamchargeticks"
+        },
+        "beamWidthPx": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Beamwidthpx"
+        },
+        "chargePowerMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chargepowermultiplier"
+        },
+        "chargeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chargeticks"
+        },
+        "delayTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delayticks"
+        },
+        "delivery": {
+          "anyOf": [
+            {
+              "enum": [
+                "cast",
+                "flail",
+                "shoot",
+                "summon",
+                "swing",
+                "throw",
+                "thrust",
+                "whip",
+                "yoyo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "extraUpdates": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extraupdates"
+        },
+        "homingStrength": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Homingstrength"
+        },
+        "immunityCooldown": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Immunitycooldown"
+        },
+        "lifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifetimeticks"
+        },
+        "movement": {
+          "anyOf": [
+            {
+              "enum": [
+                "accelerate",
+                "blackhole_pull",
+                "boomerang",
+                "bounce",
+                "drift",
+                "expanding_wave",
+                "flail_tether",
+                "gravity_arc",
+                "orbit",
+                "phase",
+                "proximity_missile",
+                "returning_glaive",
+                "sine_homing",
+                "slow_homing",
+                "spiral",
+                "straight",
+                "vortex_orb",
+                "whip_lash",
+                "yoyo_hover"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Movement"
+        },
+        "pierce": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pierce"
+        },
+        "projectileFamily": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilefamily"
+        },
+        "projectileImpact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileimpact"
+        },
+        "projectileMotion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectilemotion"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "projectileTrail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectiletrail"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "runtimeFamily": {
+          "anyOf": [
+            {
+              "enum": [
+                "beam",
+                "cast",
+                "charge_release",
+                "flail",
+                "overhead_barrage",
+                "returning",
+                "shoot",
+                "summon",
+                "swing",
+                "throw",
+                "thrust",
+                "whip",
+                "yoyo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtimefamily"
+        },
+        "secondaryDamageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarydamagemultiplier"
+        },
+        "secondaryLifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondarylifetimeticks"
+        },
+        "shotCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shotcount"
+        },
+        "soundImpactCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "impact_blade",
+                "impact_bubble",
+                "impact_construct",
+                "impact_creature_meow",
+                "impact_crystal",
+                "impact_earth",
+                "impact_electric",
+                "impact_explosion",
+                "impact_fire",
+                "impact_frost",
+                "impact_harpoon",
+                "impact_heal",
+                "impact_heavy",
+                "impact_inferno",
+                "impact_insect",
+                "impact_laser",
+                "impact_magic",
+                "impact_meteor",
+                "impact_nail",
+                "impact_nature",
+                "impact_portal",
+                "impact_rocket",
+                "impact_shadow",
+                "impact_slime",
+                "impact_soft",
+                "impact_spectral",
+                "impact_star",
+                "impact_summon",
+                "impact_toxic",
+                "impact_void",
+                "impact_water",
+                "impact_wind_vortex"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundimpactcatalogid"
+        },
+        "soundPitch": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitch"
+        },
+        "soundPitchVariance": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundpitchvariance"
+        },
+        "soundUseCatalogId": {
+          "anyOf": [
+            {
+              "enum": [
+                "bow_release",
+                "bow_volley",
+                "creature_meow",
+                "dart_pistol",
+                "dart_rifle",
+                "firearm_burst",
+                "firearm_clockwork",
+                "firearm_light",
+                "flail_chain",
+                "flame_stream",
+                "insect_swarm",
+                "laser_heavy",
+                "laser_machine",
+                "laser_short",
+                "laser_space",
+                "laser_zap",
+                "launcher_grenade",
+                "launcher_rocket",
+                "magic_bolt",
+                "magic_bubble",
+                "magic_cosmic",
+                "magic_crystal_burst",
+                "magic_earth",
+                "magic_electric",
+                "magic_frost",
+                "magic_gem",
+                "magic_harp",
+                "magic_inferno",
+                "magic_meteor",
+                "magic_phase",
+                "magic_shadow",
+                "magic_spectral",
+                "magic_star",
+                "magic_stream",
+                "magic_toxic",
+                "magic_void",
+                "magic_water",
+                "magic_wind_vortex",
+                "melee_energy_slash",
+                "melee_heavy",
+                "melee_prismatic_shred",
+                "melee_swing",
+                "melee_thrust",
+                "nailgun",
+                "potion_use",
+                "returning_boomerang",
+                "shotgun_heavy",
+                "shotgun_tactical",
+                "sniper_heavy",
+                "summon_fiery",
+                "summon_general",
+                "summon_insect",
+                "summon_lightning",
+                "summon_mechanical",
+                "summon_portal",
+                "summon_sentry",
+                "summon_skittering",
+                "throw_light",
+                "whip_lash",
+                "yoyo_launch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundusecatalogid"
+        },
+        "soundVolume": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soundvolume"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        },
+        "useAnimationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useanimationticks"
+        },
+        "useTimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usetimeticks"
+        },
+        "weaponFamily": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weaponfamily"
+        }
+      },
+      "title": "EngineParams_ShootProjectile",
+      "type": "object"
+    },
+    "spawn_contact_particles": {
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "durationTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Durationticks"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "enum": [
+                "blood",
+                "dust",
+                "electric",
+                "flame",
+                "frost",
+                "heal",
+                "holy",
+                "honey",
+                "leaf",
+                "lunar",
+                "none",
+                "poison",
+                "sand",
+                "shadow",
+                "slime",
+                "smoke",
+                "star"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "enum": [
+                "fire",
+                "frost",
+                "magic",
+                "metal",
+                "none",
+                "shadow",
+                "slime",
+                "stone",
+                "wood"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        }
+      },
+      "title": "EngineParams_SpawnContactParticles",
+      "type": "object"
+    },
+    "spawn_secondary_projectiles": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        },
+        "damageMultiplier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Damagemultiplier"
+        },
+        "lifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifetimeticks"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "sameTargetBias": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sametargetbias"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "enum": [
+                "on_expire",
+                "on_hit"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger"
+        }
+      },
+      "title": "EngineParams_SpawnSecondaryProjectiles",
+      "type": "object"
+    },
+    "spawn_temporary_helper_projectile": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "anyOf": [
+            {
+              "enum": [
+                "drone",
+                "orbiter",
+                "pet_attack",
+                "temporary_turret",
+                "wisp"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Family"
+        },
+        "lifetimeTicks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifetimeticks"
+        },
+        "movement": {
+          "anyOf": [
+            {
+              "enum": [
+                "drift",
+                "orbit",
+                "slow_homing",
+                "straight"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Movement"
+        },
+        "pierce": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pierce"
+        },
+        "projectileShape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectileshape"
+        },
+        "rangeTiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rangetiles"
+        },
+        "shotCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shotcount"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "spreadRadians": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spreadradians"
+        }
+      },
+      "title": "EngineParams_SpawnTemporaryHelperProjectile",
+      "type": "object"
+    },
+    "tool_capability": {
+      "additionalProperties": false,
+      "properties": {
+        "axePower": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axepower"
+        },
+        "hammerPower": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hammerpower"
+        },
+        "miningSpeedScale": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Miningspeedscale"
+        },
+        "pickPower": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pickpower"
+        }
+      },
+      "title": "EngineParams_ToolCapability",
+      "type": "object"
+    },
+    "use_affordance": {
+      "additionalProperties": false,
+      "properties": {
+        "autoReuse": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Autoreuse"
+        },
+        "channelUse": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channeluse"
+        },
+        "handPose": {
+          "anyOf": [
+            {
+              "enum": [
+                "held_out",
+                "none",
+                "overhead",
+                "short_weapon",
+                "staff",
+                "throwing",
+                "two_hand"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Handpose"
+        },
+        "heldVisibility": {
+          "anyOf": [
+            {
+              "enum": [
+                "hide_item",
+                "show_both",
+                "show_item",
+                "show_projectile"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heldvisibility"
+        },
+        "holdoutOffsetX": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holdoutoffsetx"
+        },
+        "holdoutOffsetY": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holdoutoffsety"
+        },
+        "initialOffsetPx": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initialoffsetpx"
+        },
+        "itemScale": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Itemscale"
+        },
+        "releaseTiming": {
+          "anyOf": [
+            {
+              "enum": [
+                "early",
+                "instant",
+                "mid_swing",
+                "on_contact",
+                "on_release"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Releasetiming"
+        },
+        "useTurn": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useturn"
+        }
+      },
+      "title": "EngineParams_UseAffordance",
+      "type": "object"
+    },
+    "use_condition": {
+      "additionalProperties": false,
+      "properties": {
+        "minLife": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minlife"
+        },
+        "minMana": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minmana"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "grounded",
+                "life_above",
+                "mana_above",
+                "not_wet"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        }
+      },
+      "title": "EngineParams_UseCondition",
+      "type": "object"
+    },
+    "visual_effect_cue": {
+      "additionalProperties": false,
+      "properties": {
+        "alpha": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alpha"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        },
+        "density": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Density"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "emissionMode": {
+          "anyOf": [
+            {
+              "enum": [
+                "burst",
+                "cone",
+                "orbit",
+                "point",
+                "residue",
+                "ring",
+                "spiral",
+                "wake"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emissionmode"
+        },
+        "event": {
+          "anyOf": [
+            {
+              "enum": [
+                "active",
+                "expire",
+                "hit",
+                "kill",
+                "on_alt_use",
+                "on_use",
+                "tick",
+                "travel",
+                "while_equipped",
+                "while_held"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event"
+        },
+        "importance": {
+          "anyOf": [
+            {
+              "enum": [
+                "accent",
+                "core",
+                "luxury",
+                "secondary"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Importance"
+        },
+        "jitter": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Jitter"
+        },
+        "lane": {
+          "anyOf": [
+            {
+              "enum": [
+                "accent",
+                "cue",
+                "ornament",
+                "primary",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lane"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "particleRole": {
+          "anyOf": [
+            {
+              "enum": [
+                "child",
+                "field",
+                "impact",
+                "projectile"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Particlerole"
+        },
+        "particleSystemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Particlesystemid"
+        },
+        "rendererKind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rendererkind"
+        },
+        "repeatEvery": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repeatevery"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "spread": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spread"
+        },
+        "startTick": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Starttick"
+        },
+        "textureRole": {
+          "anyOf": [
+            {
+              "enum": [
+                "child",
+                "field",
+                "impact",
+                "projectile"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Texturerole"
+        }
+      },
+      "title": "EngineParams_VisualEffectCue",
+      "type": "object"
+    }
+  },
+  "repairGroups": {
+    "set_alt_use_mode": [
+      [
+        "mobilityMode",
+        "mode"
+      ]
+    ],
+    "shoot_projectile": [
+      [
+        "delivery",
+        "movement",
+        "runtimeFamily"
+      ]
+    ],
+    "spawn_contact_particles": [
+      [
+        "effect",
+        "material"
+      ]
+    ],
+    "visual_effect_cue": [
+      [
+        "channel",
+        "event",
+        "rendererKind"
+      ]
+    ]
+  },
+  "schema": "infini.engine-function-surface-baseline.v1"
+}

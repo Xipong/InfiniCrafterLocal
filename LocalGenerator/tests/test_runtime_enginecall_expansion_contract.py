@@ -6,6 +6,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_patch
+from infini_local.core.runtime_authoring.engine_call_contracts import (
+    engine_params_model,
+    validate_engine_call_params,
+)
 
 
 def _check_player_effect_on_use_compiles_multi_buff_channels() -> None:
@@ -77,13 +81,27 @@ def _check_alt_hold_and_use_condition_calls_compile_to_patch() -> None:
     assert patch["altUseMode"] == "mobility"
     assert patch["altMobilityMode"] == "blink_to_cursor"
     assert patch["altMobilityRangeTiles"] == 30
-    assert patch["altMobilityCooldownTicks"] == 240
+    assert patch["altUseCooldownTicks"] == 240
     assert patch["holdLightStrength"] == 0.55
     assert patch["holdLightColorName"] == "cyan"
     assert patch["holdGeneratedBuff"]["movementSpeed"] == 0.12
 
     assert patch["useConditionMode"] == "mana_above"
     assert patch["useConditionMinMana"] == 40
+
+
+def _check_damage_class_is_canonical_or_exact_modded_identity() -> None:
+    parsed, errors = validate_engine_call_params("set_item_stats", {"damageClass": "nature"})
+    assert parsed is None
+    assert any("pattern" in error for error in errors)
+
+    for value in ("generic", "melee", "summon_melee_speed", "CalamityMod/RogueDamageClass"):
+        parsed, errors = validate_engine_call_params("set_item_stats", {"damageClass": value})
+        assert errors == []
+        assert parsed and parsed["damageClass"] == value
+
+    damage_schema = engine_params_model("set_item_stats").model_json_schema()["properties"]["damageClass"]
+    assert "pattern" in str(damage_schema)
 
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
@@ -96,7 +114,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_player_effect_on_use_compiles_multi_buff_channels',
     '_check_tool_light_and_mobility_calls_are_accepted_without_presets',
     '_check_generated_utility_buff_call_compiles_to_patch',
-    '_check_alt_hold_and_use_condition_calls_compile_to_patch'
+    '_check_alt_hold_and_use_condition_calls_compile_to_patch',
+    '_check_damage_class_is_canonical_or_exact_modded_identity'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

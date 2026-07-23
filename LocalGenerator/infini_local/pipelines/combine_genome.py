@@ -12,7 +12,11 @@ from infini_local.core.llm_stage_messages import agent_handoff, planner_history_
 from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.core.runtime_authoring.reports import infer_attack_pattern_from_runtime
 from infini_local.core.runtime_authoring.schema import _runtime_family_affordances
-from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_family_policy import (
+    CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES,
+    exclusive_movement_owner,
+    runtime_family_required_movements,
+)
 from infini_local.core.runtime_authoring.vocabulary import (
     DELIVERIES,
     normalize_authoring_enum,
@@ -22,6 +26,7 @@ from infini_local.pipelines.engine_pressure_metrics import (
     effective_hit_cadence_ticks,
     clamp_float,
     estimate_engine_metrics,
+    projectile_pressure_envelope_report,
     sanitize_genome_engine,
 )
 from infini_local.pipelines.pipeline_runtime_constants import (
@@ -36,9 +41,7 @@ from infini_local.pipelines.presentation_sound import (
     movement_for,
     onhit_for,
 )
-from infini_local.pipelines.llm_authoring_prompt import (
-    runtime_plan_to_attack_genome_patch,
-)
+from infini_local.core.runtime_authoring.final_projection import runtime_final_patch
 from infini_local.pipelines.llm_transport import (
     llm_chat_json,
     llm_json_response_format,
@@ -72,7 +75,7 @@ def proposed_attack_genome(data: dict[str, Any]) -> dict[str, Any]:
         if k in attack and k not in merged:
             merged[k] = attack[k]
     if LLM_RUNTIME_AUTHORING and runtime_plan(data):
-        merged.update(runtime_plan_to_attack_genome_patch(data))
+        merged.update(runtime_final_patch(data))
     return merged
 
 def genome_defect_details(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -138,16 +141,10 @@ def genome_defect_details(data: dict[str, Any]) -> list[dict[str, Any]]:
     try:
         stage_value = data.get("gameplay")
         stage: dict[str, Any] = stage_value if isinstance(stage_value, dict) else {}
-        power = max(0.5, min(8.0, float(proposed.get("powerBudget") or stage.get("powerBudget") or 1.0)))
-        metrics = estimate_engine_metrics(proposed, stage)
-        max_active = 22.0 + power * 8.0
-        max_sync = 26.0 + power * 8.0
-        if metrics["activeProjectileEstimate"] > max_active or metrics["networkSyncPressureEstimate"] > max_sync:
+        pressure = projectile_pressure_envelope_report(proposed, stage)
+        if not pressure["ok"]:
             reject(
-                "composite projectile pressure exceeds runtime safety envelope: "
-                f"active={metrics['activeProjectileEstimate']}>{round(max_active, 3)} or "
-                f"sync={metrics['networkSyncPressureEstimate']}>{round(max_sync, 3)}; "
-                "author lower shotCount/extraUpdates/lifetime or slower useTimeTicks",
+                str(pressure["reason"]),
                 ["shotCount", "extraUpdates", "lifetimeTicks", "useTimeTicks"],
             )
     except (TypeError, ValueError, OverflowError):
@@ -158,29 +155,16 @@ def genome_defect_details(data: dict[str, Any]) -> list[dict[str, Any]]:
 
     family = _normalize_authored_enum_value(proposed.get("runtimeFamily"), "runtimeFamily")
     movement = _normalize_authored_enum_value(proposed.get("movement"), "movement")
-    required_movement = {
-        "flail": "flail_tether",
-        "yoyo": "yoyo_hover",
-        "whip": "whip_lash",
-    }
-    if family == "returning" and movement not in {"boomerang", "returning_glaive"}:
+    required_movements = runtime_family_required_movements(family)
+    if required_movements and movement not in required_movements:
         reject(
-            f"runtimeFamily=returning requires movement=boomerang|returning_glaive, got {movement or '<empty>'}",
+            f"runtimeFamily={family} requires movement={'|'.join(sorted(required_movements))}, got {movement or '<empty>'}",
             ["runtimeFamily", "movement"],
         )
-    elif family in required_movement and movement != required_movement[family]:
+    movement_owner = exclusive_movement_owner(movement)
+    if movement_owner and family != movement_owner:
         reject(
-            f"runtimeFamily={family} requires movement={required_movement[family]}, got {movement or '<empty>'}",
-            ["runtimeFamily", "movement"],
-        )
-    movement_owner = {
-        "flail_tether": "flail",
-        "yoyo_hover": "yoyo",
-        "whip_lash": "whip",
-    }
-    if movement in movement_owner and family != movement_owner[movement]:
-        reject(
-            f"movement={movement} requires runtimeFamily={movement_owner[movement]}, got {family or '<empty>'}",
+            f"movement={movement} requires runtimeFamily={movement_owner}, got {family or '<empty>'}",
             ["movement", "runtimeFamily"],
         )
     return details

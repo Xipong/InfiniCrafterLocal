@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import math
 from typing import Any
+
+from infini_local.core.runtime_family_policy import HELD_PROJECTILE_RUNTIME_FAMILIES
 
 
 # AGENT MAP: pure engine-pressure/balance sanity helpers used by the
@@ -111,9 +114,10 @@ def estimate_engine_metrics(genome: dict[str, Any], stage: dict[str, Any] | None
     uses_per_second = 60.0 / use_time
     hit_cadence = effective_hit_cadence_ticks(genome, use_time)
     hit_events_per_second = 60.0 / hit_cadence if runtime_family == "beam" else uses_per_second
-    # Exact held-root/sentry duplicate policies own one root projectile. Sentry shots are
-    # bounded separately by authored cadence and lifetime.
-    if runtime_family in {"beam", "charge_release", "sentry"}:
+    # Canonical held-root families and sentries own one root projectile. Their child or
+    # release shots are bounded separately below by authored cadence and lifetime.
+    single_root_families = set(HELD_PROJECTILE_RUNTIME_FAMILIES) | {"sentry"}
+    if runtime_family in single_root_families:
         active_primary = 1.0
     else:
         active_primary = shot_count * uses_per_second * (lifetime / 60.0)
@@ -151,6 +155,70 @@ def estimate_engine_metrics(genome: dict[str, Any], stage: dict[str, Any] | None
         "activeProjectileEstimate": round(active_projectiles, 3),
         "dustPerSecondEstimate": round(dust_per_second, 3),
         "networkSyncPressureEstimate": round(sync_pressure, 3),
+    }
+
+
+def projectile_pressure_envelope_report(
+    genome: dict[str, Any],
+    stage: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Evaluate the one canonical projectile/network pressure envelope."""
+    stage = stage or {}
+    power = max(
+        0.5,
+        min(8.0, float(genome.get("powerBudget") or stage.get("powerBudget") or 1.0)),
+    )
+    metrics = estimate_engine_metrics(genome, stage)
+    max_active = round(22.0 + power * 8.0, 3)
+    max_sync = round(26.0 + power * 8.0, 3)
+    ok = bool(
+        metrics["activeProjectileEstimate"] <= max_active
+        and metrics["networkSyncPressureEstimate"] <= max_sync
+    )
+    reason = ""
+    if not ok:
+        reason = (
+            "composite projectile pressure exceeds runtime safety envelope: "
+            f"active={metrics['activeProjectileEstimate']}>{max_active} or "
+            f"sync={metrics['networkSyncPressureEstimate']}>{max_sync}; "
+            "author lower shotCount/extraUpdates/lifetime or slower useTimeTicks"
+        )
+    repair_constraints: dict[str, dict[str, int]] = {}
+    runtime_family = str(genome.get("runtimeFamily") or "").strip().lower()
+    single_root_families = set(HELD_PROJECTILE_RUNTIME_FAMILIES) | {"sentry"}
+    if not ok and runtime_family not in single_root_families:
+        shot_count = max(1.0, float(genome.get("shotCount") or 1))
+        lifetime = max(10.0, min(1200.0, float(genome.get("lifetimeTicks") or 90)))
+        use_time = max(6.0, min(150.0, float(genome.get("useTimeTicks") or 24)))
+        extra_updates = max(0.0, min(3.0, float(genome.get("extraUpdates") or 0)))
+        active_total = float(metrics.get("activeProjectileEstimate") or 0)
+        active_primary = float(metrics.get("activePrimaryProjectiles") or 0)
+        child_pressure = max(0.0, active_total - active_primary)
+        safe_total = min(max_active, max_sync / (1.0 + extra_updates * 0.22))
+        safe_primary = max(1.0, safe_total - child_pressure)
+        if "shotCount" in genome:
+            repair_constraints["shotCount"] = {
+                "maximum": max(1, int(math.floor(shot_count))),
+            }
+        if "lifetimeTicks" in genome:
+            repair_constraints["lifetimeTicks"] = {
+                "maximum": max(10, int(math.floor(safe_primary * use_time / shot_count))),
+            }
+        if "useTimeTicks" in genome:
+            repair_constraints["useTimeTicks"] = {
+                "minimum": min(150, max(6, int(math.ceil(shot_count * lifetime / safe_primary)))),
+            }
+        if "extraUpdates" in genome:
+            repair_constraints["extraUpdates"] = {
+                "maximum": max(0, int(math.floor(extra_updates))),
+            }
+    return {
+        "ok": ok,
+        "metrics": metrics,
+        "maxActive": max_active,
+        "maxSync": max_sync,
+        "reason": reason,
+        "repairParamConstraints": repair_constraints,
     }
 
 

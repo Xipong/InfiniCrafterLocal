@@ -190,6 +190,12 @@ def _contract_check_wood_workbench_keeps_visual_intent_out_of_attack_without_cod
 
 
 def _contract_check_visual_kit_rejects_singleton_text_aliases_without_leaking_invalid_raw_output(monkeypatch) -> None:
+    monkeypatch.setattr(LLM_TRANSPORT, "LLM_RESPONSE_FORMAT_MODE", "auto")
+    monkeypatch.setattr(
+        LLM_TRANSPORT,
+        "active_llm_provider",
+        lambda *_args, **_kwargs: "openai_compat",
+    )
     with pytest.raises(ValidationError):
         validate_visual_kit_boundary({
             "qualityNotes": "Keep the wooden material readable.",
@@ -281,6 +287,12 @@ def _contract_check_visual_kit_rejects_singleton_text_aliases_without_leaking_in
     assert retried_result["debug"]["visualDirectorRetryCount"] == 1
     assert retried_result["visualKit"]["bakedAssets"]["projectile"]["mode"] == "baked_sprite"
     assert len(retry_requests) == 2
+    for request in retry_requests:
+        response_format = request["response_format"]
+        assert response_format["type"] == "json_schema"
+        assert response_format["json_schema"]["name"] == "infini_visual_director"
+        assert response_format["json_schema"]["strict"] is True
+        assert response_format["json_schema"]["schema"] == VISUAL.visual_kit_response_schema()
     correction = json.loads(retry_requests[1]["messages"][-1]["content"])
     assert correction["task"].startswith("Replace your invalid Visual Director response")
     assert correction["requiredSchema"]["type"] == "object"
@@ -327,7 +339,7 @@ def _contract_check_visual_kit_rejects_singleton_text_aliases_without_leaking_in
 def _contract_check_initial_visual_director_request_enforces_root_and_baked_role_boundary_without_retry(monkeypatch) -> None:
     requests: list[dict] = []
     required_phrase = 'root object must contain exactly one key named "visualkit"'
-    baked_role_phrase = "bakedassets may contain only projectile, impact, child, and field; never item"
+    baked_role_phrase = "bakedassets may contain only projectile, impact, child, field, and equip_overlay; never item"
     flat_field_phrase = (
         "role prompt and vfx fields belong directly inside visualkit; "
         "never inside bakedassets and never inside a vfx object"
@@ -876,7 +888,7 @@ def _contract_check_visual_director_payload_contains_raw_parent_facts_and_real_s
     monkeypatch.setattr(
         VISUAL,
         "llm_json_response_format",
-        lambda name, *, schema, strict: {
+        lambda name, *, schema, strict, auto_preference=None: {
             "type": "json_schema",
             "json_schema": {"name": name, "strict": strict, "schema": schema},
         },
@@ -938,13 +950,13 @@ def _contract_check_visual_director_payload_contains_raw_parent_facts_and_real_s
     assert vfx_avoid_schema["type"] == "string"
     assert "exactly one string" in vfx_avoid_schema["description"].casefold()
     assert "never an array" in vfx_avoid_schema["description"].casefold()
-    baked_properties = schema["$defs"]["BakedAssetBoundary"]["properties"]
+    baked_schema = visual_properties["bakedAssets"]
+    baked_properties = baked_schema["properties"]["projectile"]["properties"]
     mode_schema = baked_properties["mode"]
     assert set(mode_schema["enum"]) == {"baked_sprite", "particle_vfx", "reuse_item_sprite", "none"}
     assert "prompt" not in baked_properties
-    baked_schema = schema["properties"]["visualKit"]["properties"]["bakedAssets"]
     assert baked_schema["additionalProperties"] is False
-    assert set(baked_schema["properties"]) == {"projectile", "impact", "child", "field"}
+    assert set(baked_schema["properties"]) == {"projectile", "impact", "child", "field", "equip_overlay"}
 
 def _contract_check_visual_kit_rejects_alias_schema_instead_of_semantic_migration() -> None:
     from infini_local.core.boundary_models import canonical_visual_kit_view

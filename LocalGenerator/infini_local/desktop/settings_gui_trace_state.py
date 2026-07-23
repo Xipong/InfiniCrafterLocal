@@ -216,6 +216,7 @@ class SettingsGuiTraceStateMixin:
         posterize = self._value("INFINI_PIXEL_POSTERIZE", "1") == "1"
         strict_ai = self._value("INFINI_VISUAL_STRICT_AI_AUTHORSHIP", "1") == "1"
         attack_consumable_debug = self._value("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", "0") == "1"
+        asset_transport = (self._value("INFINI_MP_ASSET_TRANSPORT", "native") or "native").lower()
 
         local_llm = ["INFINI_LMSTUDIO_URL", "INFINI_LMSTUDIO_MODEL"]
         openrouter_llm = [
@@ -290,7 +291,9 @@ class SettingsGuiTraceStateMixin:
         self._set_field_enabled("INFINI_A1111_URL", backend == "a1111", f"Image backend сейчас `{backend}`, A1111 URL не используется.")
         self._set_field_enabled("INFINI_COMFYUI_URL", backend == "comfyui", f"Image backend сейчас `{backend}`, ComfyUI URL не используется.")
 
-        if not self.radmin_enabled.get():
+        if asset_transport != "http":
+            self._set_field_enabled("INFINI_ASSET_PUBLIC_BASE_URL", False, "Asset transport=native; PNG идут через Terraria packets, внешний URL не используется.")
+        elif not self.radmin_enabled.get():
             self._set_field_enabled("INFINI_ASSET_PUBLIC_BASE_URL", False, "Radmin/LAN overlay выключен; внешний URL ассетов не нужен для локальной игры.")
         else:
             self._set_field_enabled("INFINI_ASSET_PUBLIC_BASE_URL", True, "")
@@ -351,8 +354,13 @@ class SettingsGuiTraceStateMixin:
                 data["INFINI_SDCPP_SERVER_COMMAND_MODE"] = "safe_args"
             self.status_var.set(f"sd.cpp command template repaired on save: {reason}")
         # Radmin/LAN is an overlay, not a pipeline preset. Apply it last so it can sit
-        # on top of local/OpenRouter/image_api/etc.
-        if self.radmin_enabled.get():
+        # on top of local/OpenRouter/image_api/etc. Native packets do not expose the
+        # LocalGenerator HTTP listener; HTTP asset mode requires the LAN/Radmin bind.
+        asset_transport = "http" if (data.get("INFINI_MP_ASSET_TRANSPORT") or "native").strip().lower() == "http" else "native"
+        data["INFINI_MP_ASSET_TRANSPORT"] = asset_transport
+        if "INFINI_MP_ASSET_TRANSPORT" in self.vars:
+            self.vars["INFINI_MP_ASSET_TRANSPORT"].set(asset_transport)
+        if self.radmin_enabled.get() and asset_transport == "http":
             data["INFINI_HOST"] = "0.0.0.0"
             if "INFINI_HOST" in self.vars:
                 self.vars["INFINI_HOST"].set("0.0.0.0")
@@ -414,12 +422,15 @@ class SettingsGuiTraceStateMixin:
     def apply_radmin_overlay(self, status_only: bool = True):
         self.radmin_enabled.set(True)
         if "INFINI_HOST" in self.vars:
-            self.vars["INFINI_HOST"].set("0.0.0.0")
-        if "INFINI_ASSET_PUBLIC_BASE_URL" in self.vars and not self.vars["INFINI_ASSET_PUBLIC_BASE_URL"].get().strip():
+            self.vars["INFINI_HOST"].set("0.0.0.0" if self._value("INFINI_MP_ASSET_TRANSPORT", "native").lower() == "http" else "127.0.0.1")
+        if (self._value("INFINI_MP_ASSET_TRANSPORT", "native").lower() == "http"
+                and "INFINI_ASSET_PUBLIC_BASE_URL" in self.vars
+                and not self.vars["INFINI_ASSET_PUBLIC_BASE_URL"].get().strip()):
             best = self._best_radmin_ip()
             self.vars["INFINI_ASSET_PUBLIC_BASE_URL"].set(f"http://{best}:5055" if best else "http://26.x.x.x:5055")
         self._update_radmin_info()
-        self.status_var.set("Radmin/LAN overlay включён: host=0.0.0.0. Друзья получают только готовый item JSON + PNG/JSON ассеты, не LLM/prompts.")
+        host = self.vars.get("INFINI_HOST", tk.StringVar(value="127.0.0.1")).get().strip()
+        self.status_var.set(f"Radmin/LAN overlay включён: host={host}. Друзья получают только готовый item JSON + PNG ассеты, не LLM/prompts.")
         self._refresh_visibility()
 
     def apply_local_overlay(self, status_only: bool = True):
@@ -479,9 +490,11 @@ class SettingsGuiTraceStateMixin:
         ip_text = ", ".join(ips) if ips else "не найден 26.x.x.x — запусти Radmin VPN и вступи в одну сеть"
         lan_text = ", ".join(lan[:4]) if lan else "нет IPv4"
         url = self.vars.get("INFINI_ASSET_PUBLIC_BASE_URL", tk.StringVar(value=self.data.get("INFINI_ASSET_PUBLIC_BASE_URL", ""))).get().strip() if hasattr(self, "vars") else self.data.get("INFINI_ASSET_PUBLIC_BASE_URL", "")
+        transport = self._value("INFINI_MP_ASSET_TRANSPORT", "native").lower()
         terraria_port = self.vars.get("INFINI_TERRARIA_PORT", tk.StringVar(value="7777")).get().strip() if hasattr(self, "vars") else self.data.get("INFINI_TERRARIA_PORT", "7777")
+        url_text = (url or "не задан") if transport == "http" else "не нужен (Native)"
         return (f"Radmin IP: {ip_text}.  Terraria друзьям: Join via IP → <Radmin IP>:{terraria_port}.  "
-                f"Asset URL: {url or 'не задан'}.  Друзьям не нужен LocalGenerator для уже готовых предметов; они качают только финальные ассеты.")
+                f"Asset transport: {transport}.  Asset URL: {url_text}.  Друзьям не нужен LLM/image pipeline.")
 
     def _update_radmin_info(self):
         if hasattr(self, "radmin_info_var"):
@@ -489,6 +502,8 @@ class SettingsGuiTraceStateMixin:
 
     def autofill_radmin_url(self):
         self.radmin_enabled.set(True)
+        if "INFINI_MP_ASSET_TRANSPORT" in self.vars:
+            self.vars["INFINI_MP_ASSET_TRANSPORT"].set("http")
         if "INFINI_HOST" in self.vars:
             self.vars["INFINI_HOST"].set("0.0.0.0")
         ip = self._best_radmin_ip()
@@ -506,11 +521,15 @@ class SettingsGuiTraceStateMixin:
     def _friend_guide_text(self) -> str:
         ip = self._best_radmin_ip() or "<мой Radmin IP 26.x.x.x>"
         port = self.vars.get("INFINI_TERRARIA_PORT", tk.StringVar(value="7777")).get().strip() or "7777"
+        transport = self._value("INFINI_MP_ASSET_TRANSPORT", "native").lower()
         asset_url = self.vars.get("INFINI_ASSET_PUBLIC_BASE_URL", tk.StringVar(value=f"http://{ip}:5055")).get().strip() or f"http://{ip}:5055"
+        asset_step = (f"3) Для проверки HTTP-ассетов открой: {asset_url}/health\n"
+                      if transport == "http"
+                      else "3) PNG идут через Terraria/tModLoader packets; Public asset URL не нужен.\n")
         return ("Как подключиться к моей Terraria / InfiniCrafterLocal:\n"
                 "1) Запусти Radmin VPN и зайди в нашу общую сеть.\n"
                 f"2) Terraria/tModLoader → Multiplayer → Join via IP → {ip} → Port {port}.\n"
-                f"3) Для проверки ассетов открой в браузере: {asset_url}/health\n"
+                f"{asset_step}"
                 "4) LocalGenerator/LLM/Z-Image нужен только хосту. Тебе прилетают уже готовые предметы и финальные PNG/JSON ассеты.")
 
     def copy_radmin_friend_guide(self):

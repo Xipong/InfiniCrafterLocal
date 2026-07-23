@@ -1,230 +1,85 @@
 from __future__ import annotations
 
 import math
-import re
 from functools import lru_cache
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError, create_model
+from pydantic import BaseModel, StringConstraints, ValidationError, create_model
 
-from infini_local.core.runtime_authoring.schema import (
-    ENGINE_FN_CATALOG_V2,
-    INT_FIELDS,
+from infini_local.core.runtime_authoring.engine_param_boundaries import (
+    ArmorSetBonusParamBoundary,
+    BuffParamBoundary,
+    EquipmentStatsParamBoundary,
+    GeneratedBuffParamBoundary,
+    StrictEngineParamModel,
+)
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ENGINE_FUNCTION_CONTRACT_BY_NAME,
     accepted_engine_param_names,
+)
+from infini_local.core.runtime_authoring.function_contract_types import (
+    EngineParamContract,
+    ParamValueKind,
 )
 
 
-class StrictEngineParamModel(BaseModel):
-    """Strict per-function authoring boundary.
-
-    Models are generated from the canonical engine function catalog.  This is a
-    validator only: it never fills gameplay defaults and never compiles behavior.
-    """
-
-    model_config = ConfigDict(extra="forbid", strict=True, validate_assignment=True)
-
-
-class BuffParamBoundary(StrictEngineParamModel):
-    buffType: int
-    buffTime: int
-
-
-class GeneratedBuffParamBoundary(StrictEngineParamModel):
-    durationTicks: int = 0
-    miningSpeedMultiplier: int | float = 1.0
-    emitLightStrength: int | float = 0.0
-    lightColorName: str = ""
-    oreSenseRadiusTiles: int = 0
-    movementSpeed: int | float = 0.0
-    jumpBoost: int | float = 0.0
-    manaRegen: int = 0
-    lifeRegen: int = 0
-
-
-# These params are intentionally typed as nested authoring objects.  They are
-# flattened by the compiler; adding a new stat requires extending this model and
-# the compiler owner, which makes the change visible to agents instead of inert.
-class EquipmentStatsParamBoundary(StrictEngineParamModel):
-    maxLife: int | None = None
-    maxMana: int | None = None
-    lifeRegen: int | None = None
-    manaRegen: int | None = None
-    movementSpeed: int | float | None = None
-    maxRunSpeed: int | float | None = None
-    jumpSpeed: int | float | None = None
-    genericDamage: int | float | None = None
-    meleeDamage: int | float | None = None
-    rangedDamage: int | float | None = None
-    magicDamage: int | float | None = None
-    summonDamage: int | float | None = None
-    genericCrit: int | float | None = None
-    attackSpeed: int | float | None = None
-    knockback: int | float | None = None
-    minionSlots: int | None = None
-    sentrySlots: int | None = None
-    manaCostReduction: int | float | None = None
-    ammoSaveChance: int | float | None = None
-    aggro: int | None = None
-    endurance: int | float | None = None
-    armorPenetration: int | float | None = None
-    lightStrength: int | float | None = None
-    lightColorName: str | None = None
-    fallDamageImmune: bool | None = None
-    lavaImmune: bool | None = None
-    waterWalk: bool | None = None
-    whipRange: int | float | None = None
-    summonTagDamage: int | float | None = None
-
-
-class ArmorSetBonusParamBoundary(StrictEngineParamModel):
-    text: str = ""
-    genericDamage: int | float | None = None
-    meleeDamage: int | float | None = None
-    rangedDamage: int | float | None = None
-    magicDamage: int | float | None = None
-    summonDamage: int | float | None = None
-    genericCrit: int | float | None = None
-    movementSpeed: int | float | None = None
-    lifeRegen: int | None = None
-    manaRegen: int | None = None
-    minionSlots: int | None = None
-    sentrySlots: int | None = None
-    manaCostReduction: int | float | None = None
-    ammoSaveChance: int | float | None = None
-    aggro: int | None = None
-    endurance: int | float | None = None
-    armorPenetration: int | float | None = None
-
-
-_BOOL_PARAMS = frozenset({
-    "autoReuse", "consumable", "visualOnly", "safeTileOnly",
-    "useTurn", "channelUse", "fallDamageImmune", "lavaImmune", "waterWalk",
-})
-_INT_PARAMS = frozenset({
-    *INT_FIELDS,
-    "damage", "maxStack", "rarity", "value", "defense", "count", "amount",
-    "attackIntervalTicks", "helperLifetimeTicks", "secondaryLifetimeTicks",
-    "startTick", "repeatEvery", "duration", "tickRate", "debuffTime",
-    "oreSenseRadiusTiles", "manaRegen", "lifeRegen", "minionSlots", "sentrySlots",
-    "aggro", "armorPenetration", "summonTagDamage",
-    "holdoutOffsetX", "holdoutOffsetY", "initialOffsetPx",
-})
-# Deliberately explicit. NUMERIC_LIMITS contains both integral and continuous
-# fields, so using the whole map as a float inventory would make strict raw
-# boundaries accept values such as chargeTicks=1.5.
-_FLOAT_PARAMS = frozenset({
-    "knockback", "aoeRadiusTiles", "homingStrength", "rangeTiles",
-    "spreadRadians", "speed", "beamWidthPx", "chargePowerMultiplier",
-    "sentryTargetRangeTiles", "fieldRadiusTiles", "secondaryDamageMultiplier",
-    "secondarySpreadRadians", "sameTargetBias", "lightStrength", "soundVolume",
-    "soundPitch", "soundPitchVariance", "scale", "density", "alpha", "spread",
-    "jitter", "decayPerSecond", "strength", "miningSpeedScale", "itemScale",
-    "damageMultiplier", "pullStrength", "targetRangeTiles", "movementSpeed",
-    "maxRunSpeed", "jumpSpeed", "genericDamage", "meleeDamage", "rangedDamage",
-    "magicDamage", "summonDamage", "genericCrit", "attackSpeed", "manaCostReduction",
-    "ammoSaveChance", "endurance", "whipRange", "emitLightStrength", "jumpBoost",
-})
-_LIST_PARAMS: dict[tuple[str, str], Any] = {
-    ("apply_player_effect_on_use", "buffs"): list[BuffParamBoundary],
-}
-_OBJECT_PARAMS: dict[tuple[str, str], Any] = {
-    ("apply_player_effect_on_use", "generatedBuff"): GeneratedBuffParamBoundary,
-    ("set_alt_use_mode", "generatedBuff"): GeneratedBuffParamBoundary,
-    ("hold_item_effect", "generatedBuff"): GeneratedBuffParamBoundary,
-    ("accessory_effect", "stats"): EquipmentStatsParamBoundary,
-    ("armor_effect", "stats"): EquipmentStatsParamBoundary,
-    ("armor_effect", "setBonus"): ArmorSetBonusParamBoundary,
-}
-
-# Semantic enums whose unknown values must never silently become executable.
-_ENUM_PARAMS: dict[tuple[str, str] | str, tuple[str, ...]] = {
-    ("spawn_contact_particles", "material"): ("none", "wood", "metal", "stone", "magic", "fire", "slime", "frost", "shadow"),
-    "delivery": ("swing", "thrust", "shoot", "cast", "throw", "summon"),
-    "runtimeFamily": (
-        "swing", "thrust", "returning", "flail", "yoyo", "whip", "shoot", "cast",
-        "beam", "charge_release", "overhead_barrage", "throw", "summon",
-    ),
-    # Function-specific trigger catalogs take precedence. This shared fallback
-    # exists only for generic trigger-bearing calls whose catalog does not expose
-    # a closed set.
-    "trigger": (
-        "on_hit", "on_expire", "on_use", "on_alt_use", "on_hit_npc", "on_kill_npc",
-        "on_projectile_impact", "while_held", "while_equipped", "on_low_life",
-        "after_not_hit_for_ticks", "while_moving", "while_airborne", "while_in_water",
-    ),
-    ("spawn_secondary_projectiles", "trigger"): ("on_expire", "on_hit"),
-    ("deploy_sentry", "placement"): ("grounded", "floating"),
-    ("mobility_effect", "mode"): ("recall_home", "blink_to_cursor", "blink_to_projectile_impact"),
-    ("set_alt_use_mode", "mode"): ("mobility", "generated_buff", "light", "none"),
-    ("set_alt_use_mode", "mobilityMode"): ("recall_home", "blink_to_cursor"),
-    ("ammo_behavior", "ammoFor"): ("arrow", "bullet", "empty"),
-    ("use_condition", "mode"): ("grounded", "not_wet", "life_above", "mana_above"),
-
-}
-
-
-
-
-_OPEN_ENUM_SENTINELS = frozenset({"etc", "other", "any", "custom", "optional"})
-
-
-def _catalog_enum_values(fn: str, name: str) -> tuple[str, ...] | None:
-    """Infer only genuinely closed pipe-delimited enums from the catalog.
-
-    Catalog cards also document extensible identities using tails such as
-    ``|etc`` or prose such as ``other exact family``. Treating those as Literal
-    values would make adding a new projectile/material/family fail before the
-    compiler can see it, so open descriptions deliberately stay ``str``.
-    """
-    entry: Any = ENGINE_FN_CATALOG_V2.get(fn) or {}
-    params: Any = entry.get("params") if isinstance(entry, dict) else {}
-    descriptor = str((params.get(name) if isinstance(params, dict) else "") or "")
-    clause = descriptor.split(";", 1)[0].strip()
-    if "|" not in clause:
-        return None
-    values = tuple(part.strip() for part in clause.split("|"))
-    if not values or any(not value or not re.fullmatch(r"[a-z0-9_]+", value) for value in values):
-        return None
-    if any(value in _OPEN_ENUM_SENTINELS for value in values):
-        return None
-    return values
+def _param_contract(fn: str, name: str) -> EngineParamContract:
+    spec = ENGINE_FUNCTION_CONTRACT_BY_NAME.get(str(fn or ""))
+    if spec is None:
+        raise KeyError(fn)
+    for param in spec.params:
+        if param.name == name:
+            return param
+    raise KeyError(f"{fn}.{name}")
 
 
 def engine_param_enum_values(fn: str, name: str) -> tuple[str, ...]:
-    """Return canonical closed enum values for a strict engine-call parameter."""
-    values = _ENUM_PARAMS.get((str(fn), str(name))) or _catalog_enum_values(str(fn), str(name)) or _ENUM_PARAMS.get(str(name))
-    return tuple(str(value) for value in (values or ()))
+    """Return the canonical closed enum values from the immutable registry."""
+
+    return tuple(_param_contract(fn, name).enum_values)
 
 
 def _literal_type(values: tuple[str, ...]) -> Any:
-    # Pydantic accepts this runtime form on Python 3.10; keeping the dynamic
-    # factory typed as Any avoids pretending static type checkers can enumerate
-    # catalog values that are intentionally data-driven.
     literal_factory: Any = Literal
-    return literal_factory.__getitem__(values)
+    # ``typing.Literal`` caches equal value sets without preserving which caller's
+    # order won first. Canonical sorting keeps provider schema bytes independent
+    # of the first function validated in this process.
+    return literal_factory.__getitem__(tuple(sorted(values)))
 
 
 def _param_annotation(fn: str, name: str) -> Any:
-    nested = _LIST_PARAMS.get((fn, name)) or _OBJECT_PARAMS.get((fn, name))
-    if nested is not None:
-        return nested
-    # Most-specific policy first. A function card may intentionally narrow a
-    # shared semantic (for example secondary trigger is only on_hit/on_expire).
-    enum_values = _ENUM_PARAMS.get((fn, name)) or _catalog_enum_values(fn, name) or _ENUM_PARAMS.get(name)
-    if enum_values:
-        return _literal_type(enum_values)
-    if name in _BOOL_PARAMS:
+    param = _param_contract(fn, name)
+    try:
+        kind = ParamValueKind(param.value_kind)
+    except ValueError as exc:  # protected by registry validation; fail closed if corrupted
+        raise TypeError(f"unsupported provider kind for {fn}.{name}: {param.value_kind!r}") from exc
+
+    if kind is ParamValueKind.BOOLEAN:
         return bool
-    if name in _INT_PARAMS:
+    if kind is ParamValueKind.INTEGER:
         return int
-    if name in _FLOAT_PARAMS:
+    if kind is ParamValueKind.NUMBER:
         return int | float
-    return str
+    if kind is ParamValueKind.ENUM:
+        return _literal_type(tuple(param.enum_values))
+    if kind is ParamValueKind.OBJECT:
+        if param.object_model is None:
+            raise TypeError(f"missing object model for {fn}.{name}")
+        return param.object_model
+    if kind is ParamValueKind.LIST:
+        if param.list_item_model is None:
+            raise TypeError(f"missing list item model for {fn}.{name}")
+        return list[param.list_item_model]
+    if kind is ParamValueKind.STRING and param.string_pattern:
+        return Annotated[str, StringConstraints(pattern=param.string_pattern)]
+    if kind is ParamValueKind.STRING:
+        return str
+    raise TypeError(f"unsupported provider kind for {fn}.{name}: {kind.value}")
 
 
 @lru_cache(maxsize=None)
 def engine_params_model(fn: str) -> type[BaseModel]:
-    if fn not in ENGINE_FN_CATALOG_V2:
+    if fn not in ENGINE_FUNCTION_CONTRACT_BY_NAME:
         raise KeyError(fn)
     fields: dict[str, tuple[Any, Any]] = {}
     for name in sorted(accepted_engine_param_names(fn)):
@@ -239,7 +94,7 @@ def engine_params_model(fn: str) -> type[BaseModel]:
 
 
 def validate_engine_call_params(fn: str, params: Any) -> tuple[dict[str, Any] | None, list[str]]:
-    if fn not in ENGINE_FN_CATALOG_V2:
+    if fn not in ENGINE_FUNCTION_CONTRACT_BY_NAME:
         return None, [f"unknown function {fn}"]
     if not isinstance(params, dict):
         return None, ["params must be an object"]
@@ -261,8 +116,11 @@ def validate_engine_call_params(fn: str, params: Any) -> tuple[dict[str, Any] | 
 
 def engine_contract_inventory() -> dict[str, dict[str, str]]:
     return {
-        fn: {name: str(_param_annotation(fn, name)) for name in sorted(accepted_engine_param_names(fn))}
-        for fn in sorted(ENGINE_FN_CATALOG_V2)
+        fn: {
+            name: str(_param_annotation(fn, name))
+            for name in sorted(accepted_engine_param_names(fn))
+        }
+        for fn in sorted(ENGINE_FUNCTION_CONTRACT_BY_NAME)
     }
 
 
@@ -272,6 +130,7 @@ __all__ = [
     "GeneratedBuffParamBoundary",
     "EquipmentStatsParamBoundary",
     "ArmorSetBonusParamBoundary",
+    "engine_param_enum_values",
     "engine_params_model",
     "validate_engine_call_params",
     "engine_contract_inventory",

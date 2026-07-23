@@ -364,7 +364,8 @@ class SettingsGuiServerControlsMixin:
                 warnings.append(f"LLM {slot}: OpenRouter выбран, но API key пустой.")
         if backend == "image_api" and not data.get("INFINI_IMAGE_API_KEY"):
             warnings.append("Image API выбран, но API key пустой.")
-        if self.radmin_enabled.get():
+        asset_transport = (data.get("INFINI_MP_ASSET_TRANSPORT") or "native").strip().lower()
+        if self.radmin_enabled.get() and asset_transport == "http":
             url = data.get("INFINI_ASSET_PUBLIC_BASE_URL", "")
             if not url or "26.x.x.x" in url:
                 warnings.append("Radmin/LAN включён, но Public asset URL не заполнен реальным Radmin IP: http://26.xxx.xxx.xxx:5055")

@@ -1,33 +1,29 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from typing import Any
 from infini_local.core.balance_report import attach_balance_report
 
 from infini_local.core.balance_mode import should_apply_soft_normalization
 
 from infini_local.core.category_policy import COMBAT_CATEGORIES, NON_WEAPON_CATEGORIES
-from infini_local.core.boundary_models import ATTACK_NON_WIRE_FIELDS, GAMEPLAY_DEBUG_ONLY_FIELDS
-from infini_local.core.errors import PlannerUnavailable
+
 from infini_local.core.item_identity_tools import item_field, item_num
 from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
 from infini_local.core.runtime_authoring.compiler import (
     project_aoe_radius_tiles_to_damage_pixels,
     project_authored_pierce_to_runtime_hit_budget,
 )
-from infini_local.core.runtime_authoring.reports import runtime_plan_provenance_report
-from infini_local.core.runtime_authoring.structural import all_calls, find_call
-from infini_local.core.runtime_contracts import (
-    STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
-    authored_param_requires_final_wire_provenance,
+from infini_local.core.runtime_authoring.final_projection import (
+    apply_runtime_final_sections,
+    compile_runtime_plan_to_final_result,
 )
+from infini_local.core.runtime_authoring.structural import find_call
 from infini_local.pipelines.runtime_presentation_policy import runtime_presentation_defaults
 from infini_local.pipelines.result_identity_policy import (
     choose_result_category,
     coerce_category_by_policy,
     normalize_category,
-    project_runtime_result_identity,
 )
 from infini_local.pipelines.equipment_stats import (
     accessory_stats_for,
@@ -46,9 +42,6 @@ from infini_local.pipelines.llm_authoring_prompt import (
     authored_num,
     authored_weapon_damage,
     llm_category_without_router,
-    llm_runtime_result_kind_policy,
-    normalize_runtime_authoring_fields,
-    runtime_plan_to_attack_genome_patch,
 )
 from infini_local.pipelines.combine_balance import size_profile_for, stat_profile_for
 from infini_local.pipelines.combine_genome import _bounded_parent_potion_stats, _parent_tool_power, normalize_authored_attack_pattern, weapon_genome_for, weapon_numbers_from_genome
@@ -59,296 +52,50 @@ def _authored_float_or_default(values: dict[str, Any], key: str, default: float 
     return float(default if raw in (None, "") else raw)
 
 
-_PROVENANCE_ROOTS = ("gameplay", "attack", "accessory", "armor")
-
-
-def _provenance_values_match(left: Any, right: Any) -> bool:
-    if isinstance(left, bool) or isinstance(right, bool):
-        return left is right
-    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-        return abs(float(left) - float(right)) <= 1e-9
-    return left == right
-
-
-def _flatten_final_wire(data: dict[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-
-    def visit(path: str, value: Any) -> None:
-        if isinstance(value, dict):
-            for key in sorted(value):
-                visit(f"{path}.{key}", value[key])
-            return
-        out[path] = value
-
-    for root in _PROVENANCE_ROOTS:
-        value = data.get(root)
-        if isinstance(value, dict):
-            non_wire = ATTACK_NON_WIRE_FIELDS if root == "attack" else GAMEPLAY_DEBUG_ONLY_FIELDS if root == "gameplay" else frozenset()
-            for key in sorted(value):
-                if key not in non_wire:
-                    visit(f"{root}.{key}", value[key])
-    return out
-
-
-
-
-
-def _attach_compiler_final_wire_receipts(
-    output: dict[str, Any],
-    authored_preimage: dict[str, Any],
-    a: dict[str, Any],
-    b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
-) -> None:
-    """Attach exact compiler provenance for every mapped authored scalar."""
-    del a, b, ca, cb
-    baseline = _flatten_final_wire(output)
-    source = deepcopy(authored_preimage)
-    provenance = runtime_plan_provenance_report(source)
-    compiled_patch = runtime_plan_to_attack_genome_patch(source)
-    stats_call = find_call(source, "set_item_stats")
-    result_projection = project_runtime_result_identity(
-        stats_call.get("resultKind") or runtime_plan(source).get("resultKind"),
-        ammo_for=stats_call.get("ammoFor"),
-        has_primary=bool(all_calls(source, "shoot_projectile")),
-    )
-    field_renames = {
-        "resultKind": "kind",
-        "useTimeTicks": "useTime",
-        "useAnimationTicks": "useAnimation",
-        "lifetimeTicks": "lifetime",
-        "buffType": "buffCode",
-    }
-    receipts: list[dict[str, Any]] = []
-    authored_rows = provenance.get("authoredParameters")
-    for row in authored_rows if isinstance(authored_rows, list) else []:
-        if not isinstance(row, dict):
-            continue
-        call_id = str(row.get("callId") or "")
-        fn = str(row.get("fn") or "")
-        authored_param = str(row.get("param") or "")
-        if not authored_param_requires_final_wire_provenance(fn, authored_param):
-            continue
-        authored_value = row.get("authoredValue")
-        compiled_fields = row.get("compiledFields")
-        compiled_field_values = compiled_fields if isinstance(compiled_fields, list) else []
-        if not compiled_field_values:
-            receipts.append({
-                "callId": call_id,
-                "authoredParam": authored_param,
-                "authoredValue": authored_value,
-                "compiledField": "unmapped",
-                "finalPath": "",
-                "compiledValue": None,
-                "status": "dropped",
-            })
-            continue
-        for compiled_field_value in compiled_field_values:
-            compiled_field = str(compiled_field_value or "")
-            wire_field = field_renames.get(compiled_field, compiled_field)
-            final_paths = [
-                f"{root}.{wire_field}"
-                for root in _PROVENANCE_ROOTS
-                if f"{root}.{wire_field}" in baseline
-            ]
-
-            def compiled_patch_value() -> tuple[bool, Any]:
-                candidate_paths = [compiled_field]
-                if wire_field != compiled_field:
-                    candidate_paths.append(wire_field)
-                candidate_paths.extend(
-                    source_field
-                    for source_field, target_field in field_renames.items()
-                    if target_field == wire_field and source_field not in candidate_paths
-                )
-                candidate_paths.extend(
-                    f"{root}.{wire_field}"
-                    for root in ("accessory", "armor")
-                )
-                for candidate_path in candidate_paths:
-                    current: Any = compiled_patch
-                    found = True
-                    for part in candidate_path.split("."):
-                        if not isinstance(current, dict) or part not in current:
-                            found = False
-                            break
-                        current = current[part]
-                    if found:
-                        return True, current
-                return False, None
-
-            compiled_present, compiled_value = compiled_patch_value()
-            if not compiled_present:
-                # Direct item fields are projected from the already strict authored
-                # scalar. Falling back to the source preimage keeps this value
-                # independent from the final DTO and prevents self-certification.
-                compiled_value = deepcopy(authored_value)
-            if compiled_field == "resultKind":
-                compiled_value = result_projection.gameplay_kind
-            elif compiled_field == "pierce" and "projectileHitBudget" in compiled_patch:
-                compiled_value = compiled_patch["projectileHitBudget"]
-            elif (
-                compiled_field == "ammoFor"
-                and result_projection.runtime_output_kind == "actual_ammo"
-            ):
-                compiled_value = result_projection.final_ammo_for
-            elif compiled_field == "maxStack":
-                if result_projection.runtime_output_kind == "consumable_weapon":
-                    compiled_value = authored_int(stats_call, "maxStack", 50, 1, 999)
-                elif result_projection.gameplay_kind in {"weapon", "tool"}:
-                    compiled_value = 1
-                elif result_projection.gameplay_kind == "potion":
-                    compiled_value = authored_int(stats_call, "maxStack", 30, 1, 999)
-                else:
-                    compiled_value = authored_int(stats_call, "maxStack", 1, 1, 9999)
-            elif compiled_field == "craftYield":
-                compiled_value = authored_int(stats_call, "craftYield", 1, 1, 999)
-            if not final_paths:
-                receipts.append({
-                    "callId": call_id,
-                    "authoredParam": authored_param,
-                    "authoredValue": authored_value,
-                    "compiledField": compiled_field,
-                    "finalPath": "",
-                    "compiledValue": compiled_value,
-                    "status": "dropped",
-                })
-                continue
-            for final_path in final_paths:
-                if _provenance_values_match(compiled_value, authored_value):
-                    status = "active"
-                elif (
-                    isinstance(compiled_value, (int, float))
-                    and not isinstance(compiled_value, bool)
-                    and isinstance(authored_value, (int, float))
-                    and not isinstance(authored_value, bool)
-                ):
-                    status = "clamped"
-                else:
-                    status = "normalized"
-                receipts.append({
-                    "callId": call_id,
-                    "authoredParam": authored_param,
-                    "authoredValue": authored_value,
-                    "compiledField": compiled_field,
-                    "finalPath": final_path,
-                    "compiledValue": deepcopy(compiled_value),
-                    "status": status,
-                })
-
-    mapped_params = {
-        (str(receipt.get("callId") or ""), str(receipt.get("authoredParam") or ""))
-        for receipt in receipts
-        if str(receipt.get("finalPath") or "")
-    }
-    receipts = [
-        receipt
-        for receipt in receipts
-        if receipt.get("status") != "dropped"
-        or (str(receipt.get("callId") or ""), str(receipt.get("authoredParam") or "")) not in mapped_params
-    ]
-
-    contract_candidate = output.get("runtimeContract")
-    contract: dict[str, Any] = dict(contract_candidate) if isinstance(contract_candidate, dict) else {}
-    contract["schema"] = STRUCTURAL_RUNTIME_CONTRACT_SCHEMA
-    contract["finalWireReceipts"] = receipts
-    output["runtimeContract"] = contract
-    debug_candidate = output.setdefault("debug", {})
-    if isinstance(debug_candidate, dict):
-        debug_candidate["compilerFinalWireReceipts"] = deepcopy(receipts[:192])
-
-
-
-
-
-def _project_explicit_runtime_item_fields(
-    data: dict[str, Any],
-    gameplay: dict[str, Any],
-    item_stats: dict[str, Any],
-    runtime_patch: dict[str, Any],
-) -> None:
-    """Project typed engine-call values into the finite item DTO without inference."""
-    for field in (
-        "healLife", "healMana", "buffCode", "buffTime", "pickPower", "axePower",
-        "hammerPower", "miningSpeedScale", "mobilityMode", "mobilityRangeTiles",
-        "mobilityCooldownTicks", "mobilitySafeTileOnly", "altUseMode", "altMobilityMode",
-        "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly",
-        "holdLightStrength", "holdLightColorName", "itemScale", "holdoutOffsetX",
-        "holdoutOffsetY", "autoReuse", "useTurn", "channelUse", "consumeChancePercent",
-        "ammoFor", "useConditionMode", "useConditionMinLife", "useConditionMinMana",
-        "heldVisibility", "releaseTiming", "handPose", "initialOffsetPx",
-    ):
-        if runtime_patch.get(field) not in (None, ""):
-            gameplay[field] = runtime_patch[field]
-    if runtime_patch.get("runtimeLightStrength") not in (None, ""):
-        gameplay["holdLightStrength"] = runtime_patch["runtimeLightStrength"]
-    if runtime_patch.get("runtimeLightColorName") not in (None, ""):
-        gameplay["holdLightColorName"] = runtime_patch["runtimeLightColorName"]
-    for field in ("extraBuffs", "generatedBuff", "altGeneratedBuff", "holdGeneratedBuff"):
-        if runtime_patch.get(field) not in (None, ""):
-            gameplay[field] = deepcopy(runtime_patch[field])
-
-    direct_fields = (
-        "damageClass", "damage", "knockback", "autoReuse", "maxStack", "consumable",
-        "rarity", "value", "healLife", "healMana", "buffTime", "pickPower", "axePower",
-        "hammerPower", "manaCost", "itemScale", "holdoutOffsetX", "holdoutOffsetY",
-        "width", "height",
-    )
-    for field in direct_fields:
-        if item_stats.get(field) not in (None, ""):
-            gameplay[field] = item_stats[field]
-    for source, target in (("useTimeTicks", "useTime"), ("useAnimationTicks", "useAnimation"), ("buffType", "buffCode")):
-        if item_stats.get(source) not in (None, ""):
-            gameplay[target] = item_stats[source]
-    if gameplay.get("useTime") not in (None, "") and gameplay.get("useAnimation") in (None, ""):
-        gameplay["useAnimation"] = gameplay["useTime"]
-    if item_stats.get("buffCode") not in (None, ""):
-        gameplay["buffCode"] = item_stats["buffCode"]
-    if item_stats.get("craftYield") not in (None, ""):
-        gameplay["craftYield"] = int(item_stats["craftYield"])
-    if item_stats.get("ammoFor") not in (None, ""):
-        gameplay["ammoFor"] = str(item_stats["ammoFor"])
-    if isinstance(runtime_patch.get("accessory"), dict):
-        data["accessory"] = deepcopy(runtime_patch["accessory"])
-    if isinstance(runtime_patch.get("armor"), dict):
-        data["armor"] = deepcopy(runtime_patch["armor"])
-    if isinstance(runtime_patch.get("vfxCues"), list):
-        # The gameplay final-wire gate deliberately defers visual_effect_cue.
-        # Project its compiler-owned representation to the top-level surface read
-        # by the later Visual -> VFX manifest pass; never infer it from prose.
-        data["vfxCues"] = deepcopy(runtime_patch["vfxCues"])
-
-
 def attach_gameplay_and_attack(
     data: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
     ca: dict[str, Any],
     cb: dict[str, Any],
-    *,
-    _trace_structural_provenance: bool = True,
 ) -> dict[str, Any]:
-    authored_preimage = (
-        deepcopy(data)
-        if _trace_structural_provenance
-        and bool(runtime_plan(data))
-        else None
-    )
-    if LLM_RUNTIME_AUTHORING and runtime_plan(data):
+    runtime_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data))
+    runtime_compile_result: dict[str, Any] = {}
+    if runtime_authored:
         normalize_runtime_plan_inplace(data)
+        runtime_compile_result = compile_runtime_plan_to_final_result(data)
     tags = set(data.get("tags", [])) | tags_of(a) | tags_of(b)
     gp = data.setdefault("gameplay", {})
     attack = data.setdefault("attack", {})
+    if runtime_authored:
+        apply_runtime_final_sections(data, runtime_compile_result)
+    final_sections = runtime_compile_result.get("finalSections")
+    final_sections = final_sections if isinstance(final_sections, dict) else {}
+    projected_fields = {
+        section: set(values)
+        for section, values in final_sections.items()
+        if isinstance(values, dict)
+    }
+
+    def update_composition(section: str, target: dict[str, Any], values: dict[str, Any]) -> None:
+        if runtime_authored:
+            owned = projected_fields.get(section, set())
+            values = {key: value for key, value in values.items() if key not in owned}
+        target.update(values)
     requested_kind = gp.get("kind") or data.get("category") or choose_result_category(tags, a, b, data.get("recipeKey"))
-    if LLM_RUNTIME_AUTHORING and runtime_plan(data):
-        kind, policy = llm_runtime_result_kind_policy(data, requested_kind, tags, a, b, data.get("recipeKey"))
+    if runtime_authored:
+        kind = str(gp.get("kind") or "generic")
+        policy = {
+            "source": "runtime_final_projection",
+            "resultKind": kind,
+        }
     elif is_llm_planner(data):
         kind, policy = llm_category_without_router(data, requested_kind, tags, a, b, data.get("recipeKey"))
     else:
         kind, policy = coerce_category_by_policy(requested_kind, tags, a, b, data.get("recipeKey"))
     data["category"] = kind
-    gp["kind"] = kind
+    if not runtime_authored:
+        gp["kind"] = kind
     data.setdefault("debug", {})["categoryPolicyFinal"] = json.dumps(policy, ensure_ascii=False)
     max_parent_damage = max(int(a.get("damage") or 0), int(b.get("damage") or 0))
     stage = stat_profile_for(a, b, tags)
@@ -360,54 +107,27 @@ def attach_gameplay_and_attack(
     # - consumable_weapon: stackable thrown/shot item using GeneratedProjectile
     # - actual_ammo: Terraria ammo skin/stat mode via item.ammo, reduced custom runtime support
     runtime_stats = find_call(data, "set_item_stats") if LLM_RUNTIME_AUTHORING else {}
-    runtime_authored = bool(LLM_RUNTIME_AUTHORING and runtime_plan(data))
-    runtime_patch = runtime_plan_to_attack_genome_patch(data) if runtime_authored else {}
-    if runtime_authored:
-        _project_explicit_runtime_item_fields(data, gp, runtime_stats, runtime_patch)
-    runtime_has_primary = bool(all_calls(data, "shoot_projectile")) if LLM_RUNTIME_AUTHORING else False
-    runtime_identity = project_runtime_result_identity(
-        runtime_stats.get("resultKind"),
-        ammo_for=runtime_stats.get("ammoFor") or gp.get("ammoFor"),
-        has_primary=runtime_has_primary,
+    runtime_patch_candidate = runtime_compile_result.get("patch")
+    runtime_patch: dict[str, Any] = (
+        runtime_patch_candidate if isinstance(runtime_patch_candidate, dict) else {}
     )
-    runtime_ammo_for = runtime_identity.final_ammo_for
-    if runtime_identity.unsupported_ammo_for:
-        gp["unsupportedAmmoFor"] = runtime_identity.unsupported_ammo_for
-    runtime_consumable_weapon = bool(
-        LLM_RUNTIME_AUTHORING
-        and runtime_plan(data)
-        and runtime_identity.runtime_output_kind == "consumable_weapon"
-    )
+    runtime_identity = runtime_compile_result.get("identity")
+    runtime_identity = runtime_identity if isinstance(runtime_identity, dict) else {}
+    runtime_ammo_for = str(runtime_identity.get("finalAmmoFor") or "")
     runtime_actual_ammo = bool(
-        LLM_RUNTIME_AUTHORING
-        and runtime_identity.runtime_output_kind == "actual_ammo"
+        runtime_authored
+        and runtime_identity.get("runtimeOutputKind") == "actual_ammo"
     )
-    if runtime_consumable_weapon:
-        kind = "weapon"
-        data["category"] = "weapon"
-        gp["kind"] = "weapon"
-        gp["runtimeOutputKind"] = "consumable_weapon"
-        gp["consumable"] = True
-        try:
-            max_stack_raw = runtime_stats.get("maxStack")
-            authored_stack = int(float(max_stack_raw)) if max_stack_raw is not None else 1
-        except Exception:
-            authored_stack = 1
-        try:
-            craft_yield_raw = runtime_stats.get("craftYield")
-            authored_yield = int(float(craft_yield_raw)) if craft_yield_raw is not None else 1
-        except Exception:
-            authored_yield = 1
-        gp["maxStack"] = max(1, min(999, authored_stack))
-        gp["craftYield"] = max(1, min(int(gp["maxStack"]), authored_yield))
-    elif runtime_actual_ammo:
-        gp["runtimeOutputKind"] = "actual_ammo"
-        gp["actualAmmoMode"] = "vanilla_projectile_basic; generated split/onHit runtime is not used by bow/gun ammo yet"
+    if runtime_actual_ammo:
+        gp.setdefault(
+            "actualAmmoMode",
+            "vanilla_projectile_basic; generated split/onHit runtime is not used by bow/gun ammo yet",
+        )
 
     explicit_non_weapon = kind in NON_WEAPON_CATEGORIES and kind != "generic"
     runtime_tool_family = str(runtime_patch.get("runtimeFamily") or "").strip().lower()
-    runtime_tool_has_primary = kind == "tool" and runtime_tool_family not in {"", "none"}
-    is_weapon = ((kind in COMBAT_CATEGORIES) or runtime_tool_has_primary) if runtime_authored else (
+    runtime_tool_has_root_executor = kind == "tool" and runtime_tool_family not in {"", "none"}
+    is_weapon = ((kind in COMBAT_CATEGORIES) or runtime_tool_has_root_executor) if runtime_authored else (
         (kind in COMBAT_CATEGORIES) or (not explicit_non_weapon and ("weapon" in tags or max_parent_damage > 0))
     )
     if runtime_authored:
@@ -430,7 +150,7 @@ def attach_gameplay_and_attack(
     if runtime_actual_ammo:
         data["category"] = "ammo"
         ammo_for = "arrow" if runtime_ammo_for in {"arrow", "arrows"} else "bullet"
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": "ammo",
             "runtimeOutputKind": "actual_ammo",
             "actualAmmoMode": "vanilla_projectile_basic; generated split/onHit runtime is not used by bow/gun ammo yet",
@@ -454,39 +174,33 @@ def attach_gameplay_and_attack(
             "height": authored_int(gp, "height", 20, 8, 64),
             "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55),
         })
-        attack.update({"enabled": False})
+        update_composition("attack", attack, {"enabled": False})
         data.setdefault("accessory", {"enabled": False})
     elif kind == "armor" or data.get("category") == "armor":
         data["category"] = "armor"
-        slot = armor_slot_from_authoring(
-            data,
-            runtime_stats,
-            default="" if runtime_authored else "body",
-        )
-        armor = {} if runtime_authored else armor_stats_for(tags, stage, slot)
-        armor.update(data.get("armor") or {})
-        authored_armor_candidate = runtime_patch.get("armor")
-        authored_armor: dict[str, Any] = dict(authored_armor_candidate) if isinstance(authored_armor_candidate, dict) else {}
-        armor.update(authored_armor)
-        if runtime_stats.get("armorSlot") not in (None, ""):
-            armor["slot"] = armor_slot_from_authoring(data, runtime_stats)
-        defense_raw = runtime_stats.get("defense")
-        if defense_raw not in (None, ""):
-            try:
-                defense_val = float(defense_raw)
-            except Exception:
-                defense_val = None
-            if defense_val is not None:
-                armor["defense"] = max(0, min(80, int(round(defense_val))))
-        armor["enabled"] = True
-        armor["slot"] = armor.get("slot") if armor.get("slot") in {"head", "body", "legs"} else slot
-        armor, armor_budget_report = apply_armor_soft_budget(
-            armor, stage, str(armor.get("slot") or slot),
-            apply_clamps=should_apply_soft_normalization() and not runtime_authored,
-        )
+        if runtime_authored:
+            projected_armor = data.get("armor")
+            armor: dict[str, Any] = projected_armor if isinstance(projected_armor, dict) else {}
+            slot = str(armor.get("slot") or "")
+            armor_budget_report = {"mode": "runtime_final_projection", "applied": False}
+        else:
+            slot = armor_slot_from_authoring(data, runtime_stats, default="body")
+            armor = armor_stats_for(tags, stage, slot)
+            armor.update(data.get("armor") or {})
+            authored_armor_candidate = runtime_patch.get("armor")
+            authored_armor = dict(authored_armor_candidate) if isinstance(authored_armor_candidate, dict) else {}
+            armor.update(authored_armor)
+            armor["enabled"] = True
+            armor["slot"] = armor.get("slot") if armor.get("slot") in {"head", "body", "legs"} else slot
+            armor, armor_budget_report = apply_armor_soft_budget(
+                armor,
+                stage,
+                str(armor.get("slot") or slot),
+                apply_clamps=should_apply_soft_normalization(),
+            )
+            data["armor"] = armor
         data.setdefault("debug", {})["armorBudgetReport"] = json.dumps(armor_budget_report, ensure_ascii=False)
-        data["armor"] = armor
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": "armor", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0,
             "knockback": 0, "useTime": 10, "useAnimation": 10, "useStyle": 0, "autoReuse": False,
             "consumable": False, "manaCost": 0,
@@ -494,22 +208,29 @@ def attach_gameplay_and_attack(
             "value": authored_int(gp, "value", 0 if runtime_authored else max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.72)), 0, 999999999),
             "maxStack": 1, "width": 24, "height": 24, "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
-        attack.update({"enabled": False})
+        update_composition("attack", attack, {"enabled": False})
         data.setdefault("debug", {})["armorGeneration"] = json.dumps({"slot": armor.get("slot"), "setKey": armor.get("setKey", ""), "rule": "Generated armor uses dedicated Head/Body/Legs proxy ModItem types; C# writes Item.defense and UpdateEquip modifiers."}, ensure_ascii=False)
     elif kind == "accessory" or data.get("category") == "accessory":
         data["category"] = "accessory"
-        acc = {} if runtime_authored else accessory_stats_for(tags, stage)
-        acc.update(data.get("accessory") or {})
-        authored_accessory_candidate = runtime_patch.get("accessory")
-        authored_accessory: dict[str, Any] = dict(authored_accessory_candidate) if isinstance(authored_accessory_candidate, dict) else {}
-        acc.update(authored_accessory)
-        acc["enabled"] = True
-        acc, accessory_budget_report = apply_accessory_soft_budget(
-            acc, stage, apply_clamps=should_apply_soft_normalization() and not runtime_authored,
-        )
+        if runtime_authored:
+            projected_accessory = data.get("accessory")
+            acc: dict[str, Any] = projected_accessory if isinstance(projected_accessory, dict) else {}
+            accessory_budget_report = {"mode": "runtime_final_projection", "applied": False}
+        else:
+            acc = accessory_stats_for(tags, stage)
+            acc.update(data.get("accessory") or {})
+            authored_accessory_candidate = runtime_patch.get("accessory")
+            authored_accessory = dict(authored_accessory_candidate) if isinstance(authored_accessory_candidate, dict) else {}
+            acc.update(authored_accessory)
+            acc["enabled"] = True
+            acc, accessory_budget_report = apply_accessory_soft_budget(
+                acc,
+                stage,
+                apply_clamps=should_apply_soft_normalization(),
+            )
+            data["accessory"] = acc
         data.setdefault("debug", {})["accessoryBudgetReport"] = json.dumps(accessory_budget_report, ensure_ascii=False)
-        data["accessory"] = acc
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": "accessory", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0,
             "knockback": 0, "useTime": 10, "useAnimation": 10, "useStyle": 0, "autoReuse": False,
             "consumable": False, "manaCost": 0,
@@ -517,11 +238,11 @@ def attach_gameplay_and_attack(
             "value": authored_int(gp, "value", 0 if runtime_authored else max(max(int(a.get("value") or 0), int(b.get("value") or 0)) + 100, int(stage["value"] * 0.65)), 0, 999999999),
             "maxStack": 1, "width": 24, "height": 24, "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
-        attack.update({"enabled": False})
+        update_composition("attack", attack, {"enabled": False})
     elif is_weapon:
         # Combat-capable tools keep their authored item identity while sharing the
         # explicit attack DTO/executor path with weapons.
-        combat_output_kind = "tool" if runtime_tool_has_primary else "weapon"
+        combat_output_kind = "tool" if runtime_tool_has_root_executor else "weapon"
         data["category"] = combat_output_kind
         requested_dc = str(gp.get("damageClass") or "").strip()
         if runtime_authored:
@@ -549,7 +270,7 @@ def attach_gameplay_and_attack(
         presentation_defaults = runtime_presentation_defaults(runtime_family, damage_class, delivery)
 
         use_style = int(presentation_defaults["useStyle"])
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": combat_output_kind,
             "categoryIntent": kind,
             "stage": stage_name,
@@ -602,7 +323,7 @@ def attach_gameplay_and_attack(
             "contactForgivenessPx",
             0 if runtime_authored else (min(14, max(0, aoe_damage_radius_px // 6)) if str(genome.get("onHit") or "") in {"burst", "starburst", "aura_pulse"} else 0),
         ))
-        attack.update({
+        update_composition("attack", attack, {
             "enabled": True,
             "stage": stage_name,
             "powerBudget": stage["powerBudget"],
@@ -710,9 +431,10 @@ def attach_gameplay_and_attack(
     elif kind == "tool":
         data["category"] = "tool"
         tool_power = max(35, min(230, int(28 + stage["derivedPower"] * 4 + max_parent_damage * 1.2)))
-        authored_pick = int(float(gp.get("pickPower") or 0)) if gp.get("pickPower") not in (None, "") else 0
-        authored_axe = int(float(gp.get("axePower") or 0)) if gp.get("axePower") not in (None, "") else 0
-        authored_hammer = int(float(gp.get("hammerPower") or 0)) if gp.get("hammerPower") not in (None, "") else 0
+        authored_tool = gp if runtime_authored else {}
+        authored_pick = int(authored_tool.get("pickPower") or 0)
+        authored_axe = int(authored_tool.get("axePower") or 0)
+        authored_hammer = int(authored_tool.get("hammerPower") or 0)
         parent_pick_signal = "pickaxe" in tags or "drill" in tags or _parent_tool_power(a, "pickPower", "pick") > 0 or _parent_tool_power(b, "pickPower", "pick") > 0
         parent_axe_signal = "axe" in tags or "chainsaw" in tags or _parent_tool_power(a, "axePower", "axe") > 0 or _parent_tool_power(b, "axePower", "axe") > 0
         parent_hammer_signal = "hammer" in tags or _parent_tool_power(a, "hammerPower", "hammer") > 0 or _parent_tool_power(b, "hammerPower", "hammer") > 0
@@ -748,7 +470,7 @@ def attach_gameplay_and_attack(
             "rule": "tool tile-edit powers come from parent tool signals or explicit runtimePlan tool_capability; weapons/projectiles do not invent them",
         }, ensure_ascii=False)
         damage_class = str(gp.get("damageClass") or ("generic" if runtime_authored else "melee"))
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": "tool", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": damage_class,
             "damage": authored_int(gp, "damage", 0 if runtime_authored else max(4, int(max_parent_damage * 0.75 + max(1, int(stage.get("derivedDamage") or max_parent_damage or 4)) * 0.25)), 0, 9999),
             "knockback": round(authored_num(gp, "knockback", 0.0 if runtime_authored else 2.0 + min(stage["powerBudget"], 3.0) * 0.35, 0.0, 12.0), 2),
@@ -760,19 +482,20 @@ def attach_gameplay_and_attack(
             "maxStack": 1, "width": 28, "height": 28, "itemScale": authored_num(gp, "itemScale", 1.0 if runtime_authored else size["itemScale"], 0.55, 1.55),
             "pickPower": pick, "axePower": axe, "hammerPower": hammer,
         })
-        if mining_speed not in (None, ""):
-            try:
-                gp["miningSpeedScale"] = max(0.25, min(3.0, float(mining_speed)))
-            except Exception as exc:
-                data.setdefault("debug", {})["ignoredInvalidMiningSpeedScale"] = json.dumps({"value": mining_speed, "error": repr(exc)}, ensure_ascii=False)
-        if light_strength not in (None, ""):
-            try:
-                gp["holdLightStrength"] = max(0.0, min(1.5, float(light_strength)))
-            except Exception as exc:
-                data.setdefault("debug", {})["ignoredInvalidHoldLightStrength"] = json.dumps({"value": light_strength, "error": repr(exc)}, ensure_ascii=False)
-        if light_color not in (None, ""):
-            gp["holdLightColorName"] = str(light_color)
-        attack.update({"enabled": False})
+        if not runtime_authored:
+            if mining_speed not in (None, ""):
+                try:
+                    gp["miningSpeedScale"] = max(0.25, min(3.0, float(mining_speed)))
+                except Exception as exc:
+                    data.setdefault("debug", {})["ignoredInvalidMiningSpeedScale"] = json.dumps({"value": mining_speed, "error": repr(exc)}, ensure_ascii=False)
+            if light_strength not in (None, ""):
+                try:
+                    gp["holdLightStrength"] = max(0.0, min(1.5, float(light_strength)))
+                except Exception as exc:
+                    data.setdefault("debug", {})["ignoredInvalidHoldLightStrength"] = json.dumps({"value": light_strength, "error": repr(exc)}, ensure_ascii=False)
+            if light_color not in (None, ""):
+                gp["holdLightColorName"] = str(light_color)
+        update_composition("attack", attack, {"enabled": False})
         data.setdefault("accessory", {"enabled": False})
     elif kind == "potion" or (not runtime_authored and ("potion" in tags or "consumable" in tags)):
         data["category"] = "potion"
@@ -786,21 +509,13 @@ def attach_gameplay_and_attack(
             extra_buffs = []
         if buff_code > 0 and buff_time > 0 and not any(isinstance(entry, dict) and int(float(entry.get("buffCode") or entry.get("buffType") or 0)) == buff_code for entry in extra_buffs):
             extra_buffs = [{"buffCode": buff_code, "buffTime": buff_time}] + list(extra_buffs)
-        generated_use_buff = dict(runtime_patch.get("generatedBuff") or {}) if isinstance(runtime_patch.get("generatedBuff"), dict) else {}
-        light_calls = all_calls(data, "emit_light") if runtime_authored else []
-        if light_calls:
-            strengths = [authored_num(call, "strength", 0.0, 0.0, 1.5) for call in light_calls]
-            durations = [authored_int(call, "durationTicks", 0, 0, 60 * 60 * 6) for call in light_calls]
-            strength = max(strengths or [0.0])
-            duration = max(durations or [0])
-            if strength > 0 and duration > 0:
-                generated_use_buff["durationTicks"] = max(int(generated_use_buff.get("durationTicks") or 0), duration)
-                generated_use_buff["emitLightStrength"] = max(float(generated_use_buff.get("emitLightStrength") or 0.0), strength)
-                color = next((str(call.get("lightColorName") or call.get("color") or "").strip() for call in light_calls if str(call.get("lightColorName") or call.get("color") or "").strip()), "")
-                if color:
-                    generated_use_buff["lightColorName"] = color[:32]
+        generated_use_buff = (
+            dict(gp.get("generatedBuff") or {})
+            if not runtime_authored and isinstance(gp.get("generatedBuff"), dict)
+            else {}
+        )
         data.setdefault("debug", {})["potionMerge"] = json.dumps(potion_profile.get("debug", {}), ensure_ascii=False)
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": "potion", "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0, "useStyle": 2,
             "consumable": True,
             "maxStack": authored_int(gp, "maxStack", 30, 1, 999),
@@ -809,11 +524,12 @@ def attach_gameplay_and_attack(
             "useTime": authored_int(gp, "useTime", 17, 10, 60), "useAnimation": authored_int(gp, "useAnimation", 17, 6, 60),
             "width": authored_int(gp, "width", 20, 8, 64), "height": authored_int(gp, "height", 26, 8, 64), "healLife": heal_life, "healMana": heal_mana, "buffCode": buff_code, "buffTime": buff_time, "extraBuffs": extra_buffs[:4], "itemScale": authored_num(gp, "itemScale", 1.0, 0.55, 1.55)
         })
-        if generated_use_buff:
-            gp["generatedBuff"] = generated_use_buff
-        else:
-            gp.pop("generatedBuff", None)
-        attack.update({"enabled": False})
+        if not runtime_authored:
+            if generated_use_buff:
+                gp["generatedBuff"] = generated_use_buff
+            else:
+                gp.pop("generatedBuff", None)
+        update_composition("attack", attack, {"enabled": False})
         data.setdefault("accessory", {"enabled": False})
     else:
         generic_kind = kind if kind != "generic" else data.get("category", "generic")
@@ -826,22 +542,20 @@ def attach_gameplay_and_attack(
                 generic_kind,
                 stage,
             )
-        gp.update({
+        update_composition("gameplay", gp, {
             "kind": generic_kind, "stage": stage_name, "powerBudget": stage["powerBudget"], "damageClass": "generic", "damage": 0, "useStyle": 1,
             "maxStack": authored_int(gp, "maxStack", 1 if runtime_authored else (99 if generic_kind in ["material", "generic", "ammo"] else 1), 1, 9999),
             "rarity": authored_int(gp, "rarity", 0 if runtime_authored else max(int(a.get("rare") or 0), int(b.get("rare") or 0), min(4, int(stage["rarity"]))), -1, 12),
             "value": authored_int(gp, "value", 0 if runtime_authored else max(int(a.get("value") or 0), int(b.get("value") or 0)) + 50, 0, 999999999),
             "width": 24, "height": 24, "itemScale": authored_num(gp, "itemScale", 1.0 if runtime_authored else size["itemScale"], 0.55, 1.55)
         })
-        attack.update({"enabled": False})
+        update_composition("attack", attack, {"enabled": False})
         data.setdefault("accessory", {"enabled": False})
 
     data.setdefault("debug", {})["statProfile"] = json.dumps(stage, ensure_ascii=False)
     data.setdefault("debug", {})["sizeProfile"] = json.dumps(size, ensure_ascii=False)
     data.setdefault("debug", {})["finalCategory"] = data.get("category", "generic")
     attach_balance_report(data, stage)
-    if authored_preimage is not None:
-        _attach_compiler_final_wire_receipts(data, authored_preimage, a, b, ca, cb)
     return data
 
 __all__ = ["attach_gameplay_and_attack"]

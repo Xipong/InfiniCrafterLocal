@@ -83,7 +83,7 @@ def _contract_check_exact_channelled_beam_reaches_final_attack_without_prose_inf
                         "spreadRadians": 0.0,
                         "pierce": -1,
                         "beamWidthPx": 19,
-                        "chargeTicks": 45,
+                        "beamChargeTicks": 45,
                         "immunityCooldown": 8,
                         "effect": "electric",
                         "soundUseCatalogId": "laser_machine",

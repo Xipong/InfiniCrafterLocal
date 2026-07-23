@@ -1,0 +1,5486 @@
+{
+  "cases": [
+    {
+      "case": "glowing_healing_potion",
+      "caseId": "glowing-potion-bufftype-smoke-20260723-013127__glowing_healing_potion__2ec3cf4100",
+      "category": "potion",
+      "expectedFinalSectionsFingerprint": "10939f4fda7b1fe1fcee13e67dca83b8ab75ae02a59e32c3ea9050da40474401",
+      "functions": [
+        "apply_player_effect_on_use",
+        "set_item_stats"
+      ],
+      "resultKind": "potion",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "buffTime": 600,
+              "buffType": 2,
+              "consumable": true,
+              "damage": 0,
+              "damageClass": "generic",
+              "healLife": 100,
+              "maxStack": 30,
+              "rarity": 1,
+              "resultKind": "potion",
+              "useAnimationTicks": 15,
+              "useTimeTicks": 15,
+              "value": 200
+            }
+          },
+          {
+            "callId": "apply_player_effect_on_use_0",
+            "fn": "apply_player_effect_on_use",
+            "params": {
+              "buffs": [
+                {
+                  "buffTime": 600,
+                  "buffType": 2
+                }
+              ],
+              "healLife": 100,
+              "note": "Restore health and minor regen"
+            }
+          }
+        ],
+        "resultKind": "potion"
+      },
+      "sourceRun": "glowing-potion-bufftype-smoke-20260723-013127"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260722-224742__astral_mirror__130ce8fb4f",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "fc15d35b7843235dfc36613239d3fb52e3915d5bb2e2dee0486931caeeb5c0b5",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "alt_use_teleport"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 45,
+              "damageClass": "magic",
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 50000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileFamily": "magic_star",
+              "rangeTiles": 80,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "speed": 14,
+              "spreadRadians": 0.05,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 3600,
+              "mobilityMode": "recall_home",
+              "mode": "mobility"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-224742"
+    },
+    {
+      "case": "bee_boomstick",
+      "caseId": "live20-fixed-reset-20260722-224742__bee_boomstick__90861b88c0",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "0c78663ddf4696470270abe596f563a6c777107195db632a47b8300e288dcd70",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "bee_swarm_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "stats",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "bullet",
+              "autoReuse": false,
+              "damage": 14,
+              "damageClass": "ranged",
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 40,
+              "useTimeTicks": 40,
+              "value": 15000
+            }
+          },
+          {
+            "callId": "attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "bee",
+              "projectileShape": "bee",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 3,
+              "soundUseCatalogId": "shotgun_heavy",
+              "speed": 6,
+              "spreadRadians": 0.2,
+              "weaponFamily": "shotgun"
+            }
+          },
+          {
+            "callId": "hit",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 120,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-224742"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260722-224742__woodwork_blade__d93520adcc",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "cb29169f8778bc8bbf7eb2f2f5f773a0512ec80e1e3af06384a591f41eb57b11",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile",
+        "tool_capability"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "knockback": 5,
+              "maxStack": 1,
+              "rarity": 0,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 250
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 20,
+              "movement": "straight",
+              "pierce": 1,
+              "rangeTiles": 3,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "speed": 15,
+              "spreadRadians": 0,
+              "useTimeTicks": 20,
+              "weaponFamily": "broadsword"
+            }
+          },
+          {
+            "callId": "tool_capability",
+            "fn": "tool_capability",
+            "params": {
+              "hammerPower": 20,
+              "miningSpeedScale": 1.2
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-224742"
+    },
+    {
+      "case": "swift_boots",
+      "caseId": "live20-fixed-reset-20260722-230450__swift_boots__38ba10746d",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "a308e5f19b84289430b09c20f5ce8c4e93ed4884916a3640d8a99ab4cd2bb901",
+      "functions": [
+        "accessory_effect",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": false,
+              "damage": 0,
+              "damageClass": "generic",
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "useAnimationTicks": 100,
+              "useTimeTicks": 100,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "accessory_effect",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "mobility",
+              "defense": 0,
+              "stats": {
+                "movementSpeed": 0.25
+              }
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-230450"
+    },
+    {
+      "case": "bee_boomstick",
+      "caseId": "live20-fixed-reset-20260722-231519__bee_boomstick__0450f92ebc",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "060e9c6d0b5c77c041faf6fb8ed7bfc272419a769faf863aadd88022f7fc87c5",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "stats",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "bullet",
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 16,
+              "damageClass": "ranged",
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 35,
+              "useTimeTicks": 35,
+              "value": 150000
+            }
+          },
+          {
+            "callId": "attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 40,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "bullet",
+              "projectileShape": "bullet",
+              "rangeTiles": 30,
+              "runtimeFamily": "shoot",
+              "shotCount": 4,
+              "soundImpactCatalogId": "impact_nature",
+              "soundUseCatalogId": "shotgun_heavy",
+              "speed": 7,
+              "spreadRadians": 0.25,
+              "weaponFamily": "shotgun"
+            }
+          },
+          {
+            "callId": "bees",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-231519"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260722-231519__woodwork_blade__b655181066",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "0f7aa36ce1d5964b93913ac825b0ff9f0c69cee2b59f6a7930bdca28108a5cbc",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_secondary_projectiles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "melee_utility_fusion"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "knockback": 4,
+              "maxStack": 1,
+              "rarity": 0,
+              "resultKind": "weapon",
+              "useAnimationTicks": 22,
+              "useTimeTicks": 22,
+              "value": 250
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 22,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileImpact": "impact_blade",
+              "projectileMotion": "straight",
+              "projectileShape": "wooden_splinter",
+              "projectileTrail": "none",
+              "rangeTiles": 3,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_blade",
+              "soundUseCatalogId": "melee_swing",
+              "soundVolume": 0.6,
+              "speed": 8,
+              "spreadRadians": 0,
+              "useTimeTicks": 22,
+              "weaponFamily": "broadsword"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 1,
+              "debuffTime": 0,
+              "onHit": "split",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          },
+          {
+            "callId": "spawn_secondary_projectiles",
+            "fn": "spawn_secondary_projectiles",
+            "params": {
+              "count": 1,
+              "damageMultiplier": 0.2,
+              "lifetimeTicks": 120,
+              "material": "wood",
+              "projectileShape": "work_bench_fragment",
+              "trigger": "on_hit"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-231519"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260722-232924__astral_mirror__79fc14f914",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "334122e8c3f032bffc68f1cd98187848b25d5c6e0df70bca561f05c8d4c008b2",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 45,
+              "damageClass": "magic",
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileShape": "star",
+              "rangeTiles": 12,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 600,
+              "mobilityMode": "recall_home",
+              "mode": "mobility",
+              "safeTileOnly": true
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-232924"
+    },
+    {
+      "case": "swift_boots",
+      "caseId": "live20-fixed-reset-20260722-232924__swift_boots__650d918bd1",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "8679249c89b068e96a373ce535c6ccf9c13619d63f84864c24243f08dc4aa559",
+      "functions": [
+        "accessory_effect",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": false,
+              "craftYield": 1,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "value": 75000
+            }
+          },
+          {
+            "callId": "accessory_effect_0",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "mobility",
+              "stats": {
+                "maxRunSpeed": 1.25,
+                "movementSpeed": 0.15
+              }
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-232924"
+    },
+    {
+      "case": "astral_minishark",
+      "caseId": "live20-fixed-reset-20260722-233803__astral_minishark__daf36651a1",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "86e96756aaf3a2ece50950ce21e2e7d070cced0d6acae3453a326cedadf26314",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "starburst_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 12,
+              "damageClass": "ranged",
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 8,
+              "useTimeTicks": 8,
+              "value": 500000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon_0",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 40,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "star",
+              "projectileImpact": "impact_star",
+              "projectileShape": "star",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "firearm_light",
+              "speed": 14,
+              "spreadRadians": 0.1,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_0",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.3,
+              "secondaryLifetimeTicks": 20
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260722-233803__astral_mirror__4ce4faecf6",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "9027a90b78ae3b67394f8e53cff125de63f25eec759272e7a92e3170958e0d9d",
+      "functions": [
+        "mobility_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "teleport_utility_weapon"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "damage": 45,
+              "damageClass": "magic",
+              "manaCost": 20,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 40,
+              "useTimeTicks": 40,
+              "value": 50000
+            }
+          },
+          {
+            "callId": "summon_star",
+            "fn": "shoot_projectile",
+            "params": {
+              "delayTicks": 10,
+              "delivery": "shoot",
+              "lifetimeTicks": 90,
+              "movement": "gravity_arc",
+              "pierce": 2,
+              "projectileFamily": "magic_star",
+              "rangeTiles": 40,
+              "runtimeFamily": "overhead_barrage",
+              "secondaryDamageMultiplier": 1.0,
+              "secondaryLifetimeTicks": 60,
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "blink_move",
+            "fn": "mobility_effect",
+            "params": {
+              "cooldownTicks": 180,
+              "mode": "blink_to_cursor",
+              "rangeTiles": 40,
+              "safeTileOnly": true
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "chained_ball",
+      "caseId": "live20-fixed-reset-20260722-233803__chained_ball__cd21c2e2c5",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "5abe7cb3747beec250d40dc82689e7061fc17c162ccd27036f1fde74dfe4b7a9",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "tether_physics_enabled"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "damage": 18,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 35,
+              "useTimeTicks": 35,
+              "value": 75200
+            }
+          },
+          {
+            "callId": "shoot_projectile_0",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "flail",
+              "lifetimeTicks": 900,
+              "movement": "flail_tether",
+              "pierce": -1,
+              "projectileMotion": "flail",
+              "projectileShape": "ball_and_chain",
+              "rangeTiles": 15,
+              "runtimeFamily": "flail",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundUseCatalogId": "flail_chain",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_0",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "onHit": "none",
+              "pullMode": "target_to_owner",
+              "pullStrength": 0.5
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "caseId": "live20-fixed-reset-20260722-233803__corrupt_yoyo__d89b0bd3b0",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "7cadefcda10359f1198d9430ae666479358246b091c88045893e24fedf4d0422",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 4.5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "yoyo",
+              "lifetimeTicks": 600,
+              "movement": "yoyo_hover",
+              "pierce": -1,
+              "projectileShape": "body",
+              "rangeTiles": 16,
+              "runtimeFamily": "yoyo",
+              "shotCount": 1,
+              "soundUseCatalogId": "yoyo_launch",
+              "soundVolume": 0.8,
+              "speed": 14,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "shadowflame"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "gel_grenade",
+      "caseId": "live20-fixed-reset-20260722-233803__gel_grenade__48794e6095",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "939eb606d76dd86d5d0c9b9ddc81cce2b7e5f64d9398402b2aa791a56d10d800",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "consumable_weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "lingering_damage_zone"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": true,
+              "craftYield": 5,
+              "damage": 60,
+              "damageClass": "ranged",
+              "maxStack": 999,
+              "rarity": 1,
+              "resultKind": "consumable_weapon",
+              "useAnimationTicks": 40,
+              "useTimeTicks": 40,
+              "value": 100
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "shoot",
+              "lifetimeTicks": 300,
+              "movement": "gravity_arc",
+              "pierce": 1,
+              "projectileFamily": "launcher",
+              "projectileShape": "grenade",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "launcher_grenade",
+              "speed": 6,
+              "spreadRadians": 0.1,
+              "weaponFamily": "launcher"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 180,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.25,
+              "secondaryLifetimeTicks": 120
+            }
+          }
+        ],
+        "resultKind": "consumable_weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260722-233803__infernal_boomerang__543b102023",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "c2f643e44af4bcb1f748810bcb5f842b49fe89c3e8f233df1bcf29e412230ae9",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "fire_damage_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 25,
+              "damageClass": "melee",
+              "knockback": 9,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 18,
+              "useTimeTicks": 18,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 120,
+              "movement": "boomerang",
+              "pierce": -1,
+              "projectileFamily": "boomerang",
+              "projectileShape": "boomerang",
+              "rangeTiles": 30,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "melee_swing",
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "burn"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 15,
+              "effect": "flame",
+              "scale": 1.2
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "jungle_whip",
+      "caseId": "live20-fixed-reset-20260722-233803__jungle_whip__b855ca10f4",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "a30b42d9c746660a65cf34e01bc0bea927864f30d73525d982e0db3caea8f389",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 22,
+              "damageClass": "summon_melee_speed",
+              "knockback": 2.0,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "whip",
+              "lifetimeTicks": 30,
+              "movement": "whip_lash",
+              "pierce": -1,
+              "projectileFamily": "whip",
+              "projectileShape": "whip",
+              "rangeTiles": 12,
+              "runtimeFamily": "whip",
+              "shotCount": 1,
+              "speed": 10,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 120,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "lens_finch_staff",
+      "caseId": "live20-fixed-reset-20260722-233803__lens_finch_staff__921d5e2512",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "647f533aaa3ad8200a92f12acaab0326cbf6c935f4005495944b1415361e5b06",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 18,
+              "damageClass": "magic",
+              "knockback": 3,
+              "manaCost": 12,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 15000
+            }
+          },
+          {
+            "callId": "cast_magic_weapon_0",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 120,
+              "movement": "slow_homing",
+              "pierce": 2,
+              "projectileFamily": "magic_bird",
+              "projectileImpact": "impact_star",
+              "projectileShape": "bird",
+              "projectileTrail": "magic",
+              "rangeTiles": 60,
+              "runtimeFamily": "cast",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_bolt",
+              "soundVolume": 0.6,
+              "speed": 8,
+              "spreadRadians": 0.1,
+              "weaponFamily": "staff"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_0",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "meteor_spacegun",
+      "caseId": "live20-fixed-reset-20260722-233803__meteor_spacegun__b0fcc7f376",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "4dc0b0c26ead7870b7f1ee488be7ca7022f5c6601223bc605a91cb51b7545945",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "reusable_magic_weapon"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 45,
+              "damageClass": "magic",
+              "knockback": 4,
+              "manaCost": 12,
+              "maxStack": 1,
+              "rarity": 4,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 15000
+            }
+          },
+          {
+            "callId": "cast_magic_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileFamily": "bolt",
+              "projectileShape": "bolt",
+              "rangeTiles": 80,
+              "runtimeFamily": "cast",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_explosion",
+              "soundUseCatalogId": "laser_heavy",
+              "soundVolume": 0.8,
+              "speed": 16,
+              "spreadRadians": 0.05,
+              "weaponFamily": "magic_gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 60,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "obsidian_pickaxe",
+      "caseId": "live20-fixed-reset-20260722-233803__obsidian_pickaxe__757bfc3c5e",
+      "category": "tool",
+      "expectedFinalSectionsFingerprint": "80041803fd94a5eb089b31b3a08bf6fa82db18b6e33bff1d895d14ae1b6e5cbf",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles",
+        "tool_capability"
+      ],
+      "resultKind": "tool",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "knockback": 2,
+              "maxStack": 1,
+              "pickPower": 100,
+              "rarity": 3,
+              "resultKind": "tool",
+              "useAnimationTicks": 22,
+              "useTimeTicks": 18,
+              "value": 30000
+            }
+          },
+          {
+            "callId": "tool_capability",
+            "fn": "tool_capability",
+            "params": {
+              "miningSpeedScale": 1.0,
+              "pickPower": 100
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 22,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileShape": "none",
+              "rangeTiles": 4,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "speed": 18,
+              "spreadRadians": 0,
+              "useTimeTicks": 18,
+              "weaponFamily": "pickaxe"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "burn"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 5,
+              "durationTicks": 20,
+              "effect": "flame",
+              "scale": 1.0
+            }
+          }
+        ],
+        "resultKind": "tool"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "spider_sentry",
+      "caseId": "live20-fixed-reset-20260722-233803__spider_sentry__12f2a6933b",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "c4d72e44459a9b2194eae0e7f3990117fbad0706645c07e35d5ad93964eccd72",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 32,
+              "damageClass": "summon",
+              "manaCost": 15,
+              "maxStack": 1,
+              "rarity": 4,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 300000
+            }
+          },
+          {
+            "callId": "deploy_sentry",
+            "fn": "shoot_projectile",
+            "params": {
+              "attackIntervalTicks": 60,
+              "delivery": "summon",
+              "helperLifetimeTicks": 3600,
+              "lifetimeTicks": 3600,
+              "movement": "straight",
+              "onHit": "poison",
+              "pierce": 2,
+              "placement": "grounded",
+              "projectileFamily": "sentry",
+              "projectileShape": "venom_spit",
+              "rangeTiles": 45,
+              "runtimeFamily": "sentry",
+              "secondaryLifetimeTicks": 60,
+              "sentryAttackIntervalTicks": 60,
+              "sentryLifetimeTicks": 3600,
+              "sentryPlacement": "grounded",
+              "sentryTargetRangeTiles": 45,
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_toxic",
+              "soundUseCatalogId": "summon_sentry",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "targetRangeTiles": 45,
+              "weaponFamily": "sentry"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 300,
+              "onHit": "poison"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260722-233803__woodwork_blade__3fd43d8846",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "c6a4052383d810018c6bfb7dc513af2e9e4900e63fab7de5f228b5a4f87e6916",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "hammerPower": 50,
+              "knockback": 5,
+              "maxStack": 1,
+              "rarity": 0,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 250
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 20,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileImpact": "impact_heavy",
+              "projectileMotion": "swing",
+              "projectileShape": "hammer",
+              "rangeTiles": 4,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundPitch": 0.0,
+              "soundUseCatalogId": "melee_heavy",
+              "soundVolume": 0.8,
+              "speed": 10,
+              "spreadRadians": 0,
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "weaponFamily": "hammer"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233803"
+    },
+    {
+      "case": "astral_minishark",
+      "caseId": "live20-fixed-reset-20260722-233950__astral_minishark__a8456dd8a7",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "ea31f03db48e0a7c8b56f035d02109969b8862d5f7695d7a38bf207339ee8654",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "starburst_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 15,
+              "damageClass": "ranged",
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 12,
+              "useTimeTicks": 12,
+              "value": 500000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "magic_star",
+              "projectileImpact": "impact_star",
+              "projectileShape": "star",
+              "projectileTrail": "magic_star",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "firearm_light",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233950"
+    },
+    {
+      "case": "bee_boomstick",
+      "caseId": "live20-fixed-reset-20260722-233950__bee_boomstick__d95d630c74",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "6fc7c4921c360aacb38c126c21e41d04529d1bda2b3a9c510ea8b85e5659b75a",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "damage": 14,
+              "damageClass": "ranged",
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 40,
+              "useTimeTicks": 40,
+              "value": 150000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "bullet",
+              "projectileShape": "bee",
+              "rangeTiles": 30,
+              "runtimeFamily": "shoot",
+              "shotCount": 3,
+              "soundImpactCatalogId": "impact_nature",
+              "speed": 6,
+              "spreadRadians": 0.2,
+              "weaponFamily": "shotgun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 60,
+              "onHit": "mini_missiles",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 40
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233950"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260722-233950__infernal_boomerang__9e1d8ddd26",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "8aa7f825f03ccf8c21c38abf2598fb33df4e4adf500fb5d718c08f71eb126388",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "fire_burst_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 25,
+              "damageClass": "melee",
+              "knockback": 8,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 18,
+              "useTimeTicks": 24,
+              "value": 70000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "extraUpdates": 0,
+              "lifetimeTicks": 400,
+              "movement": "boomerang",
+              "pierce": -1,
+              "projectileShape": "boomerang",
+              "rangeTiles": 12,
+              "runtimeFamily": "throw",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_explosion",
+              "soundUseCatalogId": "melee_swing",
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 3,
+              "onHit": "burst",
+              "secondaryDamageMultiplier": 0.5
+            }
+          },
+          {
+            "callId": "spawn_contact_particles",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 10,
+              "durationTicks": 20,
+              "effect": "flame",
+              "scale": 1.2
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233950"
+    },
+    {
+      "case": "meteor_spacegun",
+      "caseId": "live20-fixed-reset-20260722-233950__meteor_spacegun__0e02884d4d",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "11ac1d56334f1d05bdaa910451ad3fcaca8fafed6108d977a6a3efd94e3a1263",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "burn_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "damage": 22,
+              "damageClass": "magic",
+              "manaCost": 8,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 16,
+              "useTimeTicks": 16,
+              "value": 15000
+            }
+          },
+          {
+            "callId": "cast_magic_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 45,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileFamily": "bolt",
+              "projectileShape": "beam",
+              "rangeTiles": 60,
+              "runtimeFamily": "cast",
+              "shotCount": 1,
+              "soundUseCatalogId": "laser_heavy",
+              "soundVolume": 0.7,
+              "speed": 12,
+              "spreadRadians": 0.05,
+              "weaponFamily": "magic_gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 120,
+              "onHit": "burn"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233950"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260722-233950__woodwork_blade__adc374a592",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "2dc4854c3711af0c8c51e89a08b23b21ae4768a6623cf61333ab7850669542c2",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 0,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 250
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 20,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileImpact": "impact_heavy",
+              "projectileMotion": "swing",
+              "projectileShape": "hammer",
+              "projectileTrail": "none",
+              "rangeTiles": 4,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "speed": 12,
+              "spreadRadians": 0,
+              "useTimeTicks": 20,
+              "weaponFamily": "hammer"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-233950"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260722-235307__astral_mirror__34b7889645",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "16b5d38ae76e63c15c93c91db866cec5e6b2f77ba356cbf901516badaad31302",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "ammo_consumption_override"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 35,
+              "damageClass": "magic",
+              "knockback": 3,
+              "manaCost": 5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 180,
+              "movement": "gravity_arc",
+              "pierce": 1,
+              "projectileFamily": "star",
+              "projectileImpact": "impact_star",
+              "projectileMotion": "gravity_arc",
+              "projectileShape": "star",
+              "projectileTrail": "star_trail",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 1800,
+              "mobilityMode": "recall_home",
+              "mode": "mobility"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260722-235307"
+    },
+    {
+      "case": "chained_ball",
+      "caseId": "live20-fixed-reset-20260723-000641__chained_ball__19cf407ca6",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "6344a7451b1c91469be23113018fcf5af8474b3c22136117a9edc44525bc2a48",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "extended_reach"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 6.5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 35,
+              "useTimeTicks": 35,
+              "value": 120000
+            }
+          },
+          {
+            "callId": "flail_swing",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "flail",
+              "lifetimeTicks": 450,
+              "movement": "flail_tether",
+              "pierce": -1,
+              "projectileMotion": "chain-tethered flail head",
+              "rangeTiles": 25,
+              "runtimeFamily": "flail",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundUseCatalogId": "flail_chain",
+              "soundVolume": 0.8,
+              "speed": 14,
+              "spreadRadians": 0,
+              "useTimeTicks": 35,
+              "weaponFamily": "flail"
+            }
+          },
+          {
+            "callId": "chain_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "chainCount": 3,
+              "debuffTime": 30,
+              "onHit": "chain",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 15
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "caseId": "live20-fixed-reset-20260723-000641__corrupt_yoyo__d8811e5003",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "0cb24d2014dd558104103d90e454e329fd1ac984f427486cadef6bf2aa3c61b0",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "visual_effect_cue"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 30,
+              "value": 100000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "yoyo",
+              "extraUpdates": 0,
+              "lifetimeTicks": 600,
+              "movement": "yoyo_hover",
+              "pierce": -1,
+              "projectileShape": "body",
+              "rangeTiles": 20,
+              "runtimeFamily": "yoyo",
+              "shotCount": 1,
+              "speed": 16,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 120,
+              "onHit": "shadowflame"
+            }
+          },
+          {
+            "callId": "visual_effect_cue",
+            "fn": "visual_effect_cue",
+            "params": {
+              "channel": "motionTrail",
+              "event": "active",
+              "lane": "primary",
+              "particleSystemId": "pl:glow",
+              "rendererKind": "projectileAfterimage"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "gel_grenade",
+      "caseId": "live20-fixed-reset-20260723-000641__gel_grenade__11ff4a22f6",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "51b0e03b60f36cc189fa5d946795256f142748a71b019e6925dd3ae0005a7efc",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "consumable_weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 60,
+              "damageClass": "ranged",
+              "knockback": 8,
+              "maxStack": 999,
+              "rarity": 1,
+              "resultKind": "consumable_weapon",
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "value": 150
+            }
+          },
+          {
+            "callId": "shoot_grenade",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 300,
+              "movement": "gravity_arc",
+              "pierce": 1,
+              "projectileFamily": "grenade",
+              "projectileImpact": "impact_explosion",
+              "projectileShape": "grenade",
+              "rangeTiles": 60,
+              "runtimeFamily": "throw",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_explosion",
+              "soundUseCatalogId": "throw_light",
+              "soundVolume": 0.8,
+              "speed": 6,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_gel_residue",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 4,
+              "count": 3,
+              "debuffTime": 300,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 120
+            }
+          }
+        ],
+        "resultKind": "consumable_weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "glowing_healing_potion",
+      "caseId": "live20-fixed-reset-20260723-000641__glowing_healing_potion__91dceff520",
+      "category": "potion",
+      "expectedFinalSectionsFingerprint": "f796c2b583d4df84de36ed8c584753ab0d290b4add17640b2f0e655fd5185d5a",
+      "functions": [
+        "apply_player_effect_on_use",
+        "set_item_stats"
+      ],
+      "resultKind": "potion",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "buffTime": 0,
+              "buffType": 0,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 0,
+              "damageClass": "generic",
+              "healLife": 100,
+              "healMana": 0,
+              "knockback": 0,
+              "manaCost": 0,
+              "maxStack": 9999,
+              "rarity": 1,
+              "resultKind": "potion",
+              "useAnimationTicks": 17,
+              "useTimeTicks": 17,
+              "value": 1050
+            }
+          },
+          {
+            "callId": "apply_player_effect_0",
+            "fn": "apply_player_effect_on_use",
+            "params": {
+              "generatedBuff": {
+                "durationTicks": 600,
+                "emitLightStrength": 0.8,
+                "lightColorName": "blue"
+              },
+              "healLife": 100,
+              "note": "Heal and glow effect"
+            }
+          }
+        ],
+        "resultKind": "potion"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260723-000641__infernal_boomerang__cb8af5d0be",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "917eaf0b486a3a57244e145d29292c8bae29c486fad5f59175ac14060b9002ea",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 28,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 18,
+              "useTimeTicks": 18,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 400,
+              "movement": "boomerang",
+              "pierce": -1,
+              "projectileShape": "body",
+              "rangeTiles": 40,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_explosion",
+              "soundUseCatalogId": "melee_swing",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 3,
+              "debuffHint": "burn",
+              "debuffTime": 180,
+              "onHit": "burst",
+              "secondaryDamageMultiplier": 0.5
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "jungle_whip",
+      "caseId": "live20-fixed-reset-20260723-000641__jungle_whip__0ab66e1796",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "1b1ba60bea9666e71a7f49a5594a6e1e95d84f7c9388189ea298f35589558f72",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "spore_cloud_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 22,
+              "damageClass": "summon_melee_speed",
+              "knockback": 2.5,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "whip",
+              "lifetimeTicks": 30,
+              "movement": "whip_lash",
+              "pierce": -1,
+              "projectileMotion": "summon whip lash",
+              "rangeTiles": 12,
+              "runtimeFamily": "whip",
+              "shotCount": 1,
+              "speed": 10,
+              "spreadRadians": 0,
+              "useTimeTicks": 30,
+              "weaponFamily": "whip"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 3,
+              "count": 3,
+              "debuffTime": 120,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "meteor_spacegun",
+      "caseId": "live20-fixed-reset-20260723-000641__meteor_spacegun__7cdd704516",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "434a5ef0fd395c18c7b9c92131fb3a10c3fb0082e1dc47ad1e9ca4fc8650e316",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "elemental_infusion"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 24,
+              "damageClass": "magic",
+              "manaCost": 7,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 16,
+              "useTimeTicks": 16,
+              "value": 27000
+            }
+          },
+          {
+            "callId": "cast_magic_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 45,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileFamily": "bolt",
+              "rangeTiles": 60,
+              "runtimeFamily": "cast",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "laser_heavy",
+              "soundVolume": 0.8,
+              "speed": 14,
+              "spreadRadians": 0.02,
+              "weaponFamily": "magic_gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "burn"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 15,
+              "effect": "flame"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "obsidian_pickaxe",
+      "caseId": "live20-fixed-reset-20260723-000641__obsidian_pickaxe__1fc05c3b61",
+      "category": "tool",
+      "expectedFinalSectionsFingerprint": "1a0a284b9562398c6a9140e7e56f33bdb04c49b97cd2e5a187dd461d111ed0ca",
+      "functions": [
+        "set_item_stats",
+        "tool_capability",
+        "use_affordance"
+      ],
+      "resultKind": "tool",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "base_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 15,
+              "damageClass": "melee",
+              "knockback": 3,
+              "maxStack": 1,
+              "pickPower": 110,
+              "rarity": 3,
+              "resultKind": "tool",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 16,
+              "value": 35000
+            }
+          },
+          {
+            "callId": "mining_capability",
+            "fn": "tool_capability",
+            "params": {
+              "miningSpeedScale": 1.1,
+              "pickPower": 110
+            }
+          },
+          {
+            "callId": "tool_polish",
+            "fn": "use_affordance",
+            "params": {
+              "autoReuse": true,
+              "handPose": "short_weapon",
+              "itemScale": 1.1,
+              "useTurn": true
+            }
+          }
+        ],
+        "resultKind": "tool"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "ropebound_spear",
+      "caseId": "live20-fixed-reset-20260723-000641__ropebound_spear__2b0916bb48",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "89e16394bb53ba6e409eca5351b3506af2cdf52530c464483e226c1066831b54",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "tethered_projectile"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 14,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 1500
+            }
+          },
+          {
+            "callId": "shoot_projectile_root",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 60,
+              "movement": "returning_glaive",
+              "pierce": 3,
+              "projectileMotion": "straight",
+              "projectileShape": "spear",
+              "projectileTrail": "rope_tether",
+              "rangeTiles": 25,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_blade",
+              "soundUseCatalogId": "throw_light",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "rope_pull_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "onHit": "none",
+              "pullMode": "target_to_owner",
+              "pullStrength": 0.4
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "silt_extractinator",
+      "caseId": "live20-fixed-reset-20260723-000641__silt_extractinator__16675e75e5",
+      "category": "furniture",
+      "expectedFinalSectionsFingerprint": "c4ef3151f3f5821476396b7a94c03dd6c9b2c274668db973a686d1946b7bc964",
+      "functions": [
+        "placeable_behavior",
+        "set_item_stats"
+      ],
+      "resultKind": "furniture",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "furniture_placement_logic"
+        ],
+        "engineCalls": [
+          {
+            "callId": "stats_01",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 0,
+              "damageClass": "generic",
+              "knockback": 0,
+              "maxStack": 99,
+              "rarity": 1,
+              "resultKind": "furniture",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 20000
+            }
+          },
+          {
+            "callId": "place_01",
+            "fn": "placeable_behavior",
+            "params": {
+              "createTile": 219,
+              "createWall": -1,
+              "placeStyle": 0
+            }
+          }
+        ],
+        "resultKind": "furniture"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000641"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260723-000813__astral_mirror__75a59d8e0f",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "735dbecb2397ffa5f487f0774d1404e64dbec4ff4e6a810a1eb40da28e38eecc",
+      "functions": [
+        "consumption_behavior",
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "consumable_weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 35,
+              "damageClass": "magic",
+              "knockback": 4,
+              "manaCost": 0,
+              "maxStack": 9999,
+              "rarity": 2,
+              "resultKind": "consumable_weapon",
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "value": 52500
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileFamily": "magic_star",
+              "projectileShape": "star",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 0,
+              "mobilityMode": "recall_home",
+              "mode": "mobility",
+              "rangeTiles": 0,
+              "safeTileOnly": true
+            }
+          },
+          {
+            "callId": "consumption_behavior",
+            "fn": "consumption_behavior",
+            "params": {
+              "consumeChancePercent": 100
+            }
+          }
+        ],
+        "resultKind": "consumable_weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000813"
+    },
+    {
+      "case": "bee_boomstick",
+      "caseId": "live20-fixed-reset-20260723-000813__bee_boomstick__9ea1e59763",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "999e6bf8e7cb953ea81294d86fb3178e05790c46afd26ba76f39be36b21f58f6",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "shotgun_spread",
+          "on_hit_child_spawn"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "bullet",
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 16,
+              "damageClass": "ranged",
+              "knockback": 6.0,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 40,
+              "useTimeTicks": 40,
+              "value": 150000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "bullet",
+              "projectileShape": "bullet",
+              "rangeTiles": 40,
+              "runtimeFamily": "shoot",
+              "shotCount": 3,
+              "soundImpactCatalogId": "impact_blade",
+              "soundUseCatalogId": "firearm_light",
+              "soundVolume": 0.8,
+              "speed": 8,
+              "spreadRadians": 0.25,
+              "weaponFamily": "shotgun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 2,
+              "onHit": "mini_missiles",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 40
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-000813"
+    },
+    {
+      "case": "astral_minishark",
+      "caseId": "live20-fixed-reset-20260723-001344__astral_minishark__6d2302261f",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "34e5f2c964e26231bff6ff13daee149fbde79113ce2a27beff170763cd14f5c1",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "bullet",
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 10,
+              "damageClass": "ranged",
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 8,
+              "useTimeTicks": 8,
+              "value": 50000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 40,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "star_bolt",
+              "projectileShape": "star",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "firearm_light",
+              "speed": 14,
+              "spreadRadians": 0.08,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.4,
+              "secondaryLifetimeTicks": 20
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260723-001344__astral_mirror__d791fc15fa",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "2de9dac34a3fe962b834d8b43bd893620fe1fd1c4953db7e89954ba76caca9c2",
+      "functions": [
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 45,
+              "damageClass": "magic",
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 52500
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileFamily": "magic_star",
+              "rangeTiles": 15,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 1800,
+              "mobilityMode": "recall_home",
+              "mode": "mobility"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "chained_ball",
+      "caseId": "live20-fixed-reset-20260723-001344__chained_ball__2e699762b1",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "10198a19d847ca65fad9fbfc9e1a841ad1679f0f8040047d6289d877c606fc62",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "extended_range"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 6.5,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 85000
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "flail",
+              "lifetimeTicks": 600,
+              "movement": "flail_tether",
+              "pierce": -1,
+              "projectileImpact": "impact_heavy",
+              "projectileMotion": "flail_tether",
+              "projectileShape": "spiked_ball",
+              "rangeTiles": 25,
+              "runtimeFamily": "flail",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundUseCatalogId": "flail_chain",
+              "soundVolume": 0.8,
+              "speed": 14,
+              "spreadRadians": 0,
+              "useTimeTicks": 30,
+              "weaponFamily": "flail"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "chainCount": 3,
+              "debuffTime": 60,
+              "onHit": "lightning_arc",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "caseId": "live20-fixed-reset-20260723-001344__corrupt_yoyo__0e0bfe4533",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "7714c231677633f7e9388a7e8a521d1fff95271971fd2e2a81332d6382aed793",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "shadowflame_applied_via_yoyo"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 4.5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25
+            }
+          },
+          {
+            "callId": "shoot_projectile_0",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "yoyo",
+              "lifetimeTicks": 600,
+              "movement": "yoyo_hover",
+              "pierce": -1,
+              "projectileMotion": "yoyo_hover",
+              "projectileShape": "body",
+              "rangeTiles": 20,
+              "runtimeFamily": "yoyo",
+              "shotCount": 1,
+              "soundUseCatalogId": "yoyo_launch",
+              "soundVolume": 0.8,
+              "speed": 16,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_0",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "shadowflame"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "gel_grenade",
+      "caseId": "live20-fixed-reset-20260723-001344__gel_grenade__acfd1958a3",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "70de1dbc96c95360afebcd100402fd5a746d76e45af6dcdcecc6614625818c9e",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "consumable_weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "lingering_field_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 60,
+              "damageClass": "ranged",
+              "knockback": 8,
+              "maxStack": 999,
+              "rarity": 1,
+              "resultKind": "consumable_weapon",
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "value": 150
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 600,
+              "movement": "gravity_arc",
+              "pierce": 1,
+              "projectileShape": "grenade",
+              "rangeTiles": 10,
+              "runtimeFamily": "throw",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_explosion",
+              "soundUseCatalogId": "throw_light",
+              "soundVolume": 0.8,
+              "speed": 5.5,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 4,
+              "count": 1,
+              "debuffHint": "burn",
+              "debuffTime": 180,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 120
+            }
+          }
+        ],
+        "resultKind": "consumable_weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "glowing_healing_potion",
+      "caseId": "live20-fixed-reset-20260723-001344__glowing_healing_potion__0c41c02f62",
+      "category": "potion",
+      "expectedFinalSectionsFingerprint": "353df1fac5bc2828d73e82b0170e5ac3f206a9904aa968f0ef306a2a202d0a80",
+      "functions": [
+        "apply_player_effect_on_use",
+        "set_item_stats"
+      ],
+      "resultKind": "potion",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "light_buff_on_consume"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 15,
+              "damageClass": "magic",
+              "healLife": 100,
+              "maxStack": 30,
+              "rarity": 1,
+              "resultKind": "potion",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 200
+            }
+          },
+          {
+            "callId": "apply_player_effect_on_use",
+            "fn": "apply_player_effect_on_use",
+            "params": {
+              "generatedBuff": {
+                "durationTicks": 600,
+                "emitLightStrength": 0.8,
+                "lightColorName": "blue"
+              },
+              "healLife": 100,
+              "note": "Heal and bioluminescent glow"
+            }
+          }
+        ],
+        "resultKind": "potion"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260723-001344__infernal_boomerang__a6847c0938",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "b37ea7a8165ece83f5142edfdc8df4ebbfc4c30d4ab4abdeca8adf38a337f911",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_secondary_projectiles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "elemental_effect_added"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 28,
+              "damageClass": "melee",
+              "knockback": 9,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 18,
+              "useTimeTicks": 24,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "extraUpdates": 0,
+              "lifetimeTicks": 450,
+              "movement": "boomerang",
+              "pierce": -1,
+              "projectileShape": "boomerang_hellstone",
+              "rangeTiles": 12,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "throw_light",
+              "speed": 14,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "burn"
+            }
+          },
+          {
+            "callId": "spawn_secondary_projectiles",
+            "fn": "spawn_secondary_projectiles",
+            "params": {
+              "count": 3,
+              "damageMultiplier": 0.4,
+              "lifetimeTicks": 30,
+              "projectileShape": "fire_shard",
+              "trigger": "on_hit"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "jester_bow",
+      "caseId": "live20-fixed-reset-20260723-001344__jester_bow__4fe854585a",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "eb5d79a16ae55f67bd38ffda00a93cacaa603d2059f8fb70ebfc035e73182854",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "infinite_pierce"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "arrow",
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 14,
+              "damageClass": "ranged",
+              "knockback": 4,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 200
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon_0",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "arrow",
+              "delivery": "shoot",
+              "lifetimeTicks": 120,
+              "movement": "straight",
+              "pierce": -1,
+              "projectileFamily": "bolt",
+              "projectileImpact": "impact_magic",
+              "projectileShape": "arrow",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_magic",
+              "soundUseCatalogId": "bow_release",
+              "soundVolume": 0.8,
+              "speed": 10,
+              "spreadRadians": 0,
+              "weaponFamily": "bow"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "meteor_spacegun",
+      "caseId": "live20-fixed-reset-20260723-001344__meteor_spacegun__094b8e5331",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "d231a278642e30daaeb539d4f502206f9750951946d308aa4d5d4d3a598a0967",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_01",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 32,
+              "damageClass": "ranged",
+              "knockback": 4,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 22,
+              "useTimeTicks": 22,
+              "value": 7000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon_01",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 600,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileFamily": "bullet",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "speed": 10,
+              "spreadRadians": 0.05,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_01",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 3,
+              "onHit": "burst",
+              "secondaryDamageMultiplier": 0.5
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "swift_boots",
+      "caseId": "live20-fixed-reset-20260723-001344__swift_boots__83ae9fa4df",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "2919566d0d163ac4a55b83bb3c85b35faa00d5c40306d52fafc8dc11d33055e2",
+      "functions": [
+        "accessory_effect",
+        "set_alt_use_mode",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damageClass": "generic",
+              "knockback": 0,
+              "manaCost": 0,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "useAnimationTicks": 0,
+              "useTimeTicks": 0,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "accessory_effect",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "mobility",
+              "defense": 0,
+              "stats": {
+                "jumpSpeed": 1.5,
+                "maxRunSpeed": 2.0,
+                "movementSpeed": 0.15
+              }
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 600,
+              "mobilityMode": "blink_to_cursor",
+              "mode": "mobility",
+              "rangeTiles": 15,
+              "safeTileOnly": true
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260723-001344__woodwork_blade__ded6e22c19",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "6051db6e15bdebd3fee956b4650b328d71c23eda1719aaeb141a45b909a0b180",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_01",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 14,
+              "damageClass": "melee",
+              "knockback": 5,
+              "maxStack": 1,
+              "rarity": 0,
+              "resultKind": "weapon",
+              "useAnimationTicks": 22,
+              "useTimeTicks": 22,
+              "value": 150
+            }
+          },
+          {
+            "callId": "perform_melee_attack_01",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 15,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileShape": "body",
+              "rangeTiles": 3.5,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "speed": 12,
+              "spreadRadians": 0,
+              "useTimeTicks": 22,
+              "weaponFamily": "broadsword"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_01",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 2,
+              "count": 3,
+              "onHit": "burst"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles_01",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 8,
+              "durationTicks": 20,
+              "effect": "dust",
+              "material": "wood",
+              "scale": 1
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-001344"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260723-003840__astral_mirror__ffa62e2fa1",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "5f6661d306147980313b613fa79624f41bce6b8af9e3f1854866757bd038a506",
+      "functions": [
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 40,
+              "damageClass": "magic",
+              "manaCost": 25,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 52500
+            }
+          },
+          {
+            "callId": "cast_magic_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 3,
+              "projectileFamily": "magic_star",
+              "projectileImpact": "impact_star",
+              "projectileMotion": "straight",
+              "projectileShape": "star",
+              "projectileTrail": "magic",
+              "rangeTiles": 60,
+              "runtimeFamily": "cast",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "weaponFamily": "magic_gun"
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 300,
+              "mobilityMode": "blink_to_cursor",
+              "mode": "mobility",
+              "rangeTiles": 50,
+              "safeTileOnly": true
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-003840"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260723-003840__infernal_boomerang__44c7e31fc2",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "a30ce001b08a686db5d5dc4c47072c53e34dcb2231dc5057cb11138d294a1d18",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "elemental_infusion"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 28,
+              "damageClass": "melee",
+              "knockback": 8,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 70000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 600,
+              "movement": "returning_glaive",
+              "pierce": -1,
+              "projectileShape": "EnchantedBoomerang",
+              "rangeTiles": 40,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "melee_swing",
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 120,
+              "onHit": "burn"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 5,
+              "durationTicks": 20,
+              "effect": "flame",
+              "scale": 1.2
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-003840"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260723-003840__woodwork_blade__a911c185ba",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "7019f98d750aa2c1ac078d0d0ef35e2958d847d3cc007bfd54a69afa1ef24929",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "tool_capability"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 250
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 20,
+              "movement": "straight",
+              "pierce": 2,
+              "rangeTiles": 4,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "speed": 15,
+              "spreadRadians": 0,
+              "useTimeTicks": 25,
+              "weaponFamily": "hammer"
+            }
+          },
+          {
+            "callId": "tool_capability",
+            "fn": "tool_capability",
+            "params": {
+              "hammerPower": 50
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "burst",
+              "secondaryDamageMultiplier": 0.5
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-003840"
+    },
+    {
+      "case": "astral_minishark",
+      "caseId": "live20-fixed-reset-20260723-005231__astral_minishark__1db8101aef",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "38c3f7fbcdc9b8b0a29830aa0a4570d93a53476cba1a8dedb7e7ee0e6d9e70fc",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "star_projectile_pierce"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "bullet",
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 18,
+              "damageClass": "ranged",
+              "knockback": 2,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 10,
+              "useTimeTicks": 10,
+              "value": 50000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileFamily": "star",
+              "projectileShape": "star",
+              "rangeTiles": 80,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "firearm_light",
+              "speed": 14,
+              "spreadRadians": 0.05,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 3,
+              "onHit": "burst"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260723-005231__astral_mirror__f384ac59c4",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "56293d420d5bc626ebf933dab170f7f49a96718af5fb9dcc543aa871f06754a8",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_alt_use_mode",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "damage": 35,
+              "damageClass": "magic",
+              "manaCost": 20,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30
+            }
+          },
+          {
+            "callId": "cast_magic_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 120,
+              "movement": "gravity_arc",
+              "pierce": 2,
+              "projectileFamily": "magic_star",
+              "rangeTiles": 60,
+              "runtimeFamily": "cast",
+              "shotCount": 3,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "soundVolume": 0.8,
+              "speed": 10,
+              "spreadRadians": 0.4,
+              "weaponFamily": "staff"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 600,
+              "mobilityMode": "recall_home",
+              "mode": "mobility"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "chained_ball",
+      "caseId": "live20-fixed-reset-20260723-005231__chained_ball__093379b888",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "77e591fc89d45378e36d7192be0efada6ee6470b26c3dfe6e972b2b3c62e4d57",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "chain_reaction_on_hit"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 6.5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 35,
+              "useTimeTicks": 35,
+              "value": 120000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "flail",
+              "lifetimeTicks": 900,
+              "movement": "flail_tether",
+              "pierce": -1,
+              "rangeTiles": 20,
+              "runtimeFamily": "flail",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundUseCatalogId": "flail_chain",
+              "soundVolume": 0.8,
+              "speed": 14,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "chainCount": 3,
+              "debuffTime": 60,
+              "onHit": "chain",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "caseId": "live20-fixed-reset-20260723-005231__corrupt_yoyo__c78d14fb43",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "1983856b320ccc789b78b779404708b50be30d85f0c2fc2b7413072d1c514a02",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "persistent_projectile"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 4.5,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 65000
+            }
+          },
+          {
+            "callId": "melee_root",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "yoyo",
+              "lifetimeTicks": 600,
+              "movement": "yoyo_hover",
+              "pierce": -1,
+              "projectileMotion": "channelled yoyo hover",
+              "projectileShape": "yoyo_body",
+              "rangeTiles": 18,
+              "runtimeFamily": "yoyo",
+              "shotCount": 1,
+              "speed": 16,
+              "spreadRadians": 0,
+              "useTimeTicks": 25,
+              "weaponFamily": "yoyo"
+            }
+          },
+          {
+            "callId": "debuff_on_hit",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 120,
+              "onHit": "shadowflame"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "jungle_whip",
+      "caseId": "live20-fixed-reset-20260723-005231__jungle_whip__da3a420cb9",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "c71af53994b60b6cd56cd4c95775a4000995e3537dee531955ace29e5426756d",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 22,
+              "damageClass": "summon_melee_speed",
+              "knockback": 2.5,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "whip",
+              "lifetimeTicks": 30,
+              "movement": "whip_lash",
+              "pierce": -1,
+              "rangeTiles": 12,
+              "runtimeFamily": "whip",
+              "shotCount": 1,
+              "soundUseCatalogId": "whip_lash",
+              "soundVolume": 0.8,
+              "speed": 4,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 120,
+              "onHit": "spore_cloud",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 120
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "lens_finch_staff",
+      "caseId": "live20-fixed-reset-20260723-005231__lens_finch_staff__45b5f5123d",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "bdd783817e540c66712d899440a92516d1f1c95df407a9f121a6979dd444e547",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "sentry_conversion"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 12,
+              "damageClass": "summon",
+              "knockback": 3,
+              "manaCost": 15,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 60000
+            }
+          },
+          {
+            "callId": "deploy_sentry",
+            "fn": "shoot_projectile",
+            "params": {
+              "attackIntervalTicks": 40,
+              "delivery": "summon",
+              "effect": "none",
+              "helperLifetimeTicks": 600,
+              "lifetimeTicks": 600,
+              "movement": "straight",
+              "onHit": "none",
+              "pierce": 1,
+              "placement": "floating",
+              "projectileFamily": "sentry",
+              "projectileShape": "eye_beam_sentry",
+              "rangeTiles": 40,
+              "runtimeFamily": "sentry",
+              "secondaryLifetimeTicks": 30,
+              "secondaryProjectileShape": "eye_beam_shot",
+              "sentryAttackIntervalTicks": 40,
+              "sentryLifetimeTicks": 600,
+              "sentryPlacement": "floating",
+              "sentryTargetRangeTiles": 40,
+              "shotCount": 1,
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "targetRangeTiles": 40,
+              "weaponFamily": "sentry"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "obsidian_pickaxe",
+      "caseId": "live20-fixed-reset-20260723-005231__obsidian_pickaxe__fbd212c7be",
+      "category": "tool",
+      "expectedFinalSectionsFingerprint": "69bfdd3b9048e005ee95743fb9f9ecec86dbb9230a17d721acf626de1f39ef8f",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "tool_capability"
+      ],
+      "resultKind": "tool",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 18,
+              "damageClass": "melee",
+              "maxStack": 1,
+              "pickPower": 110,
+              "rarity": 3,
+              "resultKind": "tool",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 16,
+              "value": 35000
+            }
+          },
+          {
+            "callId": "tool_capability",
+            "fn": "tool_capability",
+            "params": {
+              "miningSpeedScale": 1.1,
+              "pickPower": 110
+            }
+          },
+          {
+            "callId": "perform_melee_attack",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 20,
+              "movement": "straight",
+              "pierce": 1,
+              "rangeTiles": 5,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "speed": 12,
+              "spreadRadians": 0,
+              "useTimeTicks": 16,
+              "weaponFamily": "pickaxe"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 120,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          }
+        ],
+        "resultKind": "tool"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "swift_boots",
+      "caseId": "live20-fixed-reset-20260723-005231__swift_boots__f63b201f83",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "103bec3d38f0569b8e4dc9ab8d484e0945294c3e8f4e948edd9bab46e33db7f4",
+      "functions": [
+        "accessory_effect",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 0,
+              "knockback": 0,
+              "manaCost": 0,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "useAnimationTicks": 0,
+              "useTimeTicks": 0,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "accessory_effect_01",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "mobility",
+              "defense": 0,
+              "stats": {
+                "lightColorName": "white",
+                "lightStrength": 0.2,
+                "movementSpeed": 0.05
+              }
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "torch_mining_helmet",
+      "caseId": "live20-fixed-reset-20260723-005231__torch_mining_helmet__bd8ba3e273",
+      "category": "armor",
+      "expectedFinalSectionsFingerprint": "4d662db0aba6322cc155138ca1131cc807bf1166d5519e308dcb28368af1d591",
+      "functions": [
+        "armor_effect",
+        "set_alt_use_mode",
+        "set_item_stats"
+      ],
+      "resultKind": "armor",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "armorSlot": "head",
+              "consumable": false,
+              "craftYield": 1,
+              "defense": 3,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "armor",
+              "value": 40050
+            }
+          },
+          {
+            "callId": "armor_effect",
+            "fn": "armor_effect",
+            "params": {
+              "archetype": "utility",
+              "armorSlot": "head",
+              "defense": 3,
+              "stats": {
+                "lightColorName": "yellow",
+                "lightStrength": 0.8
+              }
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 7200,
+              "durationTicks": 3600,
+              "generatedBuff": {
+                "durationTicks": 3600,
+                "emitLightStrength": 1.5,
+                "lightColorName": "yellow"
+              },
+              "mode": "generated_buff"
+            }
+          }
+        ],
+        "resultKind": "armor"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "vital_regen_band",
+      "caseId": "live20-fixed-reset-20260723-005231__vital_regen_band__6dc6e2c2a7",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "bd1f34c08635e8ad82d1a3ac4b0d5302af89ffa904c21096bd12c0e079f83e78",
+      "functions": [
+        "accessory_effect",
+        "set_alt_use_mode",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": false,
+              "damageClass": "generic",
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "value": 125000
+            }
+          },
+          {
+            "callId": "accessory_effect",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "utility",
+              "stats": {
+                "lifeRegen": 2,
+                "maxLife": 20
+              }
+            }
+          },
+          {
+            "callId": "set_alt_use_mode",
+            "fn": "set_alt_use_mode",
+            "params": {
+              "cooldownTicks": 3600,
+              "generatedBuff": {
+                "durationTicks": 300,
+                "lifeRegen": 10
+              },
+              "mode": "generated_buff"
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260723-005231__woodwork_blade__0b25c13197",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "55628eadb69ff36a745c80afddba055d572319920aaa4720ea3ea483faa7682d",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_01",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 18,
+              "damageClass": "melee",
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 500
+            }
+          },
+          {
+            "callId": "shoot_projectile_01",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 40,
+              "movement": "gravity_arc",
+              "pierce": 1,
+              "projectileShape": "WorkBench",
+              "rangeTiles": 15,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "speed": 10,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect_01",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 2,
+              "onHit": "burst"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles_01",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 10,
+              "durationTicks": 20,
+              "effect": "dust",
+              "material": "wood",
+              "scale": 1.0
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-005231"
+    },
+    {
+      "case": "astral_minishark",
+      "caseId": "live20-fixed-reset-20260723-014001__astral_minishark__573f325104",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "b4977d4ede5e5c221ff930e0e16f7d34434d815e1872e152a1f44d1f43651e25",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "ammo_consumption_override"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 14,
+              "damageClass": "ranged",
+              "knockback": 2,
+              "maxStack": 1,
+              "rarity": 3,
+              "resultKind": "weapon",
+              "useAnimationTicks": 10,
+              "useTimeTicks": 10,
+              "value": 450000
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileFamily": "star",
+              "rangeTiles": 80,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "firearm_light",
+              "soundVolume": 0.8,
+              "speed": 16,
+              "spreadRadians": 0.05,
+              "weaponFamily": "gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "onHit": "starburst",
+              "secondaryDamageMultiplier": 0.4,
+              "secondaryLifetimeTicks": 20
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-014001"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260723-014001__infernal_boomerang__cd8604f839",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "49cc6fc7f8928222ba6033e75f3613b88b82f23447a9910bc722bdcfe0d5ef5f",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "spawn_contact_particles"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 28,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 100000
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 600,
+              "movement": "returning_glaive",
+              "pierce": -1,
+              "rangeTiles": 30,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "melee_swing",
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 300,
+              "onHit": "burn"
+            }
+          },
+          {
+            "callId": "spawn_contact_particles",
+            "fn": "spawn_contact_particles",
+            "params": {
+              "amount": 10,
+              "durationTicks": 20,
+              "effect": "flame",
+              "scale": 1.0
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-014001"
+    },
+    {
+      "case": "meteor_spacegun",
+      "caseId": "live20-fixed-reset-20260723-014001__meteor_spacegun__93e72f396b",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "07dc147b7b97b3a5fb9f3b4faabe4eb32094fb808ec112b82bc2bb31ab132ebe",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "anomalyFlags": [
+          "high_impact_visuals"
+        ],
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 22,
+              "damageClass": "magic",
+              "manaCost": 8,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 16,
+              "useTimeTicks": 16,
+              "value": 30000
+            }
+          },
+          {
+            "callId": "cast_magic_weapon",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "cast",
+              "lifetimeTicks": 60,
+              "movement": "straight",
+              "pierce": 2,
+              "projectileFamily": "bolt",
+              "projectileShape": "bolt",
+              "rangeTiles": 60,
+              "runtimeFamily": "cast",
+              "shotCount": 1,
+              "soundUseCatalogId": "laser_heavy",
+              "speed": 12,
+              "spreadRadians": 0.05,
+              "weaponFamily": "magic_gun"
+            }
+          },
+          {
+            "callId": "apply_on_hit_effect",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "count": 3,
+              "debuffTime": 120,
+              "onHit": "overhead_barrage",
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-014001"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260723-014001__woodwork_blade__076687e2dc",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "415408fdd2b64585d2fde0f7ef6ba2c0b39db4f565b5035a6b5fbb38c542b81f",
+      "functions": [
+        "apply_player_effect_on_use",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 15,
+              "damageClass": "melee",
+              "knockback": 6,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 250
+            }
+          },
+          {
+            "callId": "melee_attack_0",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 15,
+              "movement": "straight",
+              "pierce": 2,
+              "rangeTiles": 4,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundUseCatalogId": "melee_heavy",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0,
+              "useTimeTicks": 25,
+              "weaponFamily": "hammer"
+            }
+          },
+          {
+            "callId": "buff_effect_0",
+            "fn": "apply_player_effect_on_use",
+            "params": {
+              "generatedBuff": {
+                "durationTicks": 600,
+                "miningSpeedMultiplier": 1.25
+              },
+              "note": "Grants Carpentry Focus buff"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-014001"
+    },
+    {
+      "case": "ropebound_spear",
+      "caseId": "live20-fixed-reset-20260723-015826__ropebound_spear__e4bb209e14",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "4990a79ecbc5d751d07ffe8e3312f101ef09b3c4f7aa5b302ec126931a28340e",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile",
+        "use_affordance"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "damage": 18,
+              "damageClass": "melee",
+              "knockback": 4,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 1500
+            }
+          },
+          {
+            "callId": "shoot_projectile",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 45,
+              "movement": "returning_glaive",
+              "pierce": 2,
+              "projectileShape": "spear",
+              "rangeTiles": 20,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_blade",
+              "soundPitch": 0.1,
+              "soundUseCatalogId": "melee_heavy",
+              "soundVolume": 0.8,
+              "speed": 14,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "use_affordance",
+            "fn": "use_affordance",
+            "params": {
+              "handPose": "throwing",
+              "heldVisibility": "show_item",
+              "itemScale": 1.1
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-015826"
+    },
+    {
+      "case": "swift_boots",
+      "caseId": "live20-fixed-reset-20260723-015826__swift_boots__a7b5ba3773",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "9ee997428240c407d7c9306b4b9da53093423837168ece4b8fc18d710874f7fa",
+      "functions": [
+        "accessory_effect",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": false,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "value": 75000
+            }
+          },
+          {
+            "callId": "accessory_effect",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "mobility",
+              "stats": {
+                "maxRunSpeed": 0.15,
+                "movementSpeed": 0.05
+              }
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-015826"
+    },
+    {
+      "case": "astral_minishark",
+      "caseId": "live20-fixed-reset-20260723-031309__astral_minishark__1034059158",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "b3dd17cf351976e401099379be150b003a1b431e23f6ca1a9fd85d87502b7ca7",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "ranged",
+              "knockback": 0,
+              "manaCost": 0,
+              "maxStack": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 8,
+              "useTimeTicks": 8,
+              "value": 400000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 300,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "gun",
+              "rangeTiles": 80,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundPitch": 0.2,
+              "soundUseCatalogId": "firearm_light",
+              "soundVolume": 0.8,
+              "speed": 10,
+              "spreadRadians": 0.05,
+              "weaponFamily": "gun"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "astral_mirror",
+      "caseId": "live20-fixed-reset-20260723-031309__astral_mirror__98b9efc628",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "a9d8fd255943abbe1fa7fd7ff7a21790b3824cc35bcb949b06d5dcb23d2654bf",
+      "functions": [
+        "mobility_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "consumable_weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 35,
+              "damageClass": "magic",
+              "knockback": 4,
+              "manaCost": 20,
+              "maxStack": 9999,
+              "rarity": 1,
+              "resultKind": "consumable_weapon",
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "value": 25000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "delayTicks": 0,
+              "delivery": "cast",
+              "lifetimeTicks": 120,
+              "movement": "gravity_arc",
+              "pierce": 1,
+              "rangeTiles": 60,
+              "runtimeFamily": "overhead_barrage",
+              "secondaryDamageMultiplier": 1.0,
+              "secondaryLifetimeTicks": 60,
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundUseCatalogId": "magic_star",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1
+            }
+          },
+          {
+            "callId": "call_2",
+            "fn": "mobility_effect",
+            "params": {
+              "cooldownTicks": 90,
+              "mode": "recall_home",
+              "rangeTiles": 0,
+              "safeTileOnly": true
+            }
+          }
+        ],
+        "resultKind": "consumable_weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "bee_boomstick",
+      "caseId": "live20-fixed-reset-20260723-031309__bee_boomstick__85a1ac35a7",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "5aff7d686e7143bc3f4e8645799378edcdb5fd4ec89a32dda4ee672471f12bc9",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "use_affordance"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "ammoFor": "bullet",
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 14,
+              "damageClass": "ranged",
+              "knockback": 5.75,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 40,
+              "useTimeTicks": 40,
+              "value": 100000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "bullet",
+              "delivery": "shoot",
+              "lifetimeTicks": 300,
+              "movement": "straight",
+              "pierce": 1,
+              "projectileFamily": "shotgun",
+              "rangeTiles": 40,
+              "runtimeFamily": "shoot",
+              "shotCount": 3,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundPitch": 0.1,
+              "soundPitchVariance": 0.1,
+              "soundUseCatalogId": "firearm_light",
+              "soundVolume": 0.8,
+              "speed": 5.35,
+              "spreadRadians": 0.2,
+              "weaponFamily": "shotgun"
+            }
+          },
+          {
+            "callId": "call_2",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 2,
+              "count": 2,
+              "debuffHint": "bee sting",
+              "debuffTime": 60,
+              "onHit": "mini_missiles",
+              "pullMode": "none",
+              "pullStrength": 0,
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 30
+            }
+          },
+          {
+            "callId": "call_3",
+            "fn": "use_affordance",
+            "params": {
+              "autoReuse": false,
+              "channelUse": false,
+              "handPose": "two_hand",
+              "heldVisibility": "show_item",
+              "holdoutOffsetX": 12,
+              "holdoutOffsetY": -4,
+              "initialOffsetPx": 0,
+              "itemScale": 1,
+              "releaseTiming": "instant",
+              "useTurn": true
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "chained_ball",
+      "caseId": "live20-fixed-reset-20260723-031309__chained_ball__df501036dc",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "7d3e4dfb1bb6a2edac2469e6150bba8d518805204b5d924fc7e6fd21c6556651",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile",
+        "use_affordance"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 15,
+              "damageClass": "melee",
+              "knockback": 5.5,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "flail",
+              "lifetimeTicks": 3600,
+              "movement": "flail_tether",
+              "pierce": -1,
+              "projectileShape": "body",
+              "rangeTiles": 25,
+              "runtimeFamily": "flail",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_heavy",
+              "soundPitch": 0.0,
+              "soundUseCatalogId": "flail_chain",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0
+            }
+          },
+          {
+            "callId": "call_2",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "shadowflame"
+            }
+          },
+          {
+            "callId": "call_3",
+            "fn": "use_affordance",
+            "params": {
+              "autoReuse": false,
+              "channelUse": true,
+              "handPose": "two_hand",
+              "heldVisibility": "show_projectile",
+              "itemScale": 1.0,
+              "useTurn": true
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "caseId": "live20-fixed-reset-20260723-031309__corrupt_yoyo__bf832805d5",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "d29ecfb2796118fa20c7172b2a59af0a0d40427d165b93023dc69219e81c95f9",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "damage": 22,
+              "damageClass": "melee",
+              "knockback": 4.5,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 30,
+              "value": 25000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "yoyo",
+              "extraUpdates": 0,
+              "lifetimeTicks": 1800,
+              "movement": "yoyo_hover",
+              "pierce": -1,
+              "rangeTiles": 20,
+              "runtimeFamily": "yoyo",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_blade",
+              "soundUseCatalogId": "yoyo_launch",
+              "speed": 16,
+              "spreadRadians": 0
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "gel_grenade",
+      "caseId": "live20-fixed-reset-20260723-031309__gel_grenade__287d17cebb",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "beb3405a2917a142c1ac2aec231e5b4b6e98d805a6a52dd39a2b6406c6d2736c",
+      "functions": [
+        "apply_on_hit_effect",
+        "consumption_behavior",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "consumable_weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 55,
+              "damageClass": "ranged",
+              "knockback": 6,
+              "maxStack": 9999,
+              "rarity": 1,
+              "resultKind": "consumable_weapon",
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "value": 100
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "empty",
+              "delivery": "shoot",
+              "lifetimeTicks": 3600,
+              "movement": "gravity_arc",
+              "pierce": -1,
+              "projectileFamily": "launcher",
+              "projectileImpact": "impact_slime",
+              "projectileMotion": "gravity_arc",
+              "projectileShape": "body",
+              "projectileTrail": "slime",
+              "rangeTiles": 40,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_explosion",
+              "soundPitch": 0.0,
+              "soundPitchVariance": 0.1,
+              "soundUseCatalogId": "throw_light",
+              "soundVolume": 0.8,
+              "speed": 6.0,
+              "spreadRadians": 0.0,
+              "useAnimationTicks": 45,
+              "useTimeTicks": 45,
+              "weaponFamily": "launcher"
+            }
+          },
+          {
+            "callId": "call_2",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "aoeRadiusTiles": 3,
+              "count": 3,
+              "debuffHint": "Slimed",
+              "debuffTime": 120,
+              "onHit": "spore_cloud",
+              "pullMode": "none",
+              "pullStrength": 0.0,
+              "secondaryDamageMultiplier": 0.5,
+              "secondaryLifetimeTicks": 60
+            }
+          },
+          {
+            "callId": "call_3",
+            "fn": "consumption_behavior",
+            "params": {
+              "consumeChancePercent": 100
+            }
+          }
+        ],
+        "resultKind": "consumable_weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "glowing_healing_potion",
+      "caseId": "live20-fixed-reset-20260723-031309__glowing_healing_potion__ba1413a865",
+      "category": "potion",
+      "expectedFinalSectionsFingerprint": "fbf7bef27eeaf917f06930f3f5c82e90c7f927f242ec97f620ccc95d749cb7a9",
+      "functions": [
+        "apply_player_effect_on_use",
+        "consumption_behavior",
+        "hold_item_effect",
+        "set_item_stats"
+      ],
+      "resultKind": "potion",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": true,
+              "craftYield": 1,
+              "damage": 0,
+              "damageClass": "generic",
+              "healLife": 150,
+              "healMana": 0,
+              "knockback": 0,
+              "manaCost": 0,
+              "maxStack": 9999,
+              "rarity": 1,
+              "resultKind": "potion",
+              "useAnimationTicks": 17,
+              "useTimeTicks": 17,
+              "value": 1500
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "apply_player_effect_on_use",
+            "params": {
+              "healLife": 150,
+              "healMana": 0,
+              "note": "Restores 150 health"
+            }
+          },
+          {
+            "callId": "call_2",
+            "fn": "hold_item_effect",
+            "params": {
+              "lightColorName": "cyan",
+              "lightStrength": 0.8
+            }
+          },
+          {
+            "callId": "call_3",
+            "fn": "consumption_behavior",
+            "params": {
+              "consumeChancePercent": 100
+            }
+          }
+        ],
+        "resultKind": "potion"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "infernal_boomerang",
+      "caseId": "live20-fixed-reset-20260723-031309__infernal_boomerang__0637db559e",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "85ff8f10245b6062e455c9502602b8a9e7031541ea2241545a0d782e2ae3ae90",
+      "functions": [
+        "apply_on_hit_effect",
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 32,
+              "damageClass": "melee",
+              "knockback": 8,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 70000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "throw",
+              "lifetimeTicks": 600,
+              "movement": "boomerang",
+              "pierce": -1,
+              "projectileShape": "body",
+              "rangeTiles": 40,
+              "runtimeFamily": "returning",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_fire",
+              "soundUseCatalogId": "returning_boomerang",
+              "soundVolume": 1.0,
+              "speed": 10,
+              "spreadRadians": 0,
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20
+            }
+          },
+          {
+            "callId": "call_2",
+            "fn": "apply_on_hit_effect",
+            "params": {
+              "debuffTime": 180,
+              "onHit": "burn"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "jester_bow",
+      "caseId": "live20-fixed-reset-20260723-031309__jester_bow__518c86b471",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "6e813417cf4f8586b9f49f73acc3e6cd97ff2ee5cfa8c517f3e8c0e8f79f39e1",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_1",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": true,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 14,
+              "damageClass": "ranged",
+              "knockback": 3,
+              "maxStack": 1,
+              "rarity": 1,
+              "resultKind": "weapon",
+              "useAnimationTicks": 25,
+              "useTimeTicks": 25,
+              "value": 200
+            }
+          },
+          {
+            "callId": "fire_ranged_weapon_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "ammoFor": "empty",
+              "delivery": "shoot",
+              "lifetimeTicks": 300,
+              "movement": "straight",
+              "pierce": -1,
+              "projectileFamily": "bow",
+              "projectileImpact": "impact_star",
+              "projectileMotion": "straight",
+              "projectileShape": "arrow",
+              "projectileTrail": "light",
+              "rangeTiles": 60,
+              "runtimeFamily": "shoot",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_star",
+              "soundPitch": 0.1,
+              "soundUseCatalogId": "bow_release",
+              "soundVolume": 0.8,
+              "speed": 8,
+              "spreadRadians": 0,
+              "weaponFamily": "bow"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "spider_sentry",
+      "caseId": "live20-fixed-reset-20260723-031309__spider_sentry__c35bf959ae",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "0b6c1a0a57ad71138ac1c56e6afd564ef027c523baa7ae9184f943af495ec0c2",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 35,
+              "damageClass": "summon",
+              "knockback": 5.0,
+              "manaCost": 12,
+              "maxStack": 1,
+              "rarity": 4,
+              "resultKind": "weapon",
+              "useAnimationTicks": 30,
+              "useTimeTicks": 30,
+              "value": 300000
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "attackIntervalTicks": 45,
+              "delivery": "summon",
+              "effect": "poison",
+              "helperLifetimeTicks": 3600,
+              "lifetimeTicks": 3600,
+              "movement": "straight",
+              "onHit": "poison",
+              "pierce": 1,
+              "placement": "grounded",
+              "projectileFamily": "sentry",
+              "projectileShape": "sentry",
+              "rangeTiles": 30,
+              "runtimeFamily": "sentry",
+              "secondaryLifetimeTicks": 60,
+              "secondaryProjectileShape": "bolt",
+              "sentryAttackIntervalTicks": 45,
+              "sentryLifetimeTicks": 3600,
+              "sentryPlacement": "grounded",
+              "sentryTargetRangeTiles": 30,
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_toxic",
+              "soundUseCatalogId": "summon_sentry",
+              "soundVolume": 0.8,
+              "speed": 12,
+              "spreadRadians": 0.1,
+              "targetRangeTiles": 30,
+              "weaponFamily": "sentry"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "woodwork_blade",
+      "caseId": "live20-fixed-reset-20260723-031309__woodwork_blade__fe61f0ca74",
+      "category": "weapon",
+      "expectedFinalSectionsFingerprint": "3032d3ccb181c6867ba10d931ef12e0f8647a9dd47ebb8dfa56aaf98347d8178",
+      "functions": [
+        "set_item_stats",
+        "shoot_projectile"
+      ],
+      "resultKind": "weapon",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "call_0",
+            "fn": "set_item_stats",
+            "params": {
+              "autoReuse": false,
+              "consumable": false,
+              "craftYield": 1,
+              "damage": 10,
+              "damageClass": "melee",
+              "knockback": 5,
+              "maxStack": 1,
+              "rarity": 0,
+              "resultKind": "weapon",
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "value": 150
+            }
+          },
+          {
+            "callId": "call_1",
+            "fn": "shoot_projectile",
+            "params": {
+              "delivery": "swing",
+              "lifetimeTicks": 20,
+              "movement": "straight",
+              "pierce": 0,
+              "projectileImpact": "impact",
+              "projectileMotion": "motion",
+              "projectileShape": "body",
+              "projectileTrail": "trail",
+              "rangeTiles": 4,
+              "runtimeFamily": "swing",
+              "shotCount": 1,
+              "soundImpactCatalogId": "impact_blade",
+              "soundUseCatalogId": "melee_swing",
+              "soundVolume": 0.8,
+              "speed": 6,
+              "spreadRadians": 0,
+              "useAnimationTicks": 20,
+              "useTimeTicks": 20,
+              "weaponFamily": "broadsword"
+            }
+          }
+        ],
+        "resultKind": "weapon"
+      },
+      "sourceRun": "live20-fixed-reset-20260723-031309"
+    },
+    {
+      "case": "swift_boots",
+      "caseId": "swift-boots-enabled-smoke-20260722-232734__swift_boots__60cb5b1eb5",
+      "category": "accessory",
+      "expectedFinalSectionsFingerprint": "0e95423069525185e72834fd93a6b6f5a31301eb04ce7f09f4335651bc9630cb",
+      "functions": [
+        "accessory_effect",
+        "set_item_stats"
+      ],
+      "resultKind": "accessory",
+      "runtimePlan": {
+        "engineCalls": [
+          {
+            "callId": "set_item_stats_0",
+            "fn": "set_item_stats",
+            "params": {
+              "consumable": false,
+              "damage": 0,
+              "maxStack": 1,
+              "rarity": 2,
+              "resultKind": "accessory",
+              "useAnimationTicks": 100,
+              "useTimeTicks": 100,
+              "value": 75000
+            }
+          },
+          {
+            "callId": "accessory_effect_0",
+            "fn": "accessory_effect",
+            "params": {
+              "archetype": "mobility",
+              "defense": 0,
+              "stats": {
+                "maxRunSpeed": 0.15,
+                "movementSpeed": 0.15
+              }
+            }
+          }
+        ],
+        "resultKind": "accessory"
+      },
+      "sourceRun": "swift-boots-enabled-smoke-20260722-232734"
+    }
+  ],
+  "coverage": {
+    "callShapeCount": 135,
+    "caseCount": 82,
+    "compile": {
+      "compiled": 82,
+      "errors": {},
+      "failed": 0
+    },
+    "functionCount": 16,
+    "functions": [
+      "accessory_effect",
+      "apply_on_hit_effect",
+      "apply_player_effect_on_use",
+      "armor_effect",
+      "consumption_behavior",
+      "hold_item_effect",
+      "mobility_effect",
+      "placeable_behavior",
+      "set_alt_use_mode",
+      "set_item_stats",
+      "shoot_projectile",
+      "spawn_contact_particles",
+      "spawn_secondary_projectiles",
+      "tool_capability",
+      "use_affordance",
+      "visual_effect_cue"
+    ],
+    "rawRowCount": 140,
+    "resultKinds": [
+      "accessory",
+      "armor",
+      "consumable_weapon",
+      "furniture",
+      "potion",
+      "tool",
+      "weapon"
+    ],
+    "uniquePlanCount": 138
+  },
+  "schema": "infini.runtime-contract-replay-corpus.v1",
+  "source": {
+    "dumpRoot": "artifacts/tool-runs",
+    "glob": "**/image_boundary.ndjson",
+    "selector": "function+callShape+resultKind cover; dedupe by canonical runtimePlan"
+  }
+}

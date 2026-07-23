@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2
+from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
 from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
 
@@ -35,8 +35,8 @@ def _contract_check_critical_numeric_and_sentinel_semantics_survive_prompt_compa
 
 
 def _contract_check_prompt_does_not_advertise_dead_or_false_primary_controls() -> None:
-    shoot = ENGINE_FN_CATALOG_V2["shoot_projectile"]["params"]
-    ranged = ENGINE_FN_CATALOG_V2["fire_ranged_weapon"]["params"]
+    shoot = ENGINE_FUNCTION_CATALOG["shoot_projectile"]["params"]
+    ranged = ENGINE_FUNCTION_CATALOG["fire_ranged_weapon"]["params"]
     assert "damageMultiplier" not in shoot
     assert "sentry" not in shoot["runtimeFamily"].split("|")
     assert "rocket" not in ranged["ammoFor"].split("|")

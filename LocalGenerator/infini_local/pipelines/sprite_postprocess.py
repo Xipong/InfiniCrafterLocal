@@ -4,9 +4,10 @@ import traceback
 from typing import Any
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageEnhance
 except Exception:
     Image = None
+    ImageEnhance = None
 
 from infini_local.core.config_bootstrap import SPRITE_DIR
 from infini_local.core.env_utils import env_int
@@ -60,6 +61,18 @@ from infini_local.pipelines.sprite_contracts import (
 
 # AGENT MAP: sprite selection, alpha cleanup, resize/bake, validation/retry notes,
 # and final postprocess orchestration.
+
+# Fixed corpus-validated final color restore.  Native downscaling averages away a
+# little luminance and chroma regardless of BOX/Bilinear/Bicubic/Lanczos.  A mild
+# gamma lift restores shadow/midtone color while protecting hot highlights better
+# than a raw brightness multiplier.  This is technical RGB compensation only:
+# alpha, geometry, filter choice and role semantics remain untouched.
+FINAL_COLOR_SATURATION = 1.08
+FINAL_COLOR_GAMMA = 0.96
+FINAL_COLOR_GAMMA_LUT = [
+    max(0, min(255, int(round(255.0 * ((value / 255.0) ** FINAL_COLOR_GAMMA)))))
+    for value in range(256)
+]
 
 def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> tuple[str, float]:
     if Image is None:
@@ -392,7 +405,21 @@ def bake_sprite_from_master(master: Any, target_size: int, role: str = "item") -
     # transparency. This is much less destructive than the old blanket magenta wipe.
     img = neutralize_chroma_edge_colors(img)
     img = cleanup_alpha(img)
+    img = restore_downscaled_sprite_color(img)
     return scrub_transparent_rgb(img)
+
+
+def restore_downscaled_sprite_color(img: Any) -> Any:
+    """Restore mild final-stage RGB loss without changing alpha or geometry."""
+    if Image is None or ImageEnhance is None:
+        return img
+    rgba = img.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    rgb = ImageEnhance.Color(rgba.convert("RGB")).enhance(FINAL_COLOR_SATURATION)
+    rgb = rgb.point(FINAL_COLOR_GAMMA_LUT * 3)
+    restored = rgb.convert("RGBA")
+    restored.putalpha(alpha)
+    return scrub_transparent_rgb(restored)
 
 def alpha_stats(img: Any) -> dict[str, Any]:
     if Image is None:
@@ -868,6 +895,7 @@ __all__ = [
     "resize_rgba_premultiplied",
     "prepare_sprite_master",
     "bake_sprite_from_master",
+    "restore_downscaled_sprite_color",
     "alpha_stats",
     "fit_to_canvas",
     "palette_cleanup",

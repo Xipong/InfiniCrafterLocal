@@ -1,13 +1,16 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Commands;
@@ -42,6 +45,7 @@ public sealed class InfiniDumpCommand : ModCommand
                         internalName = TryItemName(type),
                         sourceMod = item.ModItem?.Mod?.Name ?? "Terraria",
                         fullName = item.ModItem is not null ? item.ModItem.Mod.Name + "/" + item.ModItem.Name : "Terraria/" + TryItemName(type),
+                        tooltipLines = TryItemTooltipLines(item, type),
                         textureMetrics = TryItemTextureMetrics(type),
                         damage = item.damage,
                         damageClass = DamageClassName(item),
@@ -143,6 +147,39 @@ public sealed class InfiniDumpCommand : ModCommand
 
         Main.NewText($"InfiniCraft dump written: {itemPath}", 120, 220, 255);
         Main.NewText($"InfiniCraft dump written: {projectilePath}", 120, 220, 255);
+    }
+
+    private static string[] TryItemTooltipLines(Item item, int type)
+    {
+        try
+        {
+            string raw;
+            if (item.ModItem is not null)
+            {
+                raw = item.ModItem.Tooltip.Value;
+            }
+            else
+            {
+                string key = "ItemTooltip." + TryItemName(type);
+                raw = Language.GetTextValue(key);
+                if (raw == key) return Array.Empty<string>();
+            }
+
+            if (string.IsNullOrWhiteSpace(raw)) return Array.Empty<string>();
+            List<string> lines = new();
+            foreach (string sourceLine in raw.Replace("\r", "").Split('\n'))
+            {
+                string line = sourceLine.Trim();
+                if (line.Length == 0) continue;
+                lines.Add(line.Length <= 512 ? line : line[..512]);
+                if (lines.Count >= 12) break;
+            }
+            return lines.ToArray();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
     }
 
     private sealed class TextureMetrics

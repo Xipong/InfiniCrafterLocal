@@ -32,12 +32,12 @@ def _check_getinfini_is_read_only_client_catchup_not_world_rebroadcast_or_regist
     block = _registry_request_handler_block()
     command = _read(COMMAND_PATH)
     assert "PacketRequestGeneratedRegistryForceAssets" in block
-    assert "PrepareForNetworkSync(data, forceHostAssetMetadata: true)" in block
-    assert "packet.Send(whoAmI)" in block
+    assert "ReadKnownDefinitionHashes(reader)" in block
+    assert "ComputeDefinitionHash(data)" in block
+    assert "EnqueueDefinitionForClient(data, whoAmI, highPriority: false)" in block
     assert "NotifyNewItemCrafted" not in block
     assert "RegisterLocal(networkData" not in block
-    assert "requesting client already clears" in block
-    assert "read-only catch-up request" in block
+    assert "packet.Send(whoAmI)" not in block
     assert "ResetRetryState()" in command
     assert "RequestFullSyncFromServer(forceAssetRetry: true)" in command
 
@@ -57,7 +57,27 @@ def _check_targeted_generated_item_resync_by_id_exists() -> None:
     assert "_inFlightGeneratedItemHydration.Clear();" in registry
     assert "_lastGeneratedItemHydrationRequestTick.Clear();" in registry
     assert "TryGet(id, out var cachedData)" in registry
+    assert "NeedsRemoteDescriptorRefresh(cachedData, forceAssetRetry)" in registry
+    assert "ShouldStartSingleHydrationRequest(id, allowCachedDefinition: true)" in registry
+    assert "private bool ShouldStartSingleHydrationRequest(string id, bool allowCachedDefinition = false)" in registry
     assert "EnsureAssetsForData(cachedData, forceRetry: forceAssetRetry)" in registry
+    assert "NeedsDescriptorRefreshForAsset" in _read(ASSET_SYNC_PATH)
+    assets = _read(ASSET_SYNC_PATH)
+    assert "forceDefinitionRefresh = false" in registry
+    assert "forceDefinitionRefresh: true" in assets
+    assert "x.Value.ItemId, itemId" in assets
+    assert "ShouldStartServerAssetRequest" in assets
+    asset_request = assets[assets.index("public void HandleAssetRequestPacket"):assets.index("public void HandleAssetChunkPacket")]
+    assert asset_request.index("Main.netMode != NetmodeID.Server") < asset_request.index("reader.ReadByte()")
+    asset_chunk = assets[assets.index("public void HandleAssetChunkPacket"):assets.index("private bool TryReadVerifiedAssetBundle")]
+    assert asset_chunk.index("Main.netMode != NetmodeID.MultiplayerClient") < asset_chunk.index("reader.ReadByte()")
+    assert "Dictionary<string, string>? known = ReadKnownDefinitionHashes(reader);" in registry
+    request_start = registry.index("public void RequestOneFromServer")
+    request_end = registry.index("private static void SendSingleHydrationRequest", request_start)
+    cached_request = registry[request_start:request_end]
+    assert cached_request.index("SendSingleHydrationRequest(id, forceAssetRetry)") < cached_request.index(
+        "EnsureAssetsForData(cachedData, forceRetry: forceAssetRetry)"
+    )
     assert "GeneratedHydrationDebugSnapshot" in registry
     assert "CacheHitCount" in registry
     assert "CacheMissCount" in registry
@@ -76,7 +96,7 @@ def _check_runtime_sprite_cache_can_recover_after_asset_download() -> None:
     asset_sync = _read(ASSET_SYNC_PATH)
     assert "public void Invalidate(string? path)" in sprite_cache
     assert "_missingOrBad.Remove" in sprite_cache
-    assert "InfiniCrafterLocalMod.Sprites?.Invalidate(local);" in asset_sync
+    assert "Main.QueueMainThreadAction(() => InfiniCrafterLocalMod.Sprites?.Invalidate(local));" in asset_sync
 
 
 def _check_registry_and_asset_sync_are_current_world_scoped() -> None:
@@ -93,11 +113,21 @@ def _check_registry_and_asset_sync_are_current_world_scoped() -> None:
     assert "_byId.Values.Where(IsCurrentWorldData).ToArray()" in registry
     assert "&& IsCurrentWorldData(data)" in registry
     assert "if (!GeneratedItemRegistryService.IsCurrentWorldData(data)) return;" in asset_sync
-    assert asset_sync.count("GeneratedItemRegistryService.IsCurrentWorldData(data)") >= 2
+    assert "InfiniCrafterLocalMod.GeneratedItems.TryGet(itemId, out GeneratedItemData data)" in asset_sync
+    assert "BuildServerAssetDescriptors(data)" in asset_sync
     assert "GeneratedItemRegistryService.StampCurrentWorld(data);" in generator
     assert "clone.RecipeMeta.WorldId = SafeText(clone.RecipeMeta.WorldId, 32);" in model
     assert "WorldId = SafeText(source.RecipeMeta?.WorldId" in model
     assert "WorldScoped = source.RecipeMeta?.WorldScoped" in model
+    load_start = registry.index("private void LoadLocalCache()")
+    load_end = registry.index("private void PersistOne", load_start)
+    load_block = registry[load_start:load_end]
+    assert "CacheJsonTargetsCurrentWorld" in registry
+    assert "JsonDocument.Parse" in registry
+    assert 'TryGetProperty("RecipeMeta"' in registry
+    assert 'TryGetProperty("WorldId"' in registry
+    assert "if (!CacheJsonTargetsCurrentWorld(json))" in load_block
+    assert load_block.index("if (!CacheJsonTargetsCurrentWorld(json))") < load_block.index("GeneratedItemData.FromJson(json)")
     assert "public override void OnWorldLoad()" in world_system
     assert "ReloadLocalCacheForCurrentWorld" in world_system
     assert "public override void OnWorldUnload()" in world_system
@@ -143,6 +173,8 @@ def _check_projectile_remote_visual_sync_is_explicit_and_tolerates_asset_orderin
     assert "payload.Center = generated.Projectile.Center" in projectile
     assert "ClearPresentationSyncCaches" in projectile
     assert "DrawRuntimePlanFallback(px, center, dir, perp, c, len, width);" in projectile
+    assert "TryDrawBundledProjectilePlaceholder(center, lightColor)" in projectile
+    assert 'ModContent.Request<Texture2D>("InfiniCrafterLocal/Assets/GeneratedItem")' in projectile
     assert "remote peers can receive the projectile/VFX manifest before" in projectile
     assert "RequestProjectileAssetCatchupIfMissing(spritePath, _generatedItemId);" in projectile
     assert "MissingProjectileAssetRequestTicks" in projectile
@@ -306,6 +338,55 @@ def _check_asset_download_hydration_is_deduped_cached_and_counted() -> None:
     assert "DownloadStartedCount" in asset_sync
 
 
+def _check_runtime_asset_transport_is_runtime_only_hashed_atomic_and_paced() -> None:
+    asset_sync = _read(ASSET_SYNC_PATH)
+    registry = _read(REGISTRY_PATH)
+    model = _read(MODEL_PATH)
+    packet_ids = _read(ROOT / "ModSources/InfiniCrafterLocal/Common/InfiniNetPacketIds.cs")
+    mod_entry = _read(MOD_ENTRY_PATH)
+
+    files_start = asset_sync.index("public static IEnumerable<string> AssetFilesFromData")
+    files_end = asset_sync.index("public static string FileNameFromPath", files_start)
+    files_block = asset_sync[files_start:files_end]
+    assert "AssetManifestPath" not in files_block
+    assert "RecipeMeta.AssetFiles" not in files_block
+    assert '.EndsWith(".png"' in files_block
+
+    assert "ChunkPayloadBytes = 48 * 1024" in asset_sync
+    assert "ChunksPerSecondPerClient = 16" in asset_sync
+    assert "HttpDownloadConcurrency = 4" in asset_sync
+    assert "SemaphoreSlim" in asset_sync
+    assert "SHA256.HashData" in asset_sync
+    assert "IsCompletePng" in asset_sync
+    assert "ComputePngChunkCrc" in asset_sync
+    assert "ZLibStream" in asset_sync
+    assert "ValidatePngScanlines" in asset_sync
+    assert "LooksLikePng" not in asset_sync
+    assert 'local + ".part"' in asset_sync
+    assert "File.Move(partPath, local, overwrite: true)" in asset_sync
+    assert "MaxOutboundChunksPerClient = 512" in asset_sync
+    assert "AssetBundlePayloadVersion" in asset_sync
+    assert "EnqueueAssetBundles" in asset_sync
+    assert "TryReadVerifiedAssetBundle" in asset_sync
+    assert "if (expected is null" in asset_sync
+    assert "if (IsValidCachedAsset(local, descriptor))" in asset_sync
+    assert "Main.QueueMainThreadAction" in asset_sync
+    assert "RequestGeneratedAsset = 16" in packet_ids
+    assert "GeneratedAssetChunk = 17" in packet_ids
+    assert "InfiniNetPacketIds.RequestGeneratedAsset" in mod_entry
+    assert "InfiniNetPacketIds.GeneratedAssetChunk" in mod_entry
+    assert "UpdateTransfers()" in asset_sync
+
+    assert "DeflateStream" in registry
+    assert "CompressionLevel.Fastest" in registry
+    assert "WriteKnownDefinitionHashes" in registry
+    assert "ReadKnownDefinitionHashes" in registry
+    assert "EnqueueDefinitionForClient" in registry
+    assert "ComputeDefinitionHash" in registry
+    assert 'clone.Attack.VfxManifestJson = "";' in model
+    assert '.Where(file => file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))' in model
+
+
 def _check_cached_item_and_projectile_use_hot_path_performs_zero_http_downloads() -> None:
     item = _read(ITEM_PATH)
     projectile = _read(PROJECTILE_PATH)
@@ -320,9 +401,9 @@ def _check_cached_item_and_projectile_use_hot_path_performs_zero_http_downloads(
         assert forbidden not in send_extra
 
     queue = asset_sync[asset_sync.index("public void QueueDownloads"):asset_sync.index("private async Task DownloadOneAsync")]
-    cache_hit = queue.index("if (File.Exists(local))")
+    cache_hit = queue.index("if (IsValidCachedAsset(local, descriptor) && !forceRetry)")
     cache_hit_continue = queue.index("continue;", cache_hit)
-    schedule_download = queue.index("Task.Run", cache_hit)
+    schedule_download = queue.index("_ = DownloadOneAsync", cache_hit)
     assert cache_hit < cache_hit_continue < schedule_download
     assert "_inFlight.ContainsKey(key)" in asset_sync
     assert "MaxInFlightDownloads" in asset_sync
@@ -423,6 +504,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_generated_item_hooks_drive_registry_hydration_not_projectile_only',
     '_check_remote_compact_item_reference_resolves_before_ground_inventory_and_held_draw',
     '_check_asset_download_hydration_is_deduped_cached_and_counted',
+    '_check_runtime_asset_transport_is_runtime_only_hashed_atomic_and_paced',
     '_check_cached_item_and_projectile_use_hot_path_performs_zero_http_downloads',
     '_check_projectile_runtime_state_reset_is_single_helper_not_three_near_duplicate_blocks',
     '_check_csharp_client_does_not_cache_poll_after_structured_fatal_combine_failure',

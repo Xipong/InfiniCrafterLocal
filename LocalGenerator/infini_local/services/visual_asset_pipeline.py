@@ -245,7 +245,10 @@ def strip_conflicting_sprite_prompt_bits(text: str) -> str:
     if not text:
         return ""
     cleaned_parts = []
-    for raw_part in text.replace(";", ",").split(","):
+    # Treat background/UI wrapper sentences as local control text. A model often
+    # emits several positive subject sentences followed by one wrapper sentence;
+    # dropping the whole comma-free paragraph would erase the authored subject.
+    for raw_part in re.split(r"[,;]|\.(?=\s|$)", text):
         part = raw_part.strip()
         if not part:
             continue

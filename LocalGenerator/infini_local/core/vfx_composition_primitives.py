@@ -12,6 +12,23 @@ from infini_local.core.vfx_manifest_config import (
     VFX_RENDER_QUALITY,
 )
 
+VFX_CUE_EVENTS = frozenset({
+    "travel", "active", "tick", "hit", "kill", "expire",
+    "while_held", "while_equipped", "on_use", "on_alt_use",
+})
+VFX_CUE_RENDERERS = frozenset({
+    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
+    "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
+    "actorAfterimage", "impactRing", "impactSprite", "childMotes", "lightCue",
+    "soundCue",
+})
+VFX_CUE_CHANNELS = frozenset({
+    "motionTrail", "coreGlow", "ambientParticles", "impactShape",
+    "impactParticles", "decaySmoke", "light", "sound",
+})
+VFX_ITEM_LIVE_RENDERERS = frozenset({"orbitingMotes", "childMotes", "lightCue"})
+VFX_ITEM_BURST_RENDERERS = frozenset({"impactRing", "childMotes", "lightCue", "soundCue"})
+
 # AGENT MAP: shared VFX composition primitives. Owns deterministic jitter,
 # renderer/channel normalization, slot scoring/arbitration, effect magnitude,
 # emergency budgets, and particle-system address resolution.
@@ -156,7 +173,8 @@ def _vfx_event_stage(event: Any, renderer: Any = "") -> str:
     e = str(event or "").strip()
     if e == "hit": return "impact"
     if e in {"kill", "expire"}: return "decay"
-    if e == "active": return "active"
+    if e in {"active", "on_use", "on_alt_use"}: return "active"
+    if e in {"while_held", "while_equipped"}: return "loop"
     return "loop"
 
 
@@ -190,6 +208,57 @@ def _vfx_infer_channel(renderer: Any, event: Any = "") -> str:
     return "motionTrail"
 
 
+def vfx_cue_repair_combinations(
+    result_kind: Any,
+    current_values: dict[str, Any] | None = None,
+) -> tuple[dict[str, str], ...]:
+    """Project a bounded set of executable event/renderer/channel repair triples."""
+    kind = str(result_kind or "").strip().lower()
+    current = current_values or {}
+    event = str(current.get("event") or "").strip()
+    renderer = str(current.get("rendererKind") or "").strip()
+    equipment = kind in {"armor", "accessory"}
+    item_event_forbidden = kind in {"armor", "accessory", "ammo", "material"}
+    if event == "while_equipped" and equipment:
+        events = (event,)
+    elif event in {"while_held", "on_use", "on_alt_use"} and not item_event_forbidden:
+        events = (event,)
+    elif event in VFX_CUE_EVENTS and event not in {"while_held", "while_equipped", "on_use", "on_alt_use"}:
+        events = (event,)
+    elif equipment:
+        events = ("while_equipped",)
+    elif kind in {"ammo", "material"}:
+        events = ("travel", "hit", "kill", "expire")
+    else:
+        events = ("while_held", "on_use", "on_alt_use")
+
+    rows: list[dict[str, str]] = []
+    for candidate_event in events:
+        if candidate_event in {"while_held", "while_equipped"}:
+            renderers = sorted(VFX_ITEM_LIVE_RENDERERS)
+        elif candidate_event in {"on_use", "on_alt_use"}:
+            renderers = sorted(VFX_ITEM_BURST_RENDERERS)
+        elif renderer in VFX_CUE_RENDERERS:
+            renderers = [renderer]
+        else:
+            renderers = sorted(VFX_CUE_RENDERERS)
+        rows.extend({
+            "event": candidate_event,
+            "rendererKind": candidate_renderer,
+            "channel": _vfx_infer_channel(candidate_renderer, candidate_event),
+        } for candidate_renderer in renderers)
+    return tuple(rows)
+
+
+def vfx_cue_repair_values_allowed(result_kind: Any, values: dict[str, Any]) -> bool:
+    row = {
+        "event": str(values.get("event") or "").strip(),
+        "rendererKind": str(values.get("rendererKind") or "").strip(),
+        "channel": str(values.get("channel") or "").strip(),
+    }
+    return row in vfx_cue_repair_combinations(result_kind, row)
+
+
 def _vfx_infer_emission_mode(renderer: Any, event: Any = "") -> str:
     r = _vfx_renderer_kind(renderer)
     e = str(event or "").strip()
@@ -221,6 +290,8 @@ def _vfx_renderer_family(renderer: Any) -> str:
 
 def _vfx_event_group(event: Any) -> str:
     e = str(event or "").strip()
+    if e in {"while_held", "while_equipped"}: return "item_live"
+    if e in {"on_use", "on_alt_use"}: return "item_use"
     if e == "hit": return "hit"
     if e in {"kill", "expire"}: return "kill"
     return "live"

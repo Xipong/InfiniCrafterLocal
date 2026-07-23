@@ -22,6 +22,8 @@ public sealed partial class GeneratedItemData
     private static string AttackRuntimeFamily(AttackSpec? attack)
         => GeneratedRuntimeFamilyPolicy.Normalize(attack?.RuntimeFamily);
 
+    private const int NoPlacementType = -1;
+
     internal static (bool IsArmor, bool IsAccessory) ResolveEquipmentRoles(
         GameplaySpec gameplay,
         AccessorySpec accessory,
@@ -57,11 +59,36 @@ public sealed partial class GeneratedItemData
         item.noMelee = false;
         item.healLife = Math.Max(0, Gameplay.HealLife);
         item.healMana = Math.Max(0, Gameplay.HealMana);
+        item.potion = Gameplay.HealLife > 0;
         item.buffType = Gameplay.BuffCode;
         item.buffTime = Gameplay.BuffTime;
         item.pick = Math.Max(0, Gameplay.PickPower);
         item.axe = Math.Max(0, Gameplay.AxePower);
         item.hammer = Math.Max(0, Gameplay.HammerPower);
+        item.createTile = Gameplay.CreateTile;
+        item.createWall = Gameplay.CreateWall;
+        item.placeStyle = Math.Max(0, Gameplay.PlaceStyle);
+        bool placeable = item.createTile > NoPlacementType || item.createWall > NoPlacementType;
+        if (placeable)
+        {
+            item.damage = 0;
+            item.knockBack = 0f;
+            item.useStyle = ItemUseStyleID.Swing;
+            item.useTime = Math.Max(10, Gameplay.UseTime);
+            item.useAnimation = Math.Max(15, Gameplay.UseAnimation);
+            item.useTurn = true;
+            item.autoReuse = true;
+            item.noUseGraphic = false;
+            item.noMelee = true;
+            item.consumable = true;
+        }
+        bool reusableGear = Gameplay.Kind is "tool" or "armor" or "accessory"
+            || Gameplay.Kind == "weapon" && !Gameplay.Consumable;
+        if (reusableGear)
+        {
+            item.consumable = false;
+            item.maxStack = 1;
+        }
         (bool isArmor, bool isAccessory) = ResolveEquipmentRoles(Gameplay, Accessory, Armor);
         item.accessory = isAccessory;
         if (isArmor)

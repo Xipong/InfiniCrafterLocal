@@ -37,7 +37,7 @@ def _contract_check_runtime_api_sync_guard_reads_python_and_csharp_contracts():
         r'RuntimeApiCurrent = "([^"]+)"',
         "C# runtime API",
     )
-    assert py_runtime_api == cs_runtime_api == "v0.4.52"
+    assert py_runtime_api == cs_runtime_api == "v0.4.53"
 
 
 # One collected item per contract module; individual checks keep source order and tracebacks.

@@ -165,18 +165,20 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         float drawScale = Math.Clamp(baseScale * payloadScale, 0.45f, 1.85f);
         Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir);
         Vector2 holdOffset = HeldOffset(data, drawGravDir);
-        Vector2 itemLocation = PayloadItemLocation(payload);
+        Vector2 itemLocation = payload is not null ? PayloadItemLocation(payload) : drawInfo.ItemLocation;
         Vector2 position = (itemLocation.LengthSquared() > 4f ? itemLocation : player.itemLocation) - Main.screenPosition + holdOffset;
         if (position.LengthSquared() < 4f)
             position = player.MountedCenter - Main.screenPosition + new Vector2(drawDirection * 8f, -4f * drawGravDir) + holdOffset;
         position += RoleForwardOffset(role, drawDirection, drawGravDir, data?.Gameplay?.InitialOffsetPx ?? 0);
+        position = new Vector2((int)position.X, (int)position.Y);
 
         float rotation = payload is not null ? payload.ItemRotation : player.itemRotation;
         if (drawGravDir == -1f)
             rotation *= -1f;
 
         Color lightColor = Lighting.GetColor((int)(player.Center.X / 16f), (int)(player.Center.Y / 16f));
-        drawInfo.DrawDataCache.Add(new DrawData(texture, position, source, lightColor, rotation, origin, drawScale, effects, 0));
+        Color tint = held is not null && !held.IsAir ? held.GetAlpha(lightColor) : lightColor;
+        drawInfo.DrawDataCache.Add(new DrawData(texture, position, source, tint, rotation, origin, drawScale, effects, 0));
     }
 
     public static void MaybeBroadcastLocalHeldItem(Player player, ref int lastSyncTick, ref string lastSyncKey)

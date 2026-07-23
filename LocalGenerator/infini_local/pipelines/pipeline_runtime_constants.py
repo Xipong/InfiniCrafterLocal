@@ -74,7 +74,7 @@ LLM_INCLUDE_PROJECTILE_BEHAVIOR_DIGEST = env_bool("INFINI_LLM_PROJECTILE_BEHAVIO
 # are meaningful raw values, drop only null/empty strings/empty containers and duplicated
 # sourceItem echo that is already present in itemRaw.
 LLM_ITEM_RAW_KEYS = [
-    "type", "name", "internalName", "sourceMod", "fullName",
+    "type", "name", "internalName", "sourceMod", "fullName", "tooltipLines",
     "damage", "damageClass", "damageClassFullName", "knockback", "crit",
     "useStyle", "useTime", "useAnimation", "reuseDelay", "autoReuse", "channel", "noMelee", "noUseGraphic", "useTurn",
     "rare", "rarityDetails", "value", "maxStack", "consumable", "material", "accessory", "defense",

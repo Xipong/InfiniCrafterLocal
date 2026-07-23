@@ -187,7 +187,7 @@ public sealed class VfxSlotSpec
 {
     public string Event { get; set; } = "tick";
     public string EffectName { get; set; } = ""; // optional debug/style label; runtime must not parse this
-    public string EventGroup { get; set; } = "auto"; // live/hit/kill; canonical lifecycle group precompiled by Python.
+    public string EventGroup { get; set; } = "auto"; // live/hit/kill/item_live/item_use; canonical lifecycle group precompiled by Python.
     public string Stage { get; set; } = "loop"; // windup, active, impact, decay, loop
     public string Backend { get; set; } = "Auto"; // Baked, Realtime, Primitive, Sprite, Particle, Auto
     public string RendererKind { get; set; } = "projectileAfterimage"; // exact canonical renderer id.

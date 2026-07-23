@@ -114,6 +114,11 @@
       "title": "Childvfx",
       "type": "string"
     },
+    "equipOverlayPrompt": {
+      "default": "",
+      "title": "Equipoverlayprompt",
+      "type": "string"
+    },
     "fieldSpritePrompt": {
       "default": "",
       "title": "Fieldspriteprompt",

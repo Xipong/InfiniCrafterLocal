@@ -38,6 +38,10 @@ def _check_held_draw_does_not_double_apply_item_scale() -> None:
     assert "Do not multiply by Gameplay.ItemScale again" in src
     assert "baseScale * itemScale" not in src
     assert "Math.Clamp(baseScale * payloadScale, 0.45f, 1.85f)" in src
+    assert "payload is not null ? PayloadItemLocation(payload) : drawInfo.ItemLocation" in src
+    assert "position = new Vector2((int)position.X, (int)position.Y);" in src
+    assert "Color tint = held is not null && !held.IsAir ? held.GetAlpha(lightColor) : lightColor;" in src
+    assert "new DrawData(texture, position, source, tint," in src
 
 
 def _check_world_draw_anchors_scaled_sprite_bottom_and_clamps_visual_scales() -> None:
@@ -45,8 +49,13 @@ def _check_world_draw_anchors_scaled_sprite_bottom_and_clamps_visual_scales() ->
     assert "Math.Clamp(drawData.Visual.InventoryScale, 0.55f, 1.55f)" in src
     assert "Math.Clamp(drawData.Visual.WorldScale, 0.55f, 1.75f)" in src
     assert "GeneratedItemData drawData = ResolveRuntimeDataForPresentation();" in src
+    assert "float staticFramePixels = Math.Max(frame.Width, frame.Height);" in src
+    assert "float runtimeTexturePixels = Math.Max(texture.Width, texture.Height);" in src
+    assert "float runtimeFitScale = Math.Min(1f, staticFramePixels / Math.Max(1f, runtimeTexturePixels));" in src
+    assert "scale * runtimeFitScale" in src
     assert "drawOrigin.Y * finalScale" in src
     assert "drawOrigin.Y);" not in src
+    assert "spriteBatch.Draw(texture, drawPosition, source, alphaColor," in src
 
 
 def _check_melee_explosion_radius_no_longer_becomes_half_radius_hidden_reach() -> None:
@@ -66,6 +75,27 @@ def _check_projectile_runtime_size_is_sanitized_before_apply_and_hitbox_radius_i
     assert "_spec.ContactForgivenessPx" in src and "_spec.AoeDamageRadiusPx / 4" not in src
     assert "ExplosionRadius / 2" not in src
 
+
+def _check_generated_projectile_draw_preserves_authored_native_sprite_size() -> None:
+    visuals = (
+        ROOT
+        / "ModSources"
+        / "InfiniCrafterLocal"
+        / "Content"
+        / "Projectiles"
+        / "GeneratedProjectile.Visuals.cs"
+    ).read_text(encoding="utf-8")
+    start = visuals.index("private bool TryDrawGeneratedProjectileSprite")
+    end = visuals.index("private static void DrawRect", start)
+    draw = visuals[start:end]
+    assert "Vector2 drawPosition = center + new Vector2(0f, Projectile.gfxOffY);" in draw
+    assert "float drawScale = Math.Clamp(Projectile.scale, 0.35f, 2.5f);" in draw
+    assert "Projectile.GetAlpha(lightColor)" in draw
+    assert "targetPixels" not in draw
+    assert "basePixels" not in draw
+    assert "Projectile.localAI[1]" not in draw
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -78,7 +108,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_held_draw_does_not_double_apply_item_scale',
     '_check_world_draw_anchors_scaled_sprite_bottom_and_clamps_visual_scales',
     '_check_melee_explosion_radius_no_longer_becomes_half_radius_hidden_reach',
-    '_check_projectile_runtime_size_is_sanitized_before_apply_and_hitbox_radius_is_capped'
+    '_check_projectile_runtime_size_is_sanitized_before_apply_and_hitbox_radius_is_capped',
+    '_check_generated_projectile_draw_preserves_authored_native_sprite_size'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

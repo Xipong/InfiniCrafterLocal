@@ -17,10 +17,9 @@ using Terraria.ModLoader.IO;
 namespace InfiniCrafterLocal.Common.Players;
 
 // AGENT MAP: explicit two-slot station UI/inventory transfer logic.
-// In singleplayer the slots own one-item escrows. In multiplayer they are
-// non-owning selections until the server atomically reserves matching inventory
-// units. This keeps ingredient/refund semantics separate from generated authoring
-// and prevents vanilla cursor sync from racing a second client-side debit.
+// The slots own one-item escrows in every net mode. Multiplayer deposits move one
+// unit through Terraria's synchronized mouse slot 58 into matching server-owned
+// A/B state before crafting can start.
 public sealed partial class InfiniCraftPlayer
 {
 
@@ -33,7 +32,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryPutMouseItemIntoInput(int index)
     {
-        if (HasPendingCraft || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
+        if (HasPendingCraft || HasPendingStationEscrowOperation || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
             return false;
 
         ref Item target = ref InputSlot(index);
@@ -42,12 +41,26 @@ public sealed partial class InfiniCraftPlayer
 
         if (Main.netMode == NetmodeID.MultiplayerClient)
         {
-            // A multiplayer station input is a server-reserved selection, not a
-            // second inventory container. Keep the real stack on the cursor until
-            // the player returns it to vanilla inventory; the server consumes the
-            // authoritative slot only after RequestServerCraft arrives.
+            // Whether the item came from normal inventory or an open Void Bag,
+            // Terraria exposes it through mouse slot 58. Send that exact vanilla
+            // slot state first; the following mod packet atomically moves one unit
+            // into the server-owned A/B escrow.
+            if (Player.inventory.Length <= 58)
+                return false;
+            Player.inventory[58] = Main.mouseItem.Clone();
+            Player.inventory[58].NetStateChanged();
+            NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Player.whoAmI, 58);
             target = Main.mouseItem.Clone();
             target.stack = 1;
+            Main.mouseItem.stack--;
+            if (Main.mouseItem.stack <= 0)
+                Main.mouseItem.TurnToAir();
+            Player.inventory[58] = Main.mouseItem.Clone();
+            if (!SendStationEscrowRequest(StationEscrowAction.Deposit, index, target))
+            {
+                RestoreRejectedLocalDeposit(index);
+                return false;
+            }
             return true;
         }
 
@@ -61,7 +74,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryTakeInputToMouse(int index)
     {
-        if (HasPendingCraft || Main.mouseItem is null || !Main.mouseItem.IsAir)
+        if (HasPendingCraft || HasPendingStationEscrowOperation || Main.mouseItem is null || !Main.mouseItem.IsAir)
             return false;
 
         ref Item slot = ref InputSlot(index);
@@ -69,11 +82,7 @@ public sealed partial class InfiniCraftPlayer
             return false;
 
         if (Main.netMode == NetmodeID.MultiplayerClient)
-        {
-            // Non-owning selection: clearing it must not mint a second item.
-            slot.TurnToAir();
-            return true;
-        }
+            return SendStationEscrowRequest(StationEscrowAction.TakeToMouse, index, slot);
 
         Main.mouseItem = slot.Clone();
         slot.TurnToAir();
@@ -82,21 +91,24 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryClearInputToInventory(int index)
     {
-        if (HasPendingCraft)
+        if (HasPendingCraft || HasPendingStationEscrowOperation)
             return false;
         ref Item slot = ref InputSlot(index);
         if (slot is null || slot.IsAir)
             return false;
-        if (Main.netMode != NetmodeID.MultiplayerClient)
-            RefundOne(slot);
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+            return SendStationEscrowRequest(StationEscrowAction.ReturnOne, index, slot);
+        RefundOne(slot);
         slot.TurnToAir();
         return true;
     }
 
     public bool TryClearAllInputsToInventory()
     {
-        if (HasPendingCraft)
+        if (HasPendingCraft || HasPendingStationEscrowOperation)
             return false;
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+            return HasAnyInput && SendStationEscrowRequest(StationEscrowAction.ReturnAll, -1, NewAirItem());
         bool changed = false;
         if (TryClearInputToInventory(0)) changed = true;
         if (TryClearInputToInventory(1)) changed = true;
@@ -108,17 +120,8 @@ public sealed partial class InfiniCraftPlayer
         if (!CanStartStationCraft)
             return false;
 
-        if (Main.netMode == NetmodeID.MultiplayerClient && Main.mouseItem is not null && !Main.mouseItem.IsAir)
-        {
-            Main.NewText("InfiniCraft: сначала верните выбранный предмет с курсора в инвентарь", 255, 190, 90);
-            return false;
-        }
-
         Item a = InputA.Clone();
         Item b = InputB.Clone();
-
-        InputA.TurnToAir();
-        InputB.TurnToAir();
 
         // Multiplayer clients do not run LocalGenerator/LLM/Z-Image locally.
         // They only send a compact craft intent to the Terraria host/server; the
@@ -128,10 +131,25 @@ public sealed partial class InfiniCraftPlayer
         {
             if (!BeginRemoteServerCraft(a, b))
                 return false;
+            InputA.TurnToAir();
+            InputB.TurnToAir();
             return true;
         }
 
-        var request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(a, b, Player);
+        InputA.TurnToAir();
+        InputB.TurnToAir();
+
+        GeneratorClient.PreparedGenerationRequest request;
+        try
+        {
+            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(a, b, Player);
+        }
+        catch
+        {
+            RefundOne(a);
+            RefundOne(b);
+            return false;
+        }
 
         if (!BeginCraft(request, $"{request.ParentA} + {request.ParentB}"))
         {
@@ -151,16 +169,20 @@ public sealed partial class InfiniCraftPlayer
 
     public void ReturnStationInputs()
     {
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+        {
+            if (HasAnyInput && !HasPendingStationEscrowOperation)
+                SendStationEscrowRequest(StationEscrowAction.ReturnAll, -1, NewAirItem());
+            return;
+        }
         if (HasInputA)
         {
-            if (Main.netMode != NetmodeID.MultiplayerClient)
-                RefundOne(InputA);
+            RefundOne(InputA);
             InputA.TurnToAir();
         }
         if (HasInputB)
         {
-            if (Main.netMode != NetmodeID.MultiplayerClient)
-                RefundOne(InputB);
+            RefundOne(InputB);
             InputB.TurnToAir();
         }
     }

@@ -5,6 +5,12 @@ from typing import Any
 
 from infini_local.core.boundary_models import VisualKitBoundary
 from infini_local.core.item_identity_tools import generated_data_of, item_field, name_of
+from infini_local.core.visual_role_contracts import (
+    VISUAL_BAKED_ROLE_CONTRACTS,
+    VISUAL_BAKED_ROLE_PROMPT_FIELDS,
+    VISUAL_FORBIDDEN_BAKED_ASSET_KEYS,
+    visual_director_role_fields,
+)
 
 
 # AGENT MAP: pure Visual Director input/output contract.
@@ -50,37 +56,43 @@ _VISUAL_CONTEXT_KEYS = (
     "requiredAnchors",
 )
 
-_VISUAL_DIRECTOR_ROLE_FIELDS = {
-    "item": {
-        "promptField": "itemIconPrompt",
-        "assetDecision": (
-            "the item icon is always the required generated inventory/held sprite; "
-            "it is never represented by a bakedAssets.item entry"
-        ),
-        "requiredWhen": "always",
+_RUNTIME_VISUAL_ROLE_SPECS: dict[str, dict[str, dict[str, Any]]] = {
+    "sentry": {
+        "projectile": {
+            "allowedModes": ("baked_sprite",),
+            "promptField": "projectileSpritePrompt",
+            "promptRequiredModes": ("baked_sprite",),
+            "contextRule": "required baked_sprite for the stationary sentry root/body",
+            "error": "sentry projectile required: baked_sprite + projectileSpritePrompt",
+        },
+        "child": {
+            "allowedModes": ("baked_sprite",),
+            "promptField": "childSpritePrompt",
+            "promptRequiredModes": ("baked_sprite",),
+            "contextRule": "required baked_sprite for the fired sentry shot body",
+            "error": "sentry child required: baked_sprite + childSpritePrompt",
+        },
     },
-    "projectile": {
-        "promptField": "projectileSpritePrompt",
-        "assetModeField": "bakedAssets.projectile.mode",
-        "requiredWhen": "the role is visually relevant; a non-empty prompt is mandatory when mode=baked_sprite",
-    },
-    "impact": {
-        "promptField": "impactSpritePrompt",
-        "assetModeField": "bakedAssets.impact.mode",
-        "requiredWhen": "the role is visually relevant; a non-empty prompt is mandatory when mode=baked_sprite",
-    },
-    "child": {
-        "promptField": "childSpritePrompt",
-        "assetModeField": "bakedAssets.child.mode",
-        "requiredWhen": "the accepted runtime has a child role; a non-empty prompt is mandatory when mode=baked_sprite",
-    },
-    "field": {
-        "promptField": "fieldSpritePrompt",
-        "assetModeField": "bakedAssets.field.mode",
-        "requiredWhen": "the accepted runtime has a field role; a non-empty prompt is mandatory when mode=baked_sprite",
+    "summon": {
+        "projectile": {
+            "allowedModes": ("baked_sprite", "reuse_item_sprite"),
+            "promptField": "projectileSpritePrompt",
+            "promptRequiredModes": ("baked_sprite",),
+            "contextRule": (
+                "required explicit persistent summon body: baked_sprite + projectileSpritePrompt, "
+                "or reuse_item_sprite for an item-bodied summon"
+            ),
+            "error": (
+                "summon projectile body required: baked_sprite + projectileSpritePrompt "
+                "or reuse_item_sprite"
+            ),
+        },
     },
 }
 
+
+def _runtime_visual_role_specs(runtime_family: str) -> dict[str, dict[str, Any]]:
+    return _RUNTIME_VISUAL_ROLE_SPECS.get(runtime_family.strip().lower(), {})
 
 def _nonempty(value: Any) -> bool:
     if value in (None, "", [], {}):
@@ -165,9 +177,9 @@ def visual_director_output_contract() -> dict[str, Any]:
             'The root object must contain exactly one key named "visualKit". '
             "Never return itemIconPrompt, bakedAssets, or any other VisualKit field at the root."
         ),
-        "roleFields": copy.deepcopy(_VISUAL_DIRECTOR_ROLE_FIELDS),
-        "bakedAssetRoleKeys": ["projectile", "impact", "child", "field"],
-        "forbiddenBakedAssetKeys": ["item", "vfx"],
+        "roleFields": visual_director_role_fields(),
+        "bakedAssetRoleKeys": [contract.role for contract in VISUAL_BAKED_ROLE_CONTRACTS],
+        "forbiddenBakedAssetKeys": list(VISUAL_FORBIDDEN_BAKED_ASSET_KEYS),
         "fieldPlacementRule": (
             "Role prompt and VFX fields belong directly inside visualKit; "
             "never inside bakedAssets and never inside a vfx object. "
@@ -177,6 +189,26 @@ def visual_director_output_contract() -> dict[str, Any]:
             "A role prompt describes appearance but never requests a PNG by itself; "
             "only bakedAssets.<role>.mode=baked_sprite requests one."
         ),
+    }
+
+
+def _inline_local_schema_refs(value: Any, definitions: dict[str, Any]) -> Any:
+    if isinstance(value, list):
+        return [_inline_local_schema_refs(item, definitions) for item in value]
+    if not isinstance(value, dict):
+        return copy.deepcopy(value)
+    ref = value.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/$defs/"):
+        name = ref.rsplit("/", 1)[-1]
+        definition = definitions.get(name)
+        if not isinstance(definition, dict):
+            raise ValueError(f"visual provider schema references unknown definition: {name}")
+        merged = copy.deepcopy(definition)
+        merged.update({key: item for key, item in value.items() if key != "$ref"})
+        return _inline_local_schema_refs(merged, definitions)
+    return {
+        key: _inline_local_schema_refs(item, definitions)
+        for key, item in value.items()
     }
 
 
@@ -234,16 +266,20 @@ def visual_kit_response_schema() -> dict[str, Any]:
         kit_properties["bakedAssets"] = {
             "type": "object",
             "description": (
-                "bakedAssets may contain only projectile, impact, child, and field; never item. "
+                "bakedAssets may contain only projectile, impact, child, field, and equip_overlay; never item. "
                 "The required item sprite is described by itemIconPrompt outside bakedAssets. "
                 "Role prompt fields are direct visualKit properties and must never be nested in a bakedAssets role."
             ),
             "additionalProperties": False,
             "properties": {
-                "projectile": {"$ref": "#/$defs/BakedAssetBoundary"},
-                "impact": {"$ref": "#/$defs/EffectBakedAssetBoundary"},
-                "child": {"$ref": "#/$defs/EffectBakedAssetBoundary"},
-                "field": {"$ref": "#/$defs/EffectBakedAssetBoundary"},
+                contract.role: {
+                    "$ref": (
+                        "#/$defs/BakedAssetBoundary"
+                        if contract.reuse_item_sprite_allowed
+                        else "#/$defs/EffectBakedAssetBoundary"
+                    )
+                }
+                for contract in VISUAL_BAKED_ROLE_CONTRACTS
             },
         }
     schema: dict[str, Any] = {
@@ -256,9 +292,7 @@ def visual_kit_response_schema() -> dict[str, Any]:
         "properties": {"visualKit": kit_schema},
         "required": ["visualKit"],
     }
-    if defs:
-        schema["$defs"] = defs
-    return schema
+    return _inline_local_schema_refs(schema, defs)
 
 
 def visual_kit_usefulness_errors(kit: dict[str, Any]) -> list[str]:
@@ -270,7 +304,7 @@ def visual_kit_usefulness_errors(kit: dict[str, Any]) -> list[str]:
     meaningful_keys = (
         "styleGuide", "palette", "silhouetteSummary", "itemSilhouetteContract",
         "itemIconPrompt", "projectileSpritePrompt", "childSpritePrompt",
-        "impactSpritePrompt", "fieldSpritePrompt", "bakedAssets", "vfxIntent",
+        "impactSpritePrompt", "fieldSpritePrompt", "equipOverlayPrompt", "bakedAssets", "vfxIntent",
         "projectileVfx", "impactVfx", "childVfx", "fieldVfx", "vfxMaterialHints",
         "vfxAvoid", "animationPlan", "assetDependencies", "qualityNotes",
         "animeReference",
@@ -290,7 +324,8 @@ def visual_director_context(
     concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
     runtime_plan = data.get("runtimePlan") if isinstance(data.get("runtimePlan"), dict) else {}
     planner_visual_intent = runtime_plan.get("visualIntent") if isinstance(runtime_plan.get("visualIntent"), dict) else {}
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
+    attack_candidate = data.get("attack")
+    attack: dict[str, Any] = attack_candidate if isinstance(attack_candidate, dict) else {}
 
     attack_facts = {
         key: copy.deepcopy(attack.get(key))
@@ -304,6 +339,11 @@ def visual_director_context(
             "vfxFieldRadiusTiles", "vfxFieldTickRate",
         )
         if _nonempty(attack.get(key))
+    }
+    runtime_family = str(attack.get("runtimeFamily") or "").strip().lower()
+    runtime_role_obligations = {
+        role: str(spec["contextRule"])
+        for role, spec in _runtime_visual_role_specs(runtime_family).items()
     }
 
     final_identity: dict[str, Any] = {}
@@ -322,19 +362,12 @@ def visual_director_context(
         "plannerVisualIntent": _bounded_visual_value(planner_visual_intent),
         "runtimeAffordance": copy.deepcopy(data.get("runtimeAffordance")) if isinstance(data.get("runtimeAffordance"), dict) else {},
         "attackFacts": attack_facts,
+        "runtimeVisualRoleObligations": runtime_role_obligations,
         "parents": [
             compact_visual_parent_card(parent_a, canonical_a),
             compact_visual_parent_card(parent_b, canonical_b),
         ],
     }
-
-
-_ROLE_PROMPT_FIELDS = {
-    "projectile": "projectileSpritePrompt",
-    "impact": "impactSpritePrompt",
-    "child": "childSpritePrompt",
-    "field": "fieldSpritePrompt",
-}
 
 
 def visual_kit_projection_errors(kit: dict[str, Any], data: dict[str, Any]) -> list[str]:
@@ -343,13 +376,33 @@ def visual_kit_projection_errors(kit: dict[str, Any], data: dict[str, Any]) -> l
     This does not judge visual quality or parent fusion. It prevents an asset-mode
     decision from requesting a PNG when the same canonical VisualKit has no role prompt.
     """
-    del data  # Kept in the public seam for caller stability; legacy mirrors are not evidence.
-    baked = kit.get("bakedAssets") if isinstance(kit.get("bakedAssets"), dict) else {}
+    baked_raw = kit.get("bakedAssets")
+    baked: dict[str, Any] = baked_raw if isinstance(baked_raw, dict) else {}
     errors: list[str] = []
+    gameplay_raw = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_raw if isinstance(gameplay_raw, dict) else {}
+    result_kind = str(gameplay.get("kind") or data.get("category") or "").strip().lower()
+    if result_kind in {"armor", "accessory"}:
+        equip_raw = baked.get("equip_overlay")
+        equip_spec: dict[str, Any] = equip_raw if isinstance(equip_raw, dict) else {}
+        if str(equip_spec.get("mode") or "") != "baked_sprite" or not str(kit.get("equipOverlayPrompt") or "").strip():
+            errors.append("equip_overlay required for armor/accessory: baked_sprite + equipOverlayPrompt")
+    attack_raw = data.get("attack")
+    attack: dict[str, Any] = attack_raw if isinstance(attack_raw, dict) else {}
+    runtime_family = str(attack.get("runtimeFamily") or "").strip().lower()
+    for role, obligation in _runtime_visual_role_specs(runtime_family).items():
+        role_raw = baked.get(role)
+        role_spec: dict[str, Any] = role_raw if isinstance(role_raw, dict) else {}
+        mode = str(role_spec.get("mode") or "")
+        allowed_modes = tuple(obligation["allowedModes"])
+        prompt_required_modes = tuple(obligation["promptRequiredModes"])
+        prompt = str(kit.get(str(obligation["promptField"])) or "").strip()
+        if mode not in allowed_modes or (mode in prompt_required_modes and not prompt):
+            errors.append(str(obligation["error"]))
     for role, spec in baked.items():
         if not isinstance(spec, dict) or str(spec.get("mode") or "") != "baked_sprite":
             continue
-        prompt_field = _ROLE_PROMPT_FIELDS.get(role, "")
+        prompt_field = VISUAL_BAKED_ROLE_PROMPT_FIELDS.get(role, "")
         prompt = str(kit.get(prompt_field) or "").strip()
         if not prompt:
             errors.append(f"bakedAssets.{role}: mode=baked_sprite requires a role prompt")

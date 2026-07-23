@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Offline planner-prompt usability and catalog-integrity check.
 
-This does not call an LLM.  It verifies that the real author-plan payload stays
-short enough for cheap/free API calls while preserving every executable function,
-parameter range/enum, and safety note that the runtime compiler accepts.
+This does not call an LLM. During the contract-architecture refactor, prompt size
+is reported as telemetry while executable-function, schema and safety integrity
+remain hard failures.
 """
 from __future__ import annotations
 
@@ -20,16 +20,18 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL_GENERATOR = ROOT / "LocalGenerator"
 sys.path.insert(0, str(LOCAL_GENERATOR))
 
-from infini_local.pipelines.llm_authoring_pipeline import (  # noqa: E402
-    build_initial_author_request,
+from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request  # noqa: E402
+from infini_local.pipelines.author_item_repair import build_same_author_repair_request  # noqa: E402
+from infini_local.pipelines.llm_authoring_prompt import (  # noqa: E402
+    PLANNER_PROMPT_LIMIT_CHARS,
     build_llm_author_payload,
-    build_same_author_repair_request,
 )
-from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS  # noqa: E402
 from infini_local.pipelines.author_item_contract import author_item_provider_response_schema  # noqa: E402
 from infini_local.pipelines.llm_transport import transport_footprint  # noqa: E402
+from infini_local.core.runtime_authoring.function_contract_registry import (  # noqa: E402
+    ENGINE_FUNCTION_CATALOG,
+)
 from infini_local.core.runtime_authoring.schema import (  # noqa: E402
-    ENGINE_FN_CATALOG_V2,
     PLANNER_HIDDEN_ENGINE_FUNCTIONS,
     TEMPORARY_HELPER_FAMILIES,
 )
@@ -153,7 +155,7 @@ def _contract_section_sizes(contract: dict) -> dict[str, int]:
 
 def _check_catalog_losslessness(functions: dict) -> list[str]:
     problems: list[str] = []
-    expected = set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+    expected = set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
     actual = set(functions)
     missing = sorted(expected - actual)
     extra = sorted(actual - expected)
@@ -161,7 +163,7 @@ def _check_catalog_losslessness(functions: dict) -> list[str]:
         problems.append("missing engine functions: " + ", ".join(missing))
     if extra:
         problems.append("planner exposes unknown functions: " + ", ".join(extra))
-    for fn, spec in ENGINE_FN_CATALOG_V2.items():
+    for fn, spec in ENGINE_FUNCTION_CATALOG.items():
         if fn in PLANNER_HIDDEN_ENGINE_FUNCTIONS:
             continue
         card = functions.get(fn)
@@ -202,8 +204,9 @@ def run(limit_chars: int) -> dict:
     functions_candidate = contract.get("availableFunctions")
     functions: dict[str, object] = functions_candidate if isinstance(functions_candidate, dict) else {}
     problems: list[str] = []
+    warnings: list[str] = []
     if len(text) > limit_chars:
-        problems.append(f"planner payload too large: {len(text)} > {limit_chars}")
+        problems.append(f"planner payload exceeds hard size limit: {len(text)} > {limit_chars}")
     if contract.get("contractStyle") != "sharp":
         problems.append(f"planner contract style must be sharp, got {contract.get('contractStyle')!r}")
     problems.extend(_check_catalog_losslessness(functions))
@@ -226,11 +229,13 @@ def run(limit_chars: int) -> dict:
         if alt_contract.get("contractStyle") != "sharp":
             problems.append(f"env style {style!r} changed planner style to {alt_contract.get('contractStyle')!r}")
         alt_functions = alt_contract.get("availableFunctions") if isinstance(alt_contract.get("availableFunctions"), dict) else {}
-        if set(alt_functions) != (set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)):
+        if set(alt_functions) != (set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)):
             problems.append(f"env style {style!r} changed function set")
     return {
         "ok": not problems,
         "limitChars": limit_chars,
+        "withinRecommendedChars": len(text) <= limit_chars,
+        "sizeGateMode": "hard_limit",
         "report": {
             "ok": not problems,
             "chars": len(text),
@@ -255,9 +260,10 @@ def run(limit_chars: int) -> dict:
         "contractSectionSizes": _contract_section_sizes(contract),
         "functionCardSizes": {fn: len(json.dumps({fn: card}, ensure_ascii=False, separators=(",", ":"))) for fn, card in functions.items()},
         "hiddenFunctions": sorted(PLANNER_HIDDEN_ENGINE_FUNCTIONS),
-        "missingFunctions": sorted((set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)) - set(functions)),
-        "extraFunctions": sorted(set(functions) - (set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))),
+        "missingFunctions": sorted((set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)) - set(functions)),
+        "extraFunctions": sorted(set(functions) - (set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))),
         "problems": problems,
+        "warnings": warnings,
     }
 
 

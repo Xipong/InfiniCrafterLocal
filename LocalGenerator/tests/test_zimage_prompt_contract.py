@@ -61,8 +61,32 @@ def _check_zimage_prompt_uses_positive_contract_not_negative_channel(monkeypatch
     assert "subject:" not in prompt
     assert "purpose:" not in prompt
     assert "long rope/chain/tether is not part of the png" not in prompt
-    assert "preserve the authored projectile body or multipart arrangement" in prompt
+    assert "preserve every explicitly authored projectile body, beam, tether, and trail" in prompt
+    assert "without adding beam" not in prompt
     assert len(prompt) <= 1800
+
+
+def _check_disabled_backend_keeps_the_real_semantic_prompt_boundary(monkeypatch) -> None:
+    # The no-image live probe disables calls in visual_sprite_generation, while
+    # prompt construction still sees the configured semantic FLUX backend.
+    monkeypatch.setattr(VISUAL, "IMAGE_BACKEND", "sdcpp")
+    monkeypatch.setattr(VISUAL, "ZIMAGE_PROMPT_CONTRACT", "0")
+    monkeypatch.setattr(VISUAL, "SDCPP_MODEL", "C:/models/flux.2-klein-4b.gguf")
+    monkeypatch.setattr(VISUAL, "SDCPP_SERVER_COMMAND_TEMPLATE", "")
+    monkeypatch.setattr(VISUAL, "SDCPP_SERVER_EXTRA_ARGS", "")
+    monkeypatch.delenv("INFINI_ZIMAGE_PROMPT_LIMIT", raising=False)
+    data = _sample_data()
+    data["visual"]["styleGuide"] = "ornate silver and cyan pixel clusters " * 20
+    long_subject = (
+        "one luminous five-pointed falling star with a white core, cyan tips, "
+        "and a short downward trail of readable pixel sparks; "
+    ) * 18
+
+    prompt = normalize_asset_prompt(data, "projectile", long_subject, 32)
+
+    assert len(prompt) <= 1800
+    assert "projectile" in prompt.lower()
+    assert "#ff00ff" in prompt.lower()
 
 
 
@@ -148,6 +172,23 @@ def _check_visual_director_background_wrapper_keeps_post_colon_subject() -> None
     assert "bright white edge glints" in cleaned
     assert "background" not in cleaned
     assert "#ff00ff" not in cleaned
+
+
+def _check_visual_director_trailing_wrapper_sentence_keeps_positive_subject() -> None:
+    raw = (
+        "A single compact volcanic tool rendered in sharp pixel art. "
+        "Its broad asymmetrical head is securely fused to a sturdy straight handle. "
+        "Dark volcanic glass surrounds glowing orange veins carved into recessed grooves. "
+        "The background is flat solid #ff00ff with no extra scenes or UI elements."
+    )
+    cleaned = strip_conflicting_sprite_prompt_bits(raw).lower()
+
+    assert "single compact volcanic tool" in cleaned
+    assert "asymmetrical head is securely fused" in cleaned
+    assert "glowing orange veins" in cleaned
+    assert "background" not in cleaned
+    assert "#ff00ff" not in cleaned
+    assert "ui elements" not in cleaned
 
 
 def _check_zimage_final_prompt_preserves_visual_director_subject_after_wrapper(monkeypatch) -> None:
@@ -348,7 +389,7 @@ def _check_thrust_projectile_prompt_does_not_force_spear_category(monkeypatch) -
     assert "forcing a spear or polearm silhouette" not in prompt
     assert "held spear/lance" not in prompt
     assert "straight polearm body" not in prompt
-    assert "projectile body or multipart arrangement" in prompt
+    assert "authored projectile geometry" in prompt
 
 
 def _check_item_prompt_does_not_append_generated_name_as_flux_meta_text(monkeypatch) -> None:
@@ -606,11 +647,13 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_zimage_prompt_uses_positive_contract_not_negative_channel',
+    '_check_disabled_backend_keeps_the_real_semantic_prompt_boundary',
     '_check_zimage_tether_guard_does_not_rewrite_plain_item_icons',
     '_check_sdcpp_zimage_payload_clears_negative_prompt',
     '_check_zimage_prompt_matches_pe_final_description_style',
     '_check_zimage_prompt_contract_can_be_disabled_or_forced',
     '_check_visual_director_background_wrapper_keeps_post_colon_subject',
+    '_check_visual_director_trailing_wrapper_sentence_keeps_positive_subject',
     '_check_zimage_final_prompt_preserves_visual_director_subject_after_wrapper',
     '_check_zimage_palette_filters_chroma_key_but_keeps_background_clause',
     '_check_zimage_tether_guard_is_not_duplicated',

@@ -1,9 +1,25 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from infini_local.core.runtime_authoring import compile_runtime_plan_to_genome_result
+from infini_local.core.runtime_authoring.final_projection import (
+    attach_runtime_final_evidence,
+    compile_runtime_plan_to_final_result,
+)
 from infini_local.core.runtime_authoring.reports import compiled_fields_for_authored_param
-from infini_local.pipelines import combine_gameplay
-from infini_local.core.runtime_contracts import validate_structural_final_wire_contract
+from infini_local.core.boundary_models import validate_executable_item_boundary
+from infini_local.core.runtime_contracts import (
+    apply_structural_final_wire_contract,
+    structural_final_wire_report,
+)
+
+
+def _attach_evidence(output: dict, authored: dict) -> None:
+    attach_runtime_final_evidence(
+        output,
+        compile_runtime_plan_to_final_result(deepcopy(authored)),
+    )
 
 
 def _contract_check_authored_runtime_fields_have_precise_provenance() -> None:
@@ -112,9 +128,7 @@ def _contract_check_final_wire_receipts_are_compiler_owned_per_authored_param() 
         "gameplay": {"kind": "weapon", "damage": 21, "useTime": 17},
         "attack": {},
     }
-    combine_gameplay._attach_compiler_final_wire_receipts(
-        output, authored, {}, {}, {}, {},
-    )
+    _attach_evidence(output, authored)
     receipts = output["runtimeContract"]["finalWireReceipts"]
     assert {
         "callId": "stats",
@@ -134,21 +148,27 @@ def _contract_check_final_wire_receipts_are_compiler_owned_per_authored_param() 
         "compiledValue": 17,
         "status": "active",
     } in receipts
-    final_report = validate_structural_final_wire_contract(output)
+    before_report = deepcopy(output)
+    final_report = structural_final_wire_report(output)
+    assert output == before_report
     assert final_report["ok"] is True
-    assert output["tooltip"] == "Deals direct magic damage."
+    assert set(final_report["componentGates"]) == {
+        "receiptShape", "sourceIdentity", "finalProjection", "mechanic",
+    }
+    assert "tooltip" not in output
+    apply_structural_final_wire_contract(output, final_report)
+    assert output["tooltip"] == "Executable: weapon runtime."
+    assert output["tooltip"] != authored["concept"]["coreMechanic"]
 
     dropped = {**authored, "gameplay": {}, "attack": {}}
-    combine_gameplay._attach_compiler_final_wire_receipts(
-        dropped, authored, {}, {}, {}, {},
-    )
+    _attach_evidence(dropped, authored)
     assert any(
         row["callId"] == "stats"
         and row["authoredParam"] == "damage"
-        and row["status"] == "dropped"
+        and row["status"] == "active"
         for row in dropped["runtimeContract"]["finalWireReceipts"]
     )
-    dropped_report = validate_structural_final_wire_contract(dropped)
+    dropped_report = structural_final_wire_report(dropped)
     assert dropped_report["ok"] is False
     assert any(
         row["kind"] == "compiler_provenance_dropped"
@@ -162,10 +182,8 @@ def _contract_check_final_wire_receipts_are_compiler_owned_per_authored_param() 
         "gameplay": {"kind": "weapon", "damage": 12, "useTime": 17},
         "attack": {},
     }
-    combine_gameplay._attach_compiler_final_wire_receipts(
-        misprojected, authored, {}, {}, {}, {},
-    )
-    misprojected_report = validate_structural_final_wire_contract(misprojected)
+    _attach_evidence(misprojected, authored)
+    misprojected_report = structural_final_wire_report(misprojected)
     assert misprojected_report["ok"] is False
     assert any(
         row["kind"] == "compiler_provenance_mismatched"
@@ -195,9 +213,7 @@ def _contract_check_final_wire_receipts_are_compiler_owned_per_authored_param() 
         ]},
         "attack": {},
     }
-    combine_gameplay._attach_compiler_final_wire_receipts(
-        list_output, list_authored, {}, {}, {}, {},
-    )
+    _attach_evidence(list_output, list_authored)
     list_receipt = next(
         row
         for row in list_output["runtimeContract"]["finalWireReceipts"]
@@ -205,7 +221,55 @@ def _contract_check_final_wire_receipts_are_compiler_owned_per_authored_param() 
     )
     assert list_receipt["finalPath"] == "gameplay.extraBuffs"
     assert list_receipt["compiledValue"] == list_output["gameplay"]["extraBuffs"]
-    assert validate_structural_final_wire_contract(list_output)["ok"] is True
+    assert structural_final_wire_report(list_output)["ok"] is True
+
+
+def _contract_check_dormant_equipment_sections_publish_explicit_enabled_sentinel() -> None:
+    authored = {
+        "category": "accessory",
+        "runtimePlan": {
+            "resultKind": "accessory",
+            "engineCalls": [
+                {
+                    "callId": "base_stats",
+                    "fn": "set_item_stats",
+                    "params": {
+                        "resultKind": "accessory",
+                        "damageClass": "generic",
+                        "damage": 0,
+                        "useTimeTicks": 0,
+                        "useAnimationTicks": 0,
+                        "maxStack": 1,
+                        "defense": 0,
+                    },
+                },
+                {
+                    "callId": "mobility",
+                    "fn": "accessory_effect",
+                    "params": {
+                        "archetype": "mobility",
+                        "stats": {"movementSpeed": 0.15},
+                    },
+                },
+            ],
+        },
+    }
+
+    result = compile_runtime_plan_to_final_result(deepcopy(authored))
+    sections = result["finalSections"]
+    assert sections["accessory"]["enabled"] is True
+    assert sections["armor"] == {"defense": 0, "enabled": False}
+    assert any(
+        row["callId"] == "base_stats"
+        and row["authoredParam"] == "defense"
+        and row["finalPath"] == "armor.defense"
+        and row["status"] == "active"
+        for row in result["finalWireReceipts"]
+    )
+
+    wire = deepcopy(sections)
+    wire["attack"] = {"enabled": False}
+    validate_executable_item_boundary(wire)
 
 
 # One collected item per contract module; individual checks keep source order and tracebacks.
@@ -220,5 +284,6 @@ def test_runtime_provenance_contract_module_contract(request):
             '_contract_check_defaults_are_distinguishable_from_authored_fields',
             '_contract_check_tool_and_accessory_params_publish_exact_final_wire_fields',
             '_contract_check_final_wire_receipts_are_compiler_owned_per_authored_param',
+            '_contract_check_dormant_equipment_sections_publish_explicit_enabled_sentinel',
         ),
     )

@@ -31,6 +31,7 @@ WORLD_RECIPES_DIR.mkdir(parents=True, exist_ok=True)
 # Public URL other Terraria clients should use to fetch generated assets from this generator.
 # Leave empty to let the tModLoader host advertise its own configured/guessed URL.
 ASSET_PUBLIC_BASE_URL = env_str("INFINI_ASSET_PUBLIC_BASE_URL", "").rstrip("/")
+ASSET_TRANSPORT = "http" if env_str("INFINI_MP_ASSET_TRANSPORT", "native").strip().lower() == "http" else "native"
 TERRARIA_PORT = env_str("INFINI_TERRARIA_PORT", "7777") or "7777"
 
 __all__ = [
@@ -43,5 +44,6 @@ __all__ = [
     "SPRITE_DIR",
     "WORLD_RECIPES_DIR",
     "ASSET_PUBLIC_BASE_URL",
+    "ASSET_TRANSPORT",
     "TERRARIA_PORT",
 ]

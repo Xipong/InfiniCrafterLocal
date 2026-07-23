@@ -110,8 +110,59 @@ def _log_vfx_fallback_policy(
     })
 
 
-def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], recipe_key_value: str, parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None) -> dict[str, Any] | None:
+_VFX_PROJECTILE_EVENTS = frozenset({"travel", "active", "tick", "hit", "kill", "expire"})
+
+
+def _vfx_executable_events(data: dict[str, Any]) -> set[str]:
+    gameplay_raw = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_raw if isinstance(gameplay_raw, dict) else {}
+    attack_raw = data.get("attack")
+    attack: dict[str, Any] = attack_raw if isinstance(attack_raw, dict) else {}
+    result_kind = str(gameplay.get("kind") or data.get("category") or "").strip().lower()
+    if result_kind in {"armor", "accessory"}:
+        allowed = {"while_equipped"}
+    else:
+        allowed = {"while_held", "on_use"}
+        alt_use_mode = str(gameplay.get("altUseMode") or "").strip().lower()
+        if alt_use_mode not in {"", "none"}:
+            allowed.add("on_alt_use")
+
+    runtime_family = str(attack.get("runtimeFamily") or "").strip().lower()
+    if bool(attack.get("enabled")) and runtime_family not in {"none", "swing"}:
+        allowed.update(_VFX_PROJECTILE_EVENTS)
+    return allowed
+
+
+def _vfx_director_runtime_event_errors(raw: Any, data: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
+        return []
+    allowed = sorted(_vfx_executable_events(data))
+    errors: list[dict[str, Any]] = []
+    for index, slot in enumerate(raw["slots"]):
+        if not isinstance(slot, dict):
+            continue
+        event = str(slot.get("event") or "").strip()
+        if event and event not in allowed:
+            errors.append({
+                "path": f"slots[{index}].event",
+                "error": "event_not_executable",
+                "actual": event,
+                "allowed": allowed,
+            })
+    return errors
+
+
+def _vfx_director_item_validation_report(raw: Any, data: dict[str, Any]) -> dict[str, Any]:
     report = _vfx_director_validation_report(raw)
+    runtime_errors = _vfx_director_runtime_event_errors(raw, data)
+    if runtime_errors:
+        report["errors"] = [*report.get("errors", []), *runtime_errors]
+        report["valid"] = False
+    return report
+
+
+def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], recipe_key_value: str, parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    report = _vfx_director_item_validation_report(raw, data)
     if not report.get("valid"):
         return None
     if not isinstance(raw, dict):
@@ -285,6 +336,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
         return None
     constraints = {
         "attackPattern": (child_item.get("attack") or {}).get("pattern") if isinstance(child_item.get("attack"), dict) else "basic",
+        "allowedEvents": sorted(_vfx_executable_events(child_item)),
         "noBakedCommands": True,
         "slots": [0, max(2, VFX_LLM_DIRECTOR_MAX_SLOTS)],
     }
@@ -307,7 +359,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
             debug[_reason_key()] = reason
             debug["vfxLlmDirectorLastFallbackReason"] = reason
 
-        report = _vfx_director_validation_report(raw)
+        report = _vfx_director_item_validation_report(raw, child_item)
         debug["vfxLlmDirectorValidationErrorCount"] = len(report.get("errors", []))
         debug["vfxLlmDirectorValidationFields"] = _vfx_director_error_fields(report)
         repair_budget = min(1, max(0, VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS))
@@ -350,7 +402,7 @@ def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, An
                 repair_raw = llm_client("", {}, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT, messages=repair_messages)
             else:
                 repair_raw = llm_client(system, repair_payload, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT)
-            last_report = _vfx_director_validation_report(repair_raw)
+            last_report = _vfx_director_item_validation_report(repair_raw, child_item)
             debug["vfxLlmDirectorRepairLastErrorCount"] = len(last_report.get("errors", []))
             debug["vfxLlmDirectorRepairLastFields"] = _vfx_director_error_fields(last_report)
             if last_report.get("valid"):

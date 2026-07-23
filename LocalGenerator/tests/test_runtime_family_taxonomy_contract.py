@@ -35,7 +35,7 @@ def _contract_check_runtime_authoring_package_exposes_only_public_api() -> None:
             exported = {item.value for item in node.value.elts if isinstance(item, ast.Constant) and isinstance(item.value, str)}
 
     assert exported == {
-        "ENGINE_FN_CATALOG_V2",
+        "ENGINE_FUNCTION_CATALOG",
         "ENGINE_RUNTIME_API_VERSION",
         "all_calls",
         "compile_runtime_plan_to_genome_patch",

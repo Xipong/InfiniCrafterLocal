@@ -15,7 +15,10 @@ from infini_local.core.vfx_composition_primitives import (
     _vfx_available_roles,
     _vfx_words,
 )
-from infini_local.core.vfx_director_contract import vfx_director_surface
+from infini_local.core.vfx_director_contract import (
+    vfx_director_required_json_shape,
+    vfx_director_surface,
+)
 from infini_local.core.vfx_manifest_config import (
     VFX_EFFECT_NAME_BANK_MAX_CARDS,
     VFX_EFFECT_NAME_BANK_MAX_NAMES,
@@ -37,6 +40,7 @@ VFX_DIRECTOR_SYSTEM = (
     "This request is self-contained; use only its accepted facts and VisualAssetKit. "
     "Return only one JSON object, with no markdown or reasoning. "
     "Use only the listed VFX surface enums and ranges, including soundCue slots where useful; "
+    "obey vfxSurface.rendererRules as hard cross-field constraints and never substitute a lane value for a channel value; "
     "never invent code names, gameplay, or extra top-level keys."
 )
 
@@ -321,57 +325,7 @@ def build_vfx_director_prompt(parent_a: dict[str, Any] | None, parent_b: dict[st
         ),
         "vfxSurface": surface,
         "constraints": constraints or {},
-        "requiredJsonShape": {
-            "type": "object",
-            "requiredTopLevelFields": ["effectMagnitude", "visualBudgetClass", "slots"],
-            "optionalTopLevelFields": ["identity"],
-            "additionalTopLevelFields": "do not add keys outside this contract. Known forbidden fields are rejected; unknown extras are validation errors.",
-            "topLevelContract": {
-                "effectMagnitude": "float in vfxSurface.numericRanges.effectMagnitude",
-                "visualBudgetClass": "one of tiny|small|normal|large|signature",
-                "identity": "optional short debug note only; runtime must not parse it",
-            },
-            "slots": {
-                "type": "array",
-                "count": "between constraints.slots[0] and constraints.slots[1]",
-                "additionalSlotFields": "do not add keys outside this contract. Known forbidden fields are rejected; unknown extras are validation errors.",
-                "requiredSlotFields": [
-                    "event", "rendererKind", "backend", "textureRole", "particleRole",
-                    "anchor", "channel", "lane", "emissionMode", "blend", "particleSystemId",
-                    "scale", "density", "duration", "alpha", "spread", "jitter",
-                    "budgetWeight", "signatureWeight", "visualCost", "fadeIn", "fadeOut"
-                ],
-                "enumFields": {
-                    "event": "one vfxSurface.events value",
-                    "rendererKind": "one vfxSurface.rendererKind value",
-                    "backend": "one vfxSurface.backend value",
-                    "textureRole": "one vfxSurface.textureRole value",
-                    "particleRole": "one vfxSurface.particleRole value",
-                    "anchor": "one vfxSurface.anchor value",
-                    "channel": "one vfxSurface.channel value",
-                    "lane": "one vfxSurface.lane value",
-                    "emissionMode": "one vfxSurface.emissionMode value",
-                    "blend": "one vfxSurface.blend value",
-                    "particleSystemId": "one explicit vfxSurface.particleSystemId value: pl:glow, pl:shard, pl:smoke, pl:spark, or dust",
-                },
-                "numericFields": {
-                    "scale": "float in vfxSurface.numericRanges.scale",
-                    "density": "float in vfxSurface.numericRanges.density",
-                    "duration": "integer in vfxSurface.numericRanges.duration",
-                    "alpha": "float in vfxSurface.numericRanges.alpha",
-                    "spread": "float in vfxSurface.numericRanges.spread",
-                    "jitter": "float in vfxSurface.numericRanges.jitter",
-                    "phaseOffset": "optional float in vfxSurface.numericRanges.phaseOffset",
-                    "budgetWeight": "float in vfxSurface.numericRanges.budgetWeight",
-                    "signatureWeight": "float in vfxSurface.numericRanges.signatureWeight",
-                    "visualCost": "float in vfxSurface.numericRanges.visualCost",
-                    "fadeIn": "float in vfxSurface.numericRanges.fadeIn",
-                    "fadeOut": "float in vfxSurface.numericRanges.fadeOut",
-                    "startTick": "optional integer in vfxSurface.numericRanges.startTick",
-                    "repeatEvery": "optional integer in vfxSurface.numericRanges.repeatEvery",
-                },
-            },
-        },
+        "requiredJsonShape": vfx_director_required_json_shape(),
     }
 
 

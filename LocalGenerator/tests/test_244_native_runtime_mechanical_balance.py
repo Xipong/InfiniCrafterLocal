@@ -219,7 +219,7 @@ def _contract_check_remaining_finite_families_keep_structural_native_boundaries(
     sentry = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Sentry.cs").read_text(encoding="utf-8")
     sentry_item = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.Sentry.cs").read_text(encoding="utf-8")
     overhead = (ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs").read_text(encoding="utf-8")
-    schema = (ROOT / "LocalGenerator/infini_local/core/runtime_authoring/schema.py").read_text(encoding="utf-8")
+    function_registry = (ROOT / "LocalGenerator/infini_local/core/runtime_authoring/function_contract_registry.py").read_text(encoding="utf-8")
 
     orbit = runtime[runtime.index("private void Orbitish"):runtime.index("private void SpiralOut")]
     assert "_spec.RangeTiles * 16f" in orbit and "owner.MountedCenter" in orbit
@@ -233,7 +233,7 @@ def _contract_check_remaining_finite_families_keep_structural_native_boundaries(
         ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs"
     ).read_text(encoding="utf-8")
     assert "ShouldRunProjectileGameplay" in overhead and "Projectile.Kill()" in overhead
-    assert "not a persistent terraria minion" in schema.lower()
+    assert "not a persistent terraria minion" in function_registry.lower()
 
 
 def _contract_check_python_v3_author_contract_does_not_cross_csharp_wire() -> None:

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import re
+import copy
 from typing import Any
+
+from infini_local.core.runtime_tooltip import compiled_runtime_tooltip
+from infini_local.core.runtime_authoring.function_contract_registry import engine_param_wire_obligation
+from infini_local.core.runtime_authoring.function_contract_types import WireObligation
 
 STRUCTURAL_RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.v3"
 STRUCTURAL_ID_MAX_CHARS = 64
@@ -19,24 +24,15 @@ _FINAL_WIRE_RECEIPT_STATUSES = frozenset({
     "active", "clamped", "normalized", "dropped", "mismatched",
 })
 
-# visual_effect_cue is compiler-owned, but its destination is the later VFX
-# manifest rather than the gameplay/attack DTO validated by this boundary.
-_DEFERRED_FINAL_WIRE_ENGINE_FUNCTIONS = frozenset({"visual_effect_cue"})
-_NON_WIRE_AUTHORED_PARAMS = frozenset({
-    ("apply_player_effect_on_use", "note"),
-    ("leave_trail_or_field", "visualOnly"),
-
-})
-
-
 def authored_param_requires_final_wire_provenance(fn: Any, authored_param: Any) -> bool:
     normalized_fn = str(fn or "").strip().lower().replace("-", "_").replace(" ", "_")
     param = str(authored_param or "").strip()
-    return (
-        bool(normalized_fn and param)
-        and normalized_fn not in _DEFERRED_FINAL_WIRE_ENGINE_FUNCTIONS
-        and (normalized_fn, param) not in _NON_WIRE_AUTHORED_PARAMS
-    )
+    if not normalized_fn or not param:
+        return False
+    obligation = engine_param_wire_obligation(normalized_fn, param)
+    # Unknown surface is fail-closed; canonical non/future-wire obligations are
+    # deliberately not required to manufacture a gameplay/attack DTO receipt.
+    return obligation is None or obligation is WireObligation.FINAL_WIRE
 
 
 
@@ -171,10 +167,11 @@ def _authored_scalar_param_identities(calls: list[Any]) -> set[tuple[str, str]]:
             if isinstance(value, dict):
                 pending[0:0] = [(f"{path}.{key}", child) for key, child in value.items()]
             elif isinstance(value, list):
-                if authored_param_requires_final_wire_provenance(fn, path):
+                if value and authored_param_requires_final_wire_provenance(fn, path):
                     identities.add((call_id, path))
             elif (
-                (value is None or isinstance(value, (str, bool, int, float)))
+                isinstance(value, (str, bool, int, float))
+                and (not isinstance(value, str) or bool(value.strip()))
                 and authored_param_requires_final_wire_provenance(fn, path)
             ):
                 identities.add((call_id, path))
@@ -250,17 +247,28 @@ def validate_structural_planner_contract(data: dict[str, Any]) -> dict[str, Any]
     }
 
 
-def validate_structural_final_wire_contract(data: dict[str, Any]) -> dict[str, Any]:
-    """Validate compiler-owned authored-param receipts against the final DTO."""
+def structural_final_wire_report(data: dict[str, Any]) -> dict[str, Any]:
+    """Pure report for compiler-owned authored-param receipts against the final DTO."""
     raw_candidate = data.get("runtimeContract")
     raw_contract: dict[str, Any] = dict(raw_candidate) if isinstance(raw_candidate, dict) else {}
     raw_receipts = raw_contract.get("finalWireReceipts")
     errors: list[dict[str, Any]] = []
+    component_errors: dict[str, list[dict[str, Any]]] = {
+        "receiptShape": [],
+        "sourceIdentity": [],
+        "finalProjection": [],
+        "mechanic": [],
+    }
+
+    def reject(component: str, claim: dict[str, Any]) -> None:
+        errors.append(claim)
+        component_errors[component].append(claim)
+
     if not isinstance(raw_receipts, list):
-        errors.append({"kind": "malformed_final_wire_receipts"})
+        reject("receiptShape", {"kind": "malformed_final_wire_receipts"})
         raw_receipts = []
     elif any(not _valid_final_wire_receipt_shape(row) for row in raw_receipts):
-        errors.append({"kind": "malformed_final_wire_receipts"})
+        reject("receiptShape", {"kind": "malformed_final_wire_receipts"})
 
     contract = _normalize_structural_runtime_contract(raw_contract)
     runtime_candidate = data.get("runtimePlan")
@@ -274,10 +282,10 @@ def validate_structural_final_wire_contract(data: dict[str, Any]) -> dict[str, A
         call_id = str(raw_call.get("callId") or "").strip()
         authored_index = raw_call.get("_index") if isinstance(raw_call.get("_index"), int) else index
         if not _STRUCTURAL_ID_RE.fullmatch(call_id):
-            errors.append({"kind": "invalid_or_missing_call_id", "callIndex": authored_index, "callId": call_id})
+            reject("sourceIdentity", {"kind": "invalid_or_missing_call_id", "callIndex": authored_index, "callId": call_id})
             continue
         if call_id in calls_by_id:
-            errors.append({"kind": "duplicate_call_id", "callId": call_id})
+            reject("sourceIdentity", {"kind": "duplicate_call_id", "callId": call_id})
             continue
         calls_by_id[call_id] = raw_call
 
@@ -288,7 +296,7 @@ def validate_structural_final_wire_contract(data: dict[str, Any]) -> dict[str, A
     }
     missing_receipts = sorted(_authored_scalar_param_identities(calls) - receipt_identities)
     for call_id, authored_param in missing_receipts:
-        errors.append({
+        reject("sourceIdentity", {
             "kind": "compiler_provenance_receipt_missing",
             "callId": call_id,
             "authoredParam": authored_param,
@@ -307,44 +315,63 @@ def validate_structural_final_wire_contract(data: dict[str, Any]) -> dict[str, A
         params: dict[str, Any] = params_candidate if isinstance(params_candidate, dict) else {}
         source_present, source_actual = _nested_path_value(params, authored_param)
         if not source_present or not _backing_values_match(source_actual, authored_value):
-            errors.append({"kind": "compiler_provenance_source_mismatch", **receipt})
+            reject("sourceIdentity", {"kind": "compiler_provenance_source_mismatch", **receipt})
 
         status = str(receipt.get("status") or "")
         final_path = str(receipt.get("finalPath") or "")
         if status == "dropped" or not final_path:
             receipt["finalActual"] = None
-            errors.append({"kind": "compiler_provenance_dropped", **receipt})
+            reject("finalProjection", {"kind": "compiler_provenance_dropped", **receipt})
             verified_receipts.append(receipt)
             continue
         final_present, final_actual = _final_wire_value(data, final_path)
         receipt["finalActual"] = final_actual if final_present else None
         if not final_present:
             receipt["status"] = "dropped"
-            errors.append({"kind": "compiler_provenance_dropped", **receipt})
+            reject("finalProjection", {"kind": "compiler_provenance_dropped", **receipt})
         elif not _backing_values_match(final_actual, receipt.get("compiledValue")):
             receipt["status"] = "mismatched"
-            errors.append({"kind": "compiler_provenance_mismatched", **receipt})
+            reject("finalProjection", {"kind": "compiler_provenance_mismatched", **receipt})
         elif status not in {"active", "clamped", "normalized"}:
-            errors.append({"kind": "compiler_provenance_invalid_status", **receipt})
+            reject("finalProjection", {"kind": "compiler_provenance_invalid_status", **receipt})
         verified_receipts.append(receipt)
 
     concept_candidate = data.get("concept")
     concept: dict[str, Any] = concept_candidate if isinstance(concept_candidate, dict) else {}
     core_mechanic = str(concept.get("coreMechanic") or "").strip()
     if not core_mechanic:
-        errors.append({"kind": "missing_core_mechanic"})
-    if not errors:
-        data["tooltip"] = core_mechanic
-        contract["executionStatus"] = "executable"
-    else:
-        contract["executionStatus"] = "partial"
+        reject("mechanic", {"kind": "missing_core_mechanic"})
+    contract["executionStatus"] = "executable" if not errors else "partial"
     contract["finalWireReceipts"] = verified_receipts
-    data["runtimeContract"] = contract
     return {
         "schema": "infini.final-wire-contract-report.v2",
         "ok": not errors,
         "blockingClaims": errors,
+        "componentGates": {
+            name: {"ok": not claims, "blockingClaims": claims}
+            for name, claims in component_errors.items()
+        },
         "finalWireReceipts": verified_receipts,
         "executionStatus": contract["executionStatus"],
         "contract": contract,
+        "tooltip": compiled_runtime_tooltip(data) if not errors else "",
     }
+
+
+def apply_structural_final_wire_contract(
+    data: dict[str, Any],
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    """Explicitly commit a previously computed structural final-wire report."""
+    if str(report.get("schema") or "") != "infini.final-wire-contract-report.v2":
+        raise ValueError("invalid structural final-wire report schema")
+    contract = report.get("contract")
+    if not isinstance(contract, dict):
+        raise ValueError("structural final-wire report lacks contract")
+    data["runtimeContract"] = copy.deepcopy(contract)
+    if report.get("ok"):
+        tooltip = str(report.get("tooltip") or "").strip()
+        if not tooltip:
+            raise ValueError("executable structural final-wire report lacks tooltip")
+        data["tooltip"] = tooltip
+    return report

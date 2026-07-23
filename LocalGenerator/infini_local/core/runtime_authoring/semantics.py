@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from infini_local.core.runtime_authoring.common import _enum, _norm_name
-from infini_local.core.runtime_executor_vocabulary import MOVEMENTS
-from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_authoring.common import _norm_name
 from infini_local.core.runtime_authoring.schema import (
     TERRARIA_WEAPON_FAMILY_GROUPS,
     _family_group,
 )
-from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 
 # Small effect ontology, not a per-item exception list.
 # Parent knowledge should eventually expose canonical effect capabilities directly
@@ -144,8 +141,6 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
         })
         if beam_family:
             common["channelUse"] = True
-            if p.get("chargeTicks") not in (None, ""):
-                common["beamChargeTicks"] = p.get("chargeTicks")
             if p.get("immunityCooldown") not in (None, ""):
                 common["immunityCooldown"] = p.get("immunityCooldown")
         elif charge_release:
@@ -175,15 +170,4 @@ def _lower_typed_engine_call(fn: str, params: dict[str, Any]) -> list[tuple[str,
     return [(fn, p)]
 
 
-def _runtime_family_from_fields(delivery: Any, movement: Any, weapon_family: Any = "", projectile_family: Any = "", explicit: Any = "") -> str:
-    """Return explicit runtimeFamily only.
-
-    This helper intentionally no longer performs broad behavior inference.  New
-    runtime authoring must use runtimeFamily; the separate light repair below is
-    the only permitted rescue path for small/local models.
-    """
-    explicit_norm = _enum(explicit, RUNTIME_FAMILIES, None)
-    return explicit_norm if explicit_norm and explicit_norm != "none" else "none"
-
-
-__all__ = ["_truthy", "_semantic_param_copy", "_lower_typed_engine_call", "_runtime_family_from_fields"]
+__all__ = ["_truthy", "_semantic_param_copy", "_lower_typed_engine_call"]

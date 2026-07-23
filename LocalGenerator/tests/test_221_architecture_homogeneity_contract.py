@@ -38,7 +38,8 @@ def _contract_check_csharp_packet_ids_are_routed_through_one_packet_id_class():
     assert "retired" not in packets
     assert "NotifyGeneratedItem = 2" in packets
     assert "InfiniNetPacketIds.CancelServerCraft" in mod
-    assert "InfiniNetPacketIds.NotifyGeneratedAssets" in mod
+    assert "InfiniNetPacketIds.RequestGeneratedAsset" in mod
+    assert "InfiniNetPacketIds.GeneratedAssetChunk" in mod
 
     for path in MOD.rglob("*.cs"):
         if path.name == "InfiniNetPacketIds.cs":
@@ -53,7 +54,7 @@ def _contract_check_csharp_runtime_api_and_opcode_limits_have_one_source_of_trut
     projectile = read(MOD / "Content" / "Projectiles" / "GeneratedProjectile.cs")
 
     assert "public static class InfiniRuntimeLimits" in limits
-    assert 'RuntimeApiCurrent = "v0.4.52"' in limits
+    assert 'RuntimeApiCurrent = "v0.4.53"' in limits
     assert "MaxSupportedMovementCode = 18" in limits
     assert "private const string RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in item_data
     assert "private const int MaxSupportedMovementCode = InfiniRuntimeLimits.MaxSupportedMovementCode" in item_data

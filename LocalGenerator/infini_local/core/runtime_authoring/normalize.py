@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION, _clamp, _norm_name
+from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
 from infini_local.core.runtime_authoring.schema import (
-    ENGINE_FN_CATALOG_V2,
     FORBIDDEN_WORLD_ENTITY_FAMILIES,
     FORBIDDEN_WORLD_ENTITY_FN_NAMES,
     SAFE_SUMMON_FAMILIES,
@@ -52,7 +52,7 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
         if hard_reject:
             rejected.append(hard_reject)
             continue
-        if fn not in ENGINE_FN_CATALOG_V2:
+        if fn not in ENGINE_FUNCTION_CATALOG:
             dropped.append({"index": i, "reason": "unknown_fn", "fn": original_fn})
             continue
         for expanded_fn, expanded_params in _lower_typed_engine_call(fn, params):
@@ -60,7 +60,7 @@ def normalize_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, Any]:
             if hard_reject:
                 rejected.append(hard_reject)
                 continue
-            if expanded_fn not in ENGINE_FN_CATALOG_V2:
+            if expanded_fn not in ENGINE_FUNCTION_CATALOG:
                 dropped.append({"index": i, "reason": "typed_lowering_unknown_fn", "fn": expanded_fn, "from": original_fn})
                 continue
             row = {"fn": expanded_fn, "params": expanded_params, "_index": i, "_rawFn": original_fn}

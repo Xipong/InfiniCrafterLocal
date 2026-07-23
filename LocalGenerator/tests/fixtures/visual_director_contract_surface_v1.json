@@ -1,0 +1,396 @@
+{
+  "outputContract": {
+    "assetDemandRule": "A role prompt describes appearance but never requests a PNG by itself; only bakedAssets.<role>.mode=baked_sprite requests one.",
+    "bakedAssetRoleKeys": [
+      "projectile",
+      "impact",
+      "child",
+      "field",
+      "equip_overlay"
+    ],
+    "fieldPlacementRule": "Role prompt and VFX fields belong directly inside visualKit; never inside bakedAssets and never inside a vfx object. Each bakedAssets role object contains only mode, reason, and projectile-only distinctFromItem.",
+    "forbiddenBakedAssetKeys": [
+      "item",
+      "vfx"
+    ],
+    "roleFields": {
+      "child": {
+        "assetModeField": "bakedAssets.child.mode",
+        "promptField": "childSpritePrompt",
+        "requiredWhen": "the accepted runtime has a child role; a non-empty prompt is mandatory when mode=baked_sprite"
+      },
+      "equip_overlay": {
+        "assetModeField": "bakedAssets.equip_overlay.mode",
+        "promptField": "equipOverlayPrompt",
+        "requiredWhen": "resultKind is armor or accessory; author one transparent single-pose overlay emblem, not an armor sheet or inventory icon"
+      },
+      "field": {
+        "assetModeField": "bakedAssets.field.mode",
+        "promptField": "fieldSpritePrompt",
+        "requiredWhen": "the accepted runtime has a field role; a non-empty prompt is mandatory when mode=baked_sprite"
+      },
+      "impact": {
+        "assetModeField": "bakedAssets.impact.mode",
+        "promptField": "impactSpritePrompt",
+        "requiredWhen": "the role is visually relevant; a non-empty prompt is mandatory when mode=baked_sprite"
+      },
+      "item": {
+        "assetDecision": "the item icon is always the required generated inventory/held sprite; it is never represented by a bakedAssets.item entry",
+        "promptField": "itemIconPrompt",
+        "requiredWhen": "always"
+      },
+      "projectile": {
+        "assetModeField": "bakedAssets.projectile.mode",
+        "promptField": "projectileSpritePrompt",
+        "requiredWhen": "the role is visually relevant; a non-empty prompt is mandatory when mode=baked_sprite"
+      }
+    },
+    "rootKey": "visualKit",
+    "rootRule": "The root object must contain exactly one key named \"visualKit\". Never return itemIconPrompt, bakedAssets, or any other VisualKit field at the root."
+  },
+  "providerSchema": {
+    "additionalProperties": false,
+    "description": "The root object must contain exactly one key named \"visualKit\"; VisualKit fields are forbidden at the root.",
+    "properties": {
+      "visualKit": {
+        "additionalProperties": false,
+        "description": "The VisualKit value nested under the required root key visualKit. These fields must never be emitted directly at the response root.",
+        "properties": {
+          "animationPlan": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Animationplan",
+            "type": "array"
+          },
+          "animeReference": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "motifs": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "title": "Motifs",
+                    "type": "array"
+                  },
+                  "source": {
+                    "title": "Source",
+                    "type": "string"
+                  },
+                  "strength": {
+                    "enum": [
+                      "subtle",
+                      "strong"
+                    ],
+                    "title": "Strength",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "strength",
+                  "source"
+                ],
+                "title": "AnimeReferenceBoundary",
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "assetDependencies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assetdependencies",
+            "type": "array"
+          },
+          "bakedAssets": {
+            "additionalProperties": false,
+            "description": "bakedAssets may contain only projectile, impact, child, field, and equip_overlay; never item. The required item sprite is described by itemIconPrompt outside bakedAssets. Role prompt fields are direct visualKit properties and must never be nested in a bakedAssets role.",
+            "properties": {
+              "child": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "baked_sprite",
+                      "particle_vfx",
+                      "none"
+                    ],
+                    "title": "Mode",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "default": "",
+                    "title": "Reason",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "title": "EffectBakedAssetBoundary",
+                "type": "object"
+              },
+              "equip_overlay": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "baked_sprite",
+                      "particle_vfx",
+                      "none"
+                    ],
+                    "title": "Mode",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "default": "",
+                    "title": "Reason",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "title": "EffectBakedAssetBoundary",
+                "type": "object"
+              },
+              "field": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "baked_sprite",
+                      "particle_vfx",
+                      "none"
+                    ],
+                    "title": "Mode",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "default": "",
+                    "title": "Reason",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "title": "EffectBakedAssetBoundary",
+                "type": "object"
+              },
+              "impact": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "baked_sprite",
+                      "particle_vfx",
+                      "none"
+                    ],
+                    "title": "Mode",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "default": "",
+                    "title": "Reason",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "title": "EffectBakedAssetBoundary",
+                "type": "object"
+              },
+              "projectile": {
+                "additionalProperties": false,
+                "properties": {
+                  "distinctFromItem": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Distinctfromitem"
+                  },
+                  "mode": {
+                    "enum": [
+                      "baked_sprite",
+                      "particle_vfx",
+                      "reuse_item_sprite",
+                      "none"
+                    ],
+                    "title": "Mode",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "default": "",
+                    "title": "Reason",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "title": "BakedAssetBoundary",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "childSpritePrompt": {
+            "default": "",
+            "description": "Canonical appearance prompt for the child role when that role is relevant.",
+            "title": "Childspriteprompt",
+            "type": "string"
+          },
+          "childVfx": {
+            "default": "",
+            "title": "Childvfx",
+            "type": "string"
+          },
+          "equipOverlayPrompt": {
+            "default": "",
+            "title": "Equipoverlayprompt",
+            "type": "string"
+          },
+          "fieldSpritePrompt": {
+            "default": "",
+            "description": "Canonical appearance prompt for the field role when that role is relevant.",
+            "title": "Fieldspriteprompt",
+            "type": "string"
+          },
+          "fieldVfx": {
+            "default": "",
+            "title": "Fieldvfx",
+            "type": "string"
+          },
+          "impactSpritePrompt": {
+            "default": "",
+            "description": "Canonical appearance prompt for the impact role when that role is relevant.",
+            "title": "Impactspriteprompt",
+            "type": "string"
+          },
+          "impactVfx": {
+            "default": "",
+            "title": "Impactvfx",
+            "type": "string"
+          },
+          "itemIconPrompt": {
+            "default": "",
+            "description": "Canonical appearance prompt for the required item inventory/held sprite.",
+            "title": "Itemiconprompt",
+            "type": "string"
+          },
+          "itemSilhouetteContract": {
+            "default": "",
+            "title": "Itemsilhouettecontract",
+            "type": "string"
+          },
+          "negativePrompt": {
+            "default": "",
+            "title": "Negativeprompt",
+            "type": "string"
+          },
+          "palette": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Palette",
+            "type": "array"
+          },
+          "projectileSpritePrompt": {
+            "default": "",
+            "description": "Canonical appearance prompt for the projectile role when that role is relevant.",
+            "title": "Projectilespriteprompt",
+            "type": "string"
+          },
+          "projectileVfx": {
+            "default": "",
+            "title": "Projectilevfx",
+            "type": "string"
+          },
+          "qualityNotes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Qualitynotes",
+            "type": "array"
+          },
+          "silhouetteSummary": {
+            "default": "",
+            "title": "Silhouettesummary",
+            "type": "string"
+          },
+          "styleGuide": {
+            "default": "",
+            "title": "Styleguide",
+            "type": "string"
+          },
+          "vfxAvoid": {
+            "default": "",
+            "description": "Exactly one string containing the complete concise avoid instruction. This field is never an array; combine multiple avoid concepts into this one string.",
+            "title": "Vfxavoid",
+            "type": "string"
+          },
+          "vfxIntent": {
+            "default": "",
+            "title": "Vfxintent",
+            "type": "string"
+          },
+          "vfxMaterialHints": {
+            "description": "The only VFX hint field that is an array; return zero or more material strings.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Vfxmaterialhints",
+            "type": "array"
+          },
+          "vfxRhythmHint": {
+            "default": "normal",
+            "description": "Exactly one enum string: slow, normal, snappy, delayed, or pulsing. This field is never an array and never contains multiple choices.",
+            "enum": [
+              "slow",
+              "normal",
+              "snappy",
+              "delayed",
+              "pulsing"
+            ],
+            "title": "Vfxrhythmhint",
+            "type": "string"
+          },
+          "vfxScaleHint": {
+            "default": "normal",
+            "description": "Exactly one enum string: tiny, small, normal, large, or huge. This field is never an array and never contains multiple choices.",
+            "enum": [
+              "tiny",
+              "small",
+              "normal",
+              "large",
+              "huge"
+            ],
+            "title": "Vfxscalehint",
+            "type": "string"
+          }
+        },
+        "title": "VisualKitBoundary",
+        "type": "object"
+      }
+    },
+    "required": [
+      "visualKit"
+    ],
+    "type": "object"
+  },
+  "schema": "infini.visual-director-contract-surface.v1"
+}

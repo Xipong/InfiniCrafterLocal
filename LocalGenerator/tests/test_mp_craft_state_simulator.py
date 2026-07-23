@@ -1,191 +1,147 @@
-"""Stage 7 — MP craft state simulator tests.
-
-These run a Python MODEL (mp_craft_state_simulator.py) that mirrors the
-server-authoritative craft logic in
-ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.cs. The goal is to
-probe server-authority invariants (cancel/timeout/dedup/refund-once) without a real
-Terraria MP session. Method names reference the C# concepts they model.
-"""
+"""Behavioral contracts for the server-owned two-slot MP station escrow."""
 from __future__ import annotations
 
-from csharp_partial_reader import read_text_with_partial_bundles
-from tests.mp_craft_state_simulator import (
-    CraftStateSimulator,
-    Slot,
-    CraftItemRef,
-)
+from tests.mp_craft_state_simulator import CraftItemRef, CraftStateSimulator, Slot
 
 
-def _inv(*slots: Slot) -> list[Slot]:
-    return list(slots) + [Slot() for _ in range(50 - len(slots))]
+def _slot(type_: int, stack: int = 1, *, prefix: int = 0, generated_id: str = "", valid: bool = True) -> Slot:
+    return Slot(
+        type=type_,
+        stack=stack,
+        prefix=prefix,
+        generated_id=generated_id,
+        is_air=False,
+        valid_ingredient=valid,
+    )
 
 
-def _slot(type_: int, stack: int = 1, **kw) -> Slot:
-    kw.setdefault("valid_ingredient", True)
-    kw.setdefault("is_air", False)
-    return Slot(type=type_, stack=stack, **kw)
+def _deposit(sim: CraftStateSimulator, player_id: int, index: int, item: Slot, *, origin: str) -> CraftItemRef:
+    ref = CraftItemRef(item.type, item.prefix, item.generated_id)
+    sim.set_mouse_item(player_id, item, origin=origin)
+    ok, error = sim.deposit_server_mouse_item(player_id, index, ref)
+    assert ok, error
+    return ref
 
 
-def _contract_check_success_grants_item_once():
+def _deposit_pair(sim: CraftStateSimulator, player_id: int = 0) -> tuple[CraftItemRef, CraftItemRef]:
+    a = _deposit(sim, player_id, 0, _slot(75), origin="inventory")
+    b = _deposit(sim, player_id, 1, _slot(43), origin="inventory")
+    return a, b
+
+
+def _contract_check_deposit_moves_exact_mouse_unit_into_server_station() -> None:
     sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75, 3), _slot(43, 2)))  # Wood 75, Copper 43
-    rid = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    assert ok is True, msg
-    # server actually debited one of each
+    item_ref = _deposit(sim, 0, 0, _slot(75, 3), origin="inventory")
     player = sim.get_player(0)
-    assert player.inventory[0].stack == 2  # 3-1
-    assert player.inventory[1].stack == 1  # 2-1
-    # server commits success result; client reveals item exactly once
-    sim.server_commit_craft_result(0, rid, True, "Merged Blade", "")
-    assert sim.get_player(0).revealed_item == "Merged Blade"
-    assert sim.get_player(0).server_has_pending is False
+    assert item_ref == CraftItemRef(75)
+    assert player.station[0].type == 75 and player.station[0].stack == 1
+    assert player.mouse_slot_58.type == 75 and player.mouse_slot_58.stack == 2
 
 
-def _contract_check_timeout_cancel_then_late_response_does_not_grant():
+def _contract_check_open_void_bag_uses_same_mouse58_boundary_and_needs_no_inventory_return() -> None:
     sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75), _slot(43)))
-    rid = sim.begin_client_craft_request(0)
-    sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    # client times out → sends cancel
-    ok, name, msg = sim.handle_cancel_server_craft(0, rid, "client_timeout")
-    assert ok is False
-    ingredients_returned = len(sim.get_player(0).refunded_slots)
-    assert ingredients_returned == 2, "cancel after server-side debit must refund both"
-    # late server response must NOT grant an item (request was cancelled)
-    sim.server_commit_craft_result(0, rid, True, "Late Item", "")
-    assert sim.get_player(0).revealed_item is None
-
-
-def _contract_check_cancel_after_server_debit_refunds_ingredients_once():
-    sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75), _slot(43)))
-    rid = sim.begin_client_craft_request(0)
-    sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
     player = sim.get_player(0)
-    assert player.inventory[0].stack == 0 and player.inventory[1].stack == 0
-    # cancel -> refund once
-    sim.handle_cancel_server_craft(0, rid, "client_cancel")
-    assert len(player.refunded_slots) == 2
-    # second cancel must NOT refund again
-    sim.handle_cancel_server_craft(0, rid, "again")
-    assert len(player.refunded_slots) == 2, "ingredients must be refunded exactly once"
-
-
-def _contract_check_old_late_response_does_not_mix_with_new_request():
-    sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75), _slot(43), _slot(9), _slot(71)))  # 2 pairs
-    rid1 = sim.begin_client_craft_request(0)
-    sim.handle_request_server_craft(0, rid1, CraftItemRef(75), CraftItemRef(43))
-    sim.handle_cancel_server_craft(0, rid1, "timeout1")
-    # second craft on a NEW request id
-    rid2 = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid2, CraftItemRef(9), CraftItemRef(71))
-    assert ok is True
-    # late response for rid1 must not be applied to rid2
-    sim.server_commit_craft_result(0, rid1, True, "Old Item", "")
-    player = sim.get_player(0)
-    assert player.revealed_item is None or player.revealed_item != "Old Item"
-    sim.server_commit_craft_result(0, rid2, True, "New Item", "")
-    assert player.revealed_item == "New Item"
-
-
-def _contract_check_second_craft_after_timeout_works():
-    sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75, 2), _slot(43, 2)))
-    rid1 = sim.begin_client_craft_request(0)
-    sim.handle_request_server_craft(0, rid1, CraftItemRef(75), CraftItemRef(43))
-    sim.handle_cancel_server_craft(0, rid1, "timeout")
-    assert sim.get_player(0).server_has_pending is False
-    # new craft should succeed
-    rid2 = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid2, CraftItemRef(75), CraftItemRef(43))
-    assert ok is True, msg
-    sim.server_commit_craft_result(0, rid2, True, "Second Item", "")
-    assert sim.get_player(0).revealed_item == "Second Item"
-
-
-def _contract_check_invalid_client_packet_cannot_craft_from_nonexistent_slots():
-    sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv())  # empty inventory
+    sim.set_mouse_item(0, _slot(166, 3), origin="void_bag_bank4")
+    ref = CraftItemRef(166)
+    assert sim.deposit_server_mouse_item(0, 0, ref)[0]
+    assert sim.deposit_server_mouse_item(0, 1, ref)[0]
+    assert player.last_mouse_origin == "void_bag_bank4"
+    assert player.mouse_slot_58.stack == 1  # holding the remainder must not block Craft
     rid = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    assert ok is False
-    assert "первый ингредиент" in msg
-    # nothing debited, nothing refunded
-    assert all(s.is_air for s in sim.get_player(0).inventory)
+    ok, _, message = sim.handle_request_server_craft(0, rid, ref, ref)
+    assert ok, message
+
+
+def _contract_check_client_ref_cannot_craft_without_matching_server_escrow() -> None:
+    sim = CraftStateSimulator()
+    rid = sim.begin_client_craft_request(0)
+    ok, _, message = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
+    assert not ok
+    assert "escrow" in message
     assert sim.get_player(0).refunded_slots == []
 
 
-def _contract_check_favorited_items_are_not_spent():
+def _contract_check_generated_identity_is_validated_at_deposit_and_start() -> None:
     sim = CraftStateSimulator()
-    fav = _slot(75, 1, favorited=True)
-    ok_slot = _slot(75, 2)
-    sim.set_inventory(0, _inv(fav, ok_slot, _slot(43)))
+    sim.set_mouse_item(0, _slot(999, generated_id="g_real"), origin="void_bag_bank4")
+    ok, _ = sim.deposit_server_mouse_item(0, 0, CraftItemRef(999, generated_id="g_fake"))
+    assert not ok
+    assert sim.get_player(0).station[0].is_air
+
+
+def _contract_check_success_consumes_station_once_and_reveals_once() -> None:
+    sim = CraftStateSimulator()
+    a_ref, b_ref = _deposit_pair(sim)
     rid = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    # the favorite slot must survive; the non-fav matching slot was spent instead
-    assert ok is True
-    inv = sim.get_player(0).inventory
-    assert inv[0].favorited is True and inv[0].stack == 1  # favorite untouched
-    assert inv[1].stack == 1  # 2-1 spent
+    ok, _, message = sim.handle_request_server_craft(0, rid, a_ref, b_ref)
+    assert ok, message
+    player = sim.get_player(0)
+    assert all(slot.is_air for slot in player.station)
+    assert len(player.active_refunds) == 2
+    sim.server_commit_craft_result(0, rid, True, "Merged Blade")
+    assert player.revealed_item == "Merged Blade"
+    assert player.active_refunds == []
+    assert player.refunded_slots == []
 
 
-def _contract_check_server_invalid_generated_items_are_not_spent():
-    """A slot with valid_ingredient=False (InfiniCore.IsValidIngredient false) must not be spent."""
+def _contract_check_cancel_refunds_exact_escrow_once_and_late_commit_is_ignored() -> None:
     sim = CraftStateSimulator()
-    invalid = _slot(75, 1, valid_ingredient=False)
-    valid = _slot(75, 2)
-    sim.set_inventory(0, _inv(invalid, valid, _slot(43)))
+    a_ref, b_ref = _deposit_pair(sim)
     rid = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    assert ok is True
-    inv = sim.get_player(0).inventory
-    assert inv[0].stack == 1 and inv[0].valid_ingredient is False  # invalid untouched
-    assert inv[1].stack == 1  # valid spent
+    assert sim.handle_request_server_craft(0, rid, a_ref, b_ref)[0]
+    sim.handle_cancel_server_craft(0, rid, "client_timeout")
+    player = sim.get_player(0)
+    assert [(item.type, item.stack) for item in player.refunded_slots] == [(75, 1), (43, 1)]
+    sim.handle_cancel_server_craft(0, rid, "again")
+    assert len(player.refunded_slots) == 2
+    sim.server_commit_craft_result(0, rid, True, "Late Item")
+    assert player.revealed_item != "Late Item"
 
 
-def _contract_check_duplicate_request_returns_committed_name():
-    """Re-sending the same request id after success returns a duplicate ack, no new craft."""
+def _contract_check_take_to_mouse_and_clear_return_exact_station_items() -> None:
     sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75, 2), _slot(43, 2)))
+    ref = _deposit(sim, 0, 0, _slot(75), origin="inventory")
+    player = sim.get_player(0)
+    assert sim.take_server_escrow_to_mouse(0, 0)[0]
+    assert player.station[0].is_air and player.mouse_slot_58.type == 75
+    assert sim.deposit_server_mouse_item(0, 1, ref)[0]
+    assert sim.return_all_server_escrow(0) == 1
+    assert [(item.type, item.stack) for item in player.refunded_slots] == [(75, 1)]
+
+
+def _contract_check_late_escrow_retry_replays_older_cached_result_without_mutation() -> None:
+    sim = CraftStateSimulator()
+    item_ref = CraftItemRef(75)
+    sim.set_mouse_item(0, _slot(75, 2), origin="inventory")
+    assert sim.handle_station_deposit(0, "op1", 0, item_ref)[0]
+    assert sim.return_all_server_escrow(0) == 1
+
+    # Complete a newer operation, then make the old input representable again.
+    sim.set_mouse_item(0, _slot(75, 2), origin="inventory")
+    assert sim.handle_station_deposit(0, "op2", 1, item_ref)[0]
+    player = sim.get_player(0)
+    before_mouse_stack = player.mouse_slot_58.stack
+    assert player.station[0].is_air
+
+    assert sim.handle_station_deposit(0, "op1", 0, item_ref)[0]
+    assert player.station[0].is_air
+    assert player.mouse_slot_58.stack == before_mouse_stack
+
+
+def _contract_check_dedupe_and_pending_gate_do_not_consume_again() -> None:
+    sim = CraftStateSimulator()
+    a_ref, b_ref = _deposit_pair(sim)
     rid = sim.begin_client_craft_request(0)
-    sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    sim.server_commit_craft_result(0, rid, True, "First Item", "")
-    # duplicate
-    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(43))
-    assert ok is True
-    assert msg == "duplicate ack"
-    assert name == "First Item"
-    # no extra debit
-    inv = sim.get_player(0).inventory
-    assert inv[0].stack == 1 and inv[1].stack == 1
+    assert sim.handle_request_server_craft(0, rid, a_ref, b_ref)[0]
+    pending_rid = "other"
+    ok, _, message = sim.handle_request_server_craft(0, pending_rid, a_ref, b_ref)
+    assert not ok and "уже есть активный" in message
+    sim.server_commit_craft_result(0, rid, True, "First Item")
+    ok, name, message = sim.handle_request_server_craft(0, rid, a_ref, b_ref)
+    assert ok and name == "First Item" and message == "duplicate ack"
 
 
-def _contract_check_pending_craft_blocks_new_request():
-    sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75, 2), _slot(43, 2)))
-    rid1 = sim.begin_client_craft_request(0)
-    sim.handle_request_server_craft(0, rid1, CraftItemRef(75), CraftItemRef(43))
-    # while first is pending, second request (same player) must be rejected
-    rid2 = "deadbeef"
-    sim.get_player(0).server_has_pending = True  # simulate server-side pending
-    ok, name, msg = sim.handle_request_server_craft(0, rid2, CraftItemRef(75), CraftItemRef(43))
-    assert ok is False
-    assert "уже есть активный" in msg
-
-
-def _contract_check_identical_inputs_reserve_two_units_from_one_server_stack():
-    sim = CraftStateSimulator()
-    sim.set_inventory(0, _inv(_slot(75, 2)))
-    rid = sim.begin_client_craft_request(0)
-    ok, name, msg = sim.handle_request_server_craft(0, rid, CraftItemRef(75), CraftItemRef(75))
-    assert ok is True, msg
-    assert sim.get_player(0).inventory[0].stack == 0
-    assert sim.get_player(0).inventory[0].is_air is True
-
-
-# One collected item per contract module; individual checks keep source order and tracebacks.
+# One collected item; ordered checks preserve scenario-level tracebacks without pytest noise.
 def test_mp_craft_state_simulator_module_contract(request):
     from contract_checks import run_contract_checks
 
@@ -193,16 +149,14 @@ def test_mp_craft_state_simulator_module_contract(request):
         globals(),
         request,
         (
-            '_contract_check_success_grants_item_once',
-            '_contract_check_timeout_cancel_then_late_response_does_not_grant',
-            '_contract_check_cancel_after_server_debit_refunds_ingredients_once',
-            '_contract_check_old_late_response_does_not_mix_with_new_request',
-            '_contract_check_second_craft_after_timeout_works',
-            '_contract_check_invalid_client_packet_cannot_craft_from_nonexistent_slots',
-            '_contract_check_favorited_items_are_not_spent',
-            '_contract_check_server_invalid_generated_items_are_not_spent',
-            '_contract_check_duplicate_request_returns_committed_name',
-            '_contract_check_pending_craft_blocks_new_request',
-            '_contract_check_identical_inputs_reserve_two_units_from_one_server_stack',
+            "_contract_check_deposit_moves_exact_mouse_unit_into_server_station",
+            "_contract_check_open_void_bag_uses_same_mouse58_boundary_and_needs_no_inventory_return",
+            "_contract_check_client_ref_cannot_craft_without_matching_server_escrow",
+            "_contract_check_generated_identity_is_validated_at_deposit_and_start",
+            "_contract_check_success_consumes_station_once_and_reveals_once",
+            "_contract_check_cancel_refunds_exact_escrow_once_and_late_commit_is_ignored",
+            "_contract_check_take_to_mouse_and_clear_return_exact_station_items",
+            "_contract_check_late_escrow_retry_replays_older_cached_result_without_mutation",
+            "_contract_check_dedupe_and_pending_gate_do_not_consume_again",
         ),
     )

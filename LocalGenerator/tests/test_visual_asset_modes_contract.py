@@ -134,14 +134,14 @@ def _check_item_bodied_projectiles_reuse_item_sprite_unless_distinct(monkeypatch
     monkeypatch.setattr(ASSET_PLAN, "VISUAL_GENERATE_PROJECTILE_IMAGES", True)
 
     boomerang = _base_item()
-    boomerang["attack"].update({"runtimeFamily": "returning", "delivery": "returning", "hideUseGraphic": True})
+    boomerang["attack"].update({"runtimeFamily": "returning", "delivery": "throw", "hideUseGraphic": True})
     boomerang["visualKit"]["bakedAssets"] = {
         "projectile": {"mode": "baked_sprite", "prompt": "same jade boomerang in flight"}
     }
     reused = next(x for x in build_visual_asset_plan(boomerang) if x["role"] == "projectile")
 
     transformed = _base_item()
-    transformed["attack"].update({"runtimeFamily": "returning", "delivery": "returning", "hideUseGraphic": True})
+    transformed["attack"].update({"runtimeFamily": "returning", "delivery": "throw", "hideUseGraphic": True})
     transformed["visualKit"]["bakedAssets"] = {
         "projectile": {
             "mode": "baked_sprite",
@@ -171,8 +171,8 @@ def _check_item_bodied_projectiles_reuse_item_sprite_unless_distinct(monkeypatch
 
     assert reused["status"] == "reuses_item_sprite"
     assert reused["assetMode"] == "reuse_item_sprite"
-    assert distinct.get("status") != "reuses_item_sprite"
-    assert distinct["assetMode"] == "baked_sprite"
+    assert distinct["status"] == "reuses_item_sprite"
+    assert distinct["assetMode"] == "reuse_item_sprite"
     assert held["status"] == "reuses_item_sprite"
     assert held["assetMode"] == "reuse_item_sprite"
     assert emitted["assetMode"] == "baked_sprite"
@@ -367,10 +367,10 @@ def _check_anime_reference_is_disabled_until_explicitly_authored(monkeypatch) ->
 def _contract_check_visual_director_schema_exposes_projectile_only_baked_asset_fields_by_role() -> None:
     schema = visual_kit_response_schema()
     baked = schema["properties"]["visualKit"]["properties"]["bakedAssets"]["properties"]
-    defs = schema["$defs"]
-
-    projectile = defs[baked["projectile"]["$ref"].rsplit("/", 1)[-1]]
-    effect = defs[baked["impact"]["$ref"].rsplit("/", 1)[-1]]
+    assert "$defs" not in schema
+    assert '"$ref"' not in json.dumps(schema, sort_keys=True)
+    projectile = baked["projectile"]
+    effect = baked["impact"]
 
     assert "distinctFromItem" in projectile["properties"]
     assert "reuse_item_sprite" in projectile["properties"]["mode"]["enum"]

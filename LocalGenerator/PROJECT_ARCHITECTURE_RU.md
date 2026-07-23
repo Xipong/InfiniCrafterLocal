@@ -52,11 +52,12 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 | Balance mode policy | `core/balance_mode.py` | exact `report/safety/normalize` selection only; no formulas |
 | Small runtime policies | `core/runtime_secondary_policy.py`, `core/runtime_overhead_barrage_policy.py`, `core/runtime_charge_release_policy.py`, `core/runtime_sentry_policy.py` | exact vocabulary/defaults/limits for their own vertical slices |
 | Secondary lowering | `core/runtime_authoring/secondary.py` | sole Python compile owner for `spawn_secondary_projectiles`, including exact `on_expire` |
-| LLM authoring | `core/llm_stage_messages.py`, `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` | transient Planner provenance gates, V3.1 stage dossiers, item leases/pool/failover, optional Responses state/cache transport, explicit legacy/no-history policy, prompt/response/auth ownership |
+| LLM authoring | `core/llm_stage_messages.py`, `llm_authoring_pipeline.py`, `llm_authoring_prompt.py`, `llm_transport.py` | initial author/VFX transport orchestration, transient Planner provenance gates, stage dossiers, item leases/pool/failover and prompt/response/auth ownership |
+| Same-author repair | `author_item_repair_scope.py`, `author_item_repair_delta.py`, `author_item_repair.py` | `delta` and request assembly import `scope`; reverse imports are forbidden. Scope owns rejection evidence/provider grammar, delta owns atomic mutation/preservation, request module owns the bounded repair dossier. No helper re-exports through `llm_authoring_pipeline.py` |
 | Runtime executor vocabulary | `core/runtime_executor_vocabulary.py` | единственный owner canonical movement/effect/onHit names и их C# opcodes; name-sets выводятся из keys |
 | Runtime family policy | `core/runtime_family_policy.py` | strict canonical executor-family enum и одна per-family profile-table для capability/presentation metadata; no natural-language aliases |
 | Sound catalog | `core/sound_catalog.py` | exact 92-role LLM vocabulary, Python/C# parity contract, bounded volume/pitch/variance controls and tiny compiled-mechanic fallbacks; no item-name/prose aliases |
-| Runtime authoring | `core/runtime_authoring/__init__.py`, `vocabulary.py`, `schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `compiler.py`, `reports.py` | узкий public compile/validate/report API, authoring-only terminology repair, enum/range schema, semantic lowering, normalization, repair and reports |
+| Runtime authoring | `core/runtime_authoring/__init__.py`, `vocabulary.py`, `schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `equipment.py`, `secondary.py`, `compiler.py`, `result_identity.py`, `final_projection.py`, `reports.py` | узкий public API; authoring terminology/schema; normalization and semantic lowering; equipment/secondary lowerers; canonical result identity; single final DTO projection; validation/provenance reports |
 | Runtime API version | `core/runtime_authoring/common.py` | single source of truth for `ENGINE_RUNTIME_API_VERSION` |
 | Parent context | `parent_context_pipeline.py`, `parent_context_cards.py`, `pipeline_runtime_dumps.py` | compact factual parent/projectile/ammo cards and runtime dump lookup |
 | Visual assets | `visual_generation_pipeline.py`, `visual_prompt_contracts.py`, `visual_asset_plan.py`, `visual_asset_manifest.py`, `visual_sprite_generation.py`, `visual_delivery_gate.py`, `visual_soul.py` | role-separated prompts, asset plan/manifest, generation, delivery gate, sprite-derived visual soul |
@@ -89,7 +90,9 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 - `normalize.py` canonicalizes `runtimePlan.engineCalls` and rejects unsupported world-entity authoring.
 - `structural.py` repairs malformed plan shape without authoring new gameplay identity.
 - `compiler.py` compiles accepted engine calls into explicit attack/gameplay genome patches.
-- `reports.py` owns quality/validation/provenance reports and typed compile result wrapping.
+- `result_identity.py` is the only runtime result-kind/category/ammo identity owner; prompt and combine layers do not re-route it.
+- `final_projection.py` is the single owner of final `gameplay/attack/accessory/armor/runtimeContract` projection and its compile cache/receipts.
+- `reports.py` owns quality/validation/provenance reports and typed compile result wrapping; duplicate stat owners and invalid final-wire semantics fail before composition.
 
 ## HTTP/public API shape
 

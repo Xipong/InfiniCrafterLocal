@@ -6,9 +6,9 @@
 - Current shared protocol 20 syncs a registry id, finite runtime variant and bounded charge/sentry/beam instance state; immutable `AttackSpec` data comes from registry hydration.
 - See `CHARGE_RELEASE_SENTRY_RUNTIME_RU.md`.
 
-## 2026-07-18 — executable-only runtime API v0.4.52
+## 2026-07-22 — executable-only runtime API v0.4.53
 
-- Runtime API Python/C# синхронизирован на `v0.4.52`.
+- Runtime API Python/C# синхронизирован на `v0.4.53`; добавлен typed `placeable_behavior` для exact parent tile/wall placement.
 - Future-only `state_meter`, `triggered_action` и `gameplay.runtimeState` удалены из active catalog/final wire до появления полного C# executor slice.
 - Scoped-repair provider schema строится из exact validator-authorized `callId`/`fn`/leaf paths; sibling params не входят в JSON grammar.
 - LLM-authored armor slot и parent balance role больше не выводятся из item name, tooltip или fantasy/name tags.

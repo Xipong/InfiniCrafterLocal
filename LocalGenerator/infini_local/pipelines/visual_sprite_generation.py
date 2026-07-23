@@ -508,7 +508,15 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         write_visual_manifest(data, plan)
         return data
     attack = data.setdefault("attack", {})
-    if not isinstance(attack, dict) or not attack.get("enabled"):
+    attack_enabled = isinstance(attack, dict) and bool(attack.get("enabled"))
+    equipment_overlay_planned = any(
+        str(slot.get("role") or "") == "equip_overlay"
+        and str(slot.get("assetMode") or "") == "baked_sprite"
+        and not str(slot.get("status") or "").startswith("skipped_")
+        for slot in plan
+        if isinstance(slot, dict)
+    )
+    if not attack_enabled and not equipment_overlay_planned:
         write_visual_manifest(data, plan)
         return data
     visual = data.setdefault("visual", {})
@@ -523,7 +531,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             slot["technicalScore"] = visual.get("spriteTechnicalScore", 0)
             slot.pop("score", None)
             continue
-        if role not in {"projectile", "impact", "child", "field"}:
+        if role not in {"projectile", "impact", "child", "field", "equip_overlay"}:
             continue
         status = str(slot.get("status") or "")
         asset_mode = str(slot.get("assetMode") or "").strip().lower()
@@ -582,6 +590,13 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             else:
                 attack["fieldSpritePath"] = ""; attack["fieldSpriteUrl"] = ""; attack["fieldSpriteScore"] = 0.0
             visual["fieldImagePrompt"] = prompt
+        elif role == "equip_overlay":
+            visual["equipOverlayPrompt"] = prompt
+            visual["equipOverlayStatus"] = status
+            if usable_path:
+                visual["equipOverlayPath"] = path; visual["equipOverlayUrl"] = url; visual["equipOverlayScore"] = score
+            else:
+                visual["equipOverlayPath"] = ""; visual["equipOverlayUrl"] = ""; visual["equipOverlayScore"] = 0.0
     data["attack"] = attack
     data["visual"] = visual
     write_visual_manifest(data, plan)

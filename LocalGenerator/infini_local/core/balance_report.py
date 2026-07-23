@@ -147,6 +147,44 @@ def _clamp_taxonomy(debug: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return {key: value for key, value in taxonomy.items() if value}
 
 
+def _review_risks(data: dict[str, Any], stage_obj: dict[str, Any], final_attack: dict[str, Any]) -> list[dict[str, Any]]:
+    """Expose suspicious authored outcomes without rewriting or rejecting sidegrades."""
+    gameplay_raw = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_raw if isinstance(gameplay_raw, dict) else {}
+    runtime_plan_raw = data.get("runtimePlan")
+    runtime_plan: dict[str, Any] = runtime_plan_raw if isinstance(runtime_plan_raw, dict) else {}
+    risks: list[dict[str, Any]] = []
+
+    parent_damage = _finite_int(stage_obj.get("sourceMaxDamage"), 0)
+    parent_use = max(1, _finite_int(stage_obj.get("sourceFastestUseTime"), 0))
+    generated_depths = stage_obj.get("parentGeneratedDepths") if isinstance(stage_obj.get("parentGeneratedDepths"), list) else []
+    damage = _finite_int(gameplay.get("damage"), 0)
+    use_time = max(1, _finite_int(gameplay.get("useTime"), 0))
+    shot_count = max(1, _finite_int(final_attack.get("shotCount"), 1))
+    parent_proxy = parent_damage * 60.0 / parent_use if parent_damage > 0 else 0.0
+    final_proxy = damage * shot_count * 60.0 / use_time if damage > 0 else 0.0
+    if generated_depths and parent_proxy > 0 and final_proxy < parent_proxy * 0.65:
+        risks.append({
+            "kind": "generated_parent_output_drop_review",
+            "parentDpsProxy": round(parent_proxy, 3),
+            "finalDpsProxy": round(final_proxy, 3),
+            "ratio": round(final_proxy / parent_proxy, 3),
+            "balanceIntent": str(runtime_plan.get("balanceIntent") or "")[:300],
+            "note": "diagnostic only; multi-hit, utility, range, defense or sidegrade intent may justify the drop",
+        })
+
+    kind = str(gameplay.get("kind") or data.get("category") or "").strip().lower()
+    consumable = bool(gameplay.get("consumable"))
+    reusable_gear = kind in {"tool", "armor", "accessory"} or (kind == "weapon" and not consumable)
+    if reusable_gear and (
+        consumable
+        or _finite_int(gameplay.get("maxStack"), 1) > 1
+        or _finite_int(gameplay.get("craftYield"), 1) > 1
+    ):
+        risks.append({"kind": "reusable_gear_economy_invariant_broken", "resultKind": kind})
+    return risks
+
+
 def build_balance_report(data: dict[str, Any], stage: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build one compact debug report for balance/repair boundaries.
 
@@ -171,12 +209,13 @@ def build_balance_report(data: dict[str, Any], stage: dict[str, Any] | None = No
         if "useTime" in gp:
             authored["useTime"] = gp.get("useTime")
 
+    final_attack = _final_attack_view(data)
     final = {
         "category": data.get("category"),
         "damage": gp.get("damage"),
         "useTime": gp.get("useTime"),
         "rarity": gp.get("rarity"),
-        "attack": _final_attack_view(data),
+        "attack": final_attack,
     }
     repair = {
         "path": debug.get("runtimeRepairPath", ""),
@@ -195,6 +234,7 @@ def build_balance_report(data: dict[str, Any], stage: dict[str, Any] | None = No
         extra={
             **{k: v for k, v in band.items() if k not in {"powerBand", "label"}},
             "balanceMode": current_balance_mode(),
+            "reviewRisks": _review_risks(data, stage_obj, final_attack),
             "authority": {
                 "author": "LLM writes fantasy/resultKind/runtimePlan/numbers",
                 "softBalance": "applied only in INFINI_BALANCE_MODE=normalize; otherwise reported as advice",

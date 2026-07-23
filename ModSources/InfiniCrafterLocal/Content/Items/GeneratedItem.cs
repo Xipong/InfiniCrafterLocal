@@ -480,18 +480,18 @@ public partial class GeneratedItem : ModItem
         if (!HasExecutableAltUse(gp)) return "";
         string mode = (gp!.AltUseMode ?? "").Trim().ToLowerInvariant();
         string prefix = "Alt use (Right Click / ПКМ): ";
+        string cooldown = gp.AltUseCooldownTicks > 0 ? $", cooldown {Math.Max(1, (int)Math.Ceiling(gp.AltUseCooldownTicks / 60f))}s" : "";
         if (mode == "mobility")
         {
             string kind = string.IsNullOrWhiteSpace(gp.AltMobilityMode) ? "mobility" : gp.AltMobilityMode.Trim();
             string range = gp.AltMobilityRangeTiles > 0 ? $", {gp.AltMobilityRangeTiles} tiles" : "";
-            string cooldown = gp.AltMobilityCooldownTicks > 0 ? $", cooldown {Math.Max(1, (int)Math.Ceiling(gp.AltMobilityCooldownTicks / 60f))}s" : "";
             return prefix + kind + range + cooldown;
         }
         if (mode == "generated_buff" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
-            return prefix + GeneratedUtilitySummary(gp.AltGeneratedBuff, "");
+            return prefix + GeneratedUtilitySummary(gp.AltGeneratedBuff, "") + cooldown;
         if (mode == "light")
-            return prefix + $"light pulse ({AltLightStrength(gp):0.00}, {Math.Max(1, (int)Math.Ceiling((gp.AltGeneratedBuff?.DurationTicks ?? 0) / 60f))}s)";
-        return prefix + mode;
+            return prefix + $"light pulse ({AltLightStrength(gp):0.00}, {Math.Max(1, (int)Math.Ceiling((gp.AltGeneratedBuff?.DurationTicks ?? 0) / 60f))}s)" + cooldown;
+        return prefix + mode + cooldown;
     }
 
     private static string GeneratedUtilitySummary(GeneratedBuffSpec? buff, string prefix)
@@ -615,15 +615,11 @@ public partial class GeneratedItem : ModItem
 
         if (player.altFunctionUse == 2 && HasExecutableAltUse(gp))
         {
-            string altMode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
-            if (altMode == "mobility")
+            var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+            if (modPlayer.GeneratedAltUseCooldownTicks > 0)
             {
-                var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-                if (modPlayer.GeneratedMobilityCooldownTicks > 0)
-                {
-                    ShowLocalUseFeedback(player, $"Mobility cooldown: {modPlayer.GeneratedMobilityCooldownSeconds}s", ref _lastAltUseBlockedNoticeTick, Color.Orange);
-                    return false;
-                }
+                ShowLocalUseFeedback(player, $"Alt-use cooldown: {modPlayer.GeneratedAltUseCooldownSeconds}s", ref _lastAltUseBlockedNoticeTick, Color.Orange);
+                return false;
             }
         }
         else if (!string.IsNullOrWhiteSpace(gp.MobilityMode))
@@ -678,6 +674,10 @@ public partial class GeneratedItem : ModItem
         bool runLocalAction = InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player);
         bool runPlayerGameplay = InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player);
         bool alt = player.altFunctionUse == 2 && gp is not null && !string.IsNullOrWhiteSpace(gp.AltUseMode);
+        bool runItemUsePresentation = runLocalAction
+            || (Main.netMode == NetmodeID.Server && !Main.dedServ && player.whoAmI == Main.myPlayer);
+        if (runItemUsePresentation)
+            InfiniItemVfxRuntime.EmitAndSyncUse(player, Data, alt);
         if (alt)
         {
             if (Main.netMode == NetmodeID.MultiplayerClient && runLocalAction)
@@ -696,7 +696,7 @@ public partial class GeneratedItem : ModItem
                 bool used = false;
                 if (runLocalAction && mode == "mobility")
                 {
-                    used = modPlayer.TryRunGeneratedMobility(gp.AltMobilityMode, gp.AltMobilityRangeTiles, gp.AltMobilityCooldownTicks, gp.AltMobilitySafeTileOnly);
+                    used = modPlayer.TryRunGeneratedMobility(gp.AltMobilityMode, gp.AltMobilityRangeTiles, 0, gp.AltMobilitySafeTileOnly);
                     if (!used)
                         ShowLocalUseFeedback(player, modPlayer.LastGeneratedMobilityFailureMessage, ref _lastAltUseBlockedNoticeTick, Color.Orange);
                 }
@@ -710,6 +710,8 @@ public partial class GeneratedItem : ModItem
                     modPlayer.ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
                     used = gp.AltGeneratedBuff.EmitLightStrength > 0f;
                 }
+                if (used)
+                    modPlayer.StartGeneratedAltUseCooldown(gp.AltUseCooldownTicks);
                 return used;
             }
             return true;
@@ -763,6 +765,7 @@ public partial class GeneratedItem : ModItem
         if (Data?.Gameplay?.HoldGeneratedBuff is not null && Data.Gameplay.HoldGeneratedBuff.HasAnyEffect && InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player))
             player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(Data.Gameplay.HoldGeneratedBuff);
 
+        InfiniItemVfxRuntime.OnLive(player, Data, "while_held");
         ApplyAuthoredToolMiningSpeed(player, Data?.Gameplay);
     }
 
@@ -823,14 +826,6 @@ public partial class GeneratedItem : ModItem
         if (a.FallDamageImmune) player.noFallDmg = true;
         if (a.LavaImmune) player.lavaImmune = true;
         if (a.WaterWalk) player.waterWalk = true;
-        if (a.LightStrength > 0f && Main.netMode != NetmodeID.Server)
-        {
-            Color c = string.IsNullOrWhiteSpace(a.LightColorName)
-                ? Color.White
-                : RuntimeColorPolicy.Resolve(a.LightColorName, Color.White);
-            float strength = Math.Clamp(a.LightStrength, 0.02f, 1.5f);
-            Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
-        }
     }
 
     public override bool IsArmorSet(Item head, Item body, Item legs)
@@ -915,12 +910,6 @@ public partial class GeneratedItem : ModItem
         if (a.FallDamageImmune) player.noFallDmg = true;
         if (a.LavaImmune) player.lavaImmune = true;
         if (a.WaterWalk) player.waterWalk = true;
-        if (a.LightStrength > 0f && Main.netMode != NetmodeID.Server)
-        {
-            Color c = RuntimeColorPolicy.Resolve(a.LightColorName, Color.White);
-            float strength = Math.Clamp(a.LightStrength, 0.02f, 1.5f);
-            Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
-        }
     }
 
     public override Vector2? HoldoutOffset() => new Vector2(Data.Gameplay.HoldoutOffsetX, Data.Gameplay.HoldoutOffsetY);
@@ -1323,7 +1312,13 @@ public partial class GeneratedItem : ModItem
         if (texture is null) return true;
         var source = new Rectangle(0, 0, texture.Width, texture.Height);
         var drawOrigin = source.Size() / 2f;
-        float finalScale = scale * Math.Clamp(drawData.Visual.InventoryScale, 0.55f, 1.55f);
+        // The incoming inventory scale was computed from the static 32 px ModItem placeholder.
+        // Rebase that fit component onto the actual per-instance PNG so 48/64 px authored
+        // canvases retain Terraria's slot extent instead of overflowing the inventory cell.
+        float staticFramePixels = Math.Max(frame.Width, frame.Height);
+        float runtimeTexturePixels = Math.Max(texture.Width, texture.Height);
+        float runtimeFitScale = Math.Min(1f, staticFramePixels / Math.Max(1f, runtimeTexturePixels));
+        float finalScale = scale * runtimeFitScale * Math.Clamp(drawData.Visual.InventoryScale, 0.55f, 1.55f);
         Vector2 finalPos = position + new Vector2(drawData.Visual.DrawOffsetX, drawData.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, finalPos, source, drawColor, 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
@@ -1340,7 +1335,7 @@ public partial class GeneratedItem : ModItem
         float finalScale = scale * Math.Clamp(drawData.Visual.WorldScale, 0.55f, 1.75f);
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0, drawOrigin.Y * finalScale);
         drawPosition += new Vector2(drawData.Visual.DrawOffsetX, drawData.Visual.DrawOffsetY);
-        spriteBatch.Draw(texture, drawPosition, source, lightColor, rotation, drawOrigin, finalScale, SpriteEffects.None, 0f);
+        spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
     }
 }

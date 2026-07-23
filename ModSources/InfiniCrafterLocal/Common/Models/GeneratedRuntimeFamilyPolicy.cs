@@ -98,11 +98,15 @@ internal static class GeneratedRuntimeFamilyPolicy
         if (spec is null) return false;
         string family = Normalize(spec.RuntimeFamily);
         string delivery = (spec.Delivery ?? "").Trim().ToLowerInvariant();
-        if (family == None || !HasCompatibleMovement(spec)) return false;
+        if (family == None || !AcceptsDelivery(family, delivery) || !HasCompatibleMovement(spec))
+            return false;
         if (family == ChargeRelease)
-            return delivery is "shoot" or "cast" or "throw";
+            return spec.ChargeTicks > 0 && spec.ChargePowerMultiplier > 0f;
         if (family == Sentry)
-            return delivery == "summon" && spec.SentryPlacement is "grounded" or "floating";
+            return spec.SentryPlacement is "grounded" or "floating"
+                && spec.SentryAttackIntervalTicks > 0
+                && spec.SentryLifetimeTicks > 0
+                && spec.SentryTargetRangeTiles > 0f;
         return true;
     }
 
@@ -114,7 +118,37 @@ internal static class GeneratedRuntimeFamilyPolicy
     {
         string family = Normalize(value);
         string carrier = (delivery ?? "").Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
-        return !(family == OverheadBarrage && carrier == "swing") && Profile(family).ProjectileOwned;
+        return Profile(family).ProjectileOwned && !KeepsItemBodyDamageLane(family, carrier);
+    }
+
+    public static bool KeepsItemBodyDamageLane(string? value, string? delivery)
+    {
+        string family = Normalize(value);
+        string carrier = (delivery ?? "").Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        return carrier == "swing" && family is Shoot or OverheadBarrage;
+    }
+
+    public static bool AcceptsDelivery(string? value, string? delivery)
+    {
+        string family = Normalize(value);
+        string carrier = (delivery ?? "").Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        return family switch
+        {
+            None => carrier == "none",
+            Swing => carrier == "swing",
+            Thrust => carrier == "thrust",
+            Returning => carrier == "throw",
+            Flail => carrier == "flail",
+            Yoyo => carrier == "yoyo",
+            Whip => carrier == "whip",
+            Shoot => carrier is "shoot" or "swing",
+            Cast or Beam => carrier == "cast",
+            ChargeRelease => carrier is "shoot" or "cast" or "throw",
+            OverheadBarrage => carrier is "shoot" or "cast" or "swing",
+            Throw => carrier == "throw",
+            Summon or Sentry => carrier == "summon",
+            _ => false,
+        };
     }
 
     public static GeneratedHeldRenderRole HeldRenderRole(string? value)
@@ -123,9 +157,11 @@ internal static class GeneratedRuntimeFamilyPolicy
     public static GeneratedHeldRenderRole HeldRenderRole(string? value, string? delivery)
     {
         string family = Normalize(value);
+        string carrier = (delivery ?? "").Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        if (KeepsItemBodyDamageLane(family, carrier))
+            return GeneratedHeldRenderRole.Swing;
         if (family != OverheadBarrage && family != ChargeRelease)
             return Profile(family).HeldRenderRole;
-        string carrier = (delivery ?? "").Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
         return carrier switch
         {
             "swing" => GeneratedHeldRenderRole.Swing,

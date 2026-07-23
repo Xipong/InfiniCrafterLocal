@@ -17,10 +17,16 @@ def _method(source: str, name: str, next_name: str) -> str:
 
 def _contract_check_asset_notifications_are_server_authored_and_downloads_are_stream_bounded() -> None:
     source = _text("Common/Services/GeneratedAssetSyncService.cs")
-    handle = _method(source, "public void HandlePacket", "public void QueueDownloads")
-    server_branch = handle.split("if (Main.netMode == NetmodeID.Server)", 1)[1]
+    request = _method(source, "public void HandleAssetRequestPacket", "public void HandleAssetChunkPacket")
+    chunk = _method(source, "public void HandleAssetChunkPacket", "private bool TryReadVerifiedAssetBundle")
 
-    assert "packet.Send" not in server_branch
+    assert "Main.netMode != NetmodeID.Server" in request
+    assert "GeneratedItems.TryGet(itemId, out GeneratedItemData data)" in request
+    assert "BuildServerAssetDescriptors(data)" in request
+    assert "packet.Send" not in request
+    assert "ComputeSha256Hex(complete)" in chunk
+    assert "SHA256.HashData" in source
+    assert "CommitVerifiedAsset" in chunk
     assert "HttpCompletionOption.ResponseHeadersRead" in source
     assert "ContentLength" in source
     assert "MaxAssetBytes" in source
@@ -28,6 +34,7 @@ def _contract_check_asset_notifications_are_server_authored_and_downloads_are_st
     assert "total > MaxAssetBytes" in source
     assert "MaxInFlightDownloads" in source
     assert "MaxKnownMissing" in source
+    assert "SemaphoreSlim" in source
 
 
 def _contract_check_registry_bounds_only_hydration_request_state_not_authoritative_definitions() -> None:
@@ -101,8 +108,10 @@ def _contract_check_server_craft_transactions_log_reservation_commit_and_refund_
     assert '"received"' in request
     assert '"reserve_rejected"' in request
     assert '"reserved"' in request
-    assert "out int sourceSlotA" in request
-    assert "out int sourceSlotB" in request
+    assert "aSlot=stationA" in request
+    assert "bSlot=stationB" in request
+    assert "TryTakeServerEscrowInput(0, aRef" in request
+    assert "TryTakeServerEscrowInput(1, bRef" in request
     assert 'success ? "committed" : "refunded"' in result
 
 

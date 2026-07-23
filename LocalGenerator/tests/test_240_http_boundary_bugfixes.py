@@ -19,7 +19,7 @@ from infini_local.web.http_response_helpers import (
     _combine_failure_http_response,
     _combine_failure_payload,
 )
-from infini_local.web.server_utility_routes import ServerUtilityRoutes
+from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES, ServerUtilityRoutes
 from infini_local.storage import world_storage
 from infini_local.web.vfx_debug_routes import VfxDebugRoutes
 
@@ -625,6 +625,24 @@ def _contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outag
     assert payload["lastFailure"] == failure
 
 
+def _contract_check_asset_response_is_streamed_and_server_bounded(tmp_path: Path) -> None:
+    small = tmp_path / "small.png"
+    small.write_bytes(b"small-png-payload")
+    small_handler = _BinaryCaptureHandler()
+    ServerUtilityRoutes.send_bounded_asset_file(small_handler, small, "image/png", immutable=True)
+    assert small_handler.code == 200
+    assert small_handler.wfile.getvalue() == b"small-png-payload"
+    assert small_handler.headers["Content-Length"] == str(small.stat().st_size)
+
+    oversized = tmp_path / "oversized.png"
+    with oversized.open("wb") as stream:
+        stream.truncate(MAX_ASSET_RESPONSE_BYTES + 1)
+    oversized_handler = _BinaryCaptureHandler()
+    ServerUtilityRoutes.send_bounded_asset_file(oversized_handler, oversized, "image/png", immutable=True)
+    assert oversized_handler.code == 413
+    assert oversized_handler.wfile.getvalue() == b""
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_240_http_boundary_bugfixes_module_contract(request):
     from contract_checks import run_contract_checks
@@ -650,6 +668,7 @@ def test_240_http_boundary_bugfixes_module_contract(request):
             '_contract_check_vfx_debug_post_routes_require_an_exact_parsed_path',
             '_contract_check_vfx_debug_force_recipe_never_crosses_or_persists_authority_boundary',
             '_contract_check_recipe_debug_views_derive_from_authoritative_recipe_files',
+            '_contract_check_asset_response_is_streamed_and_server_bounded',
             '_contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outage',
         ),
     )

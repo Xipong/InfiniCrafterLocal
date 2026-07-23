@@ -28,12 +28,6 @@ public sealed partial class InfiniCraftPlayer
     private static bool HasCraftRequestId(string? requestId)
         => NormalizeCraftRequestId(requestId).Length > 0;
 
-    private static bool IsValidIncomingCraftItemType(int type)
-        => type > ItemID.None;
-
-    private static bool HasReforgePrefix(int prefix)
-        => prefix != InfiniTerrariaSentinels.NoPrefix;
-
     private static int NormalizeCraftStack(int stack)
         => stack < 1 ? 1 : stack;
 
@@ -42,12 +36,17 @@ public sealed partial class InfiniCraftPlayer
     {
         InputA = NewAirItem();
         InputB = NewAirItem();
+        ClearPendingStationEscrowOperation();
+        ClearStationEscrowResultCache();
     }
 
     public override void OnEnterWorld()
     {
         if (InputA is null) InputA = NewAirItem();
         if (InputB is null) InputB = NewAirItem();
+        // Drop any half-open client escrow transaction after world/join transitions.
+        // Server A/B remains authoritative for true station ownership.
+        ClearPendingStationEscrowOperation();
         // Late-join catch-up: make sure this client has the generated-item registry
         // before it sees someone else use an already-crafted item.
         global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
@@ -115,12 +114,6 @@ public sealed partial class InfiniCraftPlayer
             AddRefundTag(refunds, _request.RefundB);
             return refunds;
         }
-
-        // Multiplayer station slots are non-owning selections. The actual items
-        // remain in vanilla inventory until the server reserves them, so serializing
-        // these clones as exit refunds would duplicate them on the next join.
-        if (Main.netMode == NetmodeID.MultiplayerClient)
-            return refunds;
 
         if (HasInputA) AddRefundTag(refunds, InputA);
         if (HasInputB) AddRefundTag(refunds, InputB);
@@ -233,9 +226,10 @@ public sealed partial class InfiniCraftPlayer
         TickGeneratedUtilityBuff();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
+        TickPendingStationEscrow();
         GeneratedHeldItemDrawLayer.MaybeBroadcastLocalHeldItem(Player, ref _heldItemPresentationSyncTick, ref _heldItemPresentationSyncKey);
 
-        if (!Main.playerInventory && !HasPendingCraft && HasAnyInput)
+        if (Main.netMode != NetmodeID.Server && !Main.playerInventory && !HasPendingCraft && HasAnyInput)
             ReturnStationInputs();
 
         if (_awaitingServerCommit)

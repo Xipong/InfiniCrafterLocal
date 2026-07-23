@@ -120,6 +120,7 @@ FIELD_ORDER = [
     "INFINI_VISUAL_REQUIRE_ITEM_SPRITE",
     "INFINI_HOST",
     "INFINI_PORT",
+    "INFINI_MP_ASSET_TRANSPORT",
     "INFINI_ASSET_PUBLIC_BASE_URL",
     "INFINI_TERRARIA_PORT",
     "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS",
@@ -308,6 +309,7 @@ DEFAULTS = {
     "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
     "INFINI_HOST": "127.0.0.1",
     "INFINI_PORT": "5055",
+    "INFINI_MP_ASSET_TRANSPORT": "native",
     "INFINI_ASSET_PUBLIC_BASE_URL": "",
     "INFINI_TERRARIA_PORT": "7777",
     "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS": "240",
@@ -417,6 +419,7 @@ PRESET_HELP = {
 FIELD_HELP = {
     "INFINI_HOST": "На каком интерфейсе слушает server.py. 127.0.0.1 — только этот ПК; 0.0.0.0 — принимать подключения из LAN/Radmin.",
     "INFINI_PORT": "Порт локального генератора. tModLoader-клиент должен ходить именно сюда.",
+    "INFINI_MP_ASSET_TRANSPORT": "Как друзья получают финальные PNG: native — внутри Terraria packets; http — напрямую с host LocalGenerator /get_asset.",
     "INFINI_ASSET_PUBLIC_BASE_URL": "Публичный адрес, по которому другие игроки смогут скачать готовые PNG/JSON ассеты с host-ПК. Для Radmin обычно http://26.x.x.x:5055.",
     "INFINI_TERRARIA_PORT": "Порт Terraria/tModLoader сервера для подсказки друзьям. По умолчанию Host & Play/server используют 7777, если ты не менял порт.",
     "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS": "Сколько tModLoader ждёт один HTTP-запрос крафта, прежде чем считать попытку зависшей.",
@@ -515,6 +518,10 @@ FIELD_HELP = {
 }
 
 OPTION_HELP = {
+    "INFINI_MP_ASSET_TRANSPORT": {
+        "native": "Рекомендуемый Host & Play режим: PNG bundles идут через Terraria/tModLoader packets. Public asset URL друзьям не нужен.",
+        "http": "PNG скачиваются с host LocalGenerator /get_asset. Нужны доступный Public asset URL и Host=0.0.0.0 для LAN/Radmin.",
+    },
     "INFINI_LLM_PROVIDER": {
         "local": "Локальная LLM через LM Studio/Ollama/OpenAI-compatible endpoint. Активны LM Studio URL/model, OpenRouter/Compat поля блокируются.",
         "openrouter": "LLM-контракт пишет модель с OpenRouter. Активны OpenRouter key/model/referer/title, локальные/compat поля блокируются.",

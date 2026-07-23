@@ -79,7 +79,13 @@ public sealed partial class GeneratedProjectile
         if (parent is null)
             return;
 
-        if (string.IsNullOrWhiteSpace(_spec.ProjectileSpritePath) && HasPngPath(parent.ProjectileSpritePath))
+        // Child variants own child/field presentation. Falling back to the root
+        // projectile sprite turns a sentry shot into the sentry body (and causes
+        // the same role inversion for other authored children). Empty child paths
+        // intentionally fall through to procedural shape rendering.
+        if (_runtimeVariant == GeneratedProjectileRuntimeVariant.Root
+            && string.IsNullOrWhiteSpace(_spec.ProjectileSpritePath)
+            && HasPngPath(parent.ProjectileSpritePath))
         {
             _spec.ProjectileSpritePath = parent.ProjectileSpritePath.Trim();
             _spec.ProjectileSpriteStatus = parent.ProjectileSpriteStatus ?? "";
@@ -453,7 +459,7 @@ public sealed partial class GeneratedProjectile
             // the generated PNG has finished downloading. Do not let the VFX pass suppress the
             // whole projectile in that window; draw the compact runtime-plan silhouette until the
             // real projectile sprite appears from asset sync.
-            if (!spriteDrawn)
+            if (!spriteDrawn && !TryDrawBundledProjectilePlaceholder(center, lightColor))
                 DrawRuntimePlanFallback(px, center, dir, perp, c, len, width);
 
             InfiniVfxRuntime.Draw(Projectile, _spec, manifest, ref _vfxState, lightColor, InfiniVfxDrawPass.OverProjectile);
@@ -472,7 +478,8 @@ public sealed partial class GeneratedProjectile
         if (TryDrawGeneratedProjectileSprite(center, lightColor))
             return false;
 
-        DrawRuntimePlanFallback(px, center, dir, perp, c, len, width);
+        if (!TryDrawBundledProjectilePlaceholder(center, lightColor))
+            DrawRuntimePlanFallback(px, center, dir, perp, c, len, width);
         return false;
     }
 
@@ -488,6 +495,25 @@ public sealed partial class GeneratedProjectile
             Vector2 b = center + dir * len * (0.74f + 0.08f * Math.Abs(t)) - perp * t * len * 0.58f;
             Color lineColor = i == 0 ? Color.White * 0.82f * alphaMul : c * (0.50f - Math.Abs(t) * 0.07f) * alphaMul;
             DrawLine(px, a, b, lineColor, Math.Max(1f, width * (1.55f - Math.Abs(t) * 0.28f)));
+        }
+    }
+
+    private bool TryDrawBundledProjectilePlaceholder(Vector2 center, Color lightColor)
+    {
+        try
+        {
+            Texture2D texture = ModContent.Request<Texture2D>("InfiniCrafterLocal/Assets/GeneratedItem").Value;
+            var source = new Rectangle(0, 0, texture.Width, texture.Height);
+            Vector2 origin = source.Size() * 0.5f;
+            float targetPixels = Math.Clamp(Math.Max(Projectile.width, Projectile.height) * Projectile.scale, 10f, 28f);
+            float scale = targetPixels / Math.Max(1f, Math.Max(texture.Width, texture.Height));
+            Color tint = Projectile.GetAlpha(lightColor);
+            Main.spriteBatch.Draw(texture, center + new Vector2(0f, Projectile.gfxOffY), source, tint, Projectile.rotation, origin, scale, SpriteEffects.None, 0f);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -534,17 +560,14 @@ public sealed partial class GeneratedProjectile
         var source = new Rectangle(0, 0, texture.Width, texture.Height);
         Vector2 origin = source.Size() * 0.5f;
         float rotation = Projectile.rotation - localForwardRadians;
+        Vector2 drawPosition = center + new Vector2(0f, Projectile.gfxOffY);
 
-        float basePixels = Math.Max(texture.Width, texture.Height);
-        float targetPixels = Math.Max(8f, Math.Max(Projectile.width, Projectile.height) * Projectile.scale * 1.15f);
-        if (IsThrustDelivery() || IsFlailDelivery() || IsYoyoDelivery() || IsWhipDelivery())
-            targetPixels = Math.Max(targetPixels, 42f * Math.Max(0.75f, _spec.ProjectileScale));
-        else if (Projectile.localAI[1] <= 0.001f)
-            targetPixels = Math.Max(targetPixels, 28f * Math.Max(0.75f, _spec.ProjectileScale));
-        else
-            targetPixels = Math.Max(targetPixels, 18f * Math.Max(0.75f, _spec.ProjectileScale));
-        float drawScale = Math.Clamp(targetPixels / Math.Max(1f, basePixels), 0.35f, 2.5f);
-        Color tint = lightColor;
+        // Terraria and ExampleMod draw projectile frames at their authored native pixel size,
+        // scaled only by the projectile's current presentation scale.  Do not normalize every
+        // generated PNG to a hitbox/localAI-derived 18/28/42 px target: 48/64 px weapon bodies
+        // are intentional art and their visual dimensions are independent from collision.
+        float drawScale = Math.Clamp(Projectile.scale, 0.35f, 2.5f);
+        Color tint = Projectile.GetAlpha(lightColor);
         // velocity rotation already carries the full world-space facing through
         // Projectile.rotation. Mirroring here would invert leftward shots a second time and make them fly butt-first.
         SpriteEffects effects = SpriteEffects.None;
@@ -552,8 +575,8 @@ public sealed partial class GeneratedProjectile
         // merged light/glow on both generated and vanilla-looking textures.
         Color backTint = PresentationColor(110) * 0.22f;
         if (drawScale > 0.4f && InfiniVfxClientOptions.EnableGeneratedSpriteSilhouette)
-            Main.spriteBatch.Draw(texture, center, source, backTint, rotation, origin, drawScale * 1.08f, effects, 0f);
-        Main.spriteBatch.Draw(texture, center, source, tint, rotation, origin, drawScale, effects, 0f);
+            Main.spriteBatch.Draw(texture, drawPosition, source, backTint, rotation, origin, drawScale * 1.08f, effects, 0f);
+        Main.spriteBatch.Draw(texture, drawPosition, source, tint, rotation, origin, drawScale, effects, 0f);
         return true;
     }
 

@@ -7,7 +7,6 @@ namespace InfiniCrafterLocal.Common;
 /// </summary>
 public static class InfiniNetPacketIds
 {
-    public const byte NotifyGeneratedAssets = 1;
     public const byte NotifyGeneratedItem = 2;
     public const byte RequestGeneratedRegistry = 3;
     public const byte CraftCommitResult = 4;
@@ -20,4 +19,9 @@ public static class InfiniNetPacketIds
     public const byte SyncGeneratedHeldItemPresentation = 11;
     public const byte CancelServerCraft = 12;
     public const byte RequestGeneratedAltUse = 13;
+    public const byte RequestStationEscrow = 14;
+    public const byte StationEscrowResult = 15;
+    public const byte RequestGeneratedAsset = 16;
+    public const byte GeneratedAssetChunk = 17;
+    public const byte SyncGeneratedItemVfxEvent = 18;
 }

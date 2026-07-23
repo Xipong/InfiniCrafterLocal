@@ -261,6 +261,7 @@ def _validated_visual_director_kit(
         ("childSpritePrompt", "child"),
         ("impactSpritePrompt", "impact"),
         ("fieldSpritePrompt", "field"),
+        ("equipOverlayPrompt", "equip_overlay"),
     ]:
         if kit.get(prompt_key):
             cleaned = strip_conflicting_sprite_prompt_bits(kit[prompt_key])
@@ -344,7 +345,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "imageBackendContract": backend_contract,
             "rules": [
                 'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}}; never emit VisualKit fields directly at the root.',
-                "bakedAssets may contain only projectile, impact, child, and field; never item. itemIconPrompt owns the required item sprite.",
+                "bakedAssets may contain only projectile, impact, child, field, and equip_overlay; never item. itemIconPrompt owns the required item sprite. For armor/accessory, author equipOverlayPrompt plus bakedAssets.equip_overlay.mode=baked_sprite; it is a single transparent wearable overlay emblem, not a spritesheet or inventory icon.",
                 "Role prompt and VFX fields belong directly inside visualKit; never inside bakedAssets and never inside a vfx object. bakedAssets role objects contain only mode, reason, and projectile-only distinctFromItem.",
                 "Return one JSON object matching the supplied schema; no markdown or analysis.",
                 "Do not change gameplay, delivery, runtime families, counts, timing, or stats.",
@@ -375,8 +376,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "styleGuide": "one shared authored art-direction sentence used by every role",
                 "palette": "foreground named colors only",
                 "itemSilhouetteContract": "one compact positive sentence stating global silhouette, part count, proportions, attachment points, and which bodies are continuous or intentionally separate",
-                "rolePrompts": "direct visualKit fields only: itemIconPrompt, projectileSpritePrompt, impactSpritePrompt, childSpritePrompt, fieldSpritePrompt. Never nest any prompt field inside bakedAssets",
-                "bakedAssets": "may contain only projectile, impact, child, and field; never item. It is an exact JSON object of role objects, never an array and never a string mode. Each role object contains only mode, reason, and projectile-only distinctFromItem; never a prompt. Example: {\"projectile\":{\"mode\":\"baked_sprite\",\"reason\":\"distinct moving body\",\"distinctFromItem\":true},\"impact\":{\"mode\":\"particle_vfx\",\"reason\":\"momentary sparks\"}}. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. itemIconPrompt owns the required item sprite; role prompts above are canonical",
+                "rolePrompts": "direct visualKit fields only: itemIconPrompt, projectileSpritePrompt, impactSpritePrompt, childSpritePrompt, fieldSpritePrompt, equipOverlayPrompt. Never nest any prompt field inside bakedAssets. Armor/accessory require a concise single transparent wearable-overlay emblem prompt.",
+                "bakedAssets": "may contain only projectile, impact, child, field, and equip_overlay; never item. It is an exact JSON object of role objects, never an array and never a string mode. Each role object contains only mode, reason, and projectile-only distinctFromItem; never a prompt. Example: {\"projectile\":{\"mode\":\"baked_sprite\",\"reason\":\"distinct moving body\",\"distinctFromItem\":true},\"impact\":{\"mode\":\"particle_vfx\",\"reason\":\"momentary sparks\"}}. reuse_item_sprite and distinctFromItem are projectile-only; impact, child, and field use none, particle_vfx, or baked_sprite. Armor/accessory require equip_overlay.mode=baked_sprite. itemIconPrompt owns the required item sprite; role prompts above are canonical",
                 "vfxFields": "direct visualKit fields only: concise vfxIntent/projectileVfx/impactVfx/childVfx/fieldVfx. vfxScaleHint is exactly one enum string (tiny, small, normal, large, or huge); vfxRhythmHint is exactly one enum string (slow, normal, snappy, delayed, or pulsing); vfxAvoid is exactly one string. These three fields are never arrays. vfxMaterialHints is the only VFX hint field that is an array. Never create a vfx object",
                 "lists": "animationPlan, assetDependencies, and qualityNotes are JSON arrays. vfxMaterialHints is the only VFX hint field that is an array; vfxScaleHint, vfxRhythmHint, and vfxAvoid are scalar strings",
                 "negativePrompt": "one optional shared backend negative prompt; keep empty for Z-Image",
@@ -402,7 +403,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             "Write coherent subject-first visual descriptions, not legacy SD tag recipes. Establish physical class, count, silhouette, view, and connected functional parts before materials, decoration, light, style, and background. "
             "Preserve authored subject, state, colors, materials, and topology. Use only authored glow, magic, energy, child motes, and material effects. "
             'The root object must contain exactly one key named "visualKit". Return exactly {"visualKit": {...}} and never place itemIconPrompt, bakedAssets, or other VisualKit fields at the root. '
-            "bakedAssets may contain only projectile, impact, child, and field; never item. "
+            "bakedAssets may contain only projectile, impact, child, field, and equip_overlay; never item. Armor/accessory require equipOverlayPrompt plus bakedAssets.equip_overlay.mode=baked_sprite. "
             "Role prompt and VFX fields belong directly inside visualKit; never inside bakedAssets and never inside a vfx object."
         )
         visual_user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -420,6 +421,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                 "infini_visual_director",
                 schema=visual_kit_response_schema(),
                 strict=True,
+                auto_preference="json_schema",
             ),
         }
         req = apply_llm_common_options(

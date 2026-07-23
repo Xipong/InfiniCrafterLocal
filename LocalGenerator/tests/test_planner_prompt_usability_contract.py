@@ -7,15 +7,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.core.runtime_authoring import ENGINE_FN_CATALOG_V2
+from infini_local.core.runtime_authoring import ENGINE_FUNCTION_CATALOG
 from infini_local.core.contract_versions import PLANNER_PROMPT_PROFILE_VERSION
-from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS, accepted_engine_param_names
+from infini_local.core.runtime_authoring.function_contract_registry import accepted_engine_param_names
+from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines.combine_validation import strict_validate_authored_item, validate_and_repair
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.item_power_knowledge import canonicalize
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS, build_llm_author_payload
+from infini_local.pipelines import llm_authoring_prompt
 from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 
 
@@ -30,13 +32,17 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     report = planner_prompt_usability_report(PARENT_A, PARENT_B, {}, {}, "planner_smoke")
     assert report["ok"], report
     assert report["contractStyle"] == "sharp"
-    assert len(text) <= 26_000
+    assert report["chars"] == len(text)
+    assert report["recommendedLimitChars"] == PLANNER_PROMPT_LIMIT_CHARS
+    assert report["withinRecommendedChars"] == (len(text) <= PLANNER_PROMPT_LIMIT_CHARS)
+    assert report["sizeGateMode"] == "hard_limit"
     functions = payload["engineRuntimeContract"]["availableFunctions"]
-    assert set(functions) == set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+    assert set(functions) == set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
     assert not (set(functions) & set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
     assert functions["apply_player_effect_on_use"]["params"]["healLife"] == "0..500"
     assert functions["shoot_projectile"]["params"]["speed"] == "3..18"
-    assert "Low-level primary projectile" in functions["shoot_projectile"]["does"]
+    assert "Low-level root executor" in functions["shoot_projectile"]["does"]
+    assert "delivery=swing" in functions["shoot_projectile"]["does"]
     assert "boss/NPC/mob/enemy" in functions["spawn_temporary_helper_projectile"].get("safety", "")
     for useful_section in (
         "plannerChecklist", "inputDataPolicy", "criticalValueSemantics",
@@ -46,13 +52,14 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     assert "validatorLimits" not in payload["engineRuntimeContract"]
     assert "validatorRanges" not in payload
     accepted_extras = payload["engineRuntimeContract"]["acceptedParamExtras"]
-    primary_functions = set(accepted_extras["primaryAttackFunctions"])
-    primary_params = set(accepted_extras["primaryAttackParams"])
-    assert primary_functions == {
+    root_functions = set(accepted_extras["rootExecutorFunctions"])
+    root_params = set(accepted_extras["rootExecutorParams"])
+    assert root_functions == {
         "shoot_projectile", "perform_melee_attack", "fire_ranged_weapon", "cast_magic_weapon",
+        "deploy_sentry",
     }
-    for fn in primary_functions:
-        assert set(functions[fn]["params"]) | primary_params == set(accepted_engine_param_names(fn))
+    for fn in root_functions:
+        assert set(functions[fn]["params"]) | root_params == set(accepted_engine_param_names(fn))
     assert set(functions["apply_on_hit_effect"]["params"]) | set(accepted_extras["apply_on_hit_effect"]) == set(
         accepted_engine_param_names("apply_on_hit_effect")
     )
@@ -130,7 +137,7 @@ def _check_legacy_catalog_style_env_cannot_starve_or_bloat_planner(monkeypatch) 
         contract = payload["engineRuntimeContract"]
         assert contract["contractStyle"] == "sharp"
         functions = contract["availableFunctions"]
-        assert set(functions) == set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+        assert set(functions) == set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
         assert functions["apply_player_effect_on_use"]["params"]["healLife"] == "0..500"
         assert functions["shoot_projectile"]["params"]["movement"].startswith("straight|slow_homing")
         assert "temporary_turret" in functions["spawn_temporary_helper_projectile"]["params"]["family"]
@@ -226,8 +233,10 @@ def _check_prompt_usability_cli_runs_the_same_contract() -> None:
     )
     report = json.loads(proc.stdout)
     assert report["ok"], report
-    assert report["limitChars"] == 26_000
-    assert report["report"]["functionCount"] == len(ENGINE_FN_CATALOG_V2) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
+    assert report["limitChars"] == PLANNER_PROMPT_LIMIT_CHARS
+    assert report["withinRecommendedChars"] == (report["report"]["chars"] <= PLANNER_PROMPT_LIMIT_CHARS)
+    assert report["sizeGateMode"] == "hard_limit"
+    assert report["report"]["functionCount"] == len(ENGINE_FUNCTION_CATALOG) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
 
 
 def _check_release_wrappers_do_not_override_canonical_planner_limit() -> None:
@@ -295,6 +304,20 @@ def _check_planner_prompt_guides_structural_mechanic_authoring_not_code_repair(m
     assert "image prompts: item=inventory/held" in text
     assert "same sword/blade/boomerang ok" in text
 
+
+def _check_planner_prompt_size_limit_is_a_hard_gate(monkeypatch) -> None:
+    monkeypatch.setattr(llm_authoring_prompt, "PLANNER_PROMPT_LIMIT_CHARS", 1)
+    report = llm_authoring_prompt.planner_prompt_usability_report(
+        PARENT_A,
+        PARENT_B,
+        {},
+        {},
+        "planner_size_gate",
+    )
+    assert report["withinRecommendedChars"] is False
+    assert report["sizeGateMode"] == "hard_limit"
+    assert report["ok"] is False
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -314,6 +337,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_planner_catalog_exposes_safe_terraria_item_capabilities_without_loss',
     '_check_placeable_consumable_parent_semantics_are_explicit_without_hiding_raw_flags',
     '_check_planner_prompt_guides_structural_mechanic_authoring_not_code_repair',
+    '_check_planner_prompt_size_limit_is_a_hard_gate',
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

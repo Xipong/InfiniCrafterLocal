@@ -2,9 +2,27 @@ from __future__ import annotations
 
 from typing import Any
 
-from infini_local.core.runtime_family_policy import is_projectile_owned_family, uses_projectile_only_item_affordance
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ENGINE_FUNCTION_CONTRACT_BY_NAME,
+    REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION,
+)
+
+from infini_local.core.runtime_family_policy import (
+    is_projectile_owned_family,
+    keeps_item_body_damage_lane,
+    runtime_family_accepts_delivery,
+    runtime_family_accepts_movement,
+    runtime_family_delivery_pairs,
+    runtime_family_required_movements,
+    uses_projectile_only_item_affordance,
+)
 from infini_local.core.runtime_secondary_policy import CANONICAL_SECONDARY_TRIGGERS
+from infini_local.core.runtime_executor_vocabulary import MOVEMENT_CODE
 from infini_local.core.runtime_authoring.vocabulary import normalize_authoring_token as _norm_name
+from infini_local.core.vfx_composition_primitives import (
+    vfx_cue_repair_combinations,
+    vfx_cue_repair_values_allowed,
+)
 
 
 # AGENT MAP: static runtime authoring vocabulary/catalog/range schema.
@@ -13,6 +31,11 @@ from infini_local.core.runtime_authoring.vocabulary import normalize_authoring_t
 # Canonical active temporary-helper families. True sentry lifecycle is authored only
 # through deploy_sentry; no legacy minion/sentry spellings are accepted here.
 TEMPORARY_HELPER_FAMILIES = frozenset({"orbiter", "drone", "wisp", "temporary_turret", "pet_attack"})
+
+# Every combat root authors these two neutral-safe cardinality fields directly.
+# Other required compiled fields may be derived by specialized lowerers.
+COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS = ("shotCount", "spreadRadians")
+COMBAT_EXECUTOR_RESULT_KINDS = frozenset({"weapon", "consumable_weapon"})
 
 
 TERRARIA_WEAPON_FAMILY_GROUPS: dict[str, set[str]] = {
@@ -64,9 +87,9 @@ def _runtime_family_affordances(runtime_family: str, weapon_family: Any = "", de
         # animation, but still execute through the generated held-thrust projectile.
         style = USE_STYLE_RAPIER if family in {"shortsword", "short_sword", "rapier", "dagger", "gladius"} else USE_STYLE_SHOOT
         out.update({"useStyleCode": style, "hideUseGraphic": True, "disableItemMeleeHitbox": True, "ownerHitCheck": True})
-    elif runtime_family == "overhead_barrage" and delivery_token == "swing":
-        # Starfury-style carrier: the item still swings and owns its melee hitbox;
-        # overhead_barrage only owns where the authored projectile appears.
+    elif keeps_item_body_damage_lane(runtime_family, delivery_token):
+        # One root executor may preserve Terraria's body/tool swing while emitting
+        # generated projectiles. This is a bounded carrier mode, not two controllers.
         out.update({"useStyleCode": USE_STYLE_SWING, "hideUseGraphic": False, "disableItemMeleeHitbox": False, "ownerHitCheck": False})
     elif is_projectile_owned_family(runtime_family):
         projectile_only = uses_projectile_only_item_affordance(runtime_family, delivery_token)
@@ -75,137 +98,6 @@ def _runtime_family_affordances(runtime_family: str, weapon_family: Any = "", de
             out["channelUse"] = True
     return out
 
-
-ENGINE_FN_CATALOG_V2 = {
-    "set_item_stats": {
-        "meaning": "Result kind and bounded item stats.",
-        "params": {
-            "resultKind": "weapon|ammo|consumable_weapon|tool|accessory|armor|potion|material|furniture|generic",
-            "damageClass": "generic|melee|melee_no_speed|ranged|magic|summon|summon_melee_speed|exact ModName/DamageClassName",
-            "damage": "0..cap", "useTimeTicks": "10..150", "useAnimationTicks": "6..150; =useTime one action/click; >useTime may repeat", "knockback": "0..12", "manaCost": "0..80", "autoReuse": "bool", "maxStack": "1 gear; 25+ stacks",
-            "craftYield": "output count", "healLife": "potion only", "healMana": "potion only", "buffType": "potion buff id", "buffTime": "ticks paired with buffType",
-            "pickPower": "tool only", "axePower": "tool only", "hammerPower": "tool only",
-            "ammoFor": "empty custom; arrow|bullet vanilla ammo identity",
-            "armorSlot": "head|body|legs for armor", "defense": "armor 0..80",
-            "consumable": "true stack-spent; false gear", "rarity": "-1..12", "value": ">=0",
-        },
-    },
-    "shoot_projectile": {
-        "meaning": "Low-level primary projectile/held executor; runtimeFamily required.",
-        "params": {
-            "delivery": "swing|thrust|shoot|cast|throw|summon", "movement": "straight|slow_homing|gravity_arc|drift|orbit|boomerang|bounce|sine_homing|phase|accelerate|spiral|vortex_orb|blackhole_pull|proximity_missile|returning_glaive|expanding_wave; phase passes tiles",
-            "speed": "3..18", "rangeTiles": "4..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total NPC hits", "extraUpdates": "0..3", "homingStrength": "0..1", "beamWidthPx": "2..96", "beamChargeTicks": "0..300", "chargeTicks": "1..300", "chargePowerMultiplier": "1..3", "delayTicks": "0..300; overhead_barrage 0=immediate", "immunityCooldown": "4..60",
-            "runtimeFamily": "swing|thrust|returning|flail|yoyo|whip|shoot|cast|beam|charge_release|overhead_barrage|throw|summon; sentry uses deploy_sentry",
-            "weaponFamily": "exact optional", "projectileFamily": "visual form",
-            "projectileShape": "visual body", "projectileMotion": "visual motion", "projectileTrail": "visual trail", "projectileImpact": "visual impact",
-        },
-    },
-    "perform_melee_attack": {
-        "meaning": "Melee family executor.",
-        "params": {
-            "family": "broadsword|sword|axe|hammer|shortsword|rapier|dagger|spear|lance|pike|trident|halberd|naginata|jousting_lance|boomerang|chakram|flail|mace|anchor|yoyo|whip",
-            "runtimeFamily": "omit; derived", "speed": "3..18", "rangeTiles": "2..80", "lifetimeTicks": "10..900", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "useTimeTicks": "10..150",
-            "shotCount": "1..8 simultaneous emitted; not swing count", "spreadRadians": "0..0.75",
-            "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
-        },
-    },
-    "fire_ranged_weapon": {
-        "meaning": "Ranged executor; charge_release holds, overhead_barrage spawns above target.",
-        "params": {
-            "family": "bow|repeater|gun|shotgun|launcher|rocket_launcher|dart|blowgun|harpoon|charge_release|overhead_barrage", "ammoFor": "empty custom; arrow|bullet consume vanilla ammo",
-            "movement": "straight|gravity_arc|slow_homing|phase|proximity_missile|boomerang; phase passes tiles", "speed": "3..18", "rangeTiles": "10..120", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "delayTicks": "0..300; barrage 0=immediate", "secondaryDamageMultiplier": "0.01..1 barrage damage", "secondaryLifetimeTicks": "5..180 barrage life",
-            "projectileFamily": "visual form; launcher+empty=custom rocket", "chargeTicks": "1..300 charge_release hold", "chargePowerMultiplier": "1..3 max power", "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
-        },
-    },
-    "cast_magic_weapon": {
-        "meaning": "Magic executor; beam channels, charge_release holds, overhead_barrage spawns above target.",
-        "params": {
-            "family": "staff|wand|rod|book|magic_gun|channelled_beam|charge_release|overhead_barrage|other exact family", "projectileFamily": "spear|bolt|beam|orb|etc",
-            "movement": "straight|slow_homing|gravity_arc|phase|accelerate|vortex_orb|blackhole_pull|expanding_wave", "speed": "3..18", "rangeTiles": "8..120", "chargePowerMultiplier": "1..3 charge_release", "lifetimeTicks": "25..900", "shotCount": "1..8 simultaneous", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "homingStrength": "0..1", "beamWidthPx": "2..96", "chargeTicks": "beam 0=full immediately; charge_release 1..300", "delayTicks": "0..300; barrage 0=immediate", "secondaryDamageMultiplier": "0.01..1 barrage damage", "secondaryLifetimeTicks": "5..180 barrage life", "immunityCooldown": "4..60",
-            "projectileShape": "body", "projectileMotion": "motion", "projectileTrail": "trail", "projectileImpact": "impact"
-        },
-    },
-    "deploy_sentry": {
-        "meaning": "Bounded Terraria sentry at cursor; stationary, targets NPCs, fires generated shots; not a minion.",
-        "params": {"placement": "grounded|floating", "attackIntervalTicks": "12..180 ticks/volley", "targetRangeTiles": "8..60", "helperLifetimeTicks": "120..36000 root", "shotCount": "1..4 simultaneous/volley", "speed": "3..18", "spreadRadians": "0..0.75", "pierce": "-1 infinite; 0/1 one total; 2..10 total", "movement": "shot movement", "effect": "shot effect", "onHit": "none|non-child effect only", "projectileShape": "sentry body", "secondaryProjectileShape": "shot body", "secondaryLifetimeTicks": "5..180 shot lifetime; not sentry lifetime"},
-    },
-    "spawn_temporary_helper_projectile": {
-        "meaning": "Not a persistent Terraria minion or sentry; short orbit/drift only.",
-        "params": {
-            "family": "|".join(sorted(TEMPORARY_HELPER_FAMILIES)), "movement": "orbit|slow_homing|drift|straight", "speed": "3..18", "rangeTiles": "8..120 target/orbit radius", "lifetimeTicks": "25..900 ticks; 60=1s", "shotCount": "1..4 simultaneous helpers", "spreadRadians": "0..0.75 total helper spread", "pierce": "0/1 one hit; 2..10 total hits", "projectileShape": "temporary helper body"
-        },
-    },
-    "spawn_secondary_projectiles": {
-        "meaning": "Real secondary damaging projectiles, not VFX motes. Use only for actual child hits.",
-        "params": {"trigger": "|".join(sorted(CANONICAL_SECONDARY_TRIGGERS)), "count": "0 off; 1..8 children", "damageMultiplier": "0..1 parent damage", "spreadRadians": "0..1.2 total spread", "lifetimeTicks": "5..180 child ticks", "sameTargetBias": "0..1 chance aim at hit target", "projectileShape": "optional child visual", "material": "optional child visual"},
-    },
-    "apply_on_hit_effect": {
-        "meaning": "Real on-hit gameplay: debuffs, bursts, chained hits, child-producing effects, pull/heal/lifesteal. Visual-only impact belongs in spawn_contact_particles.",
-        "params": {"onHit": "none|burst|split|chain|burn|frostburn|poison|shadowflame|bleed|starburst|overhead_barrage|aura_pulse|spore_cloud|mini_missiles|vortex_spawn|blackhole|radial_beams|lightning_arc|heal|lifesteal", "aoeRadiusTiles": "0..10", "count": "0..8 for child-producing onHit; overhead_barrage = bounded authored child projectiles descending from above the hit", "chainCount": "0..6 for chain-like effects", "secondaryDamageMultiplier": ">0..1 required for damaging child-producing onHit; authored damage*secondaryDamageMultiplier must round to at least 1", "secondaryLifetimeTicks": "5..180 required for overhead_barrage children", "pullStrength": "0..1; values above 0 require explicit pullMode", "pullMode": "none|target_to_owner|owner_to_target|target_to_projectile", "debuffHint": "short text or empty", "debuffTime": "30..600 required for buff-applying onHit"},
-    },
-    "spawn_contact_particles": {
-        "meaning": "Pure VFX/dust; no damage.",
-        "params": {"effect": "none|dust|electric|slime|star|flame|frost|leaf|shadow|poison|blood|honey|sand|lunar|heal|holy|smoke", "amount": "0 off; 1..40", "scale": "0.15..2", "durationTicks": "1..80", "material": "none|wood|metal|stone|magic|fire|slime|frost|shadow; only with effect none/dust"},
-    },
-    "leave_trail_or_field": {
-        "meaning": "Visual-only trail or bounded dust field; no gameplay.",
-        "params": {"trailLength": "0..24", "fieldLifetimeTicks": "0..240", "fieldRadiusTiles": "0..6", "tickRate": "1..60", "visualOnly": "true only"},
-    },
-    "visual_effect_cue": {
-        "meaning": "Frozen VFX/audio slot; presentation only, no gameplay.",
-        "params": {"event": "travel|active|tick|hit|kill|expire|while_held|while_equipped|on_use|on_alt_use", "rendererKind": "projectileAfterimage|spriteStampTrail|historyRibbon|tipTrail|ghostArc|wavyStrip|beamLine|fieldPulse|orbitingMotes|actorAfterimage|impactRing|impactSprite|childMotes|lightCue|soundCue", "channel": "motionTrail|coreGlow|ambientParticles|impactShape|impactParticles|decaySmoke|light|sound", "lane": "primary|support|accent|ornament|cue", "textureRole": "projectile|impact|child|field", "particleRole": "projectile|impact|child|field", "emissionMode": "wake|orbit|residue|burst|cone|ring|spiral|point", "particleSystemId": "pl:glow|pl:shard|pl:smoke|pl:spark|dust", "scale": "0.15..5", "density": "0..1", "duration": "3..120", "alpha": "0..1", "spread": "0..2", "jitter": "0..1.5", "startTick": "0..120", "repeatEvery": "0..120", "importance": "core|secondary|accent|luxury", "note": "short debug"},
-    },
-    "apply_player_effect_on_use": {
-        "meaning": "Executable non-combat use effects: healing, vanilla buffs, and bounded generated utility buffs.",
-        "params": {"healLife": "0..500", "healMana": "0..500", "buffType": "vanilla buff id", "buffTime": "ticks", "buffs": "array of {buffType,buffTime}; max 4", "generatedBuff": "object with durationTicks, miningSpeedMultiplier, emitLightStrength, lightColorName, oreSenseRadiusTiles, movementSpeed, jumpBoost, manaRegen, lifeRegen; oreSense>0=findTreasure; radius debug-only", "note": "short identity/debug only"},
-    },
-    "tool_capability": {
-        "meaning": "Executable Terraria tool stats for real tools only.",
-        "params": {"pickPower": "0..1000", "axePower": "0..200 internal Item.axe units", "hammerPower": "0..1000", "miningSpeedScale": "0.25..2 executable held-tool mining speed multiplier"},
-    },
-    "emit_light": {
-        "meaning": "Executable held/projectile/effect light.",
-        "params": {"strength": "0..1", "color": "named color", "durationTicks": "1..240"},
-    },
-    "mobility_effect": {
-        "meaning": "Bounded movement: recall, blink to cursor, or blink to projectile impact; needs safe tile/cooldown.",
-        "params": {"mode": "recall_home|blink_to_cursor|blink_to_projectile_impact", "rangeTiles": "0..80", "cooldownTicks": "0..3600", "safeTileOnly": "true"},
-    },
-
-    "accessory_effect": {
-        "meaning": "Equippable accessory stats, not temporary use effects.",
-        "params": {"archetype": "mobility|defense|damage|utility|hybrid", "defense": "0..20", "stats": "object, not string; keys include maxLife,maxMana,lifeRegen,manaRegen,movementSpeed,jumpSpeed,genericDamage,genericCrit,attackSpeed,lightStrength"},
-    },
-    "armor_effect": {
-        "meaning": "Armor: slot, defense, equip/set bonuses.",
-        "params": {"armorSlot": "head|body|legs", "setKey": "same id for set or empty", "archetype": "melee|ranged|magic|summon|defense|mobility|hybrid", "defense": "0..80", "stats": "life/mana/regen/move/jump/classDmg/crit/atkSpeed/kb/minions/light/immunities", "setBonus": "text + classDmg/crit/move/regen/minions"},
-    },
-    "set_alt_use_mode": {
-        "meaning": "Right-click/alternate-use utility; normal use unchanged unless authored.",
-        "params": {"mode": "mobility|generated_buff|light|none", "mobilityMode": "recall_home|blink_to_cursor", "rangeTiles": "0..80", "cooldownTicks": "0..3600", "safeTileOnly": "true", "generatedBuff": "same shape as apply_player_effect_on_use.generatedBuff", "durationTicks": "1..21600"},
-    },
-    "hold_item_effect": {
-        "meaning": "Held-item utility: light or generated buff refreshed while held; generatedBuff.durationTicks must be at least 2.",
-        "params": {"lightStrength": "0..1.5", "lightColorName": "white|gray|brown|tan|red|orange|yellow|gold|green|cyan|blue|purple|pink", "generatedBuff": "generated buff object"},
-    },
-
-    "use_affordance": {
-        "meaning": "Executable item-use and held-draw affordance only.",
-        "params": {"autoReuse": "bool", "useTurn": "bool", "channelUse": "bool", "itemScale": "0.55..1.55", "holdoutOffsetX": "-80..80", "holdoutOffsetY": "-80..80", "heldVisibility": "show_item|hide_item|show_projectile|show_both", "releaseTiming": "instant|early|mid_swing|on_contact|on_release", "handPose": "short_weapon|two_hand|overhead|throwing|staff|held_out|none", "initialOffsetPx": "-64..64"},
-    },
-    "consumption_behavior": {
-        "meaning": "Consumable-use behavior; consumeChancePercent controls stack spend; no loot/spawn.",
-        "params": {"consumeChancePercent": "0..100; 100 normal consume; 0 never consume"},
-    },
-    "ammo_behavior": {
-        "meaning": "Vanilla ammo identity for generated ammo stacks; projectile behavior belongs to weapon/projectile calls.",
-        "params": {"ammoFor": "arrow|bullet|empty"},
-    },
-    "use_condition": {
-        "meaning": "Side-effect-free CanUseItem condition; blocks use only.",
-        "params": {"mode": "grounded|not_wet|life_above|mana_above", "minLife": "0..5000", "minMana": "0..5000"},
-    },
-}
 
 PLANNER_HIDDEN_ENGINE_FUNCTIONS = frozenset()
 
@@ -224,27 +116,95 @@ SAFE_SUMMON_FAMILIES = set(TEMPORARY_HELPER_FAMILIES) | {"minion", "sentry", "tu
 
 
 
-# Exact cross-card fields accepted on primary attack calls.  They are documented
-# once in the global sound/critical-value contract instead of duplicated into every
-# function card.  This is a finite field set, not an alias or fuzzy compatibility map.
-PRIMARY_ATTACK_SHARED_PARAM_NAMES = frozenset({
-    "effect", "useTimeTicks", "useAnimationTicks",
-    "soundUseCatalogId", "soundImpactCatalogId", "soundVolume", "soundPitch", "soundPitchVariance",
-})
-ENGINE_FN_ACCEPTED_PARAM_EXTRAS: dict[str, frozenset[str]] = {
-    "shoot_projectile": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "perform_melee_attack": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "fire_ranged_weapon": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "cast_magic_weapon": PRIMARY_ATTACK_SHARED_PARAM_NAMES,
-    "apply_on_hit_effect": frozenset({"debuffTime"}),
-}
+def repair_param_dependency_groups(
+    fn: str,
+    selected_paths: set[str] | frozenset[str],
+) -> tuple[frozenset[str], ...]:
+    selected = {str(path).strip() for path in selected_paths if str(path).strip()}
+    return tuple(
+        group
+        for group in REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION.get(str(fn or ""), ())
+        if group.intersection(selected)
+    )
 
 
-def accepted_engine_param_names(fn: str) -> frozenset[str]:
-    card = ENGINE_FN_CATALOG_V2.get(str(fn or ""), {})
-    params = card.get("params") if isinstance(card, dict) else {}
-    declared = frozenset(str(key) for key in params) if isinstance(params, dict) else frozenset()
-    return declared | ENGINE_FN_ACCEPTED_PARAM_EXTRAS.get(str(fn or ""), frozenset())
+def repair_param_allowed_combinations(
+    fn: str,
+    group: frozenset[str],
+    current_values: dict[str, Any] | None = None,
+    *,
+    result_kind: str = "",
+) -> tuple[dict[str, str], ...]:
+    if str(fn or "") == "shoot_projectile" and group == frozenset({"runtimeFamily", "delivery", "movement"}):
+        current_movement = _norm_name((current_values or {}).get("movement"))
+        combinations: list[dict[str, str]] = []
+        for family, delivery in runtime_family_delivery_pairs():
+            if family == "sentry":
+                continue
+            required_movements = runtime_family_required_movements(family)
+            movements = sorted(required_movements)
+            if not movements and current_movement and runtime_family_accepts_movement(family, current_movement):
+                movements = [current_movement]
+            combinations.extend(
+                {"runtimeFamily": family, "delivery": delivery, "movement": movement}
+                for movement in movements
+            )
+        return tuple(combinations)
+    if str(fn or "") == "visual_effect_cue" and group == frozenset({"event", "rendererKind", "channel"}):
+        return vfx_cue_repair_combinations(result_kind, current_values)
+    if str(fn or "") == "set_alt_use_mode" and group == frozenset({"mode", "mobilityMode"}):
+        current_mode = _norm_name((current_values or {}).get("mode"))
+        if current_mode in {"recall_home", "blink_to_cursor"}:
+            mobility_modes = (current_mode,)
+        else:
+            mobility_modes = ("recall_home", "blink_to_cursor")
+        return tuple(
+            {"mode": "mobility", "mobilityMode": mobility_mode}
+            for mobility_mode in mobility_modes
+        )
+    if str(fn or "") == "spawn_contact_particles" and group == frozenset({"effect", "material"}):
+        spec = ENGINE_FUNCTION_CONTRACT_BY_NAME["spawn_contact_particles"]
+        enums = {param.name: tuple(param.enum_values) for param in spec.params}
+        return tuple(
+            {"effect": effect, "material": material}
+            for effect in enums["effect"]
+            for material in enums["material"]
+            if material == "none" or effect in {"none", "dust"}
+        )
+    return ()
+
+
+def repair_param_group_values_allowed(
+    fn: str,
+    group: frozenset[str],
+    values: dict[str, Any],
+    *,
+    result_kind: str = "",
+) -> bool:
+    if str(fn or "") == "shoot_projectile" and group == frozenset({"runtimeFamily", "delivery", "movement"}):
+        return (
+            runtime_family_accepts_delivery(
+                values.get("runtimeFamily"),
+                values.get("delivery"),
+            )
+            and runtime_family_accepts_movement(
+                values.get("runtimeFamily"),
+                values.get("movement"),
+            )
+        )
+    if str(fn or "") == "visual_effect_cue" and group == frozenset({"event", "rendererKind", "channel"}):
+        return vfx_cue_repair_values_allowed(result_kind, values)
+    if str(fn or "") == "set_alt_use_mode" and group == frozenset({"mode", "mobilityMode"}):
+        return (
+            _norm_name(values.get("mode")) == "mobility"
+            and _norm_name(values.get("mobilityMode")) in {"recall_home", "blink_to_cursor"}
+        )
+    if str(fn or "") == "spawn_contact_particles" and group == frozenset({"effect", "material"}):
+        effect = _norm_name(values.get("effect"))
+        material = _norm_name(values.get("material"))
+        return material == "none" or effect in {"none", "dust"}
+    return True
+
 
 NUMERIC_LIMITS = {
     "useTimeTicks": (10.0, 150.0), "useAnimationTicks": (6.0, 150.0), "knockback": (0.0, 12.0), "manaCost": (0.0, 80.0), "shotCount": (1.0, 8.0), "pierce": (-1.0, 10.0),
@@ -266,9 +226,10 @@ NUMERIC_LIMITS = {
     "maxValue": (1.0, 20.0), "initialValue": (0.0, 20.0), "gainOnUse": (0.0, 20.0), "gainOnHit": (0.0, 20.0),
     "gainOnKill": (0.0, 20.0), "spendOnUse": (0.0, 20.0), "spendOnAltUse": (0.0, 20.0),
     "decayPerSecond": (0.0, 20.0), "modeCount": (0.0, 8.0), "requiredValue": (0.0, 20.0), "spendValue": (0.0, 20.0),
+    "createTile": (-1.0, 65535.0), "createWall": (-1.0, 65535.0), "placeStyle": (0.0, 1000.0),
 }
 
-INT_FIELDS = {"useTimeTicks", "useAnimationTicks", "manaCost", "lifetimeTicks", "beamChargeTicks", "chargeTicks", "delayTicks", "sentryAttackIntervalTicks", "sentryLifetimeTicks", "immunityCooldown", "shotCount", "pierce", "extraUpdates", "splitCount", "chainCount", "trailLength", "burstDustCap", "fieldLifetimeTicks", "tickRate", "craftYield", "healLife", "healMana", "buffType", "buffTime", "pickPower", "axePower", "hammerPower", "durationTicks", "cooldownTicks", "resultType", "stack", "minLife", "minMana", "consumeChancePercent", "maxValue", "initialValue", "gainOnUse", "gainOnHit", "gainOnKill", "spendOnUse", "spendOnAltUse", "modeCount", "requiredValue", "spendValue"}
+INT_FIELDS = {"useTimeTicks", "useAnimationTicks", "manaCost", "lifetimeTicks", "beamChargeTicks", "chargeTicks", "delayTicks", "sentryAttackIntervalTicks", "sentryLifetimeTicks", "immunityCooldown", "shotCount", "pierce", "extraUpdates", "splitCount", "chainCount", "trailLength", "burstDustCap", "fieldLifetimeTicks", "tickRate", "craftYield", "healLife", "healMana", "buffType", "buffTime", "pickPower", "axePower", "hammerPower", "durationTicks", "cooldownTicks", "resultType", "stack", "minLife", "minMana", "consumeChancePercent", "maxValue", "initialValue", "gainOnUse", "gainOnHit", "gainOnKill", "spendOnUse", "spendOnAltUse", "modeCount", "requiredValue", "spendValue", "createTile", "createWall", "placeStyle"}
 
 
 __all__ = [
@@ -281,11 +242,15 @@ __all__ = [
     "USE_STYLE_SHOOT",
     "USE_STYLE_RAPIER",
     "_runtime_family_affordances",
-    "ENGINE_FN_CATALOG_V2",
+    "COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS",
+    "COMBAT_EXECUTOR_RESULT_KINDS",
     "PLANNER_HIDDEN_ENGINE_FUNCTIONS",
     "FORBIDDEN_WORLD_ENTITY_FN_NAMES",
     "FORBIDDEN_WORLD_ENTITY_FAMILIES",
     "SAFE_SUMMON_FAMILIES",
+    "repair_param_allowed_combinations",
+    "repair_param_dependency_groups",
+    "repair_param_group_values_allowed",
 
     "NUMERIC_LIMITS",
     "INT_FIELDS",

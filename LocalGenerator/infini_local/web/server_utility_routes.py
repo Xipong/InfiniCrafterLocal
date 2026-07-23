@@ -11,6 +11,10 @@ from urllib.parse import parse_qs, unquote, urlparse
 from infini_local.storage.trace_tools import clear_ndjson
 
 
+MAX_ASSET_RESPONSE_BYTES = 8 * 1024 * 1024
+ASSET_STREAM_CHUNK_BYTES = 64 * 1024
+
+
 class ServerUtilityRoutes:
     """Coarse HTTP route block for local status/debug/static-asset endpoints.
 
@@ -566,6 +570,36 @@ class ServerUtilityRoutes:
                 })
         return worlds
 
+    @staticmethod
+    def send_bounded_asset_file(handler: Any, path: Path, content_type: str, *, immutable: bool) -> None:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            handler.send_error(404)
+            return
+        if size <= 0:
+            handler.send_error(404)
+            return
+        if size > MAX_ASSET_RESPONSE_BYTES:
+            handler.send_error(413)
+            return
+
+        handler.send_response(200)
+        handler.send_header("Content-Type", content_type)
+        handler.send_header("Content-Length", str(size))
+        if immutable:
+            handler.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        handler.end_headers()
+        try:
+            with path.open("rb") as stream:
+                while True:
+                    chunk = stream.read(ASSET_STREAM_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    handler.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
     def get_asset(self, handler: Any, path: str) -> None:
         q = parse_qs(urlparse(path).query)
         name = self.asset_sync_service.safe_asset_file_from_query(
@@ -581,12 +615,12 @@ class ServerUtilityRoutes:
         if p is None:
             handler.send_error(404)
             return
-        handler.send_response(200)
-        handler.send_header("Content-Type", self.asset_sync_service.asset_content_type(p))
-        handler.send_header("Content-Length", str(p.stat().st_size))
-        handler.send_header("Cache-Control", "public, max-age=31536000, immutable")
-        handler.end_headers()
-        handler.wfile.write(p.read_bytes())
+        self.send_bounded_asset_file(
+            handler,
+            p,
+            self.asset_sync_service.asset_content_type(p),
+            immutable=True,
+        )
 
     def sprite_file(self, handler: Any, path: str) -> None:
         name = unquote(urlparse(path).path.rsplit("/", 1)[-1])
@@ -601,10 +635,6 @@ class ServerUtilityRoutes:
             handler.send_error(404)
             return
         if candidate.is_file() and candidate.suffix.lower() == ".png":
-            handler.send_response(200)
-            handler.send_header("Content-Type", "image/png")
-            handler.send_header("Content-Length", str(candidate.stat().st_size))
-            handler.end_headers()
-            handler.wfile.write(candidate.read_bytes())
+            self.send_bounded_asset_file(handler, candidate, "image/png", immutable=False)
             return
         handler.send_error(404)

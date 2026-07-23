@@ -1,0 +1,376 @@
+{
+  "functions": {
+    "accessory_effect": {
+      "aggro": "stats.aggro",
+      "ammoSaveChance": "stats.ammoSaveChance",
+      "archetype": "archetype",
+      "armorPenetration": "stats.armorPenetration",
+      "attackSpeed": "stats.attackSpeed",
+      "defense": "defense",
+      "endurance": "stats.endurance",
+      "fallDamageImmune": "stats.fallDamageImmune",
+      "genericCrit": "stats.genericCrit",
+      "genericDamage": "stats.genericDamage",
+      "jumpSpeed": "stats.jumpSpeed",
+      "knockback": "stats.knockback",
+      "lavaImmune": "stats.lavaImmune",
+      "lifeRegen": "stats.lifeRegen",
+      "lightColorName": "stats.lightColorName",
+      "lightStrength": "stats.lightStrength",
+      "magicDamage": "stats.magicDamage",
+      "manaCostReduction": "stats.manaCostReduction",
+      "manaRegen": "stats.manaRegen",
+      "maxLife": "stats.maxLife",
+      "maxMana": "stats.maxMana",
+      "maxRunSpeed": "stats.maxRunSpeed",
+      "meleeDamage": "stats.meleeDamage",
+      "minionSlots": "stats.minionSlots",
+      "movementSpeed": "stats.movementSpeed",
+      "rangedDamage": "stats.rangedDamage",
+      "sentrySlots": "stats.sentrySlots",
+      "summonDamage": "stats.summonDamage",
+      "summonTagDamage": "stats.summonTagDamage",
+      "waterWalk": "stats.waterWalk",
+      "whipRange": "stats.whipRange"
+    },
+    "ammo_behavior": {
+      "ammoFor": "ammoFor"
+    },
+    "apply_on_hit_effect": {
+      "aoeDamageRadiusPx": "aoeRadiusTiles",
+      "aoeRadiusTiles": "aoeRadiusTiles",
+      "chainCount": "chainCount",
+      "debuffHint": "debuffHint",
+      "debuffTime": "debuffTime",
+      "immunityCooldown": "immunityCooldown",
+      "maxChildProjectiles": "count",
+      "onHit": "onHit",
+      "pullMode": "pullMode",
+      "pullStrength": "pullStrength",
+      "secondaryDamageMultiplier": "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks": "secondaryLifetimeTicks",
+      "splitCount": "count"
+    },
+    "apply_player_effect_on_use": {
+      "buffTime": "buffTime",
+      "buffType": "buffType",
+      "extraBuffs": "buffs",
+      "generatedBuff.durationTicks": "generatedBuff.durationTicks",
+      "generatedBuff.emitLightStrength": "generatedBuff.emitLightStrength",
+      "generatedBuff.jumpBoost": "generatedBuff.jumpBoost",
+      "generatedBuff.lifeRegen": "generatedBuff.lifeRegen",
+      "generatedBuff.lightColorName": "generatedBuff.lightColorName",
+      "generatedBuff.manaRegen": "generatedBuff.manaRegen",
+      "generatedBuff.miningSpeedMultiplier": "generatedBuff.miningSpeedMultiplier",
+      "generatedBuff.movementSpeed": "generatedBuff.movementSpeed",
+      "generatedBuff.oreSenseRadiusTiles": "generatedBuff.oreSenseRadiusTiles",
+      "healLife": "healLife",
+      "healMana": "healMana"
+    },
+    "armor_effect": {
+      "aggro": "stats.aggro",
+      "ammoSaveChance": "stats.ammoSaveChance",
+      "archetype": "archetype",
+      "armorPenetration": "stats.armorPenetration",
+      "attackSpeed": "stats.attackSpeed",
+      "defense": "defense",
+      "endurance": "stats.endurance",
+      "fallDamageImmune": "stats.fallDamageImmune",
+      "genericCrit": "stats.genericCrit",
+      "genericDamage": "stats.genericDamage",
+      "jumpSpeed": "stats.jumpSpeed",
+      "knockback": "stats.knockback",
+      "lavaImmune": "stats.lavaImmune",
+      "lifeRegen": "stats.lifeRegen",
+      "lightColorName": "stats.lightColorName",
+      "lightStrength": "stats.lightStrength",
+      "magicDamage": "stats.magicDamage",
+      "manaCostReduction": "stats.manaCostReduction",
+      "manaRegen": "stats.manaRegen",
+      "maxLife": "stats.maxLife",
+      "maxMana": "stats.maxMana",
+      "maxRunSpeed": "stats.maxRunSpeed",
+      "meleeDamage": "stats.meleeDamage",
+      "minionSlots": "stats.minionSlots",
+      "movementSpeed": "stats.movementSpeed",
+      "rangedDamage": "stats.rangedDamage",
+      "sentrySlots": "stats.sentrySlots",
+      "setBonusAggro": "setBonus.aggro",
+      "setBonusAmmoSaveChance": "setBonus.ammoSaveChance",
+      "setBonusArmorPenetration": "setBonus.armorPenetration",
+      "setBonusEndurance": "setBonus.endurance",
+      "setBonusGenericCrit": "setBonus.genericCrit",
+      "setBonusGenericDamage": "setBonus.genericDamage",
+      "setBonusLifeRegen": "setBonus.lifeRegen",
+      "setBonusMagicDamage": "setBonus.magicDamage",
+      "setBonusManaCostReduction": "setBonus.manaCostReduction",
+      "setBonusManaRegen": "setBonus.manaRegen",
+      "setBonusMeleeDamage": "setBonus.meleeDamage",
+      "setBonusMinionSlots": "setBonus.minionSlots",
+      "setBonusMovementSpeed": "setBonus.movementSpeed",
+      "setBonusRangedDamage": "setBonus.rangedDamage",
+      "setBonusSentrySlots": "setBonus.sentrySlots",
+      "setBonusSummonDamage": "setBonus.summonDamage",
+      "setBonusText": "setBonus.text",
+      "setKey": "setKey",
+      "slot": [
+        "armorSlot",
+        "slot"
+      ],
+      "summonDamage": "stats.summonDamage",
+      "summonTagDamage": "stats.summonTagDamage",
+      "waterWalk": "stats.waterWalk",
+      "whipRange": "stats.whipRange"
+    },
+    "consumption_behavior": {
+      "consumeChancePercent": "consumeChancePercent"
+    },
+    "emit_light": {
+      "primaryColorName": [
+        "lightColorName",
+        "color"
+      ],
+      "runtimeLightColorName": [
+        "lightColorName",
+        "color"
+      ],
+      "runtimeLightDurationTicks": "durationTicks",
+      "runtimeLightStrength": "strength"
+    },
+    "hold_item_effect": {
+      "holdGeneratedBuff.durationTicks": "generatedBuff.durationTicks",
+      "holdGeneratedBuff.emitLightStrength": "generatedBuff.emitLightStrength",
+      "holdGeneratedBuff.jumpBoost": "generatedBuff.jumpBoost",
+      "holdGeneratedBuff.lifeRegen": "generatedBuff.lifeRegen",
+      "holdGeneratedBuff.lightColorName": "generatedBuff.lightColorName",
+      "holdGeneratedBuff.manaRegen": "generatedBuff.manaRegen",
+      "holdGeneratedBuff.miningSpeedMultiplier": "generatedBuff.miningSpeedMultiplier",
+      "holdGeneratedBuff.movementSpeed": "generatedBuff.movementSpeed",
+      "holdGeneratedBuff.oreSenseRadiusTiles": "generatedBuff.oreSenseRadiusTiles",
+      "holdLightColorName": [
+        "lightColorName",
+        "color"
+      ],
+      "holdLightStrength": "lightStrength"
+    },
+    "leave_trail_or_field": {
+      "fieldRadius": [
+        "fieldRadiusTiles",
+        "fieldRadius"
+      ],
+      "trailLength": "trailLength",
+      "vfxFieldLifetimeTicks": "fieldLifetimeTicks",
+      "vfxFieldRadiusTiles": [
+        "fieldRadiusTiles",
+        "fieldRadius"
+      ],
+      "vfxFieldTickRate": "tickRate"
+    },
+    "mobility_effect": {
+      "mobilityCooldownTicks": "cooldownTicks",
+      "mobilityMode": "mode",
+      "mobilityRangeTiles": "rangeTiles",
+      "mobilitySafeTileOnly": "safeTileOnly"
+    },
+    "placeable_behavior": {
+      "createTile": "createTile",
+      "createWall": "createWall",
+      "placeStyle": "placeStyle"
+    },
+    "set_alt_use_mode": {
+      "altGeneratedBuff.durationTicks": [
+        "generatedBuff.durationTicks",
+        "durationTicks"
+      ],
+      "altGeneratedBuff.emitLightStrength": "generatedBuff.emitLightStrength",
+      "altGeneratedBuff.jumpBoost": "generatedBuff.jumpBoost",
+      "altGeneratedBuff.lifeRegen": "generatedBuff.lifeRegen",
+      "altGeneratedBuff.lightColorName": "generatedBuff.lightColorName",
+      "altGeneratedBuff.manaRegen": "generatedBuff.manaRegen",
+      "altGeneratedBuff.miningSpeedMultiplier": "generatedBuff.miningSpeedMultiplier",
+      "altGeneratedBuff.movementSpeed": "generatedBuff.movementSpeed",
+      "altGeneratedBuff.oreSenseRadiusTiles": "generatedBuff.oreSenseRadiusTiles",
+      "altMobilityMode": [
+        "mobilityMode",
+        "mode"
+      ],
+      "altMobilityRangeTiles": "rangeTiles",
+      "altMobilitySafeTileOnly": "safeTileOnly",
+      "altUseCooldownTicks": "cooldownTicks",
+      "altUseMode": "mode"
+    },
+    "set_item_stats": {
+      "ammoFor": "ammoFor",
+      "autoReuse": "autoReuse",
+      "axePower": "axePower",
+      "buffTime": "buffTime",
+      "buffType": "buffType",
+      "consumable": "consumable",
+      "craftYield": "craftYield",
+      "damage": "damage",
+      "damageClass": "damageClass",
+      "defense": "defense",
+      "hammerPower": "hammerPower",
+      "healLife": "healLife",
+      "healMana": "healMana",
+      "knockback": "knockback",
+      "manaCost": "manaCost",
+      "maxStack": "maxStack",
+      "pickPower": "pickPower",
+      "rarity": "rarity",
+      "resultKind": "resultKind",
+      "slot": "armorSlot",
+      "useAnimationTicks": "useAnimationTicks",
+      "useTimeTicks": "useTimeTicks",
+      "value": "value"
+    },
+    "shoot_projectile": {
+      "ammoFor": "ammoFor",
+      "beamChargeTicks": "beamChargeTicks",
+      "beamWidthPx": "beamWidthPx",
+      "channelUse": "channelUse",
+      "chargePowerMultiplier": "chargePowerMultiplier",
+      "chargeTicks": "chargeTicks",
+      "delayTicks": "delayTicks",
+      "delivery": "delivery",
+      "disableItemMeleeHitbox": "disableItemMeleeHitbox",
+      "effect": "effect",
+      "extraUpdates": "extraUpdates",
+      "hideUseGraphic": "hideUseGraphic",
+      "homingStrength": "homingStrength",
+      "immunityCooldown": "immunityCooldown",
+      "lifetime": "lifetimeTicks",
+      "lifetimeTicks": "lifetimeTicks",
+      "movement": "movement",
+      "onHit": "onHit",
+      "ownerHitCheck": "ownerHitCheck",
+      "pierce": "pierce",
+      "projectileFamily": "projectileFamily",
+      "projectileImpact": "projectileImpact",
+      "projectileMotion": "projectileMotion",
+      "projectileShape": "projectileShape",
+      "projectileTrail": "projectileTrail",
+      "range": "rangeTiles",
+      "rangeTiles": "rangeTiles",
+      "runtimeFamily": "runtimeFamily",
+      "secondaryDamageMultiplier": "secondaryDamageMultiplier",
+      "secondaryLifetimeTicks": "secondaryLifetimeTicks",
+      "secondaryProjectileShape": "secondaryProjectileShape",
+      "sentryAttackIntervalTicks": [
+        "sentryAttackIntervalTicks",
+        "attackIntervalTicks"
+      ],
+      "sentryLifetimeTicks": [
+        "sentryLifetimeTicks",
+        "helperLifetimeTicks"
+      ],
+      "sentryPlacement": [
+        "sentryPlacement",
+        "placement"
+      ],
+      "sentryTargetRangeTiles": [
+        "sentryTargetRangeTiles",
+        "targetRangeTiles"
+      ],
+      "shotCount": "shotCount",
+      "soundImpactCatalogId": "soundImpactCatalogId",
+      "soundPitch": "soundPitch",
+      "soundPitchVariance": "soundPitchVariance",
+      "soundUseCatalogId": "soundUseCatalogId",
+      "soundVolume": "soundVolume",
+      "speed": "speed",
+      "spreadRadians": "spreadRadians",
+      "useAnimationTicks": "useAnimationTicks",
+      "useStyleCode": "useStyleCode",
+      "useTimeTicks": "useTimeTicks",
+      "weaponFamily": "weaponFamily"
+    },
+    "spawn_contact_particles": {
+      "burstDustCap": "amount",
+      "dustSpawnDenom": "amount",
+      "effect": "effect",
+      "vfxMaterial": "material",
+      "vfxParticleDurationTicks": "durationTicks",
+      "vfxParticleScale": "scale"
+    },
+    "spawn_secondary_projectiles": {
+      "maxChildProjectiles": [
+        "maxChildProjectiles",
+        "count"
+      ],
+      "primaryColorName": "primaryColorName",
+      "sameTargetBias": "sameTargetBias",
+      "secondaryDamageMultiplier": [
+        "secondaryDamageMultiplier",
+        "damageMultiplier"
+      ],
+      "secondaryLifetimeTicks": [
+        "secondaryLifetimeTicks",
+        "lifetimeTicks"
+      ],
+      "secondaryMaterial": [
+        "secondaryMaterial",
+        "material"
+      ],
+      "secondaryProjectileShape": [
+        "secondaryProjectileShape",
+        "projectileShape"
+      ],
+      "secondarySpreadRadians": [
+        "secondarySpreadRadians",
+        "spreadRadians"
+      ],
+      "secondaryTrigger": "trigger",
+      "splitCount": [
+        "splitCount",
+        "count"
+      ]
+    },
+    "tool_capability": {
+      "axePower": "axePower",
+      "hammerPower": "hammerPower",
+      "miningSpeedScale": "miningSpeedScale",
+      "pickPower": "pickPower"
+    },
+    "use_affordance": {
+      "autoReuse": "autoReuse",
+      "channelUse": "channelUse",
+      "handPose": "handPose",
+      "heldVisibility": "heldVisibility",
+      "holdoutOffsetX": "holdoutOffsetX",
+      "holdoutOffsetY": "holdoutOffsetY",
+      "initialOffsetPx": "initialOffsetPx",
+      "itemScale": "itemScale",
+      "releaseTiming": "releaseTiming",
+      "useTurn": "useTurn"
+    },
+    "use_condition": {
+      "useConditionMinLife": "minLife",
+      "useConditionMinMana": "minMana",
+      "useConditionMode": "mode"
+    },
+    "visual_effect_cue": {
+      "vfxCues": [
+        "event",
+        "rendererKind",
+        "channel",
+        "lane",
+        "textureRole",
+        "particleRole",
+        "emissionMode",
+        "particleSystemId",
+        "scale",
+        "density",
+        "duration",
+        "alpha",
+        "spread",
+        "jitter",
+        "startTick",
+        "repeatEvery",
+        "importance",
+        "note"
+      ]
+    }
+  },
+  "schema": "infini.compiled-field-source-map.v1"
+}

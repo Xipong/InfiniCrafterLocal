@@ -10,7 +10,7 @@ def _check_csharp_generated_item_data_keeps_runtime_api_and_debug_delivery_guard
     source = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     assert "public string RuntimeApiVersion" in source
     limits = (ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "InfiniRuntimeLimits.cs").read_text(encoding="utf-8")
-    assert "RuntimeApiCurrent = \"v0.4.52\"" in limits
+    assert "RuntimeApiCurrent = \"v0.4.53\"" in limits
     assert "RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent" in source
     assert "v0.4.23" not in source and "v0.4.30" not in source
     assert "RuntimeApiCurrent" in source
@@ -212,8 +212,9 @@ def _check_csharp_vfx_defaults_are_stock_and_light_words_do_not_create_light_cue
     assert '"lightCue" => InfiniVfxRendererKind.LightCue' in registry_source
     assert "InfiniVfxClientOptions.PresentationLightMultiplier" in runtime_source
 
-    # Generated sprite draw should use Terraria's vanilla lightColor, not an always-white/self-lit merge tint.
-    assert "Color tint = lightColor;" in projectile_source
+    # Generated sprite draw should preserve Terraria's vanilla lightColor while also
+    # respecting Projectile.alpha through the canonical Projectile.GetAlpha hook.
+    assert "Color tint = Projectile.GetAlpha(lightColor);" in projectile_source
     assert "Color.Lerp(lightColor, Color.White" not in projectile_source
     assert "public bool EnableGeneratedSpriteSilhouette = false;" in config_source
     assert "Config?.EnableGeneratedSpriteSilhouette ?? false" in options_source
@@ -447,11 +448,11 @@ def _check_generated_buff_sync_rejects_client_spoof_and_clamps_network_state() -
     assert "_generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000)" in player
     model = read_text_with_partial_bundles(ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "GeneratedItemData.cs")
     runtime_authoring = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "__init__.py").read_text(encoding="utf-8")
-    runtime_schema = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "schema.py").read_text(encoding="utf-8")
+    function_registry = (ROOT / "LocalGenerator" / "infini_local" / "core" / "runtime_authoring" / "function_contract_registry.py").read_text(encoding="utf-8")
     assert "OreSenseEnabled => OreSenseRadiusTiles > 0" in model
     assert "bool-backed" in model and "findTreasure" in player
-    assert "radius debug-only" in runtime_schema
-    assert "from infini_local.core.runtime_authoring.schema import" in runtime_authoring
+    assert "radius debug-only" in function_registry
+    assert "from infini_local.core.runtime_authoring.function_contract_registry import" in runtime_authoring
 
 
 def _check_blink_safe_destination_rejects_world_edges_and_lava() -> None:

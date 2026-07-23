@@ -125,6 +125,7 @@ public sealed class RecipeMetaSpec
     public string SampledCategory { get; set; } = "";
     public bool WorldScoped { get; set; } = true;
     public string WorldId { get; set; } = "";
+    public string AssetTransport { get; set; } = "native";
     public string AssetBaseUrl { get; set; } = "";
     public string[] AssetFiles { get; set; } = Array.Empty<string>();
 }
@@ -258,6 +259,9 @@ public sealed class GameplaySpec
     public int PickPower { get; set; } = 0;
     public int AxePower { get; set; } = 0;
     public int HammerPower { get; set; } = 0;
+    public int CreateTile { get; set; } = -1;
+    public int CreateWall { get; set; } = -1;
+    public int PlaceStyle { get; set; } = 0;
     public string MobilityMode { get; set; } = "";
     public int MobilityRangeTiles { get; set; } = 0;
     public int MobilityCooldownTicks { get; set; } = 0;
@@ -266,9 +270,9 @@ public sealed class GameplaySpec
 
     // Explicit utility engineCalls. These are inert unless authored by runtimePlan.
     public string AltUseMode { get; set; } = ""; // mobility|generated_buff|light|none
+    public int AltUseCooldownTicks { get; set; } = 0;
     public string AltMobilityMode { get; set; } = "";
     public int AltMobilityRangeTiles { get; set; } = 0;
-    public int AltMobilityCooldownTicks { get; set; } = 0;
     public bool AltMobilitySafeTileOnly { get; set; } = true;
     public GeneratedBuffSpec AltGeneratedBuff { get; set; } = new();
     public GeneratedBuffSpec HoldGeneratedBuff { get; set; } = new();
@@ -582,12 +586,17 @@ public sealed class VisualSpec
     public string ImpactImagePrompt { get; set; } = "";
     public string ChildImagePrompt { get; set; } = "";
     public string FieldImagePrompt { get; set; } = "";
+    public string EquipOverlayPrompt { get; set; } = "";
     public string NegativePrompt { get; set; } = "scene, background, character, realistic render, blurry, text, watermark";
     public string AssetManifestPath { get; set; } = "";
     public string SpriteStatus { get; set; } = "placeholder"; // placeholder, prompt_only, generated, fallback, failed
     public string SpritePath { get; set; } = "";
     public string SpriteRawPath { get; set; } = "";
     public string SpriteUrl { get; set; } = "";
+    public string EquipOverlayStatus { get; set; } = "";
+    public string EquipOverlayPath { get; set; } = "";
+    public string EquipOverlayUrl { get; set; } = "";
+    public float EquipOverlayScore { get; set; } = 0f;
     public float PreservationScore { get; set; } = 0f;
     public float SpriteTechnicalScore { get; set; } = 0f;
     public string SemanticReviewStatus { get; set; } = "not_performed";

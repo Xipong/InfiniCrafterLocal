@@ -46,7 +46,7 @@ ONHIT_ALIASES = {
     "slow": "slow", "slowed": "slow",
 }
 
-DELIVERIES = frozenset({"none", "swing", "thrust", "spear", "shoot", "cast", "throw", "summon", "flail", "yoyo", "whip"})
+DELIVERIES = frozenset({"none", "swing", "thrust", "shoot", "cast", "throw", "summon", "flail", "yoyo", "whip"})
 DELIVERY_ALIASES = {
     "slash": "swing", "melee_arc": "swing", "blade_arc": "swing", "sword": "swing", "axe": "swing", "hammer": "swing", "club": "swing",
     "stab": "thrust", "rapier": "thrust", "shortsword": "thrust", "short_sword": "thrust", "held_thrust": "thrust", "spear_thrust": "thrust",

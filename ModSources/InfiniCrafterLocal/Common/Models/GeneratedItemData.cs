@@ -76,11 +76,11 @@ public sealed partial class GeneratedItemData
                 : JsonSerializer.Serialize(Placeholder(), Options);
 
         StripBulkForTransport(clone, keepVfxManifest: true);
-        // Network sync is the canonical generated-item handoff.  Prompts/debug can be
-        // stripped, but executable/runtime authored state must survive the trip; otherwise
-        // remote clients receive an item that looks similar but loses part of its behavior/VFX.
-        if (clone.VfxManifest is not null && clone.VfxManifest.HasSlots && string.IsNullOrWhiteSpace(clone.Attack.VfxManifestJson))
-            clone.Attack.VfxManifestJson = clone.VfxManifest.ToJson();
+        // The typed top-level manifest is the one canonical gameplay copy on the wire.
+        // Attack.VfxManifestJson remains a legacy/local fallback only; sending both costs
+        // 10-13 KiB per generated item and gives peers two authorities for one VFX plan.
+        if (clone.VfxManifest is not null && clone.VfxManifest.HasSlots)
+            clone.Attack.VfxManifestJson = "";
 
         string json = JsonSerializer.Serialize(clone, Options);
         if (Utf8ByteCount(json) <= MaxNetworkStringPayloadBytes)
@@ -88,12 +88,14 @@ public sealed partial class GeneratedItemData
 
         // If a generated definition is still absurdly large after normal network stripping,
         // drop expensive visual/VFX bulk before giving up. Gameplay fields and asset ids remain.
+        VfxManifestSpec itemEventManifest = MinimalItemEventManifest(clone.VfxManifest);
         StripBulkForTransport(clone, keepVfxManifest: false);
+        clone.VfxManifest = itemEventManifest;
         json = JsonSerializer.Serialize(clone, Options);
         if (Utf8ByteCount(json) <= MaxNetworkStringPayloadBytes)
             return json;
 
-        var minimal = MinimalPlayerSaveClone(clone);
+        var minimal = MinimalNetworkClone(clone);
         json = JsonSerializer.Serialize(minimal, Options);
         return Utf8ByteCount(json) <= MaxNetworkStringPayloadBytes
             ? json
@@ -242,14 +244,18 @@ public sealed partial class GeneratedItemData
             clone.RecipeMeta.ParentIdentities = Array.Empty<string>();
             clone.RecipeMeta.ParentCategories = Array.Empty<string>();
             clone.RecipeMeta.WorldId = SafeText(clone.RecipeMeta.WorldId, 32);
+            clone.RecipeMeta.AssetTransport = string.Equals(clone.RecipeMeta.AssetTransport, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "native";
             clone.RecipeMeta.AssetBaseUrl = SafeText(clone.RecipeMeta.AssetBaseUrl, 200);
-            clone.RecipeMeta.AssetFiles = SafeTextArray(clone.RecipeMeta.AssetFiles, 64, 160);
+            clone.RecipeMeta.AssetFiles = SafeTextArray(clone.RecipeMeta.AssetFiles, 16, 160)
+                .Where(file => file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
         }
         clone.Visual.ImagePrompt = "";
         clone.Visual.ProjectileImagePrompt = "";
         clone.Visual.ImpactImagePrompt = "";
         clone.Visual.ChildImagePrompt = "";
         clone.Visual.FieldImagePrompt = "";
+        clone.Visual.EquipOverlayPrompt = "";
         clone.Visual.NegativePrompt = "";
         clone.Visual.AssetManifestPath = "";
         clone.Visual.SpriteRawPath = "";
@@ -317,6 +323,56 @@ public sealed partial class GeneratedItemData
             Visual = source.Visual ?? new VisualSpec(),
             Debug = new Dictionary<string, JsonElement>(),
             ExtensionData = new Dictionary<string, JsonElement>()
+        };
+    }
+
+    private static GeneratedItemData MinimalNetworkClone(GeneratedItemData source)
+    {
+        GeneratedItemData clone = MinimalPlayerSaveClone(source);
+        clone.RecipeMeta.AssetTransport = string.Equals(source.RecipeMeta?.AssetTransport, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "native";
+        clone.RecipeMeta.AssetBaseUrl = SafeText(source.RecipeMeta?.AssetBaseUrl ?? "", 200);
+        clone.RecipeMeta.AssetFiles = SafeTextArray(source.RecipeMeta?.AssetFiles, 16, 160)
+            .Where(file => file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        clone.VfxManifest = MinimalItemEventManifest(source.VfxManifest);
+        return clone;
+    }
+
+    private static VfxManifestSpec MinimalItemEventManifest(VfxManifestSpec? source)
+    {
+        if (source is null || !source.HasSlots)
+            return VfxManifestSpec.Empty();
+
+        VfxManifestSpec clone = VfxManifestSpec.FromJson(source.ToJson());
+        clone.EffectName = "";
+        clone.InspirationNames = Array.Empty<string>();
+        clone.Motif = new VfxMotifSpec();
+        clone.Debug = new VfxDebugSpec();
+        clone.Slots = (clone.Slots ?? Array.Empty<VfxSlotSpec>())
+            .Where(IsExecutableItemVfxSlot)
+            .OrderBy(slot => slot.Event is "on_use" or "on_alt_use" ? 0 : 1)
+            .Take(8)
+            .ToArray();
+        foreach (VfxSlotSpec slot in clone.Slots)
+        {
+            slot.EffectName = "";
+            slot.BakedClipId = "";
+            slot.BakedClipHash = "";
+            slot.BakedCommandCount = 0;
+            slot.BakedCommands = Array.Empty<VfxBakedCommandSpec>();
+        }
+        return clone;
+    }
+
+    private static bool IsExecutableItemVfxSlot(VfxSlotSpec? slot)
+    {
+        if (slot is null)
+            return false;
+        return slot.Event switch
+        {
+            "while_held" or "while_equipped" => slot.RendererKind is "orbitingMotes" or "childMotes" or "lightCue",
+            "on_use" or "on_alt_use" => slot.RendererKind is "impactRing" or "childMotes" or "lightCue" or "soundCue",
+            _ => false,
         };
     }
 

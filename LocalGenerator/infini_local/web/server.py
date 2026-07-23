@@ -19,6 +19,7 @@ from infini_local.core.config_bootstrap import (
     WORLD_RECIPES_DIR,
     TERRARIA_PORT,
     ASSET_PUBLIC_BASE_URL,
+    ASSET_TRANSPORT,
 )
 from infini_local.core.contract_versions import TMODLOADER_GREY_ZONE_NOTES
 from infini_local.core.effect_catalog import (
@@ -170,6 +171,7 @@ def _multiplayer_connect_info() -> dict[str, Any]:
         local_generator_port=env_int("INFINI_PORT", 5055, lo=1, hi=65535),
         terraria_port=TERRARIA_PORT,
         asset_public_base_url=ASSET_PUBLIC_BASE_URL,
+        asset_transport=ASSET_TRANSPORT,
         host=env_str("INFINI_HOST", "127.0.0.1"),
     )
 
@@ -441,7 +443,7 @@ def _health_payload() -> dict[str, Any]:
         "recipeStorage": "authoritative_world_recipe_files",
         "requiresWorldId": True,
         "recipeIdentityVersion": RECIPE_IDENTITY_VERSION,
-        "assetSync": {"endpoint": "/get_asset", "publicBaseUrl": ASSET_PUBLIC_BASE_URL, "spriteDir": str(SPRITE_DIR)},
+        "assetSync": {"transport": ASSET_TRANSPORT, "endpoint": "/get_asset", "publicBaseUrl": ASSET_PUBLIC_BASE_URL, "spriteDir": str(SPRITE_DIR)},
         "multiplayer": _multiplayer_connect_info(),
     }
 

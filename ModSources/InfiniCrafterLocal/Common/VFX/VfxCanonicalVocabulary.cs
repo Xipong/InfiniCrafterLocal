@@ -8,11 +8,14 @@ namespace InfiniCrafterLocal.Common.VFX;
 public static class VfxCanonicalVocabulary
 {
     public static string Event(string? value)
-        => value is "travel" or "active" or "tick" or "hit" or "kill" or "expire" ? value : "tick";
+        => value is "travel" or "active" or "tick" or "hit" or "kill" or "expire"
+            or "while_held" or "while_equipped" or "on_use" or "on_alt_use" ? value : "tick";
 
     public static string EventGroup(string? eventName)
         => Event(eventName) switch
         {
+            "while_held" or "while_equipped" => "item_live",
+            "on_use" or "on_alt_use" => "item_use",
             "hit" => "hit",
             "kill" or "expire" => "kill",
             _ => "live",
@@ -21,6 +24,8 @@ public static class VfxCanonicalVocabulary
     public static string Stage(string? eventName)
         => Event(eventName) switch
         {
+            "on_use" or "on_alt_use" => "active",
+            "while_held" or "while_equipped" => "loop",
             "active" => "active",
             "hit" => "impact",
             "kill" or "expire" => "decay",
@@ -42,10 +47,10 @@ public static class VfxCanonicalVocabulary
         if (kind is InfiniVfxRendererKind.FieldPulse or InfiniVfxRendererKind.OrbitingMotes or InfiniVfxRendererKind.ActorAfterimage)
             return "coreGlow";
         if (kind == InfiniVfxRendererKind.ChildMotes)
-            return EventGroup(eventName) == "live" ? "ambientParticles" : EventGroup(eventName) == "kill" ? "decaySmoke" : "impactParticles";
+            return EventGroup(eventName) is "live" or "item_live" ? "ambientParticles" : EventGroup(eventName) == "kill" ? "decaySmoke" : "impactParticles";
         if (kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ImpactSprite)
             return "impactShape";
-        return EventGroup(eventName) == "live" ? "motionTrail" : "impactShape";
+        return EventGroup(eventName) is "live" or "item_live" ? "motionTrail" : "impactShape";
     }
 
     public static string Importance(string? value)
@@ -82,7 +87,7 @@ public static class VfxCanonicalVocabulary
     {
         if (value is "self" or "owner" or "tip" or "tipHistory" or "hitPoint" or "velocity" or "field")
             return value;
-        if (EventGroup(eventName) != "live") return "hitPoint";
+        if (EventGroup(eventName) is not ("live" or "item_live")) return "hitPoint";
         if (kind is InfiniVfxRendererKind.TipTrail or InfiniVfxRendererKind.HistoryRibbon or InfiniVfxRendererKind.GhostArc)
             return "tipHistory";
         if (kind == InfiniVfxRendererKind.BeamLine) return "velocity";

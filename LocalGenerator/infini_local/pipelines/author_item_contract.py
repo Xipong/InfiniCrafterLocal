@@ -5,7 +5,8 @@ import re
 from typing import Any
 
 from infini_local.core.runtime_authoring.engine_call_contracts import engine_params_model
-from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2, PLANNER_HIDDEN_ENGINE_FUNCTIONS
+from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
+from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
 from infini_local.core.runtime_contracts import STRUCTURAL_ID_PATTERN
 
 
@@ -202,7 +203,7 @@ def _strict_schema_errors(
 def _engine_call_union() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     definitions: dict[str, Any] = {}
-    visible_functions = sorted(set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
+    visible_functions = sorted(set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
     for fn in visible_functions:
         model = engine_params_model(fn)
         params_schema = copy.deepcopy(model.model_json_schema())
@@ -327,7 +328,7 @@ def author_item_response_schema() -> dict[str, Any]:
                             },
                         },
                         "required": [
-                            "item", "projectile", "impact", "vfxIntent", "vfxAvoid",
+                            "item", "projectile", "impact", "vfxIntent",
                         ],
                     },
                     "sourceReading": {"type": "string", "maxLength": 500},
@@ -394,7 +395,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         },
         "runtimePlan": {
             key: (
-                "array<{callId,fn,params}> using availableFunctions"
+                "array<{callId:[a-z][a-z0-9_]{0,63},fn,params}>"
                 if key == "engineCalls"
                 else value_card(plan_properties[key])
             )
@@ -498,8 +499,29 @@ def author_item_repair_response_schema() -> dict[str, Any]:
     }
 
 
-def author_item_provider_repair_response_schema() -> dict[str, Any]:
-    return _provider_strict_projection(author_item_repair_response_schema())
+def author_item_provider_repair_response_schema(
+    allowed_patch_keys: set[str] | None = None,
+) -> dict[str, Any]:
+    schema = author_item_repair_response_schema()
+    if allowed_patch_keys is not None:
+        schema["properties"] = {
+            key: value
+            for key, value in schema["properties"].items()
+            if key in allowed_patch_keys
+        }
+    mandatory_patch_keys = {
+        "category", "coreMechanic", "primaryVerb", "controlStyle", "runtimePlan",
+    }
+    schema["required"] = [
+        key for key in schema["properties"] if key in mandatory_patch_keys
+    ]
+    runtime_plan = schema["properties"].get("runtimePlan")
+    if isinstance(runtime_plan, dict):
+        runtime_plan["required"] = [
+            "resultKind", "engineCalls", "runtimeStateIntent", "sourceReading",
+            "balanceIntent", "anomalyFlags",
+        ]
+    return _provider_strict_projection(schema)
 
 
 def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
@@ -582,6 +604,43 @@ def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
                 "items": {"oneOf": param_patch_branches},
                 "maxItems": 24,
             },
+            "engineCallParamDeletes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "callId": {"type": "string", "minLength": 1, "maxLength": 128},
+                        "fn": {"type": "string", "minLength": 1, "maxLength": 64},
+                        "paramPaths": {
+                            "type": "array",
+                            "items": {"type": "string", "minLength": 1, "maxLength": 128},
+                            "minItems": 1,
+                            "maxItems": 24,
+                        },
+                    },
+                    "required": ["callId", "fn", "paramPaths"],
+                },
+                "maxItems": 24,
+            },
+            "engineCallIdPatches": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "callIndex": {"type": "integer", "minimum": 0, "maximum": 63},
+                        "currentCallId": {"type": "string", "maxLength": 128},
+                        "fn": {"type": "string", "minLength": 1, "maxLength": 64},
+                        "newCallId": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                        },
+                    },
+                    "required": ["callIndex", "currentCallId", "fn", "newCallId"],
+                },
+                "maxItems": 24,
+            },
         },
         "required": [],
     }
@@ -593,12 +652,15 @@ def author_item_provider_targeted_repair_delta_schema(
     allowed_author_field_schemas: dict[str, dict[str, Any]] | None = None,
     allowed_runtime_metadata_fields: set[str] | None = None,
     identity_field_schemas: dict[str, dict[str, Any]] | None = None,
+    allowed_call_id_repairs: list[dict[str, Any]] | None = None,
+    allowed_param_deletes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Provider grammar narrowed to the exact validator-authorized delta leaves."""
     schema = author_item_targeted_repair_delta_schema()
     properties = schema["properties"]
 
     exact_branches: list[dict[str, Any]] = []
+    required_branch_count = 0
     for card_key in sorted(repair_function_cards or {}):
         card = (repair_function_cards or {}).get(card_key)
         if not isinstance(card, dict):
@@ -611,33 +673,139 @@ def author_item_provider_targeted_repair_delta_schema(
         )
         if not call_id or not fn or not params:
             continue
+        dependency_params = {
+            str(name)
+            for group in card.get("requiredTogether") or []
+            if isinstance(group, list)
+            for name in group
+            if str(name) in params
+        }
+        required_params = dependency_params | {
+            str(name)
+            for name in card.get("requiredParams") or []
+            if str(name) in params
+        }
+        if card.get("requiredParamPaths"):
+            required_branch_count += 1
+        allowed_together_values = [
+            row
+            for row in card.get("allowedTogetherValues") or []
+            if isinstance(row, dict) and set(row) == dependency_params
+        ]
+        params_schema: dict[str, Any] = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": copy.deepcopy(params),
+            "required": sorted(required_params),
+        }
+        if allowed_together_values:
+            params_schema = {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            **copy.deepcopy(params),
+                            **{
+                                name: {"const": row[name], "type": "string"}
+                                for name in sorted(dependency_params)
+                            },
+                        },
+                        "required": sorted(required_params),
+                    }
+                    for row in allowed_together_values
+                ],
+            }
         exact_branches.append({
             "type": "object",
             "additionalProperties": False,
             "properties": {
                 "callId": {"type": "string", "const": call_id},
                 "fn": {"type": "string", "const": fn},
-                "params": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": copy.deepcopy(params),
-                    "required": [],
-                },
+                "params": params_schema,
             },
             "required": ["callId", "fn", "params"],
         })
     if exact_branches:
         patch_array = properties["engineCallParamPatches"]
         patch_array["items"] = {"oneOf": exact_branches}
+        patch_array["minItems"] = max(1, required_branch_count)
         patch_array["maxItems"] = len(exact_branches)
     else:
         properties.pop("engineCallParamPatches", None)
+
+    exact_delete_branches: list[dict[str, Any]] = []
+    for repair in allowed_param_deletes or []:
+        if not isinstance(repair, dict):
+            continue
+        call_id = str(repair.get("callId") or "").strip()
+        fn = str(repair.get("fn") or "").strip()
+        param_paths = sorted({
+            str(path).strip()
+            for path in repair.get("paramPaths") or []
+            if str(path).strip()
+        })
+        if not call_id or not fn or not param_paths:
+            continue
+        exact_delete_branches.append({
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "callId": {"type": "string", "const": call_id},
+                "fn": {"type": "string", "const": fn},
+                "paramPaths": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": param_paths},
+                    "minItems": len(param_paths),
+                    "maxItems": len(param_paths),
+                },
+            },
+            "required": ["callId", "fn", "paramPaths"],
+        })
+    if exact_delete_branches:
+        delete_array = properties["engineCallParamDeletes"]
+        delete_array["items"] = {"oneOf": exact_delete_branches}
+        delete_array["minItems"] = len(exact_delete_branches)
+        delete_array["maxItems"] = len(exact_delete_branches)
+    else:
+        properties.pop("engineCallParamDeletes", None)
+
+    exact_id_branches: list[dict[str, Any]] = []
+    for repair in allowed_call_id_repairs or []:
+        if not isinstance(repair, dict):
+            continue
+        call_index = repair.get("callIndex")
+        current_call_id = str(repair.get("currentCallId") or "")
+        fn = str(repair.get("fn") or "").strip()
+        if not isinstance(call_index, int) or call_index < 0 or not fn:
+            continue
+        exact_id_branches.append({
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "callIndex": {"type": "integer", "const": call_index},
+                "currentCallId": {"type": "string", "const": current_call_id},
+                "fn": {"type": "string", "const": fn},
+                "newCallId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                },
+            },
+            "required": ["callIndex", "currentCallId", "fn", "newCallId"],
+        })
+    if exact_id_branches:
+        id_patch_array = properties["engineCallIdPatches"]
+        id_patch_array["items"] = {"oneOf": exact_id_branches}
+        id_patch_array["minItems"] = len(exact_id_branches)
+        id_patch_array["maxItems"] = len(exact_id_branches)
+    else:
+        properties.pop("engineCallIdPatches", None)
 
     author_schemas = allowed_author_field_schemas or {}
     if author_schemas:
         author_fields = properties["authorFields"]
         author_fields["properties"] = copy.deepcopy(author_schemas)
-        author_fields["required"] = []
+        author_fields["required"] = sorted(author_schemas)
     else:
         properties.pop("authorFields", None)
 
@@ -651,6 +819,8 @@ def author_item_provider_targeted_repair_delta_schema(
         }
         if not runtime_metadata["properties"]:
             properties.pop("runtimeMetadata", None)
+        else:
+            runtime_metadata["required"] = sorted(runtime_metadata["properties"])
     else:
         properties.pop("runtimeMetadata", None)
 
@@ -661,7 +831,98 @@ def author_item_provider_targeted_repair_delta_schema(
     else:
         properties.pop("identity", None)
 
+    # Every surviving property owns an exact rejected domain. Nullable is for
+    # genuinely optional sparse fields, not an edit the applicator requires.
+    schema["required"] = sorted(properties)
     return _provider_strict_projection(schema)
+
+
+def _truncate_repair_text_at_boundary(value: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", value).strip()
+    if len(text) <= limit:
+        return text
+    window = text[: limit + 1]
+    minimum = max(2, int(limit * 0.55))
+    candidates: list[int] = []
+    for separator in (". ", "; ", ", ", ",", " "):
+        cut = window.rfind(separator)
+        if cut >= minimum:
+            candidates.append(cut + (1 if separator != " " else 0))
+    if candidates:
+        return window[: max(candidates)].rstrip(" ,;")
+    return text[:limit].rstrip()
+
+
+def _normalize_bounded_repair_text(
+    value: Any,
+    schema: dict[str, Any],
+    *,
+    root: dict[str, Any],
+) -> Any:
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        resolved = _resolve_local_ref(root, ref)
+        return (
+            _normalize_bounded_repair_text(value, resolved, root=root)
+            if resolved is not None
+            else copy.deepcopy(value)
+        )
+
+    branches = schema.get("anyOf") or schema.get("oneOf")
+    if isinstance(branches, list):
+        candidates: list[tuple[int, Any]] = []
+        for branch in branches:
+            if not isinstance(branch, dict):
+                continue
+            candidate = _normalize_bounded_repair_text(value, branch, root=root)
+            error_count = len(
+                _strict_schema_errors(candidate, branch, root=root, path="$", limit=64)
+            )
+            candidates.append((error_count, candidate))
+        return min(candidates, key=lambda row: row[0])[1] if candidates else copy.deepcopy(value)
+
+    if isinstance(value, str):
+        max_length = schema.get("maxLength")
+        constrained = any(key in schema for key in ("enum", "const", "pattern"))
+        if (
+            isinstance(max_length, int)
+            and max_length > 0
+            and len(value) > max_length
+            and len(value) <= (max_length * 13) // 10
+            and not constrained
+        ):
+            return _truncate_repair_text_at_boundary(value, max_length)
+        return value
+
+    if isinstance(value, dict):
+        properties = schema.get("properties")
+        properties = properties if isinstance(properties, dict) else {}
+        return {
+            key: _normalize_bounded_repair_text(child, properties[key], root=root)
+            if key in properties and isinstance(properties[key], dict)
+            else copy.deepcopy(child)
+            for key, child in value.items()
+        }
+
+    if isinstance(value, list):
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            return [
+                _normalize_bounded_repair_text(child, item_schema, root=root)
+                for child in value
+            ]
+    return copy.deepcopy(value)
+
+
+def normalize_author_item_targeted_repair_delta_text_limits(value: Any) -> Any:
+    """Normalize only small provider overshoots against the canonical delta schema.
+
+    This is a bounded transport-boundary cleanup for descriptive strings. It never
+    invents or removes fields, never changes enums/patterned identifiers, and leaves
+    large overshoots invalid for the strict validator below.
+    """
+    schema = author_item_targeted_repair_delta_schema()
+    return _normalize_bounded_repair_text(value, schema, root=schema)
 
 
 def strict_author_item_targeted_repair_delta_report(value: Any) -> dict[str, Any]:

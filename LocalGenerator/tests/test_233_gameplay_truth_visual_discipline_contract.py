@@ -28,7 +28,7 @@ def _contract_check_incompatible_second_primary_cannot_override_first_executor()
     assert patch["runtimeFamily"] == "swing"
     assert patch["delivery"] == "swing"
     assert patch["disableItemMeleeHitbox"] is False
-    assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
+    assert patch["rejectedRootExecutorCalls"][0]["reason"] == "runtime_one_root_executor"
     assert "recoveredPrimaryConflictAsSecondary" not in patch
     assert patch.get("splitCount", 0) == 0
     assert patch.get("maxChildProjectiles", 0) == 0

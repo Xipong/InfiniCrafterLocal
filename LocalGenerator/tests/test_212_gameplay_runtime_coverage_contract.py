@@ -15,14 +15,14 @@ def read(path: Path) -> str:
 def _contract_check_generated_tool_mining_speed_and_alt_light_are_executable():
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
     authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "__init__.py")
-    authoring_schema = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "schema.py")
+    function_registry = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "function_contract_registry.py")
     assert "ApplyAuthoredToolMiningSpeed" in item
     assert "gp.MiningSpeedScale" in item
     assert "player.pickSpeed /= scale" in item
-    assert "from infini_local.core.runtime_authoring.schema import" in authoring
-    assert "tool_capability" in authoring_schema
-    assert "miningSpeedScale" in authoring_schema
-    assert "executable held-tool mining speed multiplier" in authoring_schema
+    assert "from infini_local.core.runtime_authoring.function_contract_registry import" in authoring
+    assert "tool_capability" in function_registry
+    assert "miningSpeedScale" in function_registry
+    assert "executable held-tool mining speed multiplier" in function_registry
     assert "AltLightStrength" in item
     assert "mode == \"light\"" in item
     assert "ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork:" in item
@@ -31,11 +31,11 @@ def _contract_check_generated_tool_mining_speed_and_alt_light_are_executable():
 
 
 def _contract_check_accessory_authoring_now_covers_runtime_supported_fields():
-    authoring = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "compiler.py")
+    equipment = read(LOCAL / "infini_local" / "core" / "runtime_authoring" / "equipment.py")
     model = read(MOD / "Common" / "Models" / "GeneratedItemData.cs")
     item = read(MOD / "Content" / "Items" / "GeneratedItem.cs")
     for field in ["sentrySlots", "manaCostReduction", "ammoSaveChance", "aggro", "endurance", "armorPenetration"]:
-        assert field in authoring
+        assert field in equipment
     for field in ["SentrySlots", "ManaCostReduction", "AmmoSaveChance", "Aggro", "Endurance", "ArmorPenetration"]:
         assert field in model
     assert "player.maxTurrets += a.SentrySlots" in item

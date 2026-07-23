@@ -647,7 +647,7 @@ def _raw_item_fields_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     Missing projectile/probe sections are simply omitted; Gemma does the source reading.
     """
     keys = [
-        "type", "name", "internalName", "fullName", "sourceMod",
+        "type", "name", "internalName", "fullName", "sourceMod", "tooltipLines",
         "damage", "damageClass", "useStyle", "useTime", "useAnimation",
         "rare", "rarityDetails", "value", "maxStack", "stack", "consumable", "material",
         "accessory", "defense", "createTile", "createWall", "placeStyle",

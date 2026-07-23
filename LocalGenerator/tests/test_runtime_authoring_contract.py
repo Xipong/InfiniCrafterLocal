@@ -51,7 +51,7 @@ def _check_result_kind_requires_its_executable_surface() -> None:
     missing_primary = runtime_plan_validation_report({"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "consumable_weapon", "damageClass": "ranged", "damage": 9, "useTimeTicks": 20, "maxStack": 50, "craftYield": 25}},
     ]}})
-    assert any("consumable_weapon result requires a primary executable action" in error for error in missing_primary["errors"])
+    assert any("consumable_weapon result requires one root executable action" in error for error in missing_primary["errors"])
 
     missing_accessory = runtime_plan_validation_report({"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "accessory", "maxStack": 1}},
@@ -84,7 +84,7 @@ def _check_result_kind_requires_its_executable_surface() -> None:
     assert material_particles["dustSpawnDenom"] > 0
 
 
-def _check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay() -> None:
+def _check_runtime_plan_rejects_extra_root_and_non_visual_field_gameplay() -> None:
     data = {"runtimePlan": {"engineCalls": [
         {"fn": "set_item_stats", "params": {"resultKind": "weapon", "damage": 4, "useTimeTicks": 22}},
         {"fn": "set_item_stats", "params": {"damage": 6, "craftYield": 3}},
@@ -97,10 +97,13 @@ def _check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay() ->
     patch = result["patch"]
     assert patch["useTimeTicks"] == 22
     assert patch["craftYield"] == 3
-    assert patch["shotCount"] == 3
-    assert patch["spreadRadians"] == 0.25
-    assert patch["pierce"] == 1
-    assert patch["rejectedPrimaryCalls"][0]["reason"] == "runtime_one_primary_family"
+    assert patch["shotCount"] == 1
+    assert patch["spreadRadians"] == 0.05
+    assert patch["pierce"] == 0
+    assert len(patch["rejectedRootExecutorCalls"]) == 2
+    assert all(row["reason"] == "runtime_one_root_executor" for row in patch["rejectedRootExecutorCalls"])
+    assert patch["rejectedRootExecutorCalls"][0]["runtimeFamily"] == "shoot"
+    assert patch["rejectedRootExecutorCalls"][1]["runtimeFamily"] == "throw"
     assert patch["trailLength"] == 5
     assert patch["vfxFieldRadiusTiles"] == 4
     assert patch["vfxFieldLifetimeTicks"] == 80
@@ -161,7 +164,7 @@ def _check_direct_shoot_projectile_requires_explicit_runtime_family() -> None:
         }},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(spear)
-    assert patch["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert patch["runtimeContractError"] == "root_executor_requires_runtimeFamily"
     assert "runtimeFamily" not in patch
     assert "runtimeFamilyRepair" not in patch
 
@@ -175,7 +178,7 @@ def _check_direct_shoot_projectile_requires_explicit_runtime_family() -> None:
         }},
     ]}}
     patch2 = compile_runtime_plan_to_genome_patch(conflicting)
-    assert patch2["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert patch2["runtimeContractError"] == "root_executor_requires_runtimeFamily"
     assert "runtimeFamily" not in patch2
 
     prose_only = {"runtimePlan": {"engineCalls": [
@@ -188,7 +191,7 @@ def _check_direct_shoot_projectile_requires_explicit_runtime_family() -> None:
         }},
     ]}}
     patch3 = compile_runtime_plan_to_genome_patch(prose_only)
-    assert patch3["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert patch3["runtimeContractError"] == "root_executor_requires_runtimeFamily"
     assert "runtimeFamily" not in patch3
     assert "runtimeFamilyRepair" not in patch3
 
@@ -325,7 +328,7 @@ def _check_direct_projectile_family_spear_does_not_repair_to_thrust() -> None:
         }},
     ]}}
     patch = compile_runtime_plan_to_genome_patch(data)
-    assert patch["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert patch["runtimeContractError"] == "root_executor_requires_runtimeFamily"
     assert "runtimeFamily" not in patch
     assert "runtimeFamilyRepair" not in patch
     assert patch["projectileFamily"] == "spear"
@@ -339,7 +342,7 @@ def _check_direct_projectile_family_spear_does_not_repair_to_thrust() -> None:
         }},
     ]}}
     patch2 = compile_runtime_plan_to_genome_patch(no_executor)
-    assert patch2["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert patch2["runtimeContractError"] == "root_executor_requires_runtimeFamily"
     assert "runtimeFamily" not in patch2
 
     compound_shape_word_is_not_magic = {"runtimePlan": {"engineCalls": [
@@ -351,7 +354,7 @@ def _check_direct_projectile_family_spear_does_not_repair_to_thrust() -> None:
         }},
     ]}}
     patch3 = compile_runtime_plan_to_genome_patch(compound_shape_word_is_not_magic)
-    assert patch3["runtimeContractError"] == "primary_attack_requires_runtimeFamily"
+    assert patch3["runtimeContractError"] == "root_executor_requires_runtimeFamily"
     assert "runtimeFamily" not in patch3
 
 
@@ -491,6 +494,24 @@ def _check_author_prompt_requires_explicit_physical_throw_motion_authorship() ->
     assert "explicit" in rules
 
 
+def _check_author_prompt_states_placeable_behavior_result_kind_boundary() -> None:
+    from infini_local.pipelines.llm_authoring_prompt import planner_priority_header_for_llm
+
+    rules = " ".join(planner_priority_header_for_llm()).casefold()
+    assert "placeable_behavior" in rules
+    assert "resultkind=furniture" in rules
+    assert "exclusive" in rules
+
+
+def _check_author_prompt_states_combat_executor_result_kind_boundary() -> None:
+    from infini_local.pipelines.llm_authoring_prompt import planner_priority_header_for_llm
+
+    rules = " ".join(planner_priority_header_for_llm()).casefold()
+    assert "combat engine calls" in rules
+    assert "resultkind=weapon" in rules
+    assert "resultkind=consumable_weapon" in rules
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -501,7 +522,7 @@ def _run_coarse_contracts(tmp_path):
     for _name in [
     '_check_runtime_plan_compiler_keeps_current_playable_core',
     '_check_result_kind_requires_its_executable_surface',
-    '_check_runtime_plan_rejects_extra_primary_and_non_visual_field_gameplay',
+    '_check_runtime_plan_rejects_extra_root_and_non_visual_field_gameplay',
     '_check_chain_requires_count_and_does_not_create_children_by_accident',
     '_check_spear_thrust_delivery_is_distinct_from_sword_swing',
     '_check_direct_shoot_projectile_requires_explicit_runtime_family',
@@ -516,7 +537,9 @@ def _run_coarse_contracts(tmp_path):
     '_check_future_state_calls_are_rejected_until_the_executor_exists',
     '_check_safe_item_capability_enginecalls_compile_to_gameplay_patch',
     '_check_overhead_barrage_onhit_is_executable_semantic_child_primitive',
-    '_check_author_prompt_requires_explicit_physical_throw_motion_authorship'
+    '_check_author_prompt_requires_explicit_physical_throw_motion_authorship',
+    '_check_author_prompt_states_placeable_behavior_result_kind_boundary',
+    '_check_author_prompt_states_combat_executor_result_kind_boundary'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

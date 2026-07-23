@@ -1,0 +1,247 @@
+{
+  "requiredJsonShape": {
+    "additionalTopLevelFields": "do not add keys outside this contract. Known forbidden fields are rejected; unknown extras are validation errors.",
+    "optionalTopLevelFields": [
+      "identity"
+    ],
+    "requiredTopLevelFields": [
+      "effectMagnitude",
+      "visualBudgetClass",
+      "slots"
+    ],
+    "slots": {
+      "additionalSlotFields": "do not add keys outside this contract. Known forbidden fields are rejected; unknown extras are validation errors.",
+      "count": "between constraints.slots[0] and constraints.slots[1]",
+      "enumFields": {
+        "anchor": "one vfxSurface.anchor value",
+        "backend": "one vfxSurface.backend value",
+        "blend": "one vfxSurface.blend value",
+        "channel": "one vfxSurface.channel value",
+        "emissionMode": "one vfxSurface.emissionMode value",
+        "event": "one vfxSurface.events value",
+        "lane": "one vfxSurface.lane value",
+        "particleRole": "one vfxSurface.particleRole value",
+        "particleSystemId": "one explicit vfxSurface.particleSystemId value: pl:glow, pl:shard, pl:smoke, pl:spark, or dust",
+        "rendererKind": "one vfxSurface.rendererKind value",
+        "textureRole": "one vfxSurface.textureRole value"
+      },
+      "numericFields": {
+        "alpha": "float in vfxSurface.numericRanges.alpha",
+        "budgetWeight": "float in vfxSurface.numericRanges.budgetWeight",
+        "density": "float in vfxSurface.numericRanges.density",
+        "duration": "integer in vfxSurface.numericRanges.duration",
+        "fadeIn": "float in vfxSurface.numericRanges.fadeIn",
+        "fadeOut": "float in vfxSurface.numericRanges.fadeOut",
+        "jitter": "float in vfxSurface.numericRanges.jitter",
+        "phaseOffset": "optional float in vfxSurface.numericRanges.phaseOffset",
+        "repeatEvery": "optional integer in vfxSurface.numericRanges.repeatEvery",
+        "scale": "float in vfxSurface.numericRanges.scale",
+        "signatureWeight": "float in vfxSurface.numericRanges.signatureWeight",
+        "spread": "float in vfxSurface.numericRanges.spread",
+        "startTick": "optional integer in vfxSurface.numericRanges.startTick",
+        "visualCost": "float in vfxSurface.numericRanges.visualCost"
+      },
+      "requiredSlotFields": [
+        "event",
+        "rendererKind",
+        "backend",
+        "textureRole",
+        "particleRole",
+        "anchor",
+        "channel",
+        "lane",
+        "emissionMode",
+        "blend",
+        "particleSystemId",
+        "scale",
+        "density",
+        "duration",
+        "alpha",
+        "spread",
+        "jitter",
+        "budgetWeight",
+        "signatureWeight",
+        "visualCost",
+        "fadeIn",
+        "fadeOut"
+      ],
+      "type": "array"
+    },
+    "topLevelContract": {
+      "effectMagnitude": "float in vfxSurface.numericRanges.effectMagnitude",
+      "identity": "optional short debug note only; runtime must not parse it",
+      "visualBudgetClass": "one of tiny|small|normal|large|signature"
+    },
+    "type": "object"
+  },
+  "schema": "infini.vfx-director-contract-surface.v1",
+  "surface": {
+    "anchor": [
+      "self",
+      "owner",
+      "tip",
+      "tipHistory",
+      "hitPoint",
+      "velocity",
+      "field"
+    ],
+    "backend": [
+      "Auto",
+      "Realtime",
+      "Primitive",
+      "Sprite",
+      "Particle"
+    ],
+    "blend": [
+      "alpha",
+      "additive"
+    ],
+    "channel": [
+      "motionTrail",
+      "coreGlow",
+      "ambientParticles",
+      "impactShape",
+      "impactParticles",
+      "decaySmoke",
+      "light",
+      "sound"
+    ],
+    "emissionMode": [
+      "wake",
+      "orbit",
+      "residue",
+      "burst",
+      "cone",
+      "ring",
+      "spiral",
+      "point"
+    ],
+    "events": [
+      "travel",
+      "active",
+      "tick",
+      "hit",
+      "kill",
+      "expire",
+      "while_held",
+      "while_equipped",
+      "on_use",
+      "on_alt_use"
+    ],
+    "lane": [
+      "primary",
+      "support",
+      "accent",
+      "ornament",
+      "cue"
+    ],
+    "numericRanges": {
+      "alpha": [
+        0.0,
+        1.0
+      ],
+      "budgetWeight": [
+        0.1,
+        4.0
+      ],
+      "density": [
+        0.0,
+        1.0
+      ],
+      "duration": [
+        3,
+        120
+      ],
+      "effectMagnitude": [
+        0.0,
+        1.0
+      ],
+      "fadeIn": [
+        0.0,
+        0.8
+      ],
+      "fadeOut": [
+        0.0,
+        0.8
+      ],
+      "jitter": [
+        0.0,
+        1.5
+      ],
+      "phaseOffset": [
+        -1.0,
+        1.0
+      ],
+      "repeatEvery": [
+        0,
+        120
+      ],
+      "scale": [
+        0.15,
+        5.0
+      ],
+      "signatureWeight": [
+        0.0,
+        1.0
+      ],
+      "spread": [
+        0.0,
+        2.0
+      ],
+      "startTick": [
+        0,
+        120
+      ],
+      "visualCost": [
+        0.0,
+        1.0
+      ]
+    },
+    "particleRole": [
+      "projectile",
+      "impact",
+      "child",
+      "field"
+    ],
+    "particleSystemId": [
+      "pl:glow",
+      "pl:shard",
+      "pl:smoke",
+      "pl:spark",
+      "dust"
+    ],
+    "rendererKind": [
+      "projectileAfterimage",
+      "spriteStampTrail",
+      "historyRibbon",
+      "tipTrail",
+      "ghostArc",
+      "wavyStrip",
+      "beamLine",
+      "fieldPulse",
+      "orbitingMotes",
+      "actorAfterimage",
+      "impactRing",
+      "impactSprite",
+      "childMotes",
+      "lightCue",
+      "soundCue"
+    ],
+    "rendererRules": {
+      "lightCue": {
+        "channel": "light",
+        "lane": "cue"
+      },
+      "soundCue": {
+        "channel": "sound",
+        "lane": "cue"
+      }
+    },
+    "textureRole": [
+      "projectile",
+      "impact",
+      "child",
+      "field"
+    ]
+  }
+}

@@ -86,6 +86,11 @@ def test_author_item_v3_design_metadata_is_compact_and_proof_is_compiler_owned()
     assert set(concept["required"]) == {"fantasy", "mergeLogic", "coreMechanic"}
     assert "weirdTwist" not in concept["properties"]
     visual_intent = schema["properties"]["runtimePlan"]["properties"]["visualIntent"]
+    assert "vfxAvoid" in visual_intent["properties"]
+    assert "vfxAvoid" not in visual_intent["required"]
+    without_avoid = _valid_author_item()
+    del without_avoid["runtimePlan"]["visualIntent"]["vfxAvoid"]
+    assert strict_author_item_v3_report(without_avoid)["ok"] is True
     assert {
         "topology", "partCountMin", "partCountMax", "palette",
         "preferredCanvasSize", "projectileCanvasSize",

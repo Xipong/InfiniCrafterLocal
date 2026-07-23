@@ -929,8 +929,11 @@ def _llm_error_text(exc: Exception) -> str:
     return " | ".join(p for p in parts if p).lower()
 
 def _is_transport_error(exc: Exception) -> bool:
-    if isinstance(exc, urlerror.HTTPError) and exc.code in {408, 425, 429, 500, 502, 503, 504}:
-        return True
+    # HTTPError is a URLError subclass. Handle it first and return decisively;
+    # otherwise permanent 400/401/403/404 responses fall through to the broad
+    # URLError branch and consume quota in a guaranteed-useless retry.
+    if isinstance(exc, urlerror.HTTPError):
+        return exc.code in {408, 409, 425, 429, 500, 502, 503, 504}
     if isinstance(exc, (urlerror.URLError, TimeoutError, ConnectionError)):
         return True
     text = _llm_error_text(exc)
@@ -1278,16 +1281,28 @@ def _switch_lease_to_legacy_fallback(lease: LlmItemLease | None, fallback: dict[
     lease.responses_disabled = False
 
 
-def _with_transport_retry_debug(result: dict[str, Any], causes: list[str]) -> dict[str, Any]:
-    if not causes:
+def _with_transport_retry_debug(
+    result: dict[str, Any],
+    causes: list[str],
+    *,
+    prior_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not causes and prior_result is None:
         return result
     debug_candidate = result.get("_debug")
     debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
+    prior_debug_candidate = prior_result.get("_debug") if isinstance(prior_result, dict) else None
+    prior_debug: dict[str, Any] = prior_debug_candidate if isinstance(prior_debug_candidate, dict) else {}
     existing_causes = [str(value) for value in debug.get("transportRetryCauses") or []]
+    prior_causes = [str(value) for value in prior_debug.get("transportRetryCauses") or []]
     result["_debug"] = {
         **debug,
-        "transportRetryCount": int(debug.get("transportRetryCount") or 0) + len(causes),
-        "transportRetryCauses": [*existing_causes, *causes],
+        "transportRetryCount": (
+            int(prior_debug.get("transportRetryCount") or 0)
+            + int(debug.get("transportRetryCount") or 0)
+            + len(causes)
+        ),
+        "transportRetryCauses": [*prior_causes, *existing_causes, *causes],
     }
     return result
 
@@ -1336,7 +1351,7 @@ def _llm_json_single_context_with_length_retry(
         "cause": retry_cause,
     })
     retry_result = _llm_json_single_context(retry_payload, timeout, context)
-    return _with_transport_retry_debug(retry_result, [retry_cause])
+    return _with_transport_retry_debug(retry_result, [retry_cause], prior_result=result)
 
 
 def _payload_without_model_override(payload: dict[str, Any]) -> dict[str, Any]:

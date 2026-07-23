@@ -1,0 +1,39 @@
+{
+  "callShapeCount": 135,
+  "caseCount": 82,
+  "compile": {
+    "compiled": 82,
+    "errors": {},
+    "failed": 0
+  },
+  "functionCount": 16,
+  "functions": [
+    "accessory_effect",
+    "apply_on_hit_effect",
+    "apply_player_effect_on_use",
+    "armor_effect",
+    "consumption_behavior",
+    "hold_item_effect",
+    "mobility_effect",
+    "placeable_behavior",
+    "set_alt_use_mode",
+    "set_item_stats",
+    "shoot_projectile",
+    "spawn_contact_particles",
+    "spawn_secondary_projectiles",
+    "tool_capability",
+    "use_affordance",
+    "visual_effect_cue"
+  ],
+  "rawRowCount": 140,
+  "resultKinds": [
+    "accessory",
+    "armor",
+    "consumable_weapon",
+    "furniture",
+    "potion",
+    "tool",
+    "weapon"
+  ],
+  "uniquePlanCount": 138
+}

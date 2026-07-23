@@ -8,18 +8,31 @@ from infini_local.core.runtime_charge_release_policy import apply_charge_release
 from infini_local.core.runtime_sentry_policy import apply_sentry_contract, reject_recursive_sentry_onhit
 from infini_local.core.runtime_authoring.common import _clamp, _enum, _intish, _norm_name, _num
 from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
+from infini_local.core.runtime_authoring.result_identity import effective_runtime_result_kind
 from infini_local.core.runtime_executor_vocabulary import EFFECTS, MOVEMENTS, ONHITS
-from infini_local.core.runtime_family_policy import CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES
+from infini_local.core.runtime_family_policy import (
+    CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES,
+    runtime_family_accepts_delivery,
+)
 from infini_local.core.runtime_color_policy import normalize_runtime_color
 from infini_local.core.sound_catalog import (
     SOUND_CATALOG_SOURCE,
     normalize_sound_catalog_id,
 )
+from infini_local.core.vfx_composition_primitives import (
+    VFX_CUE_CHANNELS,
+    VFX_CUE_EVENTS,
+    VFX_CUE_RENDERERS,
+)
 from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
 from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
-from infini_local.core.runtime_authoring.secondary import apply_secondary_projectile_calls
+from infini_local.core.runtime_authoring.equipment import apply_accessory_calls, apply_armor_calls
+from infini_local.core.runtime_authoring.secondary import (
+    apply_primary_onhit_child_gates,
+    apply_secondary_projectile_calls,
+)
 from infini_local.core.runtime_authoring.semantics import _truthy
-from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _select_primary_shoot_call, all_calls
+from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _select_root_executor_call, all_calls
 
 
 TERRARIA_TILE_SIZE_PX = 16
@@ -52,6 +65,7 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     trail_calls = all_calls(rp, "leave_trail_or_field")
     use_effect_calls = all_calls(rp, "apply_player_effect_on_use")
     tool_calls = all_calls(rp, "tool_capability")
+    placeable_calls = all_calls(rp, "placeable_behavior")
     light_calls = all_calls(rp, "emit_light")
     vfx_cue_calls = all_calls(rp, "visual_effect_cue")
     mobility_calls = all_calls(rp, "mobility_effect")
@@ -66,21 +80,21 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     armor_calls = all_calls(rp, "armor_effect")
 
     itemstats_calls = all_calls(rp, "set_item_stats")
-    shoot, rejected_primary = _select_primary_shoot_call(shoots) if shoots else ({}, [])
+    shoot, rejected_roots = _select_root_executor_call(shoots) if shoots else ({}, [])
     hit = _merged_params(hits) if hits else {}
     itemstats = _merged_params(itemstats_calls) if itemstats_calls else {}
     patch: dict[str, Any] = {}
-    authored_result_kind = _norm_name(itemstats.get("resultKind") or rp.get("resultKind"))
+    authored_result_kind = effective_runtime_result_kind(data)
     if authored_result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion", "material", "furniture", "generic"}:
         patch["kind"] = authored_result_kind
     norm = rp.get("_normalization") if isinstance(rp.get("_normalization"), dict) else {}
     if isinstance(norm.get("rejectedEngineCalls"), list) and norm.get("rejectedEngineCalls"):
         patch["rejectedEngineCalls"] = norm.get("rejectedEngineCalls")[:16]
 
-    # Primary executable action: one primary family only.  Incompatible extra
-    # primary calls stay visible in provenance/debug and never override final fields.
-    if rejected_primary:
-        patch["rejectedPrimaryCalls"] = rejected_primary[:8]
+    # One root executor owns the item-use lifecycle. A preserved item hitbox is a
+    # bounded damage lane of that same use, not a second controller.
+    if rejected_roots:
+        patch["rejectedRootExecutorCalls"] = rejected_roots[:8]
 
     raw_delivery = _norm_name(shoot.get("delivery"))
     delivery = _enum(shoot.get("delivery"), DELIVERIES, None)
@@ -98,7 +112,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
     explicit_runtime_family = _enum(shoot.get("runtimeFamily"), RUNTIME_FAMILIES, None)
     runtime_family = explicit_runtime_family or "none"
     if shoots and runtime_family == "none":
-        patch["runtimeContractError"] = "primary_attack_requires_runtimeFamily"
+        patch["runtimeContractError"] = "root_executor_requires_runtimeFamily"
+    elif shoots and not runtime_family_accepts_delivery(runtime_family, delivery):
+        patch["runtimeContractError"] = f"runtimeFamily={runtime_family} rejects delivery={delivery or 'missing'}"
     else:
         patch["runtimeFamily"] = runtime_family
         patch.update(_runtime_family_affordances(runtime_family, patch.get("weaponFamily") or shoot.get("weaponFamily"), patch.get("delivery") or shoot.get("delivery")))
@@ -239,6 +255,14 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         if merged_tool.get("miningSpeedScale") not in (None, ""):
             patch["miningSpeedScale"] = max(0.25, min(2.0, _num(merged_tool.get("miningSpeedScale"), 1.0) or 1.0))
 
+    if placeable_calls:
+        placeable = _merged_params(placeable_calls)
+        for field in ("createTile", "createWall", "placeStyle"):
+            if placeable.get(field) not in (None, ""):
+                value = _clamp(placeable.get(field), field, -1 if field != "placeStyle" else 0)
+                if value is not None:
+                    patch[field] = int(round(value))
+
     if light_calls:
         strengths = [_clamp(c.get("strength"), "lightStrength", 0) for c in light_calls if c.get("strength") not in (None, "")]
         strengths = [s for s in strengths if s is not None]
@@ -258,12 +282,23 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             if normalized_color:
                 patch.setdefault("primaryColorName", normalized_color)
                 patch.setdefault("runtimeLightColorName", normalized_color)
+        if authored_result_kind == "potion" and strengths and durations:
+            strength = float(max(strengths))
+            duration = int(round(max(durations)))
+            if strength > 0 and duration > 0:
+                use_buff = dict(patch.get("generatedBuff") or {}) if isinstance(patch.get("generatedBuff"), dict) else {}
+                use_buff["durationTicks"] = max(int(use_buff.get("durationTicks") or 0), duration)
+                use_buff["emitLightStrength"] = max(float(use_buff.get("emitLightStrength") or 0.0), strength)
+                color = str(patch.get("runtimeLightColorName") or "").strip()
+                if color:
+                    use_buff["lightColorName"] = color
+                patch["generatedBuff"] = use_buff
         patch["lightCallCount"] = len(light_calls)
 
     if vfx_cue_calls:
-        allowed_events = {"travel", "active", "tick", "hit", "kill", "expire", "while_held", "while_equipped", "on_use", "on_alt_use"}
-        allowed_renderers = {"projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite", "childMotes", "lightCue", "soundCue"}
-        allowed_channels = {"motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound"}
+        allowed_events = VFX_CUE_EVENTS
+        allowed_renderers = VFX_CUE_RENDERERS
+        allowed_channels = VFX_CUE_CHANNELS
         allowed_lanes = {"primary", "support", "accent", "ornament", "cue"}
         allowed_roles = {"projectile", "impact", "child", "field"}
         allowed_emission = {"wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point"}
@@ -323,11 +358,12 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         if mode not in {"mobility", "generated_buff", "light", "none"}:
             mode = "none"
         patch["altUseMode"] = mode
+        if alt.get("cooldownTicks") not in (None, ""):
+            patch["altUseCooldownTicks"] = int(round(_clamp(alt.get("cooldownTicks"), "cooldownTicks", 0) or 0))
         amode = _norm_name(alt.get("mobilityMode") or alt.get("mode"))
         if amode in {"recall_home", "blink_to_cursor"}:
             patch["altMobilityMode"] = amode
             patch["altMobilityRangeTiles"] = int(max(0, min(80, _num(alt.get("rangeTiles"), 0) or 0)))
-            patch["altMobilityCooldownTicks"] = int(round(_clamp(alt.get("cooldownTicks"), "cooldownTicks", 0) or 0))
             patch["altMobilitySafeTileOnly"] = bool(alt.get("safeTileOnly") is not False)
         if isinstance(alt.get("generatedBuff"), dict) and int(_num(alt.get("generatedBuff", {}).get("durationTicks"), 0) or 0) > 0:
             patch["altGeneratedBuff"] = alt.get("generatedBuff")
@@ -406,118 +442,8 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
             if cond.get("minMana") not in (None, ""):
                 patch["useConditionMinMana"] = int(round(_clamp(cond.get("minMana"), "minMana", 0) or 0))
 
-    if accessory_calls:
-        acc = _merged_params(accessory_calls)
-        stats = acc.get("stats") if isinstance(acc.get("stats"), dict) else {}
-        accessory: dict[str, Any] = {"enabled": True}
-        if acc.get("archetype") not in (None, ""):
-            accessory["archetype"] = _norm_name(acc.get("archetype"))[:32]
-        if acc.get("defense") not in (None, ""):
-            accessory["defense"] = int(round(max(0, min(20, _num(acc.get("defense"), 0) or 0))))
-        equipment_fields = [
-            ("maxLife", "maxLife", 0, 100, True), ("maxMana", "maxMana", 0, 100, True),
-            ("lifeRegen", "lifeRegen", 0, 20, True), ("manaRegen", "manaRegen", 0, 20, True),
-            ("movementSpeed", "movementSpeed", 0, 1.0, False), ("maxRunSpeed", "maxRunSpeed", 0, 2.0, False),
-            ("jumpSpeed", "jumpSpeed", 0, 4.0, False), ("genericDamage", "genericDamage", 0, 0.4, False),
-            ("meleeDamage", "meleeDamage", 0, 0.4, False), ("rangedDamage", "rangedDamage", 0, 0.4, False),
-            ("magicDamage", "magicDamage", 0, 0.4, False), ("summonDamage", "summonDamage", 0, 0.4, False),
-            ("genericCrit", "genericCrit", 0, 20, False), ("attackSpeed", "attackSpeed", 0, 0.4, False),
-            ("knockback", "knockback", 0, 2.0, False), ("minionSlots", "minionSlots", 0, 2, True),
-            ("sentrySlots", "sentrySlots", 0, 2, True), ("manaCostReduction", "manaCostReduction", 0, 0.4, False),
-            ("ammoSaveChance", "ammoSaveChance", 0, 0.5, False), ("aggro", "aggro", -400, 400, True),
-            ("endurance", "endurance", 0, 0.2, False), ("armorPenetration", "armorPenetration", 0, 40, False),
-            ("whipRange", "whipRange", 0, 1.5, False), ("summonTagDamage", "summonTagDamage", 0, 0.75, False),
-            ("lightStrength", "lightStrength", 0, 1.5, False),
-        ]
-        for src, out, lo, hi, integer in equipment_fields:
-            raw = stats.get(src)
-            if raw in (None, ""):
-                continue
-            val = max(lo, min(hi, _num(raw, 0) or 0))
-            accessory[out] = int(round(val)) if integer else round(float(val), 3)
-        for src in ("fallDamageImmune", "lavaImmune", "waterWalk"):
-            if src in stats:
-                accessory[src] = bool(stats.get(src))
-        color = str(stats.get("lightColorName") or "").strip()
-        if color:
-            accessory["lightColorName"] = color[:32]
-        patch["accessory"] = accessory
-        patch["kind"] = "accessory"
-        patch["maxStack"] = 1
-
-    if armor_calls or _norm_name(itemstats.get("resultKind")) == "armor":
-        arm = _merged_params(armor_calls) if armor_calls else {}
-        stats = arm.get("stats") if isinstance(arm.get("stats"), dict) else {}
-        set_bonus = arm.get("setBonus") if isinstance(arm.get("setBonus"), dict) else {}
-        armor: dict[str, Any] = {"enabled": True}
-        slot = _norm_name(arm.get("armorSlot") or itemstats.get("armorSlot") or arm.get("slot"))
-        armor["slot"] = slot if slot in {"head", "body", "legs"} else ""
-        if arm.get("setKey") not in (None, ""):
-            armor["setKey"] = str(arm.get("setKey"))[:64]
-        if arm.get("archetype") not in (None, ""):
-            armor["archetype"] = _norm_name(arm.get("archetype"))[:32]
-        if arm.get("defense") not in (None, "") or itemstats.get("defense") not in (None, ""):
-            raw_defense = arm.get("defense", itemstats.get("defense"))
-            armor["defense"] = int(round(max(0, min(80, _num(raw_defense, 0) or 0))))
-        armor_equipment_fields = [
-            ("maxLife", "maxLife", 0, 100, True), ("maxMana", "maxMana", 0, 100, True),
-            ("lifeRegen", "lifeRegen", 0, 20, True), ("manaRegen", "manaRegen", 0, 20, True),
-            ("movementSpeed", "movementSpeed", 0, 1.0, False), ("maxRunSpeed", "maxRunSpeed", 0, 2.0, False),
-            ("jumpSpeed", "jumpSpeed", 0, 4.0, False), ("genericDamage", "genericDamage", 0, 0.4, False),
-            ("meleeDamage", "meleeDamage", 0, 0.4, False), ("rangedDamage", "rangedDamage", 0, 0.4, False),
-            ("magicDamage", "magicDamage", 0, 0.4, False), ("summonDamage", "summonDamage", 0, 0.4, False),
-            ("genericCrit", "genericCrit", 0, 20, False), ("attackSpeed", "attackSpeed", 0, 0.4, False),
-            ("knockback", "knockback", 0, 2.0, False), ("minionSlots", "minionSlots", 0, 2, True),
-            ("sentrySlots", "sentrySlots", 0, 2, True), ("manaCostReduction", "manaCostReduction", 0, 0.4, False),
-            ("ammoSaveChance", "ammoSaveChance", 0, 0.5, False), ("aggro", "aggro", -400, 400, True),
-            ("endurance", "endurance", 0, 0.2, False), ("armorPenetration", "armorPenetration", 0, 40, False),
-            ("whipRange", "whipRange", 0, 1.5, False), ("summonTagDamage", "summonTagDamage", 0, 0.75, False),
-            ("lightStrength", "lightStrength", 0, 1.5, False),
-        ]
-        for src, out, lo, hi, integer in armor_equipment_fields:
-            raw = stats.get(src)
-            if raw in (None, ""):
-                continue
-            val = max(lo, min(hi, _num(raw, 0) or 0))
-            armor[out] = int(round(val)) if integer else round(float(val), 3)
-        for src in ("fallDamageImmune", "lavaImmune", "waterWalk"):
-            if src in stats:
-                armor[src] = bool(stats.get(src))
-        color = str(stats.get("lightColorName") or "").strip()
-        if color:
-            armor["lightColorName"] = color[:32]
-        set_map = {
-            "text": "setBonusText", "genericDamage": "setBonusGenericDamage", "meleeDamage": "setBonusMeleeDamage",
-            "rangedDamage": "setBonusRangedDamage", "magicDamage": "setBonusMagicDamage", "summonDamage": "setBonusSummonDamage",
-            "genericCrit": "setBonusGenericCrit", "movementSpeed": "setBonusMovementSpeed", "lifeRegen": "setBonusLifeRegen",
-            "manaRegen": "setBonusManaRegen", "minionSlots": "setBonusMinionSlots", "sentrySlots": "setBonusSentrySlots",
-            "manaCostReduction": "setBonusManaCostReduction", "ammoSaveChance": "setBonusAmmoSaveChance", "aggro": "setBonusAggro",
-            "endurance": "setBonusEndurance", "armorPenetration": "setBonusArmorPenetration",
-        }
-        integer_set = {"lifeRegen", "manaRegen", "minionSlots", "sentrySlots", "aggro"}
-        set_limits = {
-            "genericDamage": (0, 0.4), "meleeDamage": (0, 0.4), "rangedDamage": (0, 0.4),
-            "magicDamage": (0, 0.4), "summonDamage": (0, 0.4), "genericCrit": (0, 20),
-            "movementSpeed": (0, 1.0), "lifeRegen": (0, 20), "manaRegen": (0, 20),
-            "minionSlots": (0, 2), "sentrySlots": (0, 2), "manaCostReduction": (0, 0.4),
-            "ammoSaveChance": (0, 0.5), "aggro": (-400, 400), "endurance": (0, 0.2),
-            "armorPenetration": (0, 40),
-        }
-        for src, out in set_map.items():
-            raw = set_bonus.get(src)
-            if raw in (None, ""):
-                continue
-            if src == "text":
-                armor[out] = str(raw)[:120]
-            else:
-                val = _num(raw, 0) or 0
-                lo, hi = set_limits[src]
-                val = max(lo, min(hi, val))
-                armor[out] = int(round(val)) if src in integer_set else round(float(val), 3)
-        patch["armor"] = armor
-        patch["kind"] = "armor"
-        patch["maxStack"] = 1
-        patch["damage"] = 0
+    apply_accessory_calls(patch, accessory_calls)
+    apply_armor_calls(patch, armor_calls, itemstats)
 
     # Primary numeric mapping.
     for src, mapping in [
@@ -563,31 +489,9 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         if value is not None:
             patch["debuffTime"] = int(max(30, min(600, value)))
 
-    # Some explicit on-hit effects spawn gameplay children in the C# runtime.
-    # Give them a child budget only when the LLM actually requested an executable count.
-    if onhit in {"chain", "lightning_arc"}:
-        # For chain-like effects, generic params.count means chain hops, not split shards.
-        existing_split_for_count = int(_num(patch.get("splitCount"), 0) or 0)
-        if int(_num(patch.get("chainCount"), 0) or 0) <= 0 and existing_split_for_count > 0:
-            patch["chainCount"] = existing_split_for_count
-            patch["splitCount"] = 0
-        chain_count = int(_num(patch.get("chainCount"), 0) or 0)
-        if chain_count > 0:
-            patch.setdefault("maxChildProjectiles", int(max(1, min(48, chain_count + 1))))
-            patch.setdefault("maxChildDepth", 1)
-        else:
-            patch["onHitDemotedReason"] = f"{onhit}_requires_count_gt_0"
-            patch["onHit"] = "none"
-            onhit = "none"
-    if onhit in {"mini_missiles", "vortex_spawn", "radial_beams", "starburst", "overhead_barrage", "spore_cloud"}:
-        effect_count = int(_num(patch.get("splitCount"), 0) or 0)
-        if effect_count <= 0:
-            patch["onHitDemotedReason"] = f"{onhit}_requires_count_gt_0"
-            patch["onHit"] = "none"
-            onhit = "none"
-        else:
-            patch.setdefault("maxChildProjectiles", int(max(1, min(48, effect_count))))
-            patch.setdefault("maxChildDepth", 1)
+    # Primary onHit child budget/demotion is owned by secondary module so maxChild*
+    # has a single owner path immediately before secondary projectile calls.
+    apply_primary_onhit_child_gates(patch, hit)
 
     # Real secondary damaging projectiles live in one small owner module.
     # This keeps trigger/lifecycle rules out of the already-large main compiler.

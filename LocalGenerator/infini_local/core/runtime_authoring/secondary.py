@@ -10,15 +10,56 @@ from infini_local.core.runtime_secondary_policy import (
     normalize_secondary_trigger,
 )
 
-# AGENT MAP: compilation of spawn_secondary_projectiles only.
+# AGENT MAP: compilation of spawn_secondary_projectiles + primary onHit child gates.
 # Keep trigger/count/damage/lifetime rules here. Do not grow compiler.py with
 # another copy and do not infer child gameplay from names, tooltip or materials.
+# Primary onHit child-budget/demotion is owned here so maxChild* has one owner
+# path before secondary projectile calls apply.
 
 _CHILD_ONHITS = {
     "split", "starburst", "overhead_barrage", "radial_beams", "mini_missiles",
     "vortex_spawn", "spore_cloud",
 }
-_DEBUFF_ONHITS = {"burn", "frostburn", "poison", "shadowflame", "bleed"}
+
+
+def apply_primary_onhit_child_gates(
+    patch: dict[str, Any],
+    hit: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply primary onHit child budget / demotion before secondary projectile calls.
+
+    Chain-like effects own chainCount; other child-producing onHits own splitCount.
+    Missing executable counts demote onHit rather than inventing a child budget.
+    ``hit`` is retained for call-site symmetry with the compiler hit merge lane.
+    """
+    _ = hit
+    onhit = _norm_name(patch.get("onHit"))
+    # Some explicit on-hit effects spawn gameplay children in the C# runtime.
+    # Give them a child budget only when the LLM actually requested an executable count.
+    if onhit in {"chain", "lightning_arc"}:
+        # For chain-like effects, generic params.count means chain hops, not split shards.
+        existing_split_for_count = int(_num(patch.get("splitCount"), 0) or 0)
+        if int(_num(patch.get("chainCount"), 0) or 0) <= 0 and existing_split_for_count > 0:
+            patch["chainCount"] = existing_split_for_count
+            patch["splitCount"] = 0
+        chain_count = int(_num(patch.get("chainCount"), 0) or 0)
+        if chain_count > 0:
+            patch.setdefault("maxChildProjectiles", int(max(1, min(48, chain_count + 1))))
+            patch.setdefault("maxChildDepth", 1)
+        else:
+            patch["onHitDemotedReason"] = f"{onhit}_requires_count_gt_0"
+            patch["onHit"] = "none"
+            onhit = "none"
+    if onhit in {"mini_missiles", "vortex_spawn", "radial_beams", "starburst", "overhead_barrage", "spore_cloud"}:
+        effect_count = int(_num(patch.get("splitCount"), 0) or 0)
+        if effect_count <= 0:
+            patch["onHitDemotedReason"] = f"{onhit}_requires_count_gt_0"
+            patch["onHit"] = "none"
+            onhit = "none"
+        else:
+            patch.setdefault("maxChildProjectiles", int(max(1, min(48, effect_count))))
+            patch.setdefault("maxChildDepth", 1)
+    return patch
 
 
 def apply_secondary_projectile_calls(
@@ -84,9 +125,6 @@ def apply_secondary_projectile_calls(
         existing_split = int(_num(patch.get("splitCount"), 0) or 0)
         current_onhit = _norm_name(patch.get("onHit"))
         if current_onhit in _CHILD_ONHITS and existing_split > 0:
-            patch.setdefault("maxChildProjectiles", int(max(1, min(48, existing_split))))
-            patch.setdefault("maxChildDepth", 1)
-        elif current_onhit == "split" and existing_split > 0:
             patch.setdefault("maxChildProjectiles", int(max(1, min(48, existing_split))))
             patch.setdefault("maxChildDepth", 1)
         else:
@@ -183,4 +221,4 @@ def apply_secondary_projectile_calls(
     return patch
 
 
-__all__ = ["apply_secondary_projectile_calls"]
+__all__ = ["apply_primary_onhit_child_gates", "apply_secondary_projectile_calls"]

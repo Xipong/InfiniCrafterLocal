@@ -120,7 +120,10 @@ VFX_KNOWN_RENDERERS = {
     "childMotes", "lightCue", "soundCue",
 }
 
-VFX_KNOWN_EVENTS = {"travel", "active", "tick", "hit", "kill", "expire"}
+VFX_KNOWN_EVENTS = {
+    "travel", "active", "tick", "hit", "kill", "expire",
+    "while_held", "while_equipped", "on_use", "on_alt_use",
+}
 
 VFX_KNOWN_BACKENDS = {"auto", "baked", "realtime", "primitive", "sprite", "particle", "hybrid"}
 

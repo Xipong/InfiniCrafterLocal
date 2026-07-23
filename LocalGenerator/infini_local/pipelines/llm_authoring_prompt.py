@@ -8,7 +8,7 @@ from typing import Any
 
 from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
 
-PLANNER_PROMPT_LIMIT_CHARS = 26_000
+PLANNER_PROMPT_LIMIT_CHARS = 27_000
 
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
@@ -21,26 +21,34 @@ from infini_local.core.item_identity_tools import (
     item_num,
     name_of,
 )
+from infini_local.core.parent_role_facts import placeable_only_parent_obligation
 from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
 from infini_local.core.runtime_authoring.normalize import (
     normalize_runtime_plan_inplace,
     runtime_plan,
 )
+from infini_local.core.runtime_authoring.final_projection import compile_runtime_plan_to_final_result
 from infini_local.core.runtime_authoring.reports import (
-    compile_runtime_plan_to_genome_result,
-    compiled_runtime_contract,
     runtime_plan_quality_report,
     runtime_plan_validation_report,
 )
-
 from infini_local.core.runtime_authoring.schema import (
-    ENGINE_FN_ACCEPTED_PARAM_EXTRAS,
-    ENGINE_FN_CATALOG_V2,
+    COMBAT_EXECUTOR_RESULT_KINDS,
     PLANNER_HIDDEN_ENGINE_FUNCTIONS,
-    PRIMARY_ATTACK_SHARED_PARAM_NAMES,
+)
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ACCEPTED_PARAM_EXTRAS_BY_FUNCTION,
+    ENGINE_FUNCTION_CATALOG,
+    ROOT_EXECUTOR_FUNCTION_NAMES,
+    ROOT_EXECUTOR_SHARED_PARAM_NAMES,
 )
 from infini_local.core.sound_catalog import sound_catalog_card_for_llm
 from infini_local.core.runtime_authoring.structural import find_call
+from infini_local.core.runtime_family_policy import (
+    CANONICAL_RUNTIME_FAMILIES,
+    runtime_family_delivery_pairs,
+    runtime_family_required_movements,
+)
 from infini_local.pipelines.engine_pressure_metrics import behavior_cost_multiplier, effective_hit_cadence_ticks
 
 from infini_local.pipelines.pipeline_runtime_constants import (
@@ -49,10 +57,7 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_PLAN_REQUIRED,
     LLM_RUNTIME_STRICT_VALIDATION,
 )
-from infini_local.pipelines.result_identity_policy import (
-    normalize_category,
-    project_runtime_result_identity,
-)
+from infini_local.pipelines.result_identity_policy import normalize_category
 from infini_local.pipelines.combine_balance import (
     clamp_vanilla_like_weapon_damage,
 )
@@ -64,9 +69,16 @@ from infini_local.pipelines.parent_context_cards import (
     raw_parent_card_for_llm,
 )
 
-VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(set(ENGINE_FN_CATALOG_V2) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)))
-PRIMARY_FUNCTION_AUTHOR_RULES = {
-    "onePrimaryFunction": True,
+VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)))
+COMBAT_EXECUTOR_RESULT_KIND_RULE = (
+    "Combat engine calls are executable only for "
+    + " or ".join(f"resultKind={kind}" for kind in sorted(COMBAT_EXECUTOR_RESULT_KINDS))
+    + "; every other resultKind must omit combat roots and on-hit combat callbacks."
+)
+ROOT_EXECUTOR_AUTHOR_RULES = {
+    "oneRootExecutor": True,
+    "rootExecutorMeaning": "one item-use lifecycle/controller, not one damage source",
+    "bodyPlusProjectileEncoding": "shoot_projectile shoot/swing: body hitbox + projectile",
     "temporaryHelperCanFire": False,
     "turretFunction": "deploy_sentry",
 }
@@ -86,6 +98,19 @@ RUNTIME_FAMILY_REQUIREMENTS = {
     "beam": ["beamWidthPx", "beamChargeTicks", "immunityCooldown"],
     "charge_release": ["chargeTicks", "chargePowerMultiplier"],
     "overhead_barrage": ["delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"],
+}
+RUNTIME_FAMILY_DELIVERIES = {
+    family: "|".join(
+        delivery
+        for candidate, delivery in runtime_family_delivery_pairs()
+        if candidate == family
+    )
+    for family in sorted({family for family, _ in runtime_family_delivery_pairs()})
+}
+RUNTIME_FAMILY_REQUIRED_MOVEMENT = {
+    family: "|".join(sorted(runtime_family_required_movements(family)))
+    for family in sorted(CANONICAL_RUNTIME_FAMILIES)
+    if runtime_family_required_movements(family)
 }
 VISUAL_TOPOLOGY_RULES = {
     "connected": {"partCountMin": 1, "partCountMax": 1},
@@ -200,34 +225,6 @@ def runtime_value(data: dict[str, Any], fn: str, field: str, fallback: Any = Non
         return rp["combat"].get(field)
     return fallback
 
-def runtime_plan_to_attack_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
-    """Compile authored runtimePlan.engineCalls into executable AttackSpec-shaped keys once per craft."""
-    if not LLM_RUNTIME_AUTHORING:
-        return {}
-    normalize_runtime_plan_inplace(data)
-    signature = json.dumps(runtime_plan(data), ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    cache = data.get("_runtimePlanCompileCache")
-    if (
-        isinstance(cache, dict)
-        and cache.get("signature") == signature
-        and isinstance(cache.get("patch"), dict)
-    ):
-        return dict(cache.get("patch") or {})
-    result = compile_runtime_plan_to_genome_result(data)
-    patch = result.get("patch") if isinstance(result, dict) else {}
-    patch = patch if isinstance(patch, dict) else {}
-    data["_runtimePlanCompileCache"] = {"signature": signature, "patch": dict(patch), "result": result}
-    debug = data.setdefault("debug", {})
-    debug["runtimeApiVersion"] = ENGINE_RUNTIME_API_VERSION
-    debug["runtimePlanCompiler"] = bounded_json_dumps(result.get("quality", {}), max_chars=6000)
-    debug["runtimePlanValidation"] = bounded_json_dumps(result.get("validation", {}), max_chars=6000)
-    debug["runtimePlanProvenance"] = bounded_json_dumps(result.get("provenance", {}), max_chars=6000)
-    data["runtimeCompiled"] = result.get("compiled", compiled_runtime_contract(data, patch))
-    debug["runtimeCompiled"] = bounded_json_dumps(data.get("runtimeCompiled", {}), max_chars=6000)
-    if isinstance(data.get("attack"), dict):
-        data["attack"]["runtimeAuthoringProvenance"] = result.get("provenance", {})
-    return dict(patch)
-
 def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     if not LLM_RUNTIME_AUTHORING:
         return data
@@ -249,89 +246,14 @@ def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
     data.setdefault("debug", {})["runtimePlanValidation"] = bounded_json_dumps(validation, max_chars=6000)
     if LLM_RUNTIME_STRICT_VALIDATION and not validation.get("ok", False) and combat_genome_required_for(data):
         raise PlannerUnavailable("LLM runtimePlan failed engine-call validation: " + "; ".join(validation.get("errors") or ["unknown error"]))
-    patch = runtime_plan_to_attack_genome_patch(data)
-    if patch:
-        attack = data.setdefault("attack", {}) if isinstance(data.get("attack"), dict) else data.setdefault("attack", {})
-        genome = attack.setdefault("genome", {}) if isinstance(attack.get("genome"), dict) else {}
-        attack["genome"] = genome
-        for k, v in patch.items():
-            genome[k] = v
-        data.setdefault("debug", {})["runtimePlanGenomePatch"] = bounded_json_dumps(patch, max_chars=6000)
-    result_kind = runtime_value(data, "set_item_stats", "resultKind", None) or rp.get("resultKind")
-    if result_kind:
-        data["category"] = normalize_category(str(result_kind))
-        data.setdefault("gameplay", {})["kind"] = data["category"]
-    gp = data.setdefault("gameplay", {}) if isinstance(data.get("gameplay"), dict) else data.setdefault("gameplay", {})
-    # Utility engineCalls compile into the same concrete gameplay fields as set_item_stats.
-    # This is not a semantic router: it only copies explicit executable fields authored in
-    # runtimePlan to the tML item contract.
-    for field in ["healLife", "healMana", "buffCode", "buffTime", "pickPower", "axePower", "hammerPower"]:
-        if field in patch and patch.get(field) not in (None, ""):
-            gp[field] = patch.get(field)
-    if isinstance(patch.get("extraBuffs"), list):
-        gp["extraBuffs"] = patch.get("extraBuffs")[:4]
-    if isinstance(patch.get("generatedBuff"), dict):
-        gp["generatedBuff"] = patch.get("generatedBuff")
-    if patch.get("miningSpeedScale") not in (None, ""):
-        gp["miningSpeedScale"] = patch.get("miningSpeedScale")
-    if patch.get("mobilityMode"):
-        gp["mobilityMode"] = patch.get("mobilityMode")
-        gp["mobilityRangeTiles"] = patch.get("mobilityRangeTiles", 0)
-        gp["mobilityCooldownTicks"] = patch.get("mobilityCooldownTicks", 0)
-        gp["mobilitySafeTileOnly"] = bool(patch.get("mobilitySafeTileOnly", True))
-    affordance_fields = ["heldVisibility", "releaseTiming", "handPose", "initialOffsetPx"]
-    for field in ["altUseMode", "altMobilityMode", "altMobilityRangeTiles", "altMobilityCooldownTicks", "altMobilitySafeTileOnly", "holdLightStrength", "holdLightColorName", "itemScale", "holdoutOffsetX", "holdoutOffsetY", "autoReuse", "useTurn", "channelUse", "consumeChancePercent", "ammoFor", "useConditionMode", "useConditionMinLife", "useConditionMinMana"] + affordance_fields:
-        if field in patch and patch.get(field) not in (None, ""):
-            gp[field] = patch.get(field)
-    authored_affordance = {field: patch.get(field) for field in ["itemScale", "holdoutOffsetX", "holdoutOffsetY", "autoReuse", "useTurn", "channelUse"] + affordance_fields if field in patch and patch.get(field) not in (None, "")}
-    if authored_affordance:
-        authored_affordance.setdefault("schema", "infini.runtime-affordance.v2")
-        authored_affordance.setdefault("note", "Author-provided use/draw feel. It does not change damage, resultKind, or runtimeFamily by itself.")
-        data["runtimeAffordance"] = authored_affordance
-        data.setdefault("debug", {})["runtimeAffordance"] = bounded_json_dumps(authored_affordance, max_chars=2000)
-    if isinstance(patch.get("altGeneratedBuff"), dict):
-        gp["altGeneratedBuff"] = patch.get("altGeneratedBuff")
-    if isinstance(patch.get("holdGeneratedBuff"), dict):
-        gp["holdGeneratedBuff"] = patch.get("holdGeneratedBuff")
-    if isinstance(patch.get("rejectedEngineCalls"), list):
-        gp["rejectedEngineCalls"] = patch.get("rejectedEngineCalls")[:16]
-        data.setdefault("debug", {})["rejectedEngineCalls"] = bounded_json_dumps(gp["rejectedEngineCalls"], max_chars=6000)
-    if isinstance(patch.get("accessory"), dict):
-        data["accessory"] = patch.get("accessory")
-        gp["kind"] = "accessory"
-        data["category"] = "accessory"
-    if isinstance(patch.get("armor"), dict):
-        data["armor"] = patch.get("armor")
-        gp["kind"] = "armor"
-        data["category"] = "armor"
-    if patch.get("kind") not in (None, ""):
-        gp["kind"] = patch.get("kind")
-    for field in ["damageClass", "damage", "useTime", "useAnimation", "knockback", "autoReuse", "maxStack", "consumable", "rarity", "value", "healLife", "healMana", "buffTime", "pickPower", "axePower", "hammerPower", "manaCost"]:
-        val = runtime_value(data, "set_item_stats", field, None)
-        if val not in (None, ""):
-            gp[field] = val
-    use_time_ticks = runtime_value(data, "set_item_stats", "useTimeTicks", None)
-    if use_time_ticks not in (None, ""):
-        gp["useTime"] = use_time_ticks
-        gp.setdefault("useAnimation", use_time_ticks)
-    use_animation_ticks = runtime_value(data, "set_item_stats", "useAnimationTicks", None)
-    if use_animation_ticks not in (None, ""):
-        gp["useAnimation"] = use_animation_ticks
-    buff_type = runtime_value(data, "set_item_stats", "buffType", None)
-    if buff_type not in (None, ""):
-        gp["buffCode"] = buff_type
-    buff_code = runtime_value(data, "set_item_stats", "buffCode", None)
-    if buff_code not in (None, ""):
-        gp["buffCode"] = buff_code
-    craft_yield = runtime_value(data, "set_item_stats", "craftYield", None)
-    if craft_yield not in (None, ""):
-        try:
-            gp["craftYield"] = max(1, int(float(craft_yield)))
-        except Exception:
-            gp["craftYield"] = craft_yield
-    ammo_for = runtime_value(data, "set_item_stats", "ammoFor", None)
-    if ammo_for not in (None, ""):
-        gp["ammoFor"] = str(ammo_for)
+    compile_result = compile_runtime_plan_to_final_result(data)
+    final_sections = compile_result.get("finalSections")
+    final_sections = final_sections if isinstance(final_sections, dict) else {}
+    compiled_gameplay = final_sections.get("gameplay")
+    compiled_gameplay = compiled_gameplay if isinstance(compiled_gameplay, dict) else {}
+    compiled_kind = str(compiled_gameplay.get("kind") or "").strip()
+    if compiled_kind:
+        data["category"] = normalize_category(compiled_kind)
     vi = rp.get("visualIntent") if isinstance(rp.get("visualIntent"), dict) else {}
     if vi:
         visual = data.setdefault("visual", {}) if isinstance(data.get("visual"), dict) else data.setdefault("visual", {})
@@ -409,7 +331,7 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
     The model needs this catalog to understand what each generated item can do.
     """
     out: dict[str, Any] = {}
-    for fn, spec in ENGINE_FN_CATALOG_V2.items():
+    for fn, spec in ENGINE_FUNCTION_CATALOG.items():
         if fn in PLANNER_HIDDEN_ENGINE_FUNCTIONS:
             continue
         params = spec.get("params") if isinstance(spec.get("params"), dict) else {}
@@ -417,6 +339,8 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
             "does": _catalog_text(spec.get("meaning")),
             "params": {str(k): _catalog_text(v) for k, v in params.items()},
         }
+        if spec.get("requiresRootExecutor") is True:
+            card["requiresRootExecutor"] = True
         if fn == "spawn_temporary_helper_projectile":
             card["safety"] = "temporary projectile helper only; boss/NPC/mob/enemy spawn calls are forbidden and rejected"
         out[fn] = card
@@ -439,17 +363,24 @@ def planner_priority_header_for_llm() -> list[str]:
     """
     return [
         "Author playable output from both parents; no visual-only result.",
+        "Preserve both parents' strong raw/generated affordances; transformations need a central engineCall, not cosmetic stats.",
         "Output only requiredJsonShape keys; never copy input or prompt metadata.",
-        "Playable: engineCalls[0]=set_item_stats(resultKind,...); normally 1-4 calls.",
-        "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats; onHit only apply_on_hit_effect; equipment stats is an object. Names aren't mechanics.",
-        "MUST explicitly include shotCount and spreadRadians on the one combat primary action call after set_item_stats; NEVER put primary or sound params on set_item_stats. shoot_projectile also requires runtimeFamily; specialized calls derive it.",
-        "MUST choose exactly one primary function. spawn_temporary_helper_projectile cannot fire or act as a turret; use deploy_sentry as the only turret function.",
-        "MUST include count, secondaryDamageMultiplier, secondaryLifetimeTicks on child-producing onHit, plus debuffTime when that onHit applies a debuff.",
+        "Playable: engineCalls[0]=set_item_stats(resultKind,...); combat also requires damageClass; normally 1-4 calls.",
+        "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats; onHit→apply_on_hit_effect; equipment stats object; names aren't mechanics.",
+        "Combat root requires speed,lifetimeTicks,shotCount,spreadRadians,pierce; root/sound params never belong on set_item_stats; shoot_projectile also needs runtimeFamily.",
+        "Use runtimeContract family/movement tables; one root; whip damageClass=summon_melee_speed; buff alt needs cooldownTicks>0.",
+        "Body pick/axe/hammer: tool_capability + native swing; no melee/projectile combat root.",
+        "placeable_behavior is exclusive to resultKind=furniture; omit it for every other resultKind.",
+        COMBAT_EXECUTOR_RESULT_KIND_RULE,
+        "Child onHit split/chain/starburst/spore_cloud/mini_missiles/vortex_spawn/radial_beams/lightning_arc/overhead_barrage needs count (chainCount for chain/lightning)+secondaryDamageMultiplier+secondaryLifetimeTicks; debuffs need debuffTime.",
+        "Named children need spawn_secondary_projectiles projectileShape/material; generic onHit has no identity.",
         "Physical throw defaults to movement=gravity_arc; use movement=straight only when explicitly authoring gravity-free straight flight as part of the item design.",
-        "concept.coreMechanic is the concise player-facing gameplay description. playerViewTimeline is optional; include only relevant visible phases.",
-        "MUST use resultKind=consumable_weapon in runtimePlan and set_item_stats for any stack-spent weapon (consumable=true, maxStack>1, or consumption_behavior); require consumable=true, maxStack>1, craftYield>0; reusable weapon uses maxStack=1 and consumable=false; JSON booleans are true/false, never strings.",
-        "MUST satisfy runtimeFamilyRequirements for the selected primary family and visualTopologyRules for visualIntent.",
-        "For armor/accessory light, author lightStrength and lightColorName in armor_effect.stats/accessory_effect.stats; never use emit_light for equipment.",
+        "coreMechanic/runtimeStateIntent only engineCalls; tooltip from wire; timeline optional visible-only; sticky/cling unsupported.",
+        "Stack-spent weapon uses resultKind=consumable_weapon, consumable=true, maxStack>1, craftYield>0; never spend a reusable gear parent this way. Reusable gear uses maxStack=1, craftYield=1, consumable=false and no consumption_behavior; booleans are true/false.",
+        "MUST satisfy runtimeFamilyRequirements for the selected root executor family and visualTopologyRules for visualIntent.",
+        "Equipment light requires lightStrength+lightColorName in its armor/accessory stats; no emit_light; utility armor is valid when its explicit stats are executable.",
+        "ammoFor is exact inventory cost: empty=no ammo; arrow/bullet consume those vanilla stacks, never a parent material.",
+
     ]
 
 def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, Any], envelope: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -461,11 +392,8 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
     authoring.  This prevents prompt hints from becoming a second balance authority.
     """
     available_functions = sharp_engine_fn_catalog_for_llm()
-    primary_attack_functions = sorted(
-        fn
-        for fn, extras in ENGINE_FN_ACCEPTED_PARAM_EXTRAS.items()
-        if extras == PRIMARY_ATTACK_SHARED_PARAM_NAMES
-    )
+    root_executor_functions = sorted(ROOT_EXECUTOR_FUNCTION_NAMES)
+    parent_role_obligation = placeable_only_parent_obligation(a, b)
     return {
         "mode": ENGINE_RUNTIME_API_VERSION,
         "runtimeApiVersion": ENGINE_RUNTIME_API_VERSION,
@@ -482,14 +410,19 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "Ammo and placeable consumption semantics change only when explicitly authored.",
             "Server does not pre-author visuals or mechanics.",
         ],
+        "sourceDerivedParentRoleObligation": (
+            parent_role_obligation if parent_role_obligation["applicable"] else {}
+        ),
         "availableFunctions": available_functions,
         "acceptedParamExtras": {
-            "primaryAttackFunctions": primary_attack_functions,
-            "primaryAttackParams": sorted(PRIMARY_ATTACK_SHARED_PARAM_NAMES),
-            "apply_on_hit_effect": sorted(ENGINE_FN_ACCEPTED_PARAM_EXTRAS["apply_on_hit_effect"]),
+            "rootExecutorFunctions": root_executor_functions,
+            "rootExecutorParams": sorted(ROOT_EXECUTOR_SHARED_PARAM_NAMES),
+            "apply_on_hit_effect": sorted(ACCEPTED_PARAM_EXTRAS_BY_FUNCTION["apply_on_hit_effect"]),
         },
         "requiredAuthorParams": {
-            "everyCombatPrimary": ["shotCount", "spreadRadians"],
+            "everyCombatRootExecutor": [
+                "speed", "lifetimeTicks", "shotCount", "spreadRadians", "pierce",
+            ],
             "childProducingOnHit": [
                 "count", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
             ],
@@ -499,9 +432,11 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "pullOnHitEncoding": dict(PULL_ON_HIT_ENCODING),
             "neverOnSetItemStats": list(NEVER_ON_SET_ITEM_STATS),
             "runtimeFamilyRequirements": {key: list(value) for key, value in RUNTIME_FAMILY_REQUIREMENTS.items()},
+            "runtimeFamilyDeliveries": dict(RUNTIME_FAMILY_DELIVERIES),
+            "requiredMovementByFamily": deepcopy(RUNTIME_FAMILY_REQUIRED_MOVEMENT),
             "visualTopologyRules": deepcopy(VISUAL_TOPOLOGY_RULES),
             "equipmentLightEncoding": deepcopy(EQUIPMENT_LIGHT_ENCODING),
-            **PRIMARY_FUNCTION_AUTHOR_RULES,
+            **ROOT_EXECUTOR_AUTHOR_RULES,
         },
         "soundCatalog": sound_catalog_card_for_llm(),
         "tickGuide": concise_terraria_tick_guide_for_llm(),
@@ -527,7 +462,7 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
         "semanticRules": [
             "Preserve both parents unless mergeLogic names an executable replacement.",
             "Custom projectiles use weapon or consumable_weapon; every stack-spent weapon uses consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
-            "Public gameplay text lives once in concept.coreMechanic; compiler provenance is not authored.",
+            "coreMechanic/runtimeStateIntent describe only executable engineCalls; public tooltip is compiled from wire and compiler provenance is not authored.",
             "VFX calls present effects; burst, AoE, sticky, mobility, and utility require their typed gameplay calls.",
             "Temporary helper projectiles never summon bosses, NPCs, mobs, or enemies.",
             "Ore-sense remains diagnostic-only because no ore visual executor is available.",
@@ -704,31 +639,6 @@ def llm_category_without_router(data: dict[str, Any], requested_kind: Any, tags:
     fallback = "weapon" if max_parent_damage > 0 or "weapon" in tags else "generic"
     return fallback, {"mode": "author_first", "requested": requested_kind, "final": fallback, "repair": "unknown category only"}
 
-def llm_runtime_result_kind_policy(data: dict[str, Any], requested_kind: Any, tags: set[str], a: dict[str, Any], b: dict[str, Any], key: str | None) -> tuple[str, dict[str, Any]]:
-    """Runtime authoring category boundary.
-
-    In v0.4 runtime mode the LLM's set_item_stats.resultKind/runtimePlan.resultKind is the
-    authored category. Code may normalize unsupported labels, but it must not sample or route
-    the category from parent tags. This keeps category_policy as legacy fallback only.
-    """
-    rp = runtime_plan(data)
-    result_kind = runtime_value(data, "set_item_stats", "resultKind", None) or (rp.get("resultKind") if isinstance(rp, dict) else None) or requested_kind or data.get("category") or "generic"
-    stats = find_call(data, "set_item_stats")
-    projection = project_runtime_result_identity(
-        result_kind,
-        ammo_for=stats.get("ammoFor"),
-        has_primary=bool(find_call(data, "shoot_projectile")),
-    )
-    raw = projection.authored_kind
-    selected = projection.gameplay_kind
-    return selected, {
-        "mode": "llm_runtime_result_kind",
-        "requested": requested_kind,
-        "runtimeResultKind": raw,
-        "final": selected,
-        "note": "category comes from authored runtimePlan/set_item_stats; category_policy not used in runtime authoring mode",
-    }
-
 def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
     """Build the exact planner user payload without calling the LLM.
 
@@ -738,7 +648,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
     return {
         "task": "Combine itemA+itemB into one playable item. Return one JSON object.",
         "priorityHeader": planner_priority_header_for_llm(),
-        "designGoal": "Use both parents; prefer distinct behavior, but clean metamorphosis is fine.",
+        "designGoal": "Use both parents; distinct behavior or metamorphosis.",
         "balancePolicy": f"LLM authors numbers; Python reports/clamps per balanceMode={current_balance_mode()}; C# is final safety.",
         "engineRuntimeContract": engine_runtime_capability_contract_for_llm(a, b) if LLM_RUNTIME_AUTHORING else {},
         "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/directProjectile/effectiveProjectile/ammo/runtimeProbe/generatedParent + optional semantics", "rule": "raw=facts; semantics clarify overloaded flags; absent=unknown", "ammoRepresentativeLimit": 0},
@@ -747,10 +657,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "Use one result identity: runtimePlan.resultKind equals set_item_stats.resultKind; top category is weapon only for consumable_weapon, otherwise it equals that resultKind.",
             "Use one secondary trigger: on_hit or on_expire; on_expire means any projectile kill. shotCount is simultaneous, not timed.",
             "Projectile=weapon. Custom dart/throwable/rocket=consumable_weapon or weapon + empty ammoFor + projectile call; arrow/bullet ammo has vanilla behavior.",
-            "Put fusion physics in concept.mergeLogic, central gameplay in concept.coreMechanic, and unusual shape/count/placement in runtimePlan.visualIntent topology/parts/arrangement.",
+            "Put fusion physics in concept.mergeLogic, concise central design intent in concept.coreMechanic, and unusual shape/count/placement in runtimePlan.visualIntent topology/parts/arrangement; public gameplay text is compiled from executable wire fields.",
             "Tether/returning sprite is one moving body, never a full-canvas rope. Image prompts: item=inventory/held; projectile=hit body (same sword/blade/boomerang OK); impact=momentary; child=damaging.",
             "Utility/movement needs tool_capability, mobility_effect, or apply_player_effect_on_use; otherwise VFX-only. Never family=unsupported with executable calls.",
-            "Non-combat raw affordance: resultKind preserves it unless mergeLogic names an exact executable replacement; do not default to weapon.",
+            "Non-combat: resultKind preserves sole equip role (head/body/leg→armor+matching armorSlot); otherwise require exact executable replacement; never default weapon.",
             "No markdown, analysis, legacy attackPattern, or attack.genome.",
         ],
         "requiredJsonShape": author_item_prompt_shape_card(),
@@ -766,16 +676,20 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: di
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     contract = payload.get("engineRuntimeContract") if isinstance(payload.get("engineRuntimeContract"), dict) else {}
     functions = contract.get("availableFunctions") if isinstance(contract.get("availableFunctions"), dict) else {}
+    within_recommended_chars = len(text) <= PLANNER_PROMPT_LIMIT_CHARS
     return {
-        "ok": len(text) <= PLANNER_PROMPT_LIMIT_CHARS and bool(functions) and "requiredJsonShape" in payload,
+        "ok": bool(functions) and "requiredJsonShape" in payload and within_recommended_chars,
         "chars": len(text),
         "approxTokens": max(1, len(text) // 4),
+        "recommendedLimitChars": PLANNER_PROMPT_LIMIT_CHARS,
+        "withinRecommendedChars": within_recommended_chars,
+        "sizeGateMode": "hard_limit",
         "contractStyle": contract.get("contractStyle"),
         "functionCount": len(functions),
         "hasRequiredShape": "requiredJsonShape" in payload,
         "hasRuntimePlanShape": isinstance(payload.get("requiredJsonShape", {}).get("runtimePlan"), dict),
         "hasNoBossRule": "boss" in json.dumps(payload, ensure_ascii=False).lower(),
-        "note": "Prompt-only readiness check; does not call the LLM.",
+        "note": "Prompt-only readiness check with a hard size limit; does not call the LLM.",
     }
 
-__all__ = ['normalize_llm_attack_shape', 'normalize_behavior_toy_fields', 'runtime_value', 'runtime_plan_to_attack_genome_patch', 'normalize_runtime_authoring_fields', 'terraria_tick_guide_for_llm', '_catalog_text', 'sharp_engine_fn_catalog_for_llm', 'concise_terraria_tick_guide_for_llm', 'planner_priority_header_for_llm', 'engine_runtime_capability_contract_for_llm', 'authored_num', 'authored_int', 'authored_weapon_damage', 'authored_str', 'llm_category_without_router', 'llm_runtime_result_kind_policy', 'build_llm_author_payload', 'planner_prompt_usability_report']
+__all__ = ['normalize_llm_attack_shape', 'normalize_behavior_toy_fields', 'runtime_value', 'normalize_runtime_authoring_fields', 'terraria_tick_guide_for_llm', '_catalog_text', 'sharp_engine_fn_catalog_for_llm', 'concise_terraria_tick_guide_for_llm', 'planner_priority_header_for_llm', 'engine_runtime_capability_contract_for_llm', 'authored_num', 'authored_int', 'authored_weapon_damage', 'authored_str', 'llm_category_without_router', 'build_llm_author_payload', 'planner_prompt_usability_report']

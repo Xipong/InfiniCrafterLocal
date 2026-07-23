@@ -127,6 +127,35 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
         "usable": item_ok,
         "technicalScore": visual.get("spriteTechnicalScore"),
     }]
+    gameplay_raw = data.get("gameplay")
+    gameplay: dict[str, Any] = gameplay_raw if isinstance(gameplay_raw, dict) else {}
+    result_kind = str(gameplay.get("kind") or data.get("category") or "").strip().lower()
+    if result_kind in {"armor", "accessory"}:
+        overlay_status = str(visual.get("equipOverlayStatus") or "")
+        overlay_path = str(visual.get("equipOverlayPath") or "")
+        overlay_exists = _asset_path_exists(overlay_path)
+        overlay_usable = _sprite_status_is_usable(overlay_status) and overlay_exists
+        overlay_required = bool(VISUAL_REQUIRE_ITEM_SPRITE)
+        if overlay_required and not overlay_usable:
+            problems.append({
+                "code": "required_equip_overlay_missing",
+                "message": "Generated armor/accessory requires a usable equip_overlay PNG for its runtime player draw layer.",
+                "status": overlay_status,
+                "path": overlay_path,
+            })
+        elif not overlay_usable:
+            warnings.append({
+                "code": "equip_overlay_missing_in_no_image_audit",
+                "message": "Equipment overlay remains required by the asset plan but is not blocking because item-sprite delivery is disabled for this audit.",
+                "status": overlay_status,
+                "path": overlay_path,
+            })
+        slots.append({
+            "role": "equip_overlay", "required": overlay_required, "status": overlay_status,
+            "path": overlay_path, "exists": overlay_exists, "usable": overlay_usable,
+            "technicalScore": visual.get("equipOverlayScore"),
+            "assetMode": authored_asset_mode(data, "equip_overlay"),
+        })
     for role, prefix in [
         ("projectile", "projectile"),
         ("impact", "impact"),

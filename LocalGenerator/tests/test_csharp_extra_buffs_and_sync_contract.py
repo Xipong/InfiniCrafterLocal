@@ -20,7 +20,8 @@ def _check_csharp_extra_buffs_are_real_use_item_fields() -> None:
 
 def _check_generator_restamps_asset_transport_metadata_unconditionally() -> None:
     src = GENERATOR.read_text(encoding="utf-8")
-    assert "data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing();" in src
+    assert "data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing(data.RecipeMeta.AssetBaseUrl);" in src
+    assert 'new Uri(combineUri, "/mp_connect.json")' in src
     assert "if (string.IsNullOrWhiteSpace(data.RecipeMeta.AssetBaseUrl))" not in src
 
 

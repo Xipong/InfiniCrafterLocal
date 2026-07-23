@@ -28,9 +28,15 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public const byte PacketCraftCommitResult = InfiniNetPacketIds.CraftCommitResult;
     public const byte PacketRequestServerCraft = InfiniNetPacketIds.RequestServerCraft;
     public const byte PacketCancelServerCraft = InfiniNetPacketIds.CancelServerCraft;
+    public const byte PacketRequestStationEscrow = InfiniNetPacketIds.RequestStationEscrow;
+    public const byte PacketStationEscrowResult = InfiniNetPacketIds.StationEscrowResult;
     public const byte PacketSyncGeneratedUtilityBuff = InfiniNetPacketIds.SyncGeneratedUtilityBuff;
     public const byte PacketRequestGeneratedAltUse = InfiniNetPacketIds.RequestGeneratedAltUse;
     public const int RemoteServerCraftTimeoutTicks = CraftRecoveryTimeoutTicks;
+    // Bounded client resend cadence for a single outstanding station escrow op.
+    // Retries keep the same operationId so the server can replay without re-applying.
+    public const int StationEscrowRetryIntervalTicks = 90;
+    private const int MaxStationEscrowResultCacheEntries = 64;
     private const int GeneratedUseIntentWindowTicks = 15;
 
     private const int MaxServerCraftRequestCacheEntries = 2048;
@@ -56,6 +62,20 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _lastGeneratorOfflineNoticeTick;
     private string _serverRequestId = "";
     private string _label = "";
+    private string _pendingStationEscrowOperationId = "";
+    private byte _pendingStationEscrowAction;
+    private int _pendingStationEscrowIndex = -1;
+    private Item? _pendingStationEscrowItem;
+    private int _pendingStationEscrowWaitTicks;
+    // Server: bounded outcomes for delayed/reordered retries, not only the most
+    // recent operation. A late op1 arriving after op2 must never apply twice.
+    private sealed record StationEscrowResultCacheEntry(
+        byte Action,
+        int Index,
+        bool Success,
+        string Message);
+    private readonly Dictionary<string, StationEscrowResultCacheEntry> _stationEscrowResultCache = new(StringComparer.Ordinal);
+    private readonly Queue<string> _stationEscrowResultOrder = new();
     private readonly List<Item> _deferredExitRefunds = new();
     private bool _pendingRefundSavedForWorldExit;
     private float _craftSoundVolumeSnapshot = -1f;
@@ -78,6 +98,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _generatedManaRegen;
     private int _generatedLifeRegen;
     private int _generatedMobilityCooldownTicks;
+    private int _generatedAltUseCooldownTicks;
     private int _generatedAltUseRequestCooldownTicks;
     private string _pendingGeneratedUseItemId = "";
     private bool _pendingGeneratedUseAlternate;
@@ -97,8 +118,9 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public bool HasInputA => InputA is not null && !InputA.IsAir;
     public bool HasInputB => InputB is not null && !InputB.IsAir;
     public bool HasAnyInput => HasInputA || HasInputB;
-    public bool HasStationState => HasPendingCraft || HasAnyInput;
-    public bool CanStartStationCraft => !HasPendingCraft && HasInputA && HasInputB;
+    public bool HasPendingStationEscrowOperation => !string.IsNullOrWhiteSpace(_pendingStationEscrowOperationId);
+    public bool HasStationState => HasPendingCraft || HasPendingStationEscrowOperation || HasAnyInput;
+    public bool CanStartStationCraft => !HasPendingCraft && !HasPendingStationEscrowOperation && HasInputA && HasInputB;
     public int TicksLeft => Math.Max(0, _ticksLeft);
     public int ElapsedTicks => Math.Clamp(_elapsedTicks, 0, CraftDurationTicks);
     public float CraftProgress => HasPendingCraft ? Math.Clamp(_elapsedTicks / (float)CraftDurationTicks, 0f, 1f) : 0f;
@@ -108,6 +130,8 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public int GenerationAttempt => Math.Max(0, _generationAttempt);
     public int GeneratedMobilityCooldownTicks => Math.Max(0, _generatedMobilityCooldownTicks);
     public int GeneratedMobilityCooldownSeconds => Math.Max(0, (int)Math.Ceiling(GeneratedMobilityCooldownTicks / 60f));
+    public int GeneratedAltUseCooldownTicks => Math.Max(0, _generatedAltUseCooldownTicks);
+    public int GeneratedAltUseCooldownSeconds => Math.Max(0, (int)Math.Ceiling(GeneratedAltUseCooldownTicks / 60f));
     public string LastGeneratedMobilityFailureMessage => string.IsNullOrWhiteSpace(_lastGeneratedMobilityFailureMessage) ? "Generated mobility failed" : _lastGeneratedMobilityFailureMessage;
     public float GeneratedSummonTagDamage => Math.Max(0f, _generatedSummonTagDamage);
 

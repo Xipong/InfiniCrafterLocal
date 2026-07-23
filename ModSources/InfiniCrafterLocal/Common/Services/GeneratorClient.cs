@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -26,6 +27,10 @@ namespace InfiniCrafterLocal.Common.Services;
 public sealed class GeneratorClient
 {
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly object _assetPublicBaseUrlLock = new();
+    private string _cachedGeneratorAssetPublicBaseUrl = "";
+    private string _cachedGeneratorAssetTransport = "native";
+    private DateTime _nextGeneratorAssetPublicBaseUrlProbeUtc = DateTime.MinValue;
     private static readonly JsonSerializerOptions WireJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -47,12 +52,116 @@ public sealed class GeneratorClient
 
     public int LastRecipeFailureStatusCode { get; private set; }
 
-    public string AssetBaseUrlForSharing()
+    public string AssetBaseUrlForSharing(string preferred = "")
     {
-        string env = Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "";
-        if (!string.IsNullOrWhiteSpace(env)) return env.Trim().TrimEnd('/');
+        string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
+        if (!string.IsNullOrWhiteSpace(env)) return env;
+        string advertised = ReadGeneratorAdvertisedAssetBaseUrl();
+        if (!string.IsNullOrWhiteSpace(advertised)) return advertised;
+        preferred = NormalizeAssetBaseUrl(preferred);
+        if (!string.IsNullOrWhiteSpace(preferred)) return preferred;
         return GeneratedAssetSyncService.GuessLanBaseUrlFromEndpoint(Endpoint);
     }
+
+    public string AssetTransportForSharing()
+    {
+        _ = ReadGeneratorAdvertisedAssetBaseUrl();
+        lock (_assetPublicBaseUrlLock)
+            return _cachedGeneratorAssetTransport;
+    }
+
+    public void RefreshAssetTransportMetadata()
+    {
+        lock (_assetPublicBaseUrlLock)
+            _nextGeneratorAssetPublicBaseUrlProbeUtc = DateTime.MinValue;
+        _ = ReadGeneratorAdvertisedAssetBaseUrl();
+    }
+
+    public void StampAssetTransportMetadata(GeneratedItemData data, bool refreshBaseUrl = false)
+    {
+        if (data is null) return;
+        data.RecipeMeta ??= new RecipeMetaSpec();
+        data.RecipeMeta.AssetTransport = AssetTransportForSharing();
+        if (!string.Equals(data.RecipeMeta.AssetTransport, "http", StringComparison.Ordinal))
+        {
+            data.RecipeMeta.AssetBaseUrl = "";
+            return;
+        }
+        if (refreshBaseUrl || string.IsNullOrWhiteSpace(data.RecipeMeta.AssetBaseUrl))
+            data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing(data.RecipeMeta.AssetBaseUrl);
+    }
+
+    private string ReadGeneratorAdvertisedAssetBaseUrl()
+    {
+        lock (_assetPublicBaseUrlLock)
+        {
+            DateTime now = DateTime.UtcNow;
+            if (now < _nextGeneratorAssetPublicBaseUrlProbeUtc)
+                return _cachedGeneratorAssetPublicBaseUrl;
+            _nextGeneratorAssetPublicBaseUrlProbeUtc = now.AddSeconds(15);
+            try
+            {
+                var combineUri = new Uri(Endpoint);
+                var connectUri = new Uri(combineUri, "/mp_connect.json");
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1200));
+                using var response = Http.GetAsync(connectUri, cts.Token).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    _cachedGeneratorAssetTransport = "native";
+                    return _cachedGeneratorAssetPublicBaseUrl = "";
+                }
+                string json = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
+                using JsonDocument doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("multiplayer", out JsonElement multiplayer)
+                    && multiplayer.ValueKind == JsonValueKind.Object)
+                {
+                    _cachedGeneratorAssetPublicBaseUrl = multiplayer.TryGetProperty("assetPublicBaseUrl", out JsonElement url)
+                        && url.ValueKind == JsonValueKind.String
+                        ? NormalizeAssetBaseUrl(url.GetString() ?? "")
+                        : "";
+                    _cachedGeneratorAssetTransport = multiplayer.TryGetProperty("assetTransport", out JsonElement transport)
+                        && transport.ValueKind == JsonValueKind.String
+                        ? NormalizeAssetTransport(transport.GetString() ?? "")
+                        : "native";
+                }
+                else
+                {
+                    _cachedGeneratorAssetPublicBaseUrl = "";
+                    _cachedGeneratorAssetTransport = "native";
+                }
+            }
+            catch
+            {
+                _cachedGeneratorAssetPublicBaseUrl = "";
+                _cachedGeneratorAssetTransport = "native";
+            }
+            return _cachedGeneratorAssetPublicBaseUrl;
+        }
+    }
+
+    private static string NormalizeAssetBaseUrl(string value)
+    {
+        value = (value ?? "").Trim().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(value) || value.Contains("x.x.x", StringComparison.OrdinalIgnoreCase))
+            return "";
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+            return "";
+        if (IPAddress.TryParse(uri.Host, out IPAddress? ip))
+        {
+            byte[] bytes = ip.GetAddressBytes();
+            if (ip.IsIPv6Multicast || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))
+                return "";
+            if (bytes.Length == 4 && ((bytes[0] == 169 && bytes[1] == 254) || bytes[0] == 0 || bytes[0] >= 224))
+                return "";
+            if (IPAddress.IsLoopback(ip) && Main.netMode != NetmodeID.SinglePlayer)
+                return "";
+        }
+        return uri.GetLeftPart(UriPartial.Authority);
+    }
+
+    private static string NormalizeAssetTransport(string value)
+        => string.Equals((value ?? "").Trim(), "http", StringComparison.OrdinalIgnoreCase) ? "http" : "native";
 
     private enum GenerationFailureKind
     {
@@ -224,7 +333,8 @@ public sealed class GeneratorClient
                 return null;
             Normalize(data, request.ParentA, request.ParentB);
             GeneratedItemRegistryService.StampCurrentWorld(data);
-            data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing();
+            RefreshAssetTransportMetadata();
+            StampAssetTransportMetadata(data, refreshBaseUrl: true);
             data.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
             return data;
         }
@@ -322,7 +432,8 @@ public sealed class GeneratorClient
             }
             Normalize(data, request.ParentA, request.ParentB);
             GeneratedItemRegistryService.StampCurrentWorld(data);
-            data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing();
+            RefreshAssetTransportMetadata();
+            StampAssetTransportMetadata(data, refreshBaseUrl: true);
             data.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
             return new GenerationAttemptResult { Data = data, FailureKind = GenerationFailureKind.None, StatusCode = 200 };
         }

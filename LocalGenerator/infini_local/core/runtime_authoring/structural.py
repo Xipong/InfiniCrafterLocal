@@ -5,8 +5,9 @@ import re
 from typing import Any
 
 from infini_local.core.runtime_authoring.common import _clamp, _enum, _norm_name
+from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
 from infini_local.core.runtime_authoring.normalize import runtime_plan
-from infini_local.core.runtime_authoring.schema import ENGINE_FN_CATALOG_V2, INT_FIELDS
+from infini_local.core.runtime_authoring.schema import INT_FIELDS
 from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
 from infini_local.core.runtime_executor_vocabulary import MOVEMENTS
 
@@ -80,7 +81,7 @@ def structural_repair_runtime_plan_inplace(data: dict[str, Any]) -> dict[str, An
             continue
         fn = _norm_name(raw.get("fn"))
         params = raw.get("params")
-        if fn not in ENGINE_FN_CATALOG_V2 or not isinstance(params, dict):
+        if fn not in ENGINE_FUNCTION_CATALOG or not isinstance(params, dict):
             out.append(raw)
             continue
         normalized, fixes = _structural_params(params)
@@ -109,7 +110,7 @@ def find_call(data_or_plan: dict[str, Any], fn: str) -> dict[str, Any]:
 
 
 def all_calls(data_or_plan: dict[str, Any], fn: str) -> list[dict[str, Any]]:
-    """Return every call of a function. The author can stack compatible calls; compiler aggregates only executable-compatible shapes."""
+    """Return every call of a function. Multi-shot belongs in one root call; extra root calls are rejected by the compiler."""
     rp = data_or_plan if isinstance(data_or_plan.get("engineCalls"), list) else runtime_plan(data_or_plan)
     out: list[dict[str, Any]] = []
     want = _norm_name(fn)
@@ -150,66 +151,30 @@ def _merged_params(calls: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def _select_primary_shoot_call(calls: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Choose one executable primary family and reject incompatible extras.
+def _select_root_executor_call(calls: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Choose exactly one root executor; every additional controller is rejected.
 
-    The first authored projectile/held executor is the primary. Compatible extra
-    calls may only aggregate multi-shot/spread/pierce pressure. Incompatible
-    calls must not leak back into executableFields through a later-call merge.
-    This is the anti-spaghetti boundary: it is based only on normalized engineCall
-    fields, never on item names or prose.
+    Multi-shot/spread/pierce belong to that one call. Body damage is a lane of
+    ``shoot+swing`` rather than a second executor. This keeps the boundary finite
+    and prevents later calls from silently replacing runtimeFamily or lifecycle.
     """
     if not calls:
         return {}, []
     primary = calls[0] if isinstance(calls[0], dict) else {}
-    primary_delivery = _enum(primary.get("delivery"), DELIVERIES, "")
-    primary_movement = _enum(primary.get("movement"), MOVEMENTS, "")
-    compatible: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    total_shots = 0
-    max_spread = 0.0
-    max_pierce: float = 0.0
-    has_shot_count = False
-    has_spread = False
-    has_pierce = False
-    for sc in calls:
+    for sc in calls[1:]:
         if not isinstance(sc, dict):
             continue
-        d = _enum(sc.get("delivery"), DELIVERIES, primary_delivery)
-        m = _enum(sc.get("movement"), MOVEMENTS, primary_movement)
-        same_primary = d == primary_delivery and m == primary_movement
-        if same_primary:
-            compatible.append(sc)
-            if sc.get("shotCount") not in (None, ""):
-                has_shot_count = True
-                total_shots += int(_clamp(sc.get("shotCount"), "shotCount", 1) or 1)
-            if sc.get("spreadRadians") not in (None, ""):
-                has_spread = True
-                max_spread = max(max_spread, float(_clamp(sc.get("spreadRadians"), "spreadRadians", 0) or 0))
-            if sc.get("pierce") not in (None, ""):
-                has_pierce = True
-                pv = _clamp(sc.get("pierce"), "pierce", 0)
-                if pv == -1:
-                    max_pierce = -1
-                elif max_pierce != -1:
-                    max_pierce = max(max_pierce, float(pv or 0))
-        else:
-            rejected.append({
-                "index": sc.get("_index"),
-                "callId": sc.get("_callId"),
-                "fn": sc.get("_rawFn") or "shoot_projectile",
-                "delivery": d,
-                "movement": m,
-                "reason": "runtime_one_primary_family",
-            })
-    selected = _merged_params(compatible) if compatible else dict(primary)
-    if has_shot_count:
-        selected["shotCount"] = min(8, total_shots)
-    if has_spread:
-        selected["spreadRadians"] = max(float(selected.get("spreadRadians") or 0), max_spread)
-    if has_pierce:
-        selected["pierce"] = max(float(selected.get("pierce") or 0), max_pierce)
-    return selected, rejected
+        rejected.append({
+            "index": sc.get("_index"),
+            "callId": sc.get("_callId"),
+            "fn": sc.get("_rawFn") or "shoot_projectile",
+            "runtimeFamily": sc.get("runtimeFamily"),
+            "delivery": sc.get("delivery"),
+            "movement": sc.get("movement"),
+            "reason": "runtime_one_root_executor",
+        })
+    return dict(primary), rejected
 
 
 __all__ = [
@@ -221,5 +186,5 @@ __all__ = [
     "all_calls",
     "_first_non_empty",
     "_merged_params",
-    "_select_primary_shoot_call",
+    "_select_root_executor_call",
 ]

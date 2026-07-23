@@ -155,6 +155,36 @@ def _check_technical_score_describes_final_validation_not_raw_candidate() -> Non
     assert 0.0 < accepted_warning < 1.0
 
 
+def _check_final_color_restore_is_alpha_safe_deterministic_and_gentle() -> None:
+    img = Image.new("RGBA", (4, 1), (0, 0, 0, 0))
+    img.putdata([
+        (64, 32, 16, 255),
+        (128, 96, 64, 128),
+        (250, 220, 180, 255),
+        (200, 50, 100, 0),
+    ])
+    assert isinstance(img, Image.Image)
+
+    restore = getattr(SPRITE_POSTPROCESS, "restore_downscaled_sprite_color", None)
+    assert callable(restore), "final bake must expose one fixed filter-independent color restore"
+    first = restore(img)
+    second = restore(img)
+
+    assert isinstance(first, Image.Image)
+    assert isinstance(second, Image.Image)
+    assert first.size == img.size
+    assert first.tobytes() == second.tobytes()
+    assert first.getchannel("A").tobytes() == img.getchannel("A").tobytes()
+    assert first.getpixel((3, 0)) == (0, 0, 0, 0)
+
+    before_mid = img.getpixel((0, 0))[:3]
+    after_mid = first.getpixel((0, 0))[:3]
+    assert sum(after_mid) > sum(before_mid)
+    before_sat = max(before_mid) - min(before_mid)
+    after_sat = max(after_mid) - min(after_mid)
+    assert after_sat >= before_sat
+
+
 def _check_postprocess_failure_preserves_the_original_asset_path(monkeypatch) -> None:
     original = "/tmp/original_generated_sprite.png"
 

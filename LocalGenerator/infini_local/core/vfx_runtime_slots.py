@@ -172,7 +172,10 @@ def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_bud
         renderer_kind = "projectileAfterimage"
     renderer = renderer_kind
     event = str(raw.get("event") or "tick").strip()
-    if event not in {"travel", "active", "tick", "hit", "kill", "expire"}:
+    if event not in {
+        "travel", "active", "tick", "hit", "kill", "expire",
+        "while_held", "while_equipped", "on_use", "on_alt_use",
+    }:
         event = "tick"
     slot_seed = _vfx_seed_int(seed, renderer_kind, slot_index)
     variants = raw.get("variants") if isinstance(raw.get("variants"), list) else []
@@ -470,14 +473,10 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
 
 def _vfx_authored_cue_event(raw: Any) -> str:
     e = str(raw or "").strip()
-    return {
-        "while_held": "active",
-        "while_equipped": "active",
-        "on_use": "active",
-        "on_alt_use": "active",
-        "on_projectile_impact": "hit",
-        "on_hit": "hit",
-    }.get(e, e if e in {"travel", "active", "tick", "hit", "kill", "expire"} else "active")
+    return e if e in {
+        "travel", "active", "tick", "hit", "kill", "expire",
+        "while_held", "while_equipped", "on_use", "on_alt_use",
+    } else "active"
 
 def _vfx_authored_cue_raw_slots(data: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Convert model-authored visual_effect_cue contracts into raw VFX slots.

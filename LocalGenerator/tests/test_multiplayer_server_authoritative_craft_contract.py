@@ -19,9 +19,10 @@ def _check_multiplayer_client_sends_craft_intent_not_generated_payload() -> None
     assert "Generator.Prepare(a, b, Player)" in PLAYER_SOURCE
 
 
-def _check_server_reconstructs_items_and_runs_generator_on_host() -> None:
+def _check_server_consumes_escrow_items_and_runs_generator_on_host() -> None:
     assert "HandleRequestServerCraftPacket" in PLAYER_SOURCE
-    assert "TryReconstructCraftItem" in PLAYER_SOURCE
+    assert "TryReconstructCraftItem" not in PLAYER_SOURCE
+    assert "TryTakeServerEscrowInput" in PLAYER_SOURCE
     assert "Generator.Prepare(itemA, itemB, player)" in PLAYER_SOURCE
     assert "BeginServerAuthoritativeCraft" in PLAYER_SOURCE
     assert "StartGenerationTask(\"server_authoritative\")" in PLAYER_SOURCE
@@ -36,14 +37,15 @@ def _check_client_waits_for_host_result_and_does_not_need_local_generator() -> N
     assert "Packet id 2 is intentionally retired" not in PLAYER_SOURCE
     assert "PacketSubmitGeneratedItem" not in PLAYER_SOURCE
     assert "HandleSubmitGeneratedItemPacket" not in PLAYER_SOURCE
-    assert "generated parent отсутствует в registry хоста" in PLAYER_SOURCE
+    assert "GeneratedIdentityMatches" in PLAYER_SOURCE
 
 
 def _check_server_authoritative_craft_hydrates_assets_automatically() -> None:
     assert "StampHostAssetSyncMetadata" in PLAYER_SOURCE
-    assert "AssetBaseUrlForSharing" in PLAYER_SOURCE
+    assert "StampAssetTransportMetadata(data, refreshBaseUrl: true)" in PLAYER_SOURCE
     assert "GeneratedAssetSyncService.AssetFilesFromData(data).ToArray()" in PLAYER_SOURCE
-    assert "clients automatically call /get_asset in background" in PLAYER_SOURCE
+    assert "compressed definition chunks" in PLAYER_SOURCE
+    assert "no second filename/base-URL broadcast" in PLAYER_SOURCE
     assert "writer.Write(NormalizeCraftStack(item?.stack ?? 1));" in PLAYER_SOURCE
     assert "writer.Write((int)(item?.prefix ?? 0));\n        writer.Write((int)(item?.prefix ?? 0));" not in PLAYER_SOURCE
 
@@ -73,13 +75,14 @@ def _check_station_ui_describes_mp_host_authority_not_local_client_llm() -> None
     assert "Uses the local LLM" not in ui_source
 
 
-def _check_server_validates_and_spends_real_server_side_slots() -> None:
+def _check_server_validates_and_spends_real_server_side_escrow() -> None:
     request_body = PLAYER_SOURCE[PLAYER_SOURCE.index("public static void HandleRequestServerCraftPacket"):PLAYER_SOURCE.index("public static void HandleCancelServerCraftPacket")]
-    assert "TryTakeServerSideIngredient(player, aRef" in request_body
-    assert "TryTakeServerSideIngredient(player, bRef" in request_body
+    assert "TryTakeServerEscrowInput(0, aRef" in request_body
+    assert "TryTakeServerEscrowInput(1, bRef" in request_body
     assert "Generator.Prepare(itemA, itemB, player)" in request_body
     assert "TryReconstructCraftItem(aRef" not in request_body
-    assert "slot.favorited" in PLAYER_SOURCE
+    assert "TryDepositServerMouseItem" in PLAYER_SOURCE
+    assert "Player.inventory[58]" in PLAYER_SOURCE
     assert "InfiniCore.IsValidIngredient(slot)" in PLAYER_SOURCE
 
 
@@ -92,12 +95,12 @@ def _run_coarse_contracts(tmp_path):
 
     for _name in [
     '_check_multiplayer_client_sends_craft_intent_not_generated_payload',
-    '_check_server_reconstructs_items_and_runs_generator_on_host',
+    '_check_server_consumes_escrow_items_and_runs_generator_on_host',
     '_check_client_waits_for_host_result_and_does_not_need_local_generator',
     '_check_server_authoritative_craft_hydrates_assets_automatically',
     '_check_projectile_packets_stay_light_but_restore_visual_assets_from_registry',
     '_check_station_ui_describes_mp_host_authority_not_local_client_llm',
-    '_check_server_validates_and_spends_real_server_side_slots'
+    '_check_server_validates_and_spends_real_server_side_escrow'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)
