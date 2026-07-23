@@ -21,8 +21,13 @@ from infini_local.core.sound_catalog import (
 )
 from infini_local.core.vfx_composition_primitives import (
     VFX_CUE_CHANNELS,
+    VFX_CUE_EMISSION_MODES,
     VFX_CUE_EVENTS,
+    VFX_CUE_IMPORTANCE,
+    VFX_CUE_LANES,
+    VFX_CUE_PARTICLE_SYSTEM_IDS,
     VFX_CUE_RENDERERS,
+    VFX_CUE_ROLES,
 )
 from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
 from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
@@ -299,25 +304,58 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
         allowed_events = VFX_CUE_EVENTS
         allowed_renderers = VFX_CUE_RENDERERS
         allowed_channels = VFX_CUE_CHANNELS
-        allowed_lanes = {"primary", "support", "accent", "ornament", "cue"}
-        allowed_roles = {"projectile", "impact", "child", "field"}
-        allowed_emission = {"wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point"}
-        allowed_particles = {"pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust"}
+        allowed_lanes = VFX_CUE_LANES
+        allowed_roles = VFX_CUE_ROLES
+        allowed_emission = VFX_CUE_EMISSION_MODES
+        allowed_particles = VFX_CUE_PARTICLE_SYSTEM_IDS
         cues: list[dict[str, Any]] = []
         for call in vfx_cue_calls[:8]:
             p = call.get("params") if isinstance(call, dict) and isinstance(call.get("params"), dict) else call if isinstance(call, dict) else {}
-            event = str(p.get("event") or "").strip()
-            renderer = str(p.get("rendererKind") or "").strip()
-            channel = str(p.get("channel") or "").strip()
-            lane = str(p.get("lane") or "").strip()
-            texture_role = str(p.get("textureRole") or "projectile").strip()
-            particle_role = str(p.get("particleRole") or texture_role or "child").strip()
-            emission = str(p.get("emissionMode") or "").strip()
-            particle_id = str(p.get("particleSystemId") or "").strip()
-            cue: dict[str, Any] = {"source": "runtimePlan.visual_effect_cue"}
-            if event in allowed_events: cue["event"] = event
-            if renderer in allowed_renderers: cue["rendererKind"] = renderer
-            if channel in allowed_channels: cue["channel"] = channel
+            event = str(p.get("event") if p.get("event") is not None else "").strip()
+            renderer = str(p.get("rendererKind") if p.get("rendererKind") is not None else "").strip()
+            channel = str(p.get("channel") if p.get("channel") is not None else "").strip()
+            lane = str(p.get("lane") if p.get("lane") is not None else "").strip()
+            raw_texture_role = str(
+                p.get("textureRole") if p.get("textureRole") is not None else ""
+            ).strip()
+            texture_role = raw_texture_role or "projectile"
+            raw_particle_role = str(
+                p.get("particleRole") if p.get("particleRole") is not None else ""
+            ).strip()
+            particle_role = raw_particle_role or texture_role or "child"
+            emission = str(
+                p.get("emissionMode") if p.get("emissionMode") is not None else ""
+            ).strip()
+            particle_id = str(
+                p.get("particleSystemId")
+                if p.get("particleSystemId") is not None
+                else ""
+            ).strip()
+            importance = str(
+                p.get("importance") if p.get("importance") is not None else ""
+            ).strip()
+            # The event/renderer/channel triple is the executable identity of an
+            # authored cue.  Any explicitly supplied finite token is part of that
+            # authored contract: if one is unknown, keep the whole call inert instead
+            # of silently compiling a different partial/default cue.
+            if not (
+                event in allowed_events
+                and renderer in allowed_renderers
+                and channel in allowed_channels
+                and (not lane or lane in allowed_lanes)
+                and (not raw_texture_role or raw_texture_role in allowed_roles)
+                and (not raw_particle_role or raw_particle_role in allowed_roles)
+                and (not emission or emission in allowed_emission)
+                and (not particle_id or particle_id in allowed_particles)
+                and (not importance or importance in VFX_CUE_IMPORTANCE)
+            ):
+                continue
+            cue: dict[str, Any] = {
+                "source": "runtimePlan.visual_effect_cue",
+                "event": event,
+                "rendererKind": renderer,
+                "channel": channel,
+            }
             if lane in allowed_lanes: cue["lane"] = lane
             if texture_role in allowed_roles: cue["textureRole"] = texture_role
             if particle_role in allowed_roles: cue["particleRole"] = particle_role
@@ -328,14 +366,12 @@ def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]
                     cue[field] = _clamp(p.get(field), field, 0)
                     if field in {"duration", "startTick", "repeatEvery"}:
                         cue[field] = int(round(cue[field]))
-            importance = str(p.get("importance") or "").strip()
-            if importance in {"core", "secondary", "accent", "luxury"}:
+            if importance in VFX_CUE_IMPORTANCE:
                 cue["importance"] = importance
             note = str(p.get("note") or p.get("identity") or "").strip()
             if note:
                 cue["note"] = note[:80]
-            if any(k in cue for k in ("event", "rendererKind", "channel", "particleSystemId")):
-                cues.append(cue)
+            cues.append(cue)
         if cues:
             patch["vfxCues"] = cues
             patch["vfxCueCount"] = len(cues)

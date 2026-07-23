@@ -5,6 +5,16 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from infini_local.core.vfx_composition_primitives import (
+    VFX_CUE_CHANNEL_VALUES,
+    VFX_CUE_EMISSION_MODE_VALUES,
+    VFX_CUE_EVENT_VALUES,
+    VFX_CUE_LANE_VALUES,
+    VFX_CUE_PARTICLE_SYSTEM_ID_VALUES,
+    VFX_CUE_RENDERER_VALUES,
+    VFX_CUE_ROLE_VALUES,
+    vfx_cue_particle_system_id_text,
+)
 from infini_local.core.vfx_manifest_config import VFX_LLM_DIRECTOR_MAX_SLOTS
 
 
@@ -30,17 +40,17 @@ class VfxNumericFieldContract:
 
 
 VFX_SLOT_ENUM_FIELDS: tuple[VfxEnumFieldContract, ...] = (
-    VfxEnumFieldContract("event", "events", ("travel", "active", "tick", "hit", "kill", "expire", "while_held", "while_equipped", "on_use", "on_alt_use")),
-    VfxEnumFieldContract("rendererKind", "rendererKind", ("projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite", "childMotes", "lightCue", "soundCue")),
+    VfxEnumFieldContract("event", "events", VFX_CUE_EVENT_VALUES),
+    VfxEnumFieldContract("rendererKind", "rendererKind", VFX_CUE_RENDERER_VALUES),
     VfxEnumFieldContract("backend", "backend", ("Auto", "Realtime", "Primitive", "Sprite", "Particle")),
-    VfxEnumFieldContract("textureRole", "textureRole", ("projectile", "impact", "child", "field")),
-    VfxEnumFieldContract("particleRole", "particleRole", ("projectile", "impact", "child", "field")),
+    VfxEnumFieldContract("textureRole", "textureRole", VFX_CUE_ROLE_VALUES),
+    VfxEnumFieldContract("particleRole", "particleRole", VFX_CUE_ROLE_VALUES),
     VfxEnumFieldContract("anchor", "anchor", ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")),
-    VfxEnumFieldContract("channel", "channel", ("motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound")),
-    VfxEnumFieldContract("lane", "lane", ("primary", "support", "accent", "ornament", "cue")),
-    VfxEnumFieldContract("emissionMode", "emissionMode", ("wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point")),
+    VfxEnumFieldContract("channel", "channel", VFX_CUE_CHANNEL_VALUES),
+    VfxEnumFieldContract("lane", "lane", VFX_CUE_LANE_VALUES),
+    VfxEnumFieldContract("emissionMode", "emissionMode", VFX_CUE_EMISSION_MODE_VALUES),
     VfxEnumFieldContract("blend", "blend", ("alpha", "additive")),
-    VfxEnumFieldContract("particleSystemId", "particleSystemId", ("pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust")),
+    VfxEnumFieldContract("particleSystemId", "particleSystemId", VFX_CUE_PARTICLE_SYSTEM_ID_VALUES),
 )
 
 VFX_TOP_ENUM_FIELDS: tuple[VfxEnumFieldContract, ...] = (
@@ -123,7 +133,8 @@ def vfx_director_required_json_shape() -> dict[str, Any]:
             ],
             "enumFields": {
                 field.name: (
-                    "one explicit vfxSurface.particleSystemId value: pl:glow, pl:shard, pl:smoke, pl:spark, or dust"
+                    "one explicit vfxSurface.particleSystemId value: "
+                    + vfx_cue_particle_system_id_text()
                     if field.name == "particleSystemId"
                     else f"one vfxSurface.{field.surface_key} value"
                 )

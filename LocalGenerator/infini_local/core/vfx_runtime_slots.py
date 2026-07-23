@@ -20,6 +20,7 @@ from infini_local.core.vfx_manifest_config import (
     VFX_RUNTIME_INTENT_FIRST,
 )
 from infini_local.core.vfx_composition_primitives import (
+    VFX_CUE_EVENTS,
     _vfx_available_roles,
     _vfx_seed_int,
     _vfx_unit,
@@ -172,10 +173,7 @@ def _vfx_compile_slot(raw: dict[str, Any], seed: int, slot_index: int, power_bud
         renderer_kind = "projectileAfterimage"
     renderer = renderer_kind
     event = str(raw.get("event") or "tick").strip()
-    if event not in {
-        "travel", "active", "tick", "hit", "kill", "expire",
-        "while_held", "while_equipped", "on_use", "on_alt_use",
-    }:
+    if event not in VFX_CUE_EVENTS:
         event = "tick"
     slot_seed = _vfx_seed_int(seed, renderer_kind, slot_index)
     variants = raw.get("variants") if isinstance(raw.get("variants"), list) else []
@@ -473,10 +471,7 @@ def _vfx_runtime_plan_direct_manifest(data: dict[str, Any], recipe_key_value: st
 
 def _vfx_authored_cue_event(raw: Any) -> str:
     e = str(raw or "").strip()
-    return e if e in {
-        "travel", "active", "tick", "hit", "kill", "expire",
-        "while_held", "while_equipped", "on_use", "on_alt_use",
-    } else "active"
+    return e if e in VFX_CUE_EVENTS else "active"
 
 def _vfx_authored_cue_raw_slots(data: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Convert model-authored visual_effect_cue contracts into raw VFX slots.

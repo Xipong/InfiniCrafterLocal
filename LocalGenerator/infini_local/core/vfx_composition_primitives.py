@@ -12,20 +12,34 @@ from infini_local.core.vfx_manifest_config import (
     VFX_RENDER_QUALITY,
 )
 
-VFX_CUE_EVENTS = frozenset({
+VFX_CUE_EVENT_VALUES = (
     "travel", "active", "tick", "hit", "kill", "expire",
     "while_held", "while_equipped", "on_use", "on_alt_use",
-})
-VFX_CUE_RENDERERS = frozenset({
+)
+VFX_CUE_RENDERER_VALUES = (
     "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
     "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
     "actorAfterimage", "impactRing", "impactSprite", "childMotes", "lightCue",
     "soundCue",
-})
-VFX_CUE_CHANNELS = frozenset({
+)
+VFX_CUE_CHANNEL_VALUES = (
     "motionTrail", "coreGlow", "ambientParticles", "impactShape",
     "impactParticles", "decaySmoke", "light", "sound",
-})
+)
+VFX_CUE_LANE_VALUES = ("primary", "support", "accent", "ornament", "cue")
+VFX_CUE_ROLE_VALUES = ("projectile", "impact", "child", "field")
+VFX_CUE_EMISSION_MODE_VALUES = (
+    "wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point",
+)
+VFX_CUE_IMPORTANCE_VALUES = ("core", "secondary", "accent", "luxury")
+
+VFX_CUE_EVENTS = frozenset(VFX_CUE_EVENT_VALUES)
+VFX_CUE_RENDERERS = frozenset(VFX_CUE_RENDERER_VALUES)
+VFX_CUE_CHANNELS = frozenset(VFX_CUE_CHANNEL_VALUES)
+VFX_CUE_LANES = frozenset(VFX_CUE_LANE_VALUES)
+VFX_CUE_ROLES = frozenset(VFX_CUE_ROLE_VALUES)
+VFX_CUE_EMISSION_MODES = frozenset(VFX_CUE_EMISSION_MODE_VALUES)
+VFX_CUE_IMPORTANCE = frozenset(VFX_CUE_IMPORTANCE_VALUES)
 VFX_ITEM_LIVE_RENDERERS = frozenset({"orbitingMotes", "childMotes", "lightCue"})
 VFX_ITEM_BURST_RENDERERS = frozenset({"impactRing", "childMotes", "lightCue", "soundCue"})
 
@@ -65,6 +79,24 @@ _VFX_PARTICLE_ADDRESS_CATALOG: dict[str, dict[str, Any]] = {
         "notes": "Explicit vanilla Dust fallback. Use only when ParticleLibrary routing is not desired.",
     },
 }
+
+# Exact particle-system ids that Author may emit in ``visual_effect_cue``.
+# ``auto`` remains an internal composition fallback and is intentionally not
+# part of the Author/provider contract.
+VFX_CUE_PARTICLE_SYSTEM_IDS = frozenset(_VFX_PARTICLE_ADDRESS_CATALOG)
+VFX_CUE_PARTICLE_SYSTEM_ID_VALUES = tuple(_VFX_PARTICLE_ADDRESS_CATALOG)
+
+
+def vfx_cue_particle_system_id_text() -> str:
+    """Human-readable Author/VFX prompt list derived from the canonical ids."""
+
+    values = VFX_CUE_PARTICLE_SYSTEM_ID_VALUES
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    return ", ".join(values[:-1]) + ", or " + values[-1]
+
 
 def _vfx_available_roles(data: dict[str, Any]) -> set[str]:
     attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
@@ -106,11 +138,7 @@ def _vfx_lerp_range(seed: int, salt: str, value: Any, fallback: float) -> float:
     except Exception:
         return fallback
 
-CANONICAL_VFX_RENDERERS = frozenset({
-    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip",
-    "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite",
-    "childMotes", "lightCue", "soundCue",
-})
+CANONICAL_VFX_RENDERERS = VFX_CUE_RENDERERS
 
 _MOTION_RENDERERS = frozenset({"projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "beamLine"})
 _PRIMITIVE_RENDERERS = frozenset({"historyRibbon", "tipTrail", "wavyStrip", "beamLine"})
@@ -270,7 +298,7 @@ def _vfx_infer_emission_mode(renderer: Any, event: Any = "") -> str:
 
 def _vfx_infer_lane(slot: dict[str, Any]) -> str:
     lane = str(slot.get("lane") or "").strip()
-    if lane in {"primary", "support", "accent", "ornament", "cue"}: return lane
+    if lane in VFX_CUE_LANES: return lane
     imp = str(slot.get("importance") or "").strip()
     renderer = _vfx_renderer_kind(slot.get("rendererKind"))
     channel = str(slot.get("channel") or _vfx_infer_channel(renderer, slot.get("event")))
@@ -529,7 +557,7 @@ def _vfx_particle_address_catalog() -> dict[str, Any]:
 
 def _vfx_canonical_particle_address(value: Any) -> str:
     raw = str(value or "").strip()
-    return raw if raw in {"auto", "pl:glow", "pl:shard", "pl:smoke", "pl:spark", "dust"} else "auto"
+    return raw if raw == "auto" or raw in VFX_CUE_PARTICLE_SYSTEM_IDS else "auto"
 
 def _vfx_resolve_particle_system_id(raw: dict[str, Any] | None, renderer: str, event: str, channel: str = "", blend: str = "", emission_mode: str = "") -> str:
     raw = raw or {}
@@ -562,6 +590,24 @@ def _vfx_resolve_particle_system_id(raw: dict[str, Any] | None, renderer: str, e
 
 __all__ = [
     "_VFX_PARTICLE_ADDRESS_CATALOG",
+    "VFX_CUE_EVENTS",
+    "VFX_CUE_EVENT_VALUES",
+    "VFX_CUE_RENDERERS",
+    "VFX_CUE_RENDERER_VALUES",
+    "VFX_CUE_CHANNELS",
+    "VFX_CUE_CHANNEL_VALUES",
+    "VFX_CUE_LANES",
+    "VFX_CUE_LANE_VALUES",
+    "VFX_CUE_ROLES",
+    "VFX_CUE_ROLE_VALUES",
+    "VFX_CUE_EMISSION_MODES",
+    "VFX_CUE_EMISSION_MODE_VALUES",
+    "VFX_CUE_IMPORTANCE",
+    "VFX_CUE_IMPORTANCE_VALUES",
+    "VFX_CUE_PARTICLE_SYSTEM_IDS",
+    "VFX_CUE_PARTICLE_SYSTEM_ID_VALUES",
+    "vfx_cue_particle_system_id_text",
+    "CANONICAL_VFX_RENDERERS",
     "_vfx_available_roles",
     "_vfx_seed_int",
     "_vfx_unit",

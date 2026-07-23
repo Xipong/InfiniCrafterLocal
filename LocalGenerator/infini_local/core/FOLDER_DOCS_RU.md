@@ -5,10 +5,11 @@ Core contracts and policies.
 - `runtime_executor_vocabulary.py` owns canonical movement/effect/onHit names and numeric executor opcodes.
 - `runtime_family_policy.py` owns strict canonical runtime families and a single capability/presentation profile table; no aliases.
 - `runtime_authoring/` package owns `runtimePlan.engineCalls` validation, repair, semantic lowering, compilation and reports.
-- `runtime_authoring/vocabulary.py` owns the exact current movement/effect/onHit/delivery vocabulary; removed spellings are rejected instead of being repaired downstream.
+- `runtime_authoring/vocabulary.py` owns defensive authoring-input aliases for historical/direct inputs; new provider schemas expose canonical finite values.
 - `runtime_authoring/__init__.py` is the narrow public compile/validate/report API; production imports concrete owners directly.
 - `runtime_authoring/common.py` owns shared enum/number normalization and the single `ENGINE_RUNTIME_API_VERSION` source.
-- `runtime_authoring/schema.py` owns the engine-call catalog, Terraria family grouping, affordances and numeric ranges; canonical executor vocabulary is imported from its owner.
+- `runtime_authoring/function_contract_types.py` and `function_contract_registry.py` own immutable engine-call/param contracts, provider/prompt projections, wire obligations, repair groups and typed lowerer identity.
+- `runtime_authoring/schema.py` owns Terraria family grouping, affordances, numeric ranges and cross-param repair compatibility; it consumes the registry rather than owning the function catalog.
 - `runtime_authoring/normalize.py` owns engine-call canonicalization and hard world-entity rejection.
 - `runtime_authoring/structural.py` owns code-only repair for malformed runtimePlan shapes and call selection helpers.
 - `runtime_authoring/semantics.py` owns finite Terraria-family lowering, parent-backed onHit preservation, semantic tags/audio helpers.

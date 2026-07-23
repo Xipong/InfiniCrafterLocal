@@ -3,9 +3,12 @@
 Canonical runtime authoring package.
 
 - `__init__.py` narrow public API for runtimePlan validation/compile/report callers; schema constants and private helpers are not exported.
-- `vocabulary.py` owns bounded authoring-only aliases for movement/effect/onHit/delivery; `runtimeFamily` remains strict in `core/runtime_family_policy.py`.
+- `function_contract_types.py` defines immutable function/param/wire/repair primitives and registry validation.
+- `function_contract_registry.py` owns function inventory, provider/prompt projection, wire/provenance obligations, repair groups and typed lowerer identity.
+- `engine_call_contracts.py` projects strict Pydantic parameter models from that registry.
+- `vocabulary.py` owns bounded defensive aliases for historical/direct inputs; new provider schemas use canonical values and `runtimeFamily` remains strict in `core/runtime_family_policy.py`.
 - `common.py` shared enum/number normalization helpers and the single `ENGINE_RUNTIME_API_VERSION` owner.
-- `schema.py` engine function catalog, Terraria-family groups, runtime affordances and numeric limits; audio controls are accepted on primary attack calls without repeating the catalog in every function card.
+- `schema.py` owns Terraria-family groups, runtime affordances, numeric limits and cross-param repair compatibility; audio controls are projected from the registry without repeating them in every function card.
 - `semantics.py` finite semantic/runtime-family lowering and parent-backed hint handling.
 - `normalize.py` engine-call canonicalization, world-entity rejection and runtimePlan shape normalization.
 - `structural.py` code-only structural repair and call selection helpers.

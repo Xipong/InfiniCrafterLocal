@@ -12,6 +12,7 @@ from infini_local.core.item_identity_tools import (
     name_of,
 )
 from infini_local.core.vfx_composition_primitives import (
+    vfx_cue_particle_system_id_text,
     _vfx_available_roles,
     _vfx_words,
 )
@@ -354,7 +355,9 @@ def build_vfx_director_handoff_payload(parent_a: dict[str, Any] | None = None, p
             "Use accepted child concept, gameplay/attack/audio facts, full VisualAssetKit, clean parent facts, and VFX surface.",
             "Use soundCue slots for useful travel/impact/kill audio timing; runtime resolves accepted audioFacts catalog IDs.",
             "Use only listed VFX enums/ranges.",
-            "particleSystemId must be explicit: pl:glow, pl:shard, pl:smoke, pl:spark, or dust.",
+            "particleSystemId must be explicit: "
+            + vfx_cue_particle_system_id_text()
+            + ".",
             "Author concrete slot parameters only; Python validates enums/ranges/budget.",
             "No baked commands or engine code."
         ],

@@ -57,7 +57,7 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 | Runtime executor vocabulary | `core/runtime_executor_vocabulary.py` | единственный owner canonical movement/effect/onHit names и их C# opcodes; name-sets выводятся из keys |
 | Runtime family policy | `core/runtime_family_policy.py` | strict canonical executor-family enum и одна per-family profile-table для capability/presentation metadata; no natural-language aliases |
 | Sound catalog | `core/sound_catalog.py` | exact 92-role LLM vocabulary, Python/C# parity contract, bounded volume/pitch/variance controls and tiny compiled-mechanic fallbacks; no item-name/prose aliases |
-| Runtime authoring | `core/runtime_authoring/__init__.py`, `vocabulary.py`, `schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `equipment.py`, `secondary.py`, `compiler.py`, `result_identity.py`, `final_projection.py`, `reports.py` | узкий public API; authoring terminology/schema; normalization and semantic lowering; equipment/secondary lowerers; canonical result identity; single final DTO projection; validation/provenance reports |
+| Runtime authoring | `core/runtime_authoring/__init__.py`, `function_contract_types.py`, `function_contract_registry.py`, `engine_call_contracts.py`, `vocabulary.py`, `schema.py`, `common.py`, `semantics.py`, `normalize.py`, `structural.py`, `equipment.py`, `secondary.py`, `compiler.py`, `result_identity.py`, `final_projection.py`, `reports.py` | узкий public API; immutable function/param registry and provider projection; authoring terminology/cross-param policy; normalization and semantic lowering; equipment/secondary lowerers; canonical result identity; single final DTO projection; validation/provenance reports |
 | Runtime API version | `core/runtime_authoring/common.py` | single source of truth for `ENGINE_RUNTIME_API_VERSION` |
 | Parent context | `parent_context_pipeline.py`, `parent_context_cards.py`, `pipeline_runtime_dumps.py` | compact factual parent/projectile/ammo cards and runtime dump lookup |
 | Visual assets | `visual_generation_pipeline.py`, `visual_prompt_contracts.py`, `visual_asset_plan.py`, `visual_asset_manifest.py`, `visual_sprite_generation.py`, `visual_delivery_gate.py`, `visual_soul.py` | role-separated prompts, asset plan/manifest, generation, delivery gate, sprite-derived visual soul |
@@ -81,8 +81,9 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 - `core/runtime_executor_vocabulary.py` owns canonical movement/effect/onHit names and numeric opcodes. `dust` and `heal` exist only as authoring aliases to `smoke` and `lifesteal`.
 - `core/runtime_family_policy.py` owns the strict cross-language `runtimeFamily` vocabulary and one profile row per family. Downstream consumers must not repair aliases.
 - `beam` is a canonical finite family: exact `channelled_beam`/`runtimeArchetype.channel_beam` lowering only; range/homing/width/charge/cadence cross Python -> DTO -> net -> held C# executor.
-- `runtime_authoring/vocabulary.py` owns only permissive movement/effect/onHit/delivery terminology accepted from the LLM boundary. It does not re-export canonical executor enums.
-- `schema.py` owns the engine function catalog, Terraria-family grouping, affordance projection and numeric limits; executable enums come directly from their canonical owners.
+- `runtime_authoring/vocabulary.py` owns only defensive authoring-input aliases for historical/direct inputs. New provider schemas expose canonical finite values from the registry and executor owners.
+- `function_contract_types.py` + `function_contract_registry.py` own immutable function/param inventory, provider types/enums, prompt cards, wire/provenance obligations, repair groups and typed lowerer identity.
+- `schema.py` owns Terraria-family grouping, affordance projection, numeric limits and cross-param repair compatibility; it consumes the registry and is not the function-catalog owner.
 - `common.py` owns shared authoring normalization helpers and `ENGINE_RUNTIME_API_VERSION`.
 
 `pipelines/pipeline_support.py` удалён. Внутренние consumers импортируют symbols из реальных domain owners; compatibility facade запрещён hygiene scanner'ом.
@@ -105,7 +106,7 @@ Derived reports are read-only diagnostics, not a second authoring surface. Expli
 
 | If changing | Inspect/update |
 |---|---|
-| New engine call | `core/runtime_authoring/schema.py`, `normalize.py`, `compiler.py`, `reports.py`, C# `GeneratedItemData`/runtime executor, contract tests |
+| New engine call | `core/runtime_authoring/function_contract_registry.py`, profile-specific lowering/`normalize.py`, `compiler.py`, `reports.py`, C# `GeneratedItemData`/runtime executor when executable wire changes, frozen surface + contract tests |
 | Runtime family/movement/effect/onHit | Runtime authoring package, `InfiniRuntimeLimits.cs`, `GeneratedProjectile*.cs`, visual/VFX tests if presentation changes |
 | LLM payload/repair | `llm_authoring_prompt.py`, `llm_authoring_pipeline.py`, `llm_transport.py`, planner prompt usability tests |
 | Combine balance/gameplay | `combine_balance.py`, `combine_genome.py`, `combine_validation.py`, `combine_gameplay.py`, balance/report tests |

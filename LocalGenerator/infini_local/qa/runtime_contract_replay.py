@@ -19,6 +19,10 @@ from typing import Any
 from infini_local.core.runtime_authoring.final_projection import (
     compile_runtime_plan_to_final_result,
 )
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    ENGINE_FUNCTION_CONTRACT_BY_NAME,
+    engine_function_impact_names,
+)
 
 CORPUS_SCHEMA = "infini.runtime-contract-replay-corpus.v1"
 DEFAULT_CORPUS_PATH = (
@@ -52,6 +56,10 @@ def _safe_token(value: object) -> str:
     return token or "unknown"
 
 
+def _normalize_function_name(value: object) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
 def default_corpus_path() -> Path:
     return DEFAULT_CORPUS_PATH
 
@@ -79,9 +87,29 @@ def functions_from_runtime_plan(runtime_plan: Mapping[str, Any] | None) -> froze
     for call in calls:
         if not isinstance(call, Mapping):
             continue
-        fn = str(call.get("fn") or "").strip()
+        fn = _normalize_function_name(call.get("fn"))
         if fn:
             out.add(fn)
+    return frozenset(out)
+
+
+def authored_functions_from_runtime_plan(
+    runtime_plan: Mapping[str, Any] | None,
+) -> frozenset[str]:
+    """Recover typed Author function provenance when a dump preserved it."""
+
+    if not isinstance(runtime_plan, Mapping):
+        return frozenset()
+    calls = runtime_plan.get("engineCalls")
+    if not isinstance(calls, list):
+        return frozenset()
+    out: set[str] = set()
+    for call in calls:
+        if not isinstance(call, Mapping):
+            continue
+        authored = _normalize_function_name(call.get("_rawFn") or call.get("authoredFn"))
+        if authored:
+            out.add(authored)
     return frozenset(out)
 
 
@@ -97,6 +125,26 @@ def case_function_set(case: Mapping[str, Any]) -> frozenset[str]:
             return from_plan
         return listed_set
     return from_plan
+
+
+def case_authored_function_set(case: Mapping[str, Any]) -> frozenset[str]:
+    """Typed Author function inventory, if retained by the corpus builder."""
+
+    plan = case.get("runtimePlan") if isinstance(case.get("runtimePlan"), Mapping) else {}
+    from_plan = authored_functions_from_runtime_plan(plan if isinstance(plan, Mapping) else {})
+    listed = case.get("authoredFunctions")
+    listed_set = (
+        frozenset(_normalize_function_name(fn) for fn in listed if _normalize_function_name(fn))
+        if isinstance(listed, list)
+        else frozenset()
+    )
+    return from_plan or listed_set
+
+
+def case_impact_function_set(case: Mapping[str, Any]) -> frozenset[str]:
+    """All normalized and authored function identities represented by a case."""
+
+    return case_function_set(case) | case_authored_function_set(case)
 
 
 def corpus_function_set(corpus: Mapping[str, Any]) -> frozenset[str]:
@@ -118,9 +166,13 @@ def select_cases_by_changed_functions(
     """Select corpus cases impacted by changed engine functions.
 
     - empty / None changed set → all cases (full regression)
-    - non-empty → union of cases whose function set intersects the changed set
-    - each case appears at most once
-    - order is deterministic by caseId
+    - a provenance-aware corpus selects specialized typed lowerers by exact
+      ``authoredFunctions`` identity
+    - a legacy corpus without authored provenance conservatively maps a typed
+      lowerer to its canonical normalized executor
+    - unknown or uncovered functions raise instead of returning false-green empty
+      selections
+    - each case appears at most once; order is deterministic by caseId
     """
     cases_raw = corpus.get("cases")
     cases: list[dict[str, Any]] = [
@@ -130,15 +182,54 @@ def select_cases_by_changed_functions(
     if changed_functions is None:
         selected = cases
     else:
-        changed = {str(fn).strip() for fn in changed_functions if str(fn).strip()}
+        changed = {
+            _normalize_function_name(fn)
+            for fn in changed_functions
+            if _normalize_function_name(fn)
+        }
         if not changed:
             selected = cases
         else:
-            selected = [
-                case
-                for case in cases
-                if case_function_set(case).intersection(changed)
-            ]
+            unknown = sorted(fn for fn in changed if fn not in ENGINE_FUNCTION_CONTRACT_BY_NAME)
+            if unknown:
+                raise ValueError(f"unknown changed engine functions: {unknown}")
+
+            coverage = corpus.get("coverage")
+            coverage = coverage if isinstance(coverage, Mapping) else {}
+            authored_inventory_available = bool(
+                coverage.get("authoredFunctionInventoryAvailable")
+            )
+            selected_by_id: dict[str, dict[str, Any]] = {}
+            uncovered: list[str] = []
+            for fn in sorted(changed):
+                spec = ENGINE_FUNCTION_CONTRACT_BY_NAME[fn]
+                if spec.lowered_function_names and authored_inventory_available:
+                    # New corpora retain exact typed Author identity.  Falling back
+                    # to every normalized shoot_projectile case here would hide a
+                    # missing typed-family fixture behind unrelated executor cases.
+                    matches = [
+                        case for case in cases
+                        if fn in case_authored_function_set(case)
+                    ]
+                else:
+                    impacted = engine_function_impact_names(fn)
+                    matches = [
+                        case for case in cases
+                        if case_impact_function_set(case).intersection(impacted)
+                    ]
+                if not matches:
+                    uncovered.append(fn)
+                    continue
+                for case in matches:
+                    case_id = str(case.get("caseId") or "")
+                    selected_by_id[case_id] = case
+
+            if uncovered:
+                raise ValueError(
+                    "historical replay corpus has no coverage for changed engine functions: "
+                    f"{uncovered}"
+                )
+            selected = list(selected_by_id.values())
 
     selected.sort(key=lambda case: str(case.get("caseId") or ""))
     return selected
@@ -295,11 +386,14 @@ __all__ = [
     "PROSE_RUNTIME_PLAN_KEYS",
     "call_shapes_from_plan",
     "canonical_json",
+    "case_authored_function_set",
     "case_function_set",
+    "case_impact_function_set",
     "compile_input_from_case",
     "corpus_function_set",
     "default_corpus_path",
     "executable_runtime_plan_from_dump",
+    "authored_functions_from_runtime_plan",
     "functions_from_runtime_plan",
     "load_corpus",
     "make_case_id",

@@ -10,6 +10,7 @@ from infini_local.core.boundary_models import validate_vfx_manifest_boundary
 from infini_local.core.effect_catalog import normalize_attack_pattern
 from infini_local.core.llm_stage_messages import agent_handoff, stage_chat_message
 from infini_local.core.vfx_composition_primitives import (
+    VFX_CUE_EVENTS,
     _vfx_arbitrate_slots,
     _vfx_available_roles,
     _vfx_budget_for_recipe,
@@ -110,7 +111,8 @@ def _log_vfx_fallback_policy(
     })
 
 
-_VFX_PROJECTILE_EVENTS = frozenset({"travel", "active", "tick", "hit", "kill", "expire"})
+_VFX_ITEM_EVENTS = frozenset({"while_held", "while_equipped", "on_use", "on_alt_use"})
+_VFX_PROJECTILE_EVENTS = VFX_CUE_EVENTS - _VFX_ITEM_EVENTS
 
 
 def _vfx_executable_events(data: dict[str, Any]) -> set[str]:

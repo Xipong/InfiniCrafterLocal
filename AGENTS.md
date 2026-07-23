@@ -140,6 +140,7 @@ python tools/validate_sandbox.py
 ## Contract safety stack (v18)
 
 - Raw LLM calls валидируются до repair через `core/runtime_authoring/engine_call_contracts.py`; compiled/wire JSON — через `core/boundary_models.py`.
+- `core/runtime_authoring/function_contract_registry.py` — canonical owner function/param inventory, provider/prompt projection, wire obligations, repair groups and typed lowerer identity. `schema.py` owns family/affordance/numeric and cross-param policies, not the catalog.
 - `contracts/schemas/` и `contracts/config_registry.json` — generated evidence, не writable gameplay contract и не C# codegen.
 - Critical field policy живёт в `contracts/field_lifecycle.json`; фактические compiler/projection/DTO/normalize/network/executor/child stages извлекает `tools/contract_parity.py`.
 - При runtime-contract правке обязательны `contract_parity`, `mutation_contract_gate`, `semantic_runtime_diff` и `runtime_impact_report`.

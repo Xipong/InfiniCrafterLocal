@@ -4,20 +4,34 @@
 
 ## Новый engine call
 
-1. Добавь функцию и параметры в `core/runtime_authoring/schema.py`.
+1. Добавь функцию и параметры в immutable registry:
+   `core/runtime_authoring/function_contract_registry.py` с primitives из
+   `function_contract_types.py`. Одновременно задай provider type/enum,
+   prompt-card visibility, wire/provenance obligation, repair group и
+   `lowered_function_names`, если high-level call понижается в другой executor.
 2. Проверь generated raw boundary:
 
 ```bash
 PYTHONPATH=LocalGenerator python -c "from infini_local.core.runtime_authoring.engine_call_contracts import engine_contract_inventory; print(engine_contract_inventory())"
 ```
 
-Однозначные конечные enum выводятся из каталога автоматически. Произвольные authored строки остаются открытыми, если каталог не задаёт closed vocabulary.
+Однозначные конечные enum выводятся из registry автоматически. Произвольные
+authored строки остаются открытыми только когда это намеренный contract
+(например, modded identity), а не потому что finite vocabulary забыли закрыть.
 
-3. Добавь semantic lowering/normalization в профильного Python-owner.
-4. Добавь compiler projection в final `AttackSpec`/`GameplaySpec`.
-5. Добавь property/E2E golden case.
+3. Добавь semantic lowering/normalization в профильного Python-owner. Если call
+   понижается, registry metadata и production lowerer должны указывать один и тот
+   же canonical executor; frozen surface/replay tests обязаны это проверять.
+4. Добавь compiler projection в final `AttackSpec`/`GameplaySpec` и явную
+   provenance/final-wire обязанность. Applicability пока остаётся в
+   `reports.py`/runtime-family policy: `allowed_result_kinds` в registry зарезервирован
+   и не является действующей политикой.
+5. Обнови frozen function surface, affected historical replay coverage и
+   property/E2E golden case. Пустая replay-выборка для известной изменённой функции
+   должна fail-closed, а не считаться зелёным результатом.
 
-Не нужно редактировать общий validator для каждой новой функции, если тип выразим каталогом. Ручной код boundary нужен только для новой структурной формы параметра.
+Не нужно редактировать общий validator для каждой новой функции, если тип выразим
+registry. Ручной код boundary нужен только для новой структурной формы параметра.
 
 ## Новое executable поле
 

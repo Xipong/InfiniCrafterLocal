@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.vfx_composition_primitives import (
+    VFX_CUE_CHANNELS,
+    VFX_CUE_EMISSION_MODES,
+    VFX_CUE_EVENTS,
+    VFX_CUE_LANES,
+    VFX_CUE_RENDERERS,
     _vfx_default_backend,
     _vfx_event_stage,
     _vfx_infer_channel,
@@ -114,26 +119,19 @@ def vfx_manifest_effect_stack(manifest: dict[str, Any]) -> dict[str, Any]:
         "layers": rows,
     }
 
-VFX_KNOWN_RENDERERS = {
-    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip",
-    "beamLine", "fieldPulse", "orbitingMotes", "actorAfterimage", "impactRing", "impactSprite",
-    "childMotes", "lightCue", "soundCue",
-}
+VFX_KNOWN_RENDERERS = set(VFX_CUE_RENDERERS)
 
-VFX_KNOWN_EVENTS = {
-    "travel", "active", "tick", "hit", "kill", "expire",
-    "while_held", "while_equipped", "on_use", "on_alt_use",
-}
+VFX_KNOWN_EVENTS = set(VFX_CUE_EVENTS)
 
 VFX_KNOWN_BACKENDS = {"auto", "baked", "realtime", "primitive", "sprite", "particle", "hybrid"}
 
 VFX_KNOWN_ROLES = {"projectile", "impact", "child", "particle", "mote", "field", "trail", "self"}
 
-VFX_KNOWN_CHANNELS = {"motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound"}
+VFX_KNOWN_CHANNELS = set(VFX_CUE_CHANNELS)
 
-VFX_KNOWN_LANES = {"auto", "primary", "support", "accent", "ornament", "cue"}
+VFX_KNOWN_LANES = {"auto", *VFX_CUE_LANES}
 
-VFX_KNOWN_EMISSION_MODES = {"auto", "wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "point"}
+VFX_KNOWN_EMISSION_MODES = {"auto", *VFX_CUE_EMISSION_MODES}
 
 def _vfx_slot_value_range_ok(value: Any, name: str, lo: float, hi: float) -> list[str]:
     issues: list[str] = []

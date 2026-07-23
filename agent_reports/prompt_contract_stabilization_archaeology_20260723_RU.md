@@ -1,14 +1,16 @@
 # Каузальная археология: стабилизация prompt/function 21–23 июля 2026
 
-**Тип документа:** verified causal archaeology + implemented remediation + post-implementation audit.
+**Тип документа:** historical causal archaeology + implemented remediation + post-implementation audit; independent verification boundary is documented in section 17.
 **Дата сборки отчёта:** 2026-07-23.
 **Репозиторий:** `InfiniCrafterLocal_v0_4_234_secondary_refit_noise_cleanup`.
 **Baseline HEAD исследуемого окна:** `61bab5e` (2026-07-19 01:58:07 +0300) — *Add debug minimum yield for attack consumables*.
 **Коммитов в исследуемом окне после 19 июля:** **0** (проверено `git log --after='2026-07-19'`, `git rev-list --count 61bab5e..HEAD` → 0 до closing commit).
 **Состояние 21–23 июля:** **грязное working tree** (`gitClean: false` во всех live-summary; на момент исходной археологии ~131 dirty path).
-**Метод sections 1–10:** только read-only доказательства — git/reflog, `git diff HEAD`, `agent_reports/tmod_use_driver_multi_lane_research_20260721.md`, `artifacts/tool-runs/**/{summary.json,results.ndjson,logical_llm.ndjson,cache/prompt_trace.ndjson,ab_report.md}`, audits, делегат-логи `deleg_37a7fe02/task-0.log` и `task-1.log`. Реализация и diagnostic Live описаны отдельно в sections 11–16.
+**Метод sections 1–10 в исходной рабочей среде:** read-only evidence — git/reflog, `git diff HEAD`, `agent_reports/tmod_use_driver_multi_lane_research_20260721.md`, `artifacts/tool-runs/**/{summary.json,results.ndjson,logical_llm.ndjson,cache/prompt_trace.ndjson,ab_report.md}`, audits, делегат-логи `deleg_37a7fe02/task-0.log` и `task-1.log`. Переданный clean archive не содержит этих external run/delegation artifacts и commit object `fa01d50`, поэтому численные утверждения sections 1–10 и 12 имеют статус historical report, а не independently reproduced из архива. Реализация и diagnostic Live описаны отдельно в sections 11–16; независимый audit snapshot `c82d168` — в section 17.
 
 **Корректная рамка стоимости:** сообщённые пользователем **≈100M токенов** — это расход на Hermes/этого агента и связанные developer/audit циклы при повторной стабилизации архитектуры. Из них основная часть — порядка **≈90M** — ушла не на добавление самих функций, а на устранение каскадных отказов после изменений средней значимости. Локальная Gemini Live-телеметрия не является оценкой этой суммы и не используется для её уменьшения или опровержения.
+
+**Независимая оговорка 23.07:** ≈100M/≈90M — owner-reported project estimate без локального единого ledger; audit не переименовывает его в измеренную величину. Code-level выводы, воспроизведённые из clean archive, отделены в section 17 от external Live/accounting claims.
 
 ---
 
@@ -27,9 +29,10 @@
 11. [Реализованная архитектура после археологии](#11-реализованная-архитектура-после-археологии)
 12. [Diagnostic Live20 23.07.2026](#12-diagnostic-live20-23072026)
 13. [Final artifact audit](#13-final-artifact-audit)
-14. [Финальные local gates post-audit](#14-финальные-local-gates-post-audit)
+14. [Local gates: исходная среда и независимое воспроизведение](#14-local-gates-исходная-среда-и-независимое-воспроизведение)
 15. [Как теперь делать partial extension без нового semantic spaghetti](#15-как-теперь-делать-partial-extension-без-нового-semantic-spaghetti)
 16. [Итог](#16-итог)
+17. [Независимый audit snapshot `c82d168`](#17-независимый-audit-snapshot-c82d168)
 
 ---
 
@@ -361,7 +364,7 @@ Live20/parallel/reset waves были измеримым проявлением �
 
 1. изменение одной функции/параметра начинается в одном typed owner;
 2. prompt/provider/repair/provenance surfaces выводятся из него либо имеют явный compile-time parity gate;
-3. deterministic affected replay проверяет только затронутые functions/forms до нового LLM spend;
+3. deterministic affected replay проверяет затронутые functions до нового LLM spend; call-shape/form coverage используется corpus builder-ом, но отдельного form selector в текущем API нет;
 4. unrelated gameplay/Visual/VFX/C# owners не требуют ручной синхронизации;
 5. full Live используется как финальная приёмка, а не как следующий debugger архитектуры.
 
@@ -397,6 +400,7 @@ Live20/parallel/reset waves были измеримым проявлением �
 4. **Gemini item-generation usage** — task-1 дал all-time ~23.5M, точечный пересчёт 21–23 ≈8.93–9.08M. Это наблюдаемая подсистема и она не измеряет общий расход агента на разработку/стабилизацию.
 5. **Каузальность «этот diff строка → этот fail case»** для каждой из 21 FP-сегментов — не полная; таблица классов fail↔fix надёжнее, чем неподтверждённый line-bisect.
 6. Sections 1–10 фиксируют исходную археологию; sections 11–16 отдельно описывают последующую реализацию, diagnostic Live и post-Live audit.
+7. В переданном clean archive отсутствуют перечисленные `artifacts/tool-runs`, делегат-логи, `/tmp` ledger и commit object `fa01d50`; независимый audit этого archive может проверить код/commits/gates, но не пересчитать historical Live/token claims.
 
 ---
 
@@ -437,9 +441,11 @@ Author → Visual Director → VFX Director
 - compiled-field/provenance obligation;
 - root-executor flag;
 - repair dependency groups;
-- applicability metadata.
+- typed lowerer identity для affected replay.
 
-Frozen surface `engine_function_contract_surface_v1.json` доказывает, что prompt/provider/repair surface меняется осознанно. Последний audit убрал non-executable `set_alt_use_mode.mode=none` из Author-visible enum; defensive compiler normalization старых данных оставлена отдельно и не расширяет новый contract.
+Applicability пока **не** полностью принадлежит registry: `allowed_result_kinds` является reserved metadata и пуст во всех production entries; фактическая family/result-kind policy остаётся в `reports.py` и runtime-family policy. Это остаточный multi-owner seam, а не завершённая canonicalization.
+
+Исходный frozen surface `engine_function_contract_surface_v1.json` фиксировал catalog/provider/accepted params/repair groups, но не всю per-param wire/prompt/lowerer metadata. Независимый audit расширил fixture полным `typedContracts`, чтобы изменения `wireObligation`, `compiledFields`, prompt visibility/group, nested wire paths и lowerer mapping давали явный frozen diff. Ранее audit также убрал non-executable `set_alt_use_mode.mode=none` из Author-visible enum; defensive compiler normalization старых данных оставлена отдельно и не расширяет новый contract.
 
 ### 11.3. Compiler/final-wire ownership
 
@@ -461,10 +467,13 @@ Frozen surface `engine_function_contract_surface_v1.json` доказывает, 
 `qa/runtime_contract_replay.py`, `tools/build_runtime_contract_replay_corpus.py` и frozen corpus позволяют:
 
 - replay старых runtime plans через production compiler/final projection без LLM;
-- выбирать affected cases по function/form;
+- выбирать affected cases по changed functions;
+- сохранять authored function provenance отдельно от executable normalized plan в новых corpus;
 - сравнивать canonical final-section fingerprints;
-- fail-closed на rejected calls, validation.ok=false и dropped provenance;
+- fail-closed на unknown/uncovered function, rejected calls, validation.ok=false и dropped provenance;
 - не хранить machine-specific absolute paths.
+
+В snapshot `c82d168` selector имел false-green gap: typed functions, понижаемые в `shoot_projectile`, могли выбрать 0 cases в legacy corpus. Независимый audit добавил lowerer metadata и две честные стратегии: exact authored-function selection для provenance-aware corpus и консервативный canonical-lowerer fallback для legacy corpus. Отдельного selector по form нет; call-shape/result-kind используются при построении representative corpus.
 
 Это основной механизм для будущей частичной модификации: сначала contract diff + affected replay + local gates; Live не является первым отладчиком.
 
@@ -476,9 +485,11 @@ Frozen surface `engine_function_contract_surface_v1.json` доказывает, 
 - returning/thrust/yoyo item-bodied projectiles reuse item sprite;
 - equip overlays для armor/accessory являются отдельными required assets;
 - sentry root/child roles различены;
-- VFX slots проверяются по finite vocabulary и теперь ещё по typed runtime event reachability.
+- VFX slots проверяются по finite vocabulary и typed runtime event reachability.
 
-Последний audit добавил две generic обязанности:
+Последнее утверждение было неполным для closing snapshot `c82d168`: Author `visual_effect_cue` ещё принимал free-string `rendererKind`, `channel` и `particleSystemId`, а direct compiler мог молча получить partial/default cue. Независимый audit закрыл Author/provider enums, defensive compiler bypass и VFX Director одним canonical vocabulary; соседние finite `effect`, `onHit` и `armorSlot` также закрыты.
+
+Предыдущий post-Live audit добавил две generic обязанности:
 
 1. persistent `runtimeFamily=summon` обязан явно иметь projectile body: `baked_sprite + projectileSpritePrompt` либо authored `reuse_item_sprite`;
 2. VFX Director получает `allowedEvents`; projectile-only `hit/travel/kill/expire` запрещены для furniture, disabled attack и body-only `swing`.
@@ -502,7 +513,7 @@ External harness paths `/home/xipong/agent-work-main/projects/InfiniCrafterLocal
 
 ### 12.2. Frozen snapshot до inference
 
-Pre-Live ledger: `/tmp/icl-final-live-candidate.json`.
+Pre-Live ledger: `/tmp/icl-final-live-candidate.json`. Этот ledger и external runner artifacts отсутствуют в переданном archive; следующие значения сохранены как historical record исходной среды, а не независимо пересчитаны audit-ом.
 
 - git HEAD: `61bab5e79d272577799120248608b94a074e5fa4`;
 - tracked diff SHA-256: `47f23a1f96157cdc223a6f7ca21ffbb9da215b724c7ddd71d3729141c5a5089c`;
@@ -515,6 +526,8 @@ Pre-Live ledger: `/tmp/icl-final-live-candidate.json`.
 Post-Live fingerprint совпал со snapshot byte-for-byte.
 
 ### 12.3. Результат
+
+Результат ниже сообщён исходным Live ledger; independent archive audit его не воспроизводит.
 
 Artifact: `/home/xipong/agent-work-main/projects/InfiniCrafterLocal/artifacts/tool-runs/live20-fixed-reset-20260723-124510/`.
 
@@ -543,7 +556,9 @@ Artifact: `/home/xipong/agent-work-main/projects/InfiniCrafterLocal/artifacts/to
 
 ## 13. Final artifact audit
 
-### 13.1. Что подтверждено
+### 13.1. Что было подтверждено исходным artifact audit
+
+Перечень ниже относится к external Live artifacts исходной среды, которых нет в clean archive; независимый audit проверял соответствующие generic code contracts, а не заново открывал эти 20 item manifests.
 
 - Woodwork body-primary: `runtimeFamily=swing`, `delivery=swing`, item melee hitbox включён;
 - Obsidian Pickaxe — native body tool, `pickPower=110`, без fake projectile family;
@@ -575,9 +590,20 @@ Live был полезен как диагностический corpus и вы�
 
 Результат 20/20 относится к pre-audit frozen snapshot. Четыре generic post-audit delta подтверждены exact offline replay и tests, но **не новым Gemini Live**. Поэтому нельзя утверждать, что текущий post-audit tree имеет Live-confirmed 20/20. Новый Live требует отдельного явного разрешения пользователя.
 
+### 13.5. Дополнительные false-PASS seam, найденные независимым audit
+
+Audit clean snapshot `c82d168` воспроизвёл ещё два общих дефекта:
+
+1. invented finite VFX tokens проходили Author provider boundary, а compiler мог сохранить частичный cue;
+2. changed typed lowerer function (`fire_ranged_weapon` и аналоги) выбирала 0 historical cases, потому что frozen corpus содержал только normalized `shoot_projectile`.
+
+Оба исправлены generic/fail-closed в ветке `audit/verify-contract-stabilization`. Full committed corpus после правок: 82 cases, 0 fingerprint failures; legacy selection для `fire_ranged_weapon`: 68 conservative executor cases вместо пустого PASS. Новый Live не запускался.
+
 ---
 
-## 14. Финальные local gates post-audit
+## 14. Local gates: исходная среда и независимое воспроизведение
+
+### 14.1. Заявленные результаты исходной среды
 
 - Python: **255 passed**;
 - focused Visual/gameplay: 66 passed;
@@ -599,17 +625,33 @@ Live был полезен как диагностический corpus и вы�
 - tML Release build: 0 warnings / 0 errors;
 - `agentctl`: `ok=true`, `releaseReady=true`.
 
-Ошибочные side invocations с неверным cwd/nonexistent Pyright config не являются gates; canonical команды внутри `agentctl` прошли и перечислены выше.
+Эти результаты относятся к исходной рабочей среде, описанной автором отчёта. Переданный archive не содержит external harness/ledger и не позволяет независимо повторить весь набор. Ошибочные side invocations с неверным cwd/nonexistent Pyright config не считаются gates в исходном отчёте.
+
+### 14.2. Независимое воспроизведение из clean archive после audit fixes
+
+Подтверждено в portable sandbox:
+
+- `validate_sandbox.py`: `ok=true`, syntax/JSON 282 Python + 13 JSON, config registry/C# scanner/hygiene PASS;
+- compileall: PASS;
+- schema export: 5/5 current;
+- contract parity, delivery contract, mutation gate, runtime-impact: PASS;
+- semantic runtime baseline: 10 cases, 0 differences;
+- Planner prompt: **26,988 / 27,000**, 25 functions, no problems/warnings;
+- registry validation: 0 errors;
+- finite VFX negative checks: 9 fields rejected/inert;
+- historical replay: 82 cases, 0 failures.
+
+Не воспроизведены: full pytest/255 (в sandbox нет Hypothesis), Ruff, Pyright, tML Debug/Release и новый Live. Поэтому в этой среде `releaseReady=false`; это честная dependency/verification boundary, а не обнаруженный runtime regression.
 
 ---
 
 ## 15. Как теперь делать partial extension без нового semantic spaghetti
 
 1. **Сначала typed contract diff.** Новая функция/param начинается в immutable registry, не с prompt prose.
-2. **Одновременно определить lifecycle:** provider type, applicability, compiler fields, provenance obligation, final DTO/C# executor, repair group.
+2. **Одновременно определить lifecycle:** provider type, compiler fields, provenance obligation, final DTO/C# executor и repair group; applicability до отдельной migration синхронизируется с её текущими owners в `reports.py`/runtime-family policy.
 3. **Prompt только проецируется** из registry/role/event policy; не писать второй список enum/params вручную.
 4. **Frozen surface test** должен показать минимальный ожидаемый diff.
-5. **Affected historical replay** выбирается по изменённым functions/forms и проходит без LLM.
+5. **Affected historical replay** выбирается по changed functions и проходит без LLM; новый corpus обязан сохранять authored function provenance. Call-shape/form coverage проверяется builder-ом, а не несуществующим form selector.
 6. **Mutation/parity/delivery/C# gates** доказывают весь wire до оплаты модели.
 7. **Targeted canary/Live** возможен только после gates и только по явной текущей команде пользователя; batch/config являются ограничениями запуска, а не разрешением.
 8. **Full Live20 — acceptance, не debugger.** Если он находит general seam, исправляется canonical owner; item-name exception запрещён.
@@ -619,12 +661,28 @@ Live был полезен как диагностический corpus и вы�
 
 ## 16. Итог
 
-Архитектурная миграция реализована, а текущий tree стабилизирован: prompt/runtime contract больше не является одной неразделимой текстовой плитой. Function, provider schema, repair, compiler/provenance/final wire, Visual roles, VFX events и historical replay имеют явных владельцев и frozen gates. Это адресует установленную причину ≈100M расхода — ручную синхронизацию нескольких shadow contracts и позднее обнаружение очередного owner drift.
+Архитектурная миграция существенно реализована: prompt/runtime contract больше не является одной неразделимой текстовой плитой. Function/provider/prompt/wire metadata, repair, final projection, Visual roles, VFX policy и historical replay имеют более явных владельцев и deterministic gates. Однако closing snapshot `c82d168` ещё содержал воспроизводимые VFX и replay false-PASS seam, поэтому прежняя формулировка «текущий tree стабилизирован» была слишком сильной.
 
-Однако отчёт не должен подменять цель более дешёвым Live. Окончательное практическое доказательство — следующий реальный medium-size feature/contract diff должен остаться локальным: один typed owner, минимальный frozen diff, affected replay и отсутствие глобальной рестабилизации. Последние post-Live fixes уже дали малое подтверждение локальности, но не заменяют такой будущий change test.
+Независимый audit закрыл эти два seam, расширил frozen typed surface и исправил source-of-truth maps. Applicability пока остаётся отдельной policy surface, legacy replay corpus не имеет authored provenance, а post-audit tree не имеет нового Live confirmation. Поэтому корректный статус текущей ветки — **offline deterministic contract candidate**, не безусловно Live-confirmed/release-ready snapshot в любой среде.
 
-Открыты две verification boundaries: post-audit delta не имеет нового Live confirmation без явного разрешения пользователя; предотвращение повторного ≈100M blast radius окончательно проверяется только следующей содержательной частичной модификацией.
+Отчёт не должен подменять цель более дешёвым Live. Окончательное практическое доказательство — следующий реальный medium-size feature/contract diff должен остаться локальным: один typed owner, минимальный frozen diff, affected replay и отсутствие глобальной рестабилизации. Owner-reported ≈100M cost framing остаётся архитектурной мотивацией, но не измеренной этим archive величиной.
 
 ---
 
-*Конец обновлённого отчёта. Sections 1–10 — causal archaeology; sections 11–16 — implemented architecture, diagnostic Live, audit and verified post-audit state.*
+## 17. Независимый audit snapshot `c82d168`
+
+Полный отдельный документ: `agent_reports/prompt_contract_stabilization_independent_audit_20260723_RU.md`.
+
+Сжатый результат:
+
+- основное архитектурное направление подтверждено кодом и не является выдумкой;
+- external Live/token facts не могут быть independently reconstructed из переданного архива;
+- на исходном `c82d168` воспроизведены два false-PASS: open finite VFX tokens и empty affected replay для typed lowerers;
+- fixes сделаны generic/fail-closed в `audit/verify-contract-stabilization`;
+- deterministic gates и 82-case replay зелёные;
+- full pytest/Pyright/Ruff/tML/Live в audit environment не подтверждены;
+- applicability и legacy authored-provenance corpus остаются честно отмеченными residual boundaries.
+
+---
+
+*Конец скорректированного отчёта. Sections 1–10 — historical causal archaeology; sections 11–16 — implemented architecture/Live narrative with corrected verification status; section 17 — independent code audit of the distributed snapshot.*

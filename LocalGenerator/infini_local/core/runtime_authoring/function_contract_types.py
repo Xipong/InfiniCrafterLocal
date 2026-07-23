@@ -88,9 +88,12 @@ class EngineFunctionContract:
     params: tuple[EngineParamContract, ...]
     root_executor: bool
     requires_root_executor: bool
+    # Reserved metadata. Current production applicability is still owned by
+    # reports/runtime-family policy; registry entries intentionally leave it empty.
     allowed_result_kinds: tuple[str, ...]
     repair_groups: tuple[RepairGroupContract, ...]
     compiled_source_overrides: tuple[CompiledFieldSourceOverride, ...] = ()
+    lowered_function_names: tuple[str, ...] = ()
 
 
 def _blank(value: Any) -> bool:
@@ -198,6 +201,24 @@ def validate_engine_function_contracts(
             source_overrides: Sequence[Any] = ()
         else:
             source_overrides = spec.compiled_source_overrides
+
+        if not isinstance(spec.lowered_function_names, tuple):
+            errors.append(f"{fn_label}: lowered_function_names must be a tuple")
+            lowered_function_names: Sequence[Any] = ()
+        else:
+            lowered_function_names = spec.lowered_function_names
+
+        seen_lowered_names: set[str] = set()
+        for target in lowered_function_names:
+            target_name = str(target or "").strip()
+            if not target_name or not _TOKEN_RE.fullmatch(target_name):
+                errors.append(f"{fn_label}: invalid lowered function name {target!r}")
+                continue
+            if target_name == name.strip():
+                errors.append(f"{fn_label}: lowered function name cannot reference itself")
+            if target_name in seen_lowered_names:
+                errors.append(f"{fn_label}: duplicate lowered function name {target_name!r}")
+            seen_lowered_names.add(target_name)
 
         seen_override_fields: set[str] = set()
         for override in source_overrides:
@@ -375,6 +396,20 @@ def validate_engine_function_contracts(
                     errors.append(
                         f"{g_label}: repair member {mkey!r} is not in params"
                     )
+
+    known_function_names = set(seen_function_names)
+    for index, spec in enumerate(ordered):
+        if not isinstance(spec, EngineFunctionContract):
+            continue
+        fn_name = str(spec.name or "").strip()
+        fn_label = f"function[{index}]({fn_name})" if fn_name else f"function[{index}]"
+        targets = spec.lowered_function_names if isinstance(spec.lowered_function_names, tuple) else ()
+        for target in targets:
+            target_name = str(target or "").strip()
+            if target_name and _TOKEN_RE.fullmatch(target_name) and target_name not in known_function_names:
+                errors.append(
+                    f"{fn_label}: lowered function target {target_name!r} is not in registry"
+                )
 
     return tuple(errors)
 

@@ -2,9 +2,10 @@
 """Build a compact historical finalContract runtimePlan replay corpus.
 
 Scans image_boundary.ndjson dumps, keeps executable runtimePlan wire only
-(no names/tooltips/concept/prose), dedupes by canonical plan JSON, selects a
-representative set covering every engine function and distinct call-shape, and
-stores expected final-sections fingerprints via production compile.
+(no names/tooltips/concept/prose), retains typed Author function provenance
+separately, dedupes by canonical plan + authored inventory, selects a
+representative set covering every observed function and distinct call-shape,
+and stores expected final-sections fingerprints via production compile.
 
 No LLM, no HTTP. Mechanical accepted-wire corpus only.
 """
@@ -24,6 +25,7 @@ if str(LOCAL_GENERATOR) not in sys.path:
 
 from infini_local.qa.runtime_contract_replay import (  # noqa: E402
     CORPUS_SCHEMA,
+    authored_functions_from_runtime_plan,
     call_shapes_from_plan,
     canonical_json,
     default_corpus_path,
@@ -32,6 +34,9 @@ from infini_local.qa.runtime_contract_replay import (  # noqa: E402
     make_case_id,
     replay_case,
     stable_final_sections_fingerprint,
+)
+from infini_local.core.runtime_authoring.function_contract_registry import (  # noqa: E402
+    ENGINE_FUNCTION_CONTRACT_BY_NAME,
 )
 from infini_local.core.runtime_authoring.final_projection import (  # noqa: E402
     compile_runtime_plan_to_final_result,
@@ -93,13 +98,19 @@ def _extract_candidate(
     functions = sorted(functions_from_runtime_plan(plan))
     if not functions:
         return None
+    authored_functions = sorted(authored_functions_from_runtime_plan(runtime_plan))
 
     case_name = row.get("case")
     if case_name is None or case_name == "":
         case_name = row.get("itemId") or "unknown"
     category = row.get("category") or final_contract.get("category") or plan.get("resultKind")
     result_kind = plan.get("resultKind") or final_contract.get("category") or category
-    plan_key = canonical_json(plan)
+    plan_key = canonical_json(
+        {
+            "runtimePlan": plan,
+            "authoredFunctions": authored_functions,
+        }
+    )
     case_id = make_case_id(str(source_run), str(case_name), plan_key)
 
     return {
@@ -109,6 +120,7 @@ def _extract_candidate(
         "category": str(category) if category is not None else None,
         "resultKind": str(result_kind) if result_kind is not None else None,
         "functions": functions,
+        "authoredFunctions": authored_functions,
         "runtimePlan": plan,
         "_planKey": plan_key,
         "_shapes": call_shapes_from_plan(plan),
@@ -141,12 +153,13 @@ def _select_representative(
     *,
     max_cases: int | None,
 ) -> list[dict[str, Any]]:
-    """Greedy cover: every function + every call-shape + every resultKind."""
+    """Greedy cover: every observed authored/normalized function + call-shape + kind."""
     all_fns: set[str] = set()
     all_shapes: set[tuple[str, tuple[str, ...]]] = set()
     all_kinds: set[str] = set()
     for cand in unique:
         all_fns.update(cand["functions"])
+        all_fns.update(cand.get("authoredFunctions") or [])
         all_shapes.update(cand["_shapes"])
         rk = str(cand.get("resultKind") or "")
         if rk:
@@ -159,7 +172,8 @@ def _select_representative(
     cov_kind: set[str] = set()
 
     def novelty(cand: dict[str, Any]) -> tuple[int, int, str]:
-        new_fn = len(set(cand["functions"]) - cov_fn)
+        candidate_functions = set(cand["functions"]) | set(cand.get("authoredFunctions") or [])
+        new_fn = len(candidate_functions - cov_fn)
         new_shape = len(set(cand["_shapes"]) - cov_shape)
         rk = str(cand.get("resultKind") or "")
         new_kind = 1 if rk and rk not in cov_kind else 0
@@ -181,6 +195,7 @@ def _select_representative(
         selected.append(cand)
         remaining.pop(index)
         cov_fn.update(cand["functions"])
+        cov_fn.update(cand.get("authoredFunctions") or [])
         cov_shape.update(cand["_shapes"])
         rk = str(cand.get("resultKind") or "")
         if rk:
@@ -219,6 +234,8 @@ def _attach_fingerprints(cases: list[dict[str, Any]]) -> tuple[list[dict[str, An
             "functions": list(cand["functions"]),
             "runtimePlan": cand["runtimePlan"],
         }
+        if cand.get("authoredFunctions"):
+            case["authoredFunctions"] = list(cand["authoredFunctions"])
         try:
             data = compile_input_from_case(case)
             result = compile_runtime_plan_to_final_result(data)
@@ -262,7 +279,16 @@ def build_corpus(
     selected = _select_representative(unique, max_cases=max_cases)
     cases, compile_stats = _attach_fingerprints(selected)
 
-    all_fns = sorted({fn for case in cases for fn in case["functions"]})
+    normalized_fns = sorted({fn for case in cases for fn in case["functions"]})
+    authored_fns = sorted(
+        {
+            fn
+            for case in cases
+            for fn in (case.get("authoredFunctions") or [])
+        }
+    )
+    effective_fns = sorted(set(normalized_fns) | set(authored_fns))
+    registry_fns = sorted(ENGINE_FUNCTION_CONTRACT_BY_NAME)
     all_shapes: set[str] = set()
     for case in cases:
         for fn, keys in call_shapes_from_plan(case["runtimePlan"]):
@@ -272,8 +298,19 @@ def build_corpus(
         "caseCount": len(cases),
         "uniquePlanCount": len(unique),
         "rawRowCount": len(candidates),
-        "functions": all_fns,
-        "functionCount": len(all_fns),
+        # Legacy keys remain normalized-runtime coverage for v1 readers.
+        "functions": normalized_fns,
+        "functionCount": len(normalized_fns),
+        "normalizedFunctions": normalized_fns,
+        "normalizedFunctionCount": len(normalized_fns),
+        "authoredFunctions": authored_fns,
+        "authoredFunctionCount": len(authored_fns),
+        "authoredFunctionInventoryAvailable": bool(authored_fns),
+        "effectiveFunctions": effective_fns,
+        "effectiveFunctionCount": len(effective_fns),
+        "registryFunctions": registry_fns,
+        "registryFunctionCount": len(registry_fns),
+        "missingRegistryFunctions": sorted(set(registry_fns) - set(effective_fns)),
         "callShapeCount": len(all_shapes),
         "resultKinds": sorted(
             {str(case.get("resultKind") or "") for case in cases if case.get("resultKind")}

@@ -1,7 +1,4 @@
-"""Immutable Author engine function/param contract primitives and registry integrity.
-
-Task 2 slice: wire-contract types only. No compiler, routing, or provider logic.
-"""
+"""Immutable Author engine-function registry and its projected boundaries."""
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, is_dataclass
@@ -74,6 +71,7 @@ def _fn(
     allowed_result_kinds: tuple[str, ...] = ("weapon",),
     repair_groups: tuple[RepairGroupContract, ...] = (),
     compiled_source_overrides: tuple[CompiledFieldSourceOverride, ...] = (),
+    lowered_function_names: tuple[str, ...] = (),
 ) -> EngineFunctionContract:
     if params is None:
         params = (_param(),)
@@ -86,6 +84,7 @@ def _fn(
         allowed_result_kinds=allowed_result_kinds,
         repair_groups=repair_groups,
         compiled_source_overrides=compiled_source_overrides,
+        lowered_function_names=lowered_function_names,
     )
 
 
@@ -308,7 +307,7 @@ def test_hidden_shared_params_require_one_explicit_prompt_group() -> None:
     assert "hidden params require prompt_group" in joined
 
 
-def test_current_engine_function_surface_matches_pre_migration_baseline() -> None:
+def test_current_engine_function_surface_matches_frozen_baseline() -> None:
     import json
     from collections.abc import Mapping
     from pathlib import Path
@@ -319,6 +318,7 @@ def test_current_engine_function_surface_matches_pre_migration_baseline() -> Non
         ENGINE_FUNCTION_CATALOG,
         REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION,
         accepted_engine_param_names,
+        engine_function_contract_surface,
     )
 
     def clean(value: Any) -> Any:
@@ -349,6 +349,7 @@ def test_current_engine_function_surface_matches_pre_migration_baseline() -> Non
         },
         "acceptedExtras": clean(ACCEPTED_PARAM_EXTRAS_BY_FUNCTION),
         "repairGroups": clean(REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION),
+        "typedContracts": engine_function_contract_surface(),
         "providerSchemas": {
             fn: engine_params_model(fn).model_json_schema()
             for fn in sorted(ENGINE_FUNCTION_CATALOG)
@@ -369,6 +370,160 @@ def test_provider_enum_order_is_deterministic_across_shared_literal_sets() -> No
             if "enum" in branch
         )
         assert movement == sorted(movement)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    (
+        ("rendererKind", "hallucinatedRenderer"),
+        ("channel", "hallucinatedChannel"),
+        ("particleSystemId", "pl:not-real"),
+    ),
+)
+def test_visual_effect_cue_closed_vocabularies_fail_at_provider_boundary(
+    field: str,
+    invalid: str,
+) -> None:
+    from infini_local.core.runtime_authoring.engine_call_contracts import (
+        validate_engine_call_params,
+    )
+
+    valid, valid_errors = validate_engine_call_params(
+        "visual_effect_cue",
+        {
+            "event": "travel",
+            "rendererKind": "projectileAfterimage",
+            "channel": "motionTrail",
+            "particleSystemId": "pl:glow",
+        },
+    )
+    assert valid_errors == []
+    assert valid is not None
+
+    rejected, errors = validate_engine_call_params(
+        "visual_effect_cue",
+        {field: invalid},
+    )
+    assert rejected is None
+    assert errors and any(field in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    (
+        ("rendererKind", "hallucinatedRenderer"),
+        ("channel", "hallucinatedChannel"),
+        ("lane", "hallucinatedLane"),
+        ("textureRole", "hallucinatedRole"),
+        ("particleRole", "hallucinatedRole"),
+        ("emissionMode", "hallucinatedEmission"),
+        ("particleSystemId", "pl:not-real"),
+        ("importance", "hallucinatedImportance"),
+    ),
+)
+def test_visual_effect_cue_invalid_finite_token_stays_inert_when_provider_is_bypassed(
+    field: str,
+    invalid: str,
+) -> None:
+    from infini_local.core.runtime_authoring.compiler import (
+        compile_runtime_plan_to_genome_patch,
+    )
+
+    data = {
+        "category": "weapon",
+        "runtimePlan": {
+            "resultKind": "weapon",
+            "engineCalls": [
+                {
+                    "callId": "bad_cue",
+                    "fn": "visual_effect_cue",
+                    "params": {
+                        "event": "hit",
+                        "rendererKind": "impactRing",
+                        "channel": "impactShape",
+                        "duration": 12,
+                        field: invalid,
+                    },
+                }
+            ],
+        },
+    }
+    patch = compile_runtime_plan_to_genome_patch(data)
+    assert "vfxCues" not in patch
+    assert "vfxCueCount" not in patch
+
+
+def test_lowerer_impact_metadata_is_typed_and_fail_closed() -> None:
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        engine_function_impact_names,
+    )
+
+    assert engine_function_impact_names("fire_ranged_weapon") == frozenset(
+        {"fire_ranged_weapon", "shoot_projectile"}
+    )
+    assert engine_function_impact_names("shoot_projectile") == frozenset(
+        {"shoot_projectile"}
+    )
+    assert engine_function_impact_names("not_a_function") == frozenset()
+
+    missing_target = _fn(
+        name="typed_lowerer",
+        lowered_function_names=("missing_executor",),
+    )
+    errors = validate_engine_function_contracts((missing_target,))
+    assert any("not in registry" in error for error in errors)
+
+
+def test_typed_lowerer_metadata_matches_production_semantic_lowerer() -> None:
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ENGINE_FUNCTION_CONTRACTS,
+    )
+    from infini_local.core.runtime_authoring.semantics import _lower_typed_engine_call
+
+    representative_params = {
+        "perform_melee_attack": {"family": "broadsword"},
+        "fire_ranged_weapon": {"family": "bow"},
+        "cast_magic_weapon": {"family": "staff"},
+        "deploy_sentry": {"placement": "grounded"},
+        "spawn_temporary_helper_projectile": {"family": "drone"},
+    }
+    for contract in ENGINE_FUNCTION_CONTRACTS:
+        actual_targets = tuple(
+            target
+            for target, _params in _lower_typed_engine_call(
+                contract.name,
+                representative_params.get(contract.name, {}),
+            )
+            if target != contract.name
+        )
+        assert actual_targets == contract.lowered_function_names, contract.name
+
+
+@pytest.mark.parametrize(
+    ("fn", "field", "invalid"),
+    (
+        ("shoot_projectile", "effect", "made_up_effect"),
+        ("deploy_sentry", "onHit", "split"),
+        ("set_item_stats", "armorSlot", "hat"),
+    ),
+)
+def test_executor_closed_vocabularies_reject_non_executable_values(
+    fn: str,
+    field: str,
+    invalid: str,
+) -> None:
+    from infini_local.core.runtime_authoring.engine_call_contracts import (
+        validate_engine_call_params,
+    )
+
+    parsed, errors = validate_engine_call_params(fn, {field: invalid})
+    assert parsed is None
+    assert errors and any(field in error for error in errors)
+
+    if fn == "deploy_sentry":
+        parsed, errors = validate_engine_call_params(fn, {field: "slow"})
+        assert errors == []
+        assert parsed == {"onHit": "slow"}
 
 
 def test_compiled_field_provenance_matches_pre_migration_baseline() -> None:

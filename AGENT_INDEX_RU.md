@@ -17,7 +17,7 @@
 |---|---|
 | Запуск HTTP генератора | `LocalGenerator/server.py`, `infini_local/web/server.py`, `web/server_handler.py` |
 | `/combine` request/response/failure status | `services/combine_endpoint.py`, `web/http_response_helpers.py`, `pipelines/combine_pipeline.py` |
-| Runtime engine calls | `core/runtime_authoring/schema.py`, `engine_call_contracts.py`, `common.py`, `normalize.py`, `structural.py`, `semantics.py`, `compiler.py`, `reports.py` |
+| Runtime engine calls | `core/runtime_authoring/function_contract_registry.py`, `function_contract_types.py`, `engine_call_contracts.py`, `schema.py`, `common.py`, `normalize.py`, `structural.py`, `semantics.py`, `compiler.py`, `reports.py` |
 | LLM payload/auth/repair | `pipelines/llm_authoring_prompt.py`, `llm_authoring_pipeline.py`, `llm_transport.py` |
 | Parent facts/cards | `pipelines/parent_context_pipeline.py`, `parent_context_cards.py`, `pipeline_runtime_dumps.py` |
 | Runtime taxonomy/authoring | `core/runtime_executor_vocabulary.py`, `core/runtime_family_policy.py`, `core/runtime_authoring/vocabulary.py`, `schema.py`, `compiler.py` |

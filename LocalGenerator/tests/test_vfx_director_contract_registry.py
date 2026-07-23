@@ -19,7 +19,7 @@ from infini_local.core.vfx_director_contract import (
 from infini_local.core.vfx_director_prompt import build_vfx_director_prompt
 
 
-def test_vfx_surface_and_prompt_shape_match_pre_migration_baseline() -> None:
+def test_vfx_surface_and_prompt_shape_match_frozen_baseline() -> None:
     expected = json.loads(
         (
             Path(__file__).resolve().parent
@@ -54,6 +54,28 @@ def test_vfx_field_contracts_are_closed_unique_and_well_bounded() -> None:
     assert all(field.values and len(field.values) == len(set(field.values)) for field in VFX_SLOT_ENUM_FIELDS)
     assert all(field.minimum < field.maximum for field in VFX_NUMERIC_FIELDS)
     assert set(VFX_RENDERER_RULES) == {"soundCue", "lightCue"}
+
+
+def test_vfx_director_shared_enums_use_canonical_composition_vocabulary() -> None:
+    from infini_local.core.vfx_composition_primitives import (
+        VFX_CUE_CHANNEL_VALUES,
+        VFX_CUE_EMISSION_MODE_VALUES,
+        VFX_CUE_EVENT_VALUES,
+        VFX_CUE_LANE_VALUES,
+        VFX_CUE_PARTICLE_SYSTEM_ID_VALUES,
+        VFX_CUE_RENDERER_VALUES,
+        VFX_CUE_ROLE_VALUES,
+    )
+
+    values = {field.name: field.values for field in VFX_SLOT_ENUM_FIELDS}
+    assert values["event"] is VFX_CUE_EVENT_VALUES
+    assert values["rendererKind"] is VFX_CUE_RENDERER_VALUES
+    assert values["textureRole"] is VFX_CUE_ROLE_VALUES
+    assert values["particleRole"] is VFX_CUE_ROLE_VALUES
+    assert values["channel"] is VFX_CUE_CHANNEL_VALUES
+    assert values["lane"] is VFX_CUE_LANE_VALUES
+    assert values["emissionMode"] is VFX_CUE_EMISSION_MODE_VALUES
+    assert values["particleSystemId"] is VFX_CUE_PARTICLE_SYSTEM_ID_VALUES
 
 
 def test_vfx_field_contracts_are_frozen() -> None:

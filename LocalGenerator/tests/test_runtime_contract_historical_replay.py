@@ -8,6 +8,8 @@ import ast
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL_GENERATOR = ROOT / "LocalGenerator"
 QA_MODULE = LOCAL_GENERATOR / "infini_local" / "qa" / "runtime_contract_replay.py"
@@ -195,6 +197,95 @@ def test_select_one_changed_function_only_touching_cases() -> None:
         assert len(selected) < len(corpus["cases"])
 
 
+def test_specialized_author_function_selects_canonical_lowerer_cases() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    corpus = replay.load_corpus(CORPUS_PATH)
+    selected = replay.select_cases_by_changed_functions(
+        corpus,
+        ["fire_ranged_weapon"],
+    )
+    expected = replay.select_cases_by_changed_functions(corpus, ["shoot_projectile"])
+    assert selected
+    assert [case["caseId"] for case in selected] == [
+        case["caseId"] for case in expected
+    ]
+
+
+def test_provenance_aware_selector_uses_exact_typed_function_identity() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    corpus = {
+        "coverage": {"authoredFunctionInventoryAvailable": True},
+        "cases": [
+            {
+                "caseId": "cast",
+                "functions": ["shoot_projectile"],
+                "authoredFunctions": ["cast_magic_weapon"],
+                "runtimePlan": {
+                    "engineCalls": [
+                        {"callId": "root", "fn": "shoot_projectile", "params": {}}
+                    ]
+                },
+            },
+            {
+                "caseId": "ranged",
+                "functions": ["shoot_projectile"],
+                "authoredFunctions": ["fire_ranged_weapon"],
+                "runtimePlan": {
+                    "engineCalls": [
+                        {"callId": "root", "fn": "shoot_projectile", "params": {}}
+                    ]
+                },
+            },
+        ],
+    }
+    selected = replay.select_cases_by_changed_functions(
+        corpus,
+        ["fire_ranged_weapon"],
+    )
+    assert [case["caseId"] for case in selected] == ["ranged"]
+    with pytest.raises(ValueError, match="no coverage"):
+        replay.select_cases_by_changed_functions(corpus, ["deploy_sentry"])
+
+
+def test_selector_fails_closed_for_unknown_or_uncovered_function() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    corpus = replay.load_corpus(CORPUS_PATH)
+    with pytest.raises(ValueError, match="unknown changed engine functions"):
+        replay.select_cases_by_changed_functions(corpus, ["invented_function"])
+    with pytest.raises(ValueError, match="no coverage"):
+        replay.select_cases_by_changed_functions(corpus, ["emit_light"])
+
+
+def test_dump_builder_recovers_authored_function_provenance_without_leaking_internal_keys() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    dumped = {
+        "resultKind": "weapon",
+        "engineCalls": [
+            {
+                "callId": "ranged_root",
+                "fn": "shoot_projectile",
+                "_rawFn": "fire_ranged_weapon",
+                "params": {"runtimeFamily": "shoot", "_internal": "drop"},
+            }
+        ],
+    }
+    assert replay.authored_functions_from_runtime_plan(dumped) == frozenset(
+        {"fire_ranged_weapon"}
+    )
+    executable = replay.executable_runtime_plan_from_dump(dumped)
+    assert executable["engineCalls"] == [
+        {
+            "callId": "ranged_root",
+            "fn": "shoot_projectile",
+            "params": {"runtimeFamily": "shoot"},
+        }
+    ]
+
+
 def test_select_medium_changed_set_is_union_once() -> None:
     import infini_local.qa.runtime_contract_replay as replay
 
@@ -325,6 +416,9 @@ def test_replay_fails_closed_on_dropped_receipt_or_rejected_call(monkeypatch) ->
 
 def test_corpus_preserves_engine_function_coverage_report() -> None:
     import infini_local.qa.runtime_contract_replay as replay
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ENGINE_FUNCTION_CONTRACT_BY_NAME,
+    )
 
     corpus = replay.load_corpus(CORPUS_PATH)
     functions = replay.corpus_function_set(corpus)
@@ -334,3 +428,14 @@ def test_corpus_preserves_engine_function_coverage_report() -> None:
     coverage = corpus.get("coverage") or {}
     assert int(coverage.get("caseCount") or 0) == len(corpus["cases"])
     assert set(coverage.get("functions") or []) == set(functions)
+    assert set(coverage.get("normalizedFunctions") or []) == set(functions)
+    assert int(coverage.get("normalizedFunctionCount") or 0) == len(functions)
+    registry_functions = set(ENGINE_FUNCTION_CONTRACT_BY_NAME)
+    assert set(coverage.get("registryFunctions") or []) == registry_functions
+    assert int(coverage.get("registryFunctionCount") or 0) == len(registry_functions)
+    assert set(coverage.get("missingRegistryFunctions") or []) == (
+        registry_functions - set(coverage.get("effectiveFunctions") or [])
+    )
+    # This frozen v1 corpus was built before raw typed function provenance was kept.
+    assert coverage.get("authoredFunctionInventoryAvailable") is False
+    assert coverage.get("authoredFunctions") == []
