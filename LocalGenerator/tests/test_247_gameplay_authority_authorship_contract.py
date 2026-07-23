@@ -2767,19 +2767,19 @@ def _contract_check_scoped_repair_is_targeted_and_transport_failure_propagates(m
     redesign_dossier = json.loads(redesign_dossier_json)
     assert redesign_dossier["repairMode"] == "full_redesign"
     assert redesign_dossier["allowedPatchKeys"][0] == "category"
-    from infini_local.core.runtime_authoring.schema import (
-        COMBAT_EXECUTOR_RESULT_KINDS,
-        COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS,
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
     )
-    assert redesign_dossier["combatRootRequiredParams"] == list(
-        COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS
+    from infini_local.core.runtime_authoring.schema import COMBAT_EXECUTOR_RESULT_KINDS
+    assert redesign_dossier["normalizedRootRequiredFields"] == list(
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES
     )
     assert redesign_dossier["combatExecutorResultKinds"] == sorted(
         COMBAT_EXECUTOR_RESULT_KINDS
     )
     assert any(
-        all(field in rule for field in COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS)
-        and "MUST include" in rule
+        all(field in rule for field in NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)
+        and "must compile to" in rule.lower()
         for rule in redesign_dossier["redesignRules"]
     )
     assert any(

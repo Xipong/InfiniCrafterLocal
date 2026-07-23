@@ -29,8 +29,10 @@ def _contract_check_active_planner_contract_is_honest_and_compact() -> None:
     assert "summon_combat_entity" not in functions
     assert "persistent Terraria minion or sentry" in functions["spawn_temporary_helper_projectile"]["does"]
     assert "on_hit or on_expire" in text
-    assert "shotCount is simultaneous multishot" in text
-    assert "Starfury-style melee-on-use" in text
+    lowered = text.lower()
+    assert "shotcount" in lowered and "simultaneous" in lowered
+    assert "starfury" in lowered
+    assert "overhead_barrage" in lowered and "delivery=swing" in lowered
     assert "consumable_weapon" in text
     assert "shoot_projectile" in functions
 

@@ -16,17 +16,20 @@ def _contract_check_critical_numeric_and_sentinel_semantics_survive_prompt_compa
     payload = build_llm_author_payload(PARENT, PARENT, {}, {}, "critical_semantics")
     contract = payload["engineRuntimeContract"]
     critical = contract["criticalValueSemantics"]
-    assert critical["pierce"].startswith("-1=infinite hits")
-    assert "0 or 1=one target total" in critical["pierce"]
-    assert "not extra targets" in critical["pierce"]
-    assert "may repeat" in critical["useTiming"]
+    pierce = critical["pierce"].lower()
+    assert "-1" in pierce and "infinite" in pierce
+    assert "0/1" in pierce or "0 or 1" in pierce
+    assert "2..10" in pierce and "total" in pierce
+    assert "one target total" in pierce
+    assert "may repeat" in critical["timing"]
     assert "any projectile kill" in critical["expire"]
     assert "at most 48" in critical["sentryBudget"].lower()
 
     functions = contract["availableFunctions"]
     assert "-1=infinite hits" in functions["shoot_projectile"]["params"]["pierce"]
     assert "one action/click" in functions["set_item_stats"]["params"]["useAnimationTicks"]
-    assert "beam full immediately" in critical["zero"]
+    zero = critical["zero"].lower()
+    assert "beamchargeticks=0" in zero and "immediate" in zero
     assert "charge*→charge_release" in critical["families"]
     assert "same-NPC re-hit" in critical["cadence"]
     assert "onHit" in functions["deploy_sentry"]["params"]

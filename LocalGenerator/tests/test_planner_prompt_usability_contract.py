@@ -16,7 +16,11 @@ from infini_local.pipelines.combine_validation import strict_validate_authored_i
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_attack
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.item_power_knowledge import canonicalize
-from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS, build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import (
+    PLANNER_PROMPT_LIMIT_CHARS,
+    PLANNER_PROMPT_MIN_HEADROOM_CHARS,
+    build_llm_author_payload,
+)
 from infini_local.pipelines import llm_authoring_prompt
 from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 
@@ -34,8 +38,12 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
     assert report["contractStyle"] == "sharp"
     assert report["chars"] == len(text)
     assert report["recommendedLimitChars"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["withinRecommendedChars"] == (len(text) <= PLANNER_PROMPT_LIMIT_CHARS)
-    assert report["sizeGateMode"] == "hard_limit"
+    assert report["headroomChars"] == PLANNER_PROMPT_LIMIT_CHARS - len(text)
+    assert report["minimumHeadroomChars"] == PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    assert report["withinRecommendedChars"] == (
+        report["headroomChars"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    )
+    assert report["sizeGateMode"] == "reserved_headroom"
     functions = payload["engineRuntimeContract"]["availableFunctions"]
     assert set(functions) == set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
     assert not (set(functions) & set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
@@ -106,7 +114,7 @@ def _check_real_planner_payload_has_sharp_complete_catalog_for_api_models(monkey
 
 
 def _check_planner_payload_keeps_all_static_contract_bytes_before_recipe_data() -> None:
-    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_structural_final_wire_v3_v0.4.241"
+    assert PLANNER_PROMPT_PROFILE_VERSION == "planner_prompt_structural_final_wire_v4_v0.4.242"
     other_a = {"name": "Magic Mirror", "type": 50, "damage": 0, "useTime": 90, "value": 5000}
     other_b = {"name": "Fallen Star", "type": 75, "damage": 0, "maxStack": 9999, "value": 5}
     first = build_llm_author_payload(PARENT_A, PARENT_B, {}, {}, "planner_prefix_a")
@@ -234,8 +242,12 @@ def _check_prompt_usability_cli_runs_the_same_contract() -> None:
     report = json.loads(proc.stdout)
     assert report["ok"], report
     assert report["limitChars"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["withinRecommendedChars"] == (report["report"]["chars"] <= PLANNER_PROMPT_LIMIT_CHARS)
-    assert report["sizeGateMode"] == "hard_limit"
+    assert report["headroomChars"] == PLANNER_PROMPT_LIMIT_CHARS - report["report"]["chars"]
+    assert report["minimumHeadroomChars"] == PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    assert report["withinRecommendedChars"] == (
+        report["headroomChars"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    )
+    assert report["sizeGateMode"] == "reserved_headroom"
     assert report["report"]["functionCount"] == len(ENGINE_FUNCTION_CATALOG) - len(PLANNER_HIDDEN_ENGINE_FUNCTIONS)
 
 
@@ -299,8 +311,19 @@ def _check_planner_prompt_guides_structural_mechanic_authoring_not_code_repair(m
     assert "backingrefs" not in text
     assert "callindex" not in text
     assert "signatureclaimid" not in text
-    assert "names aren't mechanics" in text
-    assert "custom_executor for normal/utility enginecalls" in text or "never family=unsupported" in text
+    prompt_rules = [
+        *payload["priorityHeader"],
+        *payload["authorRules"],
+        *payload["engineRuntimeContract"]["semanticRules"],
+    ]
+    assert any(
+        "name" in str(rule).lower() and "mechanic" in str(rule).lower()
+        for rule in prompt_rules
+    )
+    assert any(
+        "family=unsupported" in str(rule).lower() and "never" in str(rule).lower()
+        for rule in prompt_rules
+    )
     assert "image prompts: item=inventory/held" in text
     assert "same sword/blade/boomerang ok" in text
 
@@ -315,7 +338,7 @@ def _check_planner_prompt_size_limit_is_a_hard_gate(monkeypatch) -> None:
         "planner_size_gate",
     )
     assert report["withinRecommendedChars"] is False
-    assert report["sizeGateMode"] == "hard_limit"
+    assert report["sizeGateMode"] == "reserved_headroom"
     assert report["ok"] is False
 
 # Coarse test bundle: the checks below used to be separate pytest items.

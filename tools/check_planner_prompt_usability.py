@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Offline planner-prompt usability and catalog-integrity check.
 
-This does not call an LLM. During the contract-architecture refactor, prompt size
-is reported as telemetry while executable-function, schema and safety integrity
-remain hard failures.
+This does not call an LLM. Prompt shape, catalog integrity, and reserved change
+headroom are hard failures so a one-line contract edit cannot overflow the planner.
 """
 from __future__ import annotations
 
@@ -24,6 +23,7 @@ from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_r
 from infini_local.pipelines.author_item_repair import build_same_author_repair_request  # noqa: E402
 from infini_local.pipelines.llm_authoring_prompt import (  # noqa: E402
     PLANNER_PROMPT_LIMIT_CHARS,
+    PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     build_llm_author_payload,
 )
 from infini_local.pipelines.author_item_contract import author_item_provider_response_schema  # noqa: E402
@@ -205,8 +205,13 @@ def run(limit_chars: int) -> dict:
     functions: dict[str, object] = functions_candidate if isinstance(functions_candidate, dict) else {}
     problems: list[str] = []
     warnings: list[str] = []
-    if len(text) > limit_chars:
-        problems.append(f"planner payload exceeds hard size limit: {len(text)} > {limit_chars}")
+    headroom_chars = limit_chars - len(text)
+    if headroom_chars < PLANNER_PROMPT_MIN_HEADROOM_CHARS:
+        problems.append(
+            "planner payload leaves insufficient change headroom: "
+            f"{headroom_chars} < {PLANNER_PROMPT_MIN_HEADROOM_CHARS} "
+            f"(chars={len(text)}, limit={limit_chars})"
+        )
     if contract.get("contractStyle") != "sharp":
         problems.append(f"planner contract style must be sharp, got {contract.get('contractStyle')!r}")
     problems.extend(_check_catalog_losslessness(functions))
@@ -234,8 +239,10 @@ def run(limit_chars: int) -> dict:
     return {
         "ok": not problems,
         "limitChars": limit_chars,
-        "withinRecommendedChars": len(text) <= limit_chars,
-        "sizeGateMode": "hard_limit",
+        "headroomChars": headroom_chars,
+        "minimumHeadroomChars": PLANNER_PROMPT_MIN_HEADROOM_CHARS,
+        "withinRecommendedChars": headroom_chars >= PLANNER_PROMPT_MIN_HEADROOM_CHARS,
+        "sizeGateMode": "reserved_headroom",
         "report": {
             "ok": not problems,
             "chars": len(text),

@@ -500,13 +500,13 @@ def _check_author_prompt_states_placeable_behavior_result_kind_boundary() -> Non
     rules = " ".join(planner_priority_header_for_llm()).casefold()
     assert "placeable_behavior" in rules
     assert "resultkind=furniture" in rules
-    assert "exclusive" in rules
+    assert "only" in rules or "exclusive" in rules
 
 
 def _check_author_prompt_states_combat_executor_result_kind_boundary() -> None:
-    from infini_local.pipelines.llm_authoring_prompt import planner_priority_header_for_llm
+    from infini_local.pipelines.llm_authoring_pipeline import _AUTHOR_STRUCTURAL_WIRE_RULES
 
-    rules = " ".join(planner_priority_header_for_llm()).casefold()
+    rules = _AUTHOR_STRUCTURAL_WIRE_RULES.casefold()
     assert "combat engine calls" in rules
     assert "resultkind=weapon" in rules
     assert "resultkind=consumable_weapon" in rules

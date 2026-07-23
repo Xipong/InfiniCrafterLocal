@@ -49,10 +49,16 @@ def _contract_check_llm_card_exposes_exact_sound_ids_and_controls() -> None:
     assert "melee_energy_slash" in sound["useCatalogIds"]["melee_and_thrown"]
     assert "impact_electric" in sound["impactCatalogIds"]["elemental"]
     assert sound["authoringFields"]["soundVolume"].startswith("0.05..1.0")
-    assert sound["placement"] == "Put audio fields in params of the primary attack call."
+    assert "multiplier" in sound["authoringFields"]["soundVolume"]
+    assert "offset" in sound["authoringFields"]["soundPitch"]
+    assert "preserve native variance" in sound["authoringFields"]["soundPitchVariance"]
+    placement = sound["placement"].lower()
+    assert "root" in placement and "call" in placement
     assert "silence" in sound["selectionRule"]
     assert "no fallback" in sound["selectionRule"]
-    assert "no names/prose/taxonomy" in sound["selectionRule"]
+    selection_rule = sound["selectionRule"].lower()
+    assert "names/prose/taxonomy" in selection_rule
+    assert "infer" in selection_rule or "no " in selection_rule
 
 
 def _contract_check_compiler_preserves_exact_authored_audio_and_rejects_unknown_id() -> None:

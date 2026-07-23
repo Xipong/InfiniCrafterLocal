@@ -8,11 +8,12 @@ Does not duplicate semantic validation — production compile path owns that.
 """
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
-import inspect
 import json
 import re
+import textwrap
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -63,56 +64,102 @@ def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _strip_python_docstrings(tree: ast.AST) -> ast.AST:
+    """Drop non-executable docstrings before implementation fingerprinting."""
+
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list) or not body:
+            continue
+        first = body[0]
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            del body[0]
+    return tree
+
+
+def _semantic_python_source_fingerprint(source: str) -> str:
+    """Hash executable Python structure, not whitespace/comments/docstrings.
+
+    The replay selector must react to implementation changes without turning a
+    formatter or documentation edit into a global regression run.  AST dumps keep
+    names, constants, control flow, decorators and imports while ignoring source
+    layout and comments.
+    """
+
+    tree = ast.parse(textwrap.dedent(source))
+    normalized = _strip_python_docstrings(tree)
+    payload = ast.dump(normalized, annotate_fields=True, include_attributes=False)
+    return _sha256_bytes(payload.encode("utf-8"))
+
+
+def _semantic_python_file_fingerprint(path: Path) -> str:
+    return _semantic_python_source_fingerprint(path.read_text(encoding="utf-8"))
+
+
+def _semantic_python_module_functions_fingerprint(path: Path) -> str:
+    """Hash every module-level function while excluding registry data declarations."""
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    function_nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    function_module = ast.Module(body=function_nodes, type_ignores=[])
+    normalized = _strip_python_docstrings(function_module)
+    payload = ast.dump(normalized, annotate_fields=True, include_attributes=False)
+    return _sha256_bytes(payload.encode("utf-8"))
+
+
 def _runtime_implementation_fingerprints() -> dict[str, str]:
     """Fingerprint executable owners that registry-only diffs cannot represent.
 
     Contract declarations remain form-local through ``functions`` below.  These
-    hashes cover code that consumes the declarations.  A mixed patch that changes
-    one form *and* compiler/lowering/provenance code must therefore run the whole
-    corpus instead of hiding the implementation change behind a one-case selector.
+    hashes cover executable structure that consumes the declarations.  A mixed
+    patch that changes one form *and* compiler/lowering/provenance code must therefore
+    run the whole corpus instead of hiding the implementation change behind a one-case
+    selector.  Formatting, comments and docstrings do not invalidate replay locality.
     """
 
     project_root = Path(__file__).resolve().parents[3]
-    owners = {
-        "contract_types": project_root / "LocalGenerator/infini_local/core/runtime_authoring/function_contract_types.py",
-        "semantics": project_root / "LocalGenerator/infini_local/core/runtime_authoring/semantics.py",
-        "normalize": project_root / "LocalGenerator/infini_local/core/runtime_authoring/normalize.py",
-        "compiler": project_root / "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
-        "reports": project_root / "LocalGenerator/infini_local/core/runtime_authoring/reports.py",
-        "final_projection": project_root / "LocalGenerator/infini_local/core/runtime_authoring/final_projection.py",
-        "runtime_contracts": project_root / "LocalGenerator/infini_local/core/runtime_contracts.py",
-        "historical_replay": Path(__file__).resolve(),
-        "historical_replay_gate": project_root / "tools/check_runtime_contract_replay.py",
+    core_root = project_root / "LocalGenerator/infini_local/core"
+    runtime_authoring_root = core_root / "runtime_authoring"
+
+    # Discover the complete runtime-authoring implementation package so adding a
+    # new consumer cannot silently bypass mixed-change replay.  Registry data rows
+    # remain form-local; all registry function bodies are fingerprinted separately.
+    owners: dict[str, Path] = {
+        f"runtime_authoring/{path.stem}": path
+        for path in sorted(runtime_authoring_root.glob("*.py"))
+        if path.stem not in {"__init__", "function_contract_registry"}
     }
+    owners.update(
+        {
+            f"core/{path.stem}": path
+            for path in sorted(core_root.glob("runtime_*.py"))
+        }
+    )
+    for name in ("boundary_models", "sound_catalog", "vfx_composition_primitives"):
+        owners[f"core/{name}"] = core_root / f"{name}.py"
+    owners.update(
+        {
+            "historical_replay": Path(__file__).resolve(),
+            "historical_replay_gate": project_root / "tools/check_runtime_contract_replay.py",
+        }
+    )
+
     fingerprints = {
-        name: _sha256_bytes(path.read_bytes())
+        name: _semantic_python_file_fingerprint(path)
         for name, path in sorted(owners.items())
     }
 
-    # Registry declarations and helper implementation live in one Python file.
-    # Hash only the projection/traversal helpers here; declaration changes are
-    # already represented by exact function/form fingerprints and stay local.
-    from infini_local.core.runtime_authoring import function_contract_registry as registry
-
-    helper_names = (
-        "lowerer_contract",
-        "engine_function_impact_names",
-        "engine_function_form_impacts",
-        "lowerer_passthrough_param_names",
-        "lowerer_output_param_names",
-        "lowerer_target_source_map",
-        "validate_lowerer_output",
-        "compiled_fields_for_authored_path",
-        "compiled_fields_for_function_identity",
-        "compiled_fields_for_lowered_compatibility_path",
-        "engine_function_contract_surface",
-        "compiled_field_source_map",
-    )
-    helper_source = "\n\n".join(
-        inspect.getsource(getattr(registry, name)) for name in helper_names
-    )
-    fingerprints["registry_projection_helpers"] = _sha256_bytes(
-        helper_source.encode("utf-8")
+    registry_path = runtime_authoring_root / "function_contract_registry.py"
+    fingerprints["runtime_authoring/function_contract_registry_functions"] = (
+        _semantic_python_module_functions_fingerprint(registry_path)
     )
     return dict(sorted(fingerprints.items()))
 
@@ -121,9 +168,10 @@ def runtime_contract_fingerprint_manifest() -> dict[str, Any]:
     """Compact derived fingerprints for function-level impact selection.
 
     This is deliberately not another contract owner: every byte is projected from
-    ``function_contract_registry``.  The committed file lets a dirty-tree inner loop
-    compare the current canonical registry with ``git show HEAD:<file>`` without
-    freezing tens of thousands of lines of generated provider schema.
+    ``function_contract_registry`` plus semantic AST fingerprints of executable
+    consumers.  The committed file lets a dirty-tree inner loop compare against
+    ``git show HEAD:<file>`` without freezing generated provider-schema snapshots or
+    reacting to formatting-only edits.
     """
 
     surface = engine_function_contract_surface()

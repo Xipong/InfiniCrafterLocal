@@ -14,6 +14,7 @@ from infini_local.core.runtime_family_policy import (
     exclusive_movement_owner,
     runtime_family_accepts_delivery,
     runtime_family_accepts_movement,
+    runtime_family_required_params,
     runtime_family_required_movements,
     uses_projectile_only_item_affordance,
 )
@@ -22,6 +23,7 @@ from infini_local.core.runtime_authoring.structural import all_calls, find_call
 from infini_local.core.runtime_authoring.result_identity import effective_runtime_result_kind
 from infini_local.core.runtime_authoring.function_contract_registry import (
     ENGINE_FUNCTION_CATALOG,
+    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
     compiled_fields_for_authored_path,
     compiled_fields_for_lowered_compatibility_path,
     lowerer_contract,
@@ -29,7 +31,6 @@ from infini_local.core.runtime_authoring.function_contract_registry import (
 )
 from infini_local.core.runtime_authoring.schema import (
     COMBAT_EXECUTOR_RESULT_KINDS,
-    COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS,
 )
 from infini_local.core.boundary_models import runtime_plan_boundary_report
 from infini_local.core.vfx_composition_primitives import (
@@ -344,21 +345,12 @@ def _validate_combat_root_compile(
             sink.errors.append("root executable action did not compile: " + runtime_error_raw)
         if runtime_error == "root_executor_requires_runtimefamily" or not _norm_name(compiled_patch.get("runtimeFamily")) or _norm_name(compiled_patch.get("runtimeFamily")) == "none":
             sink.errors.append("combat root action lacks an executable runtimeFamily")
-        for field in (
-            "delivery", "movement", "speed", "rangeTiles", "lifetimeTicks",
-            *COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS,
-            "pierce",
-        ):
+        for field in NORMALIZED_ROOT_REQUIRED_PARAM_NAMES:
             if field not in compiled_patch:
                 sink.errors.append(f"combat root action requires explicit {field}")
 
         compiled_family = _norm_name(compiled_patch.get("runtimeFamily"))
-        family_required: dict[str, tuple[str, ...]] = {
-            "beam": ("beamWidthPx", "beamChargeTicks", "immunityCooldown"),
-            "charge_release": ("chargeTicks", "chargePowerMultiplier"),
-            "overhead_barrage": ("delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"),
-        }
-        for field in family_required.get(compiled_family, ()):
+        for field in runtime_family_required_params(compiled_family):
             if field not in compiled_patch:
                 sink.errors.append(f"combat runtimeFamily={compiled_family} requires explicit {field}")
         if compiled_family == "overhead_barrage" and (_num(compiled_patch.get("secondaryDamageMultiplier"), 0) or 0) <= 0:

@@ -34,6 +34,9 @@ def _contract_check_llm_prompt_no_longer_receives_parent_relative_soft_balance_c
 
 
 def _contract_check_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_numbers():
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+    )
     from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
     item_a = {"name": "Copper Shortsword", "damage": 5, "useTime": 13, "rare": 0, "value": 100}
@@ -46,31 +49,43 @@ def _contract_check_payload_exposes_hard_engine_ranges_but_not_dynamic_balance_n
     assert contract["availableFunctions"]["set_item_stats"]["params"]["damage"] == "0..cap"
     assert contract["hardEngineLimits"]["maxShotCount"] == 8
     required = contract["requiredAuthorParams"]
-    assert required["everyCombatRootExecutor"] == [
-        "speed", "lifetimeTicks", "shotCount", "spreadRadians", "pierce",
-    ]
-    assert set(required["childProducingOnHit"]) >= {
-        "count", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
+    assert required["normalizedRootRequiredFields"] == list(
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES
+    )
+    # Do not duplicate per-function/provider contracts in another prompt table.
+    assert set(required) == {
+        "normalizedRootRequiredFields",
+        "runtimeFamilyRequirements",
+        "runtimeFamilyDeliveries",
+        "requiredMovementByFamily",
+        "visualTopologyRules",
     }
-    assert required["debuffingOnHit"] == ["debuffTime"]
-    assert required["stackConsumedWeaponIdentity"] == "consumable_weapon"
-    assert required["oneRootExecutor"] is True
-    assert required["rootExecutorMeaning"] == "one item-use lifecycle/controller, not one damage source"
-    assert required["temporaryHelperCanFire"] is False
-    assert required["turretFunction"] == "deploy_sentry"
-    assert required["runtimePlanMetadataTypes"]["anomalyFlags"] == "array[string]"
-    assert required["pullOnHitEncoding"] == {
-        "onHit": "none", "requiredParams": ["pullStrength", "pullMode"],
+    functions = contract["availableFunctions"]
+    on_hit = functions["apply_on_hit_effect"]["params"]
+    assert {"count", "secondaryDamageMultiplier", "secondaryLifetimeTicks", "debuffTime"} <= set(on_hit)
+    assert {"pullStrength", "pullMode"} <= set(on_hit)
+    assert "shotCount" not in functions["set_item_stats"]["params"]
+    assert payload["requiredJsonShape"]["runtimePlan"]["anomalyFlags"] == "array"
+    assert "one root" in json.dumps(payload["priorityHeader"]).lower()
+    assert "deploy_sentry" in json.dumps(contract, ensure_ascii=False)
+    from infini_local.core.runtime_family_policy import (
+        CANONICAL_RUNTIME_FAMILIES,
+        runtime_family_required_params,
+    )
+    expected_family_requirements = {
+        family: list(runtime_family_required_params(family))
+        for family in sorted(CANONICAL_RUNTIME_FAMILIES)
+        if runtime_family_required_params(family)
     }
-    assert set(required["neverOnSetItemStats"]) >= {
-        "shotCount", "spreadRadians", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume",
-    }
-    assert required["runtimeFamilyRequirements"]["overhead_barrage"] == [
-        "delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
-    ]
+    assert required["runtimeFamilyRequirements"] == expected_family_requirements
     assert required["visualTopologyRules"]["connected"]["partCountMin"] == 1
     assert required["visualTopologyRules"]["connected"]["partCountMax"] == 1
-    assert required["equipmentLightEncoding"]["forbiddenFunction"] == "emit_light"
+    equipment_light_rules = [
+        str(rule).lower() for rule in payload["priorityHeader"]
+        if "equipment light" in str(rule).lower()
+    ]
+    assert equipment_light_rules
+    assert all("never emit_light" in rule for rule in equipment_light_rules)
     assert "safety" in payload["balancePolicy"]
     assert "softDamageCapPerHit" not in text
     assert "sourceEnvelope" not in text

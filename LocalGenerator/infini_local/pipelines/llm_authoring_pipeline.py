@@ -21,8 +21,8 @@ from infini_local.core.runtime_contracts import (
     structural_final_wire_report,
     validate_structural_planner_contract,
 )
-from infini_local.core.runtime_authoring.schema import (
-    COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS,
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
 )
 from infini_local.pipelines.author_item_contract import (
     author_item_provider_response_schema,
@@ -54,7 +54,7 @@ from infini_local.storage.trace_runtime import _trace_message_summary, log_event
 _AUTHOR_STRUCTURAL_WIRE_RULES = (
     " Return exactly the source-derived requiredJsonShape fields. "
     "For combat, engineCalls[0] is set_item_stats with explicit resultKind and required combat stats; every later call uses only its catalog params. "
-    f"Every combat root engine call MUST include {', '.join(COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS)} explicitly. "
+    f"Every combat root MUST compile to {', '.join(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)}; use the selected public function card, not normalized aliases. "
     + COMBAT_EXECUTOR_RESULT_KIND_RULE
     + " "
     "concept.coreMechanic is concise authored design intent for repair/debug, never the final tooltip. playerViewTimeline is optional and contains only relevant visible phases. "

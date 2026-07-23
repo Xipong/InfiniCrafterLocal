@@ -17,6 +17,7 @@ class RuntimeFamilyProfile:
     release_timing: str
     sound_use: str
     sound_pitch: float = 0.0
+    required_params: tuple[str, ...] = ()
 
 
 # Canonical executor registry. These names cross Python -> JSON -> C#.
@@ -31,9 +32,18 @@ _RUNTIME_FAMILY_PROFILES: Final[dict[str, RuntimeFamilyProfile]] = {
     "whip": RuntimeFamilyProfile("whip", True, True, False, "tethered", "two_hand", "instant", "swing"),
     "shoot": RuntimeFamilyProfile("shoot", True, False, False, "ranged", "held_out", "on_release", "gun"),
     "cast": RuntimeFamilyProfile("cast", True, False, False, "magic", "staff", "on_release", "magic"),
-    "beam": RuntimeFamilyProfile("beam", True, True, False, "magic", "staff", "instant", "magic"),
-    "charge_release": RuntimeFamilyProfile("charge_release", True, True, False, "generic", "held_out", "on_release", "soft"),
-    "overhead_barrage": RuntimeFamilyProfile("overhead_barrage", True, False, False, "generic", "held_out", "on_release", "soft"),
+    "beam": RuntimeFamilyProfile(
+        "beam", True, True, False, "magic", "staff", "instant", "magic",
+        required_params=("beamWidthPx", "beamChargeTicks", "immunityCooldown"),
+    ),
+    "charge_release": RuntimeFamilyProfile(
+        "charge_release", True, True, False, "generic", "held_out", "on_release", "soft",
+        required_params=("chargeTicks", "chargePowerMultiplier"),
+    ),
+    "overhead_barrage": RuntimeFamilyProfile(
+        "overhead_barrage", True, False, False, "generic", "held_out", "on_release", "soft",
+        required_params=("delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"),
+    ),
     "throw": RuntimeFamilyProfile("throw", True, False, True, "generic", "throwing", "early", "soft"),
     "summon": RuntimeFamilyProfile("summon", True, False, False, "magic", "staff", "on_release", "summon"),
     "sentry": RuntimeFamilyProfile("sentry", True, False, False, "magic", "staff", "on_release", "summon"),
@@ -136,6 +146,11 @@ def runtime_family_delivery_pairs() -> tuple[tuple[str, str], ...]:
     )
 
 
+def runtime_family_required_params(value: Any) -> tuple[str, ...]:
+    """Return canonical authored fields required by the selected runtime family."""
+    return runtime_family_profile(value).required_params
+
+
 def runtime_family_required_movements(value: Any) -> frozenset[str]:
     return _RUNTIME_FAMILY_REQUIRED_MOVEMENTS.get(
         canonical_runtime_family(value),
@@ -191,6 +206,7 @@ __all__ = [
     "runtime_family_accepts_delivery",
     "runtime_family_delivery_pairs",
     "runtime_family_required_movements",
+    "runtime_family_required_params",
     "uses_held_projectile_family",
     "uses_projectile_only_item_affordance",
 ]

@@ -517,6 +517,49 @@ def test_corpus_preserves_engine_function_coverage_report() -> None:
     assert lowerer_functions <= set(coverage.get("authoredFunctions") or [])
 
 
+def test_implementation_fingerprint_ignores_non_executable_source_churn() -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    baseline = """
+    def owner(value: int) -> int:
+        \"\"\"old documentation\"\"\"
+        # old comment
+        return value + 1
+    """
+    presentation_only = """
+    def owner(value: int) -> int:
+        \"\"\"new documentation\"\"\"
+
+        # reformatted comment
+        return (value + 1)
+    """
+    changed = """
+    def owner(value: int) -> int:
+        return value + 2
+    """
+
+    fingerprint = replay._semantic_python_source_fingerprint  # type: ignore[attr-defined]
+    assert fingerprint(baseline) == fingerprint(presentation_only)
+    assert fingerprint(baseline) != fingerprint(changed)
+
+
+def test_registry_function_fingerprint_excludes_data_rows_but_tracks_helper_code(
+    tmp_path: Path,
+) -> None:
+    import infini_local.qa.runtime_contract_replay as replay
+
+    first = tmp_path / "first.py"
+    second = tmp_path / "second.py"
+    changed = tmp_path / "changed.py"
+    first.write_text("ROWS = (1,)\n\ndef project(value):\n    return value + 1\n", encoding="utf-8")
+    second.write_text("ROWS = (2, 3)\n\ndef project(value):\n    return value + 1\n", encoding="utf-8")
+    changed.write_text("ROWS = (1,)\n\ndef project(value):\n    return value + 2\n", encoding="utf-8")
+
+    fingerprint = replay._semantic_python_module_functions_fingerprint  # type: ignore[attr-defined]
+    assert fingerprint(first) == fingerprint(second)
+    assert fingerprint(first) != fingerprint(changed)
+
+
 def test_contract_fingerprint_diff_is_form_local_and_fail_closed_on_removal() -> None:
     import infini_local.qa.runtime_contract_replay as replay
 

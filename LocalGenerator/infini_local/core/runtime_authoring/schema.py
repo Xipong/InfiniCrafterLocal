@@ -32,9 +32,6 @@ from infini_local.core.vfx_composition_primitives import (
 # through deploy_sentry; no legacy minion/sentry spellings are accepted here.
 TEMPORARY_HELPER_FAMILIES = frozenset({"orbiter", "drone", "wisp", "temporary_turret", "pet_attack"})
 
-# Every combat root authors these two neutral-safe cardinality fields directly.
-# Other required compiled fields may be derived by specialized lowerers.
-COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS = ("shotCount", "spreadRadians")
 COMBAT_EXECUTOR_RESULT_KINDS = frozenset({"weapon", "consumable_weapon"})
 
 
@@ -242,7 +239,6 @@ __all__ = [
     "USE_STYLE_SHOOT",
     "USE_STYLE_RAPIER",
     "_runtime_family_affordances",
-    "COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS",
     "COMBAT_EXECUTOR_RESULT_KINDS",
     "PLANNER_HIDDEN_ENGINE_FUNCTIONS",
     "FORBIDDEN_WORLD_ENTITY_FN_NAMES",

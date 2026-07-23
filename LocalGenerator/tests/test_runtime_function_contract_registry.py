@@ -150,6 +150,47 @@ def test_root_shared_params_have_one_canonical_type_owner() -> None:
                 assert derived.provenance_via_lowerer is True
 
 
+def test_normalized_root_required_fields_are_closed_and_reachable() -> None:
+    """One normalized-root owner must cover direct and typed-lowered executors."""
+
+    from infini_local.core.runtime_authoring.function_contract_registry import (
+        ENGINE_FUNCTION_CONTRACTS,
+        ENGINE_FUNCTION_CONTRACT_BY_NAME,
+        NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+    )
+
+    required = tuple(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)
+    assert required
+    assert len(required) == len(set(required))
+
+    target = ENGINE_FUNCTION_CONTRACT_BY_NAME["shoot_projectile"]
+    target_grammar = {param.name for param in target.params} | {
+        param.name for param in target.normalized_only_params
+    }
+    assert set(required) <= target_grammar
+
+    for spec in ENGINE_FUNCTION_CONTRACTS:
+        if not spec.root_executor:
+            continue
+        if spec.name == target.name:
+            reachable = target_grammar
+        else:
+            edges = tuple(
+                lowerer for lowerer in spec.lowerers
+                if lowerer.target_function == target.name
+            )
+            assert len(edges) == 1, spec.name
+            reachable = {
+                target_path
+                for binding in edges[0].bindings
+                for target_path in binding.target_param_paths
+            }
+        assert set(required) <= reachable, (
+            spec.name,
+            sorted(set(required) - reachable),
+        )
+
+
 def test_lowerer_graph_matches_semantics_and_declares_every_output_key() -> None:
     from infini_local.core.runtime_authoring.function_contract_registry import (
         ENGINE_FUNCTION_CONTRACTS,

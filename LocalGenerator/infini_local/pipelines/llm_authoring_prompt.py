@@ -9,6 +9,7 @@ from typing import Any
 from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
 
 PLANNER_PROMPT_LIMIT_CHARS = 27_000
+PLANNER_PROMPT_MIN_HEADROOM_CHARS = 2_000
 
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
@@ -39,6 +40,7 @@ from infini_local.core.runtime_authoring.schema import (
 from infini_local.core.runtime_authoring.function_contract_registry import (
     ACCEPTED_PARAM_EXTRAS_BY_FUNCTION,
     ENGINE_FUNCTION_CATALOG,
+    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
     ROOT_EXECUTOR_FUNCTION_NAMES,
     ROOT_EXECUTOR_SHARED_PARAM_NAMES,
 )
@@ -48,6 +50,7 @@ from infini_local.core.runtime_family_policy import (
     CANONICAL_RUNTIME_FAMILIES,
     runtime_family_delivery_pairs,
     runtime_family_required_movements,
+    runtime_family_required_params,
 )
 from infini_local.pipelines.engine_pressure_metrics import behavior_cost_multiplier, effective_hit_cadence_ticks
 
@@ -94,11 +97,6 @@ PULL_ON_HIT_ENCODING = {
 NEVER_ON_SET_ITEM_STATS = (
     "shotCount", "spreadRadians", "soundUseCatalogId", "soundImpactCatalogId", "soundVolume",
 )
-RUNTIME_FAMILY_REQUIREMENTS = {
-    "beam": ["beamWidthPx", "beamChargeTicks", "immunityCooldown"],
-    "charge_release": ["chargeTicks", "chargePowerMultiplier"],
-    "overhead_barrage": ["delayTicks", "secondaryDamageMultiplier", "secondaryLifetimeTicks"],
-}
 RUNTIME_FAMILY_DELIVERIES = {
     family: "|".join(
         delivery
@@ -348,39 +346,32 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
 
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
     return {
-        "time": "60 ticks = 1 second. useTime/useAnimation are ticks.",
-        "itemSpeed": "10-18 very fast, 20-30 normal-fast, 35-50 slow, 60+ heavy.",
-        "projectiles": "lifetime 60=1s, 180=3s, 900=15s. extraUpdates 0..3 only.",
-        "stacks": "gear maxStack=1; ammo/material outputs usually craftYield/maxStack 25+.",
-        "safety": "Large AoE, many projectiles, or high dust counts are clamped, not re-authored.",
+        "time": "60 ticks=1s; useTime/useAnimation are ticks.",
+        "itemSpeed": "10-18 fast; 20-30 normal; 35-50 slow; 60+ heavy.",
+        "projectiles": "lifetime 60=1s,180=3s,900=15s; extraUpdates 0..3.",
+        "stacks": "gear maxStack=1; ammo/material craftYield/maxStack usually 25+.",
+        "safety": "Excess AoE/projectiles/dust are clamped.",
     }
 
 def planner_priority_header_for_llm() -> list[str]:
-    """Short hierarchy for the authoring model before the full API card.
-
-    This intentionally does not remove raw facts or engine functions.  It only tells
-    small/fast planners which obligations outrank the surrounding reference material.
-    """
+    """Highest-priority author obligations; detailed finite grammar stays below."""
+    normalized_root_required = ",".join(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)
     return [
         "Author playable output from both parents; no visual-only result.",
-        "Preserve both parents' strong raw/generated affordances; transformations need a central engineCall, not cosmetic stats.",
+        "Preserve both parents' executable affordances; transformations need a central engineCall, not cosmetic stats.",
         "Output only requiredJsonShape keys; never copy input or prompt metadata.",
         "Playable: engineCalls[0]=set_item_stats(resultKind,...); combat also requires damageClass; normally 1-4 calls.",
-        "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats; onHit→apply_on_hit_effect; equipment stats object; names aren't mechanics.",
-        "Combat root requires speed,lifetimeTicks,shotCount,spreadRadians,pierce; root/sound params never belong on set_item_stats; shoot_projectile also needs runtimeFamily.",
-        "Use runtimeContract family/movement tables; one root; whip damageClass=summon_melee_speed; buff alt needs cooldownTicks>0.",
-        "Body pick/axe/hammer: tool_capability + native swing; no melee/projectile combat root.",
-        "placeable_behavior is exclusive to resultKind=furniture; omit it for every other resultKind.",
-        COMBAT_EXECUTOR_RESULT_KIND_RULE,
-        "Child onHit split/chain/starburst/spore_cloud/mini_missiles/vortex_spawn/radial_beams/lightning_arc/overhead_barrage needs count (chainCount for chain/lightning)+secondaryDamageMultiplier+secondaryLifetimeTicks; debuffs need debuffTime.",
-        "Named children need spawn_secondary_projectiles projectileShape/material; generic onHit has no identity.",
-        "Physical throw defaults to movement=gravity_arc; use movement=straight only when explicitly authoring gravity-free straight flight as part of the item design.",
-        "coreMechanic/runtimeStateIntent only engineCalls; tooltip from wire; timeline optional visible-only; sticky/cling unsupported.",
-        "Stack-spent weapon uses resultKind=consumable_weapon, consumable=true, maxStack>1, craftYield>0; never spend a reusable gear parent this way. Reusable gear uses maxStack=1, craftYield=1, consumable=false and no consumption_behavior; booleans are true/false.",
-        "MUST satisfy runtimeFamilyRequirements for the selected root executor family and visualTopologyRules for visualIntent.",
-        "Equipment light requires lightStrength+lightColorName in its armor/accessory stats; no emit_light; utility armor is valid when its explicit stats are executable.",
-        "ammoFor is exact inventory cost: empty=no ammo; arrow/bullet consume those vanilla stacks, never a parent material.",
-
+        "Params=availableFunctions.params + acceptedParamExtras; never add unrelated params. Base item stats use set_item_stats.",
+        "Names/prose are not mechanics; every claimed behavior needs a typed engineCall.",
+        f"Each combat root must resolve to {normalized_root_required}; use its public function params/aliases; one root per use mode.",
+        "Use runtimeFamilyRequirements/deliveries/movement; whip damageClass=summon_melee_speed; buff alt needs cooldownTicks>0.",
+        "Body pick/axe/hammer: tool_capability + native swing, no combat root. placeable_behavior only for resultKind=furniture.",
+        "Child-producing onHit needs count (chainCount for chain/lightning)+secondaryDamageMultiplier+secondaryLifetimeTicks; debuffs need debuffTime.",
+        "Named children use spawn_secondary_projectiles with projectileShape/material; generic onHit has no identity.",
+        "Physical throw defaults to gravity_arc; straight means explicitly gravity-free flight.",
+        "coreMechanic/runtimeStateIntent describe engineCalls only; tooltip comes from wire; timeline is optional visible-only; sticky/cling unsupported.",
+        "Stack-spent weapon: consumable_weapon, consumable=true, maxStack>1, craftYield>0. Reusable gear: maxStack=1, craftYield=1, consumable=false; booleans=true/false.",
+        "Equipment light belongs in armor/accessory stats as lightStrength+lightColorName, never emit_light. ammoFor is exact inventory cost.",
     ]
 
 def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, Any], envelope: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -395,20 +386,16 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
     root_executor_functions = sorted(ROOT_EXECUTOR_FUNCTION_NAMES)
     parent_role_obligation = placeable_only_parent_obligation(a, b)
     return {
-        "mode": ENGINE_RUNTIME_API_VERSION,
         "runtimeApiVersion": ENGINE_RUNTIME_API_VERSION,
         "contractStyle": "sharp",
-        "principle": "LLM authors; Python validates; engine executes finite primitives.",
-        "runtimeLanguage": "engineCalls=gameplay; runtimeContract=truth/sync.",
+        "principle": "LLM authors typed calls; Python validates; finite C# executes.",
         "plannerChecklist": [
-            "Pick resultKind; playable outputs start with set_item_stats.",
-            "Add only relevant typed gameplay/tool/equipment calls.",
-            "VFX never substitutes gameplay; sound ids come from soundCatalog.",
+            "Choose resultKind, set_item_stats, then only relevant typed calls.",
+            "VFX is presentation, never gameplay; sound ids come from soundCatalog.",
         ],
         "inputDataPolicy": [
-            "Parent cards are facts; missing sections are unknown.",
-            "Ammo and placeable consumption semantics change only when explicitly authored.",
-            "Server does not pre-author visuals or mechanics.",
+            "Parent cards are facts; absent sections are unknown.",
+            "Ammo/placeable consumption changes only when authored; server adds no mechanics.",
         ],
         "sourceDerivedParentRoleObligation": (
             parent_role_obligation if parent_role_obligation["applicable"] else {}
@@ -419,36 +406,30 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "rootExecutorParams": sorted(ROOT_EXECUTOR_SHARED_PARAM_NAMES),
             "apply_on_hit_effect": sorted(ACCEPTED_PARAM_EXTRAS_BY_FUNCTION["apply_on_hit_effect"]),
         },
+        # Cross-function constraints only. Per-function params, result identity,
+        # repair metadata and equipment encodings already have canonical cards.
         "requiredAuthorParams": {
-            "everyCombatRootExecutor": [
-                "speed", "lifetimeTicks", "shotCount", "spreadRadians", "pierce",
-            ],
-            "childProducingOnHit": [
-                "count", "secondaryDamageMultiplier", "secondaryLifetimeTicks",
-            ],
-            "debuffingOnHit": ["debuffTime"],
-            "stackConsumedWeaponIdentity": "consumable_weapon",
-            "runtimePlanMetadataTypes": dict(RUNTIME_PLAN_METADATA_TYPES),
-            "pullOnHitEncoding": dict(PULL_ON_HIT_ENCODING),
-            "neverOnSetItemStats": list(NEVER_ON_SET_ITEM_STATS),
-            "runtimeFamilyRequirements": {key: list(value) for key, value in RUNTIME_FAMILY_REQUIREMENTS.items()},
+            "normalizedRootRequiredFields": list(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES),
+            "runtimeFamilyRequirements": {
+                family: list(runtime_family_required_params(family))
+                for family in sorted(CANONICAL_RUNTIME_FAMILIES)
+                if runtime_family_required_params(family)
+            },
             "runtimeFamilyDeliveries": dict(RUNTIME_FAMILY_DELIVERIES),
             "requiredMovementByFamily": deepcopy(RUNTIME_FAMILY_REQUIRED_MOVEMENT),
             "visualTopologyRules": deepcopy(VISUAL_TOPOLOGY_RULES),
-            "equipmentLightEncoding": deepcopy(EQUIPMENT_LIGHT_ENCODING),
-            **ROOT_EXECUTOR_AUTHOR_RULES,
         },
         "soundCatalog": sound_catalog_card_for_llm(),
         "tickGuide": concise_terraria_tick_guide_for_llm(),
         "criticalValueSemantics": {
-            "pierce": "-1=infinite hits; 0 or 1=one target total; 2..10=total targets, not extra targets.",
-            "useTiming": "useTime is cadence; useAnimation=useTime gives one action per click; larger useAnimation may repeat.",
-            "shots": "shotCount is simultaneous multishot; extraUpdates are simulation steps.",
-            "expire": "on_expire means any projectile kill, not timeout-only.",
-            "sentryBudget": "A sentry has at most 48 authored shots over its lifetime.",
-            "zero": "beamChargeTicks=0 means beam full immediately; cooldown/count/radius 0 disables that optional behavior.",
-            "families": "charge*→charge_release; sentry behavior→deploy_sentry; do not emulate either through prose.",
-            "cadence": "immunityCooldown is same-NPC re-hit cadence, not item use cadence.",
+            "pierce": "-1=infinite; 0/1=one target total; 2..10=total targets.",
+            "timing": "useTime=cadence; useAnimation=useTime is one action/click; larger may repeat.",
+            "shots": "shotCount=simultaneous; extraUpdates=simulation steps.",
+            "expire": "on_expire=any projectile kill, not timeout-only.",
+            "sentryBudget": "at most 48 authored shots/lifetime.",
+            "zero": "beamChargeTicks=0 is immediate; optional cooldown/count/radius 0 disables.",
+            "families": "charge*→charge_release; sentry→deploy_sentry; never emulate in prose.",
+            "cadence": "immunityCooldown=same-NPC re-hit cadence, not item use.",
         },
         "hardEngineLimits": {
             "maxShotCount": 8,
@@ -460,13 +441,12 @@ def engine_runtime_capability_contract_for_llm(a: dict[str, Any], b: dict[str, A
             "maxChildProjectiles": 48,
         },
         "semanticRules": [
-            "Preserve both parents unless mergeLogic names an executable replacement.",
-            "Custom projectiles use weapon or consumable_weapon; every stack-spent weapon uses consumable_weapon; arrow/bullet ammo keeps vanilla ammo identity.",
-            "coreMechanic/runtimeStateIntent describe only executable engineCalls; public tooltip is compiled from wire and compiler provenance is not authored.",
-            "VFX calls present effects; burst, AoE, sticky, mobility, and utility require their typed gameplay calls.",
-            "Temporary helper projectiles never summon bosses, NPCs, mobs, or enemies.",
-            "Ore-sense remains diagnostic-only because no ore visual executor is available.",
-            "Starfury-style melee-on-use uses shoot_projectile with runtimeFamily=overhead_barrage and delivery=swing.",
+            "Preserve both parents unless mergeLogic gives an executable replacement.",
+            "Custom projectiles use weapon/consumable_weapon; stack-spent weapons use consumable_weapon; arrow/bullet keep vanilla ammo identity.",
+            "coreMechanic/runtimeStateIntent only describe engineCalls; tooltip is compiled wire; provenance is not authored.",
+            "VFX is presentation; burst/AoE/sticky/mobility/utility require typed gameplay calls.",
+            "Temporary helpers never summon bosses/NPCs/mobs/enemies; ore-sense is diagnostic-only.",
+            "Starfury-style melee uses shoot_projectile runtimeFamily=overhead_barrage, delivery=swing.",
         ],
     }
 
@@ -646,21 +626,19 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
     runtime primitives.  This is intentionally the same payload try_llm_plan sends.
     """
     return {
-        "task": "Combine itemA+itemB into one playable item. Return one JSON object.",
+        "task": "Combine itemA+itemB into one playable item; return one JSON object.",
         "priorityHeader": planner_priority_header_for_llm(),
-        "designGoal": "Use both parents; distinct behavior or metamorphosis.",
-        "balancePolicy": f"LLM authors numbers; Python reports/clamps per balanceMode={current_balance_mode()}; C# is final safety.",
+        "designGoal": "Both parents; distinct behavior or metamorphosis.",
+        "balancePolicy": f"LLM authors; Python reports/clamps ({current_balance_mode()}); C# is final safety.",
         "engineRuntimeContract": engine_runtime_capability_contract_for_llm(a, b) if LLM_RUNTIME_AUTHORING else {},
-        "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/directProjectile/effectiveProjectile/ammo/runtimeProbe/generatedParent + optional semantics", "rule": "raw=facts; semantics clarify overloaded flags; absent=unknown", "ammoRepresentativeLimit": 0},
+        "rawParentSchema": {"mode": LLM_RAW_TOKEN_MODE, "sections": "item/projectiles/ammo/runtime/generatedParent + optional semantics", "rule": "facts only; absent=unknown", "ammoRepresentativeLimit": 0},
         "authorRules": [
-            "Return one JSON object exactly matching the source-derived requiredJsonShape card.",
-            "Use one result identity: runtimePlan.resultKind equals set_item_stats.resultKind; top category is weapon only for consumable_weapon, otherwise it equals that resultKind.",
-            "Use one secondary trigger: on_hit or on_expire; on_expire means any projectile kill. shotCount is simultaneous, not timed.",
-            "Projectile=weapon. Custom dart/throwable/rocket=consumable_weapon or weapon + empty ammoFor + projectile call; arrow/bullet ammo has vanilla behavior.",
-            "Put fusion physics in concept.mergeLogic, concise central design intent in concept.coreMechanic, and unusual shape/count/placement in runtimePlan.visualIntent topology/parts/arrangement; public gameplay text is compiled from executable wire fields.",
-            "Tether/returning sprite is one moving body, never a full-canvas rope. Image prompts: item=inventory/held; projectile=hit body (same sword/blade/boomerang OK); impact=momentary; child=damaging.",
-            "Utility/movement needs tool_capability, mobility_effect, or apply_player_effect_on_use; otherwise VFX-only. Never family=unsupported with executable calls.",
-            "Non-combat: resultKind preserves sole equip role (head/body/leg→armor+matching armorSlot); otherwise require exact executable replacement; never default weapon.",
+            "One identity: runtimePlan.resultKind=set_item_stats.resultKind; top category=weapon only for consumable_weapon, else that resultKind.",
+            "One secondary trigger: on_hit or on_expire; on_expire means any projectile kill.",
+            "Put fusion physics in concept.mergeLogic, central intent in coreMechanic, and unusual shape/count/placement in visualIntent topology/parts/arrangement; gameplay text comes from wire.",
+            "Tether/returning sprite is one moving body, not a canvas rope. Image prompts: item=inventory/held; projectile=hit body (same sword/blade/boomerang OK); impact=momentary; child=damaging.",
+            "Utility/movement requires tool_capability, mobility_effect, or apply_player_effect_on_use; otherwise VFX-only. Never executable family=unsupported.",
+            "Non-combat resultKind preserves a sole equip role (head/body/leg→armor+armorSlot) or provides an executable replacement; never default weapon.",
             "No markdown, analysis, legacy attackPattern, or attack.genome.",
         ],
         "requiredJsonShape": author_item_prompt_shape_card(),
@@ -676,20 +654,23 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: di
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     contract = payload.get("engineRuntimeContract") if isinstance(payload.get("engineRuntimeContract"), dict) else {}
     functions = contract.get("availableFunctions") if isinstance(contract.get("availableFunctions"), dict) else {}
-    within_recommended_chars = len(text) <= PLANNER_PROMPT_LIMIT_CHARS
+    headroom_chars = PLANNER_PROMPT_LIMIT_CHARS - len(text)
+    within_recommended_chars = headroom_chars >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     return {
         "ok": bool(functions) and "requiredJsonShape" in payload and within_recommended_chars,
         "chars": len(text),
         "approxTokens": max(1, len(text) // 4),
         "recommendedLimitChars": PLANNER_PROMPT_LIMIT_CHARS,
+        "headroomChars": headroom_chars,
+        "minimumHeadroomChars": PLANNER_PROMPT_MIN_HEADROOM_CHARS,
         "withinRecommendedChars": within_recommended_chars,
-        "sizeGateMode": "hard_limit",
+        "sizeGateMode": "reserved_headroom",
         "contractStyle": contract.get("contractStyle"),
         "functionCount": len(functions),
         "hasRequiredShape": "requiredJsonShape" in payload,
         "hasRuntimePlanShape": isinstance(payload.get("requiredJsonShape", {}).get("runtimePlan"), dict),
         "hasNoBossRule": "boss" in json.dumps(payload, ensure_ascii=False).lower(),
-        "note": "Prompt-only readiness check with a hard size limit; does not call the LLM.",
+        "note": "Prompt-only readiness check with reserved change headroom; does not call the LLM.",
     }
 
-__all__ = ['normalize_llm_attack_shape', 'normalize_behavior_toy_fields', 'runtime_value', 'normalize_runtime_authoring_fields', 'terraria_tick_guide_for_llm', '_catalog_text', 'sharp_engine_fn_catalog_for_llm', 'concise_terraria_tick_guide_for_llm', 'planner_priority_header_for_llm', 'engine_runtime_capability_contract_for_llm', 'authored_num', 'authored_int', 'authored_weapon_damage', 'authored_str', 'llm_category_without_router', 'build_llm_author_payload', 'planner_prompt_usability_report']
+__all__ = ['normalize_llm_attack_shape', 'normalize_behavior_toy_fields', 'runtime_value', 'normalize_runtime_authoring_fields', 'terraria_tick_guide_for_llm', '_catalog_text', 'sharp_engine_fn_catalog_for_llm', 'concise_terraria_tick_guide_for_llm', 'planner_priority_header_for_llm', 'engine_runtime_capability_contract_for_llm', 'authored_num', 'authored_int', 'authored_weapon_damage', 'authored_str', 'llm_category_without_router', 'build_llm_author_payload', 'planner_prompt_usability_report', 'PLANNER_PROMPT_LIMIT_CHARS', 'PLANNER_PROMPT_MIN_HEADROOM_CHARS']

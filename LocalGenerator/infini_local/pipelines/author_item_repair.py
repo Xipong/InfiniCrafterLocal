@@ -11,9 +11,11 @@ from infini_local.core.llm_stage_messages import (
     stage_chat_message,
 )
 from infini_local.core.parent_role_facts import sole_strong_parent_role_obligation
+from infini_local.core.runtime_authoring.function_contract_registry import (
+    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+)
 from infini_local.core.runtime_authoring.schema import (
     COMBAT_EXECUTOR_RESULT_KINDS,
-    COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS,
 )
 from infini_local.pipelines.author_item_contract import (
     author_item_prompt_shape_card,
@@ -334,8 +336,8 @@ def build_same_author_repair_request(
     redesign_rules = [
         COMBAT_EXECUTOR_RESULT_KIND_RULE,
         (
-            "Every combat root engine call MUST include "
-            f"{', '.join(COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS)} explicitly; "
+            "Every combat root MUST compile to "
+            f"{', '.join(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)} using its public function card; "
             "for one emitted body/projectile use shotCount=1 and spreadRadians=0."
         ),
         "A full redesign must remove non-representable calls instead of restating their params.",
@@ -379,7 +381,7 @@ def build_same_author_repair_request(
         "allowedPatchKeys": allowed_patch_keys,
         "allowedEngineFunctions": list(VISIBLE_ENGINE_FUNCTIONS),
         "rootExecutorRules": dict(ROOT_EXECUTOR_AUTHOR_RULES),
-        "combatRootRequiredParams": list(COMBAT_ROOT_AUTHORED_REQUIRED_PARAMS),
+        "normalizedRootRequiredFields": list(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES),
         "combatExecutorResultKinds": sorted(COMBAT_EXECUTOR_RESULT_KINDS),
         "runtimePlanMetadataTypes": dict(RUNTIME_PLAN_METADATA_TYPES),
         "pullOnHitEncoding": dict(PULL_ON_HIT_ENCODING),

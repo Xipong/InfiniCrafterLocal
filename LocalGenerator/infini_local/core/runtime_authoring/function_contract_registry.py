@@ -213,6 +213,19 @@ _ROOT_PROJECTILE_DIRECT_PARAMS = (
 )
 
 
+NORMALIZED_ROOT_REQUIRED_PARAM_NAMES: tuple[str, ...] = (
+    "runtimeFamily",
+    "delivery",
+    "movement",
+    "speed",
+    "rangeTiles",
+    "lifetimeTicks",
+    "shotCount",
+    "spreadRadians",
+    "pierce",
+)
+
+
 ENGINE_FUNCTION_CONTRACTS: tuple[EngineFunctionContract, ...] = (
     EngineFunctionContract(
         name='set_item_stats',
@@ -1252,6 +1265,7 @@ __all__ = [
     "REPAIR_DEPENDENCY_GROUPS_BY_FUNCTION",
     "ROOT_EXECUTOR_FUNCTION_NAMES",
     "ROOT_EXECUTOR_SHARED_PARAM_NAMES",
+    "NORMALIZED_ROOT_REQUIRED_PARAM_NAMES",
     "lowerer_contract",
     "lowerer_passthrough_param_names",
     "lowerer_output_param_names",
