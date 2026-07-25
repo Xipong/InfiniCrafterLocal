@@ -1,636 +1,485 @@
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Any, Mapping
+import copy
+from dataclasses import dataclass
+from typing import Any, Mapping, MutableMapping
 
-
-from infini_local.core.runtime_overhead_barrage_policy import apply_overhead_barrage_contract
-from infini_local.core.runtime_charge_release_policy import apply_charge_release_contract
-from infini_local.core.runtime_sentry_policy import apply_sentry_contract, reject_recursive_sentry_onhit
-from infini_local.core.runtime_authoring.common import _clamp, _enum, _intish, _norm_name, _num
-from infini_local.core.runtime_authoring.normalize import normalize_runtime_plan_inplace, runtime_plan
-from infini_local.core.runtime_authoring.result_identity import effective_runtime_result_kind
-from infini_local.core.runtime_executor_vocabulary import EFFECTS, MOVEMENTS, ONHITS
-from infini_local.core.runtime_family_policy import (
-    CANONICAL_RUNTIME_FAMILIES as RUNTIME_FAMILIES,
-    runtime_family_accepts_delivery,
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
+    CONTROLLER_OPCODE,
+    EVENT_ACTION_OPCODE,
+    MOVEMENT_OPCODE,
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_WIRE_SCHEMA,
+    VISUAL_ROLE_BY_ENTITY_KIND,
 )
-from infini_local.core.runtime_color_policy import normalize_runtime_color
-from infini_local.core.sound_catalog import (
-    SOUND_CATALOG_SOURCE,
-    normalize_sound_catalog_id,
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.validator import (
+    MAX_CHILD_DEPTH,
+    MAX_EVENT_SPAWNS_PER_ACTIVATION,
+    MAX_RUNTIME_ENTITIES,
+    assert_valid_runtime_program,
 )
-from infini_local.core.vfx_composition_primitives import (
-    VFX_CUE_CHANNELS,
-    VFX_CUE_EMISSION_MODES,
-    VFX_CUE_EVENTS,
-    VFX_CUE_IMPORTANCE,
-    VFX_CUE_LANES,
-    VFX_CUE_PARTICLE_SYSTEM_IDS,
-    VFX_CUE_RENDERERS,
-    VFX_CUE_ROLES,
-)
-from infini_local.core.runtime_authoring.function_contract_registry import (
-    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
-)
-from infini_local.core.runtime_authoring.schema import NUMERIC_LIMITS, _runtime_family_affordances
-from infini_local.core.runtime_authoring.vocabulary import DELIVERIES
-from infini_local.core.runtime_authoring.equipment import apply_accessory_calls, apply_armor_calls
-from infini_local.core.runtime_authoring.secondary import (
-    apply_primary_onhit_child_gates,
-    apply_secondary_projectile_calls,
-)
-from infini_local.core.runtime_authoring.semantics import _truthy
-from infini_local.core.runtime_authoring.structural import _first_non_empty, _merged_params, _select_root_executor_call, all_calls
 
 
-TERRARIA_TILE_SIZE_PX = 16
+@dataclass(slots=True)
+class _CompileContext:
+    receipts: list[dict[str, Any]]
 
-# Canonical post-compiler combat-genome surface.  The terminal root grammar is
-# projected from the typed function registry; only compiler-owned derived/defaulted
-# fields are added here.  Downstream validation must consume these constants instead
-# of maintaining an LLM-era mirror in pipeline configuration.
-COMPILED_COMBAT_GENOME_REQUIRED_FIELDS: tuple[str, ...] = tuple(dict.fromkeys((
-    *NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
-    "useTimeTicks",
-    "aoeRadiusTiles",
-)))
-COMPILED_COMBAT_GENOME_OPTIONAL_DEFAULTS: Mapping[str, int | float] = MappingProxyType({
-    "homingStrength": 0.0,
-    "beamChargeTicks": 0,
-    "delayTicks": 30,
-    "immunityCooldown": 0,
-    "extraUpdates": 0,
-    "splitCount": 0,
-    "chainCount": 0,
-    "pullStrength": 0.0,
-    "trailLength": 0,
-    "burstDustCap": 0,
-})
+    def write(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str) -> None:
+        target[key] = copy.deepcopy(value)
+        self.receipts.append({
+            "callId": str(call.get("id") or ""),
+            "fn": str(call.get("fn") or ""),
+            "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.{key}",
+            "finalPath": path,
+            "value": copy.deepcopy(value),
+            "status": "delivered",
+        })
 
-
-def project_aoe_radius_tiles_to_damage_pixels(value: Any) -> int:
-    """Compile the authored tile radius into the exact AttackSpec pixel unit."""
-    tiles = float(_num(value, 0) or 0)
-    return max(0, min(160, int(tiles * TERRARIA_TILE_SIZE_PX)))
+    def write_derived(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str, source: str) -> None:
+        target[key] = copy.deepcopy(value)
+        self.receipts.append({
+            "callId": str(call.get("id") or ""),
+            "fn": str(call.get("fn") or ""),
+            "authoredPath": source,
+            "finalPath": path,
+            "value": copy.deepcopy(value),
+            "status": "technical_projection",
+        })
 
 
-def project_authored_pierce_to_runtime_hit_budget(value: Any) -> int:
-    """Compile authored pierce sentinels to Terraria projectile.penetrate truth."""
-    pierce = int(_num(value, 1) or 0)
-    return -1 if pierce == -1 else max(1, pierce)
+def _dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
 
 
-def compile_runtime_plan_to_genome_patch(data: dict[str, Any]) -> dict[str, Any]:
-    normalize_runtime_plan_inplace(data)
-    rp = runtime_plan(data)
-    if not rp:
-        return {}
-    shoots = all_calls(rp, "shoot_projectile")
-    hits = all_calls(rp, "apply_on_hit_effect")
-    particle_calls = [
-        call for call in all_calls(rp, "spawn_contact_particles")
-        if (_num(call.get("amount"), 0) or 0) > 0
-    ]
-    secondary_calls = all_calls(rp, "spawn_secondary_projectiles")
-    trail_calls = all_calls(rp, "leave_trail_or_field")
-    use_effect_calls = all_calls(rp, "apply_player_effect_on_use")
-    tool_calls = all_calls(rp, "tool_capability")
-    placeable_calls = all_calls(rp, "placeable_behavior")
-    light_calls = all_calls(rp, "emit_light")
-    vfx_cue_calls = all_calls(rp, "visual_effect_cue")
-    mobility_calls = all_calls(rp, "mobility_effect")
-    alt_use_calls = all_calls(rp, "set_alt_use_mode")
-    hold_effect_calls = all_calls(rp, "hold_item_effect")
+def _copy_params(call: Mapping[str, Any]) -> dict[str, Any]:
+    return copy.deepcopy(_dict(call.get("params")))
 
-    use_affordance_calls = all_calls(rp, "use_affordance")
-    consumption_calls = all_calls(rp, "consumption_behavior")
-    ammo_behavior_calls = all_calls(rp, "ammo_behavior")
-    use_condition_calls = all_calls(rp, "use_condition")
-    accessory_calls = all_calls(rp, "accessory_effect")
-    armor_calls = all_calls(rp, "armor_effect")
 
-    itemstats_calls = all_calls(rp, "set_item_stats")
-    shoot, rejected_roots = _select_root_executor_call(shoots) if shoots else ({}, [])
-    hit = _merged_params(hits) if hits else {}
-    itemstats = _merged_params(itemstats_calls) if itemstats_calls else {}
-    patch: dict[str, Any] = {}
-    authored_result_kind = effective_runtime_result_kind(data)
-    if authored_result_kind in {"weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion", "material", "furniture", "generic"}:
-        patch["kind"] = authored_result_kind
-    norm = rp.get("_normalization") if isinstance(rp.get("_normalization"), dict) else {}
-    if isinstance(norm.get("rejectedEngineCalls"), list) and norm.get("rejectedEngineCalls"):
-        patch["rejectedEngineCalls"] = norm.get("rejectedEngineCalls")[:16]
+def _entity_path(index: int, suffix: str) -> str:
+    return f"runtimeProgram.entities[{index}].{suffix}"
 
-    # One root executor owns the item-use lifecycle. A preserved item hitbox is a
-    # bounded damage lane of that same use, not a second controller.
-    if rejected_roots:
-        patch["rejectedRootExecutorCalls"] = rejected_roots[:8]
 
-    raw_delivery = _norm_name(shoot.get("delivery"))
-    delivery = _enum(shoot.get("delivery"), DELIVERIES, None)
-    movement = _enum(shoot.get("movement"), MOVEMENTS, None)
-    if raw_delivery and raw_delivery != delivery:
-        patch["deliveryAlias"] = raw_delivery
-    if delivery: patch["delivery"] = delivery
-    if movement: patch["movement"] = movement
-    if shoot.get("weaponFamily") not in (None, ""):
-        patch["weaponFamily"] = _norm_name(shoot.get("weaponFamily"))[:40]
-    if shoot.get("projectileFamily") not in (None, ""):
-        patch["projectileFamily"] = _norm_name(shoot.get("projectileFamily"))[:40]
-    if shoot.get("ammoFor") not in (None, ""):
-        patch["ammoFor"] = _norm_name(shoot.get("ammoFor"))[:24]
-    explicit_runtime_family = _enum(shoot.get("runtimeFamily"), RUNTIME_FAMILIES, None)
-    runtime_family = explicit_runtime_family or "none"
-    if shoots and runtime_family == "none":
-        patch["runtimeContractError"] = "root_executor_requires_runtimeFamily"
-    elif shoots and not runtime_family_accepts_delivery(runtime_family, delivery):
-        patch["runtimeContractError"] = f"runtimeFamily={runtime_family} rejects delivery={delivery or 'missing'}"
-    else:
-        patch["runtimeFamily"] = runtime_family
-        patch.update(_runtime_family_affordances(runtime_family, patch.get("weaponFamily") or shoot.get("weaponFamily"), patch.get("delivery") or shoot.get("delivery")))
+def _compile_item_call(
+    ctx: _CompileContext,
+    call: Mapping[str, Any],
+    *,
+    gameplay: dict[str, Any],
+    accessory: dict[str, Any],
+    armor: dict[str, Any],
+    runtime: dict[str, Any],
+    item_entity: dict[str, Any],
+    entity_index: int,
+) -> None:
+    fn = str(call.get("fn") or "")
+    p = _copy_params(call)
 
-    # Aggregate pure VFX calls. This is still not gameplay child logic.
-    particle_effects: list[str] = []
-    particle_amount = 0.0
-    particle_scale = 0.0
-    particle_duration = 0.0
-    particle_materials: list[str] = []
-    for pc in particle_calls:
-        eff = _enum(pc.get("effect"), EFFECTS, None)
-        if eff and eff != "none":
-            particle_effects.append(eff)
-        particle_amount += _num(pc.get("amount"), 0) or 0
-        particle_scale = max(particle_scale, _num(pc.get("scale"), 0) or 0)
-        particle_duration = max(particle_duration, _clamp(pc.get("durationTicks"), "durationTicks", 0) or 0)
-        material = _norm_name(pc.get("material"))
-        if material not in {"", "none"}:
-            particle_materials.append(material)
-    effect = _enum(_first_non_empty(*particle_effects, shoot.get("effect")), EFFECTS, None)
-    if particle_calls and not particle_effects:
-        effect = "none"
-    if effect:
-        patch["effect"] = effect
-    if particle_calls:
-        patch["burstDustCap"] = int(round(max(0, min(NUMERIC_LIMITS["burstDustCap"][1], particle_amount))))
-        # v0.4.13: C# distinguishes effect=none from mundane dust via DustSpawnDenom.
-        # effectCode 0 is shared by none/dust; exact material is the only other
-        # explicit route that may enable dust for that code.
-        if particle_amount <= 0 or (effect in {None, "none"} and not particle_materials):
-            patch["dustSpawnDenom"] = 0
-            patch["burstDustCap"] = 0
+    def project(target: dict[str, Any], path_prefix: str, mapping: Mapping[str, str]) -> None:
+        for source, destination in mapping.items():
+            if source in p:
+                ctx.write(call=call, path=f"{path_prefix}.{destination}", value=p[source], target=target, key=destination)
+
+    if fn == "configure_item_stats":
+        project(gameplay, "gameplay", {
+            "damageClass": "damageClass",
+            "damage": "damage",
+            "knockback": "knockback",
+            "useTimeTicks": "useTime",
+            "useAnimationTicks": "useAnimation",
+            "manaCost": "manaCost",
+            "rarity": "rarity",
+            "valueCopper": "value",
+            "maxStack": "maxStack",
+            "craftYield": "craftYield",
+            "widthPx": "width",
+            "heightPx": "height",
+            "scale": "itemScale",
+        })
+        return
+    if fn == "configure_item_use":
+        item_use = runtime.setdefault("itemUse", {})
+        ctx.write_derived(
+            call=call,
+            path="runtimeProgram.itemUse.configured",
+            value=True,
+            target=item_use,
+            key="configured",
+            source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn",
+        )
+        project(gameplay, "gameplay", {
+            "useStyle": "useStyleName",
+            "autoReuse": "autoReuse",
+            "useTurn": "useTurn",
+            "channel": "channelUse",
+            "holdoutOffsetX": "holdoutOffsetX",
+            "holdoutOffsetY": "holdoutOffsetY",
+            "handPose": "handPose",
+            "releaseTiming": "releaseTiming",
+        })
+        project(item_use, "runtimeProgram.itemUse", {
+            "useStyle": "useStyle",
+            "hideUseGraphic": "hideUseGraphic",
+            "disableMeleeHitbox": "disableMeleeHitbox",
+            "channel": "channel",
+            "handPose": "handPose",
+            "releaseTiming": "releaseTiming",
+            "holdoutOffsetX": "holdoutOffsetX",
+            "holdoutOffsetY": "holdoutOffsetY",
+        })
+        return
+    if fn == "enable_item_contact_damage":
+        contact = runtime.setdefault("itemContact", {"enabled": True})
+        ctx.write_derived(
+            call=call,
+            path="runtimeProgram.itemContact.enabled",
+            value=True,
+            target=contact,
+            key="enabled",
+            source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn",
+        )
+        project(contact, "runtimeProgram.itemContact", {
+            "hitboxScale": "hitboxScale",
+            "contactForgivenessPx": "contactForgivenessPx",
+        })
+        return
+    if fn == "configure_consumption":
+        project(gameplay, "gameplay", {
+            "consumable": "consumable",
+            "consumeChancePercent": "consumeChancePercent",
+        })
+        return
+    if fn == "configure_vanilla_ammo_item":
+        project(gameplay, "gameplay", {
+            "ammoCategory": "ammoCategory",
+            "projectileId": "ammoProjectileId",
+            "shootSpeedPxPerTick": "ammoShootSpeedPxPerTick",
+            "notAmmo": "notAmmo",
+        })
+        return
+    if fn == "restore_resources_on_use":
+        project(gameplay, "gameplay", {"healLife": "healLife", "healMana": "healMana", "potionSickness": "potion"})
+        return
+    if fn == "apply_vanilla_buff_on_use":
+        buffs = gameplay.setdefault("extraBuffs", [])
+        entry = {"buffCode": p["buffId"], "buffTime": p["durationTicks"]}
+        buffs.append(entry)
+        base = len(buffs) - 1
+        ctx.receipts.extend([
+            {
+                "callId": str(call.get("id") or ""), "fn": fn,
+                "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.buffId",
+                "finalPath": f"gameplay.extraBuffs[{base}].buffCode", "value": p["buffId"], "status": "technical_projection",
+            },
+            {
+                "callId": str(call.get("id") or ""), "fn": fn,
+                "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.durationTicks",
+                "finalPath": f"gameplay.extraBuffs[{base}].buffTime", "value": p["durationTicks"], "status": "technical_projection",
+            },
+        ])
+        return
+    if fn == "apply_generated_buff_on_use":
+        generated = gameplay.setdefault("generatedBuff", {})
+        project(generated, "gameplay.generatedBuff", {
+            "durationTicks": "durationTicks",
+            "miningSpeedMultiplier": "miningSpeedMultiplier",
+            "lightStrength": "emitLightStrength",
+            "lightColor": "lightColorName",
+            "oreSenseRadiusTiles": "oreSenseRadiusTiles",
+            "movementSpeed": "movementSpeed",
+            "jumpBoost": "jumpBoost",
+            "manaRegen": "manaRegen",
+            "lifeRegen": "lifeRegen",
+        })
+        return
+    if fn == "configure_tool":
+        project(gameplay, "gameplay", {
+            "pickPower": "pickPower",
+            "axePower": "axePower",
+            "hammerPower": "hammerPower",
+            "miningSpeedScale": "miningSpeedScale",
+        })
+        return
+    if fn == "configure_placeable":
+        project(gameplay, "gameplay", {"tileId": "createTile", "wallId": "createWall", "placeStyle": "placeStyle"})
+        return
+    if fn == "require_use_condition":
+        project(gameplay, "gameplay", {"mode": "useConditionMode", "minLife": "useConditionMinLife", "minMana": "useConditionMinMana"})
+        return
+    if fn == "add_hold_light":
+        project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
+        return
+    if fn == "move_player_on_use":
+        project(gameplay, "gameplay", {
+            "mode": "mobilityMode",
+            "rangeTiles": "mobilityRangeTiles",
+            "cooldownTicks": "mobilityCooldownTicks",
+            "safeTileOnly": "mobilitySafeTileOnly",
+        })
+        return
+    if fn == "configure_accessory":
+        accessory["enabled"] = True
+        ctx.write_derived(call=call, path="accessory.enabled", value=True, target=accessory, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        project(accessory, "accessory", {
+            "defense": "defense", "maxLife": "maxLife", "maxMana": "maxMana",
+            "lifeRegen": "lifeRegen", "manaRegen": "manaRegen", "movementSpeed": "movementSpeed",
+            "genericDamage": "genericDamage", "genericCrit": "genericCrit", "endurance": "endurance",
+            "minionSlots": "minionSlots", "sentrySlots": "sentrySlots",
+            "lightStrength": "lightStrength", "lightColor": "lightColorName",
+        })
+        return
+    if fn == "configure_armor":
+        armor["enabled"] = True
+        ctx.write_derived(call=call, path="armor.enabled", value=True, target=armor, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        project(armor, "armor", {
+            "slot": "slot", "setKey": "setKey", "defense": "defense", "maxLife": "maxLife", "maxMana": "maxMana",
+            "movementSpeed": "movementSpeed", "genericDamage": "genericDamage", "genericCrit": "genericCrit",
+            "setBonusText": "setBonusText", "setBonusGenericDamage": "setBonusGenericDamage",
+            "setBonusMovementSpeed": "setBonusMovementSpeed", "setBonusLifeRegen": "setBonusLifeRegen",
+        })
+        return
+    raise AssertionError(f"unhandled item capability {fn}")
+
+
+def _compile_entity_call(
+    ctx: _CompileContext,
+    call: Mapping[str, Any],
+    *,
+    entity: dict[str, Any],
+    entity_index: int,
+) -> None:
+    fn = str(call.get("fn") or "")
+    p = _copy_params(call)
+    base = f"runtimeProgram.entities[{entity_index}]"
+
+    def component(name: str) -> dict[str, Any]:
+        return entity.setdefault(name, {})
+
+    def project(target: dict[str, Any], prefix: str, values: Mapping[str, Any]) -> None:
+        for key, value in values.items():
+            ctx.write(call=call, path=f"{prefix}.{key}", value=value, target=target, key=key)
+
+    if fn == "configure_spawn":
+        spawn = component("spawn")
+        project(spawn, f"{base}.spawn", p)
+        spawn["enabled"] = True
+        ctx.write_derived(call=call, path=f"{base}.spawn.enabled", value=True, target=spawn, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        return
+    if fn == "set_projectile_damage":
+        damage = component("damage")
+        project(damage, f"{base}.damage", p)
+        damage["enabled"] = True
+        ctx.write_derived(call=call, path=f"{base}.damage.enabled", value=True, target=damage, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        return
+    if fn == "set_projectile_lifetime":
+        ctx.write(call=call, path=f"{base}.lifetimeTicks", value=p["lifetimeTicks"], target=entity, key="lifetimeTicks")
+        return
+    if fn == "set_projectile_hitbox":
+        project(component("hitbox"), f"{base}.hitbox", p)
+        return
+    if fn == "set_projectile_collision":
+        project(component("collision"), f"{base}.collision", p)
+        return
+    if fn in MOVEMENT_OPCODE:
+        movement = component("movement")
+        source_fn = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn"
+        ctx.write_derived(call=call, path=f"{base}.movement.name", value=fn, target=movement, key="name", source=source_fn)
+        ctx.write_derived(call=call, path=f"{base}.movement.code", value=MOVEMENT_OPCODE[fn], target=movement, key="code", source=source_fn)
+        movement_params = movement.setdefault("params", {})
+        for key, value in p.items():
+            ctx.write(call=call, path=f"{base}.movement.params.{key}", value=value, target=movement_params, key=key)
+        return
+    if fn in {"channel_beam", "charge_then_release", "target_and_fire"}:
+        controller = component("controller")
+        source_fn = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn"
+        ctx.write_derived(call=call, path=f"{base}.controller.name", value=fn, target=controller, key="name", source=source_fn)
+        ctx.write_derived(call=call, path=f"{base}.controller.code", value=CONTROLLER_OPCODE[fn], target=controller, key="code", source=source_fn)
+        if fn == "target_and_fire":
+            targeting = component("targeting")
+            for source_key, destination in {
+                "shotEntity": "shotEntityId",
+                "intervalTicks": "intervalTicks",
+                "rangeTiles": "rangeTiles",
+                "sameTargetBias": "sameTargetBias",
+            }.items():
+                ctx.write(call=call, path=f"{base}.targeting.{destination}", value=p[source_key], target=targeting, key=destination)
         else:
-            # Higher authored amount = more frequent, but still bounded; no WhiteTorch fallback in runtime.
-            patch["dustSpawnDenom"] = int(max(2, min(12, round(10 - min(8, particle_amount / 5.0)))))
-        if particle_scale:
-            patch["vfxParticleScale"] = max(0.0, min(2.0, round(particle_scale, 3)))
-        if particle_duration:
-            patch["vfxParticleDurationTicks"] = int(round(min(80, particle_duration)))
-        if particle_materials:
-            # Finite visual material lineage; C# resolves it only to a dust family.
-            patch["vfxMaterial"] = particle_materials[0]
-
-    # Trails/fields are visual-only in this runtime. Do not let field prose become gameplay.
-    rejected_trails: list[dict[str, Any]] = []
-    if trail_calls:
-        for t in trail_calls:
-            if t.get("visualOnly") not in (None, "", True) and not _truthy(t.get("visualOnly")):
-                rejected_trails.append({"index": t.get("_index"), "reason": "visualOnly_false_not_executable"})
-        vals = [_clamp(t.get("trailLength"), "trailLength") for t in trail_calls if t.get("trailLength") not in (None, "")]
-        vals = [v for v in vals if v is not None]
-        if vals:
-            patch["trailLength"] = _intish("trailLength", max(vals))
-        for field, out_field in [
-            ("fieldLifetimeTicks", "vfxFieldLifetimeTicks"),
-            ("fieldRadiusTiles", "vfxFieldRadiusTiles"),
-            ("tickRate", "vfxFieldTickRate"),
-        ]:
-            raw_vals = [_clamp(t.get(field), field) for t in trail_calls if t.get(field) not in (None, "")]
-            raw_vals = [value for value in raw_vals if value is not None]
-            if raw_vals:
-                value = max(raw_vals)
-                patch[out_field] = _intish(field, value) if field != "fieldRadiusTiles" else round(float(value), 3)
-        if rejected_trails:
-            patch["rejectedTrailCalls"] = rejected_trails[:8]
-
-
-    # Executable utility calls: these expand runtime options without routing item identity
-    # into rigid presets.  They only write concrete supported fields/provenance.
-    extra_buffs: list[dict[str, int]] = []
-    for uc in use_effect_calls:
-        for field in ["healLife", "healMana"]:
-            if uc.get(field) not in (None, ""):
-                v = _clamp(uc.get(field), field, 0)
-                if v is not None:
-                    patch[field] = max(int(patch.get(field) or 0), int(round(v)))
-        raw_buffs = uc.get("buffs") if isinstance(uc.get("buffs"), list) else []
-        if uc.get("buffType") not in (None, ""):
-            raw_buffs = list(raw_buffs) + [{"buffType": uc.get("buffType"), "buffTime": uc.get("buffTime")}]
-        for b in raw_buffs:
-            if not isinstance(b, dict):
-                continue
-            bt = _clamp(b.get("buffType"), "buffType", 0)
-            tm = _clamp(b.get("buffTime"), "buffTime", 0)
-            if bt and bt > 0 and tm and tm > 0:
-                extra_buffs.append({"buffCode": int(round(bt)), "buffTime": int(round(tm))})
-    if extra_buffs:
-        dedup: dict[int, int] = {}
-        for b in extra_buffs:
-            dedup[int(b["buffCode"])] = max(dedup.get(int(b["buffCode"]), 0), int(b["buffTime"]))
-        patch["extraBuffs"] = [{"buffCode": k, "buffTime": max(1, min(21600, v))} for k, v in list(dedup.items())[:4]]
-        patch.setdefault("buffCode", patch["extraBuffs"][0]["buffCode"])
-        patch.setdefault("buffTime", patch["extraBuffs"][0]["buffTime"])
-        patch["useEffectCallCount"] = len(use_effect_calls)
-
-    generated_buff: dict[str, Any] = {}
-    for uc in use_effect_calls:
-        gb = uc.get("generatedBuff") if isinstance(uc.get("generatedBuff"), dict) else {}
-        duration_raw = gb.get("durationTicks") or uc.get("durationTicks") or uc.get("buffTime")
-        duration = _num(duration_raw, 0) if duration_raw not in (None, "") else 0
-        if duration:
-            generated_buff["durationTicks"] = max(int(generated_buff.get("durationTicks") or 0), int(round(max(1, min(21600, duration)))))
-        for src, out, lo, hi in [
-            ("miningSpeedMultiplier", "miningSpeedMultiplier", 0.25, 4.0),
-            ("emitLightStrength", "emitLightStrength", 0.0, 1.5),
-            ("oreSenseRadiusTiles", "oreSenseRadiusTiles", 0.0, 60.0),
-            ("movementSpeed", "movementSpeed", -0.5, 2.0),
-            ("jumpBoost", "jumpBoost", 0.0, 8.0),
-            ("manaRegen", "manaRegen", 0.0, 120.0),
-            ("lifeRegen", "lifeRegen", 0.0, 120.0),
-        ]:
-            raw = gb.get(src, uc.get(src))
-            if raw in (None, ""):
-                continue
-            val = _num(raw, None)
-            if val is None:
-                continue
-            val = max(lo, min(hi, val))
-            if out in {"oreSenseRadiusTiles", "manaRegen", "lifeRegen"}:
-                val = int(round(val))
-            generated_buff[out] = max(generated_buff.get(out, val), val) if isinstance(val, (int, float)) and out not in {"movementSpeed"} else val
-        color = str(gb.get("lightColorName") or gb.get("color") or uc.get("lightColorName") or "").strip()
-        if color:
-            normalized_color = normalize_runtime_color(color)
-            if normalized_color:
-                generated_buff["lightColorName"] = normalized_color
-    if generated_buff and int(generated_buff.get("durationTicks") or 0) > 0:
-        patch["generatedBuff"] = generated_buff
-
-    if tool_calls:
-        merged_tool = _merged_params(tool_calls)
-        for field in ["pickPower", "axePower", "hammerPower"]:
-            if merged_tool.get(field) not in (None, ""):
-                v = _clamp(merged_tool.get(field), field, 0)
-                if v is not None:
-                    patch[field] = int(round(v))
-        if merged_tool.get("miningSpeedScale") not in (None, ""):
-            patch["miningSpeedScale"] = max(0.25, min(2.0, _num(merged_tool.get("miningSpeedScale"), 1.0) or 1.0))
-
-    if placeable_calls:
-        placeable = _merged_params(placeable_calls)
-        for field in ("createTile", "createWall", "placeStyle"):
-            if placeable.get(field) not in (None, ""):
-                value = _clamp(placeable.get(field), field, -1 if field != "placeStyle" else 0)
-                if value is not None:
-                    patch[field] = int(round(value))
-
-    if light_calls:
-        strengths = [_clamp(c.get("strength"), "lightStrength", 0) for c in light_calls if c.get("strength") not in (None, "")]
-        strengths = [s for s in strengths if s is not None]
-        if strengths:
-            patch["runtimeLightStrength"] = round(max(strengths), 3)
-        durations = [_clamp(c.get("durationTicks"), "durationTicks", 0) for c in light_calls if c.get("durationTicks") not in (None, "")]
-        durations = [duration for duration in durations if duration is not None]
-        if durations:
-            patch["runtimeLightDurationTicks"] = int(round(min(240, max(durations))))
-        colors = [
-            str(c.get("lightColorName") or c.get("color") or "").strip()
-            for c in light_calls
-            if str(c.get("lightColorName") or c.get("color") or "").strip()
-        ]
-        if colors:
-            normalized_color = normalize_runtime_color(colors[0])
-            if normalized_color:
-                patch.setdefault("primaryColorName", normalized_color)
-                patch.setdefault("runtimeLightColorName", normalized_color)
-        if authored_result_kind == "potion" and strengths and durations:
-            strength = float(max(strengths))
-            duration = int(round(max(durations)))
-            if strength > 0 and duration > 0:
-                use_buff = dict(patch.get("generatedBuff") or {}) if isinstance(patch.get("generatedBuff"), dict) else {}
-                use_buff["durationTicks"] = max(int(use_buff.get("durationTicks") or 0), duration)
-                use_buff["emitLightStrength"] = max(float(use_buff.get("emitLightStrength") or 0.0), strength)
-                color = str(patch.get("runtimeLightColorName") or "").strip()
-                if color:
-                    use_buff["lightColorName"] = color
-                patch["generatedBuff"] = use_buff
-        patch["lightCallCount"] = len(light_calls)
-
-    if vfx_cue_calls:
-        allowed_events = VFX_CUE_EVENTS
-        allowed_renderers = VFX_CUE_RENDERERS
-        allowed_channels = VFX_CUE_CHANNELS
-        allowed_lanes = VFX_CUE_LANES
-        allowed_roles = VFX_CUE_ROLES
-        allowed_emission = VFX_CUE_EMISSION_MODES
-        allowed_particles = VFX_CUE_PARTICLE_SYSTEM_IDS
-        cues: list[dict[str, Any]] = []
-        for call in vfx_cue_calls[:8]:
-            p = call.get("params") if isinstance(call, dict) and isinstance(call.get("params"), dict) else call if isinstance(call, dict) else {}
-            event = str(p.get("event") if p.get("event") is not None else "").strip()
-            renderer = str(p.get("rendererKind") if p.get("rendererKind") is not None else "").strip()
-            channel = str(p.get("channel") if p.get("channel") is not None else "").strip()
-            lane = str(p.get("lane") if p.get("lane") is not None else "").strip()
-            raw_texture_role = str(
-                p.get("textureRole") if p.get("textureRole") is not None else ""
-            ).strip()
-            texture_role = raw_texture_role or "projectile"
-            raw_particle_role = str(
-                p.get("particleRole") if p.get("particleRole") is not None else ""
-            ).strip()
-            particle_role = raw_particle_role or texture_role or "child"
-            emission = str(
-                p.get("emissionMode") if p.get("emissionMode") is not None else ""
-            ).strip()
-            particle_id = str(
-                p.get("particleSystemId")
-                if p.get("particleSystemId") is not None
-                else ""
-            ).strip()
-            importance = str(
-                p.get("importance") if p.get("importance") is not None else ""
-            ).strip()
-            # The event/renderer/channel triple is the executable identity of an
-            # authored cue.  Any explicitly supplied finite token is part of that
-            # authored contract: if one is unknown, keep the whole call inert instead
-            # of silently compiling a different partial/default cue.
-            if not (
-                event in allowed_events
-                and renderer in allowed_renderers
-                and channel in allowed_channels
-                and (not lane or lane in allowed_lanes)
-                and (not raw_texture_role or raw_texture_role in allowed_roles)
-                and (not raw_particle_role or raw_particle_role in allowed_roles)
-                and (not emission or emission in allowed_emission)
-                and (not particle_id or particle_id in allowed_particles)
-                and (not importance or importance in VFX_CUE_IMPORTANCE)
-            ):
-                continue
-            cue: dict[str, Any] = {
-                "source": "runtimePlan.visual_effect_cue",
-                "event": event,
-                "rendererKind": renderer,
-                "channel": channel,
-            }
-            if lane in allowed_lanes: cue["lane"] = lane
-            if texture_role in allowed_roles: cue["textureRole"] = texture_role
-            if particle_role in allowed_roles: cue["particleRole"] = particle_role
-            if emission in allowed_emission: cue["emissionMode"] = emission
-            if particle_id in allowed_particles: cue["particleSystemId"] = particle_id
-            for field in ("scale", "density", "duration", "alpha", "spread", "jitter", "startTick", "repeatEvery"):
-                if field in p and p.get(field) not in (None, ""):
-                    cue[field] = _clamp(p.get(field), field, 0)
-                    if field in {"duration", "startTick", "repeatEvery"}:
-                        cue[field] = int(round(cue[field]))
-            if importance in VFX_CUE_IMPORTANCE:
-                cue["importance"] = importance
-            note = str(p.get("note") or p.get("identity") or "").strip()
-            if note:
-                cue["note"] = note[:80]
-            cues.append(cue)
-        if cues:
-            patch["vfxCues"] = cues
-            patch["vfxCueCount"] = len(cues)
-
-    if mobility_calls:
-        accepted_modes = {"recall_home", "blink_to_cursor", "blink_to_projectile_impact"}
-        mobility = _merged_params(mobility_calls)
-        mode = _norm_name(mobility.get("mode"))
-        if mode in accepted_modes:
-            patch["mobilityMode"] = mode
-            if mobility.get("rangeTiles") not in (None, ""):
-                patch["mobilityRangeTiles"] = int(max(0, min(80, _num(mobility.get("rangeTiles"), 0) or 0)))
-            if mobility.get("cooldownTicks") not in (None, ""):
-                patch["mobilityCooldownTicks"] = int(round(_clamp(mobility.get("cooldownTicks"), "cooldownTicks", 0) or 0))
-            patch["mobilitySafeTileOnly"] = bool(mobility.get("safeTileOnly") is not False)
-
-    if alt_use_calls:
-        alt = _merged_params(alt_use_calls)
-        mode = _norm_name(alt.get("mode"))
-        if mode not in {"mobility", "generated_buff", "light", "none"}:
-            mode = "none"
-        patch["altUseMode"] = mode
-        if alt.get("cooldownTicks") not in (None, ""):
-            patch["altUseCooldownTicks"] = int(round(_clamp(alt.get("cooldownTicks"), "cooldownTicks", 0) or 0))
-        amode = _norm_name(alt.get("mobilityMode") or alt.get("mode"))
-        if amode in {"recall_home", "blink_to_cursor"}:
-            patch["altMobilityMode"] = amode
-            patch["altMobilityRangeTiles"] = int(max(0, min(80, _num(alt.get("rangeTiles"), 0) or 0)))
-            patch["altMobilitySafeTileOnly"] = bool(alt.get("safeTileOnly") is not False)
-        if isinstance(alt.get("generatedBuff"), dict) and int(_num(alt.get("generatedBuff", {}).get("durationTicks"), 0) or 0) > 0:
-            patch["altGeneratedBuff"] = alt.get("generatedBuff")
-        elif mode == "light":
-            alt_strengths = [_clamp(c.get("strength"), "lightStrength", 0) for c in light_calls if c.get("strength") not in (None, "")]
-            alt_strengths = [s for s in alt_strengths if s is not None]
-            strength = max(alt_strengths) if alt_strengths else 0
-            colors = [str(c.get("lightColorName") or c.get("color") or "").strip() for c in light_calls if str(c.get("lightColorName") or c.get("color") or "").strip()]
-            duration = _clamp(alt.get("durationTicks"), "durationTicks") if alt.get("durationTicks") not in (None, "") else None
-            if strength > 0 and duration is not None and duration > 0:
-                patch["altGeneratedBuff"] = {
-                    "durationTicks": int(round(duration)),
-                    "emitLightStrength": round(max(0, min(1.5, strength)), 3),
-                    "lightColorName": (colors[0] if colors else str(patch.get("primaryColorName") or ""))[:32],
-                }
-
-    if hold_effect_calls:
-        hold = _merged_params(hold_effect_calls)
-        if hold.get("lightStrength") not in (None, ""):
-            patch["holdLightStrength"] = round(max(0, min(1.5, _num(hold.get("lightStrength"), 0) or 0)), 3)
-        color = str(hold.get("lightColorName") or hold.get("color") or "").strip()
-        if color:
-            patch["holdLightColorName"] = color[:32]
-        if isinstance(hold.get("generatedBuff"), dict) and int(_num(hold.get("generatedBuff", {}).get("durationTicks"), 0) or 0) > 0:
-            patch["holdGeneratedBuff"] = hold.get("generatedBuff")
-
-
-    if use_affordance_calls:
-        ua = _merged_params(use_affordance_calls)
-        for src, out, lo, hi in [
-            ("itemScale", "itemScale", 0.55, 1.55),
-            ("holdoutOffsetX", "holdoutOffsetX", -80, 80),
-            ("holdoutOffsetY", "holdoutOffsetY", -80, 80),
-        ]:
-            if ua.get(src) not in (None, ""):
-                val = max(lo, min(hi, _num(ua.get(src), 0) or 0))
-                patch[out] = int(round(val)) if out.startswith("holdout") else round(val, 3)
-        for src, out in [("autoReuse", "autoReuse"), ("useTurn", "useTurn"), ("channelUse", "channelUse")]:
-            if src in ua:
-                patch[out] = bool(ua.get(src))
-        enum_fields = {
-            "heldVisibility": {"show_item", "hide_item", "show_projectile", "show_both"},
-            "releaseTiming": {"instant", "early", "mid_swing", "on_contact", "on_release"},
-            "handPose": {"short_weapon", "two_hand", "overhead", "throwing", "staff", "held_out", "none"},
+            controller_params = controller.setdefault("params", {})
+            for key, value in p.items():
+                ctx.write(call=call, path=f"{base}.controller.params.{key}", value=value, target=controller_params, key=key)
+        return
+    if fn == "spawn_over_target":
+        spawn = component("spawn")
+        over_target = spawn.setdefault("overTarget", {})
+        project(over_target, f"{base}.spawn.overTarget", p)
+        return
+    if fn == "emit_light_while_active":
+        project(component("light"), f"{base}.light", p)
+        return
+    if fn in EVENT_ACTION_OPCODE:
+        events = entity.setdefault("events", [])
+        event_row: dict[str, Any] = {
+            "id": str(call.get("id") or ""),
+            "event": p.pop("event"),
+            "action": fn,
+            "actionCode": EVENT_ACTION_OPCODE[fn],
         }
-        for field, allowed in enum_fields.items():
-            value = _norm_name(ua.get(field))
-            if value in allowed:
-                patch[field] = value
-        if ua.get("initialOffsetPx") not in (None, ""):
-            patch["initialOffsetPx"] = int(round(max(-64, min(64, _num(ua.get("initialOffsetPx"), 0) or 0))))
-
-    if consumption_calls:
-        cb = _merged_params(consumption_calls)
-        if cb.get("consumeChancePercent") not in (None, ""):
-            value = _num(cb.get("consumeChancePercent"), None)
-            if value is not None:
-                patch["consumeChancePercent"] = int(round(max(0, min(100, value))))
-
-    if ammo_behavior_calls:
-        ammo = _merged_params(ammo_behavior_calls)
-        ammo_for = _norm_name(ammo.get("ammoFor") or ammo.get("kind"))
-        if ammo_for in {"arrow", "arrows", "bullet", "bullets", "empty", "none"}:
-            patch["ammoFor"] = "" if ammo_for in {"empty", "none"} else ammo_for
-            if ammo_for not in {"empty", "none"}:
-                patch.setdefault("kind", "ammo")
-                patch.setdefault("consumable", True)
-
-    if use_condition_calls:
-        cond = _merged_params(use_condition_calls)
-        mode = _norm_name(cond.get("mode"))
-        if mode in {"grounded", "not_wet", "life_above", "mana_above"}:
-            patch["useConditionMode"] = mode
-            if cond.get("minLife") not in (None, ""):
-                patch["useConditionMinLife"] = int(round(_clamp(cond.get("minLife"), "minLife", 0) or 0))
-            if cond.get("minMana") not in (None, ""):
-                patch["useConditionMinMana"] = int(round(_clamp(cond.get("minMana"), "minMana", 0) or 0))
-
-    apply_accessory_calls(patch, accessory_calls)
-    apply_armor_calls(patch, armor_calls, itemstats)
-
-    # Primary numeric mapping.
-    for src, mapping in [
-        (shoot, {"rangeTiles": "rangeTiles", "lifetimeTicks": "lifetimeTicks", "shotCount": "shotCount", "spreadRadians": "spreadRadians", "pierce": "pierce", "extraUpdates": "extraUpdates", "homingStrength": "homingStrength", "beamWidthPx": "beamWidthPx", "beamChargeTicks": "beamChargeTicks", "chargeTicks": "chargeTicks", "chargePowerMultiplier": "chargePowerMultiplier", "sentryAttackIntervalTicks": "sentryAttackIntervalTicks", "sentryTargetRangeTiles": "sentryTargetRangeTiles", "sentryLifetimeTicks": "sentryLifetimeTicks", "secondaryDamageMultiplier": "secondaryDamageMultiplier", "secondaryLifetimeTicks": "secondaryLifetimeTicks", "immunityCooldown": "immunityCooldown", "useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "speed": "speed"}),
-        (hit, {"aoeRadiusTiles": "aoeRadiusTiles", "chainCount": "chainCount", "count": "splitCount", "pullStrength": "pullStrength", "secondaryDamageMultiplier": "secondaryDamageMultiplier", "secondaryLifetimeTicks": "secondaryLifetimeTicks"}),
-        (itemstats, {"useTimeTicks": "useTimeTicks", "useAnimationTicks": "useAnimationTicks", "knockback": "knockback", "manaCost": "manaCost", "craftYield": "craftYield"}),
-    ]:
-        for k, outk in mapping.items():
-            if k in src and src.get(k) not in (None, "") and outk not in patch and outk in NUMERIC_LIMITS:
-                v = _clamp(src.get(k), outk)
-                if v is not None:
-                    patch[outk] = _intish(outk, v)
-
-    pull_strength = float(patch.get("pullStrength") or 0.0)
-    pull_mode = _enum(hit.get("pullMode"), {"none", "target_to_owner", "owner_to_target", "target_to_projectile"}, "none") or "none"
-    if pull_strength > 0.0 and pull_mode != "none":
-        patch["pullMode"] = pull_mode
-    else:
-        if pull_strength > 0.0:
-            patch["pullDemotedReason"] = "pullStrength_requires_explicit_pullMode"
-            patch["pullStrength"] = 0.0
-        patch["pullMode"] = "none"
-
-    if patch.get("runtimeFamily") == "overhead_barrage" and shoot.get("delayTicks") not in (None, ""):
-        value = _clamp(shoot.get("delayTicks"), "delayTicks")
-        if value is not None:
-            patch["delayTicks"] = _intish("delayTicks", value)
-
-    # Hit behavior: the first authored hit effect is primary. A sentry call may
-    # author the non-recursive shot effect directly because deploy_sentry owns its shot contract.
-    if patch.get("runtimeFamily") == "sentry":
-        reject_recursive_sentry_onhit(shoot.get("onHit"))
-    onhit = _enum(hit.get("onHit"), ONHITS, None)
-    if not onhit and patch.get("runtimeFamily") == "sentry":
-        onhit = _enum(shoot.get("onHit"), ONHITS, None)
-    if onhit:
-        patch["onHit"] = onhit
-    debuff_hint = str(hit.get("debuffHint") or "").strip()
-    if debuff_hint:
-        patch["debuffHint"] = debuff_hint[:80]
-    if hit.get("debuffTime") not in (None, ""):
-        value = _num(hit.get("debuffTime"), None)
-        if value is not None:
-            patch["debuffTime"] = int(max(30, min(600, value)))
-
-    # Primary onHit child budget/demotion is owned by secondary module so maxChild*
-    # has a single owner path immediately before secondary projectile calls.
-    apply_primary_onhit_child_gates(patch, hit)
-
-    # Real secondary damaging projectiles live in one small owner module.
-    # This keeps trigger/lifecycle rules out of the already-large main compiler.
-    apply_secondary_projectile_calls(patch, secondary_calls)
+        if fn == "spawn_entity_on_event":
+            event_row["entityId"] = p.pop("entity")
+        event_row.update(p)
+        events.append(event_row)
+        event_index = len(events) - 1
+        for key, value in event_row.items():
+            if key == "id":
+                continue
+            if key in {"action", "actionCode"}:
+                authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn"
+            elif key == "entityId":
+                authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.entity"
+            else:
+                authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.{key}"
+            ctx.receipts.append({
+                "callId": str(call.get("id") or ""),
+                "fn": fn,
+                "authoredPath": authored_path,
+                "finalPath": f"{base}.events[{event_index}].{key}",
+                "value": copy.deepcopy(value),
+                "status": "technical_projection" if key == "actionCode" else "delivered",
+            })
+        return
+    raise AssertionError(f"unhandled runtime entity capability {fn}")
 
 
-    # Do not fill authored primary-action mechanics. Missing delivery/movement/
-    # cadence/range/lifetime/speed fields are validation errors and go back to
-    # the LLM repair loop instead of becoming code-designed gameplay.
-    patch.setdefault("effect", "none" if not particle_calls or int(_num(patch.get("dustSpawnDenom"), 0) or 0) <= 0 else "dust")
-    if not particle_calls:
-        patch.setdefault("dustSpawnDenom", 0)
-        patch.setdefault("burstDustCap", 0)
-    patch.setdefault("onHit", "none")
-    patch.setdefault("aoeRadiusTiles", 0)
-    patch["aoeDamageRadiusPx"] = project_aoe_radius_tiles_to_damage_pixels(patch["aoeRadiusTiles"])
-    if "pierce" in patch:
-        patch["projectileHitBudget"] = project_authored_pierce_to_runtime_hit_budget(patch["pierce"])
-    patch.setdefault("useTimeTicks", int(_clamp(_first_non_empty(itemstats.get("useTimeTicks"), shoot.get("useTimeTicks")), "useTimeTicks", 24) or 24))
-    patch.setdefault("useAnimationTicks", int(_clamp(_first_non_empty(itemstats.get("useAnimationTicks"), shoot.get("useAnimationTicks"), patch.get("useTimeTicks")), "useAnimationTicks", patch.get("useTimeTicks", 24)) or patch.get("useTimeTicks", 24)))
-    if authored_result_kind in {"armor", "accessory", "ammo"}:
-        # These DTO families have no authored use action.  Their final item timing is
-        # intentionally fixed at 10/10 downstream; compile the same technical value so
-        # provenance cannot disagree with the executable wire.
-        patch["useTimeTicks"] = 10
-        patch["useAnimationTicks"] = 10
-    patch.setdefault("extraUpdates", 0)
-    patch.setdefault("homingStrength", 0)
-    if trail_calls:
-        patch.setdefault("trailLength", int(max([_clamp(t.get("trailLength"), "trailLength", 0) or 0 for t in trail_calls] or [0])))
-    else:
-        patch.setdefault("trailLength", 4 if particle_calls else 0)
+def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
+    validation = assert_valid_runtime_program(document)
+    out = copy.deepcopy(dict(document))
+    authored_program = _dict(out.get("runtimeProgram"))
+    authored_entities = [dict(row) for row in authored_program.get("entities", []) if isinstance(row, Mapping)]
+    calls = [dict(row) for row in authored_program.get("calls", []) if isinstance(row, Mapping)]
+    for index, call in enumerate(calls):
+        call["_sourceIndex"] = index
 
-    for field in ["projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "weaponFamily", "projectileFamily", "ammoKind", "sentryPlacement", "secondaryProjectileShape"]:
-        val = shoot.get(field) or rp.get(field)
-        if val not in (None, ""):
-            patch[field] = str(val)
+    item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")
+    item_entity_id = str(item_entity["id"])
+    entities: list[dict[str, Any]] = []
+    entity_index_by_id: dict[str, int] = {}
+    for source in authored_entities:
+        entity_id = str(source["id"])
+        kind = str(source["kind"])
+        entity_index_by_id[entity_id] = len(entities)
+        entities.append({
+            "id": entity_id,
+            "kind": kind,
+            "visualRole": VISUAL_ROLE_BY_ENTITY_KIND[kind],
+            "events": [],
+            "visual": {"role": VISUAL_ROLE_BY_ENTITY_KIND[kind]},
+        })
 
-    # Audio is authored as exact acoustic catalog ids. Unknown or missing ids remain
-    # absent so validation can target the same author; the compiler is never a composer.
-    if shoot:
-        raw_use_sound = shoot.get("soundUseCatalogId")
-        raw_impact_sound = shoot.get("soundImpactCatalogId")
-        use_sound = normalize_sound_catalog_id(raw_use_sound, impact=False)
-        impact_sound = normalize_sound_catalog_id(raw_impact_sound, impact=True)
-        rejected_sound_ids: list[dict[str, str]] = []
-        if raw_use_sound not in (None, "") and not use_sound:
-            rejected_sound_ids.append({"field": "soundUseCatalogId", "value": str(raw_use_sound)[:80], "reason": "unknown_exact_catalog_id"})
-        if raw_impact_sound not in (None, "") and not impact_sound:
-            rejected_sound_ids.append({"field": "soundImpactCatalogId", "value": str(raw_impact_sound)[:80], "reason": "unknown_exact_catalog_id"})
-        if use_sound:
-            patch["soundUseCatalogId"] = use_sound
-        if impact_sound:
-            patch["soundImpactCatalogId"] = impact_sound
-        if use_sound or impact_sound:
-            patch["soundCatalogSource"] = SOUND_CATALOG_SOURCE
-        explicit_color = normalize_runtime_color(patch.get("primaryColorName"))
-        if explicit_color:
-            patch["primaryColorName"] = explicit_color
-        if rejected_sound_ids:
-            patch["rejectedSoundCatalogIds"] = rejected_sound_ids
-        if shoot.get("soundVolume") not in (None, ""):
-            patch["soundVolume"] = round(float(_clamp(shoot.get("soundVolume"), "soundVolume", 0.85) or 0.85), 3)
-        if shoot.get("soundPitch") not in (None, ""):
-            patch["soundPitch"] = round(float(_clamp(shoot.get("soundPitch"), "soundPitch", 0.0) or 0.0), 3)
-        if shoot.get("soundPitchVariance") not in (None, ""):
-            patch["soundPitchVariance"] = round(float(_clamp(shoot.get("soundPitchVariance"), "soundPitchVariance", 0.18) or 0.0), 3)
+    runtime: dict[str, Any] = {
+        "apiVersion": RUNTIME_PROGRAM_API_VERSION,
+        "schema": RUNTIME_WIRE_SCHEMA,
+        "itemEntityId": item_entity_id,
+        "limits": {
+            "maxEntityCount": MAX_RUNTIME_ENTITIES,
+            "maxChildDepth": MAX_CHILD_DEPTH,
+            "maxEventSpawnsPerActivation": MAX_EVENT_SPAWNS_PER_ACTIVATION,
+        },
+        "entities": entities,
+        "bindings": copy.deepcopy(authored_program.get("bindings") or []),
+    }
+    gameplay: dict[str, Any] = {"kind": str(out.get("category") or "generic")}
+    accessory: dict[str, Any] = {"enabled": False}
+    armor: dict[str, Any] = {"enabled": False}
+    ctx = _CompileContext(receipts=[])
 
-    patch["runtimePlanAuthored"] = True
-    apply_overhead_barrage_contract(patch)
-    apply_charge_release_contract(patch)
-    apply_sentry_contract(patch)
-    return {k: v for k, v in patch.items() if v not in (None, "")}
+    for call in calls:
+        target = str(call.get("target") or "")
+        entity_index = entity_index_by_id[target]
+        compiled_entity = entities[entity_index]
+        fn = str(call.get("fn") or "")
+        if target == item_entity_id and fn not in EVENT_ACTION_OPCODE:
+            _compile_item_call(
+                ctx,
+                call,
+                gameplay=gameplay,
+                accessory=accessory,
+                armor=armor,
+                runtime=runtime,
+                item_entity=compiled_entity,
+                entity_index=entity_index,
+            )
+        else:
+            _compile_entity_call(ctx, call, entity=compiled_entity, entity_index=entity_index)
+
+    # Canonical ordering makes cache/network fingerprints stable without changing semantics.
+    for entity in entities:
+        entity["events"] = sorted(entity.get("events") or [], key=lambda row: str(row.get("id") or ""))
+    runtime["bindings"] = sorted(runtime["bindings"], key=lambda row: str(row.get("id") or ""))
+
+    lowering_audit = audit_compiler_receipts(ctx.receipts)
+    if not lowering_audit["ok"]:
+        raise RuntimeError(f"technical lowerer wrote undeclared fields: {lowering_audit['violations'][:8]}")
+
+    contract = _dict(out.get("runtimeContract"))
+    contract["compiledSchema"] = RUNTIME_WIRE_SCHEMA
+    contract["runtimeApiVersion"] = RUNTIME_PROGRAM_API_VERSION
+    contract["finalWireReceipts"] = ctx.receipts
+    contract["validation"] = validation
+    contract["technicalLoweringAudit"] = lowering_audit
+
+    out["runtimeProgram"] = runtime
+    out["runtimeContract"] = contract
+    out["gameplay"] = gameplay
+    out["accessory"] = accessory
+    out["armor"] = armor
+    out.pop("attack", None)
+    out.pop("runtimePlan", None)
+    out.pop("runtimeCompiled", None)
+    out.pop("_authorItemRaw", None)
+    return out
+
+
+def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    runtime = _dict(data.get("runtimeProgram"))
+    rows: list[dict[str, Any]] = []
+    for entity in runtime.get("entities") or []:
+        if not isinstance(entity, Mapping):
+            continue
+        entity_id = str(entity.get("id") or "")
+        rows.append({"entityId": entity_id, "event": "on_spawn"})
+        if _dict(entity.get("damage")).get("enabled"):
+            rows.extend(({"entityId": entity_id, "event": "on_hit"}, {"entityId": entity_id, "event": "on_crit"}))
+        if _dict(entity.get("collision")).get("tileCollide"):
+            rows.append({"entityId": entity_id, "event": "on_tile_collision"})
+        rows.extend(({"entityId": entity_id, "event": "on_expire"}, {"entityId": entity_id, "event": "on_kill"}))
+        for event in entity.get("events") or []:
+            if isinstance(event, Mapping):
+                rows.append({"entityId": entity_id, "event": str(event.get("event") or "")})
+    for binding in runtime.get("bindings") or []:
+        if isinstance(binding, Mapping):
+            rows.append({"entityId": str(binding.get("target") or ""), "event": "on_use", "input": str(binding.get("input") or "")})
+    unique: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (str(row.get("entityId") or ""), str(row.get("event") or ""), str(row.get("input") or ""))
+        unique[key] = row
+    return [unique[key] for key in sorted(unique)]
+
+
+def runtime_visual_roles(data: Mapping[str, Any]) -> list[dict[str, str]]:
+    runtime = _dict(data.get("runtimeProgram"))
+    out: list[dict[str, str]] = []
+    for entity in runtime.get("entities") or []:
+        if isinstance(entity, Mapping):
+            out.append({
+                "entityId": str(entity.get("id") or ""),
+                "entityKind": str(entity.get("kind") or ""),
+                "visualRole": str(entity.get("visualRole") or ""),
+            })
+    return out
+
 
 __all__ = [
-    'TERRARIA_TILE_SIZE_PX',
-    'project_aoe_radius_tiles_to_damage_pixels',
-    'project_authored_pierce_to_runtime_hit_budget',
-    'compile_runtime_plan_to_genome_patch',
+    "compile_runtime_program",
+    "runtime_event_inventory",
+    "runtime_visual_roles",
 ]

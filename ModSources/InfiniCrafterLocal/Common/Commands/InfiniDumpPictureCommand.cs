@@ -54,12 +54,9 @@ public sealed class InfiniDumpPictureCommand : ModCommand
         public string ParentA { get; set; } = "";
         public string ParentB { get; set; } = "";
         public int PreferredCanvasSize { get; set; }
-        public int ProjectileWidth { get; set; }
-        public int ProjectileHeight { get; set; }
-        public float ProjectileScale { get; set; }
-        public string Delivery { get; set; } = "";
-        public string Movement { get; set; } = "";
-        public string VisualMode { get; set; } = "";
+        public int RuntimeEntityCount { get; set; }
+        public int RuntimeBindingCount { get; set; }
+        public string RuntimeSummary { get; set; } = "";
         public List<DumpAsset> Assets { get; set; } = new();
     }
 
@@ -171,20 +168,20 @@ public sealed class InfiniDumpPictureCommand : ModCommand
                 ParentA = data.ParentA ?? "",
                 ParentB = data.ParentB ?? "",
                 PreferredCanvasSize = data.Visual?.PreferredCanvasSize ?? 0,
-                ProjectileWidth = data.Attack?.ProjectileWidth ?? 0,
-                ProjectileHeight = data.Attack?.ProjectileHeight ?? 0,
-                ProjectileScale = data.Attack?.ProjectileScale ?? 0f,
-                Delivery = data.Attack?.Delivery ?? "",
-                Movement = data.Attack?.Movement ?? "",
-                VisualMode = data.Attack?.VisualMode ?? "",
+                RuntimeEntityCount = data.RuntimeProgram.Entities.Length,
+                RuntimeBindingCount = data.RuntimeProgram.Bindings.Length,
+                RuntimeSummary = string.Join(" | ", data.RuntimeProgram.Entities.Select(entity =>
+                    $"{entity.Id}:{entity.Kind}:{entity.Movement.Name}/{entity.Controller.Name}:{entity.Visual.AssetMode}")),
             };
 
             AddAsset(entry, copied, assetDir, safeId, "item_final", data.Visual?.SpritePath, data.Visual?.SpriteStatus, data.Visual?.PreferredCanvasSize ?? 0, data.Visual?.SpriteTechnicalScore ?? 0f, data.Visual?.ImagePrompt);
             AddAsset(entry, copied, assetDir, safeId, "item_raw", data.Visual?.SpriteRawPath, "raw", data.Visual?.PreferredCanvasSize ?? 0, 0f, data.Visual?.ImagePrompt);
-            AddAsset(entry, copied, assetDir, safeId, "projectile", data.Attack?.ProjectileSpritePath, data.Attack?.ProjectileSpriteStatus, EffectiveProjectileCanvas(data), data.Attack?.ProjectileSpriteScore ?? 0f, data.Attack?.ProjectileSpritePrompt);
-            AddAsset(entry, copied, assetDir, safeId, "impact", data.Attack?.ImpactSpritePath, data.Attack?.ImpactSpriteStatus, 0, data.Attack?.ImpactSpriteScore ?? 0f, data.Attack?.ImpactSpritePrompt);
-            AddAsset(entry, copied, assetDir, safeId, "child", data.Attack?.ChildSpritePath, data.Attack?.ChildSpriteStatus, 0, data.Attack?.ChildSpriteScore ?? 0f, data.Attack?.ChildSpritePrompt);
-            AddAsset(entry, copied, assetDir, safeId, "field", data.Attack?.FieldSpritePath, data.Attack?.FieldSpriteStatus, 0, data.Attack?.FieldSpriteScore ?? 0f, data.Attack?.FieldSpritePrompt);
+            foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
+            {
+                RuntimeEntityVisualSpec visual = entity.Visual ?? new RuntimeEntityVisualSpec();
+                AddAsset(entry, copied, assetDir, safeId, "entity_" + entity.Id, visual.SpritePath, visual.SpriteStatus,
+                    EffectiveEntityCanvas(data, entity), visual.SpriteTechnicalScore, visual.Prompt);
+            }
             AddAsset(entry, copied, assetDir, safeId, "visual_manifest", data.Visual?.AssetManifestPath, "manifest", 0, 0f, "");
 
             if (entry.Assets.Count > 0)
@@ -718,16 +715,13 @@ public sealed class InfiniDumpPictureCommand : ModCommand
     private static DateTime BestMTimeUtc(GeneratedItemData data)
     {
         DateTime best = DateTime.MinValue;
-        foreach (string? path in new[]
+        IEnumerable<string?> assetPaths = new[]
         {
             data.Visual?.SpritePath,
             data.Visual?.SpriteRawPath,
-            data.Attack?.ProjectileSpritePath,
-            data.Attack?.ImpactSpritePath,
-            data.Attack?.ChildSpritePath,
-            data.Attack?.FieldSpritePath,
             data.Visual?.AssetManifestPath,
-        })
+        }.Concat(data.RuntimeProgram.Entities.Select(entity => entity.Visual?.SpritePath));
+        foreach (string? path in assetPaths)
         {
             string? local = ResolveExistingPath(path);
             if (!string.IsNullOrWhiteSpace(local) && File.Exists(local))
@@ -743,28 +737,13 @@ public sealed class InfiniDumpPictureCommand : ModCommand
         return best;
     }
 
-    private static int EffectiveProjectileCanvas(GeneratedItemData data)
+    private static int EffectiveEntityCanvas(GeneratedItemData data, RuntimeEntitySpec entity)
     {
         int baseCanvas = Math.Clamp(data.Visual?.PreferredCanvasSize ?? 32, 16, 64);
-        int major = Math.Max(data.Attack?.ProjectileWidth ?? 0, data.Attack?.ProjectileHeight ?? 0);
-        string blob = string.Join(" ", new[]
-        {
-            data.Attack?.ProjectileShape,
-            data.Attack?.ProjectileMotion,
-            data.Attack?.ProjectileTrail,
-            data.Attack?.Pattern,
-            data.Attack?.ProjectileSpritePrompt,
-            data.Attack?.VisualMode,
-        }).ToLowerInvariant();
-
-        bool meleeReadable = blob.Contains("sword") || blob.Contains("blade") || blob.Contains("slash") ||
-            blob.Contains("glaive") || blob.Contains("boomerang") || blob.Contains("spear") ||
-            blob.Contains("lance") || blob.Contains("scythe") || blob.Contains("axe");
-
-        if (major >= 21) return Math.Max(baseCanvas, 48);
-        if (major >= 16) return Math.Max(48, baseCanvas >= 64 ? 64 : 48);
-        if (meleeReadable) return Math.Max(48, baseCanvas);
-        return Math.Max(32, baseCanvas >= 64 ? 48 : 32);
+        int major = Math.Max(entity.Hitbox?.WidthPx ?? 0, entity.Hitbox?.HeightPx ?? 0);
+        if (major >= 28) return 64;
+        if (major >= 16) return Math.Max(baseCanvas, 48);
+        return Math.Max(baseCanvas, 32);
     }
 
     private static void AddAsset(DumpEntry entry, Dictionary<string, string> copied, string assetDir, string safeId, string role, string? originalPath, string? status, int canvas, float score, string? prompt)
@@ -876,8 +855,7 @@ public sealed class InfiniDumpPictureCommand : ModCommand
             Projectile p = Main.projectile[i];
             if (p is null || !p.active) continue;
             string modProj = p.ModProjectile?.GetType().FullName ?? "";
-            if (!modProj.Contains("GeneratedProjectile", StringComparison.OrdinalIgnoreCase) &&
-                !modProj.Contains("GeneratedVfxOverlayProjectile", StringComparison.OrdinalIgnoreCase))
+            if (!modProj.Contains("GeneratedProjectile", StringComparison.OrdinalIgnoreCase))
                 continue;
             yield return new
             {
@@ -941,8 +919,8 @@ public sealed class InfiniDumpPictureCommand : ModCommand
             sb.AppendLine("<div class=\"meta\">");
             sb.AppendLine("id: <code>" + H(entry.Id) + "</code><br>");
             sb.AppendLine("parents: " + H(entry.ParentA) + " + " + H(entry.ParentB) + "<br>");
-            sb.AppendLine("category: " + H(entry.Category) + " · itemCanvas: " + entry.PreferredCanvasSize + " · projectile: " + entry.ProjectileWidth + "x" + entry.ProjectileHeight + " scale " + entry.ProjectileScale.ToString("0.###") + "<br>");
-            sb.AppendLine("delivery: " + H(entry.Delivery) + " · movement: " + H(entry.Movement) + " · visualMode: " + H(entry.VisualMode));
+            sb.AppendLine("category: " + H(entry.Category) + " · itemCanvas: " + entry.PreferredCanvasSize + " · entities: " + entry.RuntimeEntityCount + " · bindings: " + entry.RuntimeBindingCount + "<br>");
+            sb.AppendLine("runtime: " + H(entry.RuntimeSummary));
             sb.AppendLine("</div>");
 
             foreach (var a in entry.Assets)

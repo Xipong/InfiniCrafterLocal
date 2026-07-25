@@ -15,7 +15,13 @@ from infini_local.pipelines import llm_transport as transport
 
 
 def _chat_payload(stage: str) -> dict:
-    return {
+    finite_stage = {
+        "item_author_contract": "planner",
+        "runtime_repair": "author_repair",
+        "visual_director": "visual_director",
+        "vfx_director": "vfx_director",
+    }[stage]
+    return transport.with_llm_stage({
         "model": "ignored",
         "messages": [
             {"role": "system", "name": f"{stage}_contract", "content": f"{stage} instructions"},
@@ -23,7 +29,7 @@ def _chat_payload(stage: str) -> dict:
         ],
         "max_tokens": 321,
         "response_format": {"type": "json_object"},
-    }
+    }, finite_stage)
 
 
 def _contract_check_item_lease_round_robin_pins_every_call_to_one_profile(monkeypatch) -> None:

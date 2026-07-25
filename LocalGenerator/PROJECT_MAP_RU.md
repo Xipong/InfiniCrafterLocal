@@ -1,42 +1,25 @@
-# LocalGenerator v0.4.239 — project map
-
-Python generator side for InfiniCrafterLocal. Read this together with `../AGENTS.md`, `../PROJECT_MAP_RU.md`, and `PROJECT_ARCHITECTURE_RU.md`.
+# LocalGenerator 0.4.241 — project map
 
 ```text
-LocalGenerator/
-  infini_local/
-    core/        contracts, env, runtime compiler, balance, VFX/effect catalogs
-    pipelines/   combine/authoring/visual/final-normalize orchestration
-    services/    endpoint helpers, asset sync, SD.cpp/visual/runtime dump services
-    storage/     world recipe storage, traces, failure states
-    web/         HTTP server/routes/dashboard/debug endpoints
-    desktop/     settings GUI
-  tests/          contract/regression tests
-  tools/          diagnostics/replay/research helpers
-  data/           compact reference/seed JSON; not a huge DB authority by itself
-  docs/           supplemental reference docs; project backlog lives at ../TODO_ROADMAP_VERY_LATER_RU.md
+infini_local/core/runtime_authoring/
+  capability_registry.py  immutable grammar and capabilities
+  program_schema.py       strict Author + Repair patch schema
+  repair_scope.py         exact frozen field scope + blocker/dependency closure
+  validator.py            references/conflicts/events/budgets
+  compiler.py             exact wire projection + receipts
+  technical_lowering.py   lossless adapters only
+  wire_validator.py       strict final DTO
+
+infini_local/pipelines/
+  llm_authoring_prompt.py  one complete Gameplay prompt
+  llm_authoring_pipeline.py Gameplay Author + conditional Repair
+  combine_pipeline.py      three-stage orchestration
+  visual_*                 entity-role Visual contract and assets
+
+infini_local/core/vfx_manifest.py exact entity/event VFX Director
+infini_local/qa/                   fixtures/witnesses/machine audit
+infini_local/storage/              v5 world recipes and traces
+tests/                             contracts and infrastructure tests
 ```
 
-Do not use old folder docs or agent reports as proof. The active source files are listed in `PROJECT_ARCHITECTURE_RU.md`.
-
-Boundary summary:
-- Python authors/validates/repairs explicit data.
-- `runtimePlan.engineCalls` remains the executable source.
-- `runtimeArchetype` and `runtimeContract` are optional v0.4.239 data contracts for family/feel/promise truth; unsupported mechanics are preserved inertly.
-- C# applies/executes supported fields only, including exact sound catalog ids and synced pitch variance; it never selects built-in audio from prose.
-- Asset sync exposes final filenames for HTTP `/get_asset`.
-- Contract stamps are provenance, not proof of implemented future behavior.
-
-## Agent guardrails
-
-- Source of truth: live files under `infini_local/` and tests under `tests/`.
-- No prose gameplay: names/prompts/tooltips/debug strings do not become mechanics unless compiled into explicit fields.
-- MP is server-authoritative on the C# side; LocalGenerator returns data to the host/server path.
-- World-scoped storage/cache must not leak generated parents across worlds.
-- If you change X, also check Y: Python compiler/validator, C# DTO/runtime, tests, docs.
-- No second model-judge claim unless implemented in source.
-- `dict[str, Any]` / dicts / dictionaries remain an architecture risk; keep provenance and field names explicit.
-
-## Output contract reminder
-
-LocalGenerator's important output is explicit `GeneratedItemData` plus `VfxManifest`/final asset filenames. The C# mod does not execute raw LLM prose.
+Public source imports should use `infini_local.core.runtime_authoring`, not deleted legacy compiler/root-lowering modules.

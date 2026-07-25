@@ -1,0 +1,197 @@
+{
+  "schema": "infini.terraria-tmodloader-standardization-verification.v1",
+  "project": "InfiniCrafterLocal",
+  "version": "0.4.241",
+  "baseline": "InfiniCrafterLocal_v0.4.240_LOW_LEVEL_RUNTIME_TARGETED_REPAIR_COMPLETE.zip",
+  "releaseReady": false,
+  "portableCriteriaComplete": true,
+  "sourceDelta": {
+    "baselineFiles": 356,
+    "finalFilesBeforeManifest": 368,
+    "addedFiles": 15,
+    "deletedFiles": 3,
+    "commonPaths": 353,
+    "changedCommonFiles": 73
+  },
+  "canonicalVocabulary": {
+    "damageClassBuiltins": 10,
+    "itemUseStyles": 13,
+    "ammoItemCategories": 16,
+    "moddedDamageClassIdentity": "exact ModName/ClassName, case-preserving, no fallback",
+    "gameplayAuthorVisibleAliases": 0
+  },
+  "capabilityLibrary": {
+    "score": 100,
+    "scoreMax": 100,
+    "metrics": {
+      "capabilities": 52,
+      "entityKinds": 7,
+      "inputs": 4,
+      "bindingActions": 5,
+      "events": 10,
+      "parameters": 185,
+      "numericParameters": 143,
+      "boundedNumericParameters": 143,
+      "semanticParameters": 185,
+      "typedEntityReferences": 2,
+      "requirements": 15,
+      "bindingDependencyEdges": 9,
+      "spawnBudgetCapabilities": 1,
+      "stationaryMeaningfulCapabilities": 10,
+      "exactWirePaths": 257,
+      "globalTechnicalLowerers": 3,
+      "globalTechnicalLowererOutputs": 100,
+      "exclusiveGroups": {
+        "movement": [
+          "move_accelerate",
+          "move_blackhole_pull",
+          "move_boomerang",
+          "move_bounce",
+          "move_drift",
+          "move_expanding_wave",
+          "move_flail_tether",
+          "move_forward_then_retract",
+          "move_gravity_arc",
+          "move_orbit",
+          "move_phase",
+          "move_proximity_missile",
+          "move_returning_glaive",
+          "move_sine_homing",
+          "move_slow_homing",
+          "move_spiral",
+          "move_straight",
+          "move_vortex_orb",
+          "move_whip_lash",
+          "move_yoyo_hover"
+        ],
+        "controller": [
+          "channel_beam",
+          "charge_then_release",
+          "target_and_fire"
+        ]
+      },
+      "authorityDistribution": {
+        "owner_request_server_execute": 12,
+        "server_execute": 4,
+        "owner_execute_sync": 34,
+        "client_visual_only": 2
+      },
+      "rangeParityRows": 79,
+      "verticalSliceCount": 52
+    },
+    "audit": "contracts/capability_library_audit.generated.json"
+  },
+  "standardizationAudit": {
+    "ok": true,
+    "score": 87,
+    "scoreMax": 87,
+    "audit": "contracts/terraria_standardization_audit.generated.json"
+  },
+  "prompt": {
+    "capabilities": 52,
+    "chars": 70685,
+    "limit": 80000,
+    "headroom": 9315,
+    "familyRouter": false,
+    "weaponMacros": false
+  },
+  "repair": {
+    "authorPayloadChars": 70484,
+    "semanticPolicies": "33/33",
+    "frozenMerge": true,
+    "blockerLocalCatalog": true
+  },
+  "tests": {
+    "pytest": {
+      "command": "PYTHONPATH=LocalGenerator python -m pytest -q",
+      "passed": 77,
+      "warnings": 6
+    },
+    "compileall": "passed",
+    "schemas": "10/10 current",
+    "delivery": "passed",
+    "parity": "passed",
+    "mutations": "4/4 caught",
+    "nonArchetypalFixtures": "8/8 passed",
+    "csharpStaticContract": "passed",
+    "projectHygiene": "passed",
+    "sandbox": {
+      "ok": true,
+      "coverage": "portable-static"
+    }
+  },
+  "standardized": [
+    "finite Python/C# DamageClass, ItemUseStyleID and AmmoID vocabularies",
+    "exact built-in or ModName/ClassName DamageClass resolution",
+    "separate consumable, ammo-item, notAmmo and potion semantics",
+    "loaded rarity/buff/tile/wall bounds",
+    "Terraria projectile defaults, explicit immunity/collision, NewProjectileDirect spawn",
+    "Item.value and Item.axe units/range parity",
+    "canonical parent facts and no duplicate pseudo damage class identity"
+  ],
+  "customRuntimeRetained": [
+    "GeneratedItem/GeneratedProjectile proxy types for post-load dynamic content",
+    "per-item entityId and per-instance visual assets",
+    "bounded movement/controller opcodes and typed event graph",
+    "dynamic hydration/network synchronization"
+  ],
+  "intentionallyUnsupportedUntilFullVerticalSlice": [
+    "Item.useAmmo/PickAmmo weapon pipeline",
+    "Sand ammo type-wide mapping",
+    "ID-static NPC immunity on shared proxy projectile type"
+  ],
+  "residualRisks": [
+    "rarity/buff/tile/wall mod content still uses numeric loaded IDs rather than persisted ModName/ContentName identities",
+    "no real C# compile or tModLoader runtime smoke in this environment"
+  ],
+  "notRun": [
+    {
+      "gate": "Ruff",
+      "reason": "executable/module unavailable"
+    },
+    {
+      "gate": "Pyright",
+      "reason": "executable/module unavailable"
+    },
+    {
+      "gate": "Hypothesis/full release runner",
+      "reason": "Hypothesis unavailable; validate_release exits unavailable before full stack"
+    },
+    {
+      "gate": "C# / tModLoader build",
+      "reason": "dotnet, tML install and external mod DLLs unavailable"
+    },
+    {
+      "gate": "tModLoader runtime self-test",
+      "reason": "no built mod/runtime report"
+    },
+    {
+      "gate": "singleplayer and host/client smoke",
+      "reason": "no tML runtime/provider"
+    },
+    {
+      "gate": "Calamity loaded-content smoke",
+      "reason": "Calamity/tML unavailable"
+    },
+    {
+      "gate": "real LLM crafts",
+      "reason": "provider credentials/endpoints unavailable"
+    }
+  ],
+  "packagedValidation": {
+    "archiveRoot": "InfiniCrafterLocal_v0.4.241_TERRARIA_STANDARDIZED_COMPLETE",
+    "sourceManifestBeforeTests": "368/368",
+    "pytest": {
+      "passed": 77,
+      "warnings": 6
+    },
+    "terrariaStandardization": "87/87",
+    "capabilityLibrary": "100/100",
+    "targetedRepair": "33/33 policies; frozen merge; blocker-local catalog",
+    "mutationGate": "4/4 caught",
+    "nonArchetypalFixtures": "8/8 passed",
+    "csharpStaticContract": "passed",
+    "projectHygiene": "passed",
+    "sourceManifestAfterTestCleanup": "368/368"
+  }
+}

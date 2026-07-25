@@ -158,10 +158,10 @@ public sealed class InfiniCacheCommand : ModCommand
     private static IEnumerable<string> RuntimeSpritePaths(GeneratedItemData data)
     {
         if (!string.IsNullOrWhiteSpace(data.Visual?.SpritePath)) yield return data.Visual.SpritePath;
-        if (!string.IsNullOrWhiteSpace(data.Attack?.ProjectileSpritePath)) yield return data.Attack.ProjectileSpritePath;
-        if (!string.IsNullOrWhiteSpace(data.Attack?.ImpactSpritePath)) yield return data.Attack.ImpactSpritePath;
-        if (!string.IsNullOrWhiteSpace(data.Attack?.ChildSpritePath)) yield return data.Attack.ChildSpritePath;
-        if (!string.IsNullOrWhiteSpace(data.Attack?.FieldSpritePath)) yield return data.Attack.FieldSpritePath;
+        if (!string.IsNullOrWhiteSpace(data.Visual?.EquipOverlayPath)) yield return data.Visual.EquipOverlayPath;
+        foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
+            if (!string.IsNullOrWhiteSpace(entity?.Visual?.SpritePath))
+                yield return entity.Visual.SpritePath;
     }
 
     private static string FormatBytes(long bytes)

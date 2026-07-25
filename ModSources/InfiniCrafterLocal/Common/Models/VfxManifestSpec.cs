@@ -1,74 +1,57 @@
 #nullable enable
+using InfiniCrafterLocal.Common.VFX;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using InfiniCrafterLocal.Common.VFX;
 
 namespace InfiniCrafterLocal.Common.Models;
 
-// AGENT MAP: frozen VFX manifest data contract.
-// VFX slots/channels/renderers are normalized data for presentation. Effect names
-// and motif prose must not become gameplay routing; projectile gameplay remains in
-// AttackSpec/runtime codes.
+/// <summary>
+/// Presentation-only manifest bound to exact low-level runtime entity/event pairs.
+/// Unknown schema, renderer, entity id, event, or JSON field fails closed.
+/// </summary>
 public sealed class VfxManifestSpec
 {
+    public const string CurrentSchema = "infini.vfx.runtime-events.v15";
 
-// =============================================================================
-// NAV TOC: VfxManifestSpec.cs
-// =============================================================================
-// NAV: VFX_MANIFEST_CONTRACT          frozen generated VFX manifest root
-// NAV: VFX_MANIFEST_JSON_NORMALIZE    JSON load/save and root Normalize()
-// NAV: VFX_MOTIF_AND_BUDGET           motif, magnitude, emergency budget
-// NAV: VFX_SLOT_CONTRACT              staged slot contract: rendererKind/eventGroup/channel/lane
-// NAV: VFX_SLOT_NORMALIZATION         channel/lane/emission/stage/anchor inference fallback
-// NAV: VFX_BAKED_COMMAND_CONTRACT     inline baked spawn commands
-// NAV: VFX_DEBUG_CONTRACT             debug data emitted by Python selector
-// =============================================================================
-
-// =============================================================================
-// NAV: VFX_MANIFEST_CONTRACT
-// =============================================================================
-    public string Schema { get; set; } = "infini.vfx.hybrid.v14";
+    public string Schema { get; set; } = CurrentSchema;
     public string RecipeId { get; set; } = "";
-    public string EffectName { get; set; } = ""; // debug/style only; runtime must not parse this
-    public string[] InspirationNames { get; set; } = Array.Empty<string>(); // debug/style only
-    public string PlaybackMode { get; set; } = "Hybrid"; // Baked, Realtime, Hybrid, Auto
-    public int Seed { get; set; } = 0;
-    public float Confidence { get; set; } = 0f;
-    public float EffectMagnitude { get; set; } = 0.5f;
-    public string VisualBudgetClass { get; set; } = "normal";
+    public string EffectName { get; set; } = "";
+    public string[] InspirationNames { get; set; } = Array.Empty<string>();
+    public string PlaybackMode { get; set; } = "Realtime";
+    public int Seed { get; set; }
+    public float Confidence { get; set; } = 1f;
+    public float EffectMagnitude { get; set; }
+    public string VisualBudgetClass { get; set; } = "tiny";
     public VfxMotifSpec Motif { get; set; } = new();
     public VfxQualityBudgetSpec Budget { get; set; } = new();
     public VfxSlotSpec[] Slots { get; set; } = Array.Empty<VfxSlotSpec>();
     public string OverlayPolicy { get; set; } = "LocalOnly";
     public VfxDebugSpec Debug { get; set; } = new();
 
-
-// =============================================================================
-// NAV: VFX_MANIFEST_JSON_NORMALIZE
-// =============================================================================
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        WriteIndented = false
+        WriteIndented = false,
     };
 
     public bool HasSlots => Slots is { Length: > 0 };
-
-    public static VfxManifestSpec Empty() => new();
+    public static VfxManifestSpec Empty() => new() { Slots = Array.Empty<VfxSlotSpec>() };
 
     public static VfxManifestSpec FromJson(string? json)
     {
         const string boundary = "VfxManifestSpec.FromJson";
         ContractJsonDiagnostics.Clear(boundary);
-        if (string.IsNullOrWhiteSpace(json))
-            return Empty();
+        if (string.IsNullOrWhiteSpace(json)) return Empty();
         try
         {
-            var parsed = JsonSerializer.Deserialize<VfxManifestSpec>(json, Options) ?? Empty();
-            parsed.Normalize();
+            VfxManifestSpec parsed = JsonSerializer.Deserialize<VfxManifestSpec>(json, Options) ?? Empty();
+            parsed.NormalizeAndValidate();
             return parsed;
         }
         catch (Exception exception)
@@ -82,8 +65,11 @@ public sealed class VfxManifestSpec
     {
         const string boundary = "VfxManifestSpec.ToJson";
         ContractJsonDiagnostics.Clear(boundary);
-        Normalize();
-        try { return JsonSerializer.Serialize(this, Options); }
+        try
+        {
+            NormalizeAndValidate();
+            return JsonSerializer.Serialize(this, Options);
+        }
         catch (Exception exception)
         {
             ContractJsonDiagnostics.Record(boundary, exception);
@@ -91,268 +77,232 @@ public sealed class VfxManifestSpec
         }
     }
 
-    public void Normalize()
+    public void Normalize() => NormalizeAndValidate();
+
+    public void NormalizeAndValidate()
     {
-        Schema = string.IsNullOrWhiteSpace(Schema) ? "infini.vfx.hybrid.v14" : Schema;
-        RecipeId ??= "";
-        EffectName ??= "";
+        Schema = (Schema ?? "").Trim();
+        if (!string.Equals(Schema, CurrentSchema, StringComparison.Ordinal))
+            throw new InvalidDataException($"Unsupported VFX manifest schema '{Schema}'");
+        RecipeId = Safe(RecipeId, 128);
+        EffectName = Safe(EffectName, 96);
         InspirationNames ??= Array.Empty<string>();
-        PlaybackMode = string.IsNullOrWhiteSpace(PlaybackMode) ? "Hybrid" : PlaybackMode;
-        Budget ??= new VfxQualityBudgetSpec();
-        Budget.Normalize();
-        EffectMagnitude = Math.Clamp(EffectMagnitude <= 0f ? Budget.EffectMagnitude : EffectMagnitude, 0f, 1f);
-        VisualBudgetClass = string.IsNullOrWhiteSpace(VisualBudgetClass) ? MagnitudeClass(EffectMagnitude) : VisualBudgetClass;
-        OverlayPolicy = string.IsNullOrWhiteSpace(OverlayPolicy) ? "LocalOnly" : OverlayPolicy;
+        PlaybackMode = PlaybackMode is "Realtime" or "Hybrid" or "Baked" ? PlaybackMode : "Realtime";
+        Confidence = Math.Clamp(Confidence, 0f, 1f);
+        EffectMagnitude = Math.Clamp(EffectMagnitude, 0f, 1f);
+        VisualBudgetClass = VisualBudgetClass is "tiny" or "small" or "normal" or "large" or "signature" ? VisualBudgetClass : "tiny";
+        OverlayPolicy = OverlayPolicy is "LocalOnly" or "AllClients" ? OverlayPolicy : "LocalOnly";
         Motif ??= new VfxMotifSpec();
         Motif.Normalize();
-        Slots ??= Array.Empty<VfxSlotSpec>();
+        Budget ??= new VfxQualityBudgetSpec();
+        Budget.Normalize();
         Debug ??= new VfxDebugSpec();
-        foreach (var slot in Slots)
-            slot?.Normalize();
+        Debug.Normalize();
+        Slots ??= Array.Empty<VfxSlotSpec>();
+        if (Slots.Length > 12)
+            throw new InvalidDataException("VFX slot count exceeds 12");
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (VfxSlotSpec? slot in Slots)
+        {
+            if (slot is null) throw new InvalidDataException("VFX manifest contains null slot");
+            slot.NormalizeAndValidate();
+            if (!ids.Add(slot.Id)) throw new InvalidDataException($"duplicate VFX slot id '{slot.Id}'");
+        }
     }
 
-    private static string MagnitudeClass(float value)
+    private static string Safe(string? value, int max)
     {
-        if (value < 0.22f) return "tiny";
-        if (value < 0.42f) return "small";
-        if (value < 0.66f) return "normal";
-        if (value < 0.86f) return "large";
-        return "signature";
+        string text = (value ?? "").Trim();
+        return text.Length <= max ? text : text[..max];
     }
 }
 
-
-
-// =============================================================================
-// NAV: VFX_MOTIF_AND_BUDGET
-// =============================================================================
 public sealed class VfxMotifSpec
 {
     public string Element { get; set; } = "neutral";
-    public string ShapeLanguage { get; set; } = "generic";
-    public string MotionLanguage { get; set; } = "forward";
+    public string ShapeLanguage { get; set; } = "none";
+    public string MotionLanguage { get; set; } = "none";
     public string PaletteRole { get; set; } = "primary";
     public float Rhythm { get; set; } = 1f;
-    public float Chaos { get; set; } = 0.25f;
-
+    public float Chaos { get; set; }
     public void Normalize()
     {
-        Element = string.IsNullOrWhiteSpace(Element) ? "neutral" : Element.Trim();
-        ShapeLanguage = string.IsNullOrWhiteSpace(ShapeLanguage) ? "generic" : ShapeLanguage.Trim();
-        MotionLanguage = string.IsNullOrWhiteSpace(MotionLanguage) ? "forward" : MotionLanguage.Trim();
-        PaletteRole = string.IsNullOrWhiteSpace(PaletteRole) ? "primary" : PaletteRole.Trim();
-        Rhythm = Math.Clamp(Rhythm <= 0f ? 1f : Rhythm, 0.2f, 3.0f);
+        Element = Safe(Element, 48, "neutral");
+        ShapeLanguage = Safe(ShapeLanguage, 96, "none");
+        MotionLanguage = Safe(MotionLanguage, 96, "none");
+        PaletteRole = Safe(PaletteRole, 48, "primary");
+        Rhythm = Math.Clamp(Rhythm <= 0f ? 1f : Rhythm, 0.2f, 3f);
         Chaos = Math.Clamp(Chaos, 0f, 1f);
+    }
+    private static string Safe(string? value, int max, string fallback)
+    {
+        string text = (value ?? "").Trim();
+        if (text.Length == 0) text = fallback;
+        return text.Length <= max ? text : text[..max];
     }
 }
 
 public sealed class VfxQualityBudgetSpec
 {
-    public float EffectMagnitude { get; set; } = 0.5f;
-    public string VisualBudgetClass { get; set; } = "normal";
+    public float EffectMagnitude { get; set; }
+    public string VisualBudgetClass { get; set; } = "tiny";
     public bool EmergencyCap { get; set; } = true;
-    public int MaxParticlesPerTick { get; set; } = 240;
-    public int MaxParticlesTotal { get; set; } = 9000;
-    public int MaxDrawCalls { get; set; } = 420;
-    public float SpawnRateMultiplier { get; set; } = 1.5f;
+    public int MaxParticlesPerTick { get; set; } = 32;
+    public int MaxParticlesTotal { get; set; } = 1000;
+    public int MaxDrawCalls { get; set; } = 64;
+    public float SpawnRateMultiplier { get; set; } = 1f;
     public bool EnableSoftGlow { get; set; } = true;
     public bool EnablePointSparks { get; set; } = true;
-    public bool EnablePersistentSmoke { get; set; } = true;
-
+    public bool EnablePersistentSmoke { get; set; }
     public void Normalize()
     {
-        EffectMagnitude = Math.Clamp(EffectMagnitude <= 0f ? 0.5f : EffectMagnitude, 0f, 1f);
-        VisualBudgetClass = string.IsNullOrWhiteSpace(VisualBudgetClass) ? MagnitudeClass(EffectMagnitude) : VisualBudgetClass;
-        MaxParticlesPerTick = Math.Clamp(MaxParticlesPerTick <= 0 ? 240 : MaxParticlesPerTick, 0, 512);
-        MaxParticlesTotal = Math.Clamp(MaxParticlesTotal <= 0 ? 9000 : MaxParticlesTotal, 0, 20000);
-        MaxDrawCalls = Math.Clamp(MaxDrawCalls <= 0 ? 420 : MaxDrawCalls, 0, 1200);
-        SpawnRateMultiplier = Math.Clamp(SpawnRateMultiplier <= 0f ? 1.5f : SpawnRateMultiplier, 0f, 4.0f);
-    }
-
-    private static string MagnitudeClass(float value)
-    {
-        if (value < 0.22f) return "tiny";
-        if (value < 0.42f) return "small";
-        if (value < 0.66f) return "normal";
-        if (value < 0.86f) return "large";
-        return "signature";
+        EffectMagnitude = Math.Clamp(EffectMagnitude, 0f, 1f);
+        VisualBudgetClass = VisualBudgetClass is "tiny" or "small" or "normal" or "large" or "signature" ? VisualBudgetClass : "tiny";
+        MaxParticlesPerTick = Math.Clamp(MaxParticlesPerTick, 0, 256);
+        MaxParticlesTotal = Math.Clamp(MaxParticlesTotal, 0, 12000);
+        MaxDrawCalls = Math.Clamp(MaxDrawCalls, 0, 512);
+        SpawnRateMultiplier = Math.Clamp(SpawnRateMultiplier, 0f, 4f);
     }
 }
 
-
-// =============================================================================
-// NAV: VFX_SLOT_CONTRACT
-// =============================================================================
 public sealed class VfxSlotSpec
 {
-    public string Event { get; set; } = "tick";
-    public string EffectName { get; set; } = ""; // optional debug/style label; runtime must not parse this
-    public string EventGroup { get; set; } = "auto"; // live/hit/kill/item_live/item_use; canonical lifecycle group precompiled by Python.
-    public string Stage { get; set; } = "loop"; // windup, active, impact, decay, loop
-    public string Backend { get; set; } = "Auto"; // Baked, Realtime, Primitive, Sprite, Particle, Auto
-    public string RendererKind { get; set; } = "projectileAfterimage"; // exact canonical renderer id.
-    public string TextureRole { get; set; } = "projectile";
-    public string ParticleRole { get; set; } = "child";
-    public string Anchor { get; set; } = "self"; // self, owner, tip, tipHistory, hitPoint, velocity, field
-    public string Blend { get; set; } = "alpha"; // alpha/additive, advisory for future backends
+    public string Id { get; set; } = "";
+    public string EntityId { get; set; } = "";
+    public string Event { get; set; } = "";
+    public string EffectName { get; set; } = "";
+    public string EventGroup { get; set; } = "auto";
+    public string Stage { get; set; } = "loop";
+    public string Backend { get; set; } = "Auto";
+    public string RendererKind { get; set; } = "";
+    public string TextureRole { get; set; } = "entity";
+    public string ParticleRole { get; set; } = "entity";
+    public string Anchor { get; set; } = "self";
+    public string Blend { get; set; } = "alpha";
     public string Layer { get; set; } = "BeforeProjectiles";
-    public string Channel { get; set; } = "auto"; // motionTrail/coreGlow/ambientParticles/impactShape/impactParticles/decaySmoke/light/sound
-    public string Lane { get; set; } = "auto"; // primary/support/accent/ornament/cue; lets multiple compatible slots share a channel without becoming equal-weight spam.
-    public string Source { get; set; } = "recipe"; // recipe, macro, blend:<id>, procedural:<kind>; debug only, runtime-safe.
-    public string EmissionMode { get; set; } = "auto"; // wake/orbit/residue/burst/cone/ring/spiral
-    public string ParticleSystemId { get; set; } = "auto"; // pl:glow/pl:shard/pl:smoke/pl:spark/dust; explicit ParticleLibrary routing address.
-    public float FadeIn { get; set; } = 0.15f;
-    public float FadeOut { get; set; } = 0.35f;
+    public string Channel { get; set; } = "ambientParticles";
+    public string Lane { get; set; } = "support";
+    public string Source { get; set; } = "llm_vfx_director";
+    public string EmissionMode { get; set; } = "none";
+    public string ParticleSystemId { get; set; } = "none";
+    public float FadeIn { get; set; }
+    public float FadeOut { get; set; }
     public string Curve { get; set; } = "smooth";
-    public int SlotSeed { get; set; } = 0;
-    public int Variant { get; set; } = 0;
-    public int StartTick { get; set; } = 0;
-    public int RepeatEvery { get; set; } = 0;
+    public int SlotSeed { get; set; }
+    public int Variant { get; set; }
+    public int StartTick { get; set; }
+    public int RepeatEvery { get; set; }
     public float Scale { get; set; } = 1f;
-    public float Density { get; set; } = 0.35f;
+    public float Density { get; set; }
     public int Duration { get; set; } = 10;
     public float Alpha { get; set; } = 0.65f;
-    public float Spread { get; set; } = 0.5f;
-    public float Jitter { get; set; } = 0.35f;
-    public float PhaseOffset { get; set; } = 0f;
+    public float Spread { get; set; }
+    public float Jitter { get; set; }
+    public float PhaseOffset { get; set; }
     public float BudgetWeight { get; set; } = 1f;
-    public string Importance { get; set; } = "secondary"; // core/secondary/accent/luxury
-    public float VisualCost { get; set; } = 0.25f;
-    public float SignatureWeight { get; set; } = 0.45f;
+    public string Importance { get; set; } = "secondary";
+    public float VisualCost { get; set; }
+    public float SignatureWeight { get; set; }
     public string BakedClipId { get; set; } = "";
     public string BakedClipHash { get; set; } = "";
-    public int BakedCommandCount { get; set; } = 0;
+    public int BakedCommandCount { get; set; }
     public VfxBakedCommandSpec[] BakedCommands { get; set; } = Array.Empty<VfxBakedCommandSpec>();
 
-    public void Normalize()
+    public void Normalize() => NormalizeAndValidate();
+    public void NormalizeAndValidate()
     {
-        Event = VfxCanonicalVocabulary.Event(Event);
-        EffectName ??= "";
-        EventGroup = VfxCanonicalVocabulary.EventGroup(Event);
-        Stage = VfxCanonicalVocabulary.Stage(Event);
-        Backend = VfxCanonicalVocabulary.Backend(Backend);
-        RendererKind = VfxRendererRegistry.NormalizeKindName(RendererKind);
-        InfiniVfxRendererKind rendererKind = VfxRendererRegistry.ParseKind(RendererKind);
-        if (rendererKind == InfiniVfxRendererKind.None)
-        {
-            RendererKind = "projectileAfterimage";
-            rendererKind = InfiniVfxRendererKind.ProjectileAfterimage;
-        }
-        TextureRole = string.IsNullOrWhiteSpace(TextureRole) ? "projectile" : TextureRole;
-        ParticleRole = string.IsNullOrWhiteSpace(ParticleRole) ? TextureRole : ParticleRole;
-        Channel = VfxCanonicalVocabulary.Channel(Channel, rendererKind, Event);
-        Importance = VfxCanonicalVocabulary.Importance(Importance);
-        Lane = VfxCanonicalVocabulary.Lane(Lane, Channel, Importance, rendererKind);
-        Anchor = VfxCanonicalVocabulary.Anchor(Anchor, rendererKind, Channel, Event);
-        Blend = VfxCanonicalVocabulary.Blend(Blend, rendererKind, Channel);
+        Id = RuntimeId(Id, "slot id");
+        EntityId = RuntimeId(EntityId, "entity id");
+        Event = (Event ?? "").Trim().ToLowerInvariant();
+        if (!RuntimeEventKind.IsKnown(Event)) throw new InvalidDataException($"unknown VFX event '{Event}'");
+        if (VfxRendererRegistry.ParseKind(RendererKind) == InfiniVfxRendererKind.None)
+            throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
+        RendererKind = VfxRendererRegistry.ToWireName(VfxRendererRegistry.ParseKind(RendererKind));
+        Backend = Backend is "Auto" or "Realtime" or "Primitive" or "Sprite" or "Particle" ? Backend : "Auto";
+        TextureRole = EnumText(TextureRole, "entity", "item", "entity", "projectile", "field", "impact", "none");
+        ParticleRole = EnumText(ParticleRole, "entity", "item", "entity", "projectile", "field", "impact", "none");
+        Anchor = EnumText(Anchor, "self", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
+        Channel = EnumText(Channel, "ambientParticles", "motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound");
+        Lane = EnumText(Lane, "support", "primary", "support", "accent", "ornament", "cue");
+        EmissionMode = EnumText(EmissionMode, "none", "wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "none");
+        Blend = EnumText(Blend, "alpha", "alpha", "additive");
+        ParticleSystemId = EnumText(ParticleSystemId, "none", "dust", "pl:glow", "pl:shard", "pl:smoke", "pl:spark", "none");
+        if (RendererKind == "soundCue" && (Channel != "sound" || Lane != "cue")) throw new InvalidDataException("soundCue requires sound/cue");
+        if (RendererKind == "lightCue" && (Channel != "light" || Lane != "cue")) throw new InvalidDataException("lightCue requires light/cue");
         Layer = Layer is "BeforeProjectiles" or "AfterProjectiles" ? Layer : "BeforeProjectiles";
-        Source = string.IsNullOrWhiteSpace(Source) ? "recipe" : Source.Trim();
-        EmissionMode = VfxCanonicalVocabulary.EmissionMode(EmissionMode, rendererKind, Channel, Event);
-        ParticleSystemId = VfxParticleAddress.Resolve(ParticleSystemId, RendererKind, Channel, Event, Blend, EmissionMode);
-        FadeIn = Math.Clamp(FadeIn <= 0f ? 0.15f : FadeIn, 0f, 0.95f);
-        FadeOut = Math.Clamp(FadeOut <= 0f ? 0.35f : FadeOut, 0f, 0.95f);
-        Curve = VfxCanonicalVocabulary.Curve(Curve);
-        SlotSeed = SlotSeed == 0 ? StableSlotSeed(RendererKind, Event, Channel, Lane, Variant) : SlotSeed;
-        StartTick = Math.Clamp(StartTick, 0, 600);
-        RepeatEvery = Math.Clamp(RepeatEvery, 0, 600);
-        Scale = Math.Clamp(Scale <= 0f ? 1f : Scale, 0.05f, 8f);
-        Density = Math.Clamp(Density, 0f, 1f);
-        Duration = Math.Clamp(Duration <= 0 ? 10 : Duration, 1, 240);
-        Alpha = Math.Clamp(Alpha <= 0f ? 0.65f : Alpha, 0f, 1f);
-        Spread = Math.Clamp(Spread, 0f, 3f);
-        Jitter = Math.Clamp(Jitter, 0f, 2f);
-        PhaseOffset = Math.Clamp(PhaseOffset, -2f, 2f);
-        BudgetWeight = Math.Clamp(BudgetWeight <= 0f ? 1f : BudgetWeight, 0.05f, 8f);
-        VisualCost = Math.Clamp(VisualCost, 0f, 1f);
-        SignatureWeight = Math.Clamp(SignatureWeight, 0f, 1f);
-        BakedClipId ??= "";
-        BakedClipHash ??= "";
+        EffectName = Safe(EffectName, 96); EventGroup = Safe(EventGroup, 24); Stage = Safe(Stage, 24);
+        Source = Safe(Source, 64); Curve = Safe(Curve, 24); Importance = Safe(Importance, 24);
+        FadeIn = Math.Clamp(FadeIn, 0f, 0.8f); FadeOut = Math.Clamp(FadeOut, 0f, 0.8f);
+        StartTick = Math.Clamp(StartTick, 0, 120); RepeatEvery = Math.Clamp(RepeatEvery, 0, 120);
+        Scale = Math.Clamp(Scale, 0.15f, 5f); Density = Math.Clamp(Density, 0f, 1f);
+        Duration = Math.Clamp(Duration, 3, 120); Alpha = Math.Clamp(Alpha, 0f, 1f);
+        Spread = Math.Clamp(Spread, 0f, 2f); Jitter = Math.Clamp(Jitter, 0f, 1.5f);
+        PhaseOffset = Math.Clamp(PhaseOffset, -1f, 1f); BudgetWeight = Math.Clamp(BudgetWeight, 0.1f, 4f);
+        SignatureWeight = Math.Clamp(SignatureWeight, 0f, 1f); VisualCost = Math.Clamp(VisualCost, 0f, 1f);
+        BakedClipId = Safe(BakedClipId, 96); BakedClipHash = Safe(BakedClipHash, 128);
         BakedCommands ??= Array.Empty<VfxBakedCommandSpec>();
-        BakedCommandCount = BakedCommandCount <= 0 ? BakedCommands.Length : Math.Max(BakedCommandCount, BakedCommands.Length);
-        foreach (var cmd in BakedCommands)
-            cmd?.Normalize();
+        if (BakedCommands.Length > 120) throw new InvalidDataException("too many baked VFX commands");
+        foreach (VfxBakedCommandSpec command in BakedCommands) command.Normalize();
+        BakedCommandCount = BakedCommands.Length;
     }
 
-
-// =============================================================================
-// NAV: VFX_SLOT_NORMALIZATION
-// =============================================================================
-    private static int StableSlotSeed(string? renderer, string? ev, string? channel, string? lane, int variant)
+    private static string RuntimeId(string? value, string label)
     {
-        unchecked
-        {
-            int h = 17;
-            foreach (char c in (renderer ?? "")) h = h * 31 + c;
-            foreach (char c in (ev ?? "")) h = h * 31 + c;
-            foreach (char c in (channel ?? "")) h = h * 31 + c;
-            foreach (char c in (lane ?? "")) h = h * 31 + c;
-            h = h * 31 + variant;
-            h &= 0x7fffffff;
-            return h == 0 ? 1337 : h;
-        }
+        string text = Safe(value, 64);
+        if (text.Length == 0 || !char.IsLower(text[0]) || text.Any(c => !(char.IsLower(c) || char.IsDigit(c) || c == '_')))
+            throw new InvalidDataException($"invalid VFX {label} '{text}'");
+        return text;
     }
-
-
+    private static string EnumText(string? value, string fallback, params string[] allowed)
+        => allowed.Contains(value ?? "", StringComparer.Ordinal) ? value! : fallback;
+    private static string Safe(string? value, int max)
+    {
+        string text = (value ?? "").Trim();
+        return text.Length <= max ? text : text[..max];
+    }
 }
 
-
-// =============================================================================
-// NAV: VFX_BAKED_COMMAND_CONTRACT
-// =============================================================================
 public sealed class VfxBakedCommandSpec
 {
-    public int Tick { get; set; } = 0;
-    public string ParticleSystemId { get; set; } = "dust";
+    public int Tick { get; set; }
+    public string ParticleSystemId { get; set; } = "none";
     public string TextureRole { get; set; } = "";
-    public float LocalX { get; set; } = 0f;
-    public float LocalY { get; set; } = 0f;
-    public float VelocityX { get; set; } = 0f;
-    public float VelocityY { get; set; } = 0f;
+    public float LocalX { get; set; }
+    public float LocalY { get; set; }
+    public float VelocityX { get; set; }
+    public float VelocityY { get; set; }
     public string StartColor { get; set; } = "";
     public string EndColor { get; set; } = "";
     public float ScaleX { get; set; } = 1f;
     public float ScaleY { get; set; } = 1f;
-    public float ScaleVelocityX { get; set; } = 0f;
-    public float ScaleVelocityY { get; set; } = 0f;
-    public float Rotation { get; set; } = 0f;
-    public float RotationVelocity { get; set; } = 0f;
+    public float ScaleVelocityX { get; set; }
+    public float ScaleVelocityY { get; set; }
+    public float Rotation { get; set; }
+    public float RotationVelocity { get; set; }
     public int Lifespan { get; set; } = 18;
     public float Alpha { get; set; } = 0.65f;
-    public int SeedBucket { get; set; } = 0;
-
+    public int SeedBucket { get; set; }
     public void Normalize()
     {
-        Tick = Math.Clamp(Tick, 0, 600);
-        ParticleSystemId = VfxParticleAddress.Resolve(ParticleSystemId);
-        TextureRole ??= "";
-        LocalX = Math.Clamp(LocalX, -8f, 8f);
-        LocalY = Math.Clamp(LocalY, -8f, 8f);
-        VelocityX = Math.Clamp(VelocityX, -12f, 12f);
-        VelocityY = Math.Clamp(VelocityY, -12f, 12f);
-        StartColor ??= "";
-        EndColor ??= "";
-        ScaleX = Math.Clamp(ScaleX <= 0f ? 1f : ScaleX, 0.03f, 8f);
-        ScaleY = Math.Clamp(ScaleY <= 0f ? 1f : ScaleY, 0.03f, 8f);
-        ScaleVelocityX = Math.Clamp(ScaleVelocityX, -2f, 2f);
-        ScaleVelocityY = Math.Clamp(ScaleVelocityY, -2f, 2f);
-        Rotation = Math.Clamp(Rotation, -32f, 32f);
-        RotationVelocity = Math.Clamp(RotationVelocity, -8f, 8f);
-        Lifespan = Math.Clamp(Lifespan <= 0 ? 18 : Lifespan, 1, 240);
-        Alpha = Math.Clamp(Alpha <= 0f ? 0.65f : Alpha, 0f, 1f);
-        SeedBucket = Math.Clamp(SeedBucket, -100000000, 100000000);
+        Tick = Math.Clamp(Tick, 0, 600); LocalX = Math.Clamp(LocalX, -8f, 8f); LocalY = Math.Clamp(LocalY, -8f, 8f);
+        VelocityX = Math.Clamp(VelocityX, -12f, 12f); VelocityY = Math.Clamp(VelocityY, -12f, 12f);
+        ScaleX = Math.Clamp(ScaleX, 0.03f, 8f); ScaleY = Math.Clamp(ScaleY, 0.03f, 8f);
+        ScaleVelocityX = Math.Clamp(ScaleVelocityX, -2f, 2f); ScaleVelocityY = Math.Clamp(ScaleVelocityY, -2f, 2f);
+        Rotation = Math.Clamp(Rotation, -32f, 32f); RotationVelocity = Math.Clamp(RotationVelocity, -8f, 8f);
+        Lifespan = Math.Clamp(Lifespan, 1, 240); Alpha = Math.Clamp(Alpha, 0f, 1f);
     }
 }
 
-
-// =============================================================================
-// NAV: VFX_DEBUG_CONTRACT
-// =============================================================================
 public sealed class VfxDebugSpec
 {
     public string Pattern { get; set; } = "";
     public string[] Roles { get; set; } = Array.Empty<string>();
-    public float SelectedScore { get; set; } = 0f;
+    public float SelectedScore { get; set; }
     public string[] SelectedReasons { get; set; } = Array.Empty<string>();
     public object[] TopCandidates { get; set; } = Array.Empty<object>();
     public string[] WordProbe { get; set; } = Array.Empty<string>();
+    public void Normalize()
+    {
+        Pattern = (Pattern ?? "").Trim(); Roles ??= Array.Empty<string>(); SelectedReasons ??= Array.Empty<string>(); TopCandidates ??= Array.Empty<object>(); WordProbe ??= Array.Empty<string>();
+    }
 }

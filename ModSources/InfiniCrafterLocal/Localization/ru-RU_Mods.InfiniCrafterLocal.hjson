@@ -59,7 +59,7 @@ Mods: {
 
 				EnableGeneratedMeleeOnHitEffects: {
 					Label: Generated melee on-hit / On-hit эффекты ближнего боя
-					Tooltip: Разрешает generated swing-оружию исполнять явные AttackSpec.OnHitCode: дебаффы, малый lifesteal и impact-пыль. Текст prompt не парсится.
+					Tooltip: Разрешает точным authored runtime-событиям применять ограниченные дебаффы, лечение и impact-представление. Текст prompt не парсится.
 				}
 
 				RuntimeSpriteCacheMaxTextures: {
@@ -110,7 +110,6 @@ Items: {
 
 Projectiles: {
 	// GeneratedProjectile.DisplayName: Generated Projectile
-	// GeneratedVfxOverlayProjectile.DisplayName: Generated Vfx Overlay Projectile
 }
 
 Configs: {

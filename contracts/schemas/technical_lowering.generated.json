@@ -1,0 +1,875 @@
+{
+  "capabilities": [
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_item_stats",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "gameplay.damageClass",
+        "gameplay.damage",
+        "gameplay.knockback",
+        "gameplay.useTime",
+        "gameplay.useAnimation",
+        "gameplay.manaCost",
+        "gameplay.rarity",
+        "gameplay.value",
+        "gameplay.maxStack",
+        "gameplay.craftYield",
+        "gameplay.width",
+        "gameplay.height",
+        "gameplay.itemScale"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_item_use",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
+      "outputs": [
+        "gameplay.useStyleName",
+        "gameplay.autoReuse",
+        "gameplay.useTurn",
+        "gameplay.channelUse",
+        "gameplay.holdoutOffsetX",
+        "gameplay.holdoutOffsetY",
+        "gameplay.handPose",
+        "gameplay.releaseTiming",
+        "runtimeProgram.itemUse.configured",
+        "runtimeProgram.itemUse.useStyle",
+        "runtimeProgram.itemUse.hideUseGraphic",
+        "runtimeProgram.itemUse.disableMeleeHitbox",
+        "runtimeProgram.itemUse.channel",
+        "runtimeProgram.itemUse.handPose",
+        "runtimeProgram.itemUse.releaseTiming",
+        "runtimeProgram.itemUse.holdoutOffsetX",
+        "runtimeProgram.itemUse.holdoutOffsetY"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "enable_item_contact_damage",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
+      "outputs": [
+        "runtimeProgram.itemContact.enabled",
+        "runtimeProgram.itemContact.hitboxScale",
+        "runtimeProgram.itemContact.contactForgivenessPx"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_consumption",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ConsumeItem",
+      "outputs": [
+        "gameplay.consumable",
+        "gameplay.consumeChancePercent"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_vanilla_ammo_item",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "gameplay.ammoCategory",
+        "gameplay.ammoProjectileId",
+        "gameplay.ammoShootSpeedPxPerTick",
+        "gameplay.notAmmo"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "restore_resources_on_use",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "gameplay.healLife",
+        "gameplay.healMana",
+        "gameplay.potion"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "apply_vanilla_buff_on_use",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "outputs": [
+        "gameplay.extraBuffs[].buffCode",
+        "gameplay.extraBuffs[].buffTime"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "apply_generated_buff_on_use",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "outputs": [
+        "gameplay.generatedBuff.durationTicks",
+        "gameplay.generatedBuff.miningSpeedMultiplier",
+        "gameplay.generatedBuff.emitLightStrength",
+        "gameplay.generatedBuff.lightColorName",
+        "gameplay.generatedBuff.oreSenseRadiusTiles",
+        "gameplay.generatedBuff.movementSpeed",
+        "gameplay.generatedBuff.jumpBoost",
+        "gameplay.generatedBuff.manaRegen",
+        "gameplay.generatedBuff.lifeRegen"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_tool",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "gameplay.pickPower",
+        "gameplay.axePower",
+        "gameplay.hammerPower",
+        "gameplay.miningSpeedScale"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_placeable",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "gameplay.createTile",
+        "gameplay.createWall",
+        "gameplay.placeStyle"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "require_use_condition",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UseBlockedReason",
+      "outputs": [
+        "gameplay.useConditionMode",
+        "gameplay.useConditionMinLife",
+        "gameplay.useConditionMinMana"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "add_hold_light",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "outputs": [
+        "gameplay.holdLightStrength",
+        "gameplay.holdLightColorName"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_player_on_use",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "outputs": [
+        "gameplay.mobilityMode",
+        "gameplay.mobilityRangeTiles",
+        "gameplay.mobilityCooldownTicks",
+        "gameplay.mobilitySafeTileOnly"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_accessory",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateAccessory",
+      "outputs": [
+        "accessory.enabled",
+        "accessory.defense",
+        "accessory.maxLife",
+        "accessory.maxMana",
+        "accessory.lifeRegen",
+        "accessory.manaRegen",
+        "accessory.movementSpeed",
+        "accessory.genericDamage",
+        "accessory.genericCrit",
+        "accessory.endurance",
+        "accessory.minionSlots",
+        "accessory.sentrySlots",
+        "accessory.lightStrength",
+        "accessory.lightColorName"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_armor",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateEquip",
+      "outputs": [
+        "armor.enabled",
+        "armor.slot",
+        "armor.setKey",
+        "armor.defense",
+        "armor.maxLife",
+        "armor.maxMana",
+        "armor.movementSpeed",
+        "armor.genericDamage",
+        "armor.genericCrit",
+        "armor.setBonusText",
+        "armor.setBonusGenericDamage",
+        "armor.setBonusMovementSpeed",
+        "armor.setBonusLifeRegen"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_spawn",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
+      "outputs": [
+        "runtimeProgram.entities[].spawn.enabled",
+        "runtimeProgram.entities[].spawn.speedPxPerTick",
+        "runtimeProgram.entities[].spawn.count",
+        "runtimeProgram.entities[].spawn.spreadRadians",
+        "runtimeProgram.entities[].spawn.offsetPx",
+        "runtimeProgram.entities[].spawn.aim",
+        "runtimeProgram.entities[].spawn.placement"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_damage",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "outputs": [
+        "runtimeProgram.entities[].damage.enabled",
+        "runtimeProgram.entities[].damage.damageClass",
+        "runtimeProgram.entities[].damage.damage",
+        "runtimeProgram.entities[].damage.knockback",
+        "runtimeProgram.entities[].damage.ownerHitCheck"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_lifetime",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "outputs": [
+        "runtimeProgram.entities[].lifetimeTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_hitbox",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "outputs": [
+        "runtimeProgram.entities[].hitbox.widthPx",
+        "runtimeProgram.entities[].hitbox.heightPx",
+        "runtimeProgram.entities[].hitbox.drawScale",
+        "runtimeProgram.entities[].hitbox.hitboxScale"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_collision",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "outputs": [
+        "runtimeProgram.entities[].collision.tileCollide",
+        "runtimeProgram.entities[].collision.ignoreWater",
+        "runtimeProgram.entities[].collision.bounceCount",
+        "runtimeProgram.entities[].collision.pierce",
+        "runtimeProgram.entities[].collision.extraUpdates",
+        "runtimeProgram.entities[].collision.npcImmunityMode",
+        "runtimeProgram.entities[].collision.localNpcHitCooldownTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_straight",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_slow_homing",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.homingStrength"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_gravity_arc",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.gravityPerTick"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_drift",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.velocityRetention"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_orbit",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_boomerang",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.returnAfterTicks",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_bounce",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.gravityPerTick"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_sine_homing",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.homingStrength",
+        "runtimeProgram.entities[].movement.params.waveAmplitude"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_phase",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.phaseStrength"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_accelerate",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.acceleration",
+        "runtimeProgram.entities[].movement.params.maxSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_spiral",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.turnRadiansPerTick"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_vortex_orb",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.pullStrength",
+        "runtimeProgram.entities[].movement.params.rangeTiles"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_blackhole_pull",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.pullStrength",
+        "runtimeProgram.entities[].movement.params.rangeTiles"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_proximity_missile",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.homingStrength",
+        "runtimeProgram.entities[].movement.params.proximityRadiusPx"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_returning_glaive",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.returnAfterTicks",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_expanding_wave",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.scalePerTick",
+        "runtimeProgram.entities[].movement.params.maxScale"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_flail_tether",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_yoyo_hover",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_whip_lash",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.segments"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_forward_then_retract",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "channel_beam",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].controller.params.rangeTiles",
+        "runtimeProgram.entities[].controller.params.widthPx",
+        "runtimeProgram.entities[].controller.params.warmupTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "charge_then_release",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].controller.params.chargeTicks",
+        "runtimeProgram.entities[].controller.params.powerMultiplier"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "target_and_fire",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "outputs": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].targeting.shotEntityId",
+        "runtimeProgram.entities[].targeting.intervalTicks",
+        "runtimeProgram.entities[].targeting.rangeTiles",
+        "runtimeProgram.entities[].targeting.sameTargetBias"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "spawn_over_target",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
+      "outputs": [
+        "runtimeProgram.entities[].spawn.overTarget.heightTiles",
+        "runtimeProgram.entities[].spawn.overTarget.delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "spawn_entity_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].spreadRadians",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks",
+        "runtimeProgram.entities[].events[].periodTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "apply_status_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].buffId",
+        "runtimeProgram.entities[].events[].durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "damage_area_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].radiusPx",
+        "runtimeProgram.entities[].events[].damageMultiplier"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "chain_damage_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].rangeTiles",
+        "runtimeProgram.entities[].events[].damageMultiplier"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "pull_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].mode",
+        "runtimeProgram.entities[].events[].strength",
+        "runtimeProgram.entities[].events[].radiusTiles",
+        "runtimeProgram.entities[].events[].periodTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "heal_owner_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].damageFraction",
+        "runtimeProgram.entities[].events[].maxHeal"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_owner_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].mode",
+        "runtimeProgram.entities[].events[].rangeTiles",
+        "runtimeProgram.entities[].events[].cooldownTicks",
+        "runtimeProgram.entities[].events[].safeTileOnly"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "emit_light_while_active",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
+      "outputs": [
+        "runtimeProgram.entities[].light.strength",
+        "runtimeProgram.entities[].light.color"
+      ]
+    }
+  ],
+  "globalLowerers": [
+    {
+      "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
+      "id": "entity_kind_to_visual_role",
+      "inputs": [
+        "runtimeProgram.entities[].kind"
+      ],
+      "outputs": [
+        "runtimeProgram.entities[].visualRole"
+      ],
+      "preserves": [
+        "entity kind",
+        "entity identity",
+        "all gameplay components"
+      ]
+    },
+    {
+      "equivalence": "finite numeric wire opcode for the exact authored capability name",
+      "id": "capability_name_to_opcode",
+      "inputs": [
+        "runtimeProgram.calls[].fn"
+      ],
+      "outputs": [
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].events[].actionCode"
+      ],
+      "preserves": [
+        "capability identity",
+        "target",
+        "params",
+        "event links"
+      ]
+    },
+    {
+      "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
+      "id": "item_fields_to_tml_projection",
+      "inputs": [
+        "item_body capability params"
+      ],
+      "outputs": [
+        "gameplay.damageClass",
+        "gameplay.damage",
+        "gameplay.knockback",
+        "gameplay.useTime",
+        "gameplay.useAnimation",
+        "gameplay.manaCost",
+        "gameplay.rarity",
+        "gameplay.value",
+        "gameplay.maxStack",
+        "gameplay.craftYield",
+        "gameplay.width",
+        "gameplay.height",
+        "gameplay.itemScale",
+        "gameplay.useStyleName",
+        "gameplay.autoReuse",
+        "gameplay.useTurn",
+        "gameplay.channelUse",
+        "gameplay.holdoutOffsetX",
+        "gameplay.holdoutOffsetY",
+        "gameplay.handPose",
+        "gameplay.releaseTiming",
+        "runtimeProgram.itemUse.configured",
+        "runtimeProgram.itemUse.useStyle",
+        "runtimeProgram.itemUse.hideUseGraphic",
+        "runtimeProgram.itemUse.disableMeleeHitbox",
+        "runtimeProgram.itemUse.channel",
+        "runtimeProgram.itemUse.handPose",
+        "runtimeProgram.itemUse.releaseTiming",
+        "runtimeProgram.itemUse.holdoutOffsetX",
+        "runtimeProgram.itemUse.holdoutOffsetY",
+        "runtimeProgram.itemContact.enabled",
+        "runtimeProgram.itemContact.hitboxScale",
+        "runtimeProgram.itemContact.contactForgivenessPx",
+        "gameplay.consumable",
+        "gameplay.consumeChancePercent",
+        "gameplay.ammoCategory",
+        "gameplay.ammoProjectileId",
+        "gameplay.ammoShootSpeedPxPerTick",
+        "gameplay.notAmmo",
+        "gameplay.healLife",
+        "gameplay.healMana",
+        "gameplay.potion",
+        "gameplay.extraBuffs[].buffCode",
+        "gameplay.extraBuffs[].buffTime",
+        "gameplay.generatedBuff.durationTicks",
+        "gameplay.generatedBuff.miningSpeedMultiplier",
+        "gameplay.generatedBuff.emitLightStrength",
+        "gameplay.generatedBuff.lightColorName",
+        "gameplay.generatedBuff.oreSenseRadiusTiles",
+        "gameplay.generatedBuff.movementSpeed",
+        "gameplay.generatedBuff.jumpBoost",
+        "gameplay.generatedBuff.manaRegen",
+        "gameplay.generatedBuff.lifeRegen",
+        "gameplay.pickPower",
+        "gameplay.axePower",
+        "gameplay.hammerPower",
+        "gameplay.miningSpeedScale",
+        "gameplay.createTile",
+        "gameplay.createWall",
+        "gameplay.placeStyle",
+        "gameplay.useConditionMode",
+        "gameplay.useConditionMinLife",
+        "gameplay.useConditionMinMana",
+        "gameplay.holdLightStrength",
+        "gameplay.holdLightColorName",
+        "gameplay.mobilityMode",
+        "gameplay.mobilityRangeTiles",
+        "gameplay.mobilityCooldownTicks",
+        "gameplay.mobilitySafeTileOnly",
+        "accessory.enabled",
+        "accessory.defense",
+        "accessory.maxLife",
+        "accessory.maxMana",
+        "accessory.lifeRegen",
+        "accessory.manaRegen",
+        "accessory.movementSpeed",
+        "accessory.genericDamage",
+        "accessory.genericCrit",
+        "accessory.endurance",
+        "accessory.minionSlots",
+        "accessory.sentrySlots",
+        "accessory.lightStrength",
+        "accessory.lightColorName",
+        "armor.enabled",
+        "armor.slot",
+        "armor.setKey",
+        "armor.defense",
+        "armor.maxLife",
+        "armor.maxMana",
+        "armor.movementSpeed",
+        "armor.genericDamage",
+        "armor.genericCrit",
+        "armor.setBonusText",
+        "armor.setBonusGenericDamage",
+        "armor.setBonusMovementSpeed",
+        "armor.setBonusLifeRegen"
+      ],
+      "preserves": [
+        "all authored item values",
+        "explicit zero",
+        "units"
+      ]
+    }
+  ],
+  "schema": "infini.technical-lowering-manifest.v1"
+}

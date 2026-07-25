@@ -45,32 +45,37 @@ def _contract_check_registry_bounds_only_hydration_request_state_not_authoritati
     assert "_cachedDefinitionTouchTick" not in source
 
 
-def _contract_check_projectile_relay_validates_live_sender_owned_projectile_and_canonicalizes_payload() -> None:
+def _contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed() -> None:
     source = _text("Content/Projectiles/GeneratedProjectile.NetSync.cs")
-    visual = _method(source, "public static void HandleProjectileVisualSyncPacket", "private const int ProjectileVfxEventSyncVersion")
-    vfx = _method(source, "public static void HandleProjectileVfxEventSyncPacket", "public static void ClearPresentationSyncCaches")
+    send = _method(source, "public override void SendExtraAI", "public override void ReceiveExtraAI")
+    receive = source.split("public override void ReceiveExtraAI", 1)[1]
 
-    assert "TryResolveServerOwnedGeneratedProjectile" in source
-    assert "TryResolveServerOwnedGeneratedProjectile(whoAmI, payload.Identity" in visual
-    assert "TryResolveServerOwnedGeneratedProjectile(whoAmI, payload.Identity" in vfx
-    assert "generated._generatedItemId" in visual
-    assert "generated._generatedItemId" in vfx
-    assert "generated.Projectile.Center" in vfx
-    assert "generated.Projectile.velocity" in vfx
-    assert "TryAcceptProjectileRelay" in visual
-    assert "TryAcceptProjectileRelay" in vfx
+    assert "RuntimeNetVersion" in source
+    assert "writer.Write(_generatedItemId" in send
+    assert "writer.Write(_entityId" in send
+    assert "reader.ReadByte() != RuntimeNetVersion" in receive
+    assert "_generatedItemId.Length > 96" in receive
+    assert "_entityId.Length > 48" in receive
+    assert "Projectile.friendly = false" in receive
+    assert "Projectile.velocity = Vector2.Zero" in receive
+    assert "TryHydrate();" in receive
 
 
-def _contract_check_projectile_pending_and_request_maps_are_expiring_and_bounded() -> None:
-    source = _text("Content/Projectiles/GeneratedProjectile.NetSync.cs")
-    partial_class_source = source + _text("Content/Projectiles/GeneratedProjectile.cs")
-    assert "PendingProjectileVisualSyncMaxEntries" in source
-    assert "PrunePendingProjectileVisualSyncLocked" in source
-    assert "PendingVisualSyncExpiryTicks" in source
-    assert "PendingProjectileVfxEventMaxEntries" in source
-    assert "PendingProjectileVfxEvents.Count >= PendingProjectileVfxEventMaxEntries" in source
-    assert "PruneTickMapLocked(MissingGeneratedItemRequestTicks" in partial_class_source
-    assert "PruneTickMapLocked(MissingProjectileAssetRequestTicks" in partial_class_source
+def _contract_check_deleted_projectile_presentation_packets_do_not_leave_dangling_routes() -> None:
+    root = _text("InfiniCrafterLocal.cs")
+    packet_ids = _text("Common/InfiniNetPacketIds.cs")
+    registry = _text("Common/Services/GeneratedItemRegistryService.cs")
+    for legacy in [
+        "HandleProjectileVisualSyncPacket",
+        "HandleProjectileVfxEventSyncPacket",
+        "FlushPendingProjectileVisualSyncForGeneratedItem",
+        "FlushPendingVfxEventsForGeneratedItem",
+        "SyncGeneratedProjectileVisual",
+        "SyncGeneratedProjectileVfxEvent",
+    ]:
+        assert legacy not in root
+        assert legacy not in packet_ids
+        assert legacy not in registry
 
 
 def _contract_check_server_craft_dedupe_and_cancel_caches_are_bounded() -> None:
@@ -125,8 +130,8 @@ def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
         (
             '_contract_check_asset_notifications_are_server_authored_and_downloads_are_stream_bounded',
             '_contract_check_registry_bounds_only_hydration_request_state_not_authoritative_definitions',
-            '_contract_check_projectile_relay_validates_live_sender_owned_projectile_and_canonicalizes_payload',
-            '_contract_check_projectile_pending_and_request_maps_are_expiring_and_bounded',
+            '_contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed',
+            '_contract_check_deleted_projectile_presentation_packets_do_not_leave_dangling_routes',
             '_contract_check_server_craft_dedupe_and_cancel_caches_are_bounded',
             '_contract_check_generated_utility_sync_consumes_payload_before_every_reject',
             '_contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots',

@@ -1,0 +1,145 @@
+{
+  "$id": "https://infinicrafter.local/contracts/visual_runtime_entities.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "animationPlan": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "entities": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "assetMode": {
+            "enum": [
+              "baked_sprite",
+              "no_asset",
+              "reuse_item_icon",
+              "runtime_geometry"
+            ],
+            "type": "string"
+          },
+          "entityId": {
+            "enum": [
+              "item",
+              "workbench_blade",
+              "nail"
+            ],
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 1400,
+            "minLength": 1,
+            "type": "string"
+          },
+          "scale": {
+            "maximum": 4.0,
+            "minimum": 0.25,
+            "type": "number"
+          },
+          "silhouette": {
+            "maxLength": 700,
+            "minLength": 1,
+            "type": "string"
+          },
+          "visualIdentity": {
+            "maxLength": 700,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "assetMode",
+          "prompt",
+          "silhouette",
+          "visualIdentity",
+          "scale"
+        ],
+        "type": "object"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "item": {
+      "additionalProperties": false,
+      "properties": {
+        "inventoryScale": {
+          "maximum": 4.0,
+          "minimum": 0.25,
+          "type": "number"
+        },
+        "negativePrompt": {
+          "maxLength": 700,
+          "type": "string"
+        },
+        "palette": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        },
+        "preferredCanvasSize": {
+          "enum": [
+            24,
+            32,
+            48,
+            64,
+            96,
+            128
+          ],
+          "type": "integer"
+        },
+        "prompt": {
+          "maxLength": 1400,
+          "minLength": 1,
+          "type": "string"
+        },
+        "silhouette": {
+          "maxLength": 700,
+          "minLength": 1,
+          "type": "string"
+        },
+        "visualIdentity": {
+          "maxLength": 700,
+          "minLength": 1,
+          "type": "string"
+        },
+        "worldScale": {
+          "maximum": 4.0,
+          "minimum": 0.25,
+          "type": "number"
+        }
+      },
+      "required": [
+        "prompt",
+        "negativePrompt",
+        "silhouette",
+        "visualIdentity",
+        "palette",
+        "preferredCanvasSize",
+        "inventoryScale",
+        "worldScale"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "infini.visual-kit.runtime-entities.v1"
+    }
+  },
+  "required": [
+    "schema",
+    "item",
+    "entities",
+    "animationPlan"
+  ],
+  "type": "object",
+  "x-infini-generated": true
+}

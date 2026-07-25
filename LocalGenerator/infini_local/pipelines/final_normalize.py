@@ -4,16 +4,15 @@ from __future__ import annotations
 
 This module is the single owner of delivery-time normalization. It may make
 emitted data consistent and debuggable, but must not invent mechanics after
-runtimePlan validation.
+runtimeProgram validation.
 """
 
 from typing import Any, Callable
 
 from infini_local.core.config_bootstrap import APP_VERSION
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
+from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
 
-from infini_local.pipelines.presentation_sound import presentation_from_genome
 
 from infini_local.pipelines.result_identity_policy import (
     bad_result_name,
@@ -24,18 +23,15 @@ from infini_local.pipelines.result_knowledge_card import build_result_item_card
 def final_normalize(data: dict[str, Any]) -> dict[str, Any]:
     data.pop("_llmHistory", None)
     data.pop("_runtimePlanCompileCache", None)
-    data.setdefault("schemaVersion", 1)
+    data.setdefault("schemaVersion", 5)
     # Runtime API/engine-call contract version is intentionally separate from the
     # project build version. C# can reject future unsupported executable contracts
     # instead of silently losing behavior.
-    data.setdefault("runtimeApiVersion", ENGINE_RUNTIME_API_VERSION)
+    data.setdefault("runtimeApiVersion", RUNTIME_PROGRAM_API_VERSION)
     data.setdefault("itemKnowledge", {})
     visual = data.setdefault("visual", {})
     if isinstance(visual.get("palette"), list):
         visual["palette"] = [str(x) for x in visual.get("palette", []) if str(x).strip()][:8]
-    if not isinstance(data.get("presentationGenome"), dict) or not data.get("presentationGenome"):
-        data["presentationGenome"] = presentation_from_genome(data)
-
 
     if isinstance(data["itemKnowledge"], dict) and "resultCard" not in data["itemKnowledge"]:
         data["itemKnowledge"]["resultCard"] = build_result_item_card(data, {}, {})

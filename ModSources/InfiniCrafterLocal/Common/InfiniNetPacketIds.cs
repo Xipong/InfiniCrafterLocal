@@ -13,12 +13,9 @@ public static class InfiniNetPacketIds
     public const byte RequestServerCraft = 5;
     public const byte RequestGeneratedRegistryForceAssets = 6;
     public const byte SyncGeneratedUtilityBuff = 7;
-    public const byte SyncGeneratedProjectileVisual = 8;
-    public const byte SyncGeneratedProjectileVfxEvent = 9;
     public const byte RequestGeneratedItemById = 10;
     public const byte SyncGeneratedHeldItemPresentation = 11;
     public const byte CancelServerCraft = 12;
-    public const byte RequestGeneratedAltUse = 13;
     public const byte RequestStationEscrow = 14;
     public const byte StationEscrowResult = 15;
     public const byte RequestGeneratedAsset = 16;

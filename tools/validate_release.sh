@@ -80,6 +80,8 @@ run_step() {
 run_step pytest "$PYTHON_BIN" tools/run_pytest_shards.py --shards 4 --timeout-seconds 60 --json-out artifacts/validation/pytest_shards.json
 run_step compileall "$PYTHON_BIN" -m compileall -q LocalGenerator/infini_local tools
 run_step schema_check "$PYTHON_BIN" tools/export_contract_schemas.py --check
+run_step targeted_repair "$PYTHON_BIN" tools/audit_targeted_repair.py --check
+run_step terraria_standardization "$PYTHON_BIN" tools/audit_terraria_standardization.py --check
 run_step config_registry "$PYTHON_BIN" tools/config_registry.py --check
 run_step contract_parity "$PYTHON_BIN" tools/contract_parity.py --quiet --out artifacts/validation/contract_parity_report.json
 run_step delivery_contract "$PYTHON_BIN" tools/check_delivery_contract.py --quiet --out artifacts/validation/delivery_contract_report.json

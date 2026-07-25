@@ -1,0 +1,114 @@
+{
+  "schema": "infini.sandbox-validation.v1",
+  "ok": true,
+  "coverage": "portable-static",
+  "releaseReady": false,
+  "fullSuiteAvailable": false,
+  "fullSuiteDependencies": {
+    "pytest": true,
+    "pydantic": true,
+    "pydantic_core": true,
+    "Pillow": true,
+    "Hypothesis": false
+  },
+  "missingFullSuiteDependencies": [
+    "Hypothesis"
+  ],
+  "failed": [],
+  "timeoutSeconds": 30,
+  "checks": [
+    {
+      "name": "syntax_and_json",
+      "status": "passed",
+      "pythonFiles": 167,
+      "jsonFiles": 22,
+      "errors": []
+    },
+    {
+      "name": "test_process_safety",
+      "status": "passed",
+      "scope": "LocalGenerator/tests/test_*.py",
+      "boundedSubprocessCalls": 7,
+      "errors": []
+    },
+    {
+      "name": "pytest_bootstrap_policy",
+      "status": "passed",
+      "importTimeBootstrap": "_configure_deterministic_sandbox",
+      "allowedEnvironmentKeys": [
+        "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
+        "INFINI_CACHE_DIR",
+        "INFINI_IMAGE_BACKEND",
+        "INFINI_SDCPP_SERVER_AUTOSTART",
+        "INFINI_SKIP_CONFIG_FILE",
+        "INFINI_USE_LLM",
+        "INFINI_WORLD_RECIPES_DIR"
+      ],
+      "errors": []
+    },
+    {
+      "name": "config_registry",
+      "status": "passed",
+      "returnCode": 0,
+      "durationSeconds": 0.467,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-S",
+        "tools/config_registry.py",
+        "--check"
+      ],
+      "outputTail": ""
+    },
+    {
+      "name": "targeted_repair",
+      "status": "passed",
+      "returnCode": 0,
+      "durationSeconds": 0.212,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-S",
+        "tools/audit_targeted_repair.py",
+        "--check"
+      ],
+      "outputTail": "[OK] Author=70484 chars; catalog=52\n  missing_required_parameter: 10654 chars, capabilities=1, errors=shape_one_of,shape_required\n  missing_item_use_capability: 9401 chars, capabilities=1, errors=binding_dependency\n  missing_position_driver: 29506 chars, capabilities=20, errors=missing_movement_component,missing_claim_backing\n  existing_dependency_parameter_mismatch: 13124 chars, capabilities=2, errors=missing_item_capability_param\n  policy=33/33; frozenMerge=True; frozenCallsites=6/6\n"
+    },
+    {
+      "name": "terraria_standardization",
+      "status": "passed",
+      "returnCode": 0,
+      "durationSeconds": 0.638,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-S",
+        "tools/audit_terraria_standardization.py",
+        "--check"
+      ],
+      "outputTail": "[OK] Terraria standardization audit 87/87\n"
+    },
+    {
+      "name": "csharp_contracts",
+      "status": "passed",
+      "returnCode": 0,
+      "durationSeconds": 0.041,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-S",
+        "tools/check_csharp_contracts.py"
+      ],
+      "outputTail": "[OK] C# v5 low-level runtime contract scanner passed\n"
+    },
+    {
+      "name": "project_hygiene",
+      "status": "passed",
+      "returnCode": 0,
+      "durationSeconds": 0.385,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-S",
+        "tools/check_project_hygiene.py"
+      ],
+      "outputTail": "[OK] project hygiene checks passed\n"
+    }
+  ],
+  "nextCommand": "Do not run full pytest here; install LocalGenerator/requirements-dev.txt in a capable environment."
+}

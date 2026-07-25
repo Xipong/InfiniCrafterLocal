@@ -1,49 +1,43 @@
-# InfiniCrafterLocal v0.4.239 — Terraria/tModLoader мод
+# InfiniCrafterLocal v0.4.241
 
-InfiniCrafterLocal добавляет InfiniCraft: ручную станцию, где два предмета превращаются в локально сгенерированный предмет. Модовая часть находится в `ModSources/InfiniCrafterLocal` и отвечает за UI, транзакцию крафта, применение generated runtime contract, multiplayer authority, asset sync, runtime sprites, projectiles, VFX/audio.
+InfiniCrafterLocal генерирует предмет Terraria из двух parent items. Gameplay Author за один LLM-вызов составляет bounded low-level `runtimeProgram`; Python проверяет и компилирует точные entities/components/events; C# tModLoader исполняет только typed v5 DTO.
 
 ## Архитектурный принцип
 
 ```text
-Python/LLM authoring validates and emits GeneratedItemData + VfxManifest
-C# tModLoader runtime applies explicit fields and safety clamps
+parents
+→ Gameplay Author: entities + inputs + capabilities + events
+→ deterministic validation/technical compile
+→ Visual Director: exact entity roles/assets
+→ VFX Director: exact entity/event slots
+→ strict world storage
+→ C# bounded runtime
 ```
 
-C# не должен угадывать gameplay из имени/tooltip/prompt/prose. Если механика должна работать в Terraria, она должна быть скомпилирована в явные поля: `Gameplay`, `Attack`, `Accessory`, `Armor`, `VfxManifest`, sprite paths, sound profiles.
+Код не выбирает weapon family и не выводит gameplay из name/tooltip/category/prose. Старые `AttackSpec`, `runtimeFamily`, whole-weapon macros, schema/cache migration и fallback удалены.
 
-## Основные документы
+## Документы
 
-- `AGENTS.md` — короткие hard rules для любых ИИ/агентов перед изменениями.
-- `PROJECT_ARCHITECTURE_RU.md` — полная текущая архитектура Terraria/tModLoader части и boundary matrix.
-- `PROJECT_MAP_RU.md` — карта папок, source-of-truth файлов и ловушек.
-- `LocalGenerator/PROJECT_ARCHITECTURE_RU.md` — Python generator/authoring/runtime contract boundary.
-- `docs/runtime_archetype_contract.md` — v0.4.239 typed runtime archetype/contract schema, promise-truth validator, migration notes.
-- `BUILD_QOL_RU.md` — сборка/QoL/MP asset notes.
-- `QUICK_START_RU.md` — минимальный запуск.
-- `ModSources/InfiniCrafterLocal/FOLDER_DOCS_RU.md` — карта активного мода.
+- `AGENTS.md` — hard rules;
+- `PROJECT_ARCHITECTURE_RU.md` / `PROJECT_MAP_RU.md` — архитектура и карта;
+- `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md` — generated inventory 52 capabilities;
+- `lowery.md` — полный finite alias/lowering inventory;
+- `docs/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md` — граница official tModLoader mappings и custom runtime;
+- `docs/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md` — machine-readable quality audit;
+- `docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` — Author contract;
+- `docs/THREE_STAGE_LLM_PIPELINE_RU.md` — baseline 3 calls;
+- `TECHNICAL_LOWERING_AUDIT_RU.md` — lossless lowering proof.
 
-## Runtime flow
-
-1. Игрок крафтит/держит `InfiniCore`.
-2. В inventory появляется station panel с двумя явными слотами A/B.
-3. В singleplayer/host мод вызывает `LocalGenerator` через HTTP `/combine`.
-4. В multiplayer клиент отправляет только craft intent; host/server берёт реальные ингредиенты и генерирует сам.
-5. Host/server коммитит `GeneratedItemData` в world-scoped registry.
-6. PNG/JSON assets синкаются через HTTP `/get_asset`, а Terraria packets несут только ids/filenames/compact visual state.
-7. `GeneratedItem` / `GeneratedProjectile` исполняют только явные runtime fields.
-
-MP asset sync note: Steam не проксирует HTTP. Для LAN/Radmin/hosted MP host должен рекламировать base URL, который клиенты реально открывают; клиенту не нужно руками открывать `/get_asset`, мод сам тянет final assets через `/get_asset`.
-
-## Передача в ChatGPT / урезанный sandbox
-
-Первой командой запускай:
+## Portable validation
 
 ```bash
 python tools/validate_sandbox.py
 ```
 
-Этот gate работает только на стандартной библиотеке и не запускает LLM, image backend, серверы или full pytest. Если JSON показывает `fullSuiteAvailable=false`, не пытайся запускать pytest/release stack в этом sandbox: недостающие pytest/Pydantic/Pillow/Hypothesis проверяются в dependency-complete окружении. `coverage=portable-static` не означает release readiness.
+Полный Python QA:
 
-## Важное для агентов
+```bash
+PYTHONPATH=LocalGenerator pytest -q
+```
 
-Если нужно менять/понимать модовую архитектуру — начинай с C# файлов в `ModSources/InfiniCrafterLocal`, а не с устаревших кратких md-заглушек. Не трогай build/cache директории как архитектуру.
+C# build требует .NET 8, stable tModLoader SDK и реальные `ParticleLibrary.dll`/`Luminance.dll`.

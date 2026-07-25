@@ -1,0 +1,181 @@
+{
+  "cases": [
+    {
+      "brokenCounts": {
+        "bindings": 0,
+        "calls": 1,
+        "claims": 0,
+        "entities": 0
+      },
+      "capabilityCardsMatchSubset": true,
+      "capabilitySubsetCount": 1,
+      "directCapabilities": [],
+      "dossierChars": 10654,
+      "errorCodes": [
+        "shape_one_of",
+        "shape_required"
+      ],
+      "errorPaths": [
+        "$.runtimeProgram.calls[1]",
+        "$.runtimeProgram.calls[1].params.useStyle"
+      ],
+      "existingBrokenCapabilities": [
+        "configure_item_use"
+      ],
+      "name": "missing_required_parameter",
+      "nonRepairableCount": 0,
+      "readOnlyDependencyCounts": {
+        "bindings": 0,
+        "calls": 0,
+        "claims": 0,
+        "entities": 1
+      },
+      "supportingCapabilities": []
+    },
+    {
+      "brokenCounts": {
+        "bindings": 0,
+        "calls": 0,
+        "claims": 0,
+        "entities": 0
+      },
+      "capabilityCardsMatchSubset": true,
+      "capabilitySubsetCount": 1,
+      "directCapabilities": [
+        "configure_item_use"
+      ],
+      "dossierChars": 9401,
+      "errorCodes": [
+        "binding_dependency"
+      ],
+      "errorPaths": [
+        "$.runtimeProgram.bindings[0].input"
+      ],
+      "existingBrokenCapabilities": [],
+      "name": "missing_item_use_capability",
+      "nonRepairableCount": 0,
+      "readOnlyDependencyCounts": {
+        "bindings": 1,
+        "calls": 0,
+        "claims": 1,
+        "entities": 1
+      },
+      "supportingCapabilities": []
+    },
+    {
+      "brokenCounts": {
+        "bindings": 0,
+        "calls": 0,
+        "claims": 1,
+        "entities": 0
+      },
+      "capabilityCardsMatchSubset": true,
+      "capabilitySubsetCount": 20,
+      "directCapabilities": [
+        "move_accelerate",
+        "move_blackhole_pull",
+        "move_boomerang",
+        "move_bounce",
+        "move_drift",
+        "move_expanding_wave",
+        "move_flail_tether",
+        "move_forward_then_retract",
+        "move_gravity_arc",
+        "move_orbit",
+        "move_phase",
+        "move_proximity_missile",
+        "move_returning_glaive",
+        "move_sine_homing",
+        "move_slow_homing",
+        "move_spiral",
+        "move_straight",
+        "move_vortex_orb",
+        "move_whip_lash",
+        "move_yoyo_hover"
+      ],
+      "dossierChars": 29506,
+      "errorCodes": [
+        "missing_movement_component",
+        "missing_claim_backing"
+      ],
+      "errorPaths": [
+        "$.runtimeProgram.calls",
+        "$.runtimeContract.claims[0].backedBy"
+      ],
+      "existingBrokenCapabilities": [],
+      "name": "missing_position_driver",
+      "nonRepairableCount": 0,
+      "readOnlyDependencyCounts": {
+        "bindings": 1,
+        "calls": 0,
+        "claims": 0,
+        "entities": 1
+      },
+      "supportingCapabilities": []
+    },
+    {
+      "brokenCounts": {
+        "bindings": 0,
+        "calls": 1,
+        "claims": 0,
+        "entities": 0
+      },
+      "capabilityCardsMatchSubset": true,
+      "capabilitySubsetCount": 2,
+      "directCapabilities": [
+        "configure_item_use"
+      ],
+      "dossierChars": 13124,
+      "errorCodes": [
+        "missing_item_capability_param"
+      ],
+      "errorPaths": [
+        "$.runtimeProgram.calls[7]"
+      ],
+      "existingBrokenCapabilities": [
+        "channel_beam",
+        "configure_item_use"
+      ],
+      "name": "existing_dependency_parameter_mismatch",
+      "nonRepairableCount": 0,
+      "readOnlyDependencyCounts": {
+        "bindings": 0,
+        "calls": 1,
+        "claims": 1,
+        "entities": 1
+      },
+      "supportingCapabilities": []
+    }
+  ],
+  "errors": [],
+  "frozenCallsites": {
+    "badCallsites": [],
+    "calls": 6,
+    "explicitFalse": 6,
+    "ok": true
+  },
+  "frozenMerge": {
+    "acceptedPaths": [
+      "$.callsUpsert[0].params.useStyle"
+    ],
+    "exactRequiredFixApplied": true,
+    "frozenExistingValuePreserved": true,
+    "fullValidationOk": true,
+    "ignoredChangeCount": 3,
+    "independentDamagePreserved": true,
+    "ok": true,
+    "optionalUnreportedAdditionIgnored": true
+  },
+  "fullAuthorPayloadChars": 70484,
+  "fullCapabilityCatalogCount": 52,
+  "ok": true,
+  "policyCoverage": {
+    "declaredCodes": 33,
+    "declaredEqualsEmitted": true,
+    "declaredEqualsPolicy": true,
+    "emittedCodes": 33,
+    "nonRepairableRegistryDefect": true,
+    "policyCodes": 33
+  },
+  "schema": "infini.targeted-repair-audit.v1"
+}

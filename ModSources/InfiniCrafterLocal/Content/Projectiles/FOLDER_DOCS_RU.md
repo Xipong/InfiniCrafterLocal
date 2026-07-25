@@ -1,18 +1,11 @@
-# Content/Projectiles — bounded generated projectile runtime
+# Content/Projectiles
 
-Executable generated attack runtime split by concern.
+One shared generated projectile executes an explicit runtime entity instance:
 
-- `GeneratedProjectile.cs` — shared state, texture/NAV map, asset catch-up helpers.
-- `GeneratedProjectile.Runtime.cs` — defaults, `ApplyGeneratedSpec`, runtime validation, stat apply, AI loop, movement primitives.
-- `GeneratedProjectile.Executors.cs` — movement executor dispatch for supported movement codes 0..18.
-- `GeneratedProjectile.Impact.cs` — collision, on-hit/on-expire bounded child projectiles, AOE, kill/impact behavior.
-- `GeneratedProjectile.OverheadBarrage.cs` — isolated target-marker + delay executor for authored projectiles descending from above; not a generic state machine.
-- `GeneratedOverheadBarragePolicy.cs` — one exact owner for child-spec descent configuration and bounded placement geometry; never chooses projectile theme.
-- `GeneratedProjectile.Visuals.cs` — registry hydration, sprite/VFX fallback drawing, dust/light polish.
-- `GeneratedProjectile.NetSync.cs` — compact visual/spec/VFX sync and catch-up queues.
-- `GeneratedVfxOverlayProjectile.cs` — timed overlay carrier for hit/kill VFX.
+- `GeneratedProjectile.cs` — load entity by generated item id/entity id;
+- `.Executors.cs` — movement/controller finite dispatch;
+- `.RuntimeEvents.cs` — exact event actions and limits;
+- `.NetSync.cs` — required authored/state fields only;
+- `.Visuals.cs` — visual kit entity role.
 
-Rules:
-- Runtime requires an authored/supported spec; it must not execute prose/script compatibility fields.
-- Child projectiles use explicit `MaxChildProjectiles`/`MaxChildDepth`; spawned child specs reset child depth/count to prevent cascades.
-- Projectile packets should be compact; registry/assets hydrate missing data by id.
+Old charge/sentry/child/family whole-weapon partials were removed. Flail/yoyo/whip/beam/targeting remain reusable controller patterns selected explicitly by capability opcode.

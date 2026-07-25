@@ -762,8 +762,37 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
         return configured if configured.lower() not in {"auto", "default"} else "~openai/gpt-latest"
     return configured or "local-model"
 
+LLM_STAGE_KEY = "_infini_stage"
+LLM_STAGES = frozenset({
+    "llm",
+    "planner",
+    "author_repair",
+    "genome_repair",
+    "name_repair",
+    "visual_director",
+    "visual_repair",
+    "vfx_director",
+    "vfx_repair",
+})
+
+
+def _normalized_llm_stage(value: Any) -> str:
+    stage = str(value or "llm").strip()
+    if stage not in LLM_STAGES:
+        raise ValueError(f"unsupported finite LLM stage: {stage!r}")
+    return stage
+
+
+def with_llm_stage(payload: dict[str, Any], stage: str) -> dict[str, Any]:
+    """Attach internal finite stage metadata without mutating the provider payload."""
+    out = dict(payload)
+    out[LLM_STAGE_KEY] = _normalized_llm_stage(stage)
+    return out
+
+
 def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
     out = json.loads(json.dumps(payload, ensure_ascii=False))
+    out.pop(LLM_STAGE_KEY, None)
     if out.get("response_format") is None:
         out.pop("response_format", None)
     return out
@@ -784,52 +813,8 @@ def http_json(url: str, payload: dict[str, Any], timeout: int = 10, headers: dic
         raise
 
 def _llm_replay_stage_from_payload(payload: dict[str, Any]) -> str:
-    """Best-effort label for an LLM hop, used only by raw replay fixtures.
-
-    This is intentionally diagnostic/test infrastructure, not item design logic.
-    It lets one INFINI_LLM_REPLAY_RAW directory feed planner, VFX-director,
-    name/JSON repair, and genome-repair calls through the real JSON parse/repair path.
-    """
-    stage_by_system_name = {
-        "item_author_contract": "planner",
-        "runtime_repair_contract": "author_repair",
-        "genome_repair_contract": "genome_repair",
-        "name_repair_contract": "name_repair",
-        "visual_director_contract": "visual_director",
-        "vfx_director_contract": "vfx_director",
-    }
-    parts: list[str] = []
-    for msg in payload.get("messages") or []:
-        if isinstance(msg, dict):
-            if str(msg.get("role") or "") == "system":
-                stage = stage_by_system_name.get(str(msg.get("name") or ""))
-                if stage:
-                    return stage
-            parts.append(str(msg.get("role") or ""))
-            parts.append(str(msg.get("content") or ""))
-    text = "\n".join(parts).lower()
-    if "pixel-art asset director" in text or "infini_visual_director" in text or "visualkit" in text:
-        return "visual_director"
-    if "vfx director" in text or "vfxinputpacket" in text or "infini_vfx" in text:
-        return "vfx_director"
-    if "repair incomplete combat genomes" in text or "infini_genome_repair" in text:
-        return "genome_repair"
-    # Planner markers must win over loose "repair"/"name" substring matches that often
-    # appear inside planner payloads (repairPolicy, display names, etc.).
-    if (
-        "author of a terraria-like generated item" in text
-        or "combine itema and itemb" in text
-        or "infini_runtime_plan" in text
-        or "priorityheader" in text
-    ):
-        return "planner"
-    if "same planner" in text and "not a fallback" in text:
-        return "author_repair"
-    if ("repair this item name" in text) or ("name repair" in text) or ("infini_name_repair" in text):
-        return "name_repair"
-    if "repair" in text and "name" in text and "runtimeplan" not in text and "enginecalls" not in text:
-        return "name_repair"
-    return "llm"
+    """Read explicit finite transport metadata; never inspect prompt content."""
+    return _normalized_llm_stage(payload.get(LLM_STAGE_KEY))
 
 def _replay_content_from_json_object(obj: Any, stage: str) -> str | None:
     if isinstance(obj, str):
@@ -1524,4 +1509,4 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         raise
 
 
-__all__ = ['_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']
+__all__ = ['LLM_STAGE_KEY', 'LLM_STAGES', '_normalized_llm_stage', 'with_llm_stage', '_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']

@@ -1016,10 +1016,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
     {
         yield return data.Visual?.SpritePath ?? "";
         yield return data.Visual?.EquipOverlayPath ?? "";
-        yield return data.Attack?.ProjectileSpritePath ?? "";
-        yield return data.Attack?.ImpactSpritePath ?? "";
-        yield return data.Attack?.ChildSpritePath ?? "";
-        yield return data.Attack?.FieldSpritePath ?? "";
+        foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
+            if (entity?.Visual is not null)
+                yield return entity.Visual.SpritePath ?? "";
     }
 
     public static IEnumerable<string> AssetFilesFromData(GeneratedItemData data)

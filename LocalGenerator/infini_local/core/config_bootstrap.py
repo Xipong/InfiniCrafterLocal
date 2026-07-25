@@ -11,7 +11,7 @@ from pathlib import Path
 
 from infini_local.core.env_utils import env_path, env_str, load_env_file
 
-APP_VERSION = "0.4.239"
+APP_VERSION = "0.4.241"
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "config.env"

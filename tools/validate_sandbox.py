@@ -29,6 +29,8 @@ FULL_SUITE_MODULES = {
 }
 STATIC_COMMANDS = (
     ("config_registry", ("tools/config_registry.py", "--check")),
+    ("targeted_repair", ("tools/audit_targeted_repair.py", "--check")),
+    ("terraria_standardization", ("tools/audit_terraria_standardization.py", "--check")),
     ("csharp_contracts", ("tools/check_csharp_contracts.py",)),
     ("project_hygiene", ("tools/check_project_hygiene.py",)),
 )

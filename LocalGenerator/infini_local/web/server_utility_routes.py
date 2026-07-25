@@ -240,7 +240,7 @@ class ServerUtilityRoutes:
             "tooltip": "Doctor probe sprite asset",
             "concept": {"fantasy": "a crystal slime blade with starlight circuitry"},
             "visual": {"palette": ["cyan", "white", "violet"], "preferredCanvasSize": 32, "requiredAnchors": ["crystal blade", "slime edge", "star circuit"]},
-            "attack": {"enabled": True, "projectileShape": "tiny crescent crystal blade", "projectileTrail": "violet starlight dots", "projectileImpact": "small cyan star crack"},
+            "runtimeProgram": {"entities": [{"id": "item", "kind": "item_body", "visualRole": "inventory_item"}, {"id": "doctor_entity", "kind": "free_projectile", "visualRole": "projectile"}]},
             "tags": ["doctor", "zimage", "sprite", "magic"],
             "debug": {},
         }
@@ -356,7 +356,7 @@ class ServerUtilityRoutes:
             "tooltip": "Debug generated sprite asset",
             "concept": {"fantasy": q.get("fantasy", ["a tiny magic sword made of slime and starlight"])[0]},
             "visual": {"palette": ["cyan", "white", "violet"], "preferredCanvasSize": 32, "requiredAnchors": ["magic sword", "slime", "starlight"]},
-            "attack": {"enabled": True, "projectileShape": "tiny crescent sword comet", "projectileTrail": "blue slime sparkles", "projectileImpact": "small star pop"},
+            "runtimeProgram": {"entities": [{"id": "item", "kind": "item_body", "visualRole": "inventory_item"}, {"id": "debug_entity", "kind": "free_projectile", "visualRole": "projectile"}]},
             "tags": ["debug", "sprite", "magic"],
             "debug": {},
         }
@@ -477,50 +477,36 @@ class ServerUtilityRoutes:
         return best_path
 
     def debug_latest_recipe_dump(self, path: str = "") -> dict[str, Any]:
+        del path
         recipe_path = self._latest_recipe_file()
         if recipe_path is None:
             return {"ok": False, "error": "no_recipe", "message": "No world recipe has been committed yet."}
         recipe = self.read_json_file(recipe_path) or {}
-        attack = recipe.get("attack") if isinstance(recipe.get("attack"), dict) else {}
-        gameplay = recipe.get("gameplay") if isinstance(recipe.get("gameplay"), dict) else {}
+        runtime = recipe.get("runtimeProgram") if isinstance(recipe.get("runtimeProgram"), dict) else {}
+        entities = [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
         visual = recipe.get("visual") if isinstance(recipe.get("visual"), dict) else {}
         debug = recipe.get("debug") if isinstance(recipe.get("debug"), dict) else {}
         health = recipe.get("recipeHealth") if isinstance(recipe.get("recipeHealth"), dict) else {}
-        recipe_meta = recipe.get("recipeMeta") if isinstance(recipe.get("recipeMeta"), dict) else {}
-        health_parents = health.get("parents") if isinstance(health.get("parents"), dict) else {}
         return {
             "ok": True,
             "version": self.app_version,
             "file": str(recipe_path),
-            "recipeKey": recipe_meta.get("recipeKey") or recipe.get("recipeKey", ""),
+            "recipeKey": recipe.get("recipeKey", ""),
             "name": recipe.get("name", ""),
-            "parents": [
-                recipe_meta.get("parentA") or health_parents.get("a") or recipe.get("parentA", ""),
-                recipe_meta.get("parentB") or health_parents.get("b") or recipe.get("parentB", ""),
-            ],
+            "parents": [recipe.get("parentA", ""), recipe.get("parentB", "")],
             "category": recipe.get("category", ""),
             "runtime": {
-                "resultKind": (recipe.get("runtimePlan") or {}).get("resultKind") if isinstance(recipe.get("runtimePlan"), dict) else gameplay.get("runtimeOutputKind", ""),
-                "delivery": attack.get("delivery", ""),
-                "runtimeFamily": attack.get("runtimeFamily", ""),
-                "movement": attack.get("movement", ""),
-                "damagePath": attack.get("damagePath", ""),
-                "hasRealChildren": (health.get("runtime") or {}).get("hasRealChildren") if isinstance(health.get("runtime"), dict) else False,
-                "pureVfx": (health.get("runtime") or {}).get("pureVfx") if isinstance(health.get("runtime"), dict) else False,
+                "apiVersion": runtime.get("apiVersion", ""),
+                "schema": runtime.get("schema", ""),
+                "itemEntityId": runtime.get("itemEntityId", ""),
+                "entityCount": len(entities),
+                "bindingCount": len(runtime.get("bindings") or []),
+                "entities": [{"id": row.get("id"), "kind": row.get("kind"), "visualRole": row.get("visualRole")} for row in entities],
             },
-            "affordance": recipe.get("runtimeAffordance", {}),
-            "visual": {
-                "itemStatus": visual.get("spriteStatus", ""),
-                "item": visual.get("spriteUrl", ""),
-                "projectileStatus": attack.get("projectileSpriteStatus", ""),
-                "projectile": attack.get("projectileSpriteUrl", ""),
-                "impactStatus": attack.get("impactSpriteStatus", ""),
-                "impact": attack.get("impactSpriteUrl", ""),
-                "assetFiles": recipe_meta.get("assetFiles", []),
-            },
+            "visual": {"itemStatus": visual.get("spriteStatus", ""), "item": visual.get("spriteUrl", ""), "entities": [row.get("visual", {}) for row in entities if row.get("kind") != "item_body"]},
             "health": health,
             "contractVersions": recipe.get("contractVersions", {}),
-            "quickWarnings": (health.get("warnings") or []) if isinstance(health, dict) else [],
+            "quickWarnings": health.get("warnings", []) if isinstance(health, dict) else [],
             "pipelineLog": debug.get("pipelineLog", ""),
         }
 

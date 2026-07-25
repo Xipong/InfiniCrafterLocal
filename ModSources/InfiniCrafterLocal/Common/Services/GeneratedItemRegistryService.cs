@@ -167,24 +167,18 @@ public sealed class GeneratedItemRegistryService : IDisposable
         }
     }
 
-    public AttackSpec? TryGetAttack(string? id)
+    public RuntimeProgramSpec? TryGetRuntimeProgram(string? id)
     {
-        if (!TryGet(id, out var data) || data.Attack is null)
-            return null;
-        // Cheap deep clone through the already-normalizing generated item contract.
-        return GeneratedItemData.FromJson(data.ToJson())?.Attack;
+        if (!TryGet(id, out GeneratedItemData data)) return null;
+        GeneratedItemData? clone = GeneratedItemData.FromJson(data.ToJson());
+        return clone?.RuntimeProgram;
     }
 
     public VfxManifestSpec TryGetVfxManifest(string? id)
     {
-        if (!TryGet(id, out var data))
-            return new VfxManifestSpec();
-        if (data.VfxManifest is not null && data.VfxManifest.HasSlots)
-        {
-            data.VfxManifest.Normalize();
-            return data.VfxManifest;
-        }
-        return VfxManifestSpec.FromJson(data.Attack?.VfxManifestJson);
+        if (!TryGet(id, out GeneratedItemData data)) return VfxManifestSpec.Empty();
+        VfxManifestSpec manifest = VfxManifestSpec.FromJson(data.VfxManifest.ToJson());
+        return manifest;
     }
 
     public void RegisterLocal(GeneratedItemData? data, bool persist = true, bool ensureAssets = true)
@@ -223,8 +217,6 @@ public sealed class GeneratedItemRegistryService : IDisposable
         if (persist) PersistOne(data);
         if (ensureAssets)
             InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(data);
-        GeneratedProjectile.FlushPendingProjectileVisualSyncForGeneratedItem(data.Id);
-        GeneratedProjectile.FlushPendingVfxEventsForGeneratedItem(data.Id);
     }
 
     public void PublishGeneratedItem(GeneratedItemData? data, int toClient = -1, int ignoreClient = -1)

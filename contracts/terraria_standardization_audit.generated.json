@@ -1,0 +1,451 @@
+{
+  "schema": "infini.terraria-standardization-audit.v1",
+  "ok": true,
+  "score": 87,
+  "scoreMax": 87,
+  "metrics": {
+    "capabilities": 52,
+    "canonicalDamageClasses": 10,
+    "canonicalUseStyles": 13,
+    "canonicalAmmoCategories": 15,
+    "authorInputs": 4
+  },
+  "checks": [
+    {
+      "name": "damage_class:default",
+      "ok": true,
+      "detail": "default must map exactly to DamageClass.Default"
+    },
+    {
+      "name": "damage_class:generic",
+      "ok": true,
+      "detail": "generic must map exactly to DamageClass.Generic"
+    },
+    {
+      "name": "damage_class:melee",
+      "ok": true,
+      "detail": "melee must map exactly to DamageClass.Melee"
+    },
+    {
+      "name": "damage_class:melee_no_speed",
+      "ok": true,
+      "detail": "melee_no_speed must map exactly to DamageClass.MeleeNoSpeed"
+    },
+    {
+      "name": "damage_class:ranged",
+      "ok": true,
+      "detail": "ranged must map exactly to DamageClass.Ranged"
+    },
+    {
+      "name": "damage_class:magic",
+      "ok": true,
+      "detail": "magic must map exactly to DamageClass.Magic"
+    },
+    {
+      "name": "damage_class:magic_summon_hybrid",
+      "ok": true,
+      "detail": "magic_summon_hybrid must map exactly to DamageClass.MagicSummonHybrid"
+    },
+    {
+      "name": "damage_class:summon",
+      "ok": true,
+      "detail": "summon must map exactly to DamageClass.Summon"
+    },
+    {
+      "name": "damage_class:summon_melee_speed",
+      "ok": true,
+      "detail": "summon_melee_speed must map exactly to DamageClass.SummonMeleeSpeed"
+    },
+    {
+      "name": "damage_class:throwing",
+      "ok": true,
+      "detail": "throwing must map exactly to DamageClass.Throwing"
+    },
+    {
+      "name": "use_style:swing",
+      "ok": true,
+      "detail": "swing must map exactly to ItemUseStyleID.Swing"
+    },
+    {
+      "name": "use_style:eat_food",
+      "ok": true,
+      "detail": "eat_food must map exactly to ItemUseStyleID.EatFood"
+    },
+    {
+      "name": "use_style:thrust",
+      "ok": true,
+      "detail": "thrust must map exactly to ItemUseStyleID.Thrust"
+    },
+    {
+      "name": "use_style:hold_up",
+      "ok": true,
+      "detail": "hold_up must map exactly to ItemUseStyleID.HoldUp"
+    },
+    {
+      "name": "use_style:shoot",
+      "ok": true,
+      "detail": "shoot must map exactly to ItemUseStyleID.Shoot"
+    },
+    {
+      "name": "use_style:drink_long",
+      "ok": true,
+      "detail": "drink_long must map exactly to ItemUseStyleID.DrinkLong"
+    },
+    {
+      "name": "use_style:drink_liquid",
+      "ok": true,
+      "detail": "drink_liquid must map exactly to ItemUseStyleID.DrinkLiquid"
+    },
+    {
+      "name": "use_style:golf_play",
+      "ok": true,
+      "detail": "golf_play must map exactly to ItemUseStyleID.GolfPlay"
+    },
+    {
+      "name": "use_style:hidden_animation",
+      "ok": true,
+      "detail": "hidden_animation must map exactly to ItemUseStyleID.HiddenAnimation"
+    },
+    {
+      "name": "use_style:mow_the_lawn",
+      "ok": true,
+      "detail": "mow_the_lawn must map exactly to ItemUseStyleID.MowTheLawn"
+    },
+    {
+      "name": "use_style:guitar",
+      "ok": true,
+      "detail": "guitar must map exactly to ItemUseStyleID.Guitar"
+    },
+    {
+      "name": "use_style:rapier",
+      "ok": true,
+      "detail": "rapier must map exactly to ItemUseStyleID.Rapier"
+    },
+    {
+      "name": "use_style:raise_lamp",
+      "ok": true,
+      "detail": "raise_lamp must map exactly to ItemUseStyleID.RaiseLamp"
+    },
+    {
+      "name": "ammo_category:arrow",
+      "ok": true,
+      "detail": "arrow must map exactly to AmmoID.Arrow"
+    },
+    {
+      "name": "ammo_category:bullet",
+      "ok": true,
+      "detail": "bullet must map exactly to AmmoID.Bullet"
+    },
+    {
+      "name": "ammo_category:candy_corn",
+      "ok": true,
+      "detail": "candy_corn must map exactly to AmmoID.CandyCorn"
+    },
+    {
+      "name": "ammo_category:coin",
+      "ok": true,
+      "detail": "coin must map exactly to AmmoID.Coin"
+    },
+    {
+      "name": "ammo_category:dart",
+      "ok": true,
+      "detail": "dart must map exactly to AmmoID.Dart"
+    },
+    {
+      "name": "ammo_category:fallen_star",
+      "ok": true,
+      "detail": "fallen_star must map exactly to AmmoID.FallenStar"
+    },
+    {
+      "name": "ammo_category:flare",
+      "ok": true,
+      "detail": "flare must map exactly to AmmoID.Flare"
+    },
+    {
+      "name": "ammo_category:gel",
+      "ok": true,
+      "detail": "gel must map exactly to AmmoID.Gel"
+    },
+    {
+      "name": "ammo_category:jack_o_lantern",
+      "ok": true,
+      "detail": "jack_o_lantern must map exactly to AmmoID.JackOLantern"
+    },
+    {
+      "name": "ammo_category:nail_friendly",
+      "ok": true,
+      "detail": "nail_friendly must map exactly to AmmoID.NailFriendly"
+    },
+    {
+      "name": "ammo_category:rocket",
+      "ok": true,
+      "detail": "rocket must map exactly to AmmoID.Rocket"
+    },
+    {
+      "name": "ammo_category:snowball",
+      "ok": true,
+      "detail": "snowball must map exactly to AmmoID.Snowball"
+    },
+    {
+      "name": "ammo_category:solution",
+      "ok": true,
+      "detail": "solution must map exactly to AmmoID.Solution"
+    },
+    {
+      "name": "ammo_category:stake",
+      "ok": true,
+      "detail": "stake must map exactly to AmmoID.Stake"
+    },
+    {
+      "name": "ammo_category:stynger_bolt",
+      "ok": true,
+      "detail": "stynger_bolt must map exactly to AmmoID.StyngerBolt"
+    },
+    {
+      "name": "exact_damage_class_vocabulary",
+      "ok": true,
+      "detail": "DamageClass mapping must use canonical built-ins or exact ModType.FullName without fallback"
+    },
+    {
+      "name": "exact_modded_damage_class_lookup",
+      "ok": true,
+      "detail": "modded DamageClass must use exact registered ModName/ClassName and fail closed"
+    },
+    {
+      "name": "modded_damage_class_pattern",
+      "ok": true,
+      "detail": "schema pattern must accept exact tModLoader FullName and reject loose aliases"
+    },
+    {
+      "name": "old_damage_policy_deleted",
+      "ok": true,
+      "detail": "open-ended legacy damage policy must stay deleted"
+    },
+    {
+      "name": "old_effect_archetype_catalog_deleted",
+      "ok": true,
+      "detail": "retired whole-weapon/effect aliases must not remain as a discoverable fallback architecture"
+    },
+    {
+      "name": "canonical_damage_class_reverse_mapping",
+      "ok": true,
+      "detail": "parent extraction must use the same canonical DamageClass vocabulary as runtime hydration"
+    },
+    {
+      "name": "single_damage_class_parent_identity",
+      "ok": true,
+      "detail": "parent facts must expose one exact damageClass token, never pseudo none/modded plus a duplicate field"
+    },
+    {
+      "name": "modded_damage_class_case_preserved",
+      "ok": true,
+      "detail": "exact ModName/ClassName must preserve case and full bounded length across both DTO layers"
+    },
+    {
+      "name": "canonical_parent_use_and_ammo_names",
+      "ok": true,
+      "detail": "parent facts must carry exact canonical tModLoader names and independent potion/notAmmo flags"
+    },
+    {
+      "name": "single_equipped_input",
+      "ok": true,
+      "detail": "Author API must expose one canonical equipped input"
+    },
+    {
+      "name": "consumption_is_not_ammo",
+      "ok": true,
+      "detail": "configure_consumption must not own Item.ammo"
+    },
+    {
+      "name": "ammo_item_is_explicit",
+      "ok": true,
+      "detail": "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo"
+    },
+    {
+      "name": "ammo_item_dependency",
+      "ok": true,
+      "detail": "ammo item must require explicit consumable=true"
+    },
+    {
+      "name": "ammo_projection_direct",
+      "ok": true,
+      "detail": "ammo fields must project directly without category-derived projectile or runtime-entity speed leakage"
+    },
+    {
+      "name": "ammo_shoot_speed_range_parity",
+      "ok": true,
+      "detail": "ammo Item.shootSpeed contribution must preserve the exact Author range at the C# boundary"
+    },
+    {
+      "name": "vanilla_projectile_id_guard",
+      "ok": true,
+      "detail": "vanilla ammo projectile must be authored in stable 1..1021 and validated against ProjectileID.Count"
+    },
+    {
+      "name": "no_plural_gameplay_ammo_alias",
+      "ok": true,
+      "detail": "plural ammo aliases are not canonical gameplay tokens"
+    },
+    {
+      "name": "potion_flag_is_authored",
+      "ok": true,
+      "detail": "Item.potion must be authored, not inferred from healing"
+    },
+    {
+      "name": "generated_parent_preserves_exact_item_semantics",
+      "ok": true,
+      "detail": "generated parents must preserve exact ammo/potion facts for the next Author"
+    },
+    {
+      "name": "loaded_rarity_guard",
+      "ok": true,
+      "detail": "rarity must be an actually loaded ID, not silently clamped"
+    },
+    {
+      "name": "loaded_buff_guards",
+      "ok": true,
+      "detail": "buff IDs and durations must fail closed against the loaded content registry"
+    },
+    {
+      "name": "loaded_tile_wall_guards",
+      "ok": true,
+      "detail": "tile/wall IDs must be validated against loaded tModLoader content"
+    },
+    {
+      "name": "axe_internal_unit_parity",
+      "ok": true,
+      "detail": "axePower must use exact Item.axe internal units and match the C# bound"
+    },
+    {
+      "name": "item_value_semantics",
+      "ok": true,
+      "detail": "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value"
+    },
+    {
+      "name": "explicit_projectile_collision",
+      "ok": true,
+      "detail": "projectile liquid and immunity semantics must be explicit"
+    },
+    {
+      "name": "vanilla_projectile_defaults",
+      "ok": true,
+      "detail": "proxy SetDefaults must retain Terraria defaults until authored entity configuration"
+    },
+    {
+      "name": "explicit_liquid_projection",
+      "ok": true,
+      "detail": "ignoreWater must come from authored collision data"
+    },
+    {
+      "name": "explicit_immunity_projection",
+      "ok": true,
+      "detail": "owner/local immunity must map to Terraria fields explicitly"
+    },
+    {
+      "name": "no_id_static_immunity",
+      "ok": true,
+      "detail": "ID-static immunity would leak across all generated entities sharing one proxy type"
+    },
+    {
+      "name": "new_projectile_direct",
+      "ok": true,
+      "detail": "spawn path should use the official direct-return overload"
+    },
+    {
+      "name": "held_projectile_static_set",
+      "ok": true,
+      "detail": "shared held projectile type should use the stable held draw-offset set"
+    },
+    {
+      "name": "owner_vector_sync",
+      "ok": true,
+      "detail": "owner cursor vectors must be synced only on bounded meaningful changes"
+    },
+    {
+      "name": "range_parity_spawn",
+      "ok": true,
+      "detail": "C# spawn clamps must match Author registry"
+    },
+    {
+      "name": "range_parity_collision",
+      "ok": true,
+      "detail": "C# collision clamps must match Author registry"
+    },
+    {
+      "name": "lowery_exists",
+      "ok": true,
+      "detail": "root lowery.md must exist"
+    },
+    {
+      "name": "lowery:Gameplay Author-visible ",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: Gameplay Author-visible semantic aliases: **нет**"
+    },
+    {
+      "name": "lowery:Item.ammo",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: Item.ammo"
+    },
+    {
+      "name": "lowery:Item.useAmmo",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: Item.useAmmo"
+    },
+    {
+      "name": "lowery:GeneratedItem` и `Genera",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: GeneratedItem` и `GeneratedProjectile` — proxy-типы"
+    },
+    {
+      "name": "lowery:sand ammo не выставляетс",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: sand ammo не выставляется"
+    },
+    {
+      "name": "lowery:ID-static immunity не ex",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: ID-static immunity не exposed"
+    },
+    {
+      "name": "lowery:VFX fallback palette",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: VFX fallback palette"
+    },
+    {
+      "name": "lowery:ModName/ClassName",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: ModName/ClassName"
+    },
+    {
+      "name": "lowery:effect_catalog.py",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: effect_catalog.py"
+    },
+    {
+      "name": "lowery:псевдотокены `none`/`mod",
+      "ok": true,
+      "detail": "lowery.md missing guardrail: псевдотокены `none`/`modded`"
+    },
+    {
+      "name": "provider_aliases_documented",
+      "ok": true,
+      "detail": "documented provider aliases must match transport"
+    },
+    {
+      "name": "image_backend_aliases_documented",
+      "ok": true,
+      "detail": "documented image backend aliases must match visual config"
+    },
+    {
+      "name": "category_aliases_documented",
+      "ok": true,
+      "detail": "documented UI category aliases must match identity normalization"
+    },
+    {
+      "name": "vfx_aliases_visual_only",
+      "ok": true,
+      "detail": "documented VFX aliases must remain confined to presentation color"
+    }
+  ],
+  "issues": []
+}

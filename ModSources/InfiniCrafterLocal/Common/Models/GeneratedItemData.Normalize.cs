@@ -5,488 +5,295 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Terraria.ID;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Models;
 
-// AGENT MAP: inbound DTO normalization and safety clamps.
-// Normalize ranges, sprite paths/status, runtime API support and future-field
-// handling here. Do not silently convert unknown/prose fields into
-// gameplay; unsupported data stays inert/debug-visible until runtime support exists.
+// Deterministic validation/engine-bound normalization for the v5 low-level wire.
+// This file may clamp hard Terraria/performance limits and translate exact use-style
+// names to ItemUseStyleID. It must not invent movement, attachment, delivery,
+// controllers, events, entity kinds, or any gameplay value from prose/category.
 public sealed partial class GeneratedItemData
 {
     private static int ClampInt(int value, int min, int max) => Math.Min(max, Math.Max(min, value));
     private static float ClampFloat(float value, float min, float max) => MathF.Min(max, MathF.Max(min, value));
-    private static string NormalizeSpriteStatus(string? raw)
-    {
-        string s = (raw ?? "").Trim().ToLowerInvariant();
-        return s switch
-        {
-            "generated" or "generated_warn_invalid" or "prompt_only" or "failed" or "placeholder" or "fallback" or "fallback_after_failed_generation" => s,
-            _ => string.IsNullOrWhiteSpace(s) ? "" : s
-        };
-    }
-
-    private static bool SpriteStatusAllowsRuntimePath(string? status)
-    {
-        string s = NormalizeSpriteStatus(status);
-        return !string.IsNullOrWhiteSpace(s) && s is not ("failed" or "prompt_only" or "placeholder" or "generated_warn_invalid");
-    }
-
-    private static string NormalizeSpritePathForStatus(string? path, string? status)
-    {
-        string s = NormalizeSpriteStatus(status);
-        if (s is "failed" or "prompt_only" or "placeholder") return "";
-        path = (path ?? "").Trim();
-        if (path.Length > 400) return "";
-        if (!path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return "";
-        return path;
-    }
-
-    private static string ConventionalAssetFileName(string id, string suffix)
-    {
-        id = SafeText(id, 96).Trim();
-        if (string.IsNullOrWhiteSpace(id)) return "";
-        foreach (char c in id)
-        {
-            if (!(char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == '.')) return "";
-        }
-        return string.IsNullOrWhiteSpace(suffix) ? id + ".png" : id + suffix + ".png";
-    }
-
-    private static BuffEntrySpec[] NormalizeExtraBuffs(BuffEntrySpec[]? source, int primaryBuffCode, int primaryBuffTime)
-    {
-        var outList = new List<BuffEntrySpec>();
-        void Add(int code, int time)
-        {
-            time = ClampInt(time, 0, 21600);
-            if (code <= InfiniTerrariaSentinels.NoBuffType || code >= BuffLoader.BuffCount || time <= 0) return;
-            int idx = outList.FindIndex(x => x.BuffCode == code);
-            if (idx >= 0)
-            {
-                if (time > outList[idx].BuffTime) outList[idx].BuffTime = time;
-                return;
-            }
-            if (outList.Count < 4) outList.Add(new BuffEntrySpec { BuffCode = code, BuffTime = time });
-        }
-        Add(primaryBuffCode, primaryBuffTime);
-        if (source is not null)
-        {
-            foreach (var buff in source)
-                if (buff is not null) Add(buff.BuffCode, buff.BuffTime);
-        }
-        return outList.ToArray();
-    }
-    private static string NormalizeRuntimeApiVersion(string? value)
-    {
-        string s = SafeText(value, 32).Trim();
-        return s;
-    }
 
     private static string SafeText(string? value, int maxLen)
     {
-        string s = value ?? "";
-        if (s.Length > maxLen) s = s[..maxLen];
-        return s.Replace('\0', ' ').Trim();
-    }
-
-    private static string NormalizeHexColor(string? value, string fallback = "#ffffff")
-    {
-        string s = SafeText(value, 16).Trim();
-        if (string.IsNullOrWhiteSpace(s)) return fallback;
-        if (!s.StartsWith("#", StringComparison.Ordinal)) s = "#" + s;
-        if (s.Length != 7) return fallback;
-        for (int i = 1; i < s.Length; i++)
-        {
-            char c = s[i];
-            bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-            if (!ok) return fallback;
-        }
-        return s.ToLowerInvariant();
+        string text = (value ?? "").Trim();
+        return text.Length <= maxLen ? text : text[..maxLen];
     }
 
     private static string[] SafeTextArray(string[]? values, int maxItems = 32, int maxLen = 64)
+        => (values ?? Array.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => SafeText(x, maxLen))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(maxItems)
+            .ToArray();
+
+    private static string NormalizeHexColor(string? value, string fallback = "#ffffff")
     {
-        if (values is null || values.Length <= 0) return Array.Empty<string>();
-        var list = new List<string>();
-        foreach (string raw in values)
-        {
-            string s = SafeText(raw, maxLen);
-            if (!string.IsNullOrWhiteSpace(s)) list.Add(s);
-            if (list.Count >= maxItems) break;
-        }
-        return list.ToArray();
+        string text = (value ?? "").Trim();
+        if (text.Length == 7 && text[0] == '#' && text.Skip(1).All(Uri.IsHexDigit))
+            return text.ToLowerInvariant();
+        return fallback;
     }
-
-    private static bool RuntimeApiSupported(string? value)
-    {
-        string s = NormalizeRuntimeApiVersion(value);
-        return SupportedRuntimeApiVersions.Contains(s);
-    }
-
-    private static bool IsRuntimeFamily(string? value)
-        => GeneratedRuntimeFamilyPolicy.IsCanonical(value);
-
-    private static string NormalizeRuntimeFamily(string? value)
-        => GeneratedRuntimeFamilyPolicy.Normalize(value);
-
-    private static string NormalizePullMode(string? value, float pullStrength)
-    {
-        if (pullStrength <= 0f) return "none";
-        string mode = SafeText(value, 24).ToLowerInvariant();
-        return mode is "target_to_owner" or "owner_to_target" or "target_to_projectile" ? mode : "none";
-    }
-
-    private static string NormalizeArmorSlot(string? value)
-    {
-        string s = (value ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
-        return s switch
-        {
-            "helmet" or "helm" or "hat" or "hood" or "mask" or "head" => "head",
-            "chest" or "chestplate" or "breastplate" or "body" or "shirt" or "robe" or "torso" => "body",
-            "legs" or "leggings" or "greaves" or "pants" or "boots" or "leg" => "legs",
-            _ => ""
-        };
-    }
-
-    private static bool RuntimeAttackContractSupported(AttackSpec? attack, string? runtimeApiVersion = null)
-    {
-        if (attack is null || !attack.Enabled) return true;
-        if (!attack.RuntimePlanAuthored) return false;
-        if (!IsRuntimeFamily(attack.RuntimeFamily)) return false;
-        return attack.MovementCode >= 0 && attack.MovementCode <= MaxSupportedMovementCode
-            && attack.EffectCode >= 0 && attack.EffectCode <= MaxSupportedEffectCode
-            && attack.OnHitCode >= 0 && attack.OnHitCode <= MaxSupportedOnHitCode
-            && attack.UseStyleCode >= ItemUseStyleID.None && attack.UseStyleCode <= InfiniTerrariaSentinels.MaxSupportedItemUseStyle;
-    }
-
-    private static GeneratedItemData MarkUnsupportedRuntimeAttack(GeneratedItemData data)
-    {
-        data.SourceMode = "failed";
-        data.Tooltip = data.Attack is null || data.Attack.RuntimePlanAuthored
-            ? $"Unsupported generated runtime opcode; update the mod/generator pair."
-            : "Generated attack runtime is missing the current authored contract; regenerate this item.";
-        if (data.Attack is not null)
-            data.Attack.Enabled = false;
-        if (data.Gameplay is not null)
-            data.Gameplay.Damage = 0;
-        return data;
-    }
-
 
     public void Normalize()
     {
-        RuntimeApiVersion = NormalizeRuntimeApiVersion(RuntimeApiVersion);
-        Id = string.IsNullOrWhiteSpace(Id) ? Guid.NewGuid().ToString("N")[..12] : SafeText(Id, 64);
-        RecipeKey = SafeText(RecipeKey, 80);
+        if (SchemaVersion != 5)
+            throw new InvalidDataException($"Unsupported generated item schemaVersion {SchemaVersion}; only 5 is accepted");
+        RuntimeApiVersion = SafeText(RuntimeApiVersion, 48);
+        if (!string.Equals(RuntimeApiVersion, RuntimeProgramSpec.CurrentApiVersion, StringComparison.Ordinal))
+            throw new InvalidDataException($"Unsupported runtimeApiVersion '{RuntimeApiVersion}'");
+
+        Id = SafeText(Id, 64);
+        RecipeKey = SafeText(RecipeKey, 120);
         Name = string.IsNullOrWhiteSpace(Name) ? "Generated Item" : SafeText(Name, 80);
-        ParentA = string.IsNullOrWhiteSpace(ParentA) ? "Unknown" : SafeText(ParentA, 80);
-        ParentB = string.IsNullOrWhiteSpace(ParentB) ? "Unknown" : SafeText(ParentB, 80);
-        Tooltip = SafeText(Tooltip, 240);
-        MergeMode = string.IsNullOrWhiteSpace(MergeMode) ? "literal" : SafeText(MergeMode, 32);
-        Category = string.IsNullOrWhiteSpace(Category) ? "generic" : SafeText(Category, 32);
-        SourceMode = string.IsNullOrWhiteSpace(SourceMode) ? "generated" : SafeText(SourceMode, 32);
-        Tags = SafeTextArray(Tags, 32, 48);
+        ParentA = SafeText(ParentA, 80);
+        ParentB = SafeText(ParentB, 80);
+        Tooltip = SafeText(Tooltip, 500);
+        MergeMode = SafeText(MergeMode, 32);
+        Category = SafeText(Category, 32).ToLowerInvariant();
+        SourceMode = SafeText(SourceMode, 32).ToLowerInvariant();
+        Tags = SafeTextArray(Tags, 32, 64);
+
         Canonical ??= new CanonicalSpec();
         SourceRepresentation ??= Array.Empty<SourceRepresentationSpec>();
         Inheritance ??= Array.Empty<InheritanceSpec>();
         LossBudget ??= new LossBudgetSpec();
         RecipeMeta ??= new RecipeMetaSpec();
-        RecipeMeta.AssetTransport = string.Equals(RecipeMeta.AssetTransport?.Trim(), "http", StringComparison.OrdinalIgnoreCase)
-            ? "http"
-            : "native";
         ItemKnowledge ??= new ItemKnowledgeSpec();
         GeneratedParentSummary ??= new GeneratedParentSummarySpec();
-        GeneratedParentSummary.Normalize();
         Gameplay ??= new GameplaySpec();
         Accessory ??= new AccessorySpec();
         Armor ??= new ArmorSpec();
-        Attack ??= new AttackSpec();
+        RuntimeProgram ??= new RuntimeProgramSpec();
         Visual ??= new VisualSpec();
-        PresentationGenome ??= new PresentationGenomeSpec();
         VfxManifest ??= new VfxManifestSpec();
-        VfxManifest.Normalize();
+        Debug ??= new Dictionary<string, System.Text.Json.JsonElement>();
+        ExtensionData ??= new Dictionary<string, System.Text.Json.JsonElement>();
 
-        Debug ??= new Dictionary<string, JsonElement>();
-        ExtensionData ??= new Dictionary<string, JsonElement>();
-        NormalizeGameplayVisualAndAttackRanges();
+        RejectRetiredArchitectureFields();
+        NormalizeGameplay();
+        NormalizeEquipment();
+        NormalizeVisual();
+        RuntimeProgram.NormalizeAndValidate();
+        ValidateBindingCapabilityProjection();
+        if (!string.Equals(RuntimeProgram.ApiVersion, RuntimeApiVersion, StringComparison.Ordinal))
+            throw new InvalidDataException("top-level runtimeApiVersion does not match runtimeProgram.apiVersion");
+        VfxManifest.Normalize();
+        ValidateVfxEntityEventReferences();
+        GeneratedParentSummary.Normalize();
+
+        RecipeMeta.WorldId = SafeText(RecipeMeta.WorldId, 32);
+        RecipeMeta.AssetTransport = SafeText(RecipeMeta.AssetTransport, 32);
+        RecipeMeta.AssetBaseUrl = SafeText(RecipeMeta.AssetBaseUrl, 500);
+        RecipeMeta.AssetFiles = SafeTextArray(RecipeMeta.AssetFiles, 64, 180);
     }
 
-
-    private void NormalizeGameplayVisualAndAttackRanges()
+    private void ValidateBindingCapabilityProjection()
     {
-        // Runtime item hitboxes should stay in Terraria-sized ranges.  The PNG canvas
-        // may be 48/64 for readability, but the gameplay/world item box must not
-        // recursively grow into huge 128-256px objects from generated-parent chains.
-        Gameplay.Width = ClampInt(Gameplay.Width, 8, 64);
-        Gameplay.Height = ClampInt(Gameplay.Height, 8, 64);
-        Gameplay.UseTime = ClampInt(Gameplay.UseTime, 10, 3600);
-        Gameplay.UseAnimation = ClampInt(Gameplay.UseAnimation, 6, 3600);
+        bool hasExplicitUseEffects = Gameplay.HealLife > 0
+            || Gameplay.HealMana > 0
+            || (Gameplay.ExtraBuffs?.Length ?? 0) > 0
+            || Gameplay.GeneratedBuff?.HasAnyEffect == true
+            || !string.IsNullOrWhiteSpace(Gameplay.MobilityMode);
+        bool hasExplicitPlaceable = Gameplay.CreateTile >= 0 || Gameplay.CreateWall >= 0;
+        bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
+
+        foreach (RuntimeBindingSpec binding in RuntimeProgram.Bindings)
+        {
+            if (binding.Action == RuntimeBindingAction.ApplyItemEffects && !hasExplicitUseEffects)
+                throw new InvalidDataException($"binding '{binding.Id}' apply_item_effects has no compiled item effect capability");
+            if (binding.Action == RuntimeBindingAction.PlaceItem && !hasExplicitPlaceable)
+                throw new InvalidDataException($"binding '{binding.Id}' place_item has no compiled configure_placeable result");
+            if (binding.Action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
+                throw new InvalidDataException($"binding '{binding.Id}' equip_passive has no compiled accessory/armor capability");
+        }
+    }
+
+    private void RejectRetiredArchitectureFields()
+    {
+        string[] retired =
+        {
+            "attack", "runtimePlan", "runtimeCompiled", "runtimeAffordance",
+            "runtimeArchetype", "weaponFamily", "runtimeFamily", "presentationGenome",
+        };
+        foreach (string key in retired)
+            if (ExtensionData.ContainsKey(key))
+                throw new InvalidDataException($"Retired generated-item field '{key}' is not accepted by runtime v5");
+    }
+
+    private void NormalizeGameplay()
+    {
+        Gameplay.Kind = SafeText(Gameplay.Kind, 32).ToLowerInvariant();
+        Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129);
+        _ = TerrariaRuntimeVocabulary.ResolveDamageClass(Gameplay.DamageClass);
+        Gameplay.Damage = ClampInt(Gameplay.Damage, 0, 2000);
+        Gameplay.Knockback = ClampFloat(Gameplay.Knockback, 0f, 20f);
+        Gameplay.UseTime = ClampInt(Gameplay.UseTime, 1, 600);
+        Gameplay.UseAnimation = ClampInt(Gameplay.UseAnimation, 1, 600);
+        Gameplay.UseStyleName = SafeText(Gameplay.UseStyleName, 32).ToLowerInvariant();
+        Gameplay.UseStyle = TerrariaRuntimeVocabulary.ResolveItemUseStyle(Gameplay.UseStyleName);
+        Gameplay.ManaCost = ClampInt(Gameplay.ManaCost, 0, 500);
+        if (Gameplay.Rarity < 0 || Gameplay.Rarity >= RarityLoader.RarityCount)
+            throw new InvalidDataException($"rarity ID {Gameplay.Rarity} is not loaded");
+        Gameplay.Value = ClampInt(Gameplay.Value, 0, 100_000_000);
         Gameplay.MaxStack = ClampInt(Gameplay.MaxStack, 1, 9999);
         Gameplay.CraftYield = ClampInt(Gameplay.CraftYield, 1, 9999);
-        Gameplay.ItemScale = ClampFloat(Gameplay.ItemScale, 0.55f, 1.55f);
-        Gameplay.HoldoutOffsetX = ClampInt(Gameplay.HoldoutOffsetX, -256, 256);
-        Gameplay.HoldoutOffsetY = ClampInt(Gameplay.HoldoutOffsetY, -256, 256);
-        Gameplay.HeldVisibility = SafeText(Gameplay.HeldVisibility, 32);
-        Gameplay.ReleaseTiming = SafeText(Gameplay.ReleaseTiming, 32);
-        Gameplay.HandPose = SafeText(Gameplay.HandPose, 32);
-        Gameplay.InitialOffsetPx = ClampInt(Gameplay.InitialOffsetPx, -64, 64);
-        Gameplay.ConsumeChancePercent = ClampInt(Gameplay.ConsumeChancePercent <= 0 ? Gameplay.ConsumeChancePercent : Gameplay.ConsumeChancePercent, 0, 100);
-        Gameplay.ManaCost = ClampInt(Gameplay.ManaCost, 0, 9999);
+        Gameplay.AmmoCategory = SafeText(Gameplay.AmmoCategory, 32).ToLowerInvariant();
+        _ = TerrariaRuntimeVocabulary.ResolveAmmoCategory(Gameplay.AmmoCategory);
+        Gameplay.AmmoProjectileId = Gameplay.AmmoCategory.Length == 0
+            ? ProjectileID.None
+            : Gameplay.AmmoProjectileId;
+        if (Gameplay.AmmoCategory.Length > 0
+            && (Gameplay.AmmoProjectileId <= ProjectileID.None || Gameplay.AmmoProjectileId >= ProjectileID.Count))
+            throw new InvalidDataException($"ammo projectile ID {Gameplay.AmmoProjectileId} is not a vanilla ProjectileID");
+        Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);
+        if (Gameplay.AmmoCategory.Length > 0 && !Gameplay.Consumable)
+            throw new InvalidDataException("configure_vanilla_ammo_item requires consumable=true");
+        Gameplay.ConsumeChancePercent = ClampInt(Gameplay.ConsumeChancePercent, 0, 100);
+        Gameplay.Width = ClampInt(Gameplay.Width, 8, 256);
+        Gameplay.Height = ClampInt(Gameplay.Height, 8, 256);
+        Gameplay.ItemScale = ClampFloat(Gameplay.ItemScale, 0.25f, 4f);
+        Gameplay.HoldoutOffsetX = ClampInt(Gameplay.HoldoutOffsetX, -96, 96);
+        Gameplay.HoldoutOffsetY = ClampInt(Gameplay.HoldoutOffsetY, -96, 96);
+        Gameplay.ReleaseTiming = SafeText(Gameplay.ReleaseTiming, 32).ToLowerInvariant();
+        Gameplay.HandPose = SafeText(Gameplay.HandPose, 32).ToLowerInvariant();
         Gameplay.HealLife = ClampInt(Gameplay.HealLife, 0, 500);
         Gameplay.HealMana = ClampInt(Gameplay.HealMana, 0, 500);
-        Gameplay.BuffCode = Gameplay.BuffCode > InfiniTerrariaSentinels.NoBuffType && Gameplay.BuffCode < BuffLoader.BuffCount
-            ? Gameplay.BuffCode
-            : InfiniTerrariaSentinels.NoBuffType;
+        if (Gameplay.BuffCode < 0 || Gameplay.BuffCode >= BuffLoader.BuffCount)
+            throw new InvalidDataException($"buff ID {Gameplay.BuffCode} is not loaded");
         Gameplay.BuffTime = ClampInt(Gameplay.BuffTime, 0, 21600);
-        Gameplay.ExtraBuffs = NormalizeExtraBuffs(Gameplay.ExtraBuffs, Gameplay.BuffCode, Gameplay.BuffTime);
+        Gameplay.ExtraBuffs = (Gameplay.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
+            .Select(x =>
+            {
+                if (x is null)
+                    throw new InvalidDataException("extra buff row cannot be null");
+                if (x.BuffCode <= 0 || x.BuffCode >= BuffLoader.BuffCount)
+                    throw new InvalidDataException($"extra buff ID {x.BuffCode} is not loaded");
+                if (x.BuffTime <= 0)
+                    throw new InvalidDataException($"extra buff ID {x.BuffCode} requires positive duration");
+                return new BuffEntrySpec
+                {
+                    BuffCode = x.BuffCode,
+                    BuffTime = ClampInt(x.BuffTime, 1, 21600),
+                };
+            })
+            .Take(16)
+            .ToArray();
         Gameplay.GeneratedBuff ??= new GeneratedBuffSpec();
         Gameplay.GeneratedBuff.Normalize();
-        if (Gameplay.BuffCode <= InfiniTerrariaSentinels.NoBuffType && Gameplay.ExtraBuffs.Length > 0)
-        {
-            Gameplay.BuffCode = Gameplay.ExtraBuffs[0].BuffCode;
-            Gameplay.BuffTime = Gameplay.ExtraBuffs[0].BuffTime;
-        }
         Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 1000);
-        Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 200);
+        Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);
         Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 1000);
-        Gameplay.CreateTile = Gameplay.CreateTile >= 0 && Gameplay.CreateTile < TileLoader.TileCount
-            ? Gameplay.CreateTile
-            : -1;
-        Gameplay.CreateWall = Gameplay.CreateWall >= 0 && Gameplay.CreateWall < WallLoader.WallCount
-            ? Gameplay.CreateWall
-            : -1;
+        if (Gameplay.CreateTile < -1 || Gameplay.CreateTile >= TileLoader.TileCount)
+            throw new InvalidDataException($"tile ID {Gameplay.CreateTile} is not loaded");
+        if (Gameplay.CreateWall < -1 || Gameplay.CreateWall >= WallLoader.WallCount)
+            throw new InvalidDataException($"wall ID {Gameplay.CreateWall} is not loaded");
         Gameplay.PlaceStyle = ClampInt(Gameplay.PlaceStyle, 0, 1000);
-        Gameplay.MobilityMode = SafeText(Gameplay.MobilityMode, 32);
+        Gameplay.MobilityMode = SafeText(Gameplay.MobilityMode, 32).ToLowerInvariant();
+        if (Gameplay.MobilityMode is not ("" or "recall_home" or "blink_to_cursor"))
+            throw new InvalidDataException($"Unsupported move_player_on_use mode '{Gameplay.MobilityMode}'");
         Gameplay.MobilityRangeTiles = ClampInt(Gameplay.MobilityRangeTiles, 0, 80);
         Gameplay.MobilityCooldownTicks = ClampInt(Gameplay.MobilityCooldownTicks, 0, 36000);
-        Gameplay.MiningSpeedScale = ClampFloat(Gameplay.MiningSpeedScale, 0.25f, 2f);
-        Gameplay.AltUseMode = SafeText(Gameplay.AltUseMode, 32);
-        Gameplay.AltUseCooldownTicks = ClampInt(Gameplay.AltUseCooldownTicks, 0, 36000);
-        Gameplay.AltMobilityMode = SafeText(Gameplay.AltMobilityMode, 32);
-        Gameplay.AltMobilityRangeTiles = ClampInt(Gameplay.AltMobilityRangeTiles, 0, 80);
-        // Held light is passive; alternate use remains explicit AltUseMode only.
+        Gameplay.MiningSpeedScale = ClampFloat(Gameplay.MiningSpeedScale, 0.1f, 4f);
         Gameplay.HoldLightStrength = ClampFloat(Gameplay.HoldLightStrength, 0f, 1.5f);
-        Gameplay.HoldLightColorName = RuntimeColorPolicy.Normalize(Gameplay.HoldLightColorName);
-        Gameplay.AltGeneratedBuff ??= new GeneratedBuffSpec();
-        Gameplay.AltGeneratedBuff.Normalize();
-        Gameplay.HoldGeneratedBuff ??= new GeneratedBuffSpec();
-        Gameplay.HoldGeneratedBuff.Normalize();
-        Gameplay.UseConditionMode = SafeText(Gameplay.UseConditionMode, 32).Trim().ToLowerInvariant();
+        Gameplay.HoldLightColorName = RuntimeColorPolicy.Normalize(Gameplay.HoldLightColorName, "white");
+        Gameplay.UseConditionMode = SafeText(Gameplay.UseConditionMode, 32).ToLowerInvariant();
         if (Gameplay.UseConditionMode is not ("" or "none" or "grounded" or "not_wet" or "life_above" or "mana_above"))
-            Gameplay.UseConditionMode = "";
-        Gameplay.UseConditionMinLife = ClampInt(Gameplay.UseConditionMinLife, 0, 5000);
-        Gameplay.UseConditionMinMana = ClampInt(Gameplay.UseConditionMinMana, 0, 5000);
-
-        Gameplay.RejectedEngineCalls = (Gameplay.RejectedEngineCalls ?? Array.Empty<RejectedEngineCallSpec>())
-            .Where(x => x is not null)
-            .Take(16)
-            .Select(x => new RejectedEngineCallSpec
-            {
-                Fn = SafeText(x.Fn, 48),
-                Reason = SafeText(x.Reason, 80),
-                Policy = SafeText(x.Policy, 96),
-                Family = SafeText(x.Family, 48),
-                Action = SafeText(x.Action, 48),
-            })
-            .ToArray();
-
-        Accessory.Defense = ClampInt(Accessory.Defense, 0, 999);
-        Accessory.MaxLife = ClampInt(Accessory.MaxLife, 0, 5000);
-        Accessory.MaxMana = ClampInt(Accessory.MaxMana, 0, 5000);
-        Accessory.LifeRegen = ClampInt(Accessory.LifeRegen, 0, 999);
-        Accessory.ManaRegen = ClampInt(Accessory.ManaRegen, 0, 999);
-        Accessory.MovementSpeed = ClampFloat(Accessory.MovementSpeed, 0f, 10f);
-        Accessory.MaxRunSpeed = ClampFloat(Accessory.MaxRunSpeed, 0f, 200f);
-        Accessory.JumpSpeed = ClampFloat(Accessory.JumpSpeed, 0f, 200f);
-        Accessory.GenericDamage = ClampFloat(Accessory.GenericDamage, 0f, 10f);
-        Accessory.MeleeDamage = ClampFloat(Accessory.MeleeDamage, 0f, 10f);
-        Accessory.RangedDamage = ClampFloat(Accessory.RangedDamage, 0f, 10f);
-        Accessory.MagicDamage = ClampFloat(Accessory.MagicDamage, 0f, 10f);
-        Accessory.SummonDamage = ClampFloat(Accessory.SummonDamage, 0f, 10f);
-        Accessory.GenericCrit = ClampFloat(Accessory.GenericCrit, 0f, 1000f);
-        Accessory.AttackSpeed = ClampFloat(Accessory.AttackSpeed, 0f, 10f);
-        Accessory.Knockback = ClampFloat(Accessory.Knockback, 0f, 100f);
-        Accessory.MinionSlots = ClampInt(Accessory.MinionSlots, 0, 200);
-        Accessory.SentrySlots = ClampInt(Accessory.SentrySlots, 0, 5);
-        Accessory.ManaCostReduction = ClampFloat(Accessory.ManaCostReduction, 0f, 0.8f);
-        Accessory.AmmoSaveChance = ClampFloat(Accessory.AmmoSaveChance, 0f, 0.75f);
-        Accessory.Aggro = ClampInt(Accessory.Aggro, -2000, 2000);
-        Accessory.Endurance = ClampFloat(Accessory.Endurance, 0f, 0.35f);
-        Accessory.ArmorPenetration = ClampFloat(Accessory.ArmorPenetration, 0f, 80f);
-        Accessory.WhipRange = ClampFloat(Accessory.WhipRange, 0f, 1.5f);
-        Accessory.SummonTagDamage = ClampFloat(Accessory.SummonTagDamage, 0f, 0.75f);
-        Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
-        Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName);
-        Accessory.Archetype = SafeText(Accessory.Archetype, 32);
-        if (!Accessory.Enabled && Accessory.HasAnyEffect && Gameplay.Kind == "accessory")
-            Accessory.Enabled = true;
-
-        Armor.Enabled = Armor.Enabled || Gameplay.Kind == "armor";
-        Armor.Slot = NormalizeArmorSlot(Armor.Slot);
-        Armor.SetKey = SafeText(Armor.SetKey, 64);
-        Armor.Archetype = SafeText(Armor.Archetype, 32);
-        Armor.Defense = ClampInt(Armor.Defense, 0, 80);
-        Armor.MaxLife = ClampInt(Armor.MaxLife, 0, 500);
-        Armor.MaxMana = ClampInt(Armor.MaxMana, 0, 500);
-        Armor.LifeRegen = ClampInt(Armor.LifeRegen, 0, 120);
-        Armor.ManaRegen = ClampInt(Armor.ManaRegen, 0, 120);
-        Armor.MovementSpeed = ClampFloat(Armor.MovementSpeed, 0f, 2f);
-        Armor.MaxRunSpeed = ClampFloat(Armor.MaxRunSpeed, 0f, 4f);
-        Armor.JumpSpeed = ClampFloat(Armor.JumpSpeed, 0f, 8f);
-        Armor.GenericDamage = ClampFloat(Armor.GenericDamage, 0f, 1f);
-        Armor.MeleeDamage = ClampFloat(Armor.MeleeDamage, 0f, 1f);
-        Armor.RangedDamage = ClampFloat(Armor.RangedDamage, 0f, 1f);
-        Armor.MagicDamage = ClampFloat(Armor.MagicDamage, 0f, 1f);
-        Armor.SummonDamage = ClampFloat(Armor.SummonDamage, 0f, 1f);
-        Armor.GenericCrit = ClampFloat(Armor.GenericCrit, 0f, 100f);
-        Armor.AttackSpeed = ClampFloat(Armor.AttackSpeed, 0f, 1f);
-        Armor.Knockback = ClampFloat(Armor.Knockback, 0f, 5f);
-        Armor.MinionSlots = ClampInt(Armor.MinionSlots, 0, 10);
-        Armor.SentrySlots = ClampInt(Armor.SentrySlots, 0, 5);
-        Armor.ManaCostReduction = ClampFloat(Armor.ManaCostReduction, 0f, 0.8f);
-        Armor.AmmoSaveChance = ClampFloat(Armor.AmmoSaveChance, 0f, 0.75f);
-        Armor.Aggro = ClampInt(Armor.Aggro, -1200, 1200);
-        Armor.Endurance = ClampFloat(Armor.Endurance, 0f, 0.35f);
-        Armor.ArmorPenetration = ClampFloat(Armor.ArmorPenetration, 0f, 80f);
-        Armor.WhipRange = ClampFloat(Armor.WhipRange, 0f, 1.5f);
-        Armor.SummonTagDamage = ClampFloat(Armor.SummonTagDamage, 0f, 0.75f);
-        Armor.LightStrength = ClampFloat(Armor.LightStrength, 0f, 1.5f);
-        Armor.LightColorName = RuntimeColorPolicy.Normalize(Armor.LightColorName);
-        Armor.SetBonusText = SafeText(Armor.SetBonusText, 120);
-        Armor.SetBonusGenericDamage = ClampFloat(Armor.SetBonusGenericDamage, 0f, 1f);
-        Armor.SetBonusMeleeDamage = ClampFloat(Armor.SetBonusMeleeDamage, 0f, 1f);
-        Armor.SetBonusRangedDamage = ClampFloat(Armor.SetBonusRangedDamage, 0f, 1f);
-        Armor.SetBonusMagicDamage = ClampFloat(Armor.SetBonusMagicDamage, 0f, 1f);
-        Armor.SetBonusSummonDamage = ClampFloat(Armor.SetBonusSummonDamage, 0f, 1f);
-        Armor.SetBonusGenericCrit = ClampFloat(Armor.SetBonusGenericCrit, 0f, 100f);
-        Armor.SetBonusMovementSpeed = ClampFloat(Armor.SetBonusMovementSpeed, 0f, 2f);
-        Armor.SetBonusLifeRegen = ClampInt(Armor.SetBonusLifeRegen, 0, 120);
-        Armor.SetBonusManaRegen = ClampInt(Armor.SetBonusManaRegen, 0, 120);
-        Armor.SetBonusMinionSlots = ClampInt(Armor.SetBonusMinionSlots, 0, 10);
-        Armor.SetBonusSentrySlots = ClampInt(Armor.SetBonusSentrySlots, 0, 5);
-        Armor.SetBonusManaCostReduction = ClampFloat(Armor.SetBonusManaCostReduction, 0f, 0.8f);
-        Armor.SetBonusAmmoSaveChance = ClampFloat(Armor.SetBonusAmmoSaveChance, 0f, 0.75f);
-        Armor.SetBonusAggro = ClampInt(Armor.SetBonusAggro, -1200, 1200);
-        Armor.SetBonusEndurance = ClampFloat(Armor.SetBonusEndurance, 0f, 0.35f);
-        Armor.SetBonusArmorPenetration = ClampFloat(Armor.SetBonusArmorPenetration, 0f, 80f);
-
-        Attack.Speed = ClampFloat(Attack.Speed, 0f, 250f);
-        Attack.RangeTiles = ClampFloat(Attack.RangeTiles, 4f, 120f);
-        Attack.HomingStrength = ClampFloat(Attack.HomingStrength, 0f, 1f);
-        Attack.BeamWidthPx = ClampFloat(Attack.BeamWidthPx, 2f, 96f);
-        Attack.BeamChargeTicks = ClampInt(Attack.BeamChargeTicks, 0, 300);
-        Attack.ChargeTicks = ClampInt(Attack.ChargeTicks, 1, 300);
-        Attack.ChargePowerMultiplier = ClampFloat(Attack.ChargePowerMultiplier, 1f, 3f);
-        Attack.DelayTicks = ClampInt(Attack.DelayTicks, 0, 300);
-        Attack.Lifetime = ClampInt(Attack.Lifetime, 1, 36000);
-        Attack.Pierce = ClampInt(Attack.Pierce, -1, 9999);
-        Attack.Scale = ClampFloat(Attack.Scale, 0.25f, 2.5f);
-        Attack.ProjectileWidth = ClampInt(Attack.ProjectileWidth, 4, 96);
-        Attack.ProjectileHeight = ClampInt(Attack.ProjectileHeight, 4, 96);
-        Attack.ProjectileScale = ClampFloat(Attack.ProjectileScale, 0.35f, 2.25f);
-        Attack.HitboxScale = ClampFloat(Attack.HitboxScale, 0.5f, 2.5f);
-        Attack.ExplosionRadius = ClampInt(Attack.ExplosionRadius, 0, 128);
-        Attack.ImpactVfxRadiusPx = ClampInt(Attack.ImpactVfxRadiusPx, 0, 192);
-        Attack.AoeDamageRadiusPx = ClampInt(Attack.AoeDamageRadiusPx, 0, 160);
-        Attack.ContactForgivenessPx = ClampInt(Attack.ContactForgivenessPx, 0, 32);
-        Attack.ExtraUpdates = ClampInt(Attack.ExtraUpdates, 0, 240);
-        Attack.BounceCount = ClampInt(Attack.BounceCount, 0, 128);
-        Attack.SplitCount = ClampInt(Attack.SplitCount, 0, 128);
-        Attack.ChainCount = ClampInt(Attack.ChainCount, 0, 128);
-        Attack.PullStrength = ClampFloat(Attack.PullStrength, 0f, 1f);
-        Attack.PullMode = NormalizePullMode(Attack.PullMode, Attack.PullStrength);
-        if (Attack.PullMode == "none") Attack.PullStrength = 0f;
-        Attack.ImmunityCooldown = ClampInt(Attack.ImmunityCooldown, 0, 600);
-        Attack.TrailLength = ClampInt(Attack.TrailLength, 0, 600);
-        Attack.ShotCount = ClampInt(Attack.ShotCount, 1, 128);
-        Attack.SpreadRadians = ClampFloat(Attack.SpreadRadians, 0f, 6.4f);
-        Attack.SecondaryTrigger = GeneratedSecondaryTriggerPolicy.NormalizeForRuntimeFamily(Attack.SecondaryTrigger, Attack.RuntimeFamily);
-        Attack.SecondarySpreadRadians = ClampFloat(Attack.SecondarySpreadRadians, 0f, 6.4f);
-        Attack.SecondaryDamageMultiplier = ClampFloat(Attack.SecondaryDamageMultiplier, 0f, 10f);
-        Attack.SecondaryLifetimeTicks = ClampInt(Attack.SecondaryLifetimeTicks, 1, 36000);
-        Attack.SentryPlacement = SafeText(Attack.SentryPlacement, 16);
-        Attack.SentryAttackIntervalTicks = ClampInt(Attack.SentryAttackIntervalTicks, 12, 180);
-        Attack.SentryTargetRangeTiles = ClampFloat(Attack.SentryTargetRangeTiles, 8f, 60f);
-        Attack.SentryLifetimeTicks = ClampInt(Attack.SentryLifetimeTicks, 120, 36000);
-        Attack.SameTargetBias = ClampFloat(Attack.SameTargetBias, 0f, 1f);
-        Attack.MaxChildProjectiles = ClampInt(Attack.MaxChildProjectiles, 0, 512);
-        Attack.MaxChildDepth = ClampInt(Attack.MaxChildDepth, 0, 16);
-        Attack.DustSpawnDenom = Attack.DustSpawnDenom <= 0 ? 0 : ClampInt(Attack.DustSpawnDenom, 2, 240);
-        Attack.BurstDustCap = ClampInt(Attack.BurstDustCap, 0, 2000);
-        Attack.VfxParticleScale = ClampFloat(Attack.VfxParticleScale, 0f, 2f);
-        Attack.VfxMaterial = SafeText(Attack.VfxMaterial, 80);
-        Attack.VfxParticleDurationTicks = ClampInt(Attack.VfxParticleDurationTicks, 0, 80);
-        Attack.VfxFieldLifetimeTicks = ClampInt(Attack.VfxFieldLifetimeTicks, 0, 240);
-        Attack.VfxFieldRadiusTiles = ClampFloat(Attack.VfxFieldRadiusTiles, 0f, 6f);
-        Attack.VfxFieldTickRate = ClampInt(Attack.VfxFieldTickRate, 0, 60);
-        Attack.RuntimeLightStrength = ClampFloat(Attack.RuntimeLightStrength, 0f, 2f);
-        Attack.RuntimeLightDurationTicks = ClampInt(Attack.RuntimeLightDurationTicks, 0, 240);
-        Attack.MobilityMode = SafeText(Attack.MobilityMode, 32);
-        Attack.MobilityRangeTiles = ClampInt(Attack.MobilityRangeTiles, 0, 80);
-        Attack.MobilityCooldownTicks = ClampInt(Attack.MobilityCooldownTicks, 0, 36000);
-        Attack.SoundVolume = ClampFloat(Attack.SoundVolume, 0.05f, 1f);
-        Attack.SoundPitch = ClampFloat(Attack.SoundPitch, -0.9f, 0.9f);
-        Attack.SoundPitchVariance = ClampFloat(Attack.SoundPitchVariance, 0f, 0.6f);
-        Attack.DamageClass = SafeText(Attack.DamageClass, 96);
-        if (string.IsNullOrWhiteSpace(Attack.DamageClass)) Attack.DamageClass = "generic";
-        Attack.UseStyleCode = ClampInt(Attack.UseStyleCode, ItemUseStyleID.None, InfiniTerrariaSentinels.MaxSupportedItemUseStyle);
-        Attack.RuntimeFamily = NormalizeRuntimeFamily(Attack.RuntimeFamily);
-        if (!GeneratedRuntimeFamilyPolicy.HasValidExecutorContract(Attack))
-        {
-            Attack.RuntimeFamily = GeneratedRuntimeFamilyPolicy.None;
-            Attack.Enabled = false;
-        }
-        Attack.SoundCatalogSource = SafeText(Attack.SoundCatalogSource, 48);
-        Attack.SoundUseCatalogId = SafeText(Attack.SoundUseCatalogId, 64);
-        Attack.SoundImpactCatalogId = SafeText(Attack.SoundImpactCatalogId, 64);
-        Attack.SoundUseCatalogPath = SafeText(Attack.SoundUseCatalogPath, 240);
-        Attack.SoundImpactCatalogPath = SafeText(Attack.SoundImpactCatalogPath, 240);
-        Attack.PrimaryColorName = RuntimeColorPolicy.Normalize(Attack.PrimaryColorName, "white");
-
-        Visual.PreferredCanvasSize = Visual.PreferredCanvasSize <= 20 ? 16 : Visual.PreferredCanvasSize <= 28 ? 24 : Visual.PreferredCanvasSize <= 40 ? 32 : Visual.PreferredCanvasSize <= 56 ? 48 : Visual.PreferredCanvasSize <= 80 ? 64 : Visual.PreferredCanvasSize <= 112 ? 96 : 128;
-        Visual.InventoryScale = ClampFloat(Visual.InventoryScale, 0.55f, 1.55f);
-        Visual.WorldScale = ClampFloat(Visual.WorldScale, 0.55f, 1.75f);
-        Visual.DrawOffsetX = ClampInt(Visual.DrawOffsetX, -256, 256);
-        Visual.DrawOffsetY = ClampInt(Visual.DrawOffsetY, -256, 256);
-        Visual.VisualSoulSignature = SafeText(Visual.VisualSoulSignature, 32);
-        Visual.VisualSoulArchetype = SafeText(Visual.VisualSoulArchetype, 32);
-        Visual.DominantColorHex = NormalizeHexColor(Visual.DominantColorHex, "#ffffff");
-        Visual.AccentColorHex = NormalizeHexColor(Visual.AccentColorHex, Visual.DominantColorHex);
-        Visual.VisualSoulGlow = ClampFloat(Visual.VisualSoulGlow, 0f, 1f);
-        Visual.VisualSoulPulse = ClampFloat(Visual.VisualSoulPulse, 0f, 1f);
-        Visual.VisualSoulCoverage = ClampFloat(Visual.VisualSoulCoverage, 0f, 1f);
-        Visual.VisualSoulEdgeDensity = ClampFloat(Visual.VisualSoulEdgeDensity, 0f, 1f);
-        Visual.VisualSoulTooltip = SafeText(Visual.VisualSoulTooltip, 120);
-        Visual.SpriteStatus = NormalizeSpriteStatus(Visual.SpriteStatus);
-        Visual.SpritePath = NormalizeSpritePathForStatus(Visual.SpritePath, Visual.SpriteStatus);
-        Visual.SpriteRawPath = NormalizeSpritePathForStatus(Visual.SpriteRawPath, Visual.SpriteStatus);
-        if (string.IsNullOrWhiteSpace(Visual.SpritePath) && SpriteStatusAllowsRuntimePath(Visual.SpriteStatus))
-            Visual.SpritePath = ConventionalAssetFileName(Id, "");
-        Visual.EquipOverlayStatus = NormalizeSpriteStatus(Visual.EquipOverlayStatus);
-        Visual.EquipOverlayPath = NormalizeSpritePathForStatus(Visual.EquipOverlayPath, Visual.EquipOverlayStatus);
-        if (string.IsNullOrWhiteSpace(Visual.EquipOverlayPath) && SpriteStatusAllowsRuntimePath(Visual.EquipOverlayStatus))
-            Visual.EquipOverlayPath = ConventionalAssetFileName(Id, "_equip_overlay");
-        Attack.ProjectileSpriteStatus = NormalizeSpriteStatus(Attack.ProjectileSpriteStatus);
-        Attack.ProjectileSpritePath = NormalizeSpritePathForStatus(Attack.ProjectileSpritePath, Attack.ProjectileSpriteStatus);
-        if (string.IsNullOrWhiteSpace(Attack.ProjectileSpritePath) && SpriteStatusAllowsRuntimePath(Attack.ProjectileSpriteStatus))
-            Attack.ProjectileSpritePath = ConventionalAssetFileName(Id, "_projectile");
-        Attack.ImpactSpriteStatus = NormalizeSpriteStatus(Attack.ImpactSpriteStatus);
-        Attack.ImpactSpritePath = NormalizeSpritePathForStatus(Attack.ImpactSpritePath, Attack.ImpactSpriteStatus);
-        if (string.IsNullOrWhiteSpace(Attack.ImpactSpritePath) && SpriteStatusAllowsRuntimePath(Attack.ImpactSpriteStatus))
-            Attack.ImpactSpritePath = ConventionalAssetFileName(Id, "_impact");
-        Attack.ChildSpriteStatus = NormalizeSpriteStatus(Attack.ChildSpriteStatus);
-        Attack.ChildSpritePath = NormalizeSpritePathForStatus(Attack.ChildSpritePath, Attack.ChildSpriteStatus);
-        if (string.IsNullOrWhiteSpace(Attack.ChildSpritePath) && SpriteStatusAllowsRuntimePath(Attack.ChildSpriteStatus))
-            Attack.ChildSpritePath = ConventionalAssetFileName(Id, "_child");
-        Attack.FieldSpriteStatus = NormalizeSpriteStatus(Attack.FieldSpriteStatus);
-        Attack.FieldSpritePath = NormalizeSpritePathForStatus(Attack.FieldSpritePath, Attack.FieldSpriteStatus);
-        if (string.IsNullOrWhiteSpace(Attack.FieldSpritePath) && SpriteStatusAllowsRuntimePath(Attack.FieldSpriteStatus))
-            Attack.FieldSpritePath = ConventionalAssetFileName(Id, "_field");
+            throw new InvalidDataException($"Unsupported use condition '{Gameplay.UseConditionMode}'");
+        Gameplay.UseConditionMinLife = ClampInt(Gameplay.UseConditionMinLife, 0, 10000);
+        Gameplay.UseConditionMinMana = ClampInt(Gameplay.UseConditionMinMana, 0, 10000);
     }
 
+    private void NormalizeEquipment()
+    {
+        Accessory.Defense = ClampInt(Accessory.Defense, -100, 500);
+        Accessory.MaxLife = ClampInt(Accessory.MaxLife, -500, 5000);
+        Accessory.MaxMana = ClampInt(Accessory.MaxMana, -500, 5000);
+        Accessory.LifeRegen = ClampInt(Accessory.LifeRegen, -120, 120);
+        Accessory.ManaRegen = ClampInt(Accessory.ManaRegen, -120, 120);
+        Accessory.MovementSpeed = ClampFloat(Accessory.MovementSpeed, -0.5f, 2f);
+        Accessory.GenericDamage = ClampFloat(Accessory.GenericDamage, -0.9f, 3f);
+        Accessory.GenericCrit = ClampFloat(Accessory.GenericCrit, -100f, 100f);
+        Accessory.Endurance = ClampFloat(Accessory.Endurance, 0f, 0.75f);
+        Accessory.MinionSlots = ClampInt(Accessory.MinionSlots, 0, 20);
+        Accessory.SentrySlots = ClampInt(Accessory.SentrySlots, 0, 10);
+        Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
+        Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName, "white");
+
+        Armor.Slot = SafeText(Armor.Slot, 16).ToLowerInvariant();
+        if (Armor.Slot is not ("head" or "body" or "legs")) Armor.Slot = "body";
+        Armor.SetKey = SafeText(Armor.SetKey, 64);
+        Armor.Defense = ClampInt(Armor.Defense, 0, 500);
+        Armor.MaxLife = ClampInt(Armor.MaxLife, -500, 5000);
+        Armor.MaxMana = ClampInt(Armor.MaxMana, -500, 5000);
+        Armor.MovementSpeed = ClampFloat(Armor.MovementSpeed, -0.5f, 2f);
+        Armor.GenericDamage = ClampFloat(Armor.GenericDamage, -0.9f, 3f);
+        Armor.GenericCrit = ClampFloat(Armor.GenericCrit, -100f, 100f);
+        Armor.SetBonusText = SafeText(Armor.SetBonusText, 240);
+        Armor.SetBonusGenericDamage = ClampFloat(Armor.SetBonusGenericDamage, -0.9f, 3f);
+        Armor.SetBonusMovementSpeed = ClampFloat(Armor.SetBonusMovementSpeed, -0.5f, 2f);
+        Armor.SetBonusLifeRegen = ClampInt(Armor.SetBonusLifeRegen, -120, 120);
+    }
+
+    private void NormalizeVisual()
+    {
+        Visual.ObjectType = SafeText(Visual.ObjectType, 64);
+        Visual.Style = SafeText(Visual.Style, 64);
+        Visual.RequiredAnchors = SafeTextArray(Visual.RequiredAnchors, 16, 80);
+        Visual.Palette = SafeTextArray(Visual.Palette, 8, 48);
+        Visual.ImagePrompt = SafeText(Visual.ImagePrompt, 1600);
+        Visual.NegativePrompt = SafeText(Visual.NegativePrompt, 700);
+        Visual.SpriteStatus = SafeText(Visual.SpriteStatus, 48).ToLowerInvariant();
+        Visual.SpritePath = SafeText(Visual.SpritePath, 260);
+        Visual.SpriteRawPath = SafeText(Visual.SpriteRawPath, 260);
+        Visual.SpriteUrl = SafeText(Visual.SpriteUrl, 500);
+        Visual.EquipOverlayStatus = SafeText(Visual.EquipOverlayStatus, 48).ToLowerInvariant();
+        Visual.EquipOverlayPath = SafeText(Visual.EquipOverlayPath, 260);
+        Visual.EquipOverlayUrl = SafeText(Visual.EquipOverlayUrl, 500);
+        Visual.PreferredCanvasSize = Visual.PreferredCanvasSize <= 20 ? 16 : Visual.PreferredCanvasSize <= 28 ? 24 : Visual.PreferredCanvasSize <= 40 ? 32 : Visual.PreferredCanvasSize <= 56 ? 48 : Visual.PreferredCanvasSize <= 80 ? 64 : Visual.PreferredCanvasSize <= 112 ? 96 : 128;
+        Visual.InventoryScale = ClampFloat(Visual.InventoryScale, 0.25f, 4f);
+        Visual.WorldScale = ClampFloat(Visual.WorldScale, 0.25f, 4f);
+        Visual.DrawOffsetX = ClampInt(Visual.DrawOffsetX, -256, 256);
+        Visual.DrawOffsetY = ClampInt(Visual.DrawOffsetY, -256, 256);
+        Visual.DominantColorHex = NormalizeHexColor(Visual.DominantColorHex);
+        Visual.AccentColorHex = NormalizeHexColor(Visual.AccentColorHex, Visual.DominantColorHex);
+        Visual.SpriteTechnicalScore = ClampFloat(Visual.SpriteTechnicalScore, 0f, 1f);
+        Visual.EquipOverlayScore = ClampFloat(Visual.EquipOverlayScore, 0f, 1f);
+        bool inertReference = SourceMode is "player_save_ref" or "corrupt_reference";
+        if (!inertReference && SourceMode is not ("developer_fixture" or "test_fixture")
+            && (string.IsNullOrWhiteSpace(Visual.SpritePath)
+                || Visual.SpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+            throw new InvalidDataException("Required generated item PNG is unavailable; placeholders are not accepted");
+        if (Accessory.Enabled && Armor.Enabled)
+            throw new InvalidDataException("A runtime item cannot enable both accessory and armor capabilities");
+        if (!inertReference && (Accessory.Enabled || Armor.Enabled)
+            && (string.IsNullOrWhiteSpace(Visual.EquipOverlayPath)
+                || Visual.EquipOverlayStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+            throw new InvalidDataException("Required equipment overlay PNG is unavailable");
+    }
+
+    private void ValidateVfxEntityEventReferences()
+    {
+        foreach (VfxSlotSpec slot in VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>())
+        {
+            if (slot is null) continue;
+            RuntimeEntitySpec? entity = RuntimeProgram.TryGetEntity(slot.EntityId);
+            if (entity is null)
+                throw new InvalidDataException($"VFX slot '{slot.Id}' references unknown entity '{slot.EntityId}'");
+            bool emitted = slot.Event == RuntimeEventKind.OnSpawn
+                || RuntimeProgram.Bindings.Any(x => x.Target == entity.Id && slot.Event == RuntimeEventKind.OnUse)
+                || entity.Events.Any(x => x.Event == slot.Event)
+                || (entity.Damage.Enabled && slot.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || (entity.Collision.TileCollide && slot.Event == RuntimeEventKind.OnTileCollision)
+                || slot.Event is RuntimeEventKind.OnExpire or RuntimeEventKind.OnKill;
+            if (!emitted)
+                throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}'");
+        }
+    }
 }

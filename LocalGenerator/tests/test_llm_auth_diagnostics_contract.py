@@ -15,7 +15,7 @@ def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast():
     assert "missing_api_key" in text
     assert "Set INFINI_OPENROUTER_API_KEY" in text
     assert '"llmAuth": llm_auth_snapshot()' in server_text
-    assert "ensure_llm_auth_configured()" in text
+    assert "ensure_llm_auth_configured(" in text
     assert "OpenRouter auth failed" in text
 
 

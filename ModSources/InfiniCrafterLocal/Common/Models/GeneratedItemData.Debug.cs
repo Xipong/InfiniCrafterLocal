@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Terraria;
@@ -9,70 +10,23 @@ namespace InfiniCrafterLocal.Common.Models;
 
 public sealed partial class GeneratedItemData
 {
-    // Compact dev-only record used by /infiniitem trace. It is runtime-only:
-    // never serialized, never networked, and not shown in normal tooltips.
     [JsonIgnore]
     public string? LastAppliedTrace { get; private set; }
 
     private string BuildAppliedTrace()
     {
-        (bool isArmor, bool isAccessory) = ResolveEquipmentRoles(Gameplay, Accessory, Armor);
-        var parts = new List<string>();
-        void F(string label, object? val) => parts.Add($"{label}={val?.ToString() ?? string.Empty}");
-
-        F("name", Name);
-        F("category", Category);
-        F("kind", Gameplay.Kind);
-        F("damageClass", Gameplay.DamageClass);
-        F("damage", Gameplay.Damage);
-        F("useTime", Gameplay.UseTime);
-        F("useAnimation", Gameplay.UseAnimation);
-        F("useStyle", Gameplay.UseStyle);
-        F("knockback", Gameplay.Knockback);
-        F("rare", Gameplay.Rarity);
-        F("value", Gameplay.Value);
-        F("maxStack", Gameplay.MaxStack);
-        F("mana", Gameplay.ManaCost);
-        F("consumable", Gameplay.Consumable);
-
-        if (Attack.Enabled && !isAccessory && !isArmor)
+        var parts = new List<string>
         {
-            F("shoot", "GeneratedProjectile");
-            F("shootSpeed", Attack.Speed);
-            F("runtimeFamily", AttackRuntimeFamily(Attack));
-            F("delivery", Attack.Delivery);
-            F("movement", Attack.Movement);
-            F("weaponFamily", Attack.WeaponFamily);
-            F("shotCount", Attack.ShotCount);
-            F("pierce", Attack.Pierce);
-            F("splitCount", Attack.SplitCount);
-            F("maxChildProjectiles", Attack.MaxChildProjectiles);
-            F("onHit", Attack.OnHit);
-            F("aoeRadiusPx", Attack.AoeDamageRadiusPx);
-            F("burstDustCap", Attack.BurstDustCap);
-            F("explosionRadius", Attack.ExplosionRadius);
-            F("trailLength", Attack.TrailLength);
-            F("effect", Attack.Effect);
-        }
-        if (isArmor)
-        {
-            F("defense", Armor.Defense);
-            F("slot", Armor.Slot);
-            F("setBonusText", Armor.SetBonusText);
-        }
-        if (isAccessory)
-        {
-            F("acc.defense", Accessory.Defense);
-            F("acc.lifeRegen", Accessory.LifeRegen);
-            F("acc.manaRegen", Accessory.ManaRegen);
-            F("acc.manaCostReduction", Accessory.ManaCostReduction);
-            F("acc.genericDamage", Accessory.GenericDamage);
-            F("acc.genericCrit", Accessory.GenericCrit);
-            F("acc.movementSpeed", Accessory.MovementSpeed);
-            F("acc.endurance", Accessory.Endurance);
-            F("acc.armorPenetration", Accessory.ArmorPenetration);
-            F("acc.aggro", Accessory.Aggro);
-        }
+            $"name={Name}", $"category={Category}", $"kind={Gameplay.Kind}",
+            $"damageClass={Gameplay.DamageClass}", $"damage={Gameplay.Damage}",
+            $"useTime={Gameplay.UseTime}", $"useAnimation={Gameplay.UseAnimation}",
+            $"useStyle={RuntimeProgram.ItemUse.UseStyle}",
+            $"runtimeEntities={RuntimeProgram.Entities.Length}",
+            $"runtimeBindings={RuntimeProgram.Bindings.Length}",
+            $"runtimeEvents={RuntimeProgram.Entities.Sum(entity => entity.Events.Length)}",
+        };
+        foreach (RuntimeEntitySpec entity in RuntimeProgram.Entities)
+            parts.Add($"entity[{entity.Id}]={entity.Kind}/move:{entity.Movement.Name}/controller:{entity.Controller.Name}");
         return string.Join(" | ", parts);
     }
 
@@ -80,13 +34,9 @@ public sealed partial class GeneratedItemData
 
     private void SetDebugJson(string key, object value)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            return;
+        if (string.IsNullOrWhiteSpace(key)) return;
         Debug ??= new Dictionary<string, JsonElement>();
-        try
-        {
-            Debug[key] = JsonSerializer.SerializeToElement(value, Options);
-        }
+        try { Debug[key] = JsonSerializer.SerializeToElement(value, Options); }
         catch (InvalidOperationException) { }
         catch (NotSupportedException) { }
         catch (ArgumentException) { }
@@ -96,125 +46,30 @@ public sealed partial class GeneratedItemData
     {
         SetDebugJson("appliedTrace", new
         {
-            schema = "infini.applied-trace.v1",
+            schema = "infini.applied-low-level-runtime-trace.v1",
             item = new
             {
-                damage = item.damage,
-                useTime = item.useTime,
-                useStyle = item.useStyle,
-                damageClass = Gameplay.DamageClass,
-                shoot = item.shoot,
-                shootSpeed = item.shootSpeed,
-                knockback = item.knockBack,
-                rare = item.rare,
-                value = item.value,
-                defense = item.defense,
-                accessory = item.accessory,
-                actualAmmo,
-                noMelee = item.noMelee,
-                noUseGraphic = item.noUseGraphic,
-                channel = item.channel
+                damage = item.damage, useTime = item.useTime, useAnimation = item.useAnimation,
+                useStyle = item.useStyle, damageClass = Gameplay.DamageClass,
+                shoot = item.shoot, shootSpeed = item.shootSpeed, knockback = item.knockBack,
+                rare = item.rare, value = item.value, defense = item.defense,
+                accessory = item.accessory, actualAmmo, noMelee = item.noMelee,
+                noUseGraphic = item.noUseGraphic, channel = item.channel,
             },
-            armor = new
+            runtimeProgram = new
             {
-                applied = isArmor,
-                defense = isArmor ? item.defense : 0,
-                slot = Armor.Slot,
-                updateEquip = new
+                RuntimeProgram.ApiVersion, RuntimeProgram.Schema, RuntimeProgram.ItemEntityId,
+                entities = RuntimeProgram.Entities.Select(entity => new
                 {
-                    Armor.MaxLife,
-                    Armor.MaxMana,
-                    Armor.LifeRegen,
-                    Armor.ManaRegen,
-                    Armor.MovementSpeed,
-                    Armor.MaxRunSpeed,
-                    Armor.JumpSpeed,
-                    Armor.GenericDamage,
-                    Armor.MeleeDamage,
-                    Armor.RangedDamage,
-                    Armor.MagicDamage,
-                    Armor.SummonDamage,
-                    Armor.GenericCrit,
-                    Armor.AttackSpeed,
-                    Armor.Knockback,
-                    Armor.MinionSlots,
-                    Armor.SentrySlots,
-                    Armor.ManaCostReduction,
-                    Armor.AmmoSaveChance,
-                    Armor.Aggro,
-                    Armor.Endurance,
-                    Armor.ArmorPenetration
-                },
-                setBonus = new
-                {
-                    Armor.SetKey,
-                    Armor.SetBonusText,
-                    Armor.SetBonusGenericDamage,
-                    Armor.SetBonusMeleeDamage,
-                    Armor.SetBonusRangedDamage,
-                    Armor.SetBonusMagicDamage,
-                    Armor.SetBonusSummonDamage,
-                    Armor.SetBonusGenericCrit,
-                    Armor.SetBonusMovementSpeed,
-                    Armor.SetBonusLifeRegen,
-                    Armor.SetBonusManaRegen,
-                    Armor.SetBonusMinionSlots,
-                    Armor.SetBonusSentrySlots,
-                    Armor.SetBonusManaCostReduction,
-                    Armor.SetBonusAmmoSaveChance,
-                    Armor.SetBonusAggro,
-                    Armor.SetBonusEndurance,
-                    Armor.SetBonusArmorPenetration
-                }
+                    entity.Id, entity.Kind, entity.VisualRole, entity.LifetimeTicks,
+                    movement = new { entity.Movement.Name, entity.Movement.Code },
+                    controller = new { entity.Controller.Name, entity.Controller.Code },
+                    damage = new { entity.Damage.Enabled, entity.Damage.Damage, entity.Damage.DamageClass },
+                    events = entity.Events.Select(action => new { action.Id, action.Event, action.Action, action.ActionCode, action.EntityId }),
+                }).ToArray(),
+                bindings = RuntimeProgram.Bindings.Select(binding => new { binding.Id, binding.Input, binding.Action, binding.Target }).ToArray(),
             },
-            accessory = new
-            {
-                applied = isAccessory,
-                updateEquip = new
-                {
-                    Accessory.Defense,
-                    Accessory.MaxLife,
-                    Accessory.MaxMana,
-                    Accessory.LifeRegen,
-                    Accessory.ManaRegen,
-                    Accessory.MovementSpeed,
-                    Accessory.MaxRunSpeed,
-                    Accessory.JumpSpeed,
-                    Accessory.GenericDamage,
-                    Accessory.MeleeDamage,
-                    Accessory.RangedDamage,
-                    Accessory.MagicDamage,
-                    Accessory.SummonDamage,
-                    Accessory.GenericCrit,
-                    Accessory.AttackSpeed,
-                    Accessory.Knockback,
-                    Accessory.MinionSlots,
-                    Accessory.SentrySlots,
-                    Accessory.ManaCostReduction,
-                    Accessory.AmmoSaveChance,
-                    Accessory.Aggro,
-                    Accessory.Endurance,
-                    Accessory.ArmorPenetration
-                }
-            },
-            projectile = new
-            {
-                applied = Attack.Enabled && !isArmor && !isAccessory && !actualAmmo,
-                Attack.RuntimeFamily,
-                Attack.Delivery,
-                Attack.Movement,
-                Attack.ShotCount,
-                Attack.Pierce,
-                Attack.OnHit,
-                Attack.SplitCount,
-                Attack.ChainCount,
-                Attack.MaxChildProjectiles,
-                Attack.TrailLength,
-                Attack.BurstDustCap,
-                Attack.Effect,
-                fieldRadius = Attack.AoeDamageRadiusPx,
-                Attack.RuntimePlanAuthored
-            }
+            equipment = new { armor = isArmor, accessory = isAccessory },
         });
         StampAppliedTrace();
     }

@@ -1,4 +1,4 @@
-# v0.4.239 — quick start
+# v0.4.241 — quick start
 
 1. Установить зависимости генератора: `cd LocalGenerator && python -m pip install -r requirements-dev.txt`.
 2. Проверить Python: `python -m pytest -q`.

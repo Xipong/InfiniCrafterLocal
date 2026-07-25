@@ -8,8 +8,7 @@ from pathlib import Path
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR, RECIPE_IDENTITY_VERSION
 from infini_local.core.contract_versions import build_contract_versions
 from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first
-from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
-from infini_local.pipelines.pipeline_runtime_constants import LLM_RUNTIME_AUTHORING as _LLM_RUNTIME_AUTHORING_DEFAULT
+from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
 from infini_local.services import sdcpp_backend, sdcpp_service
 from infini_local.storage.trace_runtime import log_event
 
@@ -148,12 +147,6 @@ VISUAL_ASSET_MODE = env_str("INFINI_VISUAL_ASSET_MODE", "full").lower()
 VISUAL_GENERATE_CHILD_FIELD_IMAGES = env_bool("INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES", False)
 VISUAL_GENERATE_IMPACT_IMAGES = env_bool("INFINI_VISUAL_GENERATE_IMPACT_IMAGES", False)
 VISUAL_GENERATE_PROJECTILE_IMAGES = env_bool("INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES", True)
-# v0.3.15: light pattern library. Do not dump long VFX docs into Gemma.
-# The planner sees only a few retrieved pattern cards, and missing/invalid attackPattern
-# is repaired by the same LLM in a tiny second call instead of deterministic guessing.
-PATTERN_LIBRARY_CARDS = env_int("INFINI_PATTERN_LIBRARY_CARDS", 4)
-PATTERN_REPAIR_ATTEMPTS = env_int("INFINI_PATTERN_REPAIR_ATTEMPTS", 0 if _LLM_RUNTIME_AUTHORING_DEFAULT else 2, lo=0, hi=8)
-PATTERN_REPAIR_TIMEOUT = env_int("INFINI_PATTERN_REPAIR_TIMEOUT", 20)
 # v0.3.9: merged author-first visual pipeline. Planner writes the toy, visual-director
 # builds a role-separated asset pack, generator produces item/projectile/impact/child/field PNGs.
 VISUAL_DIRECTOR_LLM = env_bool("INFINI_VISUAL_DIRECTOR_LLM", True)
@@ -164,7 +157,7 @@ def contract_versions_payload() -> dict[str, Any]:
     return build_contract_versions(
         app_version=APP_VERSION,
         recipe_identity_version=RECIPE_IDENTITY_VERSION,
-        runtime_api_version=ENGINE_RUNTIME_API_VERSION,
+        runtime_api_version=RUNTIME_PROGRAM_API_VERSION,
         visual_pipeline_profile=VISUAL_PIPELINE_PROFILE,
     )
 VISUAL_GENERATION_TIMEOUT = env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240)
@@ -301,9 +294,6 @@ __all__ = [
     "VISUAL_GENERATE_CHILD_FIELD_IMAGES",
     "VISUAL_GENERATE_IMPACT_IMAGES",
     "VISUAL_GENERATE_PROJECTILE_IMAGES",
-    "PATTERN_LIBRARY_CARDS",
-    "PATTERN_REPAIR_ATTEMPTS",
-    "PATTERN_REPAIR_TIMEOUT",
     "VISUAL_DIRECTOR_LLM",
     "VISUAL_PIPELINE_PROFILE",
     "contract_versions_payload",

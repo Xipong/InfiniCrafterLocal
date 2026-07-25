@@ -1,11 +1,7 @@
-# `.agent`
+# `.agent` 0.4.239
 
-Машинный control-plane репозитория для coding-агентов. Эта папка не загружается модом и не участвует в gameplay/runtime.
+Machine-readable карта ownership и impact-checks для low-level runtime v5.
 
-- `manifest.json` — канонические команды проверок и ownership-точки.
-- `impact_rules.json` — связь изменённых файлов с обязательными проверками и контекстом.
-- `task.schema.json` — контракт входной задачи агента.
-- `run_result.schema.json` — контракт результата проверки.
-- `current_state.json` — генерируемый `agentctl handoff`; не редактируется как источник истины вручную.
-
-Расширение runtime-функции выполняется через канонический engine catalog и boundary/lifecycle policy. Добавлять логику в `.agent` нельзя: здесь только orchestration и evidence.
+- `manifest.json` указывает canonical owners нового capability registry, strict wire и C# executors.
+- `impact_rules.json` связывает изменённые поверхности с актуальными v5 gates.
+- historical weapon-IR replay/fingerprint owners намеренно отсутствуют.

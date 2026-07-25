@@ -5,7 +5,8 @@ contract tests must instead start from the shipped code defaults while keeping
 all external services inert.  Live configuration experiments are explicit via
 ``INFINI_TEST_USE_PROJECT_CONFIG=1``. Impact-focused agent checks may set
 ``INFINI_FOCUSED_PYTEST=1``; missing optional modules then fail only tests that
-actually import them, while the full suite keeps its dependency gate.
+actually import them, while the full suite keeps its required runtime dependency gate. Optional
+property-test packages are reported separately by release verification.
 """
 from __future__ import annotations
 
@@ -22,7 +23,6 @@ _FULL_SUITE_MODULES = {
     "pydantic": "pydantic",
     "pydantic_core": "pydantic_core",
     "Pillow": "PIL",
-    "Hypothesis": "hypothesis",
 }
 
 

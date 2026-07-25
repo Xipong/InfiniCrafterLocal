@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.239 — quick start
+# InfiniCrafterLocal v0.4.241 — quick start
 
 1. Build/install `ModSources/InfiniCrafterLocal` as the tModLoader mod.
 2. Start LocalGenerator so `http://127.0.0.1:5055/combine` is reachable for host/singleplayer.

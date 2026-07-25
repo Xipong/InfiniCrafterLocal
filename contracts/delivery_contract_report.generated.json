@@ -1,0 +1,80 @@
+{
+  "apiVersion": "infini.runtime-program.v5",
+  "ok": true,
+  "rows": [
+    {
+      "authorErrors": [],
+      "bindings": 1,
+      "deliveryErrors": [],
+      "entities": 3,
+      "fixture": "workbench_blade",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 2,
+      "deliveryErrors": [],
+      "entities": 3,
+      "fixture": "umbrella_grenade",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 1,
+      "deliveryErrors": [],
+      "entities": 2,
+      "fixture": "door_on_chain",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 1,
+      "deliveryErrors": [],
+      "entities": 2,
+      "fixture": "returning_potion",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 1,
+      "deliveryErrors": [],
+      "entities": 1,
+      "fixture": "fishing_platform_tool",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 2,
+      "deliveryErrors": [],
+      "entities": 3,
+      "fixture": "shield_and_disc",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 2,
+      "deliveryErrors": [],
+      "entities": 4,
+      "fixture": "held_and_deployed",
+      "ok": true,
+      "wireErrors": []
+    },
+    {
+      "authorErrors": [],
+      "bindings": 2,
+      "deliveryErrors": [],
+      "entities": 2,
+      "fixture": "equipment_tool_combat",
+      "ok": true,
+      "wireErrors": []
+    }
+  ],
+  "schema": "infini.low-level-delivery-proof.v1",
+  "wireSchema": "infini.runtime-program.wire.v1"
+}

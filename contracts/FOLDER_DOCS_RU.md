@@ -1,8 +1,14 @@
 # contracts
 
-Машинно-читаемые межъязыковые контракты и lifecycle manifests.
+Generated machine-readable evidence:
 
-- `field_lifecycle.json` перечисляет критические поля `AttackSpec` и обязательные стадии Python/C#/network/runtime.
-- `schemas/` содержит детерминированные JSON Schema, экспортируемые из strict Pydantic boundary-моделей.
+- `schemas/author_item_response.schema.json`;
+- `schemas/author_item_repair.schema.json`;
+- `schemas/runtime_program_author.schema.json`;
+- `schemas/capability_inventory.generated.json`;
+- `schemas/technical_lowering.generated.json`;
+- `schemas/visual_runtime_entities.schema.json`;
+- `schemas/vfx_runtime_events.schema.json`;
+- `config_registry.json`.
 
-Эти файлы не генерируют gameplay и не заменяют явные Python/C# owners. Они используются только для валидации drift.
+Они генерируются из live Python owners и не редактируются как самостоятельная gameplay authority.

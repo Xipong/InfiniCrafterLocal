@@ -14,7 +14,7 @@ namespace InfiniCrafterLocal;
 // authoring here — generated behavior must already be explicit GeneratedItemData.
 public sealed class InfiniCrafterLocalMod : Mod
 {
-    public const string ModVersion = "0.4.239";
+    public const string ModVersion = "0.4.241";
     public static InfiniCrafterLocalMod Instance { get; private set; } = null!;
     public static GeneratorClient Generator { get; private set; } = null!;
     public static RuntimeSpriteCache Sprites { get; private set; } = null!;
@@ -74,24 +74,9 @@ public sealed class InfiniCrafterLocalMod : Mod
             InfiniCraftPlayer.HandleGeneratedUtilityBuffSyncPacket(reader, whoAmI);
             return;
         }
-        if (packetType == InfiniNetPacketIds.RequestGeneratedAltUse)
-        {
-            InfiniCraftPlayer.HandleGeneratedAltUseRequestPacket(reader, whoAmI);
-            return;
-        }
         if (packetType == InfiniNetPacketIds.NotifyGeneratedItem || packetType == InfiniNetPacketIds.RequestGeneratedRegistry || packetType == InfiniNetPacketIds.RequestGeneratedRegistryForceAssets || packetType == InfiniNetPacketIds.RequestGeneratedItemById)
         {
             GeneratedItems?.HandlePacket(packetType, reader, whoAmI);
-            return;
-        }
-        if (packetType == InfiniNetPacketIds.SyncGeneratedProjectileVisual)
-        {
-            GeneratedProjectile.HandleProjectileVisualSyncPacket(reader, whoAmI);
-            return;
-        }
-        if (packetType == InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent)
-        {
-            GeneratedProjectile.HandleProjectileVfxEventSyncPacket(reader, whoAmI);
             return;
         }
         if (packetType == InfiniNetPacketIds.SyncGeneratedHeldItemPresentation)
@@ -131,7 +116,6 @@ public sealed class InfiniCrafterLocalMod : Mod
     public override void Unload()
     {
         InfiniCraftPlayer.ClearServerCommitCache();
-        GeneratedProjectile.ClearPresentationSyncCaches();
         GeneratedHeldItemDrawLayer.ClearNetCaches();
         GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         InfiniItemVfxRuntime.ClearUseEventCaches();

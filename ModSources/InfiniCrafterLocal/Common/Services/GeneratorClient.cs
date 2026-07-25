@@ -479,6 +479,7 @@ public sealed class GeneratorClient
             useTime = craftItem.useTime,
             useAnimation = craftItem.useAnimation,
             useStyle = craftItem.useStyle,
+            useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(craftItem.useStyle),
             reuseDelay = craftItem.reuseDelay,
             channel = craftItem.channel,
             noMelee = craftItem.noMelee,
@@ -489,6 +490,7 @@ public sealed class GeneratorClient
             rarityDetails = RarityDetailsFromItem(craftItem),
             value = craftItem.value,
             consumable = craftItem.consumable,
+            potion = craftItem.potion,
             material = craftItem.material,
             accessory = craftItem.accessory,
             maxStack = craftItem.maxStack,
@@ -506,6 +508,8 @@ public sealed class GeneratorClient
             healMana = craftItem.healMana,
             manaCost = craftItem.mana,
             ammo = craftItem.ammo,
+            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(craftItem.ammo),
+            notAmmo = craftItem.notAmmo,
             useAmmo = craftItem.useAmmo,
             shoot = craftItem.shoot,
             shootSpeed = craftItem.shootSpeed,
@@ -513,7 +517,6 @@ public sealed class GeneratorClient
             bait = craftItem.bait,
             fishingPole = craftItem.fishingPole,
             damageClass = DamageClassName(craftItem),
-            damageClassFullName = DamageClassFullName(craftItem),
             shootProjectileFullName = ProjectileFullName(craftItem.shoot),
             moddedOrigin = sourceMod != "Terraria",
             directProjectileRaw = DirectProjectileRawFromItem(craftItem),
@@ -626,6 +629,7 @@ public sealed class GeneratorClient
             damageClass = DamageClassName(item),
             knockback = item.knockBack,
             useStyle = item.useStyle,
+            useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
             useTime = item.useTime,
             useAnimation = item.useAnimation,
             rare = item.rare,
@@ -633,6 +637,7 @@ public sealed class GeneratorClient
             value = item.value,
             maxStack = item.maxStack,
             consumable = item.consumable,
+            potion = item.potion,
             accessory = item.accessory,
             defense = item.defense,
             headSlot = item.headSlot,
@@ -649,6 +654,8 @@ public sealed class GeneratorClient
             healMana = item.healMana,
             manaCost = item.mana,
             ammo = item.ammo,
+            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.ammo),
+            notAmmo = item.notAmmo,
             useAmmo = item.useAmmo,
             shoot = item.shoot,
             shootSpeed = item.shootSpeed,
@@ -676,9 +683,9 @@ public sealed class GeneratorClient
             type = item.type,
             damage = item.damage,
             damageClass = DamageClassName(item),
-            damageClassFullName = DamageClassFullName(item),
             shootProjectileFullName = ProjectileFullName(item.shoot),
             useStyle = item.useStyle,
+            useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
             useTime = item.useTime,
             useAnimation = item.useAnimation,
             reuseDelay = item.reuseDelay,
@@ -692,6 +699,7 @@ public sealed class GeneratorClient
             value = item.value,
             maxStack = item.maxStack,
             consumable = item.consumable,
+            potion = item.potion,
             accessory = item.accessory,
             defense = item.defense,
             headSlot = item.headSlot,
@@ -708,6 +716,8 @@ public sealed class GeneratorClient
             healMana = item.healMana,
             manaCost = item.mana,
             ammo = item.ammo,
+            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.ammo),
+            notAmmo = item.notAmmo,
             useAmmo = item.useAmmo,
             shoot = item.shoot,
             shootSpeed = item.shootSpeed,
@@ -752,31 +762,10 @@ public sealed class GeneratorClient
     }
 
     private static string DamageClassName(Item item)
-    {
-        try
-        {
-            if (item.DamageType == DamageClass.Melee) return "melee";
-            if (item.DamageType == DamageClass.Ranged) return "ranged";
-            if (item.DamageType == DamageClass.Magic) return "magic";
-            if (item.DamageType == DamageClass.Summon) return "summon";
-            if (item.damage > 0 && item.DamageType != DamageClass.Default && item.DamageType != DamageClass.Generic)
-                return "modded";
-        }
-        catch { }
-        return item.damage > 0 ? "generic" : "none";
-    }
+        => TerrariaRuntimeVocabulary.CanonicalDamageClassToken(item?.DamageType);
 
-    private static string DamageClassFullName(Item item)
-    {
-        try
-        {
-            return item.DamageType?.GetType().FullName ?? "Terraria.ModLoader.DamageClass";
-        }
-        catch
-        {
-            return "unknown";
-        }
-    }
+    private static string DamageClassName(DamageClass? damageClass, int damage = 1)
+        => TerrariaRuntimeVocabulary.CanonicalDamageClassToken(damageClass);
 
     private static string ProjectileFullName(int projectileType)
     {
@@ -956,8 +945,9 @@ public sealed class GeneratorClient
             fullName = SourceModName(ammo) + "/" + InternalName(ammo),
             damage = ammo.damage,
             damageClass = DamageClassName(ammo),
-            damageClassFullName = DamageClassFullName(ammo),
             ammo = ammo.ammo,
+            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(ammo.ammo),
+            notAmmo = ammo.notAmmo,
             useAmmo = ammo.useAmmo,
             shoot = ammo.shoot,
             shootSpeed = ammo.shootSpeed,
@@ -967,6 +957,7 @@ public sealed class GeneratorClient
             maxStack = ammo.maxStack,
             stack = ammo.stack,
             consumable = ammo.consumable,
+            potion = ammo.potion,
             material = ammo.material
         };
     }
@@ -1012,7 +1003,7 @@ public sealed class GeneratorClient
                 sourceItemAmmo = sourceItem?.ammo ?? AmmoID.None,
                 sourceItemUseAmmo = sourceItem?.useAmmo ?? AmmoID.None,
                 sourceItemDamage = sourceItem?.damage ?? 0,
-                sourceItemDamageClass = sourceItem is null ? "none" : DamageClassName(sourceItem),
+                sourceItemDamageClass = sourceItem is null ? "" : DamageClassName(sourceItem),
                 sourceItemShoot = sourceItem?.shoot ?? ProjectileID.None,
                 sourceItemShootSpeed = sourceItem?.shootSpeed ?? 0f,
                 sourceItemKnockback = sourceItem?.knockBack ?? 0f,
@@ -1047,8 +1038,7 @@ public sealed class GeneratorClient
                 light = p.light,
                 alpha = p.alpha,
                 netImportant = p.netImportant,
-                damageClass = p.DamageType == DamageClass.Melee ? "melee" : p.DamageType == DamageClass.Ranged ? "ranged" : p.DamageType == DamageClass.Magic ? "magic" : p.DamageType == DamageClass.Summon ? "summon" : p.DamageType == DamageClass.Generic ? "generic" : "modded",
-                damageClassFullName = p.DamageType?.GetType().FullName ?? "unknown",
+                damageClass = DamageClassName(p.DamageType),
                 framesRaw = SafeProjFrames(projectileType),
                 setsRaw = ProjectileSetsRaw(projectileType)
             };

@@ -1,29 +1,25 @@
-# ModSources/InfiniCrafterLocal — active tModLoader C# runtime
+# ModSources/InfiniCrafterLocal — tModLoader runtime
 
-This is the game runtime, not the generator. Read `../../AGENTS.md` and `../../PROJECT_ARCHITECTURE_RU.md` before editing.
+Это конечный typed executor `runtimeProgram` v5.
 
-Key files:
-- `InfiniCrafterLocal.cs` — root `Mod`, services, packet router, `Mod.Call`, cleanup.
-- `Common/InfiniNetPacketIds.cs` — packet id registry.
-- `Common/InfiniRuntimeLimits.cs` — runtime API/code limits; `NetProseMaxChars=0`.
-- `Common/Models/` — game-facing `GeneratedItemData` + `VfxManifestSpec` contracts.
-- `Common/Services/` — LocalGenerator HTTP boundary, world registry, asset HTTP sync, sprite cache.
-- `Common/Players/` — station transaction, refunds, MP server-authoritative craft, held draw sync.
-- `Content/Items/` — `InfiniCore` and per-instance generated item proxies.
-- `Content/Projectiles/` — bounded generated projectile runtime and compact net sync.
+## Owners
 
-Hard rules:
-- C# applies explicit generated contracts; it must not infer gameplay from names, prompts, tooltip prose or debug strings.
-- Multiplayer clients send craft intent only; host/server commits generated items.
-- PNG/JSON asset bytes are not Terraria packet payloads; use registry + `/get_asset` by filename.
-- New runtime capabilities require Python contract + C# support + tests + docs together.
+- `Common/Models/RuntimeProgramSpec.cs` — strict DTO, versions, bounds, refs, events, component dependencies.
+- `Common/Runtime/RuntimeProgramExecutor.cs` — explicit item bindings and event actions.
+- `Common/Models/GeneratedItemData*.cs` — v5 JSON normalize/application, без `AttackSpec`.
+- `Content/Items/GeneratedItem.cs` и `.UseStyle.cs` — primary/alternate/hold/equipment binding dispatch.
+- `Content/Projectiles/GeneratedProjectile.cs` — entity bootstrap.
+- `.Executors.cs` — finite movement/controller opcode dispatch.
+- `.RuntimeEvents.cs` — bounded event actions/authority.
+- `.NetSync.cs` — compact required instance state.
+- `.Visuals.cs` — entity visual role/assets, не weapon family.
+- `Common/Models/VfxManifestSpec.cs` — exact `entityId + event` VFX slots.
 
-Charge/sentry owners:
-- `Common/Models/GeneratedDamageClassPolicy.cs` — one exact damage-class resolver for item and projectile.
-- `Content/Projectiles/GeneratedProjectile.ChargeRelease.cs` — held charge and ordinary projectile release.
-- `Content/Items/GeneratedItem.Sentry.cs` — sentry placement and maxTurrets.
-- `Content/Projectiles/GeneratedProjectile.Sentry.cs` — target scan, bounded fire lifecycle and non-recursive shot spec.
-- `Content/Projectiles/GeneratedChildSpecPolicy.cs` — finite runtime-variant vocabulary and deterministic reconstruction from the registry-owned root `AttackSpec`.
-- `Content/Projectiles/GeneratedProjectile.NetSync.cs` — protocol 20: generated id + runtime variant + bounded per-instance scalar state; no full `AttackSpec` in combat packets.
+## Правила
 
-Do not set sentry-only `ProjectileID.Sets.*` globally on the shared GeneratedProjectile type.
+- Не выводить gameplay из name/tooltip/category/tags.
+- Не добавлять sensible defaults по типу оружия.
+- Unknown version/kind/opcode/reference/action/input — fail closed.
+- Owner/server authority и spawn budgets обязательны.
+- Новый opcode публикуется Gameplay Author только после полного Python→C# vertical slice.
+- Shared projectile type не получает глобальные sentry/yoyo/flail flags; поведение задаётся instance DTO.

@@ -484,18 +484,32 @@ def _contract_check_post_body_read_timeout_uses_bounded_timeout_and_returns_408(
 
 
 def _contract_check_vfx_debug_get_routes_require_an_exact_parsed_path() -> None:
-    routes = object.__new__(VfxDebugRoutes)
-    object.__setattr__(routes, "recipe_matrix", lambda: {"route": "matrix"})
+    routes = VfxDebugRoutes(
+        app_version="test",
+        normalize_world_id_from_payload=lambda _payload: "world",
+        read_world_recipe_cache=lambda *_args, **_kwargs: None,
+        write_world_recipe_cache=lambda *_args, **_kwargs: None,
+        final_normalize=lambda data: data,
+    )
     handler = _CaptureHandler()
 
     assert routes.handle_get(handler, "/debug/vfx_matrix_extra") is False
     assert handler.called == 0
     assert routes.handle_get(handler, "/debug/vfx_matrix?verbose=1") is True
-    assert handler.json_payload == {"route": "matrix"}
+    assert handler.json_payload["ok"] is True
+    assert handler.json_payload["version"] == "test"
+    assert handler.json_payload["schema"]
+    assert handler.json_payload["sampleRuntimeEvents"]
 
 
 def _contract_check_vfx_debug_post_routes_require_an_exact_parsed_path() -> None:
-    routes = object.__new__(VfxDebugRoutes)
+    routes = VfxDebugRoutes(
+        app_version="test",
+        normalize_world_id_from_payload=lambda _payload: "world",
+        read_world_recipe_cache=lambda *_args, **_kwargs: None,
+        write_world_recipe_cache=lambda *_args, **_kwargs: None,
+        final_normalize=lambda data: data,
+    )
     object.__setattr__(routes, "select_manifest", lambda payload: {"payload": payload})
     handler = _CaptureHandler()
 
@@ -550,17 +564,23 @@ def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tm
     routes = _build_shutdown_routes(tmp_path)
     routes.read_json_file = world_storage.read_json_file
 
+    from infini_local.web.vfx_debug_routes import _sample_data
+    from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
+    from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+
+    recipe_a = _sample_data()
+    recipe_a.update({"id": "generated-a", "name": "Generated A", "contractVersions": {"runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION}, "visual": {"spriteStatus": "generated", "spritePath": "generated-a.png"}})
+    recipe_a = attach_hybrid_vfx_manifest(recipe_a, "recipe-a")
+    recipe_b = _sample_data()
+    recipe_b.update({"id": "generated-b", "name": "Generated B", "visual": {"spriteStatus": "generated", "spritePath": "generated-b.png"}})
+    recipe_b = attach_hybrid_vfx_manifest(recipe_b, "recipe-b")
+
     world_storage.write_world_recipe_cache(
         tmp_path,
         "9.9.9",
         "recipe-a",
         "debug-world",
-        {
-            "id": "generated-a",
-            "name": "Generated A",
-            "sourceMode": "generated",
-            "contractVersions": {"runtimeApiVersion": "v-test"},
-        },
+        recipe_a,
         parent_a_name="Wooden Sword",
         parent_b_name="Work Bench",
         world_name="Debug World",
@@ -570,7 +590,7 @@ def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tm
         "9.9.9",
         "recipe-b",
         "debug-world",
-        {"id": "generated-b", "name": "Generated B", "sourceMode": "generated"},
+        recipe_b,
         parent_a_name="Gel",
         parent_b_name="Torch",
         world_name="Debug World",
@@ -605,7 +625,7 @@ def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tm
     latest_dump = routes.debug_latest_recipe_dump()
     assert latest_dump["ok"] is True
     assert latest_dump["name"] in {"Generated A", "Generated B"}
-    assert routes.debug_contracts()["latestRecipeContractVersions"] == {"runtimeApiVersion": "v-test"}
+    assert routes.debug_contracts()["latestRecipeContractVersions"] == {"runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION}
 
 
 def _contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outage() -> None:

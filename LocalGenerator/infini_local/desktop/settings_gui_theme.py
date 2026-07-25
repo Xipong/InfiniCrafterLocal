@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "config.env"
 EXAMPLE_PATH = ROOT / "config.example.env"
-APP_TITLE = "InfiniCrafterLocal Settings GUI v0.4.239"
+APP_TITLE = "InfiniCrafterLocal Settings GUI v0.4.241"
 
 APP_BG = "#f5f7fb"
 APP_PANEL_BG = "#eef4ff"

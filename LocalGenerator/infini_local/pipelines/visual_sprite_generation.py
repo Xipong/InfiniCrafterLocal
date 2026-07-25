@@ -55,33 +55,23 @@ class ImageBackendConfigurationError(RuntimeError):
 
 
 def _authored_sprite_topology(data: dict[str, Any], role: str) -> tuple[str, int, int]:
-    """Pass only explicit item topology to alpha validation; never infer it from prose."""
-    if (role or "item").lower() != "item":
-        return "", 0, 0
-    runtime_plan_candidate = data.get("runtimePlan")
-    runtime_plan: dict[str, Any] = runtime_plan_candidate if isinstance(runtime_plan_candidate, dict) else {}
-    visual_intent_candidate = runtime_plan.get("visualIntent")
-    visual_intent: dict[str, Any] = visual_intent_candidate if isinstance(visual_intent_candidate, dict) else {}
-    topology = str(visual_intent.get("topology") or "").strip().lower()
-    minimum = visual_intent.get("partCountMin")
-    maximum = visual_intent.get("partCountMax")
-    parts = visual_intent.get("parts")
-    authored_part_count = (
-        len([part for part in parts if isinstance(part, str) and part.strip()])
-        if isinstance(parts, list)
-        else 0
-    )
-    if topology == "multipart_separated" and authored_part_count:
-        if not isinstance(minimum, int):
-            minimum = authored_part_count
-        if not isinstance(maximum, int):
-            maximum = authored_part_count
-    return (
-        topology,
-        int(minimum) if isinstance(minimum, int) else 0,
-        int(maximum) if isinstance(maximum, int) else 0,
-    )
+    """Return only topology explicitly authored by Visual Director.
 
+    Runtime entities do not infer sprite topology from gameplay, names, categories,
+    or movement controllers.  A visual row may optionally declare a technical
+    topology in its own visual payload; absent values remain absent.
+    """
+    if (role or "item").lower() == "item":
+        visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    else:
+        entity_id = role.removeprefix("entity_").removeprefix("entity:")
+        runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
+        entity = next((row for row in runtime.get("entities") or [] if isinstance(row, dict) and str(row.get("id") or "") == entity_id), {})
+        visual = entity.get("visual") if isinstance(entity, dict) and isinstance(entity.get("visual"), dict) else {}
+    topology = str(visual.get("topology") or "").strip().lower()
+    minimum = visual.get("partCountMin")
+    maximum = visual.get("partCountMax")
+    return topology, int(minimum) if isinstance(minimum, int) else 0, int(maximum) if isinstance(maximum, int) else 0
 
 def _backend_configuration_error() -> str:
     if IMAGE_BACKEND_CONFIG_ERROR:
@@ -494,111 +484,90 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     log_event("warn", f"{role} sprite generation failed completely", {"role": role, "backend": IMAGE_BACKEND, "strictAiAuthorship": VISUAL_STRICT_AI_AUTHORSHIP})
     return "", "", round(last_score, 3), "failed"
 
-def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
-    """Generate a coherent visual asset pack.
+def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
+    runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
+    return [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
 
-    v0.3.9: one explicit plan drives all assets. The manifest is saved next to sprites,
-    so debugging can answer: what did the author want, what did the visual director ask,
-    what was generated, and what fell back.
+
+def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
+    """Generate exactly the assets authored for accepted runtime entities.
+
+    The function never invents projectile/impact/child roles.  Every non-item
+    image is keyed by a stable runtime entity ID and an explicit Visual Director
+    ``assetMode``.
     """
     data = maybe_generate_sprite(data)
-    plan = build_visual_asset_plan(data)
-    data.setdefault("debug", {})["visualAssetPlan"] = json.dumps(plan, ensure_ascii=False)
-    if VISUAL_ASSET_MODE not in {"full", "projectile", "all", "visualpack", "assetpack"}:
-        write_visual_manifest(data, plan)
-        return data
-    attack = data.setdefault("attack", {})
-    attack_enabled = isinstance(attack, dict) and bool(attack.get("enabled"))
-    equipment_overlay_planned = any(
-        str(slot.get("role") or "") == "equip_overlay"
-        and str(slot.get("assetMode") or "") == "baked_sprite"
-        and not str(slot.get("status") or "").startswith("skipped_")
-        for slot in plan
-        if isinstance(slot, dict)
-    )
-    if not attack_enabled and not equipment_overlay_planned:
-        write_visual_manifest(data, plan)
-        return data
     visual = data.setdefault("visual", {})
-    visual_kit = data.get("visualKit") if isinstance(data.get("visualKit"), dict) else {}
-    director_negative = str(visual_kit.get("negativePrompt") or "").strip()
+    item_path = str(visual.get("spritePath") or "")
+    item_url = str(visual.get("spriteUrl") or "")
+    item_status = str(visual.get("spriteStatus") or "")
+    item_score = float(visual.get("spriteTechnicalScore") or 0.0)
+
+    plan = build_visual_asset_plan(data)
+    by_id = {str(row.get("id") or ""): row for row in _runtime_entities(data)}
+    director_negative = str((data.get("visualKit") or {}).get("negativePrompt") or "").strip() if isinstance(data.get("visualKit"), dict) else ""
 
     for slot in plan:
-        role = slot.get("role")
-        if role == "item":
-            slot["status"] = visual.get("spriteStatus", "")
-            slot["path"] = visual.get("spritePath", "")
-            slot["technicalScore"] = visual.get("spriteTechnicalScore", 0)
-            slot.pop("score", None)
+        if not isinstance(slot, dict):
             continue
-        if role not in {"projectile", "impact", "child", "field", "equip_overlay"}:
+        entity_id = str(slot.get("entityId") or "")
+        entity = by_id.get(entity_id)
+        if not isinstance(entity, dict):
+            slot.update({"status": "invalid_missing_entity", "path": "", "url": "", "technicalScore": 0.0})
             continue
-        status = str(slot.get("status") or "")
-        asset_mode = str(slot.get("assetMode") or "").strip().lower()
-        if asset_mode != "baked_sprite" or status.startswith("skipped_"):
-            slot["path"] = ""
-            slot["url"] = ""
-            slot["technicalScore"] = 0.0
-            slot.pop("score", None)
+        entity_visual = entity.setdefault("visual", {})
+        mode = str(slot.get("assetMode") or "").strip().lower()
+        role = str(slot.get("role") or "")
+        if entity.get("kind") == "item_body":
+            slot.update({"status": item_status, "path": item_path, "url": item_url, "technicalScore": item_score})
+            entity_visual.update({"assetMode": "baked_sprite", "spriteStatus": item_status, "spritePath": item_path, "spriteUrl": item_url, "spriteTechnicalScore": item_score})
             continue
-        prompt = str(slot.get("prompt") or "")
+        if mode == "reuse_item_icon":
+            status = item_status if item_path else "required_item_icon_missing"
+            entity_visual.update({"spriteStatus": status, "spritePath": item_path, "spriteUrl": item_url, "spriteTechnicalScore": item_score})
+            slot.update({"status": status, "path": item_path, "url": item_url, "technicalScore": item_score})
+            continue
+        if mode in {"runtime_geometry", "no_asset"}:
+            entity_visual.update({"spriteStatus": "not_required", "spritePath": "", "spriteUrl": "", "spriteTechnicalScore": 0.0})
+            slot.update({"status": "not_required", "path": "", "url": "", "technicalScore": 0.0})
+            continue
+        if mode != "baked_sprite":
+            entity_visual.update({"spriteStatus": "invalid_or_missing_authored_asset_mode", "spritePath": "", "spriteUrl": "", "spriteTechnicalScore": 0.0})
+            slot.update({"status": "invalid_or_missing_authored_asset_mode", "path": "", "url": "", "technicalScore": 0.0})
+            continue
+        if VISUAL_ASSET_MODE not in {"full", "projectile", "all", "visualpack", "assetpack"}:
+            entity_visual["spriteStatus"] = "skipped_disabled_by_settings"
+            slot["status"] = "skipped_disabled_by_settings"
+            continue
+        prompt = str(slot.get("prompt") or entity_visual.get("prompt") or "")
         canvas = int(slot.get("canvas") or 32)
-        role_negative = director_negative or asset_negative_prompt(role)
-        path, url, score, status = generate_visual_asset(data, role, prompt, role_negative, str(slot.get("assetId") or (str(data.get("id")) + "_" + role)), canvas)
-        # Store the actual backend prompt in the manifest/debug plan. The raw
-        # visual-director prompt remains in visual/attack fields, but manifests
-        # should show what was really sent after Z-Image PE cleanup.
-        final_prompt = str(data.get("debug", {}).get(f"{role}FinalPrompt") or "")
+        backend_role = "entity_" + entity_id
+        path, url, score, status = generate_visual_asset(
+            data,
+            backend_role,
+            prompt,
+            director_negative or asset_negative_prompt("projectile"),
+            str(slot.get("assetId") or f"{data.get('id')}_{entity_id}"),
+            canvas,
+        )
+        final_prompt = str(data.get("debug", {}).get(f"{backend_role}FinalPrompt") or "")
         if final_prompt:
             slot["prompt"] = final_prompt
-        slot["status"] = status
-        slot["path"] = path
-        slot["url"] = url
-        slot["technicalScore"] = score
-        slot.pop("score", None)
-        key = role.capitalize()
-        usable_path = bool(path) and status not in {"failed", "prompt_only", "placeholder"}
-        if role == "projectile":
-            attack["projectileSpritePrompt"] = prompt
-            attack["projectileSpriteStatus"] = status
-            if usable_path:
-                attack["projectileSpritePath"] = path; attack["projectileSpriteUrl"] = url; attack["projectileSpriteScore"] = score
-            else:
-                attack["projectileSpritePath"] = ""; attack["projectileSpriteUrl"] = ""; attack["projectileSpriteScore"] = 0.0
-            visual["projectileImagePrompt"] = prompt
-        elif role == "impact":
-            attack["impactSpritePrompt"] = prompt
-            attack["impactSpriteStatus"] = status
-            if usable_path:
-                attack["impactSpritePath"] = path; attack["impactSpriteUrl"] = url; attack["impactSpriteScore"] = score
-            else:
-                attack["impactSpritePath"] = ""; attack["impactSpriteUrl"] = ""; attack["impactSpriteScore"] = 0.0
-            visual["impactImagePrompt"] = prompt
-        elif role == "child":
-            attack["childSpritePrompt"] = prompt
-            attack["childSpriteStatus"] = status
-            if usable_path:
-                attack["childSpritePath"] = path; attack["childSpriteUrl"] = url; attack["childSpriteScore"] = score
-            else:
-                attack["childSpritePath"] = ""; attack["childSpriteUrl"] = ""; attack["childSpriteScore"] = 0.0
-            visual["childImagePrompt"] = prompt
-        elif role == "field":
-            attack["fieldSpritePrompt"] = prompt
-            attack["fieldSpriteStatus"] = status
-            if usable_path:
-                attack["fieldSpritePath"] = path; attack["fieldSpriteUrl"] = url; attack["fieldSpriteScore"] = score
-            else:
-                attack["fieldSpritePath"] = ""; attack["fieldSpriteUrl"] = ""; attack["fieldSpriteScore"] = 0.0
-            visual["fieldImagePrompt"] = prompt
-        elif role == "equip_overlay":
-            visual["equipOverlayPrompt"] = prompt
-            visual["equipOverlayStatus"] = status
-            if usable_path:
-                visual["equipOverlayPath"] = path; visual["equipOverlayUrl"] = url; visual["equipOverlayScore"] = score
-            else:
-                visual["equipOverlayPath"] = ""; visual["equipOverlayUrl"] = ""; visual["equipOverlayScore"] = 0.0
-    data["attack"] = attack
-    data["visual"] = visual
+        usable = bool(path) and status not in {"failed", "prompt_only", "placeholder", "backend_config_error"}
+        entity_visual.update({
+            "spriteStatus": status,
+            "spritePath": path if usable else "",
+            "spriteUrl": url if usable else "",
+            "spriteTechnicalScore": score if usable else 0.0,
+        })
+        slot.update({
+            "status": status,
+            "path": path if usable else "",
+            "url": url if usable else "",
+            "technicalScore": score if usable else 0.0,
+        })
+
+    data.setdefault("debug", {})["visualAssetPlan"] = json.dumps(plan, ensure_ascii=False)
     write_visual_manifest(data, plan)
     return data
 

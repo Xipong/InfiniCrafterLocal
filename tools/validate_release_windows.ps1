@@ -53,6 +53,8 @@ function Add-Unavailable([string]$Name, [string]$Reason) {
 Run-Step "pytest" $Python @("tools/run_pytest_shards.py", "--shards", "4", "--timeout-seconds", "60", "--json-out", "artifacts/validation/pytest_shards.json")
 Run-Step "compileall" $Python @("-m", "compileall", "-q", "LocalGenerator/infini_local", "tools")
 Run-Step "schema_check" $Python @("tools/export_contract_schemas.py", "--check")
+Run-Step "targeted_repair" $Python @("tools/audit_targeted_repair.py", "--check")
+Run-Step "terraria_standardization" $Python @("tools/audit_terraria_standardization.py", "--check")
 Run-Step "config_registry" $Python @("tools/config_registry.py", "--check")
 Run-Step "contract_parity" $Python @("tools/contract_parity.py", "--quiet", "--out", "artifacts/validation/contract_parity_report.json")
 Run-Step "delivery_contract" $Python @("tools/check_delivery_contract.py", "--quiet", "--out", "artifacts/validation/delivery_contract_report.json")

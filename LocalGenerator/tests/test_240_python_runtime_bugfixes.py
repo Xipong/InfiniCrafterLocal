@@ -18,11 +18,6 @@ from infini_local.services import combine_endpoint, sdcpp_backend, sdcpp_service
 from infini_local.web import server
 
 
-def _contract_check_dev_fallback_helper_exposes_runtime_api_version() -> None:
-    helpers = combine_pipeline._dev_fallback_helpers()
-    assert helpers["ENGINE_RUNTIME_API_VERSION"]
-
-
 def _contract_check_dev_fallback_resolves_its_package_owner() -> None:
     result = combine_pipeline.deterministic_plan(
         {"name": "Copper Shortsword"},
@@ -318,6 +313,8 @@ def _contract_check_invalid_sdcpp_env_is_bounded_once_and_shared_by_backend() ->
 
 def _contract_check_visual_config_import_does_not_replace_process_signal_handlers() -> None:
     env = os.environ.copy()
+    package_root = str(Path(__file__).resolve().parents[1])
+    env["PYTHONPATH"] = package_root + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     code = (
         "import json, signal; "
         "signals=[s for s in (getattr(signal,'SIGINT',None),getattr(signal,'SIGTERM',None)) if s is not None]; "
@@ -512,7 +509,6 @@ def test_240_python_runtime_bugfixes_module_contract(request):
         globals(),
         request,
         (
-            '_contract_check_dev_fallback_helper_exposes_runtime_api_version',
             '_contract_check_dev_fallback_resolves_its_package_owner',
             '_contract_check_combine_exception_carries_immutable_request_failure_snapshot',
             '_contract_check_failure_record_keeps_each_exception_snapshot_isolated',

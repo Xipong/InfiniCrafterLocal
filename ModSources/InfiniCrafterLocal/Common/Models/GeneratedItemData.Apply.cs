@@ -1,27 +1,21 @@
 #nullable enable
-using InfiniCrafterLocal.Common;
-using InfiniCrafterLocal.Common.Audio;
+using InfiniCrafterLocal.Content.Projectiles;
 using System;
+using System.Linq;
 using Terraria;
-using Terraria.Audio;
 using Terraria.ID;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Models;
 
-// AGENT MAP: DTO -> Terraria Item application boundary.
-// This file maps explicit GeneratedItemData fields onto Item stats/equipment/tool
-// flags and proxy state. It should not inspect prompt/flavor/name text to infer
-// mechanics; if a mechanic is real it needs an explicit normalized field.
+/// <summary>
+/// Exact v5 DTO -> Terraria Item projection. The projection may translate one
+/// authored capability into the tModLoader fields required to express that same
+/// capability, but it never chooses a weapon archetype, movement, delivery path,
+/// attachment, controller, or lifecycle from category/name/prose.
+/// </summary>
 public sealed partial class GeneratedItemData
 {
-// =============================================================================
-// NAV: GENERATED_ITEM_APPLY_TO_ITEM
-// =============================================================================
-
-    private static string AttackRuntimeFamily(AttackSpec? attack)
-        => GeneratedRuntimeFamilyPolicy.Normalize(attack?.RuntimeFamily);
-
     private const int NoPlacementType = -1;
 
     internal static (bool IsArmor, bool IsAccessory) ResolveEquipmentRoles(
@@ -29,37 +23,43 @@ public sealed partial class GeneratedItemData
         AccessorySpec accessory,
         ArmorSpec armor)
     {
-        bool isArmor = gameplay.Kind == "armor" || armor.Enabled;
-        bool isAccessory = !isArmor && (gameplay.Kind == "accessory" || accessory.Enabled);
+        _ = gameplay; // UI category is deliberately not gameplay authority.
+        bool isArmor = armor?.Enabled == true;
+        bool isAccessory = accessory?.Enabled == true;
+        if (isArmor && isAccessory)
+            throw new InvalidOperationException("A generated item cannot be both armor and accessory");
         return (isArmor, isAccessory);
     }
 
     public void ApplyToItem(Item item)
     {
         Normalize();
+        (bool isArmor, bool isAccessory) = ResolveEquipmentRoles(Gameplay, Accessory, Armor);
+
         item.SetNameOverride(Name);
-        item.width = Math.Max(16, Gameplay.Width);
-        item.height = Math.Max(16, Gameplay.Height);
+        item.width = Math.Max(8, Gameplay.Width);
+        item.height = Math.Max(8, Gameplay.Height);
         item.value = Math.Max(0, Gameplay.Value);
         item.rare = Gameplay.Rarity;
         item.maxStack = Math.Max(1, Gameplay.MaxStack);
+        item.scale = 1f; // Per-instance authored scale is applied in ModifyItemScale.
 
         item.damage = Math.Max(0, Gameplay.Damage);
         item.knockBack = Gameplay.Knockback;
-        item.useTime = Math.Max(10, Gameplay.UseTime);
-        item.useAnimation = Math.Max(6, Gameplay.UseAnimation);
+        item.DamageType = TerrariaRuntimeVocabulary.ResolveDamageClass(Gameplay.DamageClass);
+        item.useTime = Math.Max(1, Gameplay.UseTime);
+        item.useAnimation = Math.Max(1, Gameplay.UseAnimation);
         item.useStyle = Gameplay.UseStyle;
         item.autoReuse = Gameplay.AutoReuse;
-        item.consumable = Gameplay.Consumable;
-        item.mana = Math.Max(0, Gameplay.ManaCost);
-        item.scale = 1f; // dynamic held-item scale is applied in ModItem.ModifyItemScale
         item.useTurn = Gameplay.UseTurn;
-        item.channel = Gameplay.ChannelUse;
-        item.noUseGraphic = false;
-        item.noMelee = false;
+        item.channel = RuntimeProgram.ItemUse.Channel;
+        item.noUseGraphic = RuntimeProgram.ItemUse.HideUseGraphic;
+        item.noMelee = RuntimeProgram.ItemUse.DisableMeleeHitbox || !RuntimeProgram.ItemContact.Enabled;
+        item.mana = Math.Max(0, Gameplay.ManaCost);
+        item.consumable = Gameplay.Consumable;
         item.healLife = Math.Max(0, Gameplay.HealLife);
         item.healMana = Math.Max(0, Gameplay.HealMana);
-        item.potion = Gameplay.HealLife > 0;
+        item.potion = Gameplay.Potion;
         item.buffType = Gameplay.BuffCode;
         item.buffTime = Gameplay.BuffTime;
         item.pick = Math.Max(0, Gameplay.PickPower);
@@ -68,221 +68,72 @@ public sealed partial class GeneratedItemData
         item.createTile = Gameplay.CreateTile;
         item.createWall = Gameplay.CreateWall;
         item.placeStyle = Math.Max(0, Gameplay.PlaceStyle);
-        bool placeable = item.createTile > NoPlacementType || item.createWall > NoPlacementType;
-        if (placeable)
-        {
-            item.damage = 0;
-            item.knockBack = 0f;
-            item.useStyle = ItemUseStyleID.Swing;
-            item.useTime = Math.Max(10, Gameplay.UseTime);
-            item.useAnimation = Math.Max(15, Gameplay.UseAnimation);
-            item.useTurn = true;
-            item.autoReuse = true;
-            item.noUseGraphic = false;
-            item.noMelee = true;
-            item.consumable = true;
-        }
-        bool reusableGear = Gameplay.Kind is "tool" or "armor" or "accessory"
-            || Gameplay.Kind == "weapon" && !Gameplay.Consumable;
-        if (reusableGear)
-        {
-            item.consumable = false;
-            item.maxStack = 1;
-        }
-        (bool isArmor, bool isAccessory) = ResolveEquipmentRoles(Gameplay, Accessory, Armor);
         item.accessory = isAccessory;
+
+        // The low-level binding is the only reason to install the generated
+        // projectile proxy. It does not matter whether the item looks like a
+        // sword, bow, staff, sentry, furniture, or none of those.
+        RuntimeBindingSpec? primary = RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse);
+        RuntimeBindingSpec? alternate = RuntimeProgram.BindingForInput(RuntimeInputKind.AlternateUse);
+        bool spawnsRuntimeEntity = primary?.Action == RuntimeBindingAction.SpawnEntity
+            || alternate?.Action == RuntimeBindingAction.SpawnEntity;
+        item.shoot = spawnsRuntimeEntity ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
+        RuntimeEntitySpec? primaryEntity = primary?.Action == RuntimeBindingAction.SpawnEntity
+            ? RuntimeProgram.TryGetEntity(primary.Target)
+            : null;
+        item.shootSpeed = primaryEntity?.Spawn.SpeedPxPerTick ?? 0f;
+
+        // Exact Terraria ammo-item projection. Item.ammo means “this item is ammo”;
+        // Item.useAmmo would mean “this weapon consumes ammo” and is intentionally not
+        // inferred here. The projectile ID is authored explicitly rather than selected
+        // from a family/category table.
+        item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory(Gameplay.AmmoCategory);
+        item.notAmmo = Gameplay.NotAmmo;
+        if (item.ammo != AmmoID.None)
+        {
+            item.shoot = Gameplay.AmmoProjectileId;
+            item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;
+            item.noMelee = true;
+        }
+
+        bool placeable = item.createTile > NoPlacementType || item.createWall > NoPlacementType;
+        if (placeable && RuntimeProgram.Bindings.Any(x => x.Action == RuntimeBindingAction.PlaceItem))
+        {
+            // These are tModLoader plumbing obligations of the explicitly
+            // authored place_item binding, not an inferred gameplay design.
+            item.useTurn = true;
+            item.noMelee = true;
+        }
+
         if (isArmor)
         {
             item.defense = Math.Max(0, Armor.Defense);
-            item.damage = 0;
-            item.knockBack = 0f;
-            item.useStyle = ItemUseStyleID.None;
-            item.useTime = 10;
-            item.useAnimation = 10;
-            item.noUseGraphic = true;
-            item.noMelee = true;
-            item.autoReuse = false;
-            item.consumable = false;
-            item.maxStack = 1;
-            item.accessory = false;
+            ConfigureNonUsableEquipmentItem(item);
         }
         else if (isAccessory)
         {
-            item.damage = 0;
-            item.useStyle = ItemUseStyleID.None;
-            item.useTime = 10;
-            item.useAnimation = 10;
-            item.noUseGraphic = true;
-            item.noMelee = true;
-            item.autoReuse = false;
-            item.consumable = false;
-            item.maxStack = 1;
+            item.defense = Math.Max(0, Accessory.Defense);
+            ConfigureNonUsableEquipmentItem(item);
         }
 
-        item.DamageType = GeneratedDamageClassPolicy.Resolve(Gameplay.DamageClass);
-
-        if (!isAccessory && !isArmor && Gameplay.Consumable)
-        {
-            item.UseSound = SoundID.Item3;
-        }
-
-        bool hasRuntimeItemSpriteForHeldUse = !string.IsNullOrWhiteSpace(Visual.SpritePath) && !isAccessory && !isArmor;
-
-        string ammoFor = (Gameplay.AmmoFor ?? "").Trim().ToLowerInvariant();
-        bool actualAmmo = !isAccessory && !isArmor && Gameplay.Kind == "ammo" && (ammoFor is "arrow" or "arrows" or "bullet" or "bullets");
-        if (actualAmmo)
-        {
-            item.consumable = true;
-            item.noMelee = true;
-            item.noUseGraphic = true;
-            item.useStyle = ItemUseStyleID.None;
-            item.ammo = ammoFor switch
-            {
-                "arrow" or "arrows" => AmmoID.Arrow,
-                "bullet" or "bullets" => AmmoID.Bullet,
-                _ => ItemID.None
-            };
-            item.shoot = ammoFor switch
-            {
-                "arrow" or "arrows" => ProjectileID.WoodenArrowFriendly,
-                "bullet" or "bullets" => ProjectileID.Bullet,
-                _ => ProjectileID.None
-            };
-        }
-
-        if (!isAccessory && !isArmor && Attack.Enabled && !actualAmmo)
-        {
-            string runtimeFamily = AttackRuntimeFamily(Attack);
-            bool thrustLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Thrust);
-            bool flailLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Flail);
-            bool yoyoLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Yoyo);
-            bool whipLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Whip);
-            bool chargeReleaseLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease);
-            bool sentryLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
-            bool projectileOwnedUse = GeneratedRuntimeFamilyPolicy.IsProjectileOwned(runtimeFamily);
-            projectileOwnedUse = projectileOwnedUse
-                && GeneratedRuntimeFamilyPolicy.UsesProjectileOnlyItemAffordance(runtimeFamily, Attack.Delivery);
-            if (Attack.UseStyleCode > ItemUseStyleID.None)
-                item.useStyle = Attack.UseStyleCode;
-            item.noMelee = Attack.DisableItemMeleeHitbox || projectileOwnedUse;
-            item.noUseGraphic = Attack.HideUseGraphic || projectileOwnedUse;
-            item.channel = Attack.ChannelUse;
-            item.shoot = ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>();
-            item.shootSpeed = Math.Max(1f, Attack.Speed);
-            string family = (Attack.WeaponFamily ?? "").Trim().ToLowerInvariant();
-            string ammoKind = (Attack.AmmoKind ?? Gameplay.AmmoFor ?? "").Trim().ToLowerInvariant();
-            bool bowLike = family is "bow" or "repeater" or "crossbow" || ammoKind is "arrow" or "arrows";
-            bool gunLike = family is "gun" or "shotgun" or "musket" or "pistol" || ammoKind is "bullet" or "bullets";
-            bool launcherLike = family is "launcher" or "rocket_launcher" || ammoKind is "rocket" or "rockets";
-
-            // v0.4.57: vanilla held-item drawing can only use the static ModItem.Texture.
-            // When an AI-authored runtime PNG exists, hide that static placeholder for every
-            // weapon delivery (including swing) and let GeneratedHeldItemDrawLayer draw the
-            // per-instance sprite from Data.Visual.SpritePath instead.
-            bool hasRuntimeItemSprite = hasRuntimeItemSpriteForHeldUse;
-
-            if (thrustLike)
-            {
-                // Held-thrust geometry is projectile-owned, while Rapier vs Shoot style
-                // remains the explicit authored Terraria animation affordance.
-                item.useStyle = Attack.UseStyleCode > ItemUseStyleID.None
-                    ? Attack.UseStyleCode
-                    : ItemUseStyleID.Shoot;
-                item.noUseGraphic = true;
-                item.noMelee = true;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-            }
-            else if (flailLike)
-            {
-                item.useStyle = ItemUseStyleID.Shoot;
-                item.noUseGraphic = true;
-                item.noMelee = true;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-            }
-            else if (yoyoLike)
-            {
-                item.useStyle = ItemUseStyleID.Shoot;
-                item.noUseGraphic = true;
-                item.noMelee = true;
-                item.channel = true;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-            }
-            else if (whipLike)
-            {
-                item.useStyle = ItemUseStyleID.Shoot;
-                item.noUseGraphic = true;
-                item.noMelee = true;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-            }
-            else if (chargeReleaseLike)
-            {
-                item.useStyle = ItemUseStyleID.Shoot;
-                item.noUseGraphic = true;
-                item.noMelee = true;
-                item.channel = true;
-                // Charge-release owns its use sound at the actual release frame.
-                item.UseSound = null;
-            }
-            else if (sentryLike)
-            {
-                item.sentry = true;
-                item.useStyle = ItemUseStyleID.Swing;
-                item.noUseGraphic = false;
-                item.noMelee = true;
-                item.channel = false;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-            }
-            else if (bowLike)
-            {
-                // Preserve vanilla bow affordance: consume arrows and use bow sound, while still
-                // spawning the generated projectile in Shoot().
-                item.useAmmo = AmmoID.Arrow;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-                item.noUseGraphic = true;
-            }
-            else if (gunLike)
-            {
-                item.useAmmo = AmmoID.Bullet;
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-                item.noUseGraphic = true;
-            }
-            else if (launcherLike)
-            {
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-                item.noUseGraphic = true;
-            }
-            else
-            {
-                item.UseSound = UseSoundForCatalog(runtimeFamily, Attack.Effect);
-                if (hasRuntimeItemSprite || projectileOwnedUse)
-                    item.noUseGraphic = true;
-            }
-        }
-
-        if (!isAccessory && !isArmor && !actualAmmo && hasRuntimeItemSpriteForHeldUse && item.useStyle > ItemUseStyleID.None)
-        {
-            // Generated item texture is per-instance and cannot be represented by
-            // ModItem.Texture. Hide the static placeholder and let
-            // GeneratedHeldItemDrawLayer render the actual Z-Image sprite for tools,
-            // potions/throwables and weapons alike.
-            item.noUseGraphic = true;
-        }
-
-        RecordAppliedItemTrace(item, isArmor, isAccessory, actualAmmo);
+        // Sound is supplied by exact entity/event VFX slots. There is no
+        // category/family-derived fallback sound at this gameplay boundary.
+        item.UseSound = null;
     }
-    private Terraria.Audio.SoundStyle? UseSoundForCatalog(string runtimeFamily, string effect)
+
+    private static void ConfigureNonUsableEquipmentItem(Item item)
     {
-        if (!InfiniSoundLibrary.IsBuiltInCatalogId(Attack.SoundUseCatalogId))
-            return null;
-        return InfiniSoundLibrary.ForUse(
-            runtimeFamily,
-            Attack.Delivery,
-            effect,
-            Attack.SoundVolume,
-            Attack.SoundPitch,
-            Attack.SoundPitchVariance,
-            Attack.SoundUseCatalogId,
-            Attack.SoundUseCatalogPath,
-            Attack.SoundCatalogSource ?? "");
+        item.damage = 0;
+        item.knockBack = 0f;
+        item.useStyle = ItemUseStyleID.None;
+        item.useTime = 1;
+        item.useAnimation = 1;
+        item.noUseGraphic = true;
+        item.noMelee = true;
+        item.autoReuse = false;
+        item.channel = false;
+        item.consumable = false;
+        item.maxStack = 1;
+        item.shoot = ProjectileID.None;
     }
 }

@@ -31,13 +31,11 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public const byte PacketRequestStationEscrow = InfiniNetPacketIds.RequestStationEscrow;
     public const byte PacketStationEscrowResult = InfiniNetPacketIds.StationEscrowResult;
     public const byte PacketSyncGeneratedUtilityBuff = InfiniNetPacketIds.SyncGeneratedUtilityBuff;
-    public const byte PacketRequestGeneratedAltUse = InfiniNetPacketIds.RequestGeneratedAltUse;
     public const int RemoteServerCraftTimeoutTicks = CraftRecoveryTimeoutTicks;
     // Bounded client resend cadence for a single outstanding station escrow op.
     // Retries keep the same operationId so the server can replay without re-applying.
     public const int StationEscrowRetryIntervalTicks = 90;
     private const int MaxStationEscrowResultCacheEntries = 64;
-    private const int GeneratedUseIntentWindowTicks = 15;
 
     private const int MaxServerCraftRequestCacheEntries = 2048;
     private static readonly Dictionary<string, string> ServerCommittedCraftRequests = new(StringComparer.Ordinal);
@@ -98,12 +96,6 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _generatedManaRegen;
     private int _generatedLifeRegen;
     private int _generatedMobilityCooldownTicks;
-    private int _generatedAltUseCooldownTicks;
-    private int _generatedAltUseRequestCooldownTicks;
-    private string _pendingGeneratedUseItemId = "";
-    private bool _pendingGeneratedUseAlternate;
-    private Vector2 _pendingGeneratedUseTarget;
-    private int _pendingGeneratedUseTicks;
     private float _generatedAmmoSaveChance;
     private float _generatedSummonTagDamage;
     private string _lastGeneratedMobilityFailureMessage = "";
@@ -130,8 +122,6 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public int GenerationAttempt => Math.Max(0, _generationAttempt);
     public int GeneratedMobilityCooldownTicks => Math.Max(0, _generatedMobilityCooldownTicks);
     public int GeneratedMobilityCooldownSeconds => Math.Max(0, (int)Math.Ceiling(GeneratedMobilityCooldownTicks / 60f));
-    public int GeneratedAltUseCooldownTicks => Math.Max(0, _generatedAltUseCooldownTicks);
-    public int GeneratedAltUseCooldownSeconds => Math.Max(0, (int)Math.Ceiling(GeneratedAltUseCooldownTicks / 60f));
     public string LastGeneratedMobilityFailureMessage => string.IsNullOrWhiteSpace(_lastGeneratedMobilityFailureMessage) ? "Generated mobility failed" : _lastGeneratedMobilityFailureMessage;
     public float GeneratedSummonTagDamage => Math.Max(0f, _generatedSummonTagDamage);
 

@@ -222,7 +222,6 @@ public sealed partial class InfiniCraftPlayer
     public override void PostUpdate()
     {
         TickCraftAudioGuard();
-        ProcessPendingGeneratedUseIntent();
         TickGeneratedUtilityBuff();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();

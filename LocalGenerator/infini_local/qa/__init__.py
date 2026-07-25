@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-# AGENT MAP: gameplay/runtime proof helpers. These modules build deterministic
-# reports from authored runtimePlan golden cases; they do not call LLMs and do
-# not change runtime behavior.
+"""Deterministic QA helpers for the v5 low-level runtime program."""
 
-from infini_local.qa.golden_runtime_cases import GOLDEN_RUNTIME_CASES
-from infini_local.qa.runtime_proof import (
-    assert_runtime_proof_report,
-    build_gameplay_seam_report,
-    build_runtime_proof_report,
-    write_runtime_proof_artifacts,
+from infini_local.qa.runtime_program_fixtures import (
+    NON_ARCHETYPAL_FIXTURES,
+    build_runtime_fixture,
+)
+from infini_local.qa.runtime_program_proof import (
+    assert_runtime_program_proof,
+    build_runtime_program_proof,
+    write_runtime_program_proof,
 )
 
 __all__ = [
-    "GOLDEN_RUNTIME_CASES",
-    "assert_runtime_proof_report",
-    "build_gameplay_seam_report",
-    "build_runtime_proof_report",
-    "write_runtime_proof_artifacts",
+    "NON_ARCHETYPAL_FIXTURES",
+    "assert_runtime_program_proof",
+    "build_runtime_fixture",
+    "build_runtime_program_proof",
+    "write_runtime_program_proof",
 ]

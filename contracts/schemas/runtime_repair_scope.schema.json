@@ -1,0 +1,755 @@
+{
+  "$id": "https://infinicrafter.local/contracts/runtime_repair_scope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blockerPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "directCapabilityNames": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "existingBrokenCapabilityNames": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "requirements": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "supportingCapabilityNames": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "directCapabilityNames",
+        "supportingCapabilityNames",
+        "existingBrokenCapabilityNames",
+        "requirements"
+      ],
+      "type": "object"
+    },
+    "capabilitySubset": {
+      "items": {
+        "maxLength": 48,
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "contextIds": {
+      "additionalProperties": false,
+      "properties": {
+        "bindingIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "claimIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "entityIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "entityIds",
+        "bindingIds",
+        "callIds",
+        "claimIds"
+      ],
+      "type": "object"
+    },
+    "create": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "allowedActions": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "allowedInputs": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "allowedTargetIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "requiredTargetIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "allowed",
+            "allowedTargetIds",
+            "allowedInputs",
+            "allowedActions",
+            "requiredTargetIds"
+          ],
+          "type": "object"
+        },
+        "calls": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "allowedFns": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "allowedTargetIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "requiredReferenceEntityIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "allowed",
+            "allowedTargetIds",
+            "allowedFns",
+            "requiredReferenceEntityIds"
+          ],
+          "type": "object"
+        },
+        "claims": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "allowed"
+          ],
+          "type": "object"
+        },
+        "entities": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "allowedKinds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "exactIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "allowed",
+            "exactIds",
+            "allowedKinds"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "entities",
+        "bindings",
+        "calls",
+        "claims"
+      ],
+      "type": "object"
+    },
+    "deletable": {
+      "additionalProperties": false,
+      "properties": {
+        "bindingIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "bindingIndices": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callIndices": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "claimIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "claimIndices": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "entityIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "entityIndices": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "entityIds",
+        "bindingIds",
+        "callIds",
+        "claimIds",
+        "entityIndices",
+        "bindingIndices",
+        "callIndices",
+        "claimIndices"
+      ],
+      "type": "object"
+    },
+    "errorPaths": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "fieldPermissions": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "id",
+              "paths"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "calls": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "id",
+              "paths"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "claims": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "id",
+              "paths"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "entities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "id",
+              "paths"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entities",
+        "bindings",
+        "calls",
+        "claims"
+      ],
+      "type": "object"
+    },
+    "identityChanges": {
+      "additionalProperties": false,
+      "properties": {
+        "bindingActionIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "bindingInputIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "bindingTargetIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callEventIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callFnIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callReferenceParams": {
+          "items": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,47}:[A-Za-z][A-Za-z0-9_]{0,47}$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callTargetIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "claimBackingIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "claimKindIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "entityKindIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "entityKindIds",
+        "bindingInputIds",
+        "bindingActionIds",
+        "bindingTargetIds",
+        "callFnIds",
+        "callTargetIds",
+        "callEventIds",
+        "callReferenceParams",
+        "claimKindIds",
+        "claimBackingIds"
+      ],
+      "type": "object"
+    },
+    "metadataFields": {
+      "items": {
+        "maxLength": 48,
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "mutable": {
+      "additionalProperties": false,
+      "properties": {
+        "bindingIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "claimIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "entityIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "entityIds",
+        "bindingIds",
+        "callIds",
+        "claimIds"
+      ],
+      "type": "object"
+    },
+    "nonRepairableErrors": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "repairRequirements": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "affectedIds": {
+            "items": {
+              "maxLength": 48,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "allowedValues": {
+            "type": "array"
+          },
+          "code": {
+            "type": "string"
+          },
+          "errorPath": {
+            "type": "string"
+          },
+          "exactCapabilityParams": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "llmRepairable": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "repairStrategy": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "requiredOneOfCapabilities": {
+            "items": {
+              "maxLength": 48,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "errorPath",
+          "code",
+          "message",
+          "affectedIds",
+          "requiredOneOfCapabilities",
+          "exactCapabilityParams",
+          "allowedValues",
+          "repairStrategy",
+          "llmRepairable"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "retarget": {
+      "additionalProperties": false,
+      "properties": {
+        "bindingTargetIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "callTargetIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "entityIds": {
+          "items": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "entityIds",
+        "bindingTargetIds",
+        "callTargetIds"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "infini.runtime-repair-scope.v5"
+    }
+  },
+  "required": [
+    "schema",
+    "mutable",
+    "deletable",
+    "create",
+    "retarget",
+    "identityChanges",
+    "metadataFields",
+    "contextIds",
+    "fieldPermissions",
+    "repairRequirements",
+    "blockerPlan",
+    "errorPaths",
+    "capabilitySubset",
+    "nonRepairableErrors"
+  ],
+  "type": "object",
+  "x-infini-generated": true
+}

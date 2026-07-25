@@ -325,8 +325,7 @@
       "minimum": null,
       "name": "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "tools/semantic_runtime_diff.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -382,32 +381,17 @@
       "visibility": "gui"
     },
     {
-      "declarations": [
-        {
-          "default": {
-            "expression": "DEFAULT_BALANCE_MODE"
-          },
-          "file": "LocalGenerator/infini_local/core/balance_mode.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": {
-        "expression": "DEFAULT_BALANCE_MODE"
-      },
+      "declarations": [],
+      "default": [],
       "documented": true,
       "example": "safety",
       "gui": true,
       "maximum": null,
       "minimum": null,
       "name": "INFINI_BALANCE_MODE",
-      "owners": [
-        "LocalGenerator/infini_local/core/balance_mode.py",
-        "tools/semantic_runtime_diff.py"
-      ],
+      "owners": [],
       "secret": false,
-      "type": "string",
+      "type": "unknown",
       "visibility": "gui"
     },
     {
@@ -1200,51 +1184,31 @@
       "visibility": "gui"
     },
     {
-      "declarations": [
-        {
-          "default": 10,
-          "file": "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py",
-          "maximum": 999,
-          "minimum": 1,
-          "type": "integer"
-        }
-      ],
-      "default": 10,
+      "declarations": [],
+      "default": [],
       "documented": true,
       "example": "10",
       "gui": true,
-      "maximum": 999,
-      "minimum": 1,
+      "maximum": null,
+      "minimum": null,
       "name": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py"
-      ],
+      "owners": [],
       "secret": false,
-      "type": "integer",
+      "type": "unknown",
       "visibility": "gui"
     },
     {
-      "declarations": [
-        {
-          "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": false,
+      "declarations": [],
+      "default": [],
       "documented": true,
       "example": "0",
       "gui": true,
       "maximum": null,
       "minimum": null,
       "name": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/debug_delivery_overrides.py"
-      ],
+      "owners": [],
       "secret": false,
-      "type": "boolean",
+      "type": "unknown",
       "visibility": "gui"
     },
     {
@@ -2564,32 +2528,42 @@
       "visibility": "gui"
     },
     {
+      "declarations": [],
+      "default": [],
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_REAUTHOR_TEMPERATURE",
+      "owners": [],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "gui"
+    },
+    {
       "declarations": [
         {
-          "default": {
-            "expression": "env_float(\"INFINI_LLM_TEMPERATURE\", 0.38, lo=0.0, hi=1.2)"
-          },
-          "file": "LocalGenerator/infini_local/pipelines/author_item_repair.py",
-          "maximum": 1.2,
+          "default": 0.12,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "maximum": 0.8,
           "minimum": 0.0,
           "type": "number"
         }
       ],
-      "default": {
-        "expression": "env_float(\"INFINI_LLM_TEMPERATURE\", 0.38, lo=0.0, hi=1.2)"
-      },
-      "documented": true,
-      "example": "",
-      "gui": true,
-      "maximum": 1.2,
+      "default": 0.12,
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": 0.8,
       "minimum": 0.0,
-      "name": "INFINI_LLM_REAUTHOR_TEMPERATURE",
+      "name": "INFINI_LLM_REPAIR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/author_item_repair.py"
+        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
       ],
       "secret": false,
       "type": "number",
-      "visibility": "gui"
+      "visibility": "internal"
     },
     {
       "declarations": [
@@ -2668,13 +2642,6 @@
       "declarations": [
         {
           "default": 0.38,
-          "file": "LocalGenerator/infini_local/pipelines/author_item_repair.py",
-          "maximum": 1.2,
-          "minimum": 0.0,
-          "type": "number"
-        },
-        {
-          "default": 0.38,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
           "maximum": 1.2,
           "minimum": 0.0,
@@ -2689,7 +2656,6 @@
       "minimum": 0.0,
       "name": "INFINI_LLM_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/author_item_repair.py",
         "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
       ],
       "secret": false,
@@ -2708,13 +2674,6 @@
         {
           "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        },
-        {
-          "default": 95,
-          "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3149,82 +3108,6 @@
       "secret": false,
       "type": "string",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": 4,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 4,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PATTERN_LIBRARY_CARDS",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": {
-            "expression": "0 if _LLM_RUNTIME_AUTHORING_DEFAULT else 2"
-          },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": 8,
-          "minimum": 0,
-          "type": "integer"
-        }
-      ],
-      "default": {
-        "expression": "0 if _LLM_RUNTIME_AUTHORING_DEFAULT else 2"
-      },
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": 8,
-      "minimum": 0,
-      "name": "INFINI_PATTERN_REPAIR_ATTEMPTS",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 20,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 20,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PATTERN_REPAIR_TIMEOUT",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -4808,60 +4691,11 @@
       "minimum": null,
       "name": "INFINI_USE_LLM",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "tools/semantic_runtime_diff.py"
+        "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": false,
       "type": "boolean",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": 8,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 8,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_EFFECT_NAME_BANK_MAX_CARDS",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 42,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 42,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_EFFECT_NAME_BANK_MAX_NAMES",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -5082,366 +4916,6 @@
     {
       "declarations": [
         {
-          "default": 0.18,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "number"
-        }
-      ],
-      "default": 0.18,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_MAGNITUDE_JITTER",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "number",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PARENT_EFFECT_INHERITANCE",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 3,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 3,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PARENT_EFFECT_MAX_INHERITED_SLOTS",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 0.48,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "number"
-        }
-      ],
-      "default": 0.48,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PARENT_EFFECT_STRONG_THRESHOLD",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "number",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 2,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 2,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PROCEDURAL_BLEND_CANDIDATES",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 0.82,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "number"
-        }
-      ],
-      "default": 0.82,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PROCEDURAL_CHANCE",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "number",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PROCEDURAL_COMPOSE",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 5,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 5,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_PROCEDURAL_MAX_EXTRA_SLOTS",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_RECIPE_BLEND",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_RUNTIME_INTENT_FIRST",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_SELECTOR",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_SELECTOR_DEBUG",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 18.0,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "number"
-        }
-      ],
-      "default": 18.0,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_SELECTOR_JITTER",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "number",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 6.0,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "number"
-        }
-      ],
-      "default": 6.0,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_SELECTOR_NOVELTY_WEIGHT",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "number",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 5,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 5,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VFX_SELECTOR_TOP",
-      "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
           "maximum": null,
@@ -5538,19 +5012,19 @@
     {
       "declarations": [
         {
-          "default": 0.42,
+          "default": 0.45,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-          "maximum": 1.2,
-          "minimum": 0.0,
+          "maximum": null,
+          "minimum": null,
           "type": "number"
         }
       ],
-      "default": 0.42,
+      "default": 0.45,
       "documented": true,
       "example": "0.42",
       "gui": true,
-      "maximum": 1.2,
-      "minimum": 0.0,
+      "maximum": null,
+      "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_TEMPERATURE",
       "owners": [
         "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
@@ -5850,27 +5324,17 @@
       "visibility": "gui"
     },
     {
-      "declarations": [
-        {
-          "default": 1800,
-          "file": "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 1800,
+      "declarations": [],
+      "default": [],
       "documented": true,
       "example": "1800",
       "gui": false,
       "maximum": null,
       "minimum": null,
       "name": "INFINI_ZIMAGE_PROMPT_LIMIT",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/visual_prompt_contracts.py"
-      ],
+      "owners": [],
       "secret": false,
-      "type": "integer",
+      "type": "unknown",
       "visibility": "documented"
     },
     {
@@ -5899,8 +5363,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 240,
-  "fingerprint": "593095ad26d54897df9dd346eff6e5133358c482b88b0bed0a5edd8d8537a102",
+  "fieldCount": 221,
+  "fingerprint": "22ca67fe3ca828e3bb1624b6d7b4641ac30f57109ab029882d79a9ab29b65660",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
@@ -5913,6 +5377,10 @@
   "secretFieldCount": 13,
   "warnings": [
     {
+      "field": "INFINI_BALANCE_MODE",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
       "field": "INFINI_CRAFT_HTTP_ATTEMPTS",
       "kind": "presented_without_env_helper_declaration"
     },
@@ -5921,7 +5389,23 @@
       "kind": "presented_without_env_helper_declaration"
     },
     {
+      "field": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
+      "field": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
       "field": "INFINI_GUI_PIPELINE_PRESET",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
+      "field": "INFINI_LLM_REAUTHOR_TEMPERATURE",
+      "kind": "presented_without_env_helper_declaration"
+    },
+    {
+      "field": "INFINI_ZIMAGE_PROMPT_LIMIT",
       "kind": "presented_without_env_helper_declaration"
     }
   ]

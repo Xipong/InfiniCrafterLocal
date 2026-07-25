@@ -1,22 +1,13 @@
-# Репозиторий v0.4.239 — что здесь важно
+# Репозиторий v0.4.241
 
-Активная Terraria/tModLoader часть: `ModSources/InfiniCrafterLocal`.
+- `LocalGenerator/` — Gameplay/Visual/VFX authoring, validation, storage and QA.
+- `ModSources/InfiniCrafterLocal/` — typed tModLoader runtime.
+- `contracts/` — generated strict schemas/manifests.
+- `docs/` — current low-level architecture/inventory/research.
+- `tools/` — parity, mutation, build, packaging and verification.
 
-Навигация:
-- `PROJECT_ARCHITECTURE_RU.md` — полная архитектура модовой части.
-- `PROJECT_MAP_RU.md` — карта директорий и source-of-truth файлов.
-- `README_RU.md` — краткое описание runtime flow.
-- `BUILD_QOL_RU.md` — сборка, runtime dependencies, MP asset caveats.
-- `TODO_ROADMAP_VERY_LATER_RU.md` — единый будущий backlog в корне версии.
-- `docs/` — дополнительные канонические материалы:
-  - `docs/RUNTIME_AUTHORING_CURRENT_RU.md` — текущий Python authoring/runtime contract;
-  - `docs/CONTRACT_SAFETY_STACK_RU.md` — границы и проверочный стек;
-  - `docs/PRE_LIVETEST_MANUAL_TRACES_V12_RU.md` — негативные author/image примеры;
-  - `docs/ZIMAGE_WEAPON_TOPOLOGY_RU.md` — model-authored positive item topology без code-owned geometry;
+Source-of-truth navigation: `AGENTS.md`, `PROJECT_ARCHITECTURE_RU.md`, `PROJECT_MAP_RU.md`, `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`.
 
-
-Не считать архитектурой мода:
-- `.tml-build-cache/`, `.nuget/`, `bin/`, `obj/`, `build_logs/`, `artifacts/`;
-- `agent_reports/` — одноразовые отчёты и результаты экспериментов;
-- `LocalGenerator/cache/` — runtime/test cache;
-- `LocalGenerator/` — Python generator boundary, не C# runtime.
+Не считать source: `.pytest_cache`, `__pycache__`, `bin`, `obj`, `.tml-build-cache`, temporary reports or generated packaging directories.
+- `lowery.md` — конечный перечень canonical mappings и сохранённых non-gameplay aliases.
+- `TERRARIA_TMODLOADER_STANDARDIZATION_REPORT_RU.md` — отчёт v0.4.241 и граница vanilla/custom runtime.

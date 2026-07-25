@@ -1,0 +1,4286 @@
+{
+  "$id": "https://infinicrafter.local/contracts/author_item_response.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "category": {
+      "description": "UI/equipment result category only; never routes runtime execution.",
+      "enum": [
+        "combat",
+        "tool",
+        "equipment",
+        "placeable",
+        "consumable",
+        "material",
+        "hybrid",
+        "generic"
+      ],
+      "type": "string"
+    },
+    "concept": {
+      "additionalProperties": false,
+      "properties": {
+        "coreMechanic": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "literalSynthesis": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "parentAContribution": {
+          "maxLength": 280,
+          "minLength": 1,
+          "type": "string"
+        },
+        "parentBContribution": {
+          "maxLength": 280,
+          "minLength": 1,
+          "type": "string"
+        },
+        "playerExperience": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "literalSynthesis",
+        "coreMechanic",
+        "parentAContribution",
+        "parentBContribution",
+        "playerExperience"
+      ],
+      "type": "object"
+    },
+    "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "type": "string"
+    },
+    "runtimeContract": {
+      "additionalProperties": false,
+      "properties": {
+        "claims": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "backedBy": {
+                "items": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "minItems": 1,
+                "type": "array"
+              },
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "gameplay",
+                  "physical",
+                  "parent_synthesis"
+                ],
+                "type": "string"
+              },
+              "text": {
+                "maxLength": 280,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "text",
+              "backedBy"
+            ],
+            "type": "object"
+          },
+          "maxItems": 24,
+          "minItems": 1,
+          "type": "array"
+        },
+        "parentSynthesis": {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "parentA": {
+              "additionalProperties": false,
+              "properties": {
+                "facts": {
+                  "items": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "runtimeRoles": {
+                  "items": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "facts",
+                "runtimeRoles"
+              ],
+              "type": "object"
+            },
+            "parentB": {
+              "additionalProperties": false,
+              "properties": {
+                "facts": {
+                  "items": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "runtimeRoles": {
+                  "items": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "facts",
+                "runtimeRoles"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "composition",
+            "parentA",
+            "parentB"
+          ],
+          "type": "object"
+        },
+        "schema": {
+          "const": "infini.runtime-contract.low-level.v1"
+        }
+      },
+      "required": [
+        "schema",
+        "parentSynthesis",
+        "claims"
+      ],
+      "type": "object"
+    },
+    "runtimeProgram": {
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "const": "infini.runtime-program.v5"
+        },
+        "bindings": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "spawn_entity",
+                  "use_item_body",
+                  "apply_item_effects",
+                  "place_item",
+                  "equip_passive"
+                ],
+                "type": "string"
+              },
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "enum": [
+                  "primary_use",
+                  "alternate_use",
+                  "hold",
+                  "equipped"
+                ],
+                "type": "string"
+              },
+              "target": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body",
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "action",
+              "target"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 0,
+          "type": "array"
+        },
+        "calls": {
+          "items": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_item_stats"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "craftYield": {
+                        "description": "Items granted by one craft",
+                        "maximum": 9999,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "item_count"
+                      },
+                      "damage": {
+                        "description": "Base item damage",
+                        "maximum": 2000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "damage_points"
+                      },
+                      "damageClass": {
+                        "description": "Exact built-in token or loaded tModLoader ModName/ClassName copied from parent facts",
+                        "pattern": "^(?:default|generic|melee|melee_no_speed|ranged|magic|magic_summon_hybrid|summon|summon_melee_speed|throwing|[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$",
+                        "type": "string",
+                        "x-infini-semanticType": "terraria_damage_class"
+                      },
+                      "heightPx": {
+                        "description": "Inventory/world hitbox height",
+                        "maximum": 256,
+                        "minimum": 8,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      },
+                      "knockback": {
+                        "description": "Item knockback",
+                        "maximum": 20,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "knockback_strength"
+                      },
+                      "manaCost": {
+                        "description": "Mana consumed per use",
+                        "maximum": 500,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "mana_points"
+                      },
+                      "maxStack": {
+                        "description": "Maximum stack",
+                        "maximum": 9999,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "stack_count"
+                      },
+                      "rarity": {
+                        "description": "Exact loaded Item.rare ID (built-in normal rarities are 0..11); copy modded IDs from parent facts, do not guess",
+                        "maximum": 65535,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "loaded_rarity_id"
+                      },
+                      "scale": {
+                        "description": "Item draw scale",
+                        "maximum": 4,
+                        "minimum": 0.25,
+                        "type": "number",
+                        "x-infini-semanticType": "draw_scale"
+                      },
+                      "useAnimationTicks": {
+                        "description": "Use animation",
+                        "maximum": 600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "useTimeTicks": {
+                        "description": "Use time",
+                        "maximum": 600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "valueCopper": {
+                        "description": "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount",
+                        "maximum": 100000000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "copper"
+                      },
+                      "widthPx": {
+                        "description": "Inventory/world hitbox width",
+                        "maximum": 256,
+                        "minimum": 8,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      }
+                    },
+                    "required": [
+                      "damageClass",
+                      "damage",
+                      "knockback",
+                      "useTimeTicks",
+                      "useAnimationTicks",
+                      "manaCost",
+                      "rarity",
+                      "valueCopper",
+                      "maxStack",
+                      "craftYield",
+                      "widthPx",
+                      "heightPx",
+                      "scale"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_item_use"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "autoReuse": {
+                        "description": "Allow repeated use while input is held",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "channel": {
+                        "description": "Keep use active while input is held",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "disableMeleeHitbox": {
+                        "description": "Disable vanilla item melee hitbox",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "handPose": {
+                        "description": "Exact renderer hint",
+                        "enum": [
+                          "",
+                          "one_handed",
+                          "two_handed",
+                          "overhead",
+                          "forward"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "hideUseGraphic": {
+                        "description": "Hide inventory sprite during use",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "holdoutOffsetX": {
+                        "description": "Held draw offset X",
+                        "maximum": 96,
+                        "minimum": -96,
+                        "type": "integer",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels"
+                      },
+                      "holdoutOffsetY": {
+                        "description": "Held draw offset Y",
+                        "maximum": 96,
+                        "minimum": -96,
+                        "type": "integer",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels"
+                      },
+                      "releaseTiming": {
+                        "description": "Exact release timing",
+                        "enum": [
+                          "",
+                          "immediate",
+                          "on_release",
+                          "after_charge"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "useStyle": {
+                        "description": "Named Terraria ItemUseStyleID",
+                        "enum": [
+                          "swing",
+                          "eat_food",
+                          "thrust",
+                          "hold_up",
+                          "shoot",
+                          "drink_long",
+                          "drink_liquid",
+                          "golf_play",
+                          "hidden_animation",
+                          "mow_the_lawn",
+                          "guitar",
+                          "rapier",
+                          "raise_lamp"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "terraria_item_use_style"
+                      },
+                      "useTurn": {
+                        "description": "Allow facing turn during use",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "useStyle",
+                      "autoReuse",
+                      "useTurn",
+                      "hideUseGraphic",
+                      "disableMeleeHitbox",
+                      "channel",
+                      "holdoutOffsetX",
+                      "holdoutOffsetY"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "enable_item_contact_damage"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "contactForgivenessPx": {
+                        "description": "Extra contact radius",
+                        "maximum": 64,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      },
+                      "hitboxScale": {
+                        "description": "Contact hitbox scale",
+                        "maximum": 2,
+                        "minimum": 0.5,
+                        "type": "number",
+                        "x-infini-semanticType": "hitbox_scale"
+                      }
+                    },
+                    "required": [
+                      "hitboxScale",
+                      "contactForgivenessPx"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_consumption"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "consumable": {
+                        "description": "Consume stack on use",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "consumeChancePercent": {
+                        "description": "Chance of stack consumption",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "percent"
+                      }
+                    },
+                    "required": [
+                      "consumable",
+                      "consumeChancePercent"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_vanilla_ammo_item"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "ammoCategory": {
+                        "description": "Exact stable Terraria AmmoID category",
+                        "enum": [
+                          "arrow",
+                          "bullet",
+                          "candy_corn",
+                          "coin",
+                          "dart",
+                          "fallen_star",
+                          "flare",
+                          "gel",
+                          "jack_o_lantern",
+                          "nail_friendly",
+                          "rocket",
+                          "snowball",
+                          "solution",
+                          "stake",
+                          "stynger_bolt"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "terraria_ammo_id_category"
+                      },
+                      "notAmmo": {
+                        "description": "Exact Item.notAmmo flag for special ammo-slot/tooltip behaviour",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "projectileId": {
+                        "description": "Exact vanilla ProjectileID fired when this ammo is consumed; do not guess",
+                        "maximum": 1021,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_projectile_id"
+                      },
+                      "shootSpeedPxPerTick": {
+                        "description": "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo",
+                        "maximum": 80,
+                        "minimum": -20,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels_per_tick"
+                      }
+                    },
+                    "required": [
+                      "ammoCategory",
+                      "projectileId",
+                      "shootSpeedPxPerTick",
+                      "notAmmo"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "restore_resources_on_use"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "healLife": {
+                        "description": "Life restored",
+                        "maximum": 500,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "life_points"
+                      },
+                      "healMana": {
+                        "description": "Mana restored",
+                        "maximum": 500,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "mana_points"
+                      },
+                      "potionSickness": {
+                        "description": "Set exact Terraria Item.potion flag; false allows non-potion healing items",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "healLife",
+                      "healMana",
+                      "potionSickness"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "apply_vanilla_buff_on_use"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "buffId": {
+                        "description": "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess",
+                        "maximum": 65535,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_buff_id"
+                      },
+                      "durationTicks": {
+                        "description": "Buff duration",
+                        "maximum": 21600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      }
+                    },
+                    "required": [
+                      "buffId",
+                      "durationTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "apply_generated_buff_on_use"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "durationTicks": {
+                        "description": "Duration",
+                        "maximum": 21600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "jumpBoost": {
+                        "description": "Jump speed bonus",
+                        "maximum": 8,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "lifeRegen": {
+                        "description": "Life regeneration bonus",
+                        "maximum": 120,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_life_regen"
+                      },
+                      "lightColor": {
+                        "description": "Canonical light color",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_color"
+                      },
+                      "lightStrength": {
+                        "description": "Emitted light",
+                        "maximum": 1.5,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "manaRegen": {
+                        "description": "Mana regeneration bonus",
+                        "maximum": 120,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_mana_regen"
+                      },
+                      "miningSpeedMultiplier": {
+                        "description": "Mining-time multiplier",
+                        "maximum": 4,
+                        "minimum": 0.25,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "movementSpeed": {
+                        "description": "Additive movement speed",
+                        "maximum": 2,
+                        "minimum": -0.5,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "oreSenseRadiusTiles": {
+                        "description": "Ore-sense radius",
+                        "maximum": 60,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "durationTicks",
+                      "miningSpeedMultiplier",
+                      "lightStrength",
+                      "lightColor",
+                      "oreSenseRadiusTiles",
+                      "movementSpeed",
+                      "jumpBoost",
+                      "manaRegen",
+                      "lifeRegen"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_tool"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "axePower": {
+                        "description": "Exact Terraria Item.axe internal power; the in-game tooltip displays this value multiplied by 5",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_axe_power",
+                        "x-infini-units": "Item.axe units"
+                      },
+                      "hammerPower": {
+                        "description": "Hammer power",
+                        "maximum": 1000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_hammer_power"
+                      },
+                      "miningSpeedScale": {
+                        "description": "Use-time multiplier while mining",
+                        "maximum": 4,
+                        "minimum": 0.1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "pickPower": {
+                        "description": "Pickaxe power",
+                        "maximum": 1000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_pick_power"
+                      }
+                    },
+                    "required": [
+                      "pickPower",
+                      "axePower",
+                      "hammerPower",
+                      "miningSpeedScale"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_placeable"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "placeStyle": {
+                        "description": "Placement style",
+                        "maximum": 255,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_place_style"
+                      },
+                      "tileId": {
+                        "description": "Exact loaded TileID/ModContent.TileType; -1 disables",
+                        "maximum": 65535,
+                        "minimum": -1,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_tile_id_or_disabled"
+                      },
+                      "wallId": {
+                        "description": "Exact loaded WallID/ModContent.WallType; -1 disables",
+                        "maximum": 65535,
+                        "minimum": -1,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_wall_id_or_disabled"
+                      }
+                    },
+                    "required": [
+                      "tileId",
+                      "wallId",
+                      "placeStyle"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "require_use_condition"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "minLife": {
+                        "description": "Required life for life_above",
+                        "maximum": 1000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "life_points"
+                      },
+                      "minMana": {
+                        "description": "Required mana for mana_above",
+                        "maximum": 1000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "mana_points"
+                      },
+                      "mode": {
+                        "description": "Use condition",
+                        "enum": [
+                          "grounded",
+                          "not_wet",
+                          "life_above",
+                          "mana_above"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "add_hold_light"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "description": "Canonical light color",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_color"
+                      },
+                      "strength": {
+                        "description": "Light strength",
+                        "maximum": 1.5,
+                        "minimum": 0.01,
+                        "type": "number",
+                        "x-infini-semanticType": "effect_strength"
+                      }
+                    },
+                    "required": [
+                      "strength",
+                      "color"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_player_on_use"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "cooldownTicks": {
+                        "description": "Cooldown",
+                        "maximum": 3600,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "mode": {
+                        "description": "Mobility executor",
+                        "enum": [
+                          "recall_home",
+                          "blink_to_cursor"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "rangeTiles": {
+                        "description": "Maximum blink range",
+                        "maximum": 120,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "safeTileOnly": {
+                        "description": "Require safe destination",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "rangeTiles",
+                      "cooldownTicks",
+                      "safeTileOnly"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_accessory"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "defense": {
+                        "description": "Defense",
+                        "maximum": 200,
+                        "minimum": -50,
+                        "type": "integer",
+                        "x-infini-semanticType": "defense_points"
+                      },
+                      "endurance": {
+                        "description": "Damage reduction",
+                        "maximum": 0.75,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "genericCrit": {
+                        "description": "Generic critical chance points",
+                        "maximum": 100,
+                        "minimum": -100,
+                        "type": "number",
+                        "x-infini-semanticType": "percentage_points"
+                      },
+                      "genericDamage": {
+                        "description": "Generic damage additive modifier",
+                        "maximum": 3,
+                        "minimum": -0.9,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "lifeRegen": {
+                        "description": "Life regeneration",
+                        "maximum": 200,
+                        "minimum": -100,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_life_regen"
+                      },
+                      "lightColor": {
+                        "description": "Canonical light color",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_color"
+                      },
+                      "lightStrength": {
+                        "description": "Equipped light",
+                        "maximum": 1.5,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "manaRegen": {
+                        "description": "Mana regeneration",
+                        "maximum": 200,
+                        "minimum": -100,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_mana_regen"
+                      },
+                      "maxLife": {
+                        "description": "Maximum life",
+                        "maximum": 1000,
+                        "minimum": -200,
+                        "type": "integer",
+                        "x-infini-semanticType": "life_points"
+                      },
+                      "maxMana": {
+                        "description": "Maximum mana",
+                        "maximum": 1000,
+                        "minimum": -200,
+                        "type": "integer",
+                        "x-infini-semanticType": "mana_points"
+                      },
+                      "minionSlots": {
+                        "description": "Additional minion slots",
+                        "maximum": 20,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "minion_slots"
+                      },
+                      "movementSpeed": {
+                        "description": "Movement speed modifier",
+                        "maximum": 3,
+                        "minimum": -0.9,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "sentrySlots": {
+                        "description": "Additional sentry slots",
+                        "maximum": 20,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "sentry_slots"
+                      }
+                    },
+                    "required": [
+                      "defense",
+                      "maxLife",
+                      "maxMana",
+                      "lifeRegen",
+                      "manaRegen",
+                      "movementSpeed",
+                      "genericDamage",
+                      "genericCrit",
+                      "endurance",
+                      "minionSlots",
+                      "sentrySlots",
+                      "lightStrength",
+                      "lightColor"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_armor"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "defense": {
+                        "description": "Defense",
+                        "maximum": 200,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "defense_points"
+                      },
+                      "genericCrit": {
+                        "description": "Generic critical chance points",
+                        "maximum": 100,
+                        "minimum": -100,
+                        "type": "number",
+                        "x-infini-semanticType": "percentage_points"
+                      },
+                      "genericDamage": {
+                        "description": "Generic damage additive modifier",
+                        "maximum": 3,
+                        "minimum": -0.9,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "maxLife": {
+                        "description": "Maximum life",
+                        "maximum": 1000,
+                        "minimum": -200,
+                        "type": "integer",
+                        "x-infini-semanticType": "life_points"
+                      },
+                      "maxMana": {
+                        "description": "Maximum mana",
+                        "maximum": 1000,
+                        "minimum": -200,
+                        "type": "integer",
+                        "x-infini-semanticType": "mana_points"
+                      },
+                      "movementSpeed": {
+                        "description": "Movement speed modifier",
+                        "maximum": 3,
+                        "minimum": -0.9,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "setBonusGenericDamage": {
+                        "description": "Set bonus generic damage",
+                        "maximum": 3,
+                        "minimum": -0.9,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "setBonusLifeRegen": {
+                        "description": "Set bonus life regen",
+                        "maximum": 200,
+                        "minimum": -100,
+                        "type": "integer",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "setBonusMovementSpeed": {
+                        "description": "Set bonus movement speed",
+                        "maximum": 3,
+                        "minimum": -0.9,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "setBonusText": {
+                        "description": "Player-facing set bonus text",
+                        "type": "string",
+                        "x-infini-semanticType": "display_text"
+                      },
+                      "setKey": {
+                        "description": "Exact authored set key",
+                        "pattern": "^[a-z0-9_]{0,48}$",
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "slot": {
+                        "description": "Armor equip slot",
+                        "enum": [
+                          "head",
+                          "body",
+                          "legs"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "slot",
+                      "setKey",
+                      "defense",
+                      "maxLife",
+                      "maxMana",
+                      "movementSpeed",
+                      "genericDamage",
+                      "genericCrit"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "configure_spawn"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "aim": {
+                        "description": "Initial aim source",
+                        "enum": [
+                          "cursor",
+                          "facing",
+                          "velocity",
+                          "none"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "count": {
+                        "description": "Entities spawned per activation",
+                        "maximum": 12,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "spawn_or_target_count"
+                      },
+                      "offsetPx": {
+                        "description": "Forward spawn offset",
+                        "maximum": 256,
+                        "minimum": -128,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      },
+                      "placement": {
+                        "description": "Spawn position",
+                        "enum": [
+                          "item_use_origin",
+                          "owner_center",
+                          "cursor",
+                          "ground_at_cursor",
+                          "above_cursor"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "speedPxPerTick": {
+                        "description": "Initial speed",
+                        "maximum": 80,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick"
+                      },
+                      "spreadRadians": {
+                        "description": "Total angular spread",
+                        "maximum": 6.283185307179586,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "radians",
+                        "x-infini-units": "radians"
+                      }
+                    },
+                    "required": [
+                      "speedPxPerTick",
+                      "count",
+                      "spreadRadians",
+                      "offsetPx",
+                      "aim",
+                      "placement"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "set_projectile_damage"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "damage": {
+                        "description": "Projectile base damage",
+                        "maximum": 2000,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "damage_points"
+                      },
+                      "damageClass": {
+                        "description": "Exact built-in token or loaded tModLoader ModName/ClassName copied from parent facts",
+                        "pattern": "^(?:default|generic|melee|melee_no_speed|ranged|magic|magic_summon_hybrid|summon|summon_melee_speed|throwing|[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$",
+                        "type": "string",
+                        "x-infini-semanticType": "terraria_damage_class"
+                      },
+                      "knockback": {
+                        "description": "Projectile knockback",
+                        "maximum": 20,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "knockback_strength"
+                      },
+                      "ownerHitCheck": {
+                        "description": "Require owner line/held hit check",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "damageClass",
+                      "damage",
+                      "knockback",
+                      "ownerHitCheck"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "set_projectile_lifetime"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "lifetimeTicks": {
+                        "description": "Lifetime",
+                        "maximum": 21600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      }
+                    },
+                    "required": [
+                      "lifetimeTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "set_projectile_hitbox"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "drawScale": {
+                        "description": "Sprite draw scale",
+                        "maximum": 4,
+                        "minimum": 0.25,
+                        "type": "number",
+                        "x-infini-semanticType": "draw_scale"
+                      },
+                      "heightPx": {
+                        "description": "Hitbox height",
+                        "maximum": 192,
+                        "minimum": 4,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      },
+                      "hitboxScale": {
+                        "description": "Runtime hitbox multiplier",
+                        "maximum": 3,
+                        "minimum": 0.25,
+                        "type": "number",
+                        "x-infini-semanticType": "hitbox_scale"
+                      },
+                      "widthPx": {
+                        "description": "Hitbox width",
+                        "maximum": 192,
+                        "minimum": 4,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      }
+                    },
+                    "required": [
+                      "widthPx",
+                      "heightPx",
+                      "drawScale",
+                      "hitboxScale"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "set_projectile_collision"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "bounceCount": {
+                        "description": "Maximum custom tile bounces",
+                        "maximum": 32,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "bounce_count"
+                      },
+                      "extraUpdates": {
+                        "description": "Terraria Projectile.extraUpdates",
+                        "maximum": 5,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "extra_ai_updates"
+                      },
+                      "ignoreWater": {
+                        "description": "Ignore Terraria liquid drag; false keeps vanilla water interaction",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "localNpcHitCooldownTicks": {
+                        "description": "Used only in local mode; -1 means this projectile can hit each NPC once",
+                        "maximum": 600,
+                        "minimum": -1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "npcImmunityMode": {
+                        "description": "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers",
+                        "enum": [
+                          "owner",
+                          "local"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "terraria_npc_immunity_mode"
+                      },
+                      "pierce": {
+                        "description": "Terraria Projectile.penetrate count; -1 means infinite",
+                        "maximum": 100,
+                        "minimum": -1,
+                        "type": "integer",
+                        "x-infini-semanticType": "penetration_count"
+                      },
+                      "tileCollide": {
+                        "description": "Collide with solid tiles",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "tileCollide",
+                      "ignoreWater",
+                      "bounceCount",
+                      "pierce",
+                      "extraUpdates",
+                      "npcImmunityMode",
+                      "localNpcHitCooldownTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_straight"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_slow_homing"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "homingStrength": {
+                        "description": "Steering strength",
+                        "maximum": 1,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "rangeTiles": {
+                        "description": "Target search radius",
+                        "maximum": 120,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "homingStrength"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_gravity_arc"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "gravityPerTick": {
+                        "description": "Vertical acceleration",
+                        "maximum": 2,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick^2"
+                      }
+                    },
+                    "required": [
+                      "gravityPerTick"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_drift"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "velocityRetention": {
+                        "description": "Velocity multiplier",
+                        "maximum": 1.05,
+                        "minimum": 0.8,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      }
+                    },
+                    "required": [
+                      "velocityRetention"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_orbit"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rangeTiles": {
+                        "description": "Orbit leash",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_boomerang"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "returnAfterTicks": {
+                        "description": "Outbound duration",
+                        "maximum": 600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "returnSpeed": {
+                        "description": "Return speed",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick"
+                      }
+                    },
+                    "required": [
+                      "returnAfterTicks",
+                      "returnSpeed"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_bounce"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "gravityPerTick": {
+                        "description": "Vertical acceleration",
+                        "maximum": 2,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick^2"
+                      }
+                    },
+                    "required": [
+                      "gravityPerTick"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_sine_homing"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "homingStrength": {
+                        "description": "Steering strength",
+                        "maximum": 1,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "rangeTiles": {
+                        "description": "Target search radius",
+                        "maximum": 120,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "waveAmplitude": {
+                        "description": "Lateral wave amplitude",
+                        "maximum": 64,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "homingStrength",
+                      "waveAmplitude"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_phase"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "phaseStrength": {
+                        "description": "Phase drift strength",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      }
+                    },
+                    "required": [
+                      "phaseStrength"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_accelerate"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "acceleration": {
+                        "description": "Per-tick speed multiplier",
+                        "maximum": 1.2,
+                        "minimum": 1.0,
+                        "type": "number",
+                        "x-infini-semanticType": "pixels_per_tick_squared"
+                      },
+                      "maxSpeed": {
+                        "description": "Speed cap",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick"
+                      }
+                    },
+                    "required": [
+                      "acceleration",
+                      "maxSpeed"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_spiral"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "turnRadiansPerTick": {
+                        "description": "Angular turn",
+                        "maximum": 0.5,
+                        "minimum": -0.5,
+                        "type": "number",
+                        "x-infini-semanticType": "radians",
+                        "x-infini-units": "radians/tick"
+                      }
+                    },
+                    "required": [
+                      "turnRadiansPerTick"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_vortex_orb"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "pullStrength": {
+                        "description": "Nearby pull strength",
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "rangeTiles": {
+                        "description": "Pull radius",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "pullStrength",
+                      "rangeTiles"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_blackhole_pull"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "pullStrength": {
+                        "description": "Pull strength",
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "rangeTiles": {
+                        "description": "Pull radius",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "pullStrength",
+                      "rangeTiles"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_proximity_missile"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "homingStrength": {
+                        "description": "Steering strength",
+                        "maximum": 1,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "proximityRadiusPx": {
+                        "description": "Trigger radius",
+                        "maximum": 512,
+                        "minimum": 4,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      },
+                      "rangeTiles": {
+                        "description": "Detection/search radius",
+                        "maximum": 120,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "homingStrength",
+                      "proximityRadiusPx"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_returning_glaive"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "returnAfterTicks": {
+                        "description": "Outbound duration",
+                        "maximum": 600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "returnSpeed": {
+                        "description": "Return speed",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick"
+                      }
+                    },
+                    "required": [
+                      "returnAfterTicks",
+                      "returnSpeed"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_expanding_wave"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "maxScale": {
+                        "description": "Scale cap",
+                        "maximum": 4,
+                        "minimum": 0.25,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "scalePerTick": {
+                        "description": "Scale increase",
+                        "maximum": 0.5,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      }
+                    },
+                    "required": [
+                      "scalePerTick",
+                      "maxScale"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_flail_tether"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rangeTiles": {
+                        "description": "Maximum tether length",
+                        "maximum": 60,
+                        "minimum": 2,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "returnSpeed": {
+                        "description": "Return speed",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "returnSpeed"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_yoyo_hover"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rangeTiles": {
+                        "description": "Cursor leash",
+                        "maximum": 60,
+                        "minimum": 2,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "returnSpeed": {
+                        "description": "Return speed",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-units": "pixels/tick"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "returnSpeed"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_whip_lash"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rangeTiles": {
+                        "description": "Lash reach",
+                        "maximum": 60,
+                        "minimum": 2,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "segments": {
+                        "description": "Collision curve segments",
+                        "maximum": 48,
+                        "minimum": 3,
+                        "type": "integer",
+                        "x-infini-semanticType": "collision_segment_count"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "segments"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_forward_then_retract"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "durationTicks": {
+                        "description": "Full forward/retract cycle",
+                        "maximum": 240,
+                        "minimum": 2,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "rangeTiles": {
+                        "description": "Maximum reach",
+                        "maximum": 20,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "durationTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "channel_beam"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rangeTiles": {
+                        "description": "Beam length",
+                        "maximum": 120,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "warmupTicks": {
+                        "description": "Warmup before full damage",
+                        "maximum": 600,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "widthPx": {
+                        "description": "Beam collision width",
+                        "maximum": 128,
+                        "minimum": 2,
+                        "type": "number",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      }
+                    },
+                    "required": [
+                      "rangeTiles",
+                      "widthPx",
+                      "warmupTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "charge_then_release"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "chargeTicks": {
+                        "description": "Full charge duration",
+                        "maximum": 600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "powerMultiplier": {
+                        "description": "Full-charge damage/knockback multiplier",
+                        "maximum": 4,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      }
+                    },
+                    "required": [
+                      "chargeTicks",
+                      "powerMultiplier"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "target_and_fire"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "intervalTicks": {
+                        "description": "Firing interval",
+                        "maximum": 3600,
+                        "minimum": 6,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "rangeTiles": {
+                        "description": "Target range",
+                        "maximum": 120,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "sameTargetBias": {
+                        "description": "Bias toward current target",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "shotEntity": {
+                        "description": "Referenced projectile entity id",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": false,
+                          "graphEdge": true,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        },
+                        "x-infini-semanticType": "runtime_entity_id"
+                      }
+                    },
+                    "required": [
+                      "shotEntity",
+                      "intervalTicks",
+                      "rangeTiles",
+                      "sameTargetBias"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "stationary_projectile",
+                        "temporary_helper"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "spawn_over_target"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "delayTicks": {
+                        "description": "Telegraph delay",
+                        "maximum": 600,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "heightTiles": {
+                        "description": "Vertical spawn height",
+                        "maximum": 80,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "heightTiles",
+                      "delayTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "spawn_entity_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "count": {
+                        "description": "Spawn count",
+                        "maximum": 12,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "spawn_or_target_count"
+                      },
+                      "damageMultiplier": {
+                        "description": "Multiplier applied to target entity base damage",
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "delayTicks": {
+                        "description": "Delay after event",
+                        "maximum": 600,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "entity": {
+                        "description": "Referenced entity id",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": false,
+                          "graphEdge": true,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        },
+                        "x-infini-semanticType": "runtime_entity_id"
+                      },
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_use",
+                          "on_spawn",
+                          "on_hit",
+                          "on_crit",
+                          "on_tile_collision",
+                          "on_expire",
+                          "on_kill",
+                          "periodic",
+                          "on_release",
+                          "channel_complete"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      },
+                      "periodTicks": {
+                        "description": "Required for periodic event",
+                        "maximum": 3600,
+                        "minimum": 6,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "spreadRadians": {
+                        "description": "Total angular spread",
+                        "maximum": 6.283185307179586,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-semanticType": "radians",
+                        "x-infini-units": "radians"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "entity",
+                      "count",
+                      "spreadRadians",
+                      "damageMultiplier",
+                      "delayTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "apply_status_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "buffId": {
+                        "description": "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess",
+                        "maximum": 65535,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "terraria_buff_id"
+                      },
+                      "durationTicks": {
+                        "description": "Status duration",
+                        "maximum": 21600,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "buffId",
+                      "durationTicks"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "damage_area_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "damageMultiplier": {
+                        "description": "Source damage multiplier",
+                        "maximum": 4,
+                        "minimum": 0.05,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_hit",
+                          "on_crit",
+                          "on_tile_collision",
+                          "on_expire",
+                          "on_kill"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      },
+                      "radiusPx": {
+                        "description": "Damage radius",
+                        "maximum": 768,
+                        "minimum": 8,
+                        "type": "integer",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-units": "pixels"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "radiusPx",
+                      "damageMultiplier"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "chain_damage_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "count": {
+                        "description": "Maximum chained targets",
+                        "maximum": 12,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "spawn_or_target_count"
+                      },
+                      "damageMultiplier": {
+                        "description": "Source damage multiplier",
+                        "maximum": 2,
+                        "minimum": 0.05,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      },
+                      "rangeTiles": {
+                        "description": "Search radius",
+                        "maximum": 60,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "count",
+                      "rangeTiles",
+                      "damageMultiplier"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "pull_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_hit",
+                          "periodic",
+                          "on_expire"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      },
+                      "mode": {
+                        "description": "Pull direction",
+                        "enum": [
+                          "target_to_owner",
+                          "target_to_entity",
+                          "owner_to_target"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "periodTicks": {
+                        "description": "Required for periodic event",
+                        "maximum": 3600,
+                        "minimum": 6,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "radiusTiles": {
+                        "description": "Affected radius",
+                        "maximum": 60,
+                        "minimum": 1,
+                        "type": "number",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "strength": {
+                        "description": "Velocity impulse",
+                        "maximum": 4,
+                        "minimum": 0.01,
+                        "type": "number",
+                        "x-infini-semanticType": "effect_strength"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "mode",
+                      "strength",
+                      "radiusTiles"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "heal_owner_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "damageFraction": {
+                        "description": "Fraction of damage healed",
+                        "maximum": 1,
+                        "minimum": 0.001,
+                        "type": "number",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      },
+                      "maxHeal": {
+                        "description": "Per-event heal cap",
+                        "maximum": 200,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "life_points"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "damageFraction",
+                      "maxHeal"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "move_owner_on_event"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "cooldownTicks": {
+                        "description": "Cooldown",
+                        "maximum": 3600,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-units": "ticks"
+                      },
+                      "event": {
+                        "description": "Source event",
+                        "enum": [
+                          "on_hit",
+                          "on_tile_collision",
+                          "on_expire"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_event_kind"
+                      },
+                      "mode": {
+                        "description": "Mobility executor",
+                        "enum": [
+                          "blink_to_entity",
+                          "blink_to_event_position"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "rangeTiles": {
+                        "description": "Maximum movement range",
+                        "maximum": 120,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-units": "tiles"
+                      },
+                      "safeTileOnly": {
+                        "description": "Require safe destination",
+                        "type": "boolean",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "event",
+                      "mode",
+                      "rangeTiles",
+                      "cooldownTicks",
+                      "safeTileOnly"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fn": {
+                    "const": "emit_light_while_active"
+                  },
+                  "id": {
+                    "description": "Stable call id used by claims and repair.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "params": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "description": "Canonical light color",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "type": "string",
+                        "x-infini-semanticType": "runtime_color"
+                      },
+                      "strength": {
+                        "description": "Light strength",
+                        "maximum": 1.5,
+                        "minimum": 0.01,
+                        "type": "number",
+                        "x-infini-semanticType": "effect_strength"
+                      }
+                    },
+                    "required": [
+                      "strength",
+                      "color"
+                    ],
+                    "type": "object"
+                  },
+                  "target": {
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 48,
+          "minItems": 1,
+          "type": "array"
+        },
+        "entities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "item_body",
+                  "owner_attached_projectile",
+                  "free_projectile",
+                  "stationary_projectile",
+                  "temporary_helper",
+                  "field",
+                  "child_projectile"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind"
+            ],
+            "type": "object"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema": {
+          "const": "infini.runtime-program.authoring.v1"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "schema",
+        "entities",
+        "bindings",
+        "calls"
+      ],
+      "type": "object"
+    },
+    "tooltip": {
+      "maxLength": 360,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "tooltip",
+    "category",
+    "concept",
+    "runtimeContract",
+    "runtimeProgram"
+  ],
+  "type": "object",
+  "x-infini-generated": true
+}

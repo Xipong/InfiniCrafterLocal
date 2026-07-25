@@ -1,1148 +1,142 @@
 from __future__ import annotations
 
 import copy
-import re
-from typing import Any
+from typing import Any, Mapping
 
-from infini_local.core.runtime_authoring.engine_call_contracts import engine_params_model
-from infini_local.core.runtime_authoring.function_contract_registry import ENGINE_FUNCTION_CATALOG
-from infini_local.core.runtime_authoring.schema import PLANNER_HIDDEN_ENGINE_FUNCTIONS
-from infini_local.core.runtime_contracts import STRUCTURAL_ID_PATTERN
-
-
-def _namespace_refs(value: Any, prefix: str) -> Any:
-    if isinstance(value, dict):
-        out: dict[str, Any] = {}
-        for key, child in value.items():
-            if key == "$ref" and isinstance(child, str) and child.startswith("#/$defs/"):
-                out[key] = "#/$defs/" + prefix + child.removeprefix("#/$defs/")
-            else:
-                out[key] = _namespace_refs(child, prefix)
-        return out
-    if isinstance(value, list):
-        return [_namespace_refs(child, prefix) for child in value]
-    return value
-
-
-def _strip_schema_annotations(value: Any) -> Any:
-    """Remove schema prose without deleting user fields named like annotations."""
-    if isinstance(value, dict):
-        out: dict[str, Any] = {}
-        for key, item in value.items():
-            if key in {"title", "description", "default", "examples"}:
-                continue
-            if key == "properties" and isinstance(item, dict):
-                out[key] = {
-                    property_name: _strip_schema_annotations(property_schema)
-                    for property_name, property_schema in item.items()
-                }
-            else:
-                out[key] = _strip_schema_annotations(item)
-        return out
-    if isinstance(value, list):
-        return [_strip_schema_annotations(item) for item in value]
-    return value
-
-
-def _recursively_sparse_object_schema(value: Any) -> Any:
-    """Copy a patch-only schema while making every nested object leaf-sparse."""
-    if isinstance(value, dict):
-        out = {
-            key: _recursively_sparse_object_schema(child)
-            for key, child in value.items()
-        }
-        if isinstance(out.get("properties"), dict):
-            out["required"] = []
-        return out
-    if isinstance(value, list):
-        return [_recursively_sparse_object_schema(child) for child in value]
-    return copy.deepcopy(value)
-
-
-def _json_type_matches(value: Any, expected: str) -> bool:
-    if expected == "null":
-        return value is None
-    if expected == "boolean":
-        return isinstance(value, bool)
-    if expected == "integer":
-        return isinstance(value, int) and not isinstance(value, bool)
-    if expected == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-    if expected == "string":
-        return isinstance(value, str)
-    if expected == "array":
-        return isinstance(value, list)
-    if expected == "object":
-        return isinstance(value, dict)
-    return False
-
-
-def _json_values_equal(left: Any, right: Any) -> bool:
-    if isinstance(left, bool) or isinstance(right, bool):
-        return isinstance(left, bool) and isinstance(right, bool) and left == right
-    return left == right
-
-
-def _resolve_local_ref(root: dict[str, Any], ref: str) -> dict[str, Any] | None:
-    prefix = "#/$defs/"
-    if not ref.startswith(prefix):
-        return None
-    resolved = root.get("$defs", {}).get(ref.removeprefix(prefix))
-    return resolved if isinstance(resolved, dict) else None
-
-
-def _strict_schema_errors(
-    value: Any,
-    schema: dict[str, Any],
-    *,
-    root: dict[str, Any],
-    path: str,
-    limit: int = 64,
-) -> list[dict[str, Any]]:
-    errors: list[dict[str, Any]] = []
-
-    def add(kind: str, error_path: str, expected: Any = None, actual: Any = None) -> None:
-        if len(errors) >= limit:
-            return
-        row: dict[str, Any] = {"path": error_path, "kind": kind}
-        if expected is not None:
-            row["expected"] = expected
-        if actual is not None:
-            row["actual"] = actual if isinstance(actual, (str, int, float, bool)) else type(actual).__name__
-        errors.append(row)
-
-    ref = schema.get("$ref")
-    if isinstance(ref, str):
-        resolved = _resolve_local_ref(root, ref)
-        if resolved is None:
-            add("unresolved_ref", path, ref)
-            return errors
-        return _strict_schema_errors(value, resolved, root=root, path=path, limit=limit)
-
-    any_of = schema.get("anyOf")
-    if isinstance(any_of, list):
-        branch_errors = [
-            _strict_schema_errors(value, branch, root=root, path=path, limit=limit)
-            for branch in any_of
-            if isinstance(branch, dict)
-        ]
-        if not any(not branch for branch in branch_errors):
-            add("any_of", path)
-        return errors
-
-    one_of = schema.get("oneOf")
-    if isinstance(one_of, list):
-        branch_errors = [
-            _strict_schema_errors(value, branch, root=root, path=path, limit=limit)
-            for branch in one_of
-            if isinstance(branch, dict)
-        ]
-        matching = sum(not branch for branch in branch_errors)
-        if matching != 1:
-            add("one_of", path, "exactly_one_schema", matching)
-            if matching == 0 and branch_errors:
-                errors.extend(min(branch_errors, key=len)[: max(0, limit - len(errors))])
-        return errors
-
-    if "const" in schema and not _json_values_equal(value, schema.get("const")):
-        add("const", path, schema.get("const"), value)
-    enum = schema.get("enum")
-    if isinstance(enum, list) and not any(_json_values_equal(value, candidate) for candidate in enum):
-        add("enum", path, enum, value)
-
-    expected_type = schema.get("type")
-    if isinstance(expected_type, str) and not _json_type_matches(value, expected_type):
-        add("type", path, expected_type, value)
-        return errors
-
-    if isinstance(value, str):
-        min_length = schema.get("minLength")
-        max_length = schema.get("maxLength")
-        pattern = schema.get("pattern")
-        if isinstance(min_length, int) and len(value) < min_length:
-            add("min_length", path, min_length, len(value))
-        if isinstance(max_length, int) and len(value) > max_length:
-            add("max_length", path, max_length, len(value))
-        if isinstance(pattern, str) and re.search(pattern, value) is None:
-            add("pattern", path, pattern, value)
-
-    if isinstance(value, list):
-        min_items = schema.get("minItems")
-        max_items = schema.get("maxItems")
-        if isinstance(min_items, int) and len(value) < min_items:
-            add("min_items", path, min_items, len(value))
-        if isinstance(max_items, int) and len(value) > max_items:
-            add("max_items", path, max_items, len(value))
-        item_schema = schema.get("items")
-        if isinstance(item_schema, dict):
-            for index, child in enumerate(value):
-                errors.extend(_strict_schema_errors(child, item_schema, root=root, path=f"{path}[{index}]", limit=max(0, limit - len(errors))))
-                if len(errors) >= limit:
-                    break
-
-    if isinstance(value, dict):
-        properties_candidate = schema.get("properties")
-        properties: dict[str, Any] = properties_candidate if isinstance(properties_candidate, dict) else {}
-        required_candidate = schema.get("required")
-        required: list[Any] = required_candidate if isinstance(required_candidate, list) else []
-        for key in required:
-            if key not in value:
-                add("required", f"{path}.{key}")
-        if schema.get("additionalProperties") is False:
-            for key in value:
-                if key not in properties:
-                    add("additional_property", f"{path}.{key}")
-        for key, child_schema in properties.items():
-            if key in value and isinstance(child_schema, dict):
-                errors.extend(_strict_schema_errors(value[key], child_schema, root=root, path=f"{path}.{key}", limit=max(0, limit - len(errors))))
-                if len(errors) >= limit:
-                    break
-    return errors[:limit]
-
-
-def _engine_call_union() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    variants: list[dict[str, Any]] = []
-    definitions: dict[str, Any] = {}
-    visible_functions = sorted(set(ENGINE_FUNCTION_CATALOG) - set(PLANNER_HIDDEN_ENGINE_FUNCTIONS))
-    for fn in visible_functions:
-        model = engine_params_model(fn)
-        params_schema = copy.deepcopy(model.model_json_schema())
-        prefix = fn + "__"
-        local_defs = params_schema.pop("$defs", {})
-        params_schema = _namespace_refs(params_schema, prefix)
-        for name, definition in local_defs.items():
-            definitions[prefix + name] = _namespace_refs(definition, prefix)
-        variants.append({
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "callId": {"type": "string", "pattern": STRUCTURAL_ID_PATTERN},
-                "fn": {"const": fn},
-                "params": params_schema,
-            },
-            "required": ["callId", "fn", "params"],
-        })
-    return variants, definitions
+from infini_local.core.runtime_authoring import (
+    apply_repair_patch,
+    author_item_repair_schema as _repair_schema,
+    author_item_response_schema as _author_schema,
+    strict_repair_shape_report,
+    validate_runtime_program,
+)
 
 
 def author_item_response_schema() -> dict[str, Any]:
-    """Project canonical Pydantic engine-call models into the complete AuthorItem-v3 schema."""
-    engine_variants, definitions = _engine_call_union()
-    schema: dict[str, Any] = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$defs": definitions,
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "name": {"type": "string", "minLength": 2, "maxLength": 80},
-
-            "category": {"enum": ["weapon", "ammo", "tool", "accessory", "armor", "potion", "material", "furniture", "generic"]},
-            "concept": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "fantasy": {"type": "string", "minLength": 2, "maxLength": 500},
-                    "mergeLogic": {"type": "string", "minLength": 2, "maxLength": 500},
-                    "coreMechanic": {"type": "string", "minLength": 2, "maxLength": 500},
-                },
-                "required": ["fantasy", "mergeLogic", "coreMechanic"],
-            },
-
-            "runtimeContract": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "primaryVerb": {"type": "string", "minLength": 1, "maxLength": 160},
-                    "controlStyle": {"enum": ["tap", "hold-to-channel", "passive", "toggle", "automatic", "right-click-alt", "combo", "on-hit-trigger"]},
-                    "playerViewTimeline": {
-                        "type": "array",
-                        "maxItems": 8,
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {
-                                "phase": {"type": "string", "minLength": 1, "maxLength": 48},
-                                "description": {"type": "string", "minLength": 1, "maxLength": 240},
-                            },
-                            "required": ["phase", "description"],
-                        },
-                    },
-                },
-                "required": ["primaryVerb", "controlStyle"],
-            },
-            "runtimePlan": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "resultKind": {"enum": ["weapon", "ammo", "consumable_weapon", "tool", "accessory", "armor", "potion", "material", "furniture", "generic"]},
-                    "sourceRolePreservation": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {"itemA": {"type": "string"}, "itemB": {"type": "string"}},
-                        "required": ["itemA", "itemB"],
-                    },
-                    "engineCalls": {"type": "array", "items": {"oneOf": engine_variants}, "minItems": 1, "maxItems": 16},
-                    "runtimeStateIntent": {"type": "string", "maxLength": 500},
-                    "visualIntent": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "item": {"type": "string", "maxLength": 500},
-                            "projectile": {"type": "string", "maxLength": 500},
-                            "impact": {"type": "string", "maxLength": 500},
-                            "vfxIntent": {"type": "string", "maxLength": 500},
-                            "vfxAvoid": {"type": "string", "maxLength": 500},
-                            "topology": {"enum": ["connected", "multipart_touching", "multipart_separated"]},
-                            "partCountMin": {"type": "integer", "minimum": 1, "maximum": 8},
-                            "partCountMax": {"type": "integer", "minimum": 1, "maximum": 8},
-                            "parts": {
-                                "type": "array",
-                                "items": {"type": "string", "minLength": 1, "maxLength": 120},
-                                "minItems": 1,
-                                "maxItems": 8,
-                            },
-                            "arrangement": {"type": "string", "minLength": 1, "maxLength": 300},
-                            "palette": {
-                                "type": "array",
-                                "items": {"type": "string", "minLength": 1, "maxLength": 48},
-                                "maxItems": 8,
-                            },
-                            "preferredCanvasSize": {"enum": [32, 48, 64]},
-                            "projectileCanvasSize": {"enum": [32, 48, 64]},
-                            "projectileVisualFamily": {"type": "string", "minLength": 1, "maxLength": 120},
-                            "projectileOrientation": {"type": "string", "minLength": 1, "maxLength": 120},
-                            "animeReference": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "strength": {"enum": ["subtle", "strong"]},
-                                    "source": {"type": "string", "minLength": 1, "maxLength": 120},
-                                    "motifs": {
-                                        "type": "array",
-                                        "items": {"type": "string", "minLength": 1, "maxLength": 120},
-                                        "minItems": 1,
-                                        "maxItems": 6,
-                                    },
-                                },
-                                "required": ["strength", "source", "motifs"],
-                            },
-                        },
-                        "required": [
-                            "item", "projectile", "impact", "vfxIntent",
-                        ],
-                    },
-                    "sourceReading": {"type": "string", "maxLength": 500},
-                    "balanceIntent": {"type": "string", "maxLength": 500},
-                    "anomalyFlags": {"type": "array", "items": {"type": "string"}, "maxItems": 16},
-                },
-                "required": ["resultKind", "sourceRolePreservation", "engineCalls", "runtimeStateIntent", "visualIntent", "sourceReading", "balanceIntent", "anomalyFlags"],
-            },
-        },
-        "required": ["name", "category", "concept", "runtimeContract", "runtimePlan"],
-    }
-    return _strip_schema_annotations(schema)
+    return copy.deepcopy(_author_schema())
 
 
 def author_item_prompt_shape_card() -> dict[str, Any]:
-    """Return a compact author card projected from the canonical response schema."""
-    schema = author_item_response_schema()
-    properties = schema["properties"]
-
-    def enum_or_type(node: dict[str, Any]) -> Any:
-        enum = node.get("enum")
-        if isinstance(enum, list) and enum:
-            if all(isinstance(value, str) for value in enum):
-                return "|".join(enum)
-            return copy.deepcopy(enum[0])
-        return str(node.get("type") or "value")
-
-    def value_card(node: dict[str, Any]) -> Any:
-        if node.get("type") == "object":
-            child_candidate = node.get("properties")
-            child_properties: dict[str, Any] = child_candidate if isinstance(child_candidate, dict) else {}
-            required = {str(key) for key in node.get("required") or []}
-            out: dict[str, Any] = {}
-            for key, child in child_properties.items():
-                child_card = value_card(child)
-                out[key] = (
-                    child_card
-                    if key in required or not isinstance(child_card, str)
-                    else f"optional {child_card}"
-                )
-            return out
-        if node.get("type") == "array":
-            return "array"
-        return enum_or_type(node)
-
-    concept_schema = properties["concept"]
-    concept_properties = concept_schema["properties"]
-    runtime_schema = properties["runtimeContract"]
-    runtime_properties = runtime_schema["properties"]
-    plan_schema = properties["runtimePlan"]
-    plan_properties = plan_schema["properties"]
-
-    card: dict[str, Any] = {
-        "name": enum_or_type(properties["name"]),
-        "category": enum_or_type(properties["category"]),
-        "concept": {
-            key: enum_or_type(concept_properties[key])
-            for key in concept_schema["required"]
+    return {
+        "root": ["name", "tooltip", "category", "concept", "runtimeContract", "runtimeProgram"],
+        "runtimeProgram": {
+            "apiVersion": "exact configured version",
+            "schema": "exact authoring schema",
+            "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
+            "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "target": "entity_id"}],
+            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": "exact capability params"}],
         },
         "runtimeContract": {
-            "primaryVerb": enum_or_type(runtime_properties["primaryVerb"]),
-            "controlStyle": enum_or_type(runtime_properties["controlStyle"]),
-            "playerViewTimeline": "optional array<{phase,description}>; include only relevant phases",
+            "parentSynthesis": "literal parent facts and runtime roles",
+            "claims": "every gameplay claim cites existing call/binding ids",
         },
-        "runtimePlan": {
-            key: (
-                "array<{callId:[a-z][a-z0-9_]{0,63},fn,params}>"
-                if key == "engineCalls"
-                else value_card(plan_properties[key])
-            )
-            for key in plan_schema["required"]
-        },
+        "forbidden": [
+            "weapon archetype selector",
+            "family-derived movement/attachment/delivery",
+            "compiler receipts",
+            "visual or VFX gameplay invention",
+        ],
     }
-    return {key: card[key] for key in schema["required"]}
 
 
-def _schema_allows_null(schema: dict[str, Any]) -> bool:
-    schema_type = schema.get("type")
-    if schema_type == "null" or (isinstance(schema_type, list) and "null" in schema_type):
-        return True
-    if schema.get("const", object()) is None:
-        return True
-    enum = schema.get("enum")
-    if isinstance(enum, list) and None in enum:
-        return True
-    alternatives = schema.get("anyOf") or schema.get("oneOf")
-    return bool(
-        isinstance(alternatives, list)
-        and any(isinstance(child, dict) and _schema_allows_null(child) for child in alternatives)
-    )
+def _provider_strict_projection(schema: Any) -> Any:
+    """Make optional object properties required+nullable for strict providers.
 
-
-def _provider_strict_projection(value: Any) -> Any:
-    """Project sparse local JSON Schema into OpenAI strict-output shape.
-
-    Local validation intentionally accepts sparse engine parameter objects. Strict
-    providers instead require every declared object property to be present; optional
-    values are represented as nullable. Semantic keywords unsupported by provider
-    grammars stay owned by the ordinary local boundary after parsing.
+    The local contract remains sparse where a capability parameter is genuinely
+    optional. Provider-only nulls are stripped before local validation; no semantic
+    value is invented.
     """
-    if isinstance(value, list):
-        return [_provider_strict_projection(child) for child in value]
-    if not isinstance(value, dict):
-        return value
-
-    out: dict[str, Any] = {}
-    for key, child in value.items():
-        if key in {"contains", "minContains", "maxContains", "default"}:
-            continue
-        projected_key = "anyOf" if key == "oneOf" else key
-        out[projected_key] = _provider_strict_projection(child)
-
-    properties_candidate = out.get("properties")
-    properties: dict[str, Any] = properties_candidate if isinstance(properties_candidate, dict) else {}
-    if out.get("type") == "object" and properties:
-        original_required = {str(name) for name in value.get("required") or []}
-        for name, child in list(properties.items()):
-            if name not in original_required and isinstance(child, dict) and not _schema_allows_null(child):
-                properties[name] = {"anyOf": [child, {"type": "null"}]}
-        out["required"] = list(properties)
+    if isinstance(schema, list):
+        return [_provider_strict_projection(value) for value in schema]
+    if not isinstance(schema, dict):
+        return copy.deepcopy(schema)
+    out = {key: _provider_strict_projection(value) for key, value in schema.items()}
+    props = out.get("properties")
+    if isinstance(props, dict):
+        local_required = set(schema.get("required") or [])
+        for key, child in list(props.items()):
+            if key in local_required or not isinstance(child, dict):
+                continue
+            props[key] = {"anyOf": [child, {"type": "null"}]}
+        out["required"] = list(props)
     return out
 
 
 def author_item_provider_response_schema() -> dict[str, Any]:
-    """Strict provider grammar; local sparse validation remains author_item_response_schema."""
     return _provider_strict_projection(author_item_response_schema())
 
 
 def author_item_repair_response_schema() -> dict[str, Any]:
-    """Return the bounded same-author repair patch schema, never a second full AuthorItem."""
-    full = author_item_response_schema()
-    properties = full["properties"]
-    plan = copy.deepcopy(properties["runtimePlan"])
-    plan_properties = plan["properties"]
-    plan["properties"] = {
-        key: copy.deepcopy(plan_properties[key])
-        for key in (
-            "resultKind", "engineCalls", "runtimeStateIntent", "sourceReading",
-            "balanceIntent", "anomalyFlags",
-        )
-    }
-    plan["required"] = ["resultKind"]
-    runtime_contract = properties["runtimeContract"]["properties"]
-    source_role_patch = copy.deepcopy(
-        properties["runtimePlan"]["properties"]["sourceRolePreservation"]
-    )
-    source_role_patch["required"] = []
-    visual_patch = copy.deepcopy(properties["runtimePlan"]["properties"]["visualIntent"])
-    visual_patch["required"] = []
-    return {
-        "$schema": full["$schema"],
-        "$defs": copy.deepcopy(full.get("$defs") or {}),
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "name": copy.deepcopy(properties["name"]),
-            "category": copy.deepcopy(properties["category"]),
-            "fantasy": copy.deepcopy(properties["concept"]["properties"]["fantasy"]),
-            "mergeLogic": copy.deepcopy(properties["concept"]["properties"]["mergeLogic"]),
-            "coreMechanic": copy.deepcopy(properties["concept"]["properties"]["coreMechanic"]),
-            "primaryVerb": copy.deepcopy(runtime_contract["primaryVerb"]),
-            "controlStyle": copy.deepcopy(runtime_contract["controlStyle"]),
-            "playerViewTimeline": copy.deepcopy(runtime_contract["playerViewTimeline"]),
-            "sourceRolePreservation": source_role_patch,
-            "visualIntent": visual_patch,
-            "runtimePlan": plan,
-        },
-    }
+    return copy.deepcopy(_repair_schema())
 
 
-def author_item_provider_repair_response_schema(
-    allowed_patch_keys: set[str] | None = None,
-) -> dict[str, Any]:
-    schema = author_item_repair_response_schema()
-    if allowed_patch_keys is not None:
-        schema["properties"] = {
-            key: value
-            for key, value in schema["properties"].items()
-            if key in allowed_patch_keys
-        }
-    mandatory_patch_keys = {
-        "category", "coreMechanic", "primaryVerb", "controlStyle", "runtimePlan",
-    }
-    schema["required"] = [
-        key for key in schema["properties"] if key in mandatory_patch_keys
-    ]
-    runtime_plan = schema["properties"].get("runtimePlan")
-    if isinstance(runtime_plan, dict):
-        runtime_plan["required"] = [
-            "resultKind", "engineCalls", "runtimeStateIntent", "sourceReading",
-            "balanceIntent", "anomalyFlags",
-        ]
-    return _provider_strict_projection(schema)
+def author_item_provider_repair_response_schema(*_: Any, **__: Any) -> dict[str, Any]:
+    return _provider_strict_projection(author_item_repair_response_schema())
 
 
 def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
-    """Sparse, typed leaf edits for ordinary same-author repair.
-
-    This schema is derived from the AuthorItem function branches. It deliberately
-    keeps structural call replacement separate from the common params-only path.
-    """
-    full = author_item_response_schema()
-    properties = full["properties"]
-    runtime_plan = properties["runtimePlan"]["properties"]
-    runtime_contract = properties["runtimeContract"]["properties"]
-    engine_items = runtime_plan["engineCalls"]["items"]
-    call_branches = engine_items.get("oneOf") or []
-    param_patch_branches: list[dict[str, Any]] = []
-    for call_branch in call_branches:
-        call_properties = call_branch.get("properties") if isinstance(call_branch, dict) else None
-        if not isinstance(call_properties, dict):
-            continue
-        params = _recursively_sparse_object_schema(call_properties.get("params") or {})
-        param_patch_branches.append({
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "callId": copy.deepcopy(call_properties["callId"]),
-                "fn": copy.deepcopy(call_properties["fn"]),
-                "params": params,
-            },
-            "required": ["callId", "fn", "params"],
-        })
-
-    author_fields = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "name": copy.deepcopy(properties["name"]),
-            "fantasy": copy.deepcopy(properties["concept"]["properties"]["fantasy"]),
-            "mergeLogic": copy.deepcopy(properties["concept"]["properties"]["mergeLogic"]),
-            "coreMechanic": copy.deepcopy(properties["concept"]["properties"]["coreMechanic"]),
-            "primaryVerb": copy.deepcopy(runtime_contract["primaryVerb"]),
-            "controlStyle": copy.deepcopy(runtime_contract["controlStyle"]),
-            "playerViewTimeline": copy.deepcopy(runtime_contract["playerViewTimeline"]),
-            "sourceRolePreservation": _recursively_sparse_object_schema(
-                runtime_plan["sourceRolePreservation"]
-            ),
-            "visualIntent": _recursively_sparse_object_schema(runtime_plan["visualIntent"]),
-        },
-        "required": [],
-    }
-    runtime_metadata = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            key: copy.deepcopy(runtime_plan[key])
-            for key in (
-                "runtimeStateIntent", "sourceReading", "balanceIntent", "anomalyFlags",
-            )
-        },
-        "required": [],
-    }
-    return {
-        "$schema": full["$schema"],
-        "$defs": copy.deepcopy(full.get("$defs") or {}),
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "identity": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "category": copy.deepcopy(properties["category"]),
-                    "resultKind": copy.deepcopy(runtime_plan["resultKind"]),
-                },
-                "required": ["category", "resultKind"],
-            },
-            "authorFields": author_fields,
-            "runtimeMetadata": runtime_metadata,
-            "engineCallParamPatches": {
-                "type": "array",
-                "items": {"oneOf": param_patch_branches},
-                "maxItems": 24,
-            },
-            "engineCallParamDeletes": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "callId": {"type": "string", "minLength": 1, "maxLength": 128},
-                        "fn": {"type": "string", "minLength": 1, "maxLength": 64},
-                        "paramPaths": {
-                            "type": "array",
-                            "items": {"type": "string", "minLength": 1, "maxLength": 128},
-                            "minItems": 1,
-                            "maxItems": 24,
-                        },
-                    },
-                    "required": ["callId", "fn", "paramPaths"],
-                },
-                "maxItems": 24,
-            },
-            "engineCallIdPatches": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "callIndex": {"type": "integer", "minimum": 0, "maximum": 63},
-                        "currentCallId": {"type": "string", "maxLength": 128},
-                        "fn": {"type": "string", "minLength": 1, "maxLength": 64},
-                        "newCallId": {
-                            "type": "string",
-                            "pattern": "^[a-z][a-z0-9_]{0,63}$",
-                        },
-                    },
-                    "required": ["callIndex", "currentCallId", "fn", "newCallId"],
-                },
-                "maxItems": 24,
-            },
-        },
-        "required": [],
-    }
+    return author_item_repair_response_schema()
 
 
-def author_item_provider_targeted_repair_delta_schema(
-    repair_function_cards: dict[str, Any] | None = None,
-    *,
-    allowed_author_field_schemas: dict[str, dict[str, Any]] | None = None,
-    allowed_runtime_metadata_fields: set[str] | None = None,
-    identity_field_schemas: dict[str, dict[str, Any]] | None = None,
-    allowed_call_id_repairs: list[dict[str, Any]] | None = None,
-    allowed_param_deletes: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Provider grammar narrowed to the exact validator-authorized delta leaves."""
-    schema = author_item_targeted_repair_delta_schema()
-    properties = schema["properties"]
-
-    exact_branches: list[dict[str, Any]] = []
-    required_branch_count = 0
-    for card_key in sorted(repair_function_cards or {}):
-        card = (repair_function_cards or {}).get(card_key)
-        if not isinstance(card, dict):
-            continue
-        call_id = str(card.get("callId") or card_key).strip()
-        fn = str(card.get("fn") or "").strip()
-        params_candidate = card.get("params")
-        params: dict[str, Any] = (
-            params_candidate if isinstance(params_candidate, dict) else {}
-        )
-        if not call_id or not fn or not params:
-            continue
-        dependency_params = {
-            str(name)
-            for group in card.get("requiredTogether") or []
-            if isinstance(group, list)
-            for name in group
-            if str(name) in params
-        }
-        required_params = dependency_params | {
-            str(name)
-            for name in card.get("requiredParams") or []
-            if str(name) in params
-        }
-        if card.get("requiredParamPaths"):
-            required_branch_count += 1
-        allowed_together_values = [
-            row
-            for row in card.get("allowedTogetherValues") or []
-            if isinstance(row, dict) and set(row) == dependency_params
-        ]
-        params_schema: dict[str, Any] = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": copy.deepcopy(params),
-            "required": sorted(required_params),
-        }
-        if allowed_together_values:
-            params_schema = {
-                "oneOf": [
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            **copy.deepcopy(params),
-                            **{
-                                name: {"const": row[name], "type": "string"}
-                                for name in sorted(dependency_params)
-                            },
-                        },
-                        "required": sorted(required_params),
-                    }
-                    for row in allowed_together_values
-                ],
-            }
-        exact_branches.append({
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "callId": {"type": "string", "const": call_id},
-                "fn": {"type": "string", "const": fn},
-                "params": params_schema,
-            },
-            "required": ["callId", "fn", "params"],
-        })
-    if exact_branches:
-        patch_array = properties["engineCallParamPatches"]
-        patch_array["items"] = {"oneOf": exact_branches}
-        patch_array["minItems"] = max(1, required_branch_count)
-        patch_array["maxItems"] = len(exact_branches)
-    else:
-        properties.pop("engineCallParamPatches", None)
-
-    exact_delete_branches: list[dict[str, Any]] = []
-    for repair in allowed_param_deletes or []:
-        if not isinstance(repair, dict):
-            continue
-        call_id = str(repair.get("callId") or "").strip()
-        fn = str(repair.get("fn") or "").strip()
-        param_paths = sorted({
-            str(path).strip()
-            for path in repair.get("paramPaths") or []
-            if str(path).strip()
-        })
-        if not call_id or not fn or not param_paths:
-            continue
-        exact_delete_branches.append({
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "callId": {"type": "string", "const": call_id},
-                "fn": {"type": "string", "const": fn},
-                "paramPaths": {
-                    "type": "array",
-                    "items": {"type": "string", "enum": param_paths},
-                    "minItems": len(param_paths),
-                    "maxItems": len(param_paths),
-                },
-            },
-            "required": ["callId", "fn", "paramPaths"],
-        })
-    if exact_delete_branches:
-        delete_array = properties["engineCallParamDeletes"]
-        delete_array["items"] = {"oneOf": exact_delete_branches}
-        delete_array["minItems"] = len(exact_delete_branches)
-        delete_array["maxItems"] = len(exact_delete_branches)
-    else:
-        properties.pop("engineCallParamDeletes", None)
-
-    exact_id_branches: list[dict[str, Any]] = []
-    for repair in allowed_call_id_repairs or []:
-        if not isinstance(repair, dict):
-            continue
-        call_index = repair.get("callIndex")
-        current_call_id = str(repair.get("currentCallId") or "")
-        fn = str(repair.get("fn") or "").strip()
-        if not isinstance(call_index, int) or call_index < 0 or not fn:
-            continue
-        exact_id_branches.append({
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "callIndex": {"type": "integer", "const": call_index},
-                "currentCallId": {"type": "string", "const": current_call_id},
-                "fn": {"type": "string", "const": fn},
-                "newCallId": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,63}$",
-                },
-            },
-            "required": ["callIndex", "currentCallId", "fn", "newCallId"],
-        })
-    if exact_id_branches:
-        id_patch_array = properties["engineCallIdPatches"]
-        id_patch_array["items"] = {"oneOf": exact_id_branches}
-        id_patch_array["minItems"] = len(exact_id_branches)
-        id_patch_array["maxItems"] = len(exact_id_branches)
-    else:
-        properties.pop("engineCallIdPatches", None)
-
-    author_schemas = allowed_author_field_schemas or {}
-    if author_schemas:
-        author_fields = properties["authorFields"]
-        author_fields["properties"] = copy.deepcopy(author_schemas)
-        author_fields["required"] = sorted(author_schemas)
-    else:
-        properties.pop("authorFields", None)
-
-    metadata_fields = allowed_runtime_metadata_fields or set()
-    if metadata_fields:
-        runtime_metadata = properties["runtimeMetadata"]
-        runtime_metadata["properties"] = {
-            field: copy.deepcopy(runtime_metadata["properties"][field])
-            for field in sorted(metadata_fields)
-            if field in runtime_metadata["properties"]
-        }
-        if not runtime_metadata["properties"]:
-            properties.pop("runtimeMetadata", None)
-        else:
-            runtime_metadata["required"] = sorted(runtime_metadata["properties"])
-    else:
-        properties.pop("runtimeMetadata", None)
-
-    identity_schemas = identity_field_schemas or {}
-    if identity_schemas:
-        identity = properties["identity"]
-        identity["properties"] = copy.deepcopy(identity_schemas)
-    else:
-        properties.pop("identity", None)
-
-    # Every surviving property owns an exact rejected domain. Nullable is for
-    # genuinely optional sparse fields, not an edit the applicator requires.
-    schema["required"] = sorted(properties)
-    return _provider_strict_projection(schema)
+def author_item_provider_targeted_repair_delta_schema(*_: Any, **__: Any) -> dict[str, Any]:
+    return author_item_provider_repair_response_schema()
 
 
-def _truncate_repair_text_at_boundary(value: str, limit: int) -> str:
-    text = re.sub(r"\s+", " ", value).strip()
-    if len(text) <= limit:
-        return text
-    window = text[: limit + 1]
-    minimum = max(2, int(limit * 0.55))
-    candidates: list[int] = []
-    for separator in (". ", "; ", ", ", ",", " "):
-        cut = window.rfind(separator)
-        if cut >= minimum:
-            candidates.append(cut + (1 if separator != " " else 0))
-    if candidates:
-        return window[: max(candidates)].rstrip(" ,;")
-    return text[:limit].rstrip()
-
-
-def _normalize_bounded_repair_text(
-    value: Any,
-    schema: dict[str, Any],
-    *,
-    root: dict[str, Any],
-) -> Any:
-    ref = schema.get("$ref")
-    if isinstance(ref, str):
-        resolved = _resolve_local_ref(root, ref)
-        return (
-            _normalize_bounded_repair_text(value, resolved, root=root)
-            if resolved is not None
-            else copy.deepcopy(value)
-        )
-
-    branches = schema.get("anyOf") or schema.get("oneOf")
-    if isinstance(branches, list):
-        candidates: list[tuple[int, Any]] = []
-        for branch in branches:
-            if not isinstance(branch, dict):
-                continue
-            candidate = _normalize_bounded_repair_text(value, branch, root=root)
-            error_count = len(
-                _strict_schema_errors(candidate, branch, root=root, path="$", limit=64)
-            )
-            candidates.append((error_count, candidate))
-        return min(candidates, key=lambda row: row[0])[1] if candidates else copy.deepcopy(value)
-
-    if isinstance(value, str):
-        max_length = schema.get("maxLength")
-        constrained = any(key in schema for key in ("enum", "const", "pattern"))
-        if (
-            isinstance(max_length, int)
-            and max_length > 0
-            and len(value) > max_length
-            and len(value) <= (max_length * 13) // 10
-            and not constrained
-        ):
-            return _truncate_repair_text_at_boundary(value, max_length)
-        return value
-
-    if isinstance(value, dict):
-        properties = schema.get("properties")
-        properties = properties if isinstance(properties, dict) else {}
-        return {
-            key: _normalize_bounded_repair_text(child, properties[key], root=root)
-            if key in properties and isinstance(properties[key], dict)
-            else copy.deepcopy(child)
-            for key, child in value.items()
-        }
-
+def _strip_nulls(value: Any) -> Any:
     if isinstance(value, list):
-        item_schema = schema.get("items")
-        if isinstance(item_schema, dict):
-            return [
-                _normalize_bounded_repair_text(child, item_schema, root=root)
-                for child in value
-            ]
-    return copy.deepcopy(value)
+        return [_strip_nulls(child) for child in value if child is not None]
+    if isinstance(value, dict):
+        return {key: _strip_nulls(child) for key, child in value.items() if child is not None}
+    return value
+
+
+def project_provider_nullable_optionals_to_local(value: Any, *_: Any, **__: Any) -> Any:
+    return _strip_nulls(copy.deepcopy(value))
+
+
+def project_provider_author_item_to_local(value: Any, *_: Any, **__: Any) -> Any:
+    return project_provider_nullable_optionals_to_local(value)
 
 
 def normalize_author_item_targeted_repair_delta_text_limits(value: Any) -> Any:
-    """Normalize only small provider overshoots against the canonical delta schema.
-
-    This is a bounded transport-boundary cleanup for descriptive strings. It never
-    invents or removes fields, never changes enums/patterned identifiers, and leaves
-    large overshoots invalid for the strict validator below.
-    """
-    schema = author_item_targeted_repair_delta_schema()
-    return _normalize_bounded_repair_text(value, schema, root=schema)
-
-
-def strict_author_item_targeted_repair_delta_report(value: Any) -> dict[str, Any]:
-    schema = author_item_targeted_repair_delta_schema()
-    errors = _strict_schema_errors(value, schema, root=schema, path="$")
-    if isinstance(value, dict) and not value:
-        errors.append({"path": "$", "kind": "empty_repair_delta"})
-    if isinstance(value, dict):
-        for index, patch in enumerate(value.get("engineCallParamPatches") or []):
-            params = patch.get("params") if isinstance(patch, dict) else None
-            if isinstance(params, dict) and not params:
-                errors.append({
-                    "path": f"$.engineCallParamPatches[{index}].params",
-                    "kind": "empty_engine_call_params_patch",
-                })
-    return {
-        "schema": "infini.author-item-v3-targeted-repair-delta.v1",
-        "ok": not errors,
-        "errors": errors,
-    }
-
-
-def strict_author_item_repair_report(value: Any) -> dict[str, Any]:
-    schema = author_item_repair_response_schema()
-    errors = _strict_schema_errors(value, schema, root=schema, path="$")
-    if isinstance(value, dict) and not value:
-        errors.append({"path": "$", "kind": "empty_repair_patch"})
-    return {
-        "schema": "infini.author-item-v3-scoped-repair-validation.v1",
-        "ok": not errors,
-        "errors": errors,
-    }
-
-
-def _local_schema_branch(value: Any, schema: dict[str, Any]) -> dict[str, Any]:
-    """Select a discriminator branch without attempting semantic validation."""
-    alternatives = schema.get("oneOf") or schema.get("anyOf")
-    if not isinstance(alternatives, list):
-        return schema
-    if isinstance(value, dict):
-        for candidate in alternatives:
-            if not isinstance(candidate, dict):
-                continue
-            properties = candidate.get("properties")
-            if not isinstance(properties, dict):
-                continue
-            if all(
-                not isinstance(rule, dict)
-                or "const" not in rule
-                or value.get(key) == rule["const"]
-                for key, rule in properties.items()
-            ):
-                return candidate
-    return schema
-
-
-def project_provider_nullable_optionals_to_local(
-    value: Any,
-    schema: dict[str, Any],
-) -> Any:
-    """Decode strict-provider nullable optionals into a local sparse object.
-
-    Strict JSON-schema providers require every object property to be present, so
-    provider projections represent local optional fields as nullable. ``null`` in
-    those provider-only slots means omission. Required fields, truly nullable local
-    fields, and unknown keys remain untouched so the local boundary can reject them.
-    """
-    local_schema = _local_schema_branch(value, schema)
-    if isinstance(value, list):
-        item_schema = local_schema.get("items")
-        return [
-            project_provider_nullable_optionals_to_local(
-                child,
-                item_schema if isinstance(item_schema, dict) else {},
-            )
-            for child in value
-        ]
-    if not isinstance(value, dict):
-        return copy.deepcopy(value)
-
-    properties_candidate = local_schema.get("properties")
-    properties: dict[str, Any] = properties_candidate if isinstance(properties_candidate, dict) else {}
-    required = {str(key) for key in local_schema.get("required") or []}
-    out: dict[str, Any] = {}
-    for key, child in value.items():
-        child_schema = properties.get(key)
-        if not isinstance(child_schema, dict):
-            out[key] = copy.deepcopy(child)
-            continue
-        if child is None and key not in required and not _schema_allows_null(child_schema):
-            continue
-        out[key] = project_provider_nullable_optionals_to_local(child, child_schema)
-    return out
-
-
-def project_provider_author_item_to_local(value: Any, schema: dict[str, Any] | None = None) -> Any:
-    """Decode provider-only nullable omissions for an AuthorItem response."""
-    return project_provider_nullable_optionals_to_local(
-        value,
-        schema or author_item_response_schema(),
-    )
-
-
-def _explicit_physical_throw_movement_errors(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, dict):
-        return []
-    plan = value.get("runtimePlan")
-    calls = plan.get("engineCalls") if isinstance(plan, dict) else None
-    if not isinstance(calls, list):
-        return []
-    errors: list[dict[str, Any]] = []
-    for index, call in enumerate(calls):
-        if not isinstance(call, dict) or call.get("fn") != "shoot_projectile":
-            continue
-        params = call.get("params")
-        if not isinstance(params, dict):
-            continue
-        delivery = str(params.get("delivery") or "").strip().lower()
-        runtime_family = str(params.get("runtimeFamily") or "").strip().lower()
-        if (delivery == "throw" or runtime_family == "throw") and "movement" not in params:
-            errors.append({
-                "path": f"$.runtimePlan.engineCalls[{index}].params.movement",
-                "kind": "required_for_physical_throw",
-                "expected": "explicit gravity_arc or explicit straight/other authored movement",
-            })
-    return errors
-
-
-def _engine_call_identity_errors(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, dict):
-        return []
-    plan = value.get("runtimePlan")
-    calls = plan.get("engineCalls") if isinstance(plan, dict) else None
-    if not isinstance(calls, list):
-        return []
-    first_index_by_id: dict[str, int] = {}
-    errors: list[dict[str, Any]] = []
-    for index, call in enumerate(calls):
-        if not isinstance(call, dict):
-            continue
-        call_id = str(call.get("callId") or "").strip()
-        if not call_id:
-            continue
-        if call_id in first_index_by_id:
-            errors.append({
-                "path": f"$.runtimePlan.engineCalls[{index}].callId",
-                "kind": "duplicate_call_id",
-                "callId": call_id,
-                "duplicateOf": first_index_by_id[call_id],
-            })
-        else:
-            first_index_by_id[call_id] = index
-    return errors
-
-
-def _visual_intent_errors(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, dict):
-        return []
-    plan = value.get("runtimePlan")
-    intent = plan.get("visualIntent") if isinstance(plan, dict) else None
-    if not isinstance(intent, dict):
-        return []
-    minimum = intent.get("partCountMin")
-    maximum = intent.get("partCountMax")
-    errors: list[dict[str, Any]] = []
-    if (minimum is None) != (maximum is None):
-        missing = "partCountMin" if minimum is None else "partCountMax"
-        return [{
-            "path": f"$.runtimePlan.visualIntent.{missing}",
-            "kind": "part_count_range_requires_both_bounds",
-        }]
-    if isinstance(minimum, int) and isinstance(maximum, int):
-        if minimum > maximum:
-            errors.append({
-                "path": "$.runtimePlan.visualIntent.partCountMin",
-                "kind": "part_count_range_inverted",
-                "expected": "partCountMin <= partCountMax",
-            })
-        topology = str(intent.get("topology") or "")
-        if topology == "connected" and (minimum != 1 or maximum != 1):
-            if minimum != 1:
-                errors.append({
-                    "path": "$.runtimePlan.visualIntent.partCountMin",
-                    "kind": "connected_topology_requires_one_significant_body",
-                    "expected": 1,
-                })
-            if maximum != 1:
-                errors.append({
-                    "path": "$.runtimePlan.visualIntent.partCountMax",
-                    "kind": "connected_topology_requires_one_significant_body",
-                    "expected": 1,
-                })
-        if topology == "multipart_separated" and maximum < 2:
-            errors.append({
-                "path": "$.runtimePlan.visualIntent.partCountMax",
-                "kind": "separated_topology_requires_multiple_bodies",
-            })
-    return errors
+    return copy.deepcopy(value)
 
 
 def strict_author_item_v3_report(value: Any) -> dict[str, Any]:
-    schema = author_item_response_schema()
-    errors = _strict_schema_errors(value, schema, root=schema, path="$")
-    errors.extend(_engine_call_identity_errors(value))
-    errors.extend(_explicit_physical_throw_movement_errors(value))
-    errors.extend(_visual_intent_errors(value))
-    return {
-        "schema": "infini.author-item-v3-local-validation.v1",
-        "ok": not errors,
-        "errors": errors,
-    }
+    if not isinstance(value, Mapping):
+        return {
+            "schema": "infini.author-item-low-level-report.v1",
+            "ok": False,
+            "errors": [{"path": "$", "code": "type", "message": "Author response must be an object."}],
+        }
+    return validate_runtime_program(value)
+
+
+def strict_author_item_repair_report(value: Any) -> dict[str, Any]:
+    return strict_repair_shape_report(value)
+
+
+def strict_author_item_targeted_repair_delta_report(value: Any) -> dict[str, Any]:
+    return strict_repair_shape_report(value)
+
+
+def apply_author_item_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
+    return apply_repair_patch(current, patch)
 
 
 __all__ = [
-    "author_item_response_schema",
-    "author_item_provider_response_schema",
-    "author_item_repair_response_schema",
-    "author_item_provider_repair_response_schema",
+    "apply_author_item_repair_patch",
     "author_item_prompt_shape_card",
+    "author_item_provider_repair_response_schema",
+    "author_item_provider_response_schema",
+    "author_item_provider_targeted_repair_delta_schema",
+    "author_item_repair_response_schema",
+    "author_item_response_schema",
+    "author_item_targeted_repair_delta_schema",
+    "normalize_author_item_targeted_repair_delta_text_limits",
     "project_provider_author_item_to_local",
-    "strict_author_item_v3_report",
+    "project_provider_nullable_optionals_to_local",
     "strict_author_item_repair_report",
+    "strict_author_item_targeted_repair_delta_report",
+    "strict_author_item_v3_report",
 ]

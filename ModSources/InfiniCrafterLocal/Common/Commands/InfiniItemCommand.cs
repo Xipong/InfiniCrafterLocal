@@ -68,12 +68,11 @@ public sealed class InfiniItemCommand : ModCommand
         sb.AppendLine("  [authored]");
         sb.AppendLine($"    damage={data.Gameplay?.Damage}  useTime={data.Gameplay?.UseTime}  useAnim={data.Gameplay?.UseAnimation}");
         sb.AppendLine($"    knockback={data.Gameplay?.Knockback}  rare={data.Gameplay?.Rarity}  value={data.Gameplay?.Value}c");
-        if (data.Attack?.Enabled == true)
-        {
-            sb.AppendLine($"    shoot=[generated]  shootSpeed={data.Attack.Speed}  shotCount={data.Attack.ShotCount}  pierce={data.Attack.Pierce}");
-            sb.AppendLine($"    splitCount={data.Attack.SplitCount}  onHit={data.Attack.OnHit}  effect={data.Attack.Effect}");
-            sb.AppendLine($"    runtimeFamily={data.Attack.RuntimeFamily}  weaponFamily={data.Attack.WeaponFamily}");
-        }
+        sb.AppendLine($"    runtime={data.RuntimeProgram.ApiVersion}  entities={data.RuntimeProgram.Entities.Length}  bindings={data.RuntimeProgram.Bindings.Length}");
+        foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
+            sb.AppendLine($"    entity {entity.Id}: kind={entity.Kind} move={entity.Movement.Name}/{entity.Movement.Code} controller={entity.Controller.Name}/{entity.Controller.Code} events={entity.Events.Length}");
+        foreach (RuntimeBindingSpec binding in data.RuntimeProgram.Bindings)
+            sb.AppendLine($"    binding {binding.Id}: {binding.Input} -> {binding.Action}({binding.Target})");
         if (data.Armor?.Enabled == true)
             sb.AppendLine($"    armor.defense={data.Armor.Defense}  slot={data.Armor.Slot}");
         if (data.Accessory?.Enabled == true)

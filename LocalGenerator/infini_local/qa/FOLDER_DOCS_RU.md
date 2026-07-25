@@ -1,12 +1,11 @@
 # infini_local/qa
 
-Gameplay/runtime proof helpers for PATCH 0.4.239.
+Offline proof-слой для runtime contracts. Он не выбирает механику и не участвует в игровом исполнении.
 
-- `golden_runtime_cases.py` owns deterministic authored `runtimePlan` golden cases and expected compiler/gameplay envelopes.
-- `runtime_proof.py` builds:
-  - compiler/provenance reports via `compile_runtime_plan_to_genome_patch`;
-  - gameplay-seam reports via `validate_and_repair` + `apply_item_knowledge` + `attach_gameplay_and_attack`.
-- `csharp_delivery_contract.py` derives the strict recursive `GeneratedItemData` JSON graph from current C# DTO source and validates already-sanitized delivery payloads, including nested unknown fields and JSON kinds.
-- `__init__.py` exposes the small public proof API for tests and tools.
+- `golden_runtime_cases.py` хранит небольшой проверенный набор authored `runtimePlan` и ожидаемые gameplay envelopes.
+- `runtime_proof.py` строит compiler/provenance и gameplay-seam отчёты через production owners.
+- `runtime_contract_replay.py` хранит generated witnesses, historical replay, callable-level fingerprints и affected-case selector. Accepted cases проверяют exact final wire и finite-executor fingerprint; известные старые dead wires остаются ожидаемыми typed rejections.
+- `executable_semantics.py` — proof-only DTO canonicalizer. Он десериализует уже готовые `gameplay/attack/accessory/armor` через strict boundary и нормализует только эквивалентные для конечного executor написания. Он не читает Author prose, не маршрутизирует функции и не создаёт gameplay defaults.
+- `csharp_delivery_contract.py` выводит strict recursive `GeneratedItemData` JSON graph из текущих C# DTO и проверяет delivery payload.
 
-This package does not call LLMs, HTTP, image backends, or Terraria. It proves the Python runtime authoring → compiled fields → GeneratedItemData gameplay/attack seam. Full visual generation and in-game smoke checks remain separate layers.
+Здесь запрещены LLM/HTTP/image calls, item-name rules, prose classifiers и повторная компиляция смысла. Terraria/tModLoader smoke остаётся отдельным acceptance-слоем.

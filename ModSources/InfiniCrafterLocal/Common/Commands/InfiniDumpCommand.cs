@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -457,16 +458,6 @@ public sealed class InfiniDumpCommand : ModCommand
     }
 
     private static string DamageClassName(Item item)
-    {
-        try
-        {
-            if (item.DamageType == DamageClass.Melee) return "melee";
-            if (item.DamageType == DamageClass.Ranged) return "ranged";
-            if (item.DamageType == DamageClass.Magic) return "magic";
-            if (item.DamageType == DamageClass.Summon) return "summon";
-            if (item.damage > 0 && item.DamageType != DamageClass.Default && item.DamageType != DamageClass.Generic) return "modded";
-        }
-        catch { }
-        return item.damage > 0 ? "generic" : "none";
-    }
+        => TerrariaRuntimeVocabulary.CanonicalDamageClassToken(item?.DamageType);
+
 }

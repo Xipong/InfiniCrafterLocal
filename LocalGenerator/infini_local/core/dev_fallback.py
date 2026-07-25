@@ -1,181 +1,134 @@
 from __future__ import annotations
 
-"""Developer-only deterministic fallback planner.
+"""Explicit opt-in deterministic low-level fixture.
 
-This module is intentionally not part of normal InfiniCraft item authoring.
-Production gameplay should use the LLM-authored runtimePlan path; this fallback
-exists only for local smoke tests and emergency offline development when
-INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK=1 is explicitly set.
-
-The fallback keeps its semantic examples and plan builders outside server.py so
-the main HTTP/combine pipeline remains an authored LLM/runtime transport,
-validation and delivery shell.
+This is not a production design fallback.  It exists so offline contract and
+HTTP smoke tests can exercise the same v5 entities/bindings/capabilities wire
+without reviving the removed weapon-root architecture.
 """
 
-import json
-from typing import Any, Mapping
+from typing import Any
+
+from infini_local.core.runtime_authoring import (
+    RUNTIME_CONTRACT_SCHEMA,
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
+)
 
 
-def _h(helpers: Mapping[str, Any], name: str) -> Any:
-    return helpers[name]
+def _parent_name(parent: dict[str, Any], default: str) -> str:
+    return str(parent.get("name") or parent.get("displayName") or default).strip()
 
 
-def _base_spec(helpers: Mapping[str, Any], result_id: str, key: str, a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], name: str, tooltip: str, merge: str, source: str, category: str, tags: list[str]) -> dict[str, Any]:
-    name_of = _h(helpers, "name_of")
-    canonical_for_result = _h(helpers, "canonical_for_result")
-    rep_for_parent = _h(helpers, "rep_for_parent")
-    inh_for_parent = _h(helpers, "inh_for_parent")
-    recipe_meta = _h(helpers, "recipe_meta")
-    category_policy = _h(helpers, "category_policy")
-    engine_runtime_api_version = _h(helpers, "ENGINE_RUNTIME_API_VERSION")
-    app_version = _h(helpers, "APP_VERSION")
+def deterministic_low_level_plan(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+    key: str,
+) -> dict[str, Any]:
+    del ca, cb
+    parent_a = _parent_name(a, "Parent A")
+    parent_b = _parent_name(b, "Parent B")
     return {
-        "schemaVersion": 1,
-        "runtimeApiVersion": engine_runtime_api_version,
-        "id": result_id,
-        "recipeKey": key,
-        "name": name,
-        "parentA": name_of(a),
-        "parentB": name_of(b),
-        "tooltip": tooltip,
-        "mergeMode": merge,
-        "sourceMode": source,
-        "category": category,
-        "tags": sorted(set(tags)),
-        "canonical": canonical_for_result(name, category, tags),
-        "sourceRepresentation": [
-            rep_for_parent(a, ca, "primary"),
-            rep_for_parent(b, cb, "secondary"),
-        ],
-        "inheritance": [
-            inh_for_parent(a, ca, "base_shape" if ca.get("headNoun") not in ["item", "material"] else "influence"),
-            inh_for_parent(b, cb, "attachment" if cb.get("headNoun") in ["wire", "headset"] else "influence"),
-        ],
-        "lossBudget": {
-            "requiredParentPresence": 2,
-            "maxDroppedHardTags": 0 if merge in ["literal", "lexicalized_literal"] else 1,
-            "mustPreserveHeadNounFromAtLeastOneParent": True,
-            "mustPreserveMaterialIfPresent": merge in ["literal", "lexicalized_literal"],
-            "minPreservationScore": 0.65,
+        "name": f"{parent_a}–{parent_b} Runtime Fixture"[:80],
+        "tooltip": "Developer-only low-level fixture: a held body strikes forward and emits bounded child shards on hit.",
+        "category": "hybrid",
+        "concept": {
+            "literalSynthesis": f"The physical bodies of {parent_a} and {parent_b} remain visibly combined.",
+            "coreMechanic": "Primary use spawns an owner-attached body with explicit forward/retract motion; hits emit three explicit child projectiles.",
+            "parentAContribution": f"{parent_a} supplies the main held body.",
+            "parentBContribution": f"{parent_b} supplies the emitted fragments.",
+            "playerExperience": "A direct short-range strike followed by a small directional fragment burst.",
         },
-        "visual": {},
-        "presentationGenome": {},
-        "gameplay": {},
-        "attack": {},
-        "recipeMeta": recipe_meta(a, b, set(tags), category_policy(set(tags), a, b, key)),
-        "debug": {"planner": "deterministic", "version": app_version},
+        "runtimeContract": {
+            "schema": RUNTIME_CONTRACT_SCHEMA,
+            "parentSynthesis": {
+                "composition": f"Literal {parent_a} body carrying visible {parent_b} fragments.",
+                "parentA": {"facts": [parent_a], "runtimeRoles": ["held body"]},
+                "parentB": {"facts": [parent_b], "runtimeRoles": ["child fragments"]},
+            },
+            "claims": [
+                {
+                    "id": "claim_primary_strike",
+                    "kind": "gameplay",
+                    "text": "Primary use performs a bounded owner-attached strike.",
+                    "backedBy": ["bind_primary", "call_move_held", "call_damage_held"],
+                },
+                {
+                    "id": "claim_child_burst",
+                    "kind": "gameplay",
+                    "text": "A hit emits three child projectiles.",
+                    "backedBy": ["call_spawn_shards"],
+                },
+            ],
+        },
+        "runtimeProgram": {
+            "apiVersion": RUNTIME_PROGRAM_API_VERSION,
+            "schema": RUNTIME_PROGRAM_SCHEMA,
+            "entities": [
+                {"id": "item", "kind": "item_body"},
+                {"id": "held_body", "kind": "owner_attached_projectile"},
+                {"id": "child_shard", "kind": "child_projectile"},
+            ],
+            "bindings": [
+                {"id": "bind_primary", "input": "primary_use", "action": "spawn_entity", "target": "held_body"},
+            ],
+            "calls": [
+                {
+                    "id": "call_item_stats", "fn": "configure_item_stats", "target": "item",
+                    "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "useTimeTicks": 24, "useAnimationTicks": 24, "manaCost": 0, "rarity": 2, "valueCopper": 15000, "maxStack": 1, "craftYield": 1, "widthPx": 40, "heightPx": 40, "scale": 1.0},
+                },
+                {
+                    "id": "call_item_use", "fn": "configure_item_use", "target": "item",
+                    "params": {"useStyle": "shoot", "autoReuse": True, "useTurn": True, "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "two_handed", "releaseTiming": "immediate"},
+                },
+                {
+                    "id": "call_spawn_held", "fn": "configure_spawn", "target": "held_body",
+                    "params": {"speedPxPerTick": 1.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 18, "aim": "cursor", "placement": "owner_center"},
+                },
+                {
+                    "id": "call_damage_held", "fn": "set_projectile_damage", "target": "held_body",
+                    "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "ownerHitCheck": True},
+                },
+                {"id": "call_life_held", "fn": "set_projectile_lifetime", "target": "held_body", "params": {"lifetimeTicks": 30}},
+                {"id": "call_hitbox_held", "fn": "set_projectile_hitbox", "target": "held_body", "params": {"widthPx": 64, "heightPx": 32, "drawScale": 1.0, "hitboxScale": 1.0}},
+                {"id": "call_collision_held", "fn": "set_projectile_collision", "target": "held_body", "params": {"tileCollide": False, "ignoreWater": False, "bounceCount": 0, "pierce": 3, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownTicks": 10}},
+                {"id": "call_move_held", "fn": "move_forward_then_retract", "target": "held_body", "params": {"rangeTiles": 6.0, "durationTicks": 24}},
+                {
+                    "id": "call_spawn_shards", "fn": "spawn_entity_on_event", "target": "held_body",
+                    "params": {"event": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delayTicks": 0},
+                },
+                {
+                    "id": "call_spawn_child", "fn": "configure_spawn", "target": "child_shard",
+                    "params": {"speedPxPerTick": 9.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "velocity", "placement": "item_use_origin"},
+                },
+                {
+                    "id": "call_damage_child", "fn": "set_projectile_damage", "target": "child_shard",
+                    "params": {"damageClass": "ranged", "damage": 18, "knockback": 2.0, "ownerHitCheck": False},
+                },
+                {"id": "call_life_child", "fn": "set_projectile_lifetime", "target": "child_shard", "params": {"lifetimeTicks": 120}},
+                {"id": "call_hitbox_child", "fn": "set_projectile_hitbox", "target": "child_shard", "params": {"widthPx": 10, "heightPx": 10, "drawScale": 0.7, "hitboxScale": 1.0}},
+                {"id": "call_collision_child", "fn": "set_projectile_collision", "target": "child_shard", "params": {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownTicks": -1}},
+                {"id": "call_move_child", "fn": "move_gravity_arc", "target": "child_shard", "params": {"gravityPerTick": 0.12}},
+            ],
+        },
+        "id": "dev_" + str(abs(hash(key)))[:16],
+        "recipeKey": key,
+        "parentA": parent_a,
+        "parentB": parent_b,
+        "debug": {
+            "planner": "deterministic_dev_low_level_fixture",
+            "llmStageAccounting": {
+                "gameplayAuthorCalls": 0,
+                "gameplayRepairCalls": 0,
+                "visualDirectorCalls": 0,
+                "visualRepairCalls": 0,
+                "vfxDirectorCalls": 0,
+                "vfxRepairCalls": 0,
+            },
+        },
     }
 
 
-def _weapon_plan(helpers: Mapping[str, Any], result_id: str, key: str, a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], tags: set[str]) -> dict[str, Any]:
-    creative_result_name = _h(helpers, "creative_result_name")
-    required_anchors_from = _h(helpers, "required_anchors_from")
-    palette_from = _h(helpers, "palette_from")
-    name = creative_result_name(a, b, ca, cb, "weapon", tags | {"weapon"}, key)
-    data = _base_spec(helpers, result_id, key, a, b, ca, cb, name, "A generated weapon whose attack profile was synthesized separately", "literal", "generated", "weapon", sorted(tags | {"weapon"}))
-    data["visual"] = {"objectType": "generated_weapon", "requiredAnchors": required_anchors_from(ca, cb, tags), "palette": palette_from(tags)}
-    return data
-
-
-def _tool_plan(helpers: Mapping[str, Any], result_id: str, key: str, a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], tags: set[str]) -> dict[str, Any]:
-    creative_result_name = _h(helpers, "creative_result_name")
-    required_anchors_from = _h(helpers, "required_anchors_from")
-    palette_from = _h(helpers, "palette_from")
-    category_policy = _h(helpers, "category_policy")
-    if "pickaxe" in tags or "drill" in tags:
-        suffix = "Drill" if "drill" in tags else "Pickaxe"
-    elif "hammer" in tags:
-        suffix = "Hammer"
-    elif "axe" in tags or "chainsaw" in tags:
-        suffix = "Chainsaw" if "chainsaw" in tags else "Axe"
-    else:
-        suffix = "Tool"
-    name = creative_result_name(a, b, ca, cb, "tool", tags | {"tool", suffix.lower()}, key)
-    data = _base_spec(helpers, result_id, key, a, b, ca, cb, name, "A generated utility tool with inherited traits.", "functional", "generated", "tool", sorted(tags | {"tool"}))
-    data["gameplay"] = {"kind": "tool"}
-    data["visual"] = {"objectType": "generated_tool", "requiredAnchors": required_anchors_from(ca, cb, tags | {"tool"}), "palette": palette_from(tags | {"tool"})}
-    data["debug"]["categoryDecision"] = json.dumps(category_policy(tags | {"tool"}, a, b, key), ensure_ascii=False)
-    return data
-
-
-def _accessory_plan(helpers: Mapping[str, Any], result_id: str, key: str, a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], tags: set[str]) -> dict[str, Any]:
-    creative_result_name = _h(helpers, "creative_result_name")
-    required_anchors_from = _h(helpers, "required_anchors_from")
-    palette_from = _h(helpers, "palette_from")
-    category_policy = _h(helpers, "category_policy")
-    if "boots" in tags or "mobility" in tags:
-        name = creative_result_name(a, b, ca, cb, "accessory", tags | {"boots"}, key)
-        tooltip = "A generated accessory that converts item power into movement."
-    elif "shield" in tags or "defense" in tags:
-        name = creative_result_name(a, b, ca, cb, "accessory", tags | {"shield"}, key)
-        tooltip = "A generated accessory that preserves defensive traits from its parents."
-    elif "emblem" in tags or "damage" in tags or "weapon" in tags:
-        name = creative_result_name(a, b, ca, cb, "accessory", tags | {"emblem"}, key)
-        tooltip = "A generated accessory that channels weapon traits into passive power."
-    else:
-        name = creative_result_name(a, b, ca, cb, "accessory", tags | {"accessory"}, key)
-        tooltip = "A generated accessory shaped by both parent items."
-    data = _base_spec(helpers, result_id, key, a, b, ca, cb, name, tooltip, "functional", "generated", "accessory", sorted(tags | {"accessory"}))
-    data["gameplay"] = {"kind": "accessory"}
-    data["attack"] = {"enabled": False}
-    data["visual"] = {"objectType": "generated_accessory", "requiredAnchors": required_anchors_from(ca, cb, tags | {"accessory"}), "palette": palette_from(tags | {"accessory"})}
-    data["debug"]["categoryDecision"] = json.dumps(category_policy(tags | {"accessory"}, a, b, key), ensure_ascii=False)
-    return data
-
-
-def deterministic_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str, helpers: Mapping[str, Any]) -> dict[str, Any]:
-    name_of = _h(helpers, "name_of")
-    tags_of = _h(helpers, "tags_of")
-    stable_hash = _h(helpers, "stable_hash")
-    rep = _h(helpers, "rep")
-    choose_result_category = _h(helpers, "choose_result_category")
-    creative_result_name = _h(helpers, "creative_result_name")
-
-    tags = tags_of(a) | tags_of(b)
-    result_id = "g_" + stable_hash(key, "result", length=16)
-
-    # Known / near-vanilla resolver. These can be expanded with a full Terraria item database later.
-    if {"sun", "flower"} <= tags or "sunflower" in tags:
-        return _base_spec(helpers, result_id, key, a, b, ca, cb, "Sunflower", "Can be placed", "literal", "vanilla_match", "furniture", ["sunflower", "flower", "plant", "placeable"])
-
-    if "chair" in tags and "wire" in tags:
-        data = _base_spec(helpers, result_id, key, a, b, ca, cb, "Electric Chair", "Shocking seating arrangement", "lexicalized_literal", "generated", "furniture", ["chair", "wood", "wire", "electric", "furniture"])
-        data["sourceRepresentation"] = [
-            rep(name_of(a), "visual", "primary" if "chair" in tags_of(a) else "secondary", "wooden chair silhouette" if "chair" in tags_of(a) else "visible wire", "main object" if "chair" in tags_of(a) else "wrapped around chair"),
-            rep(name_of(b), "visual", "primary" if "chair" in tags_of(b) else "secondary", "wooden chair silhouette" if "chair" in tags_of(b) else "visible wire", "main object" if "chair" in tags_of(b) else "wrapped around chair"),
-        ]
-        data["visual"] = {"objectType": "electric_chair", "requiredAnchors": ["wooden chair as main silhouette", "visible wires wrapped around chair", "small yellow sparks"], "palette": ["brown", "dark_gray", "yellow"]}
-        return data
-
-    if {"daybloom"} <= tags and (name_of(a).lower() == name_of(b).lower() or "potion" in tags or "flower" in tags):
-        data = _base_spec(helpers, result_id, key, a, b, ca, cb, "Daybloom Potion", "A potion with healing properties", "literal", "generated", "potion", ["daybloom", "flower", "potion", "consumable", "plant"])
-        data["visual"] = {"objectType": "daybloom_potion", "requiredAnchors": ["glass potion bottle", "yellow daybloom petals", "green plant accent"], "palette": ["yellow", "green", "white"]}
-        return data
-
-    if "circuit" in tags and ("workbench" in tags or "bench" in tags):
-        data = _base_spec(helpers, result_id, key, a, b, ca, cb, "Computer", "A compact machine for processing information", "functional", "generated", "technology", ["computer", "technology", "circuit", "workbench", "screen"])
-        data["visual"] = {"objectType": "computer", "requiredAnchors": ["small monitor", "green circuit detail", "wooden workbench influence"], "palette": ["dark_gray", "green", "cyan", "brown"]}
-        return data
-
-    if "vr" in tags and "chair" in tags:
-        data = _base_spec(helpers, result_id, key, a, b, ca, cb, "Gaming Station", "A setup for immersive play", "functional", "generated", "placeable_station", ["gaming_station", "vr", "headset", "chair", "technology", "screen"])
-        data["visual"] = {"objectType": "gaming_station", "requiredAnchors": ["wooden chair", "visible VR headset", "small monitor", "cyan screen glow"], "palette": ["brown", "dark_gray", "cyan", "purple"]}
-        return data
-
-    # Generic semantic merge. Category is selected before stat generation; parent damage does not force weapon.
-    chosen_category = choose_result_category(tags, a, b, key)
-    if chosen_category == "accessory":
-        return _accessory_plan(helpers, result_id, key, a, b, ca, cb, tags)
-    if chosen_category == "weapon":
-        return _weapon_plan(helpers, result_id, key, a, b, ca, cb, tags)
-    if chosen_category == "potion" or ("flower" in tags and "bottle" in tags):
-        return _base_spec(helpers, result_id, key, a, b, ca, cb, creative_result_name(a, b, ca, cb, "potion", tags | {"potion", "consumable"}, key), "A strange blended potion", "literal", "generated", "potion", sorted(tags | {"potion", "consumable"}))
-    if chosen_category == "tool":
-        return _tool_plan(helpers, result_id, key, a, b, ca, cb, tags)
-    if chosen_category == "ammo":
-        return _base_spec(helpers, result_id, key, a, b, ca, cb, creative_result_name(a, b, ca, cb, "ammo", tags | {"ammo"}, key), "Generated ammunition with inherited traits", "functional", "generated", "ammo", sorted(tags | {"ammo"}))
-    if chosen_category == "armor":
-        return _base_spec(helpers, result_id, key, a, b, ca, cb, creative_result_name(a, b, ca, cb, "armor", tags | {"armor"}, key), "A generated defensive item", "functional", "generated", "armor", sorted(tags | {"armor"}))
-    if chosen_category in {"technology", "furniture", "placeable_station"}:
-        return _base_spec(helpers, result_id, key, a, b, ca, cb, creative_result_name(a, b, ca, cb, chosen_category, tags | {"device"}, key), "A locally generated device", "functional", "generated", chosen_category, sorted(tags | {"device"}))
-    return _base_spec(helpers, result_id, key, a, b, ca, cb, creative_result_name(a, b, ca, cb, "generic", tags | {"generated"}, key), "A locally generated hybrid item", "literal", "generated", "generic", sorted(tags | {"generated"}))
+__all__ = ["deterministic_low_level_plan"]

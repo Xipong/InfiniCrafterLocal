@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "noQaImports": true,
+    "noSelfTestProjectileSpawn": true,
+    "selfTestOptIn": true,
+    "semanticFixtures": true,
+    "v5SelfTest": true
+  },
+  "controlPlaneLeaks": [],
+  "ok": true,
+  "runtimePolicy": {
+    "capabilityPath": "registry -> strict Author schema -> compiler -> strict wire DTO -> finite C# dispatcher",
+    "familyRouter": false,
+    "validatorsAuthorGameplay": false
+  },
+  "schema": "infini.low-level-runtime-impact.v2"
+}

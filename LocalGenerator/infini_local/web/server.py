@@ -22,9 +22,6 @@ from infini_local.core.config_bootstrap import (
     ASSET_TRANSPORT,
 )
 from infini_local.core.contract_versions import TMODLOADER_GREY_ZONE_NOTES
-from infini_local.core.effect_catalog import (
-    ATTACK_PATTERN_IDS,
-)
 from infini_local.core.item_identity_tools import (
     item_field,
 )
@@ -49,7 +46,7 @@ from infini_local.core.llm_config import (
     OPENROUTER_MODEL,
     USE_LLM,
 )
-from infini_local.core.runtime_authoring.common import ENGINE_RUNTIME_API_VERSION
+from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_AUTHORING,
     LLM_RUNTIME_PLAN_REQUIRED,
@@ -60,13 +57,8 @@ from infini_local.core.vfx_manifest_config import (
     VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
     VFX_EMERGENCY_MAX_PARTICLES_TOTAL,
     VFX_LLM_DIRECTOR_ENABLED,
-    VFX_PARENT_EFFECT_INHERITANCE,
     VFX_RENDER_QUALITY,
-    VFX_SELECTOR_ENABLED,
-    VFX_SELECTOR_TOP,
-    VFX_SLOT_MACROS,
 )
-from infini_local.core.vfx_recipe_library import get_vfx_recipes
 from infini_local.pipelines.combine_pipeline import (
     combine,
     combine_cache_lookup,
@@ -139,20 +131,6 @@ from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.pipeline_visual_config import cleanup_sdcpp_server_process
 
-
-def load_json_file(path: Path, fallback: Any) -> Any:
-    try:
-        if path.exists():
-            return json.loads(path.read_text(encoding="utf-8-sig"))
-    except Exception as exc:
-        trace_event("warn", "SERVER:load_json_file", "json reference load failed", {"path": str(path)}, error=repr(exc))
-    return fallback
-
-# v0.3.14: the LLM no longer receives the verbose effect-archetype library.
-# It only sees a compact enum contract. The detailed JSON file remains as human/reference data,
-# but runtime code uses the stable ids from effect_catalog.py.
-EFFECT_ARCHETYPES = load_json_file(DATA_DIR / "effect_archetypes.json", {"patterns": {}})
-ATTACK_PATTERN_NAMES = list(ATTACK_PATTERN_IDS)
 
 # =============================================================================
 # NAV: CONFIG_AND_DATA_BOOTSTRAP
@@ -379,7 +357,7 @@ def _health_payload() -> dict[str, Any]:
         "llmRuntimeAuthoring": LLM_RUNTIME_AUTHORING,
         "llmRuntimePlanRequired": LLM_RUNTIME_PLAN_REQUIRED,
         "llmRuntimeStrictValidation": LLM_RUNTIME_STRICT_VALIDATION,
-        "runtimeApiVersion": ENGINE_RUNTIME_API_VERSION,
+        "runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION,
         "contractVersions": visual_config.contract_versions_payload(),
         "tmodloaderGreyZoneNotes": TMODLOADER_GREY_ZONE_NOTES,
         "imageBackend": visual_config.IMAGE_BACKEND,
@@ -397,13 +375,9 @@ def _health_payload() -> dict[str, Any]:
         "visualRequireZImageBackend": visual_config.VISUAL_REQUIRE_ZIMAGE_BACKEND,
         "zImagePromptContract": visual_config.ZIMAGE_PROMPT_CONTRACT,
         "zImagePositiveOnly": visual_config.ZIMAGE_POSITIVE_ONLY,
-        "patternLibraryCards": visual_config.PATTERN_LIBRARY_CARDS,
-        "patternRepairAttempts": visual_config.PATTERN_REPAIR_ATTEMPTS,
-        "vfxSelector": VFX_SELECTOR_ENABLED,
-        "vfxRecipeCount": len(get_vfx_recipes()),
-        "vfxMacroCount": len(VFX_SLOT_MACROS),
-        "vfxSelectorTop": VFX_SELECTOR_TOP,
-        "vfxParentEffectInheritance": VFX_PARENT_EFFECT_INHERITANCE,
+        "vfxContract": "exact_runtime_entity_event_pairs",
+        "vfxBaselineCalls": 1,
+        "vfxRepairConditional": True,
         "vfxRenderQuality": VFX_RENDER_QUALITY,
         "vfxEmergencyCaps": {
             "maxParticlesPerTick": VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,

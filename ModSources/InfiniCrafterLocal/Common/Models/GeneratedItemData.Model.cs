@@ -14,20 +14,13 @@ namespace InfiniCrafterLocal.Common.Models;
 
 // AGENT MAP: game-facing wire/cache/runtime DTO.
 // Python may preserve extra/future data, but C# executes only explicit supported
-// sub-specs below (Gameplay, Accessory, Armor, Attack, Visual, VfxManifest).
+// sub-specs below (Gameplay, Accessory, Armor, RuntimeProgram, Visual, VfxManifest).
 // Adding a property here is not enough: wire it through Normalize,
 // Apply, runtime executors, tests, and docs before treating it as gameplay.
 public sealed partial class GeneratedItemData
 {
     public string RuntimeApiVersion { get; set; } = RuntimeApiCurrent;
     private const string RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent;
-    private const int MaxSupportedMovementCode = InfiniRuntimeLimits.MaxSupportedMovementCode;
-    private const int MaxSupportedEffectCode = InfiniRuntimeLimits.MaxSupportedEffectCode;
-    private const int MaxSupportedOnHitCode = InfiniRuntimeLimits.MaxSupportedOnHitCode;
-    private static readonly HashSet<string> SupportedRuntimeApiVersions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        RuntimeApiCurrent
-    };
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
     public string RecipeKey { get; set; } = "";
     public string Name { get; set; } = "Generated Item";
@@ -50,18 +43,15 @@ public sealed partial class GeneratedItemData
     public GameplaySpec Gameplay { get; set; } = new();
     public AccessorySpec Accessory { get; set; } = new();
     public ArmorSpec Armor { get; set; } = new();
-    public AttackSpec Attack { get; set; } = new();
+    public RuntimeProgramSpec RuntimeProgram { get; set; } = new();
     public VisualSpec Visual { get; set; } = new();
-    public PresentationGenomeSpec PresentationGenome { get; set; } = new();
     public VfxManifestSpec VfxManifest { get; set; } = new();
 
 
     public Dictionary<string, JsonElement> Debug { get; set; } = new();
 
-    // Preserve Python-authored top-level fields that the C# runtime does not execute yet
-    // (runtimePlan, recipeHealth, contractVersions, runtimeAffordance, future diagnostics).
-    // Local cache/debug round-trips should not lie by silently erasing them, while
-    // network/player-save payloads still strip this extension bag explicitly below.
+    // Preserve non-executable diagnostics such as recipeHealth and contractVersions.
+    // Retired executable shapes are explicitly rejected during Normalize.
     [JsonExtensionData]
     public Dictionary<string, JsonElement> ExtensionData { get; set; } = new();
 
@@ -224,8 +214,13 @@ public sealed class GameplaySpec
     public float Knockback { get; set; } = 2f;
     public int UseTime { get; set; } = 24;
     public int UseAnimation { get; set; } = 24;
+    public string UseStyleName { get; set; } = "swing";
     public int UseStyle { get; set; } = ItemUseStyleID.Swing;
     public bool AutoReuse { get; set; } = true;
+    public int HoldoutOffsetX { get; set; } = 0;
+    public int HoldoutOffsetY { get; set; } = 0;
+    public string HandPose { get; set; } = "";
+    public string ReleaseTiming { get; set; } = "";
     public bool Consumable { get; set; } = false;
     public int ManaCost { get; set; } = 0;
     public int Rarity { get; set; } = ItemRarityID.White;
@@ -233,25 +228,20 @@ public sealed class GameplaySpec
     public int MaxStack { get; set; } = 1;
     // v0.4.4: stack granted by one generated craft. Needed for LLM-authored ammo/material batches.
     public int CraftYield { get; set; } = 1;
-    // v0.4.5: optional actual Terraria ammo type. Empty means consumable thrown/used stack, not bow/gun ammo.
-    public string AmmoFor { get; set; } = "";
-    public bool ChannelUse { get; set; } = false;
+    // Exact per-instance Terraria ammo fields. This marks the generated item as
+    // ammunition; it does not configure another item to consume that ammo.
+    public string AmmoCategory { get; set; } = "";
+    public int AmmoProjectileId { get; set; } = ProjectileID.None;
+    public float AmmoShootSpeedPxPerTick { get; set; } = 0f;
+    public bool NotAmmo { get; set; } = false;
     public int ConsumeChancePercent { get; set; } = 100;
     public int Width { get; set; } = 24;
     public int Height { get; set; } = 24;
     public float ItemScale { get; set; } = 1f;
     public bool UseTurn { get; set; } = false;
-    public int HoldoutOffsetX { get; set; } = 0;
-    public int HoldoutOffsetY { get; set; } = 0;
-
-    // Authored use/draw affordance fields with concrete runtime consumers.
-    public string HeldVisibility { get; set; } = "";
-    public string ReleaseTiming { get; set; } = "";
-    public string HandPose { get; set; } = "";
-    public int InitialOffsetPx { get; set; } = 0;
-
     public int HealLife { get; set; } = 0;
     public int HealMana { get; set; } = 0;
+    public bool Potion { get; set; } = false;
     public int BuffCode { get; set; } = InfiniTerrariaSentinels.NoBuffType;
     public int BuffTime { get; set; } = 0;
     public BuffEntrySpec[] ExtraBuffs { get; set; } = Array.Empty<BuffEntrySpec>();
@@ -268,29 +258,11 @@ public sealed class GameplaySpec
     public bool MobilitySafeTileOnly { get; set; } = true;
     public float MiningSpeedScale { get; set; } = 1f;
 
-    // Explicit utility engineCalls. These are inert unless authored by runtimePlan.
-    public string AltUseMode { get; set; } = ""; // mobility|generated_buff|light|none
-    public int AltUseCooldownTicks { get; set; } = 0;
-    public string AltMobilityMode { get; set; } = "";
-    public int AltMobilityRangeTiles { get; set; } = 0;
-    public bool AltMobilitySafeTileOnly { get; set; } = true;
-    public GeneratedBuffSpec AltGeneratedBuff { get; set; } = new();
-    public GeneratedBuffSpec HoldGeneratedBuff { get; set; } = new();
     public float HoldLightStrength { get; set; } = 0f;
     public string HoldLightColorName { get; set; } = "";
     public string UseConditionMode { get; set; } = ""; // none|grounded|not_wet|life_above|mana_above
     public int UseConditionMinLife { get; set; } = 0;
     public int UseConditionMinMana { get; set; } = 0;
-    public RejectedEngineCallSpec[] RejectedEngineCalls { get; set; } = Array.Empty<RejectedEngineCallSpec>();
-}
-
-public sealed class RejectedEngineCallSpec
-{
-    public string Fn { get; set; } = "";
-    public string Reason { get; set; } = "";
-    public string Policy { get; set; } = "";
-    public string Family { get; set; } = "";
-    public string Action { get; set; } = "";
 }
 
 public sealed class BuffEntrySpec
@@ -410,171 +382,6 @@ public sealed class ArmorSpec
 // =============================================================================
 // NAV: ATTACK_SPEC_CONTRACT
 // =============================================================================
-public sealed class AttackSpec
-{
-    // True only when this item has an authored generated runtime executor
-    // (projectile / held generated attack / custom magic path). It does not mean
-    // "can deal damage": tools and melee items may still hit through Terraria's
-    // vanilla item hitbox using Gameplay.Damage.
-    public bool Enabled { get; set; } = false;
-    public string Delivery { get; set; } = "none"; // compatibility/use-style hint; RuntimeFamily is authoritative for execution
-    public string RuntimeFamily { get; set; } = GeneratedRuntimeFamilyPolicy.None; // canonical values live in GeneratedRuntimeFamilyPolicy
-    public string WeaponFamily { get; set; } = ""; // broadsword, spear, bow, gun, staff, flail, yoyo, whip, etc.
-    public string ProjectileFamily { get; set; } = ""; // optional visual/projectile family emitted by authoring compiler
-    public string AmmoKind { get; set; } = ""; // empty, arrow, bullet, rocket; advisory unless actual ammo output
-    public int UseStyleCode { get; set; } = ItemUseStyleID.None; // explicit Terraria.ItemUseStyleID subset emitted by runtime compiler
-    public bool HideUseGraphic { get; set; } = false; // explicit noUseGraphic affordance, not inferred from prose
-    public bool DisableItemMeleeHitbox { get; set; } = false; // explicit noMelee affordance
-    public bool OwnerHitCheck { get; set; } = false; // explicit held/owner-checked projectile affordance
-    public bool ChannelUse { get; set; } = false; // explicit channelled use affordance for yoyo/beam-like generated weapons
-    public string Stage { get; set; } = "early";
-    public float PowerBudget { get; set; } = 1f;
-    public string DamageClass { get; set; } = "generic"; // exact projectile damage class; shared resolver owns item/projectile mapping
-    public string Movement { get; set; } = "straight"; // straight, slow_homing, gravity_arc, drift, boomerang, bounce, phase
-    public string Effect { get; set; } = "dust"; // dust, electric, slime, star, flame, frost, leaf, shadow, poison, blood, honey, sand, lunar
-    public string OnHit { get; set; } = "none"; // none, burst, split, chain, burn, frostburn, poison, shadowflame, starburst, bleed
-    public int MovementCode { get; set; } = 0;
-    public int EffectCode { get; set; } = 0;
-    public int OnHitCode { get; set; } = 0;
-    public float Speed { get; set; } = 8f;
-    public float RangeTiles { get; set; } = 35f; // targeting range and exact held-beam reach
-    public float HomingStrength { get; set; } = 0f; // explicit steering strength; 0 selects executor default
-    public float BeamWidthPx { get; set; } = 14f; // used only by RuntimeFamily=beam
-    public int BeamChargeTicks { get; set; } = 0; // bounded warmup before full beam power
-    public int ChargeTicks { get; set; } = 45; // RuntimeFamily=charge_release full-charge duration
-    public float ChargePowerMultiplier { get; set; } = 1.6f; // maximum released damage/knockback multiplier
-    public int DelayTicks { get; set; } = 0; // overhead_barrage telegraph before bounded authored projectiles descend
-    public int Lifetime { get; set; } = 90;
-    public int Pierce { get; set; } = 1;
-    public float Scale { get; set; } = 1f;
-    public int ProjectileWidth { get; set; } = 14;
-    public int ProjectileHeight { get; set; } = 14;
-    public float ProjectileScale { get; set; } = 1f;
-    public float HitboxScale { get; set; } = 1f;
-    public int ExplosionRadius { get; set; } = 0; // compat/debug alias; runtime uses the split radii below
-    public int ImpactVfxRadiusPx { get; set; } = 0;
-    public int AoeDamageRadiusPx { get; set; } = 0;
-    public int ContactForgivenessPx { get; set; } = 0;
-    public int ExtraUpdates { get; set; } = 0;
-    public bool TileCollide { get; set; } = true;
-    public int BounceCount { get; set; } = 0;
-    public int SplitCount { get; set; } = 0;
-    public int ChainCount { get; set; } = 0;
-    public float PullStrength { get; set; } = 0f;
-    public string PullMode { get; set; } = "none";
-    public int ImmunityCooldown { get; set; } = 10;
-    public int TrailLength { get; set; } = 4;
-    public int ShotCount { get; set; } = 1;
-    public float SpreadRadians { get; set; } = 0f;
-    public int ProcMode { get; set; } = 0; // 0 none, 1 proximity burst, 2 vortex spawn, 3 blackhole pull, 4 radial burst
-
-    // v0.4.4: true when mechanics came from runtimePlan.engineCalls. In this mode
-    // the projectile runtime must not parse prose to create gameplay child projectiles.
-    public bool RuntimePlanAuthored { get; set; } = false;
-    public string SecondaryTrigger { get; set; } = GeneratedSecondaryTriggerPolicy.OnHit;
-    public float SecondarySpreadRadians { get; set; } = 0.45f;
-    public float SecondaryDamageMultiplier { get; set; } = 0.35f;
-    public int SecondaryLifetimeTicks { get; set; } = 24;
-    public string SentryPlacement { get; set; } = "grounded";
-    public int SentryAttackIntervalTicks { get; set; } = 45;
-    public float SentryTargetRangeTiles { get; set; } = 30f;
-    public int SentryLifetimeTicks { get; set; } = 3600;
-    public float SameTargetBias { get; set; } = 0.0f;
-    public string DebuffHint { get; set; } = "";
-    public int DebuffTime { get; set; } = 0;
-    public string SecondaryMaterial { get; set; } = "";
-    public string SecondaryProjectileShape { get; set; } = "";
-
-    // v2.10: Derived technical guardrails. These are not creative tags; they are engine-pressure limits.
-    public int MaxChildProjectiles { get; set; } = 16;
-    public int MaxChildDepth { get; set; } = 1;
-    public int DustSpawnDenom { get; set; } = 3;
-    public int BurstDustCap { get; set; } = 20;
-    public float VfxParticleScale { get; set; } = 0f;
-    public string VfxMaterial { get; set; } = "";
-    public int VfxParticleDurationTicks { get; set; } = 0;
-    public int VfxFieldLifetimeTicks { get; set; } = 0;
-    public float VfxFieldRadiusTiles { get; set; } = 0f;
-    public int VfxFieldTickRate { get; set; } = 0;
-    public Dictionary<string, float> EngineMetrics { get; set; } = new();
-
-    // Presentation/audio layer. LLM may author exact catalog ids and bounded controls; server derives only safe fallbacks.
-    public string VisualMode { get; set; } = "projectile"; // projectile, slash_arc, slash_plus_projectile, beam, falling_projectile, orbiting_projectile
-    public string TrailStyle { get; set; } = "dust";
-    public string ImpactStyle { get; set; } = "small_flash";
-    public string PrimaryColorName { get; set; } = "white";
-    public float RuntimeLightStrength { get; set; } = 0f;
-    public int RuntimeLightDurationTicks { get; set; } = 0;
-    public string MobilityMode { get; set; } = "";
-    public int MobilityRangeTiles { get; set; } = 0;
-    public int MobilityCooldownTicks { get; set; } = 0;
-    public bool MobilitySafeTileOnly { get; set; } = true;
-    public float SoundPitch { get; set; } = 0f;
-    public float SoundVolume { get; set; } = 0.85f;
-    public float SoundPitchVariance { get; set; } = 0.18f;
-
-    // Presentation/debug pattern only. Runtime behavior is selected by Delivery/WeaponFamily/MovementCode.
-    public string Pattern { get; set; } = "basic";
-
-    public string ProjectileShape { get; set; } = "";
-    public string ProjectileMotion { get; set; } = "";
-    public string ProjectileRotation { get; set; } = "";
-    public string ProjectileTrail { get; set; } = "";
-    public string ProjectileImpact { get; set; } = "";
-
-    // Exact sound-catalog contract. "terraria_vanilla" ids resolve through the
-    // built-in acoustic-role catalog; other sources remain available to the future
-    // explicit asset catalog seam. Runtime never keyword-classifies names/tooltips.
-    public string SoundCatalogSource { get; set; } = "";
-    public string SoundUseCatalogId { get; set; } = "";
-    public string SoundImpactCatalogId { get; set; } = "";
-    public string SoundUseCatalogPath { get; set; } = "";
-    public string SoundImpactCatalogPath { get; set; } = "";
-
-    // v0.3.3 visual-model integration: separate generated assets for the flying
-    // projectile and its impact flash. These are runtime PNG paths loaded by
-    // RuntimeSpriteCache; if absent, GeneratedProjectile falls back to primitive drawing.
-    public string ProjectileSpritePath { get; set; } = "";
-    public string ProjectileSpriteUrl { get; set; } = "";
-    public string ProjectileSpriteStatus { get; set; } = "";
-    public string ProjectileSpritePrompt { get; set; } = "";
-    public float ProjectileSpriteScore { get; set; } = 0f;
-    public string ImpactSpritePath { get; set; } = "";
-    public string ImpactSpriteUrl { get; set; } = "";
-    public string ImpactSpriteStatus { get; set; } = "";
-    public string ImpactSpritePrompt { get; set; } = "";
-    public float ImpactSpriteScore { get; set; } = 0f;
-
-    // v0.3.4: visual asset pack. Children/fields use their own sprites instead of
-    // inheriting the main bolt, so a return spark, echo, trap or rune can be visible.
-    public string ChildSpritePath { get; set; } = "";
-    public string ChildSpriteUrl { get; set; } = "";
-    public string ChildSpriteStatus { get; set; } = "";
-    public string ChildSpritePrompt { get; set; } = "";
-    public float ChildSpriteScore { get; set; } = 0f;
-    public string FieldSpritePath { get; set; } = "";
-    public string FieldSpriteUrl { get; set; } = "";
-    public string FieldSpriteStatus { get; set; } = "";
-    public string FieldSpritePrompt { get; set; } = "";
-    public float FieldSpriteScore { get; set; } = 0f;
-    public string VisualAnimationPlan { get; set; } = "";
-
-    // v0.3.16 hybrid VFX manifest compiled by LocalGenerator once per generated item.
-    // GeneratedProjectile executes this frozen data; it does not re-parse prompt prose every tick.
-    public string VfxManifestJson { get; set; } = "";
-
-    public AttackSpec CloneForRuntimeSpawn()
-    {
-        var clone = (AttackSpec)MemberwiseClone();
-        clone.EngineMetrics = EngineMetrics is null ? new Dictionary<string, float>() : new Dictionary<string, float>(EngineMetrics);
-        return clone;
-    }
-}
-
-
-// =============================================================================
-// NAV: VISUAL_AND_PRESENTATION_CONTRACT
-// =============================================================================
 public sealed class VisualSpec
 {
     public string ObjectType { get; set; } = "generic_item";
@@ -582,10 +389,6 @@ public sealed class VisualSpec
     public string[] RequiredAnchors { get; set; } = Array.Empty<string>();
     public string[] Palette { get; set; } = Array.Empty<string>();
     public string ImagePrompt { get; set; } = "small pixel art item icon, solid magenta key background";
-    public string ProjectileImagePrompt { get; set; } = "";
-    public string ImpactImagePrompt { get; set; } = "";
-    public string ChildImagePrompt { get; set; } = "";
-    public string FieldImagePrompt { get; set; } = "";
     public string EquipOverlayPrompt { get; set; } = "";
     public string NegativePrompt { get; set; } = "scene, background, character, realistic render, blurry, text, watermark";
     public string AssetManifestPath { get; set; } = "";
@@ -614,58 +417,4 @@ public sealed class VisualSpec
     public float VisualSoulCoverage { get; set; } = 0f;
     public float VisualSoulEdgeDensity { get; set; } = 0f;
     public string VisualSoulTooltip { get; set; } = "";
-}
-
-
-public sealed class PresentationGenomeSpec
-{
-    public string Schema { get; set; } = "presentationGenome.v1";
-    public string[] Palette { get; set; } = Array.Empty<string>();
-    public HeldSpriteSpec HeldSprite { get; set; } = new();
-    public AttackVisualSpec AttackVisual { get; set; } = new();
-    public ProjectileVisualSpec ProjectileVisual { get; set; } = new();
-    public ImpactVisualSpec ImpactVisual { get; set; } = new();
-    public TrailVisualSpec TrailVisual { get; set; } = new();
-}
-
-public sealed class HeldSpriteSpec
-{
-    public string Family { get; set; } = "generic";
-    public string Silhouette { get; set; } = "generic_item";
-    public string SizeClass { get; set; } = "medium";
-    public string Accent { get; set; } = "white";
-}
-
-public sealed class AttackVisualSpec
-{
-    public string Mode { get; set; } = "projectile";
-    public string Movement { get; set; } = "straight";
-    public string Effect { get; set; } = "dust";
-    public string OnHit { get; set; } = "none";
-    public string ArcStyle { get; set; } = "none";
-    public string Flash { get; set; } = "small_flash";
-    public bool Glow { get; set; } = false;
-}
-
-public sealed class ProjectileVisualSpec
-{
-    public bool Enabled { get; set; } = false;
-    public string Shape { get; set; } = "bolt";
-    public string TrailStyle { get; set; } = "dust";
-    public string Color { get; set; } = "white";
-    public int Frames { get; set; } = 1;
-}
-
-public sealed class ImpactVisualSpec
-{
-    public string Style { get; set; } = "small_flash";
-    public string Size { get; set; } = "small";
-    public string Color { get; set; } = "white";
-}
-
-public sealed class TrailVisualSpec
-{
-    public string Style { get; set; } = "dust";
-    public float Density { get; set; } = 0.25f;
-    public string Color { get; set; } = "white";
 }

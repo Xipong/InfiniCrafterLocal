@@ -59,7 +59,7 @@ Mods: {
 
 				EnableGeneratedMeleeOnHitEffects: {
 					Label: Generated melee on-hit effects
-					Tooltip: Allows generated swing weapons to execute explicit AttackSpec.OnHitCode debuffs, small lifesteal, and impact dust. No prompt text is parsed.
+					Tooltip: Allows exact authored runtime events to apply bounded debuffs, healing, and impact presentation. No prompt text is parsed.
 				}
 
 				RuntimeSpriteCacheMaxTextures: {
@@ -110,7 +110,6 @@ Items: {
 
 Projectiles: {
 	GeneratedProjectile.DisplayName: Generated Projectile
-	GeneratedVfxOverlayProjectile.DisplayName: Generated Vfx Overlay Projectile
 }
 
 Configs: {

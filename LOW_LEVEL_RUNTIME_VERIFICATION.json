@@ -1,0 +1,133 @@
+{
+  "schema": "infini.low-level-runtime-refactor-verification.v2",
+  "project": "InfiniCrafterLocal",
+  "version": "0.4.241",
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "wireSchema": "infini.runtime-program.wire.v1",
+  "portableCriteriaComplete": true,
+  "releaseReady": false,
+  "stageAccounting": {
+    "happyPath": {
+      "gameplayAuthor": 1,
+      "visualDirector": 1,
+      "vfxDirector": 1,
+      "gameplayRepair": 0,
+      "visualRepair": 0,
+      "vfxRepair": 0
+    },
+    "repairs": "conditional_after_exact_stage_validator_failure"
+  },
+  "capabilityLibrary": {
+    "ok": true,
+    "score": 100,
+    "metrics": {
+      "capabilities": 52,
+      "entityKinds": 7,
+      "inputs": 4,
+      "bindingActions": 5,
+      "events": 10,
+      "parameters": 185,
+      "numericParameters": 143,
+      "boundedNumericParameters": 143,
+      "semanticParameters": 185,
+      "typedEntityReferences": 2,
+      "requirements": 15,
+      "bindingDependencyEdges": 9,
+      "spawnBudgetCapabilities": 1,
+      "stationaryMeaningfulCapabilities": 10,
+      "exactWirePaths": 257,
+      "globalTechnicalLowerers": 3,
+      "globalTechnicalLowererOutputs": 100,
+      "exclusiveGroups": {
+        "movement": [
+          "move_accelerate",
+          "move_blackhole_pull",
+          "move_boomerang",
+          "move_bounce",
+          "move_drift",
+          "move_expanding_wave",
+          "move_flail_tether",
+          "move_forward_then_retract",
+          "move_gravity_arc",
+          "move_orbit",
+          "move_phase",
+          "move_proximity_missile",
+          "move_returning_glaive",
+          "move_sine_homing",
+          "move_slow_homing",
+          "move_spiral",
+          "move_straight",
+          "move_vortex_orb",
+          "move_whip_lash",
+          "move_yoyo_hover"
+        ],
+        "controller": [
+          "channel_beam",
+          "charge_then_release",
+          "target_and_fire"
+        ]
+      },
+      "authorityDistribution": {
+        "owner_request_server_execute": 12,
+        "server_execute": 4,
+        "owner_execute_sync": 34,
+        "client_visual_only": 2
+      },
+      "rangeParityRows": 79,
+      "verticalSliceCount": 52
+    },
+    "audit": "contracts/capability_library_audit.generated.json"
+  },
+  "terrariaStandardization": {
+    "ok": true,
+    "score": 87,
+    "scoreMax": 87,
+    "audit": "contracts/terraria_standardization_audit.generated.json",
+    "aliasInventory": "lowery.md"
+  },
+  "tests": {
+    "pytest": {
+      "passed": 77,
+      "warnings": 6
+    },
+    "mutationCaught": "4/4",
+    "nonArchetypalFixtures": "8/8",
+    "prompt": {
+      "visibleCapabilities": 52,
+      "chars": 70685,
+      "limit": 80000,
+      "headroom": 9315
+    },
+    "portableSandbox": {
+      "ok": true,
+      "coverage": "portable-static"
+    }
+  },
+  "notRun": [
+    "ruff",
+    "pyright",
+    "hypothesis_property_suite",
+    "dotnet_tmodloader_build",
+    "tml_runtime_selftest",
+    "singleplayer_craft_asset_smoke",
+    "host_client_sync_smoke",
+    "calamity_loaded_content_smoke",
+    "real_provider_crafts"
+  ],
+  "packagedValidation": {
+    "archiveRoot": "InfiniCrafterLocal_v0.4.241_TERRARIA_STANDARDIZED_COMPLETE",
+    "sourceManifestBeforeTests": "368/368",
+    "pytest": {
+      "passed": 77,
+      "warnings": 6
+    },
+    "terrariaStandardization": "87/87",
+    "capabilityLibrary": "100/100",
+    "targetedRepair": "33/33 policies; frozen merge; blocker-local catalog",
+    "mutationGate": "4/4 caught",
+    "nonArchetypalFixtures": "8/8 passed",
+    "csharpStaticContract": "passed",
+    "projectHygiene": "passed",
+    "sourceManifestAfterTestCleanup": "368/368"
+  }
+}

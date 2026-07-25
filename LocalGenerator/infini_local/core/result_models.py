@@ -45,21 +45,6 @@ class RepairResult:
 
 
 @dataclass(slots=True)
-class RuntimeCompileResult:
-    """Result model for runtimePlan -> executable genome compilation."""
-
-    patch: dict[str, Any]
-    provenance: dict[str, Any]
-    clamps: list[ClampRecord | dict[str, Any]] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        out = asdict(self)
-        out["clamps"] = [c.to_dict() if isinstance(c, ClampRecord) else dict(c) for c in self.clamps]
-        return out
-
-
-@dataclass(slots=True)
 class BalanceReportModel:
     """Stable top-level shape for debug.balanceReport."""
 

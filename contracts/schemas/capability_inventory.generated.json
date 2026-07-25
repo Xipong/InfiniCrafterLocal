@@ -1,0 +1,4331 @@
+{
+  "capabilities": [
+    {
+      "authorityByEffect": {},
+      "capability": "configure_item_stats",
+      "componentSlot": "item_stats",
+      "conflicts": [],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.damageClass",
+        "gameplay.damage",
+        "gameplay.knockback",
+        "gameplay.useTime",
+        "gameplay.useAnimation",
+        "gameplay.manaCost",
+        "gameplay.rarity",
+        "gameplay.value",
+        "gameplay.maxStack",
+        "gameplay.craftYield",
+        "gameplay.width",
+        "gameplay.height",
+        "gameplay.itemScale"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "craftYield": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 9999,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "item_count",
+          "units": ""
+        },
+        "damage": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 2000,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "damage_points",
+          "units": ""
+        },
+        "damageClass": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_damage_class",
+          "units": ""
+        },
+        "heightPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 256,
+          "minimum": 8,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "knockback": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "knockback_strength",
+          "units": ""
+        },
+        "manaCost": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 500,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "maxStack": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 9999,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "stack_count",
+          "units": ""
+        },
+        "rarity": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "loaded_rarity_id",
+          "units": ""
+        },
+        "scale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "draw_scale",
+          "units": ""
+        },
+        "useAnimationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "useTimeTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "valueCopper": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100000000,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "copper"
+        },
+        "widthPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 256,
+          "minimum": 8,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing set_item_stats fields split from weapon roots",
+      "purpose": "Set exact item stats; no weapon class or behaviour is inferred.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_item_use",
+      "componentSlot": "item_use",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.useStyleName",
+        "gameplay.autoReuse",
+        "gameplay.useTurn",
+        "gameplay.channelUse",
+        "gameplay.holdoutOffsetX",
+        "gameplay.holdoutOffsetY",
+        "gameplay.handPose",
+        "gameplay.releaseTiming",
+        "runtimeProgram.itemUse.configured",
+        "runtimeProgram.itemUse.useStyle",
+        "runtimeProgram.itemUse.hideUseGraphic",
+        "runtimeProgram.itemUse.disableMeleeHitbox",
+        "runtimeProgram.itemUse.channel",
+        "runtimeProgram.itemUse.handPose",
+        "runtimeProgram.itemUse.releaseTiming",
+        "runtimeProgram.itemUse.holdoutOffsetX",
+        "runtimeProgram.itemUse.holdoutOffsetY"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "autoReuse": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "channel": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "disableMeleeHitbox": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "handPose": {
+          "enum": [
+            "",
+            "one_handed",
+            "two_handed",
+            "overhead",
+            "forward"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "hideUseGraphic": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "holdoutOffsetX": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 96,
+          "minimum": -96,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels"
+        },
+        "holdoutOffsetY": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 96,
+          "minimum": -96,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels"
+        },
+        "releaseTiming": {
+          "enum": [
+            "",
+            "immediate",
+            "on_release",
+            "after_charge"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "useStyle": {
+          "enum": [
+            "swing",
+            "eat_food",
+            "thrust",
+            "hold_up",
+            "shoot",
+            "drink_long",
+            "drink_liquid",
+            "golf_play",
+            "hidden_animation",
+            "mow_the_lawn",
+            "guitar",
+            "rapier",
+            "raise_lamp"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_item_use_style",
+          "units": ""
+        },
+        "useTurn": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing use_affordance and explicit root affordance fields",
+      "purpose": "Set exact item use/draw/input affordances.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "enable_item_contact_damage",
+      "componentSlot": "item_contact",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [
+        "on_hit",
+        "on_crit"
+      ],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.itemContact.enabled",
+        "runtimeProgram.itemContact.hitboxScale",
+        "runtimeProgram.itemContact.contactForgivenessPx"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "contactForgivenessPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 64,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "hitboxScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0.5,
+          "reference": null,
+          "required": true,
+          "semanticType": "hitbox_scale",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing swing/item-hitbox executor extracted from melee root",
+      "purpose": "Enable the authored item body's vanilla contact hitbox.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.itemContact.enabled"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_consumption",
+      "componentSlot": "consumption",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ConsumeItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.consumable",
+        "gameplay.consumeChancePercent"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "consumable": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "consumeChancePercent": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "percent"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing consumption_behavior separated from Terraria ammo identity",
+      "purpose": "Set exact stack-consumption behaviour. This does not mark the item as ammunition.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_vanilla_ammo_item",
+      "componentSlot": "ammo_item",
+      "conflicts": [],
+      "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [
+        "configure_consumption"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.ammoCategory",
+        "gameplay.ammoProjectileId",
+        "gameplay.ammoShootSpeedPxPerTick",
+        "gameplay.notAmmo"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "ammoCategory": {
+          "enum": [
+            "arrow",
+            "bullet",
+            "candy_corn",
+            "coin",
+            "dart",
+            "fallen_star",
+            "flare",
+            "gel",
+            "jack_o_lantern",
+            "nail_friendly",
+            "rocket",
+            "snowball",
+            "solution",
+            "stake",
+            "stynger_bolt"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_ammo_id_category",
+          "units": ""
+        },
+        "notAmmo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "projectileId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1021,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_projectile_id",
+          "units": ""
+        },
+        "shootSpeedPxPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": -20,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels_per_tick"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing ammo_behavior split into direct Terraria Item.ammo and Item.shoot fields",
+      "purpose": "Mark this generated item as one exact vanilla ammo category and projectile. Sets Item.ammo and Item.shoot; it does not configure a weapon to consume ammo.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "configure_consumption",
+          "equals": true,
+          "kind": "item_capability_param",
+          "message": "vanilla ammo item requires configure_consumption(consumable=true)",
+          "param": "consumable",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "restore_resources_on_use",
+      "componentSlot": "resource_restore",
+      "conflicts": [],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.healLife",
+        "gameplay.healMana",
+        "gameplay.potion"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "healLife": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 500,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "life_points",
+          "units": ""
+        },
+        "healMana": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 500,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "potionSickness": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing healing item fields",
+      "purpose": "Restore exact life and/or mana when use succeeds.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "apply_vanilla_buff_on_use",
+      "componentSlot": "use_buff",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.extraBuffs[].buffCode",
+        "gameplay.extraBuffs[].buffTime"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "buffId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_buff_id",
+          "units": ""
+        },
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing apply_player_effect_on_use buff path",
+      "purpose": "Apply one concrete Terraria buff when use succeeds.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "apply_generated_buff_on_use",
+      "componentSlot": "generated_use_buff",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.generatedBuff.durationTicks",
+        "gameplay.generatedBuff.miningSpeedMultiplier",
+        "gameplay.generatedBuff.emitLightStrength",
+        "gameplay.generatedBuff.lightColorName",
+        "gameplay.generatedBuff.oreSenseRadiusTiles",
+        "gameplay.generatedBuff.movementSpeed",
+        "gameplay.generatedBuff.jumpBoost",
+        "gameplay.generatedBuff.manaRegen",
+        "gameplay.generatedBuff.lifeRegen"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "jumpBoost": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "lifeRegen": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 120,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_life_regen",
+          "units": ""
+        },
+        "lightColor": {
+          "enum": [
+            "white",
+            "red",
+            "orange",
+            "yellow",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "gray",
+            "black"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_color",
+          "units": ""
+        },
+        "lightStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.5,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "manaRegen": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 120,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_mana_regen",
+          "units": ""
+        },
+        "miningSpeedMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "movementSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": -0.5,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "oreSenseRadiusTiles": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 60,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing generated-buff executor",
+      "purpose": "Apply a bounded generated stat/light/ore-sense buff.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "kind": "non_neutral_param",
+          "message": "at least one generated-buff effect must be non-neutral",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_tool",
+      "componentSlot": "tool",
+      "conflicts": [],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.pickPower",
+        "gameplay.axePower",
+        "gameplay.hammerPower",
+        "gameplay.miningSpeedScale"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "axePower": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_axe_power",
+          "units": "Item.axe units"
+        },
+        "hammerPower": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_hammer_power",
+          "units": ""
+        },
+        "miningSpeedScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "pickPower": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_pick_power",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing tool_capability",
+      "purpose": "Set exact pick/axe/hammer powers and mining speed.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_placeable",
+      "componentSlot": "placeable",
+      "conflicts": [],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.createTile",
+        "gameplay.createWall",
+        "gameplay.placeStyle"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "placeStyle": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 255,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_place_style",
+          "units": ""
+        },
+        "tileId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": -1,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_tile_id_or_disabled",
+          "units": ""
+        },
+        "wallId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": -1,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_wall_id_or_disabled",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing placeable_behavior",
+      "purpose": "Set one concrete tile/wall placement result.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "at_least_one_param_nonnegative",
+          "message": "at least one of tileId/wallId must be enabled",
+          "param": "tileId|wallId",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "require_use_condition",
+      "componentSlot": "use_condition",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UseBlockedReason",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.useConditionMode",
+        "gameplay.useConditionMinLife",
+        "gameplay.useConditionMinMana"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "minLife": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "life_points",
+          "units": ""
+        },
+        "minMana": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "mode": {
+          "enum": [
+            "grounded",
+            "not_wet",
+            "life_above",
+            "mana_above"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing use_condition",
+      "purpose": "Gate use on one explicit runtime condition.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "life_above:minLife",
+            "mana_above:minMana"
+          ],
+          "equals": null,
+          "kind": "conditional_param",
+          "message": "threshold modes require their threshold parameter",
+          "param": "mode",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "add_hold_light",
+      "componentSlot": "held_light",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.holdLightStrength",
+        "gameplay.holdLightColorName"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "client_visual_only",
+      "parameters": {
+        "color": {
+          "enum": [
+            "white",
+            "red",
+            "orange",
+            "yellow",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "gray",
+            "black"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_color",
+          "units": ""
+        },
+        "strength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.5,
+          "minimum": 0.01,
+          "reference": null,
+          "required": true,
+          "semanticType": "effect_strength",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing hold_item_effect/light executor",
+      "purpose": "Emit bounded light while the item is held.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_player_on_use",
+      "componentSlot": "item_mobility",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.mobilityMode",
+        "gameplay.mobilityRangeTiles",
+        "gameplay.mobilityCooldownTicks",
+        "gameplay.mobilitySafeTileOnly"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "cooldownTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 3600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "mode": {
+          "enum": [
+            "recall_home",
+            "blink_to_cursor"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 120,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "safeTileOnly": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing mobility_effect",
+      "purpose": "Run one explicit bounded mobility action on successful use.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_accessory",
+      "componentSlot": "accessory",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateAccessory",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "accessory.enabled",
+        "accessory.defense",
+        "accessory.maxLife",
+        "accessory.maxMana",
+        "accessory.lifeRegen",
+        "accessory.manaRegen",
+        "accessory.movementSpeed",
+        "accessory.genericDamage",
+        "accessory.genericCrit",
+        "accessory.endurance",
+        "accessory.minionSlots",
+        "accessory.sentrySlots",
+        "accessory.lightStrength",
+        "accessory.lightColorName"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "defense": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -50,
+          "reference": null,
+          "required": true,
+          "semanticType": "defense_points",
+          "units": ""
+        },
+        "endurance": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 0.75,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "genericCrit": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": true,
+          "semanticType": "percentage_points",
+          "units": ""
+        },
+        "genericDamage": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": -0.9,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "lifeRegen": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -100,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_life_regen",
+          "units": ""
+        },
+        "lightColor": {
+          "enum": [
+            "white",
+            "red",
+            "orange",
+            "yellow",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "gray",
+            "black"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_color",
+          "units": ""
+        },
+        "lightStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.5,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "manaRegen": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -100,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_mana_regen",
+          "units": ""
+        },
+        "maxLife": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -200,
+          "reference": null,
+          "required": true,
+          "semanticType": "life_points",
+          "units": ""
+        },
+        "maxMana": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -200,
+          "reference": null,
+          "required": true,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "minionSlots": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "minion_slots",
+          "units": ""
+        },
+        "movementSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": -0.9,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "sentrySlots": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "sentry_slots",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing accessory_effect",
+      "purpose": "Apply exact passive player stat modifiers while equipped as an accessory.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "accessory.enabled"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_armor",
+      "componentSlot": "armor",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateEquip",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "armor.enabled",
+        "armor.slot",
+        "armor.setKey",
+        "armor.defense",
+        "armor.maxLife",
+        "armor.maxMana",
+        "armor.movementSpeed",
+        "armor.genericDamage",
+        "armor.genericCrit",
+        "armor.setBonusText",
+        "armor.setBonusGenericDamage",
+        "armor.setBonusMovementSpeed",
+        "armor.setBonusLifeRegen"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "defense": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "defense_points",
+          "units": ""
+        },
+        "genericCrit": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": true,
+          "semanticType": "percentage_points",
+          "units": ""
+        },
+        "genericDamage": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": -0.9,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "maxLife": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -200,
+          "reference": null,
+          "required": true,
+          "semanticType": "life_points",
+          "units": ""
+        },
+        "maxMana": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -200,
+          "reference": null,
+          "required": true,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "movementSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": -0.9,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "setBonusGenericDamage": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": -0.9,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "setBonusLifeRegen": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "setBonusMovementSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": -0.9,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "setBonusText": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "display_text",
+          "units": ""
+        },
+        "setKey": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "slot": {
+          "enum": [
+            "head",
+            "body",
+            "legs"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing armor_effect",
+      "purpose": "Apply exact armor slot stats and optional set-key bonus.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "armor.enabled"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_spawn",
+      "componentSlot": "spawn",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].spawn.enabled",
+        "runtimeProgram.entities[].spawn.speedPxPerTick",
+        "runtimeProgram.entities[].spawn.count",
+        "runtimeProgram.entities[].spawn.spreadRadians",
+        "runtimeProgram.entities[].spawn.offsetPx",
+        "runtimeProgram.entities[].spawn.aim",
+        "runtimeProgram.entities[].spawn.placement"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "aim": {
+          "enum": [
+            "cursor",
+            "facing",
+            "velocity",
+            "none"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "offsetPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 256,
+          "minimum": -128,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "placement": {
+          "enum": [
+            "item_use_origin",
+            "owner_center",
+            "cursor",
+            "ground_at_cursor",
+            "above_cursor"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "speedPxPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick"
+        },
+        "spreadRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 6.283185307179586,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "shot count/spread/aim/placement extracted from all roots",
+      "purpose": "Set how this entity is spawned; does not choose its movement or damage.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].spawn.enabled"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_damage",
+      "componentSlot": "damage",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [
+        "on_hit",
+        "on_crit"
+      ],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].damage.enabled",
+        "runtimeProgram.entities[].damage.damageClass",
+        "runtimeProgram.entities[].damage.damage",
+        "runtimeProgram.entities[].damage.knockback",
+        "runtimeProgram.entities[].damage.ownerHitCheck"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "damage": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 2000,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "damage_points",
+          "units": ""
+        },
+        "damageClass": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_damage_class",
+          "units": ""
+        },
+        "knockback": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "knockback_strength",
+          "units": ""
+        },
+        "ownerHitCheck": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "damage delivery extracted from root AttackSpec",
+      "purpose": "Enable contact damage with explicit class, damage and knockback.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].damage.enabled"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_lifetime",
+      "componentSlot": "lifetime",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].lifetimeTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "lifetimeTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing projectile lifetime field",
+      "purpose": "Set exact bounded entity lifetime.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_hitbox",
+      "componentSlot": "hitbox",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].hitbox.widthPx",
+        "runtimeProgram.entities[].hitbox.heightPx",
+        "runtimeProgram.entities[].hitbox.drawScale",
+        "runtimeProgram.entities[].hitbox.hitboxScale"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "drawScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "draw_scale",
+          "units": ""
+        },
+        "heightPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 192,
+          "minimum": 4,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "hitboxScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "hitbox_scale",
+          "units": ""
+        },
+        "widthPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 192,
+          "minimum": 4,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing projectile geometry fields",
+      "purpose": "Set projectile collision box and draw scale.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_collision",
+      "componentSlot": "collision",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].collision.tileCollide",
+        "runtimeProgram.entities[].collision.ignoreWater",
+        "runtimeProgram.entities[].collision.bounceCount",
+        "runtimeProgram.entities[].collision.pierce",
+        "runtimeProgram.entities[].collision.extraUpdates",
+        "runtimeProgram.entities[].collision.npcImmunityMode",
+        "runtimeProgram.entities[].collision.localNpcHitCooldownTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "bounceCount": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 32,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounce_count",
+          "units": ""
+        },
+        "extraUpdates": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 5,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "extra_ai_updates",
+          "units": ""
+        },
+        "ignoreWater": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "localNpcHitCooldownTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": -1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "npcImmunityMode": {
+          "enum": [
+            "owner",
+            "local"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_npc_immunity_mode",
+          "units": ""
+        },
+        "pierce": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": -1,
+          "reference": null,
+          "required": true,
+          "semanticType": "penetration_count",
+          "units": ""
+        },
+        "tileCollide": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing tile/bounce/pierce fields",
+      "purpose": "Set exact Terraria tile/liquid collision, penetration, update rate and NPC immunity mode.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_straight",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {},
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 0",
+      "purpose": "Keep initial velocity.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_slow_homing",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.homingStrength"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "homingStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 1",
+      "purpose": "Steer gradually toward a valid NPC.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_gravity_arc",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.gravityPerTick"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "gravityPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick^2"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 2",
+      "purpose": "Apply downward acceleration each tick.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_drift",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.velocityRetention"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "velocityRetention": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.05,
+          "minimum": 0.8,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 3",
+      "purpose": "Multiply velocity by authored retention each tick.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_orbit",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 4",
+      "purpose": "Curve around the owner while remaining a projectile.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_boomerang",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.returnAfterTicks",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "returnAfterTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "returnSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 5",
+      "purpose": "Fly out, then return to the owner.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_bounce",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.gravityPerTick"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "gravityPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick^2"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 6",
+      "purpose": "Use gravity and authored tile bounces.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_sine_homing",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.homingStrength",
+        "runtimeProgram.entities[].movement.params.waveAmplitude"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "homingStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "waveAmplitude": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 64,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 7",
+      "purpose": "Combine sinusoidal drift with bounded homing.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_phase",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.phaseStrength"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "phaseStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 8",
+      "purpose": "Phase-drift with explicit tile collision still controlled separately.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_accelerate",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.acceleration",
+        "runtimeProgram.entities[].movement.params.maxSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "acceleration": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.2,
+          "minimum": 1.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels_per_tick_squared",
+          "units": ""
+        },
+        "maxSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 9",
+      "purpose": "Multiply speed up to an explicit cap.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_spiral",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.turnRadiansPerTick"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "turnRadiansPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 0.5,
+          "minimum": -0.5,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians/tick"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 10",
+      "purpose": "Rotate velocity by an authored angle each tick.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_vortex_orb",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.pullStrength",
+        "runtimeProgram.entities[].movement.params.rangeTiles"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "pullStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 11",
+      "purpose": "Run the existing vortex-orb controller.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_blackhole_pull",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.pullStrength",
+        "runtimeProgram.entities[].movement.params.rangeTiles"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "pullStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 12",
+      "purpose": "Run the existing black-hole pull controller.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_proximity_missile",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.homingStrength",
+        "runtimeProgram.entities[].movement.params.proximityRadiusPx"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "homingStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "proximityRadiusPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 512,
+          "minimum": 4,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 13",
+      "purpose": "Home and trigger the authored on-expire/on-hit actions near a target.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_returning_glaive",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.returnAfterTicks",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "returnAfterTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "returnSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 14",
+      "purpose": "Fly, spin and return to the owner.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_expanding_wave",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.scalePerTick",
+        "runtimeProgram.entities[].movement.params.maxScale"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "maxScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "scalePerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 0.5,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "existing movement code 15",
+      "purpose": "Expand the entity while preserving authored collision/damage.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_flail_tether",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "returnSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "flail movement extracted from the retired melee macro",
+      "purpose": "Tether to owner, fly out and return; only movement/owner controller.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_yoyo_hover",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.returnSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "returnSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/tick"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "yoyo movement extracted from the retired melee macro",
+      "purpose": "Follow owner cursor inside a leash and return on release.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_whip_lash",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.segments"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "segments": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 48,
+          "minimum": 3,
+          "reference": null,
+          "required": true,
+          "semanticType": "collision_segment_count",
+          "units": ""
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "whip movement extracted from the retired melee macro",
+      "purpose": "Execute the bounded owner-attached lash curve.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_forward_then_retract",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 240,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "held thrust logic extracted from spear root",
+      "purpose": "Move an owner-attached body forward and retract during one use animation.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "channel_beam",
+      "componentSlot": "controller",
+      "conflicts": [
+        "exclusive_group:controller"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [
+        "configure_item_use"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "controller",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].controller.params.rangeTiles",
+        "runtimeProgram.entities[].controller.params.widthPx",
+        "runtimeProgram.entities[].controller.params.warmupTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "warmupTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "widthPx": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 128,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        }
+      },
+      "positionOwnership": "owns_position_while_active",
+      "promptVisibility": true,
+      "provenance": "beam scan/channel extracted from the retired magic macro",
+      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam line.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "configure_item_use",
+          "equals": true,
+          "kind": "item_capability_param",
+          "message": "channel controller requires channel=true on item_body",
+          "param": "channel",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "charge_then_release",
+      "componentSlot": "controller",
+      "conflicts": [
+        "exclusive_group:controller"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [
+        "configure_item_use"
+      ],
+      "emittedEvents": [
+        "on_release",
+        "channel_complete"
+      ],
+      "events": [],
+      "exclusiveGroup": "controller",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].controller.params.chargeTicks",
+        "runtimeProgram.entities[].controller.params.powerMultiplier"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "chargeTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "powerMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        }
+      },
+      "positionOwnership": "owns_position_until_release",
+      "promptVisibility": true,
+      "provenance": "charge/release controller extracted from cast root",
+      "purpose": "Accumulate bounded charge while held, then release this entity using authored movement.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "configure_item_use",
+          "equals": true,
+          "kind": "item_capability_param",
+          "message": "channel controller requires channel=true on item_body",
+          "param": "channel",
+          "target": "item_body"
+        },
+        {
+          "anyOf": [
+            "move_accelerate",
+            "move_blackhole_pull",
+            "move_boomerang",
+            "move_bounce",
+            "move_drift",
+            "move_expanding_wave",
+            "move_flail_tether",
+            "move_forward_then_retract",
+            "move_gravity_arc",
+            "move_orbit",
+            "move_phase",
+            "move_proximity_missile",
+            "move_returning_glaive",
+            "move_sine_homing",
+            "move_slow_homing",
+            "move_spiral",
+            "move_straight",
+            "move_vortex_orb",
+            "move_whip_lash",
+            "move_yoyo_hover"
+          ],
+          "kind": "capability_group_present",
+          "message": "released projectile needs an explicit post-release movement",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "target_and_fire",
+      "componentSlot": "controller",
+      "conflicts": [
+        "exclusive_group:controller"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "controller",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code",
+        "runtimeProgram.entities[].targeting.shotEntityId",
+        "runtimeProgram.entities[].targeting.intervalTicks",
+        "runtimeProgram.entities[].targeting.rangeTiles",
+        "runtimeProgram.entities[].targeting.sameTargetBias"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "intervalTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 3600,
+          "minimum": 6,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "sameTargetBias": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "shotEntity": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": true,
+            "namespace": "entity",
+            "targetKinds": [
+              "owner_attached_projectile",
+              "free_projectile",
+              "stationary_projectile",
+              "temporary_helper",
+              "field",
+              "child_projectile"
+            ]
+          },
+          "required": true,
+          "semanticType": "runtime_entity_id",
+          "units": ""
+        }
+      },
+      "positionOwnership": "owns_stationary_position",
+      "promptVisibility": true,
+      "provenance": "stationary targeting/firing split from the retired sentry macro",
+      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "stationary_projectile",
+        "temporary_helper"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].controller.name",
+        "runtimeProgram.entities[].controller.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "spawn_over_target",
+      "componentSlot": "spawn_over_target",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
+      "decision": "expose",
+      "dependencies": [
+        "configure_spawn"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].spawn.overTarget.heightTiles",
+        "runtimeProgram.entities[].spawn.overTarget.delayTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "heightTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "overhead barrage placement extracted from root family",
+      "purpose": "Spawn this entity above the cursor/target with an explicit telegraph delay.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "configure_spawn",
+          "kind": "capability_present",
+          "message": "spawn_over_target extends the same entity's explicit spawn component",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "spawn_entity_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_use",
+        "on_spawn",
+        "on_hit",
+        "on_crit",
+        "on_tile_collision",
+        "on_expire",
+        "on_kill",
+        "periodic",
+        "on_release",
+        "channel_complete"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].spreadRadians",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks",
+        "runtimeProgram.entities[].events[].periodTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "entity": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": true,
+            "namespace": "entity",
+            "targetKinds": [
+              "owner_attached_projectile",
+              "free_projectile",
+              "stationary_projectile",
+              "temporary_helper",
+              "field",
+              "child_projectile"
+            ]
+          },
+          "required": true,
+          "semanticType": "runtime_entity_id",
+          "units": ""
+        },
+        "event": {
+          "enum": [
+            "on_use",
+            "on_spawn",
+            "on_hit",
+            "on_crit",
+            "on_tile_collision",
+            "on_expire",
+            "on_kill",
+            "periodic",
+            "on_release",
+            "channel_complete"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "periodTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 3600,
+          "minimum": 6,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "spreadRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 6.283185307179586,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "split/child/field/helper spawning extracted from secondary macros",
+      "purpose": "Spawn a referenced authored entity when one supported event occurs.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "max 12 per action, program child depth <= 3, total event spawn budget <= 32",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "apply_status_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].buffId",
+        "runtimeProgram.entities[].events[].durationTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "buffId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_buff_id",
+          "units": ""
+        },
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "event": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "burn/frostburn/poison/slow/etc extracted from on-hit opcode",
+      "purpose": "Apply one concrete Terraria debuff/buff to the hit target on a supported event.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "damage_area_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit",
+        "on_tile_collision",
+        "on_expire",
+        "on_kill"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].radiusPx",
+        "runtimeProgram.entities[].events[].damageMultiplier"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.05,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "event": {
+          "enum": [
+            "on_hit",
+            "on_crit",
+            "on_tile_collision",
+            "on_expire",
+            "on_kill"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "radiusPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 768,
+          "minimum": 8,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "burst/aura/blackhole AoE extracted from on-hit executor",
+      "purpose": "Deal server-authoritative AoE damage around the event position.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "chain_damage_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].rangeTiles",
+        "runtimeProgram.entities[].events[].damageMultiplier"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0.05,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "event": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "chain/lightning arc extracted from on-hit opcode",
+      "purpose": "Chain bounded damage from the hit target to nearby NPCs.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {
+        "owner_to_target": "owner_execute_sync",
+        "target_to_entity": "server_execute",
+        "target_to_owner": "server_execute"
+      },
+      "capability": "pull_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "periodic",
+        "on_expire"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].mode",
+        "runtimeProgram.entities[].events[].strength",
+        "runtimeProgram.entities[].events[].radiusTiles",
+        "runtimeProgram.entities[].events[].periodTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "event": {
+          "enum": [
+            "on_hit",
+            "periodic",
+            "on_expire"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "mode": {
+          "enum": [
+            "target_to_owner",
+            "target_to_entity",
+            "owner_to_target"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "periodTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 3600,
+          "minimum": 6,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "radiusTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "strength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.01,
+          "reference": null,
+          "required": true,
+          "semanticType": "effect_strength",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "pull modes extracted from impact executor",
+      "purpose": "Apply bounded pull between owner, target and event entity.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "heal_owner_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].damageFraction",
+        "runtimeProgram.entities[].events[].maxHeal"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "damageFraction": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "event": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "maxHeal": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "life_points",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "lifesteal extracted from on-hit opcode",
+      "purpose": "Heal the owning player from dealt damage on hit/crit.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_owner_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_tile_collision",
+        "on_expire"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].mode",
+        "runtimeProgram.entities[].events[].rangeTiles",
+        "runtimeProgram.entities[].events[].cooldownTicks",
+        "runtimeProgram.entities[].events[].safeTileOnly"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "cooldownTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 3600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "event": {
+          "enum": [
+            "on_hit",
+            "on_tile_collision",
+            "on_expire"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "mode": {
+          "enum": [
+            "blink_to_entity",
+            "blink_to_event_position"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "safeTileOnly": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "blink-to-impact extracted from old attack mobility fields",
+      "purpose": "Run an explicit owner movement action after a projectile event.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "event",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "emit_light_while_active",
+      "componentSlot": "light",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].light.strength",
+        "runtimeProgram.entities[].light.color"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "client_visual_only",
+      "parameters": {
+        "color": {
+          "enum": [
+            "white",
+            "red",
+            "orange",
+            "yellow",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "gray",
+            "black"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_color",
+          "units": ""
+        },
+        "strength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.5,
+          "minimum": 0.01,
+          "reference": null,
+          "required": true,
+          "semanticType": "effect_strength",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "existing emit_light and runtime light fields",
+      "purpose": "Emit bounded world light from a live runtime entity.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    }
+  ],
+  "schema": "infini.low-level-capability-inventory.v1"
+}

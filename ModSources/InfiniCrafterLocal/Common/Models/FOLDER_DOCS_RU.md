@@ -1,16 +1,5 @@
-# Common/Models — game-facing generated contracts
+# Common/Models
 
-Source-of-truth DTOs for what C# can safely receive/apply/execute.
+`RuntimeProgramSpec.cs` is the only gameplay runtime DTO. It accepts only `infini.runtime-program.v5` and `infini.runtime-program.wire.v1`, validates exact entity/binding/component/event relations and normalizes hard bounds.
 
-- `GeneratedRuntimeFamilyPolicy.cs` — one strict owner for canonical family normalization and capability predicates used by DTO/item/projectile/presentation code.
-- `GeneratedItemData.Model.cs` — identity, recipe meta, gameplay, accessory, armor, attack, visual, presentation genome, sound profile, extension data.
-- `GeneratedItemData.Normalize.cs` — clamps, runtime API/path/status normalization; delegates runtime-family checks to the policy owner.
-- `GeneratedItemData.Apply.cs` — transfers explicit fields into Terraria `Item` stats/flags/proxy behavior.
-- `GeneratedItemData.cs` — JSON profiles: full/local-cache/network/player-save and stripping of bulk/prose.
-- `GeneratedItemData.Debug.cs` — applied trace/debug JSON for authored-vs-applied audits.
-- `VfxManifestSpec.cs` — frozen VFX manifest data/slot normalization.
-
-Rules:
-- Adding a field here does not make it gameplay. It must also be authored/validated in Python, normalized/applied here, executed in item/projectile/VFX/audio runtime, and covered by tests/docs.
-- Unknown/future fields may be preserved for local cache/debug, but must stay inert until supported.
-- Do not parse prose/debug/flavor fields to recover mechanics.
+`GeneratedItemData*` wraps metadata, explicit gameplay item fields, runtime program and VFX/visual contracts. There is no compatibility `AttackSpec`, `runtimeFamily` or weapon profile.

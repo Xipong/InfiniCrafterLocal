@@ -507,7 +507,6 @@ FIELD_HELP = {
     "INFINI_BG_REMOVE_MODE": "Метод удаления фона. Оставлен только sprite_keyer — рабочий протокол для Terraria/fake pixel-art.",
     "INFINI_BG_COLOR": "Ожидаемый chroma-key/фон. Для Z-Image пайплайна обычно magenta.",
     "INFINI_SPRITE_RETRIES": "Сколько раз ретраить image gen, если техническая валидация PNG не прошла.",
-    "INFINI_SPRITE_MASTER_CANVAS": "Промежуточный RGBA canvas перед финальным 32/48/64 master-soft bake.",
     "INFINI_SPRITE_DOWNSCALE_FILTER": "Фильтр финального downscale: box (дефолт), bilinear, bicubic или lanczos.",
     "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "Premultiplied RGBA resize, чтобы прозрачный magenta не подтекал в края.",
     "INFINI_SPRITE_CHROMA_DEFRINGE": "Консервативно удаляет magenta/key-остатки на краях альфы.",

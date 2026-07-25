@@ -1,25 +1,42 @@
 {
+  "schema": "infini.agent-manifest.v2",
+  "project": "InfiniCrafterLocal",
+  "projectVersion": "0.4.241",
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "testSuiteVersion": "low-level-v5",
+  "testSuitePolicy": "Run bounded focused gates during edits; final acceptance requires full pytest, schema/prompt/delivery/parity/mutation/hygiene/static C# gates, and a real tModLoader build when the SDK and mod references are available.",
+  "canonicalOwners": {
+    "capabilityRegistry": "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
+    "authorSchema": "LocalGenerator/infini_local/core/runtime_authoring/program_schema.py",
+    "authorValidator": "LocalGenerator/infini_local/core/runtime_authoring/validator.py",
+    "wireCompiler": "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
+    "technicalLowering": "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py",
+    "strictWireBoundary": "LocalGenerator/infini_local/core/runtime_authoring/wire_validator.py",
+    "csharpDto": "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs",
+    "csharpItemProjection": "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs",
+    "csharpProjectileRuntime": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs",
+    "csharpEventRuntime": "ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs",
+    "projectileNetwork": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
+    "visualDirectorContract": "LocalGenerator/infini_local/pipelines/visual_asset_plan.py",
+    "vfxDirectorContract": "LocalGenerator/infini_local/core/vfx_manifest.py",
+    "capabilityInventory": "docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md",
+    "terrariaVocabulary": "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
+    "aliasPolicy": "lowery.md"
+  },
   "alwaysChecks": [
     "compileall",
-    "project_hygiene"
+    "schema_check",
+    "capability_audit",
+    "project_hygiene",
+    "terraria_standardization"
   ],
-  "canonicalOwners": {
-    "childPolicy": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs",
-    "configRegistry": "contracts/config_registry.json",
-    "csharpDto": "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs",
-    "csharpNormalize": "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs",
-    "engineFunctionCatalog": "LocalGenerator/infini_local/core/runtime_authoring/function_contract_registry.py",
-    "engineFunctionContract": "LocalGenerator/infini_local/core/runtime_authoring/function_contract_registry.py",
-    "engineParamBoundary": "LocalGenerator/infini_local/core/runtime_authoring/engine_call_contracts.py",
-    "fieldLifecyclePolicy": "contracts/field_lifecycle.json",
-    "projectileNetwork": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
-    "visualDirectorContract": "LocalGenerator/infini_local/pipelines/visual_director_contract.py",
-    "wireBoundary": "LocalGenerator/infini_local/core/boundary_models.py",
-    "deliveredJsonBoundary": "LocalGenerator/infini_local/qa/csharp_delivery_contract.py",
-    "strictJsonBoundary": "LocalGenerator/infini_local/core/strict_json.py",
-    "diagnosticJsonBoundary": "LocalGenerator/infini_local/core/json_debug.py"
-  },
   "checks": {
+    "pytest": [
+      "python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
     "compileall": [
       "python",
       "-m",
@@ -28,23 +45,27 @@
       "LocalGenerator/infini_local",
       "tools"
     ],
-    "config_registry": [
+    "schema_check": [
       "python",
-      "tools/config_registry.py",
+      "tools/export_contract_schemas.py",
       "--check"
     ],
-    "contract_parity": [
+    "capability_audit": [
       "python",
-      "tools/contract_parity.py",
-      "--json"
+      "tools/audit_capability_library.py"
+    ],
+    "generated_docs": [
+      "python",
+      "tools/generate_low_level_runtime_docs.py",
+      "--check"
     ],
     "delivery_contract": [
       "python",
       "tools/check_delivery_contract.py"
     ],
-    "csharp_contracts": [
+    "contract_parity": [
       "python",
-      "tools/check_csharp_contracts.py"
+      "tools/contract_parity.py"
     ],
     "mutation_gate": [
       "python",
@@ -54,20 +75,30 @@
       "python",
       "tools/check_planner_prompt_usability.py"
     ],
+    "semantic_runtime_diff": [
+      "python",
+      "tools/semantic_runtime_diff.py"
+    ],
+    "runtime_impact": [
+      "python",
+      "tools/runtime_impact_report.py"
+    ],
+    "csharp_contracts": [
+      "python",
+      "tools/check_csharp_contracts.py"
+    ],
     "project_hygiene": [
       "python",
       "tools/check_project_hygiene.py"
     ],
-    "pyright": [
-      "pyright"
-    ],
-    "pytest": [
+    "config_registry": [
       "python",
-      "tools/run_pytest_shards.py",
-      "--shards",
-      "4",
-      "--json-out",
-      "artifacts/agent/pytest_shards.json"
+      "tools/config_registry.py",
+      "--check"
+    ],
+    "portable_sandbox": [
+      "python",
+      "tools/validate_sandbox.py"
     ],
     "ruff": [
       "ruff",
@@ -75,86 +106,40 @@
       "LocalGenerator/infini_local",
       "tools"
     ],
-    "runtime_impact": [
-      "python",
-      "tools/runtime_impact_report.py"
+    "pyright": [
+      "pyright"
     ],
-    "schema_check": [
+    "tml_build": [
       "python",
-      "tools/export_contract_schemas.py",
+      "tools/try_tml_build_check.py",
+      "--project",
+      "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
+    ],
+    "terraria_standardization": [
+      "python",
+      "tools/audit_terraria_standardization.py",
       "--check"
-    ],
-    "semantic_runtime_diff": [
-      "python",
-      "tools/semantic_runtime_diff.py"
-    ],
-    "contract_fingerprints": [
-      "python",
-      "tools/export_runtime_contract_fingerprints.py",
-      "--check"
-    ],
-    "historical_replay": [
-      "python",
-      "tools/check_runtime_contract_replay.py",
-      "--changed-contracts-from",
-      "HEAD",
-      "--quiet"
-    ],
-    "runtime_contract_tests": [
-      "python",
-      "tools/run_focused_pytests.py",
-      "LocalGenerator/tests/test_runtime_function_contract_registry.py",
-      "LocalGenerator/tests/test_runtime_contract_historical_replay.py",
-      "LocalGenerator/tests/test_planner_prompt_usability_contract.py",
-      "LocalGenerator/tests/test_247_gameplay_authority_authorship_contract.py",
-      "LocalGenerator/tests/test_248_use_driver_equipment_visual_contract.py",
-      "LocalGenerator/tests/test_v18_contract_safety_stack.py",
-      "LocalGenerator/tests/test_vfx_director_contract_registry.py"
-    ],
-    "vfx_contract_tests": [
-      "python",
-      "tools/run_focused_pytests.py",
-      "LocalGenerator/tests/test_233_gameplay_truth_visual_discipline_contract.py",
-      "LocalGenerator/tests/test_248_use_driver_equipment_visual_contract.py",
-      "LocalGenerator/tests/test_vfx_audio_and_projectile_guard_contract.py",
-      "LocalGenerator/tests/test_vfx_director_contract_registry.py",
-      "LocalGenerator/tests/test_vfx_morph_recipes_contract.py",
-      "LocalGenerator/tests/test_visual_asset_modes_contract.py",
-      "LocalGenerator/tests/test_visual_delivery_gate_contract.py",
-      "LocalGenerator/tests/test_visual_role_contract_registry.py",
-      "LocalGenerator/tests/test_visual_soul_contract.py"
-    ],
-    "agent_tooling_tests": [
-      "python",
-      "tools/run_focused_pytests.py",
-      "LocalGenerator/tests/test_v18_contract_safety_stack.py"
-    ],
-    "changed_pytests": [
-      "python",
-      "tools/run_changed_pytests.py"
     ]
   },
-  "contractSafetyVersion": "v18",
   "fullChecks": [
     "pytest",
     "compileall",
     "schema_check",
-    "config_registry",
-    "contract_parity",
+    "capability_audit",
+    "generated_docs",
     "delivery_contract",
+    "contract_parity",
     "mutation_gate",
+    "planner_prompt",
     "semantic_runtime_diff",
-    "historical_replay",
     "runtime_impact",
+    "terraria_standardization",
     "csharp_contracts",
     "project_hygiene",
-    "planner_prompt",
+    "config_registry",
+    "portable_sandbox",
     "ruff",
-    "pyright"
-  ],
-  "project": "InfiniCrafterLocal",
-  "runtimeApiVersion": "v0.4.53",
-  "schema": "infini.agent-manifest.v1",
-  "testSuitePolicy": "Impact-focused inner loop; full sharded pytest only for release/final acceptance; C# changes require direct contract gates plus a real build.",
-  "testSuiteVersion": "v19"
+    "pyright",
+    "tml_build"
+  ]
 }

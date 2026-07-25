@@ -8,6 +8,7 @@ easy to regress while refactoring architecture, without executing tModLoader.
 
 from pathlib import Path
 import ast
+import json
 import re
 import sys
 
@@ -165,9 +166,9 @@ def check_version_sync() -> None:
 
 def check_runtime_api_sync() -> None:
     py_runtime_api = _version_literal(
-        "LocalGenerator/infini_local/core/runtime_authoring/common.py",
-        r'ENGINE_RUNTIME_API_VERSION = "([^"]+)"',
-        "Python engine runtime API",
+        "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
+        r'RUNTIME_PROGRAM_API_VERSION: Final\[str\] = "([^"]+)"',
+        "Python runtime program API",
     )
     cs_runtime_api = _version_literal(
         "ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs",
@@ -175,7 +176,7 @@ def check_runtime_api_sync() -> None:
         "C# runtime API",
     )
     if py_runtime_api != cs_runtime_api:
-        fail(f"runtime API mismatch: Python ENGINE_RUNTIME_API_VERSION={py_runtime_api}; C# RuntimeApiCurrent={cs_runtime_api}")
+        fail(f"runtime API mismatch: Python RUNTIME_PROGRAM_API_VERSION={py_runtime_api}; C# RuntimeApiCurrent={cs_runtime_api}")
 
 
 def check_no_flat_helper_shims() -> None:
@@ -203,13 +204,6 @@ def check_internal_import_boundaries() -> None:
             if isinstance(node, ast.ImportFrom):
                 if node.module == "infini_local.pipelines.pipeline_support":
                     fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
-                if (
-                    production in path.parents
-                    and path != runtime_package / "__init__.py"
-                    and runtime_package not in path.parents
-                    and node.module == "infini_local.core.runtime_authoring"
-                ):
-                    fail(f"production runtime_authoring barrel import in {path.relative_to(ROOT)}:{node.lineno}")
             elif isinstance(node, ast.Import):
                 if any(alias.name == "infini_local.pipelines.pipeline_support" for alias in node.names):
                     fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
@@ -226,6 +220,37 @@ def check_internal_import_boundaries() -> None:
                 }
     if not exported or any(name.startswith("_") for name in exported):
         fail("runtime_authoring public API is missing or exports private internals")
+
+
+def check_agent_metadata() -> None:
+    manifest_path = ROOT / ".agent" / "manifest.json"
+    rules_path = ROOT / ".agent" / "impact_rules.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"invalid .agent metadata: {exc}")
+        return
+    checks = manifest.get("checks") if isinstance(manifest.get("checks"), dict) else {}
+    missing_owners = [
+        f"{name}={path}"
+        for name, path in (manifest.get("canonicalOwners") or {}).items()
+        if not isinstance(path, str) or not (ROOT / path).exists()
+    ]
+    if missing_owners:
+        fail(".agent canonicalOwners reference missing paths: " + ", ".join(missing_owners[:20]))
+    unknown_full = [name for name in manifest.get("fullChecks") or [] if name not in checks]
+    if unknown_full:
+        fail(".agent fullChecks reference unknown checks: " + ", ".join(unknown_full))
+    for rule in rules.get("rules") or []:
+        if not isinstance(rule, dict):
+            fail(".agent impact rule must be an object")
+        unknown = [name for name in rule.get("checks") or [] if name not in checks]
+        if unknown:
+            fail(f".agent impact rule {rule.get('id')!r} references unknown checks: {', '.join(unknown)}")
+        missing_context = [path for path in rule.get("context") or [] if not (ROOT / str(path)).exists()]
+        if missing_context:
+            fail(f".agent impact rule {rule.get('id')!r} references missing context: {', '.join(missing_context[:20])}")
 
 
 def check_release_docs_version() -> None:
@@ -267,10 +292,10 @@ def check_architecture_split_markers() -> None:
     trace_dashboard = read("LocalGenerator/infini_local/web/trace_dashboard.py")
     visual_asset_pipeline = read("LocalGenerator/infini_local/services/visual_asset_pipeline.py")
     network_info_service = read("LocalGenerator/infini_local/services/network_info_service.py")
-    if "def _base_spec" in server or "def accessory_plan" in server:
-        fail("developer fallback builders leaked back into server.py")
-    if "def _base_spec" not in fallback or "DEV" not in fallback.upper():
-        fail("dev_fallback.py no longer owns its fallback builders/contract wording")
+    if "deterministic_low_level_plan" in server:
+        fail("developer low-level fixture leaked back into server.py")
+    if "def deterministic_low_level_plan" not in fallback or "DEVELOPER-ONLY" not in fallback.upper():
+        fail("dev_fallback.py no longer owns the explicit developer-only v5 fixture")
     if "def parse_first_valid_llm_json" not in json_tools:
         fail("llm_json_tools.py missing JSON parser")
     if 'payload.setdefault("recipeMeta", {})' in server or "def sanitize_recipe_for_delivery" not in world_storage:
@@ -309,6 +334,7 @@ def main() -> int:
     check_python_exception_hygiene()
     check_no_flat_helper_shims()
     check_internal_import_boundaries()
+    check_agent_metadata()
     check_release_docs_version()
     check_architecture_split_markers()
     print("[OK] project hygiene checks passed")

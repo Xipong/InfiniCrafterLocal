@@ -312,6 +312,7 @@ def _canonical_compiled_runtime(payload: dict[str, Any]) -> dict[str, Any]:
             "unsupported": provenance.get("unsupported") if isinstance(provenance.get("unsupported"), list) else [],
             "futureDisabled": provenance.get("futureDisabled") if isinstance(provenance.get("futureDisabled"), list) else [],
             "fieldSources": provenance.get("fieldSources") if isinstance(provenance.get("fieldSources"), dict) else {},
+            "fieldSourceOwners": provenance.get("fieldSourceOwners") if isinstance(provenance.get("fieldSourceOwners"), dict) else {},
             "normalization": provenance.get("normalization") if isinstance(provenance.get("normalization"), dict) else {},
         },
         "validation": {

@@ -1,0 +1,371 @@
+{
+  "$id": "https://infinicrafter.local/contracts/vfx_repair_patch.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "effectMagnitude": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "motif": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "chaos": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "element": {
+              "maxLength": 48,
+              "minLength": 1,
+              "type": "string"
+            },
+            "motionLanguage": {
+              "maxLength": 96,
+              "minLength": 1,
+              "type": "string"
+            },
+            "paletteRole": {
+              "maxLength": 48,
+              "minLength": 1,
+              "type": "string"
+            },
+            "rhythm": {
+              "maximum": 3.0,
+              "minimum": 0.2,
+              "type": "number"
+            },
+            "shapeLanguage": {
+              "maxLength": 96,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "element",
+            "shapeLanguage",
+            "motionLanguage",
+            "paletteRole",
+            "rhythm",
+            "chaos"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema": {
+      "const": "infini.vfx-repair-patch.runtime-events.v1"
+    },
+    "slotIdsDelete": {
+      "items": {
+        "maxLength": 64,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 5,
+      "type": "array"
+    },
+    "slotIndicesDelete": {
+      "items": {
+        "maximum": 10,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 10,
+      "type": "array"
+    },
+    "slotsUpsert": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "alpha": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "anchor": {
+            "enum": [
+              "self",
+              "owner",
+              "tip",
+              "tipHistory",
+              "hitPoint",
+              "velocity",
+              "field"
+            ],
+            "type": "string"
+          },
+          "backend": {
+            "enum": [
+              "Auto",
+              "Realtime",
+              "Primitive",
+              "Sprite",
+              "Particle"
+            ],
+            "type": "string"
+          },
+          "blend": {
+            "enum": [
+              "alpha",
+              "additive"
+            ],
+            "type": "string"
+          },
+          "budgetWeight": {
+            "maximum": 4.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "channel": {
+            "enum": [
+              "motionTrail",
+              "coreGlow",
+              "ambientParticles",
+              "impactShape",
+              "impactParticles",
+              "decaySmoke",
+              "light",
+              "sound"
+            ],
+            "type": "string"
+          },
+          "density": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "duration": {
+            "maximum": 120,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "emissionMode": {
+            "enum": [
+              "wake",
+              "orbit",
+              "residue",
+              "burst",
+              "cone",
+              "ring",
+              "spiral",
+              "none"
+            ],
+            "type": "string"
+          },
+          "entityId": {
+            "enum": [
+              "item",
+              "nail",
+              "workbench_blade"
+            ],
+            "type": "string"
+          },
+          "event": {
+            "enum": [
+              "on_crit",
+              "on_expire",
+              "on_hit",
+              "on_kill",
+              "on_spawn",
+              "on_tile_collision",
+              "on_use"
+            ],
+            "type": "string"
+          },
+          "fadeIn": {
+            "maximum": 0.8,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "fadeOut": {
+            "maximum": 0.8,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "jitter": {
+            "maximum": 1.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "lane": {
+            "enum": [
+              "primary",
+              "support",
+              "accent",
+              "ornament",
+              "cue"
+            ],
+            "type": "string"
+          },
+          "particleRole": {
+            "enum": [
+              "item",
+              "entity",
+              "projectile",
+              "field",
+              "impact",
+              "none"
+            ],
+            "type": "string"
+          },
+          "particleSystemId": {
+            "enum": [
+              "dust",
+              "pl:glow",
+              "pl:shard",
+              "pl:smoke",
+              "pl:spark",
+              "none"
+            ],
+            "type": "string"
+          },
+          "rendererKind": {
+            "enum": [
+              "projectileAfterimage",
+              "spriteStampTrail",
+              "historyRibbon",
+              "tipTrail",
+              "ghostArc",
+              "wavyStrip",
+              "beamLine",
+              "fieldPulse",
+              "orbitingMotes",
+              "actorAfterimage",
+              "impactRing",
+              "impactSprite",
+              "childMotes",
+              "lightCue",
+              "soundCue"
+            ],
+            "type": "string"
+          },
+          "repeatEvery": {
+            "maximum": 120,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 5.0,
+            "minimum": 0.15,
+            "type": "number"
+          },
+          "signatureWeight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "spread": {
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "startTick": {
+            "maximum": 120,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "textureRole": {
+            "enum": [
+              "item",
+              "entity",
+              "projectile",
+              "field",
+              "impact",
+              "none"
+            ],
+            "type": "string"
+          },
+          "visualCost": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "entityId",
+          "event",
+          "rendererKind",
+          "backend",
+          "textureRole",
+          "particleRole",
+          "anchor",
+          "channel",
+          "lane",
+          "emissionMode",
+          "blend",
+          "particleSystemId",
+          "scale",
+          "density",
+          "duration",
+          "alpha",
+          "spread",
+          "jitter",
+          "fadeIn",
+          "fadeOut",
+          "budgetWeight",
+          "signatureWeight",
+          "visualCost",
+          "startTick",
+          "repeatEvery"
+        ],
+        "type": "object"
+      },
+      "maxItems": 5,
+      "type": "array"
+    },
+    "visualBudgetClass": {
+      "anyOf": [
+        {
+          "enum": [
+            "tiny",
+            "small",
+            "normal",
+            "large",
+            "signature"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "effectMagnitude",
+    "visualBudgetClass",
+    "motif",
+    "slotsUpsert",
+    "slotIdsDelete",
+    "slotIndicesDelete",
+    "note"
+  ],
+  "type": "object",
+  "x-infini-generated": true
+}

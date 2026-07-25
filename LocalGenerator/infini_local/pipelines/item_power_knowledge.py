@@ -25,7 +25,6 @@ from infini_local.core.item_identity_tools import (
     slug,
 )
 from infini_local.core.item_signals import HARD_TAGS, VISUAL_SYNONYMS, knowledge_key, wire_identity_names
-from infini_local.core.runtime_authoring.normalize import runtime_plan
 from infini_local.pipelines.result_identity_policy import (
     normalize_category,
     parent_primary_category,
@@ -739,12 +738,12 @@ def apply_item_knowledge(data: dict[str, Any], a: dict[str, Any], b: dict[str, A
     # Do not inject inferred parent tags into LLM-authored result tags in runtime authoring mode,
     # because that makes later VFX/category layers behave as if the code authored semantics.
     tags = set(str(t).lower() for t in data.get("tags", []))
-    if not (LLM_RUNTIME_AUTHORING and runtime_plan(data)):
+    if not (LLM_RUNTIME_AUTHORING and isinstance(data.get("runtimeProgram"), dict)):
         tags |= set(knowledge.get("tagsFromKnowledge") or [])
     data["tags"] = sorted(tags)
     dbg = data.setdefault("debug", {})
     dbg["itemKnowledge"] = json.dumps(knowledge, ensure_ascii=False)
-    dbg["itemKnowledgeTagMerge"] = "disabled_runtime_authoring" if (LLM_RUNTIME_AUTHORING and runtime_plan(data)) else "enabled_non_runtime_fallback"
+    dbg["itemKnowledgeTagMerge"] = "disabled_runtime_authoring" if (LLM_RUNTIME_AUTHORING and isinstance(data.get("runtimeProgram"), dict)) else "enabled_non_runtime_fallback"
     return data
 
 

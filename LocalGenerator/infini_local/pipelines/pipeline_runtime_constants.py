@@ -75,25 +75,25 @@ LLM_INCLUDE_PROJECTILE_BEHAVIOR_DIGEST = env_bool("INFINI_LLM_PROJECTILE_BEHAVIO
 # sourceItem echo that is already present in itemRaw.
 LLM_ITEM_RAW_KEYS = [
     "type", "name", "internalName", "sourceMod", "fullName", "tooltipLines",
-    "damage", "damageClass", "damageClassFullName", "knockback", "crit",
-    "useStyle", "useTime", "useAnimation", "reuseDelay", "autoReuse", "channel", "noMelee", "noUseGraphic", "useTurn",
+    "damage", "damageClass", "knockback", "crit",
+    "useStyle", "useStyleName", "useTime", "useAnimation", "reuseDelay", "autoReuse", "channel", "noMelee", "noUseGraphic", "useTurn",
     "rare", "rarityDetails", "value", "maxStack", "consumable", "material", "accessory", "defense",
     "headSlot", "bodySlot", "legSlot", "createTile", "createWall",
     "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
-    "healLife", "healMana", "manaCost", "buffType", "buffTime",
-    "ammo", "useAmmo", "shoot", "shootSpeed", "fishingPole", "bait",
+    "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
+    "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "fishingPole", "bait",
 ]
 LLM_PROJECTILE_RAW_KEYS = [
     "source", "inventorySlot", "type", "internalName", "sourceMod", "fullName",
     "itemShootSpeed", "width", "height", "scale", "penetrate", "maxPenetrate", "timeLeft", "extraUpdates",
     "tileCollide", "ignoreWater", "friendly", "hostile", "arrow", "minion", "sentry", "minionSlots",
     "ownerHitCheck", "usesLocalNPCImmunity", "localNPCHitCooldown", "usesIDStaticNPCImmunity", "idStaticNPCHitCooldown",
-    "stopsDealingDamageAfterPenetrateHits", "light", "alpha", "netImportant", "damageClass", "damageClassFullName",
+    "stopsDealingDamageAfterPenetrateHits", "light", "alpha", "netImportant", "damageClass",
     "framesRaw", "setsRaw", "fromGeneratedAttack", "engineMetrics", "unavailable",
 ]
 LLM_AMMO_ITEM_KEYS = [
-    "source", "inventorySlot", "type", "name", "internalName", "sourceMod", "fullName", "damage", "damageClass", "damageClassFullName",
-    "ammo", "useAmmo", "shoot", "shootSpeed", "knockback", "rare", "value", "maxStack", "consumable", "material",
+    "source", "inventorySlot", "type", "name", "internalName", "sourceMod", "fullName", "damage", "damageClass",
+    "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "rare", "value", "maxStack", "consumable", "material",
 ]
 
 

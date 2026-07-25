@@ -1,0 +1,187 @@
+{
+  "$id": "https://infinicrafter.local/contracts/visual_repair_patch.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "animationPlan": {
+      "anyOf": [
+        {
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entitiesUpsert": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "assetMode": {
+            "enum": [
+              "baked_sprite",
+              "no_asset",
+              "reuse_item_icon",
+              "runtime_geometry"
+            ],
+            "type": "string"
+          },
+          "entityId": {
+            "enum": [
+              "item",
+              "workbench_blade",
+              "nail"
+            ],
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 1400,
+            "minLength": 1,
+            "type": "string"
+          },
+          "scale": {
+            "maximum": 4.0,
+            "minimum": 0.25,
+            "type": "number"
+          },
+          "silhouette": {
+            "maxLength": 700,
+            "minLength": 1,
+            "type": "string"
+          },
+          "visualIdentity": {
+            "maxLength": 700,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "assetMode",
+          "prompt",
+          "silhouette",
+          "visualIdentity",
+          "scale"
+        ],
+        "type": "object"
+      },
+      "maxItems": 3,
+      "type": "array"
+    },
+    "entityIdsDelete": {
+      "items": {
+        "enum": [
+          "item",
+          "workbench_blade",
+          "nail"
+        ],
+        "type": "string"
+      },
+      "maxItems": 3,
+      "type": "array"
+    },
+    "entityIndicesDelete": {
+      "items": {
+        "maximum": 6,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 6,
+      "type": "array"
+    },
+    "itemPatch": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "inventoryScale": {
+              "maximum": 4.0,
+              "minimum": 0.25,
+              "type": "number"
+            },
+            "negativePrompt": {
+              "maxLength": 700,
+              "type": "string"
+            },
+            "palette": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 8,
+              "minItems": 1,
+              "type": "array"
+            },
+            "preferredCanvasSize": {
+              "enum": [
+                24,
+                32,
+                48,
+                64,
+                96,
+                128
+              ],
+              "type": "integer"
+            },
+            "prompt": {
+              "maxLength": 1400,
+              "minLength": 1,
+              "type": "string"
+            },
+            "silhouette": {
+              "maxLength": 700,
+              "minLength": 1,
+              "type": "string"
+            },
+            "visualIdentity": {
+              "maxLength": 700,
+              "minLength": 1,
+              "type": "string"
+            },
+            "worldScale": {
+              "maximum": 4.0,
+              "minimum": 0.25,
+              "type": "number"
+            }
+          },
+          "required": [
+            "prompt",
+            "negativePrompt",
+            "silhouette",
+            "visualIdentity",
+            "palette",
+            "preferredCanvasSize",
+            "inventoryScale",
+            "worldScale"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema": {
+      "const": "infini.visual-kit-repair-patch.runtime-entities.v1"
+    }
+  },
+  "required": [
+    "schema",
+    "itemPatch",
+    "entitiesUpsert",
+    "entityIdsDelete",
+    "entityIndicesDelete",
+    "animationPlan",
+    "note"
+  ],
+  "type": "object",
+  "x-infini-generated": true
+}

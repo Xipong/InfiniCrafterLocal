@@ -1,15 +1,15 @@
 # docs
 
-Supplementary design/reference docs. Они не владеют отдельными backlog: единственный project ToDo находится в корне версии.
+Current source-facing documents:
 
-Current mod architecture source of truth is `../PROJECT_ARCHITECTURE_RU.md` plus C# under `../ModSources/InfiniCrafterLocal`.
+- `LOW_LEVEL_CAPABILITY_INVENTORY_RU.md` — generated complete registry table;
+- `CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md` — generated structural/expressiveness audit;
+- `LOW_LEVEL_RUNTIME_AUTHORING_RU.md` — Author contract;
+- `ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md` — vertical-slice workflow;
+- `THREE_STAGE_LLM_PIPELINE_RU.md` — exact call topology;
+- `TARGETED_REPAIR_PROTOCOL_RU.md` — leaf-local frozen Repair contract;
+- `TARGETED_REPAIR_AUDIT_RU.md` — machine/test audit of Repair locality;
+- `TECHNICAL_LOWERING_POLICY_RU.md` — allowed adapters;
+- `LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md` — official/Calamity references.
 
-Useful docs here:
-- `BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md` — soft balance/reference constraints.
-- `RECIPE_HEALTH_AND_CONTRACTS_RU.md` — recipe health/contract notes.
-- `RUNTIME_AUTHORING_CURRENT_RU.md` — runtime authoring notes, may include historical sections.
-- `RUNTIME_VERTICAL_SLICES_RU.md` — обязательные правила расширения runtime без state-machine, semantic tables и скрытых владельцев.
-- `runtime_archetype_contract.md` — v0.4.239 runtimeArchetype/runtimeContract schema and promise-truth notes.
-- `../TODO_ROADMAP_VERY_LATER_RU.md` — sole unified future-work roadmap, intentionally kept at the version root.
-
-- `CONTRACT_SAFETY_STACK_RU.md` — strict boundaries, parity, Hypothesis, Ruff/Pyright and release gate ownership.
+Old weapon-family/runtime-archetype documents were removed because they described retired architecture.

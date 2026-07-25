@@ -1,3 +1,3 @@
 # LocalGenerator/docs
 
-Supplemental reference notes for Python generator work. Единственный project backlog — `../../TODO_ROADMAP_VERY_LATER_RU.md`. Verify active behavior against `infini_local/` source and tests before repeating claims.
+`TERRARIA_TICK_GUIDE_RU.md` — вспомогательная таблица units. Canonical ranges находятся в generated capability schema/registry.

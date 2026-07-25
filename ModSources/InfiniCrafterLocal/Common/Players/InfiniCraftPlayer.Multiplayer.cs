@@ -434,7 +434,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)3); // state version
+        writer.Write((byte)4); // state version
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -445,7 +445,6 @@ public sealed partial class InfiniCraftPlayer
         writer.Write(_generatedManaRegen);
         writer.Write(_generatedLifeRegen);
         writer.Write(_generatedMobilityCooldownTicks);
-        writer.Write(_generatedAltUseCooldownTicks);
         int buffCount = Math.Min(32, _activeGeneratedUtilityBuffs.Count);
         writer.Write((byte)buffCount);
         for (int index = 0; index < buffCount; index++)
@@ -455,7 +454,7 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 3)
+        if (version != 4)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _generatedBuffTicks = reader.ReadInt32();
         _generatedMiningSpeedMultiplier = reader.ReadSingle();
@@ -467,7 +466,6 @@ public sealed partial class InfiniCraftPlayer
         _generatedManaRegen = reader.ReadInt32();
         _generatedLifeRegen = reader.ReadInt32();
         _generatedMobilityCooldownTicks = reader.ReadInt32();
-        _generatedAltUseCooldownTicks = reader.ReadInt32();
         ClampGeneratedBuffState();
         _activeGeneratedUtilityBuffs.Clear();
         int buffCount = Math.Min(32, (int)reader.ReadByte());
@@ -478,7 +476,7 @@ public sealed partial class InfiniCraftPlayer
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 3)
+        if (version != 4)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
@@ -487,7 +485,6 @@ public sealed partial class InfiniCraftPlayer
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
         _ = reader.ReadSingle();
-        _ = reader.ReadInt32();
         _ = reader.ReadInt32();
         _ = reader.ReadInt32();
         _ = reader.ReadInt32();
@@ -554,7 +551,6 @@ public sealed partial class InfiniCraftPlayer
         _generatedManaRegen = Math.Clamp(_generatedManaRegen, 0, 120);
         _generatedLifeRegen = Math.Clamp(_generatedLifeRegen, 0, 120);
         _generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000);
-        _generatedAltUseCooldownTicks = Math.Clamp(_generatedAltUseCooldownTicks, 0, 36000);
     }
 
     private bool GeneratedBuffStateDiffers(InfiniCraftPlayer other)
@@ -565,20 +561,14 @@ public sealed partial class InfiniCraftPlayer
         bool activeOld = other._generatedBuffTicks > 0;
         bool cooldownNow = _generatedMobilityCooldownTicks > 0;
         bool cooldownOld = other._generatedMobilityCooldownTicks > 0;
-        bool altCooldownNow = _generatedAltUseCooldownTicks > 0;
-        bool altCooldownOld = other._generatedAltUseCooldownTicks > 0;
-
         // Do not sync every countdown tick. Remote clients can decrement their local
         // copy after one start/end packet; per-tick SendClientChanges would spam MP.
-        if (activeNow != activeOld || cooldownNow != cooldownOld || altCooldownNow != altCooldownOld)
+        if (activeNow != activeOld || cooldownNow != cooldownOld)
             return true;
         if (Math.Abs(_generatedBuffTicks - other._generatedBuffTicks) > 30)
             return true;
         if (Math.Abs(_generatedMobilityCooldownTicks - other._generatedMobilityCooldownTicks) > 30)
             return true;
-        if (Math.Abs(_generatedAltUseCooldownTicks - other._generatedAltUseCooldownTicks) > 30)
-            return true;
-
         return Math.Abs(_generatedMiningSpeedMultiplier - other._generatedMiningSpeedMultiplier) > 0.001f
             || Math.Abs(_generatedLightStrength - other._generatedLightStrength) > 0.001f
             || !string.Equals(_generatedLightColorName, other._generatedLightColorName, StringComparison.Ordinal)
@@ -618,7 +608,6 @@ public sealed partial class InfiniCraftPlayer
             clone._generatedManaRegen = _generatedManaRegen;
             clone._generatedLifeRegen = _generatedLifeRegen;
             clone._generatedMobilityCooldownTicks = _generatedMobilityCooldownTicks;
-            clone._generatedAltUseCooldownTicks = _generatedAltUseCooldownTicks;
         }
     }
 
@@ -659,145 +648,6 @@ public sealed partial class InfiniCraftPlayer
         }
         modPlayer.ReadGeneratedBuffState(reader);
     }
-
-    public void RequestGeneratedAltUseFromServer(string generatedItemId, bool alternateUse, Vector2 target)
-    {
-        if (Main.netMode != NetmodeID.MultiplayerClient || Player.whoAmI != Main.myPlayer)
-            return;
-        string safeId = (generatedItemId ?? "").Trim();
-        if (safeId.Length is <= 0 or > 128 || !float.IsFinite(target.X) || !float.IsFinite(target.Y))
-            return;
-        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(PacketRequestGeneratedAltUse);
-        packet.Write(alternateUse);
-        packet.Write(safeId);
-        packet.Write(target.X);
-        packet.Write(target.Y);
-        packet.Send();
-    }
-
-    public static void HandleGeneratedAltUseRequestPacket(System.IO.BinaryReader reader, int whoAmI)
-    {
-        if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers)
-            return;
-        bool alternateUse = reader.ReadBoolean();
-        string generatedItemId = reader.ReadString().Trim();
-        Vector2 target = new(reader.ReadSingle(), reader.ReadSingle());
-        if (generatedItemId.Length is <= 0 or > 128 || !float.IsFinite(target.X) || !float.IsFinite(target.Y))
-            return;
-
-        Player player = Main.player[whoAmI];
-        if (player is null || !player.active || player.dead || player.HeldItem?.ModItem is not GeneratedItem held)
-            return;
-        if (!string.Equals(held.Data?.Id, generatedItemId, StringComparison.Ordinal))
-            return;
-        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-        if (registry is null
-            || !registry.TryGet(generatedItemId, out GeneratedItemData canonical)
-            || !GeneratedItemRegistryService.IsCurrentWorldData(canonical))
-            return;
-
-        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        modPlayer.QueueGeneratedUseIntent(generatedItemId, alternateUse, target);
-        modPlayer.ProcessPendingGeneratedUseIntent();
-    }
-
-    private void QueueGeneratedUseIntent(string generatedItemId, bool alternateUse, Vector2 target)
-    {
-        if (Main.netMode != NetmodeID.Server || _pendingGeneratedUseTicks > 0)
-            return;
-        _pendingGeneratedUseItemId = generatedItemId;
-        _pendingGeneratedUseAlternate = alternateUse;
-        _pendingGeneratedUseTarget = target;
-        _pendingGeneratedUseTicks = GeneratedUseIntentWindowTicks;
-    }
-
-    private void ClearPendingGeneratedUseIntent()
-    {
-        _pendingGeneratedUseItemId = "";
-        _pendingGeneratedUseAlternate = false;
-        _pendingGeneratedUseTarget = Vector2.Zero;
-        _pendingGeneratedUseTicks = 0;
-    }
-
-    private void ProcessPendingGeneratedUseIntent()
-    {
-        if (Main.netMode != NetmodeID.Server)
-        {
-            ClearPendingGeneratedUseIntent();
-            return;
-        }
-        if (_pendingGeneratedUseTicks <= 0)
-            return;
-        _pendingGeneratedUseTicks--;
-        if (!Player.active || Player.dead || Player.HeldItem?.ModItem is not GeneratedItem held
-            || !string.Equals(held.Data?.Id, _pendingGeneratedUseItemId, StringComparison.Ordinal))
-        {
-            ClearPendingGeneratedUseIntent();
-            return;
-        }
-        // A request is only an intent. Execute after Terraria has accepted the
-        // corresponding use and exposed its item animation/time on the server.
-        if (Player.itemAnimation <= 0 && Player.itemTime <= 0)
-        {
-            if (_pendingGeneratedUseTicks <= 0)
-                ClearPendingGeneratedUseIntent();
-            return;
-        }
-
-        string generatedItemId = _pendingGeneratedUseItemId;
-        bool alternateUse = _pendingGeneratedUseAlternate;
-        Vector2 target = _pendingGeneratedUseTarget;
-        ClearPendingGeneratedUseIntent();
-        if (_generatedAltUseRequestCooldownTicks > 0)
-            return;
-        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-        if (registry is null
-            || !registry.TryGet(generatedItemId, out GeneratedItemData canonical)
-            || !GeneratedItemRegistryService.IsCurrentWorldData(canonical))
-            return;
-        GameplaySpec gp = canonical.Gameplay ?? new GameplaySpec();
-        if (!string.IsNullOrWhiteSpace(GeneratedItem.UseBlockedReason(Player, gp)))
-            return;
-        _generatedAltUseRequestCooldownTicks = Math.Clamp(gp.UseTime, 6, 150);
-
-        bool used = false;
-        if (alternateUse)
-        {
-            if (_generatedAltUseCooldownTicks > 0)
-                return;
-            string altMode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
-            if (altMode is "generated_buff" or "light" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
-            {
-                ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: false);
-                used = true;
-            }
-            else if (altMode == "mobility")
-            {
-                used = TryRunGeneratedMobilityFromServerIntent(
-                    gp.AltMobilityMode,
-                    gp.AltMobilityRangeTiles,
-                    0,
-                    gp.AltMobilitySafeTileOnly,
-                    target);
-            }
-            if (used)
-                StartGeneratedAltUseCooldown(gp.AltUseCooldownTicks);
-        }
-        else if (!string.IsNullOrWhiteSpace(gp.MobilityMode))
-        {
-            used = TryRunGeneratedMobilityFromServerIntent(
-                gp.MobilityMode,
-                gp.MobilityRangeTiles,
-                gp.MobilityCooldownTicks,
-                gp.MobilitySafeTileOnly,
-                target);
-        }
-
-        if (used)
-            SendGeneratedBuffState();
-    }
-
 
     private bool IsServerAuthoritativeCraft => Main.netMode == NetmodeID.Server && !_awaitingServerCommit && !string.IsNullOrWhiteSpace(_serverRequestId);
 

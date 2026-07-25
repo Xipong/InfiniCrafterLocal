@@ -69,7 +69,6 @@ def _contract_check_bad_infini_env_values_fallback_instead_of_crashing() -> None
         "INFINI_SDCPP_TIMEOUT": "abc",
         "INFINI_COMFYUI_HEIGHT": "abc",
         "INFINI_IMAGE_API_TIMEOUT": "abc",
-        "INFINI_PATTERN_REPAIR_ATTEMPTS": "abc",
         "INFINI_IMAGE_BACKEND": "off",
     })
     proc = subprocess.run(

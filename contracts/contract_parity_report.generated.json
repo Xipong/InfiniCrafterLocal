@@ -1,0 +1,1201 @@
+{
+  "capabilityCount": 52,
+  "capabilityLibraryAudit": {
+    "criteria": {
+      "compositionMetadata": true,
+      "exactDelivery": true,
+      "projectionParity": true,
+      "rangeParity": true,
+      "registryIdentity": true,
+      "runtimeOwnership": true,
+      "typedParameters": true,
+      "verticalSlices": true
+    },
+    "errorCount": 0,
+    "issues": [],
+    "metrics": {
+      "authorityDistribution": {
+        "client_visual_only": 2,
+        "owner_execute_sync": 34,
+        "owner_request_server_execute": 12,
+        "server_execute": 4
+      },
+      "bindingActions": 5,
+      "bindingDependencyEdges": 9,
+      "boundedNumericParameters": 143,
+      "capabilities": 52,
+      "entityKinds": 7,
+      "events": 10,
+      "exactWirePaths": 257,
+      "exclusiveGroups": {
+        "controller": [
+          "channel_beam",
+          "charge_then_release",
+          "target_and_fire"
+        ],
+        "movement": [
+          "move_accelerate",
+          "move_blackhole_pull",
+          "move_boomerang",
+          "move_bounce",
+          "move_drift",
+          "move_expanding_wave",
+          "move_flail_tether",
+          "move_forward_then_retract",
+          "move_gravity_arc",
+          "move_orbit",
+          "move_phase",
+          "move_proximity_missile",
+          "move_returning_glaive",
+          "move_sine_homing",
+          "move_slow_homing",
+          "move_spiral",
+          "move_straight",
+          "move_vortex_orb",
+          "move_whip_lash",
+          "move_yoyo_hover"
+        ]
+      },
+      "globalTechnicalLowererOutputs": 100,
+      "globalTechnicalLowerers": 3,
+      "inputs": 4,
+      "numericParameters": 143,
+      "parameters": 185,
+      "rangeParityRows": 79,
+      "requirements": 15,
+      "semanticParameters": 185,
+      "spawnBudgetCapabilities": 1,
+      "stationaryMeaningfulCapabilities": 10,
+      "typedEntityReferences": 2,
+      "verticalSliceCount": 52
+    },
+    "ok": true,
+    "rangeParity": [
+      {
+        "authorBounds": [
+          0.5,
+          2.0
+        ],
+        "capability": "enable_item_contact_damage",
+        "csharpBounds": [
+          0.5,
+          2.0
+        ],
+        "csharpClass": "RuntimeItemContactSpec",
+        "param": "hitboxScale",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          64.0
+        ],
+        "capability": "enable_item_contact_damage",
+        "csharpBounds": [
+          0.0,
+          64.0
+        ],
+        "csharpClass": "RuntimeItemContactSpec",
+        "param": "contactForgivenessPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          80.0
+        ],
+        "capability": "configure_spawn",
+        "csharpBounds": [
+          0.0,
+          80.0
+        ],
+        "csharpClass": "RuntimeSpawnSpec",
+        "param": "speedPxPerTick",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          12.0
+        ],
+        "capability": "configure_spawn",
+        "csharpBounds": [
+          1.0,
+          12.0
+        ],
+        "csharpClass": "RuntimeSpawnSpec",
+        "param": "count",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          6.283185307179586
+        ],
+        "capability": "configure_spawn",
+        "csharpBounds": [
+          0.0,
+          6.283185307179586
+        ],
+        "csharpClass": "RuntimeSpawnSpec",
+        "param": "spreadRadians",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          -128.0,
+          256.0
+        ],
+        "capability": "configure_spawn",
+        "csharpBounds": [
+          -128.0,
+          256.0
+        ],
+        "csharpClass": "RuntimeSpawnSpec",
+        "param": "offsetPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          2000.0
+        ],
+        "capability": "set_projectile_damage",
+        "csharpBounds": [
+          0.0,
+          2000.0
+        ],
+        "csharpClass": "RuntimeDamageSpec",
+        "param": "damage",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          20.0
+        ],
+        "capability": "set_projectile_damage",
+        "csharpBounds": [
+          0.0,
+          20.0
+        ],
+        "csharpClass": "RuntimeDamageSpec",
+        "param": "knockback",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          4.0,
+          192.0
+        ],
+        "capability": "set_projectile_hitbox",
+        "csharpBounds": [
+          4.0,
+          192.0
+        ],
+        "csharpClass": "RuntimeHitboxSpec",
+        "param": "widthPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          4.0,
+          192.0
+        ],
+        "capability": "set_projectile_hitbox",
+        "csharpBounds": [
+          4.0,
+          192.0
+        ],
+        "csharpClass": "RuntimeHitboxSpec",
+        "param": "heightPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.25,
+          4.0
+        ],
+        "capability": "set_projectile_hitbox",
+        "csharpBounds": [
+          0.25,
+          4.0
+        ],
+        "csharpClass": "RuntimeHitboxSpec",
+        "param": "drawScale",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.25,
+          3.0
+        ],
+        "capability": "set_projectile_hitbox",
+        "csharpBounds": [
+          0.25,
+          3.0
+        ],
+        "csharpClass": "RuntimeHitboxSpec",
+        "param": "hitboxScale",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          32.0
+        ],
+        "capability": "set_projectile_collision",
+        "csharpBounds": [
+          0.0,
+          32.0
+        ],
+        "csharpClass": "RuntimeCollisionSpec",
+        "param": "bounceCount",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          -1.0,
+          100.0
+        ],
+        "capability": "set_projectile_collision",
+        "csharpBounds": [
+          -1.0,
+          100.0
+        ],
+        "csharpClass": "RuntimeCollisionSpec",
+        "param": "pierce",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          5.0
+        ],
+        "capability": "set_projectile_collision",
+        "csharpBounds": [
+          0.0,
+          5.0
+        ],
+        "csharpClass": "RuntimeCollisionSpec",
+        "param": "extraUpdates",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          -1.0,
+          600.0
+        ],
+        "capability": "set_projectile_collision",
+        "csharpBounds": [
+          -1.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeCollisionSpec",
+        "param": "localNpcHitCooldownTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          120.0
+        ],
+        "capability": "move_slow_homing",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          1.0
+        ],
+        "capability": "move_slow_homing",
+        "csharpBounds": [
+          0.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "homingStrength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          2.0
+        ],
+        "capability": "move_gravity_arc",
+        "csharpBounds": [
+          -2.0,
+          2.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "gravityPerTick",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.8,
+          1.05
+        ],
+        "capability": "move_drift",
+        "csharpBounds": [
+          0.0,
+          1.2
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "velocityRetention",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_orbit",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          600.0
+        ],
+        "capability": "move_boomerang",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "returnAfterTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_boomerang",
+        "csharpBounds": [
+          0.0,
+          250.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "returnSpeed",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          2.0
+        ],
+        "capability": "move_bounce",
+        "csharpBounds": [
+          -2.0,
+          2.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "gravityPerTick",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          120.0
+        ],
+        "capability": "move_sine_homing",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          1.0
+        ],
+        "capability": "move_sine_homing",
+        "csharpBounds": [
+          0.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "homingStrength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          64.0
+        ],
+        "capability": "move_sine_homing",
+        "csharpBounds": [
+          0.0,
+          96.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "waveAmplitude",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          1.0
+        ],
+        "capability": "move_phase",
+        "csharpBounds": [
+          0.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "phaseStrength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          1.2
+        ],
+        "capability": "move_accelerate",
+        "csharpBounds": [
+          0.0,
+          4.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "acceleration",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_accelerate",
+        "csharpBounds": [
+          0.0,
+          250.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "maxSpeed",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          -0.5,
+          0.5
+        ],
+        "capability": "move_spiral",
+        "csharpBounds": [
+          -1.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "turnRadiansPerTick",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          4.0
+        ],
+        "capability": "move_vortex_orb",
+        "csharpBounds": [
+          0.0,
+          4.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "pullStrength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_vortex_orb",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          4.0
+        ],
+        "capability": "move_blackhole_pull",
+        "csharpBounds": [
+          0.0,
+          4.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "pullStrength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_blackhole_pull",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          120.0
+        ],
+        "capability": "move_proximity_missile",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          1.0
+        ],
+        "capability": "move_proximity_missile",
+        "csharpBounds": [
+          0.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "homingStrength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          4.0,
+          512.0
+        ],
+        "capability": "move_proximity_missile",
+        "csharpBounds": [
+          0.0,
+          512.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "proximityRadiusPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          600.0
+        ],
+        "capability": "move_returning_glaive",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "returnAfterTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_returning_glaive",
+        "csharpBounds": [
+          0.0,
+          250.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "returnSpeed",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          0.5
+        ],
+        "capability": "move_expanding_wave",
+        "csharpBounds": [
+          -0.2,
+          0.5
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "scalePerTick",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.25,
+          4.0
+        ],
+        "capability": "move_expanding_wave",
+        "csharpBounds": [
+          0.1,
+          8.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "maxScale",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          2.0,
+          60.0
+        ],
+        "capability": "move_flail_tether",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_flail_tether",
+        "csharpBounds": [
+          0.0,
+          250.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "returnSpeed",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          2.0,
+          60.0
+        ],
+        "capability": "move_yoyo_hover",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "move_yoyo_hover",
+        "csharpBounds": [
+          0.0,
+          250.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "returnSpeed",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          2.0,
+          60.0
+        ],
+        "capability": "move_whip_lash",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          3.0,
+          48.0
+        ],
+        "capability": "move_whip_lash",
+        "csharpBounds": [
+          0.0,
+          48.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "segments",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          20.0
+        ],
+        "capability": "move_forward_then_retract",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          2.0,
+          240.0
+        ],
+        "capability": "move_forward_then_retract",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "durationTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          120.0
+        ],
+        "capability": "channel_beam",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          2.0,
+          128.0
+        ],
+        "capability": "channel_beam",
+        "csharpBounds": [
+          0.0,
+          192.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "widthPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          600.0
+        ],
+        "capability": "channel_beam",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "warmupTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          600.0
+        ],
+        "capability": "charge_then_release",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "chargeTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          4.0
+        ],
+        "capability": "charge_then_release",
+        "csharpBounds": [
+          0.0,
+          4.0
+        ],
+        "csharpClass": "RuntimeParamsSpec",
+        "param": "powerMultiplier",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          6.0,
+          3600.0
+        ],
+        "capability": "target_and_fire",
+        "csharpBounds": [
+          0.0,
+          3600.0
+        ],
+        "csharpClass": "RuntimeTargetingSpec",
+        "param": "intervalTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          120.0
+        ],
+        "capability": "target_and_fire",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeTargetingSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          1.0
+        ],
+        "capability": "target_and_fire",
+        "csharpBounds": [
+          0.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeTargetingSpec",
+        "param": "sameTargetBias",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          80.0
+        ],
+        "capability": "spawn_over_target",
+        "csharpBounds": [
+          0.0,
+          80.0
+        ],
+        "csharpClass": "RuntimeOverTargetSpec",
+        "param": "heightTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          600.0
+        ],
+        "capability": "spawn_over_target",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeOverTargetSpec",
+        "param": "delayTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          12.0
+        ],
+        "capability": "spawn_entity_on_event",
+        "csharpBounds": [
+          1.0,
+          12.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "count",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          6.283185307179586
+        ],
+        "capability": "spawn_entity_on_event",
+        "csharpBounds": [
+          0.0,
+          6.283185307179586
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "spreadRadians",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          4.0
+        ],
+        "capability": "spawn_entity_on_event",
+        "csharpBounds": [
+          0.0,
+          10.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "damageMultiplier",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          600.0
+        ],
+        "capability": "spawn_entity_on_event",
+        "csharpBounds": [
+          0.0,
+          600.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "delayTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          6.0,
+          3600.0
+        ],
+        "capability": "spawn_entity_on_event",
+        "csharpBounds": [
+          0.0,
+          3600.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "periodTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          21600.0
+        ],
+        "capability": "apply_status_on_event",
+        "csharpBounds": [
+          0.0,
+          21600.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "durationTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          8.0,
+          768.0
+        ],
+        "capability": "damage_area_on_event",
+        "csharpBounds": [
+          0.0,
+          1024.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "radiusPx",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.05,
+          4.0
+        ],
+        "capability": "damage_area_on_event",
+        "csharpBounds": [
+          0.0,
+          10.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "damageMultiplier",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          12.0
+        ],
+        "capability": "chain_damage_on_event",
+        "csharpBounds": [
+          1.0,
+          12.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "count",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          60.0
+        ],
+        "capability": "chain_damage_on_event",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.05,
+          2.0
+        ],
+        "capability": "chain_damage_on_event",
+        "csharpBounds": [
+          0.0,
+          10.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "damageMultiplier",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.01,
+          4.0
+        ],
+        "capability": "pull_on_event",
+        "csharpBounds": [
+          0.0,
+          4.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "strength",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          60.0
+        ],
+        "capability": "pull_on_event",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "radiusTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          6.0,
+          3600.0
+        ],
+        "capability": "pull_on_event",
+        "csharpBounds": [
+          0.0,
+          3600.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "periodTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.001,
+          1.0
+        ],
+        "capability": "heal_owner_on_event",
+        "csharpBounds": [
+          0.0,
+          1.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "damageFraction",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          200.0
+        ],
+        "capability": "heal_owner_on_event",
+        "csharpBounds": [
+          0.0,
+          500.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "maxHeal",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          1.0,
+          120.0
+        ],
+        "capability": "move_owner_on_event",
+        "csharpBounds": [
+          0.0,
+          120.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "rangeTiles",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.0,
+          3600.0
+        ],
+        "capability": "move_owner_on_event",
+        "csharpBounds": [
+          0.0,
+          36000.0
+        ],
+        "csharpClass": "RuntimeEventActionSpec",
+        "param": "cooldownTicks",
+        "preserved": true
+      },
+      {
+        "authorBounds": [
+          0.01,
+          1.5
+        ],
+        "capability": "emit_light_while_active",
+        "csharpBounds": [
+          0.0,
+          1.5
+        ],
+        "csharpClass": "RuntimeLightSpec",
+        "param": "strength",
+        "preserved": true
+      }
+    ],
+    "schema": "infini.capability-library-audit.v1",
+    "score": 100,
+    "scoreMax": 100,
+    "warningCount": 0
+  },
+  "checks": {
+    "compilerWitnesses": true,
+    "csharpOwners": true,
+    "csharpScanner": true,
+    "delivery": true,
+    "machineReadableLibrary": true,
+    "prompt": true,
+    "registryCatalog": true,
+    "registryProvider": true,
+    "registrySchema": true
+  },
+  "csharpScannerOutput": "[OK] C# v5 low-level runtime contract scanner passed",
+  "ok": true,
+  "schema": "infini.low-level-contract-parity.v1",
+  "witnessFailures": []
+}

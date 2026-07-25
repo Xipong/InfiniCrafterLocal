@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any
+from typing import Any, Mapping
 
 from infini_local.core.env_utils import env_float, env_int
-from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
+from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_stage_messages import (
@@ -15,31 +15,27 @@ from infini_local.core.llm_stage_messages import (
     attributed_planner_history,
     stage_chat_message,
 )
-from infini_local.core.runtime_contracts import (
-    STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
-    apply_structural_final_wire_contract,
-    structural_final_wire_report,
-    validate_structural_planner_contract,
-)
-from infini_local.core.runtime_authoring.function_contract_registry import (
-    NORMALIZED_ROOT_REQUIRED_PARAM_NAMES,
+from infini_local.core.runtime_authoring import (
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
+    RUNTIME_WIRE_SCHEMA,
+    CAPABILITY_REGISTRY,
+    apply_repair_patch,
+    build_runtime_repair_scope,
+    compile_runtime_program,
+    filter_repair_patch_scope,
+    runtime_repair_fragments,
+    validate_runtime_program,
+    validate_runtime_wire,
 )
 from infini_local.pipelines.author_item_contract import (
+    author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
-    author_item_repair_response_schema,
-    author_item_targeted_repair_delta_schema,
-    normalize_author_item_targeted_repair_delta_text_limits,
     project_provider_author_item_to_local,
+    project_provider_nullable_optionals_to_local,
     strict_author_item_repair_report,
-    strict_author_item_targeted_repair_delta_report,
 )
-from infini_local.pipelines import author_item_repair
-from infini_local.pipelines import author_item_repair_delta
-from infini_local.pipelines import author_item_repair_scope
-from infini_local.pipelines.llm_authoring_prompt import (
-    COMBAT_EXECUTOR_RESULT_KIND_RULE,
-    build_llm_author_payload,
-)
+from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 from infini_local.pipelines.llm_transport import (
     active_llm_provider,
     apply_llm_common_options,
@@ -47,68 +43,72 @@ from infini_local.pipelines.llm_transport import (
     llm_json_response_format,
     llm_reasoning_system_suffix,
     resolve_llm_model,
+    with_llm_stage,
 )
-from infini_local.storage.trace_runtime import _trace_message_summary, log_event, trace_event
+from infini_local.storage.trace_runtime import _trace_message_summary, trace_event
 
 
-_AUTHOR_STRUCTURAL_WIRE_RULES = (
-    " Return exactly the source-derived requiredJsonShape fields. "
-    "For combat, engineCalls[0] is set_item_stats with explicit resultKind and required combat stats; every later call uses only its catalog params. "
-    f"Every combat root MUST compile to {', '.join(NORMALIZED_ROOT_REQUIRED_PARAM_NAMES)}; use the selected public function card, not normalized aliases. "
-    + COMBAT_EXECUTOR_RESULT_KIND_RULE
-    + " "
-    "concept.coreMechanic is concise authored design intent for repair/debug, never the final tooltip. playerViewTimeline is optional and contains only relevant visible phases. "
-    "Do not return compiler provenance, receipts, signatures, or final DTO paths."
+_AUTHOR_SYSTEM = (
+    "You are Gameplay Author for InfiniCrafterLocal. Compose one bounded executable item directly from "
+    "the supplied low-level capability catalog. Return exactly the required JSON object. The code validates, "
+    "bounds, compiles, and executes your explicit choices; it does not infer a weapon archetype or complete "
+    "missing movement, attachment, delivery, lifecycle, input, targeting, or child behaviour. Do not classify "
+    "the item as sword/bow/staff/sentry for runtime. Preserve literal parent objects when useful: a workbench "
+    "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Every gameplay "
+    "claim must cite existing entity/binding/call ids. Use only catalog capabilities. Check every reference, "
+    "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
+    "Return JSON only; no markdown or reasoning."
 )
 
 
-def _prepare_parsed_author_item(parsed: dict[str, Any]) -> dict[str, Any]:
-    """Decode provider-only nullable omissions; perform no alias or semantic repair."""
-    canonical = project_provider_author_item_to_local(parsed)
-    raw_snapshot = copy.deepcopy(canonical)
-    obj = copy.deepcopy(canonical)
-    obj["_authorItemRaw"] = raw_snapshot
-    return obj
+def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
+    debug = data.setdefault("debug", {})
+    accounting = debug.setdefault("llmStageAccounting", {})
+    defaults = {
+        "gameplayAuthorCalls": 0,
+        "gameplayRepairCalls": 0,
+        "visualDirectorCalls": 0,
+        "visualRepairCalls": 0,
+        "vfxDirectorCalls": 0,
+        "vfxRepairCalls": 0,
+    }
+    for key, value in defaults.items():
+        accounting.setdefault(key, value)
+    return accounting
 
 
+def _prepare_parsed_author_item(parsed: Mapping[str, Any]) -> dict[str, Any]:
+    canonical = project_provider_author_item_to_local(dict(parsed))
+    if not isinstance(canonical, dict):
+        raise PlannerUnavailable("Gameplay Author returned a non-object after provider projection")
+    return copy.deepcopy(canonical)
 
 
 def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
-    """Validate author metadata without mutating the model-authored document."""
-    return validate_structural_planner_contract(plan)
+    report = validate_runtime_program(plan)
+    if not report.get("ok"):
+        raise PlannerUnavailable(
+            "Gameplay Author runtime program rejected: "
+            + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report.get("errors", [])[:12]),
+            author_repair_targets=copy.deepcopy(report.get("errors") or []),
+        )
+    return report
 
 
 def final_runtime_promise_report(data: dict[str, Any]) -> dict[str, Any]:
-    """Return the structured v3 compiler-provenance report without raising."""
-    raw_contract_candidate = data.get("runtimeContract")
-    raw_contract: dict[str, Any] = dict(raw_contract_candidate) if isinstance(raw_contract_candidate, dict) else {}
-    if str(raw_contract.get("schema") or "") != STRUCTURAL_RUNTIME_CONTRACT_SCHEMA:
-        return {
-            "schema": "infini.final-wire-contract-report.v1",
-            "ok": False,
-            "blockingClaims": [{
-                "kind": "missing_structural_v3_contract",
-                "source": "runtimeContract.schema",
-                "required": STRUCTURAL_RUNTIME_CONTRACT_SCHEMA,
-            }],
-            "finalWireReceipts": [],
-            "executionStatus": "unsupported",
-        }
-    return structural_final_wire_report(data)
+    return validate_runtime_wire(data)
 
 
 def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, Any]:
-    """Require v3 compiler provenance at every runtime-authored final boundary."""
-    gate = final_runtime_promise_report(data)
-    data.setdefault("debug", {})
-    if isinstance(data.get("debug"), dict):
-        data["debug"]["finalWireExecutionReceipts"] = copy.deepcopy(gate.get("finalWireReceipts") or [])
-        data["debug"]["finalRuntimePromiseGate"] = bounded_json_dumps(gate, max_chars=8000)
-    if not gate.get("ok"):
-        kinds = sorted({str(row.get("kind") or "unsupported") for row in gate.get("blockingClaims") or []})
-        raise PlannerUnavailable("final structural runtime promise boundary rejected: " + ", ".join(kinds))
-    apply_structural_final_wire_contract(data, gate)
-    return gate
+    report = final_runtime_promise_report(data)
+    debug = data.setdefault("debug", {})
+    debug["finalRuntimeProgramWireGate"] = bounded_json_dumps(report, max_chars=12000)
+    if not report.get("ok"):
+        raise PlannerUnavailable(
+            "final low-level runtime wire rejected: "
+            + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report.get("errors", [])[:12])
+        )
+    return report
 
 
 def build_initial_author_request(
@@ -120,21 +120,11 @@ def build_initial_author_request(
     *,
     model_name: str | None = None,
 ) -> tuple[dict[str, Any], str, str]:
-    """Build the exact initial AuthorItem request without performing transport."""
-    user = build_llm_author_payload(a, b, ca, cb, key)
+    payload = build_llm_author_payload(a, b, ca, cb, key)
     selected_model = model_name or resolve_llm_model()
-    system = (
-        "You are the AUTHOR of a Terraria-like generated item. "
-        "Use raw parent fields, semantic notes, and engine functions to design one playable result. "
-        "Follow the priorityHeader before the detailed API card. "
-        "The server validates executable safety only; do not rely on legacy attackPattern/attack.genome. "
-        + _AUTHOR_STRUCTURAL_WIRE_RULES
-        + " "
-        "Return ONLY one JSON object. No reasoning, no markdown, no second JSON."
-        + llm_reasoning_system_suffix(selected_model)
-    )
-    user_content = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
-    req = {
+    system = _AUTHOR_SYSTEM + llm_reasoning_system_suffix(selected_model)
+    user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    request = {
         "model": selected_model,
         "messages": [
             stage_chat_message("system", "item_author_contract", system),
@@ -142,252 +132,324 @@ def build_initial_author_request(
         ],
         "temperature": env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
         "response_format": llm_json_response_format(
-            "infini_author_item_v3",
+            "infini_low_level_runtime_author",
             schema=author_item_provider_response_schema(),
             strict=True,
-            auto_preference="json_object",
+            auto_preference="json_schema",
         ),
     }
-    return apply_llm_common_options(req, model_name=selected_model), user_content, system
+    return apply_llm_common_options(request, model_name=selected_model), user_content, system
 
 
-def try_llm_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any] | None:
-    """Author-first chaos planner.
+def try_llm_plan(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    ca: dict[str, Any],
+    cb: dict[str, Any],
+    key: str,
+) -> dict[str, Any] | None:
+    """Perform exactly one baseline Gameplay Author call.
 
-    v0.3.9 keeps the author-first architecture. The LLM authors the playable item: fantasy,
-    category, gameplay numbers, projectile identity, behavior timeline, and visual briefs.
-    Python does not choose the item. It only validates JSON, fills trivial serialization
-    fields, then clamps catastrophic power/performance after the fact.
+    Validation failure is propagated to the one conditional Gameplay Repair owned by
+    ``combine_pipeline.compile_and_validate_authored_runtime``. This function never
+    retries and never asks code to select a replacement capability.
     """
     if not USE_LLM:
         return None
+    model_name = resolve_llm_model()
+    request, user_content, system = build_initial_author_request(a, b, ca, cb, key, model_name=model_name)
     try:
-        model_name = resolve_llm_model()
-        req, planner_user_content, system = build_initial_author_request(
-            a, b, ca, cb, key, model_name=model_name
+        trace_event(
+            "prompt",
+            "LLM:gameplay_author",
+            f"Gameplay Author request: {name_of(a)} + {name_of(b)}",
+            {
+                "provider": active_llm_provider(),
+                "model": model_name,
+                "responseFormat": bool(request.get("response_format")),
+                "messages": _trace_message_summary(request.get("messages")),
+            },
+            prompt=user_content,
         )
-        trace_event("prompt", "LLM:author_plan", f"Planner request: {name_of(a)} + {name_of(b)}", {
-            "provider": active_llm_provider(), "model": model_name, "temperature": req.get("temperature"),
-            "maxTokens": req.get("max_tokens"), "reasoning": req.get("reasoning"), "reasoningEffort": req.get("reasoning_effort"),
-            "responseFormat": bool(req.get("response_format")), "messages": _trace_message_summary(req.get("messages")),
-        }, prompt=planner_user_content)
-        raw = llm_chat_json(req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+        raw = llm_chat_json(with_llm_stage(request, "planner"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
         content = raw["choices"][0]["message"]["content"]
-        transport_debug = raw.get("_debug") if isinstance(raw.get("_debug"), dict) else {}
-        trace_event("response", "LLM:author_plan", "Planner response", {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": transport_debug}, response=content)
-        parsed_child_json = parse_first_valid_llm_json(content)
-        obj = _prepare_parsed_author_item(parsed_child_json)
-        # The initial author call never retries internally. Source/runtime/compiler
-        # rejection is owned by the one bounded same-author repair budget in
-        # combine_pipeline.
-        promise_gate = planner_runtime_promise_gate(obj)
-        obj.setdefault("id", "g_" + stable_hash(key, content, length=16))
-        obj.setdefault("recipeKey", key)
-        obj.setdefault("schemaVersion", 1)
-        obj.setdefault("parentA", name_of(a))
-        obj.setdefault("parentB", name_of(b))
-        obj.setdefault("sourceMode", "generated")
-        obj.setdefault("debug", {})
-        obj["debug"]["planner"] = "llm_author_first"
-        obj["debug"]["plannerPromiseGate"] = promise_gate
-        obj["debug"]["model"] = model_name
-        obj["debug"]["promptMode"] = "runtime_authoring_family_contract_v0.4.30_priority_header_placeable_semantics_v0.4.172"
-        obj["debug"]["balanceAuthority"] = "llm_authors_numbers_python_clamps_after_authoring"
-        obj["debug"]["llmRawOutput"] = content[:12000]
-        obj["debug"]["llmTopLevelKeys"] = ",".join(sorted(str(k) for k in obj.keys()))
-        obj["debug"]["llmHistoryStored"] = ATTRIBUTED_PLANNER_HISTORY_KIND
-        # Runtime-only named Chat Completions history.  Consumers receive one canonical
-        # messages[] contract instead of reconstructing roles from parallel string fields.
-        obj["_llmHistory"] = attributed_planner_history(system, planner_user_content, content)
-        return obj
-    except PlannerUnavailable as e:
-        trace_event("error", "LLM:author_plan", "Planner rejected authored result", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
-        log_event("warn", "LLM author-first planner failed source validation", {"error": repr(e)})
+        trace_event(
+            "response",
+            "LLM:gameplay_author",
+            "Gameplay Author response",
+            {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": raw.get("_debug", {})},
+            response=content,
+        )
+        parsed = parse_first_valid_llm_json(content)
+        if not isinstance(parsed, dict):
+            raise PlannerUnavailable("Gameplay Author returned non-object JSON")
+        item = _prepare_parsed_author_item(parsed)
+        item.setdefault("id", "g_" + stable_hash(key, content, length=16))
+        item.setdefault("recipeKey", key)
+        item.setdefault("schemaVersion", 5)
+        item.setdefault("parentA", name_of(a))
+        item.setdefault("parentB", name_of(b))
+        item.setdefault("sourceMode", "generated")
+        debug = item.setdefault("debug", {})
+        debug.update({
+            "planner": "llm_low_level_runtime_author",
+            "model": model_name,
+            "promptMode": "low_level_runtime_program_v5",
+            "runtimeAuthorSchema": RUNTIME_PROGRAM_SCHEMA,
+            "runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION,
+            "llmRawOutput": str(content)[:12000],
+            "llmHistoryStored": ATTRIBUTED_PLANNER_HISTORY_KIND,
+        })
+        _stage_accounting(item)["gameplayAuthorCalls"] = 1
+        item["_llmHistory"] = attributed_planner_history(system, user_content, str(content))
+        return item
+    except PlannerUnavailable:
         raise
-    except Exception as e:
-        trace_event("error", "LLM:author_plan", "Planner failed", {"parents": [name_of(a), name_of(b)]}, error=repr(e))
-        log_event("warn", "LLM author-first planner failed", {"error": repr(e)})
-        return None
+    except Exception as exc:
+        trace_event("error", "LLM:gameplay_author", "Gameplay Author transport/parse failure", {"model": model_name}, error=repr(exc))
+        raise PlannerUnavailable(f"Gameplay Author failed: {exc!r}") from exc
+
+
+def _repair_error_rows(failure_report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows = failure_report.get("errors")
+    if isinstance(rows, list):
+        return [copy.deepcopy(row) for row in rows if isinstance(row, dict)][:40]
+    validation = failure_report.get("validation")
+    if isinstance(validation, Mapping) and isinstance(validation.get("errors"), list):
+        return [copy.deepcopy(row) for row in validation["errors"] if isinstance(row, dict)][:40]
+    return [{
+        "path": str(failure_report.get("path") or "$"),
+        "code": str(failure_report.get("code") or "runtime_program_rejected"),
+        "message": str(failure_report.get("error") or "Runtime program failed deterministic validation")[:1600],
+    }]
+
+
+GAMEPLAY_REPAIR_DOSSIER_SCHEMA = "infini.gameplay-repair-dossier.v1"
+
+
+def build_gameplay_repair_dossier(
+    current: Mapping[str, Any],
+    a: Mapping[str, Any],
+    b: Mapping[str, Any],
+    ca: Mapping[str, Any],
+    cb: Mapping[str, Any],
+    *,
+    failure_report: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the finite model-facing dossier for one Gameplay Repair call.
+
+    This is intentionally a pure projection.  It contains exact invalid
+    fragments, the local read-only dependency neighbourhood, a compact global
+    id index, and only the blocker capability cards that can solve the current
+    deterministic errors without rewriting frozen context.
+    """
+
+    exact_errors = _repair_error_rows(failure_report)
+    scope = build_runtime_repair_scope(current, exact_errors)
+    fragments = runtime_repair_fragments(current, scope)
+    blocker_plan = scope.get("blockerPlan") if isinstance(scope.get("blockerPlan"), Mapping) else {}
+
+    def cards(names: Any) -> list[dict[str, Any]]:
+        return [
+            CAPABILITY_REGISTRY[name].prompt_card()
+            for name in names or []
+            if name in CAPABILITY_REGISTRY
+        ]
+
+    return {
+        "schema": GAMEPLAY_REPAIR_DOSSIER_SCHEMA,
+        "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
+        "rules": [
+            "Return exactly the repair patch schema; never return the full item.",
+            "Return the broken node as a complete object when convenient. Deterministic merge preserves every already-valid old value.",
+            "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
+            "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
+            "Use create permissions only for the exact blocker or its declared support dependency.",
+            "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
+            "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
+            "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
+        ],
+        "runtimeVersions": {
+            "authorSchema": RUNTIME_PROGRAM_SCHEMA,
+            "apiVersion": RUNTIME_PROGRAM_API_VERSION,
+        },
+        "parents": {
+            "a": {"name": name_of(dict(a)), "canonical": copy.deepcopy(dict(ca))},
+            "b": {"name": name_of(dict(b)), "canonical": copy.deepcopy(dict(cb))},
+        },
+        "acceptedItemContext": {
+            "name": current.get("name"),
+            "tooltip": current.get("tooltip"),
+            "category": current.get("category"),
+            "concept": copy.deepcopy(current.get("concept") or {}),
+            "parentSynthesis": copy.deepcopy((current.get("runtimeContract") or {}).get("parentSynthesis") or {}),
+        },
+        "exactValidationErrors": exact_errors,
+        "failureStage": str(failure_report.get("stage") or "runtime_program_validation"),
+        "repairScope": scope,
+        "blockerPlan": copy.deepcopy(blocker_plan),
+        "brokenFragments": fragments["broken"],
+        "brokenFragmentsByIndex": fragments["brokenByIndex"],
+        "validDependencyFragments": fragments["dependencyContext"],
+        "immutableProgramIndex": fragments["immutableIndex"],
+        "blockerCapabilities": cards(blocker_plan.get("directCapabilityNames")),
+        "supportingCapabilities": cards(blocker_plan.get("supportingCapabilityNames")),
+        "existingBrokenCapabilityCards": cards(blocker_plan.get("existingBrokenCapabilityNames")),
+    }
+
 
 def repair_author_item_after_failure(
-    data: dict[str, Any],
+    current: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
     ca: dict[str, Any],
     cb: dict[str, Any],
     key: str,
     *,
-    failure_report: dict[str, Any],
+    failure_report: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Give one exact domain rejection to the same item-author role before abort.
+    """Perform one conditional Gameplay Repair over a deterministic node scope.
 
-    The compiler remains evidence-only: it neither chooses nor edits a mechanic.
-    Ordinary rejection uses a typed leaf delta. Full gameplay redesign remains a
-    separate complete-patch contract. Both return to source validation and compile.
+    The model receives only invalid nodes, exact missing-dependency permissions,
+    and immutable summaries/full dependency fragments.  The model may return a
+    complete broken node, but deterministic merge changes only exact broken paths;
+    already-valid old values remain frozen and independent nodes are ignored.
     """
     if not USE_LLM:
-        raise PlannerUnavailable("same-author scoped repair requires the configured item author")
-
-    req, user_content, system, targeted_repair, current_item = (
-        author_item_repair.build_same_author_repair_request(data, a, b, failure_report)
+        raise PlannerUnavailable("Gameplay Repair required but LLM is disabled")
+    model_name = resolve_llm_model()
+    repair_context = build_gameplay_repair_dossier(
+        current, a, b, ca, cb, failure_report=failure_report,
     )
-    model_name = str(req.get("model") or resolve_llm_model())
+    exact_errors = copy.deepcopy(repair_context["exactValidationErrors"])
+    scope = copy.deepcopy(repair_context["repairScope"])
+    if scope.get("nonRepairableErrors"):
+        raise PlannerUnavailable(
+            "Gameplay validation exposed a registry/runtime defect that LLM Repair must not hide: "
+            + bounded_json_dumps(scope["nonRepairableErrors"], max_chars=5000)
+        )
+    repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
+    repair_system = (
+        "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
+        "Return complete broken nodes when useful: deterministic merge will freeze already-valid old values, accept the exact "
+        "broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
+        "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."
+    )
+    messages = [
+        stage_chat_message("system", "author_repair_contract", repair_system + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("user", "author_repair_context", repair_user),
+    ]
+    request = apply_llm_common_options({
+        "model": model_name,
+        "messages": messages,
+        "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
+        "response_format": llm_json_response_format(
+            "infini_low_level_runtime_repair",
+            schema=author_item_provider_repair_response_schema(),
+            strict=True,
+            auto_preference="json_schema",
+        ),
+    }, model_name=model_name)
     trace_event(
         "prompt",
-        "LLM:author_plan_scoped_repair",
-        "Planner same-author scoped repair request",
+        "LLM:gameplay_repair",
+        "Conditional node-scoped Gameplay Repair request",
         {
             "provider": active_llm_provider(),
             "model": model_name,
-            "failureStage": str(failure_report.get("stage") or "unknown"),
+            "errorCount": len(exact_errors),
+            "mutableCounts": {key: len(value) for key, value in (scope.get("mutable") or {}).items()},
         },
-        prompt=user_content,
+        prompt=messages,
     )
-    raw = llm_chat_json(req, timeout=env_int("INFINI_LLM_TIMEOUT", 95))
-    content = raw["choices"][0]["message"]["content"]
-    transport_debug = raw.get("_debug") if isinstance(raw.get("_debug"), dict) else {}
-    trace_event(
-        "response",
-        "LLM:author_plan_scoped_repair",
-        "Planner same-author scoped repair response",
-        {
-            "provider": active_llm_provider(),
-            "model": model_name,
-            "chars": len(str(content)),
-            "transport": transport_debug,
-        },
-        response=content,
-    )
-    raw_patch = parse_first_valid_llm_json(content)
-    if targeted_repair:
-        patch = project_provider_author_item_to_local(
-            raw_patch,
-            author_item_targeted_repair_delta_schema(),
+    try:
+        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+        content = raw["choices"][0]["message"]["content"]
+        trace_event(
+            "response",
+            "LLM:gameplay_repair",
+            "Conditional Gameplay Repair response",
+            {"model": model_name, "chars": len(str(content)), "transport": raw.get("_debug", {})},
+            response=content,
         )
-        patch = normalize_author_item_targeted_repair_delta_text_limits(patch)
-        patch_report = strict_author_item_targeted_repair_delta_report(patch)
-        if not patch_report.get("ok"):
+        parsed = parse_first_valid_llm_json(content)
+        patch = project_provider_nullable_optionals_to_local(parsed)
+        report = strict_author_item_repair_report(patch)
+        if not report.get("ok"):
+            raise PlannerUnavailable("Gameplay Repair patch shape rejected: " + bounded_json_dumps(report, max_chars=6000))
+        filtered_patch, filter_report = filter_repair_patch_scope(current, patch, scope)
+        if not filter_report.get("ok"):
             raise PlannerUnavailable(
-                "same-author targeted repair returned an invalid delta: "
-                + bounded_json_dumps(patch_report, max_chars=4000)
+                "Gameplay Repair patch could not be deterministically filtered: "
+                + bounded_json_dumps(filter_report, max_chars=7000),
+                author_repair_targets=copy.deepcopy(filter_report.get("errors") or []),
             )
-        parsed = author_item_repair_delta._apply_targeted_repair_delta(
-            current_item, patch, failure_report
-        )
-        repair_kind = "same_author_role_targeted_leaf_delta"
-    else:
-        patch = project_provider_author_item_to_local(
-            raw_patch,
-            author_item_repair_response_schema(),
-        )
-        patch_report = strict_author_item_repair_report(patch)
-        allowed_patch_keys = set(
-            author_item_repair_scope._repair_allowed_patch_keys(failure_report, targeted_repair)
-        )
-        unexpected_patch_keys = sorted(set(patch) - allowed_patch_keys)
-        if unexpected_patch_keys:
-            patch_report.setdefault("errors", []).append({
-                "path": "$",
-                "kind": "out_of_scope_repair_keys",
-                "keys": unexpected_patch_keys,
-            })
-            patch_report["ok"] = False
-        required_patch_keys = author_item_repair_scope.FULL_REDESIGN_REQUIRED_PATCH_KEYS
-        missing_patch_keys = sorted(required_patch_keys - set(patch))
-        plan = patch.get("runtimePlan") if isinstance(patch.get("runtimePlan"), dict) else {}
-        required_plan_keys = author_item_repair_scope.FULL_REDESIGN_REQUIRED_PLAN_KEYS
-        missing_plan_keys = sorted(required_plan_keys - set(plan))
-        if missing_patch_keys or missing_plan_keys:
-            patch_report.setdefault("errors", []).append({
-                "path": "$",
-                "kind": "incomplete_gameplay_redesign_patch",
-                "missingPatchKeys": missing_patch_keys,
-                "missingRuntimePlanKeys": missing_plan_keys,
-            })
-            patch_report["ok"] = False
-        if not patch_report.get("ok"):
+        repaired = apply_repair_patch(current, filtered_patch)
+        validation = validate_runtime_program(repaired)
+        if not validation.get("ok"):
             raise PlannerUnavailable(
-                "same-author scoped repair returned an invalid patch: "
-                + bounded_json_dumps(patch_report, max_chars=4000)
+                "Gameplay Repair did not resolve runtime validation: "
+                + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in validation.get("errors", [])[:12]),
+                author_repair_targets=copy.deepcopy(validation.get("errors") or []),
             )
-        parsed = author_item_repair_delta._preserve_accepted_authoring(
-            author_item_repair._scoped_repair_candidate(patch),
-            current_item,
-            failure_report,
-        )
-        repair_kind = "same_author_role_full_gameplay_redesign"
-    obj = _prepare_parsed_author_item(parsed)
-    source_gate = planner_runtime_promise_gate(copy.deepcopy(obj))
-    if not source_gate.get("ok"):
-        kinds = sorted({str(row.get("kind") or "unsupported") for row in source_gate.get("blockingClaims") or []})
-        raise PlannerUnavailable("same-author scoped repair returned invalid source contract: " + ", ".join(kinds))
-
-    obj.setdefault("id", str(data.get("id") or "g_" + stable_hash(key, content, length=16)))
-    obj.setdefault("recipeKey", key)
-    obj.setdefault("schemaVersion", 1)
-    obj.setdefault("parentA", name_of(a))
-    obj.setdefault("parentB", name_of(b))
-    obj.setdefault("sourceMode", "generated")
-    obj.setdefault("debug", {})
-    obj["debug"]["planner"] = "llm_author_first"
-    obj["debug"]["plannerPromiseGate"] = source_gate
-    obj["debug"]["model"] = model_name
-    obj["debug"]["authorRepair"] = repair_kind
-    obj["debug"]["repairPatchKeys"] = sorted(patch)
-    obj["debug"]["authorRepairTransport"] = copy.deepcopy(transport_debug)
-    obj["debug"]["llmRawOutput"] = str(content)[:12000]
-    obj["_llmHistory"] = attributed_planner_history(system, user_content, content)
-    return obj
+        repaired.setdefault("debug", {})["gameplayRepairRawPatch"] = copy.deepcopy(patch)
+        repaired["debug"]["gameplayRepairPatch"] = copy.deepcopy(filtered_patch)
+        repaired["debug"]["gameplayRepairFilterAudit"] = copy.deepcopy(filter_report)
+        repaired["debug"]["gameplayRepairScope"] = copy.deepcopy(scope)
+        accounting = _stage_accounting(repaired)
+        accounting["gameplayAuthorCalls"] = max(1, int(accounting.get("gameplayAuthorCalls", 0)))
+        accounting["gameplayRepairCalls"] = 1
+        return repaired
+    except PlannerUnavailable:
+        raise
+    except Exception as exc:
+        raise PlannerUnavailable(f"Gameplay Repair failed: {exc!r}") from exc
 
 
-def call_llm_vfx_director(system: str, user: dict[str, Any], max_tokens: int, temperature: float, timeout: int, messages: list[dict[str, str]] | None = None) -> dict[str, Any] | None:
-    """Small adapter used by vfx_manifest.py.
-
-    Keeps the VFX module from creating a new LLM backend or importing server.py.
-    The caller must supply the authoritative self-contained V3.1 system + VFX
-    dossier. Planner transcript replay and standalone authoring are not supported.
-    """
+def call_llm_vfx_director(
+    system: str,
+    user: dict[str, Any],
+    max_tokens: int,
+    temperature: float,
+    timeout: int,
+    messages: list[dict[str, str]] | None = None,
+) -> dict[str, Any] | None:
+    """Transport-only helper used by the finite VFX Director stage."""
     if not USE_LLM:
         return None
-    if not isinstance(messages, list) or not messages:
-        raise ValueError("self-contained VFX stage messages are required")
-    req_messages = [
-        stage_chat_message(
-            str(message.get("role") or "user"),
-            str(message.get("name") or ""),
-            str(message.get("content") or ""),
-        )
-        for message in messages
-        if isinstance(message, dict) and str(message.get("content") or "").strip()
-    ]
-    if not req_messages:
-        raise ValueError("self-contained VFX stage messages are required")
-    try:
-        model_name = resolve_llm_model()
-        req = {
-            "model": model_name,
-            "messages": req_messages,
-            "temperature": float(temperature),
-            "response_format": llm_json_response_format("infini_vfx"),
-        }
-        req = apply_llm_common_options(req, model_name=model_name, default_max_tokens=int(max_tokens))
-        trace_event("prompt", "LLM:vfx_director", "VFX director request", {
-            "provider": active_llm_provider(), "model": model_name, "temperature": req.get("temperature"),
-            "maxTokens": req.get("max_tokens"), "reasoning": req.get("reasoning"), "reasoningEffort": req.get("reasoning_effort"),
-            "messageMode": "authoritative_stage_dossier_v31", "messages": _trace_message_summary(req.get("messages")),
-        }, prompt=req_messages)
-        raw = llm_chat_json(req, timeout=int(timeout))
-        content = raw["choices"][0]["message"]["content"]
-        transport_debug = raw.get("_debug") if isinstance(raw.get("_debug"), dict) else {}
-        trace_event("response", "LLM:vfx_director", "VFX director response", {"model": model_name, "chars": len(str(content)), "transport": transport_debug}, response=content)
-        # Return the model artifact exactly. Transport metadata belongs in trace/debug
-        # side channels; injecting `_debug` here makes a valid strict VFX object fail its
-        # own top-level contract.
-        return parse_first_valid_llm_json(content)
-    except Exception as e:
-        trace_event("error", "LLM:vfx_director", "VFX director failed", error=repr(e))
-        log_event("warn", "LLM VFX director failed", {"error": repr(e)})
-        return None
+    model_name = resolve_llm_model()
+    stage_name = "vfx_repair" if messages and any(message.get("name") == "vfx_repair_contract" for message in messages) else "vfx_director"
+    output_schema = user.get("outputSchema") if isinstance(user.get("outputSchema"), Mapping) else None
+    request = {
+        "model": model_name,
+        "messages": messages or [
+            stage_chat_message("system", "vfx_director_contract", system + llm_reasoning_system_suffix(model_name)),
+            stage_chat_message("user", "vfx_director_context", json.dumps(user, ensure_ascii=False, separators=(",", ":"))),
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "response_format": llm_json_response_format(
+            "infini_vfx_repair_patch" if stage_name == "vfx_repair" else "infini_vfx_runtime_events",
+            schema=output_schema,
+            strict=True,
+            auto_preference="json_schema",
+        ) if output_schema else {"type": "json_object"},
+    }
+    request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
+    raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
+    content = raw["choices"][0]["message"]["content"]
+    parsed = parse_first_valid_llm_json(content)
+    return parsed if isinstance(parsed, dict) else None
 
 
-# legacy contract marker for tests/documentation: ensure_llm_auth_configured()
+__all__ = [
+    "GAMEPLAY_REPAIR_DOSSIER_SCHEMA",
+    "build_gameplay_repair_dossier",
+    "build_initial_author_request",
+    "call_llm_vfx_director",
+    "final_runtime_promise_report",
+    "planner_runtime_promise_gate",
+    "repair_author_item_after_failure",
+    "try_llm_plan",
+    "validate_final_runtime_promise_boundary",
+]

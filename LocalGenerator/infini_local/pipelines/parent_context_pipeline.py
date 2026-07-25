@@ -65,60 +65,89 @@ def _strip_texture_metrics_for_llm(profile: dict[str, Any]) -> dict[str, Any]:
     out.pop("sourceTextureMetrics", None)
     return out
 
-def projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
-    """C# sends a Projectile.SetDefaults(item.shoot) snapshot for vanilla/modded projectiles.
-    This is not full AI simulation, but it is a much better source than item names:
-    penetrate/timeLeft/extraUpdates/tileCollide/ownerHitCheck/local immunity/minion/sentry/aiStyle.
+def _generated_runtime_primary_projectile(generated: dict[str, Any]) -> dict[str, Any]:
+    """Return the explicitly bound runtime entity used as a compact projectile profile.
 
-    GeneratedItem is special: Terraria can only SetDefaults the generic GeneratedProjectile
-    type, but the actual behavior lives in generatedData.attack. When a generated item is
-    used as a parent, synthesize a projectile profile from that attack spec so recursive
-    crafting does not forget pierce/lifetime/extraUpdates/tile collision/multi-hit pressure.
+    This is a compatibility projection for parent fact cards, not a gameplay router. The
+    complete generated runtimeProgram is preserved separately by parent_context_cards.
+    Selection follows authored binding order (primary, alternate, hold), then entity order.
+    """
+    runtime_raw = dict_get_ci(generated, "runtimeProgram", {})
+    runtime = runtime_raw if isinstance(runtime_raw, dict) else {}
+    entities = [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
+    by_id = {str(row.get("id") or ""): row for row in entities}
+    input_rank = {"primary_use": 0, "alternate_use": 1, "hold": 2}
+    bindings = sorted(
+        [row for row in runtime.get("bindings") or [] if isinstance(row, dict) and str(row.get("action") or "") == "spawn_entity"],
+        key=lambda row: input_rank.get(str(row.get("input") or ""), 99),
+    )
+    for binding in bindings:
+        entity = by_id.get(str(binding.get("target") or ""))
+        if isinstance(entity, dict) and str(entity.get("kind") or "") != "item_body":
+            return entity
+    return next((row for row in entities if str(row.get("kind") or "") != "item_body"), {})
+
+
+def projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
+    """Return a factual projectile profile for vanilla/modded or generated parents.
+
+    Generated parents are projected from their accepted v5 runtimeProgram. No category,
+    name, weapon family, or prose is used to choose movement/delivery. The full entity graph
+    is also carried in ``raw.generatedParent.runtimeProgram`` by parent_context_cards.
     """
     gd = generated_data_of(item)
-    attack = dict_get_ci(gd, "attack", {}) if gd else {}
-    if isinstance(attack, dict) and attack.get("enabled"):
-        pierce = int(float(attack.get("pierce") or 1))
-        # attack.pierce is the real projectile penetrate count in the generated item JSON.
-        # Keep -1 only if a future schema explicitly emits it; otherwise clamp to a sane count.
-        if pierce == -1:
-            penetrate = -1
-        else:
-            penetrate = max(1, min(12, pierce))
-        return {
-            "type": int(item_num(item, "shoot", 0)),
-            "sourceMod": "InfiniCrafterLocal",
-            "internalName": "GeneratedProjectile",
-            "fullName": "InfiniCrafterLocal/GeneratedProjectile",
-            "itemShootSpeed": float(attack.get("speed") or item_num(item, "shootSpeed", 0)),
-            "width": int(float(attack.get("projectileWidth") or 14)),
-            "height": int(float(attack.get("projectileHeight") or 14)),
-            "scale": float(attack.get("projectileScale") or 1.0),
-            "aiStyle": 0,
-            "penetrate": penetrate,
-            "maxPenetrate": penetrate,
-            "timeLeft": int(float(attack.get("lifetime") or 90)),
-            "extraUpdates": int(float(attack.get("extraUpdates") or 0)),
-            "tileCollide": bool(attack.get("tileCollide", True)),
-            "ignoreWater": False,
-            "friendly": True,
-            "hostile": False,
-            "arrow": False,
-            "minion": str((dict_get_ci(gd, "gameplay", {}) or {}).get("damageClass") or "").lower() == "summon",
-            "sentry": False,
-            "minionSlots": 0,
-            "ownerHitCheck": str(attack.get("runtimeFamily") or attack.get("delivery") or "") in {"thrust", "spear", "whip"},
-            "usesLocalNPCImmunity": True,
-            "localNPCHitCooldown": int(float(attack.get("immunityCooldown") or 10)),
-            "usesIDStaticNPCImmunity": False,
-            "idStaticNPCHitCooldown": -1,
-            "stopsDealingDamageAfterPenetrateHits": False,
-            "light": 0,
-            "alpha": 0,
-            "netImportant": False,
-            "fromGeneratedAttack": True,
-            "engineMetrics": attack.get("engineMetrics") if isinstance(attack.get("engineMetrics"), dict) else {},
-        }
+    if isinstance(gd, dict) and gd:
+        entity = _generated_runtime_primary_projectile(gd)
+        if entity:
+            spawn = entity.get("spawn") if isinstance(entity.get("spawn"), dict) else {}
+            hitbox = entity.get("hitbox") if isinstance(entity.get("hitbox"), dict) else {}
+            collision = entity.get("collision") if isinstance(entity.get("collision"), dict) else {}
+            damage = entity.get("damage") if isinstance(entity.get("damage"), dict) else {}
+            movement = entity.get("movement") if isinstance(entity.get("movement"), dict) else {}
+            controller = entity.get("controller") if isinstance(entity.get("controller"), dict) else {}
+            targeting = entity.get("targeting") if isinstance(entity.get("targeting"), dict) else {}
+            return {
+                "type": int(item_num(item, "shoot", 0)),
+                "sourceMod": "InfiniCrafterLocal",
+                "internalName": "GeneratedProjectile",
+                "fullName": "InfiniCrafterLocal/GeneratedProjectile",
+                "generatedEntityId": str(entity.get("id") or ""),
+                "generatedEntityKind": str(entity.get("kind") or ""),
+                "itemShootSpeed": float(spawn.get("speedPxPerTick") or item_num(item, "shootSpeed", 0)),
+                "width": int(float(hitbox.get("widthPx") or 14)),
+                "height": int(float(hitbox.get("heightPx") or 14)),
+                "scale": float(hitbox.get("drawScale") or 1.0),
+                "aiStyle": 0,
+                "penetrate": int(float(collision.get("pierce") if collision.get("pierce") is not None else 1)),
+                "maxPenetrate": int(float(collision.get("pierce") if collision.get("pierce") is not None else 1)),
+                "timeLeft": int(float(entity.get("lifetimeTicks") or 90)),
+                "extraUpdates": int(float(collision.get("extraUpdates") or 0)),
+                "tileCollide": bool(collision.get("tileCollide", True)),
+                "ignoreWater": bool(collision.get("ignoreWater", False)),
+                "friendly": bool(damage.get("enabled", False)),
+                "hostile": False,
+                "arrow": False,
+                "minion": str(damage.get("damageClass") or "").lower() == "summon",
+                "sentry": str(entity.get("kind") or "") == "stationary_projectile",
+                "minionSlots": 0,
+                "ownerHitCheck": bool(damage.get("ownerHitCheck", False)),
+                "usesLocalNPCImmunity": str(collision.get("npcImmunityMode") or "owner") == "local",
+                "localNPCHitCooldown": int(float(collision.get("localNpcHitCooldownTicks") if collision.get("localNpcHitCooldownTicks") is not None else -1)),
+                "usesIDStaticNPCImmunity": False,
+                "idStaticNPCHitCooldown": -1,
+                "stopsDealingDamageAfterPenetrateHits": False,
+                "light": float((entity.get("light") or {}).get("strength") or 0) if isinstance(entity.get("light"), dict) else 0,
+                "alpha": 0,
+                "netImportant": str(entity.get("kind") or "") in {"owner_attached_projectile", "stationary_projectile", "temporary_helper", "field"},
+                "fromGeneratedRuntimeProgram": True,
+                "movement": {"name": movement.get("name"), "params": movement.get("params") or {}},
+                "controller": {"name": controller.get("name"), "params": controller.get("params") or {}},
+                "targeting": targeting,
+                "events": [
+                    {"event": row.get("event"), "action": row.get("action"), "entityId": row.get("entityId")}
+                    for row in entity.get("events") or [] if isinstance(row, dict)
+                ],
+            }
     raw_direct = _raw_section_dict(item, "directProjectileRaw")
     if raw_direct:
         out = _strip_texture_metrics_for_llm(raw_direct)
@@ -413,7 +442,7 @@ def runtime_facts_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
     rf = fp.get("runtimeFacts") if isinstance(fp, dict) else None
     if isinstance(rf, dict):
         return rf
-    keys = ["type", "damage", "damageClass", "useStyle", "useTime", "useAnimation", "rare", "rarityDetails", "value", "maxStack", "consumable", "accessory", "defense", "createTile", "createWall", "pickPower", "axePower", "hammerPower", "healLife", "healMana", "manaCost", "ammo", "useAmmo", "shoot", "shootSpeed", "knockback", "buffType", "buffTime"]
+    keys = ["type", "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation", "rare", "rarityDetails", "value", "maxStack", "consumable", "accessory", "defense", "createTile", "createWall", "pickPower", "axePower", "hammerPower", "healLife", "healMana", "potion", "manaCost", "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "buffType", "buffTime"]
     return {k: item_field(item, k, None) for k in keys if item_field(item, k, None) is not None}
 
 def auto_features_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
@@ -648,12 +677,12 @@ def _raw_item_fields_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     """
     keys = [
         "type", "name", "internalName", "fullName", "sourceMod", "tooltipLines",
-        "damage", "damageClass", "useStyle", "useTime", "useAnimation",
+        "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation",
         "rare", "rarityDetails", "value", "maxStack", "stack", "consumable", "material",
         "accessory", "defense", "createTile", "createWall", "placeStyle",
         "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
-        "healLife", "healMana", "manaCost", "buffType", "buffTime",
-        "ammo", "useAmmo", "shoot", "shootSpeed", "knockback", "knockBack",
+        "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
+        "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "knockBack",
         "questItem", "expert", "master",
         "mountType", "cartTrack", "pet", "lightPet",
         "fishingPole", "bait",
@@ -679,7 +708,7 @@ def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     num_keys = [
         "createTile", "createWall", "placeStyle", "shoot", "useAmmo", "ammo",
         "mountType", "cartTrack", "fishingPole", "bait",
-        "pickPower", "axePower", "hammerPower", "defense", "healLife", "healMana", "buffType", "buffTime",
+        "pickPower", "axePower", "hammerPower", "defense", "healLife", "healMana", "potion", "buffType", "buffTime",
     ]
     out: dict[str, Any] = {}
     for k in bool_keys:
@@ -854,12 +883,11 @@ def behavior_policy_for_prompt(a: dict[str, Any], b: dict[str, Any]) -> dict[str
     author the role/effect itself, while the server only validates executable bounds.
     """
     return {
-        "family": "runtime_authored",
-        "serverWillEnforce": "technical safety only: finite numbers, supported engine calls, active projectile/sync pressure, bounded recursion",
-        "note": "No item-name family exception table is applied here. If you want an effect, author it explicitly in runtimePlan.engineCalls.",
+        "compositionMode": "low_level_runtime_program",
+        "serverWillEnforce": "technical safety only: strict capabilities, typed references, bounded entities/events/recursion, authority and sync limits",
+        "note": "No item-name or category router is applied. Author every behavior explicitly through runtimeProgram entities, bindings, calls, and events.",
     }
 
 # Parent-relative soft damage caps are deliberately not exposed to the LLM prompt.
-# Balance lives in llm_authoring_prompt.authored_weapon_damage() and
 # combine_balance.clamp_vanilla_like_weapon_damage();
 # this module only packages raw parent facts and hard executable context for authoring.

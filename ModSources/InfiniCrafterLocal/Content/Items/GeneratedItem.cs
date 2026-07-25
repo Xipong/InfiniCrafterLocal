@@ -1,14 +1,12 @@
 #nullable enable
-using InfiniCrafterLocal.Common;
-using InfiniCrafterLocal.Common.Config;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,198 +19,88 @@ using Terraria.ModLoader.IO;
 
 namespace InfiniCrafterLocal.Content.Items;
 
-// AGENT MAP: one tModLoader proxy item type for many generated item instances.
-// SetData() applies the explicit GeneratedItemData DTO to the Terraria Item;
-// save/net paths strip unsafe bulk; use/equipment/shoot hooks execute only
-// supported fields. Do not infer gameplay from display name, tooltip, prompt,
-// flavor text, or Debug/ExtensionData.
+/// <summary>
+/// One proxy ModItem for many generated instances. Runtime behaviour is selected
+/// exclusively by the accepted RuntimeProgramSpec binding/entity/component/event
+/// graph. Display name, tooltip, category and parent prose never route gameplay.
+/// </summary>
 public partial class GeneratedItem : ModItem
 {
-    private const int GeneratedItemNetPayloadVersion = 4;
-    private const int MaxGeneratedAoeTargetsPerHit = 16;
+    private const int GeneratedItemNetPayloadVersion = 5;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
-    private static int _lowNoiseWarningCount;
-    private int _lastUseBlockedNoticeTick = -9999;
-    private int _lastAltUseBlockedNoticeTick = -9999;
-    private int _lastRuntimeHydrationTouchTick = -9999;
-    private bool _applyingGeneratedSwingAoeDamage;
+    private static int _warningCount;
+    private int _lastHydrationTick = -9999;
+    private int _lastBlockedNoticeTick = -9999;
+    private int _itemEventSpawnBudget;
 
-    private static void LogLowNoiseWarning(string context, Exception ex)
+    private static void Warn(string context, Exception ex)
     {
-        if (_lowNoiseWarningCount >= 8)
-            return;
-        _lowNoiseWarningCount++;
-        try
-        {
-            global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger?.Warn($"[GeneratedItem] {context}: {ex.GetType().Name}: {ex.Message}");
-        }
+        if (_warningCount++ >= 8) return;
+        try { global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger?.Warn($"[GeneratedItem] {context}: {ex.GetType().Name}: {ex.Message}"); }
         catch { }
     }
 
     public override ModItem Clone(Item newEntity)
     {
         var clone = (GeneratedItem)base.Clone(newEntity);
-        try
-        {
-            // CloneNewInstances routes item copies through Clone(). GeneratedItem carries a
-            // mutable reference-typed per-instance payload, so relying on tML's reflective
-            // cloning rules is unsafe for player-file load, inventory cloning, and refund
-            // backups. Keep the clone compact and side-effect free; asset registry hydration
-            // happens later through SetData/NetReceive/craft commit paths.
-            string json = (Data ?? GeneratedItemData.Placeholder()).ToNetworkJson();
-            clone.Data = GeneratedItemData.FromJson(json) ?? GeneratedItemData.Placeholder();
-        }
-        catch
-        {
-            clone.Data = GeneratedItemData.Placeholder();
-        }
+        try { clone.Data = GeneratedItemData.FromJson((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()) ?? GeneratedItemData.Placeholder(); }
+        catch { clone.Data = GeneratedItemData.Placeholder(); }
         return clone;
     }
 
     public void SetData(GeneratedItemData data) => SetData(data, ensureAssets: true, registerLocal: true);
 
-    private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal = true, bool notifyNetState = true)
+    private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal, bool notifyNetState = true)
     {
         Data = data ?? GeneratedItemData.Placeholder();
-
-        try
-        {
-            Data.ApplyToItem(Item);
-        }
+        try { Data.ApplyToItem(Item); }
         catch (Exception ex)
         {
-            // Player/character loading must never be bricked by one malformed generated
-            // item payload. Fall back to a harmless placeholder instead of letting tML
-            // mark the whole character as UnknownError on the selection screen.
-            LogLowNoiseWarning($"ApplyToItem failed for generated item '{Data?.Id ?? "unknown"}', falling back to placeholder", ex);
+            Warn($"ApplyToItem failed for '{Data.Id}'", ex);
             Data = GeneratedItemData.Placeholder();
-            try { Data.ApplyToItem(Item); } catch (Exception placeholderEx) { LogLowNoiseWarning("Placeholder ApplyToItem also failed", placeholderEx); }
+            try { Data.ApplyToItem(Item); } catch { }
         }
-
-        // Character select / player-file load is a fragile path in tModLoader: it should
-        // deserialize the item only, not touch the per-world registry, disk asset cache,
-        // HTTP asset sync, or background download tasks.  Runtime registry/asset hydration
-        // is requested again when a freshly crafted/synced item is received or used in-world.
         if (registerLocal)
         {
             try { global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RegisterLocal(Data, ensureAssets: ensureAssets); }
-            catch (Exception ex) { LogLowNoiseWarning($"RegisterLocal failed for generated item '{Data?.Id ?? "unknown"}'", ex); }
+            catch (Exception ex) { Warn($"RegisterLocal failed for '{Data.Id}'", ex); }
         }
-
         if (notifyNetState && registerLocal && Main.netMode != NetmodeID.SinglePlayer)
-        {
             try { Item.NetStateChanged(); } catch { }
-        }
     }
 
     public override void SetDefaults()
     {
         Data ??= GeneratedItemData.Placeholder();
         try { Data.ApplyToItem(Item); }
-        catch (Exception ex)
+        catch
         {
-            LogLowNoiseWarning($"SetDefaults ApplyToItem failed for generated item '{Data?.Id ?? "unknown"}', falling back to placeholder", ex);
             Data = GeneratedItemData.Placeholder();
-            try { Data.ApplyToItem(Item); } catch (Exception placeholderEx) { LogLowNoiseWarning("SetDefaults placeholder ApplyToItem also failed", placeholderEx); }
+            try { Data.ApplyToItem(Item); } catch { }
         }
     }
 
     public override void SaveData(TagCompound tag)
     {
-        try
-        {
-            tag["infiniJson"] = (Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson();
-        }
-        catch
-        {
-            tag["infiniJson"] = GeneratedItemData.Placeholder().ToPlayerSaveJson();
-        }
+        try { tag["infiniJson"] = (Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson(); }
+        catch { tag["infiniJson"] = GeneratedItemData.Placeholder().ToPlayerSaveJson(); }
     }
 
     public override void LoadData(TagCompound tag)
     {
         try
         {
-            string json = SafeGetString(tag, "infiniJson");
+            string json = tag is not null && tag.ContainsKey("infiniJson") ? tag.GetString("infiniJson") ?? "" : "";
             SetData(GeneratedItemData.FromPlayerSaveJson(json) ?? GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false);
         }
-        catch
-        {
-            try { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); } catch { }
-        }
-    }
-
-    private static string SafeGetString(TagCompound tag, string key)
-    {
-        try
-        {
-            if (tag is null || !tag.ContainsKey(key)) return "";
-            return tag.GetString(key) ?? "";
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
-    private void EnsureRuntimeHydration(Player? player = null)
-    {
-        string id = (Data?.Id ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(id) || string.Equals(id, "placeholder", StringComparison.OrdinalIgnoreCase))
-            return;
-        int now = (int)Main.GameUpdateCount;
-        if (now - _lastRuntimeHydrationTouchTick < 90)
-            return;
-        _lastRuntimeHydrationTouchTick = now;
-        try
-        {
-            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-            if (registry is null)
-                return;
-            if (registry.TryGet(id, out var cachedData))
-            {
-                if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
-                    SetData(cachedData, ensureAssets: false, registerLocal: false, notifyNetState: false);
-                global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(cachedData, forceRetry: false);
-                return;
-            }
-            if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
-                global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RegisterLocal(Data, persist: false, ensureAssets: true);
-            if (Main.netMode == NetmodeID.MultiplayerClient)
-                global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestOneFromServer(id, forceAssetRetry: false);
-        }
-        catch (Exception ex)
-        {
-            LogLowNoiseWarning($"Runtime hydration touch failed for generated item '{id}'", ex);
-        }
-    }
-
-    private GeneratedItemData ResolveRuntimeDataForPresentation()
-    {
-        GeneratedItemData current = Data ?? GeneratedItemData.Placeholder();
-        if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
-            return current;
-
-        string id = (Data?.Id ?? "").Trim();
-        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-        if (!string.IsNullOrWhiteSpace(id)
-            && registry is not null
-            && registry.TryGet(id, out var canonical)
-            && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
-            return canonical;
-
-        return current;
+        catch { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
     }
 
     public override void NetSend(BinaryWriter writer)
     {
         writer.Write(GeneratedItemNetPayloadVersion);
-        // ModItem NetSend runs in both directions. Send only a compact identity
-        // reference here; full definitions move through the server-authoritative
-        // registry hydration packets instead of letting an item-container sync
-        // carry client-authored gameplay state into the server.
         try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
         catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
     }
@@ -223,1119 +111,371 @@ public partial class GeneratedItem : ModItem
         {
             int version = reader.ReadInt32();
             if (version != GeneratedItemNetPayloadVersion)
-                throw new InvalidDataException($"Unsupported GeneratedItem net payload version {version}");
-            var reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
-            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+                throw new InvalidDataException($"Unsupported generated item payload {version}");
+            GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
             GeneratedItemData resolved = reference;
-            if (!string.IsNullOrWhiteSpace(reference.Id)
-                && registry is not null
-                && registry.TryGet(reference.Id, out var canonical)
-                && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+            if (!string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
                 resolved = canonical;
             SetData(resolved, ensureAssets: false, registerLocal: false, notifyNetState: false);
-            // Item/container sync is allowed to carry only the compact id. Kick one
-            // deduplicated registry hydration now so ground/inventory/held drawing
-            // does not remain on the static placeholder until the item is used.
             EnsureRuntimeHydration();
         }
-        catch { try { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); } catch { } }
+        catch { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
+    }
+
+    private void EnsureRuntimeHydration(Player? player = null)
+    {
+        string id = (Data?.Id ?? "").Trim();
+        if (id.Length == 0 || id == "placeholder") return;
+        int now = (int)Main.GameUpdateCount;
+        if (now - _lastHydrationTick < 90) return;
+        _lastHydrationTick = now;
+        try
+        {
+            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+            if (registry is null) return;
+            if (registry.TryGet(id, out var canonical))
+            {
+                if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
+                    SetData(canonical, ensureAssets: false, registerLocal: false, notifyNetState: false);
+                global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(canonical, forceRetry: false);
+            }
+            else if (Main.netMode == NetmodeID.MultiplayerClient)
+                registry.RequestOneFromServer(id, forceAssetRetry: false);
+            else if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
+                registry.RegisterLocal(Data, persist: false, ensureAssets: true);
+        }
+        catch (Exception ex) { Warn($"Runtime hydration failed for '{id}'", ex); }
+    }
+
+    private GeneratedItemData PresentationData()
+    {
+        if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data)) return Data;
+        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+        return registry is not null && registry.TryGet(Data.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical)
+            ? canonical : Data;
     }
 
     public override bool CanStack(Item source)
-    {
-        // GeneratedItem is one ModItem type with per-instance JSON. Do not let different
-        // generated results collapse into the same stack. Same recipe/id may stack if future
-        // categories intentionally allow stack > 1.
-        if (source.ModItem is not GeneratedItem other)
-            return false;
-        return string.Equals(Data?.Id, other.Data?.Id, StringComparison.Ordinal)
-            && string.Equals(Data?.RecipeKey, other.Data?.RecipeKey, StringComparison.Ordinal);
-    }
+        => source.ModItem is GeneratedItem other
+            && string.Equals(Data.Id, other.Data.Id, StringComparison.Ordinal)
+            && string.Equals(Data.RecipeKey, other.Data.RecipeKey, StringComparison.Ordinal);
 
     public override void ModifyTooltips(List<TooltipLine> tooltips)
     {
         EnsureRuntimeHydration();
-        GeneratedItemData data = Data ?? GeneratedItemData.Placeholder();
-        GameplaySpec gameplay = data.Gameplay ?? new GameplaySpec();
-        AccessorySpec accessory = data.Accessory ?? new AccessorySpec();
-        ArmorSpec armor = data.Armor ?? new ArmorSpec();
-        AttackSpec attack = data.Attack ?? new AttackSpec();
-        VisualSpec visual = data.Visual ?? new VisualSpec();
-        RecipeMetaSpec recipeMeta = data.RecipeMeta ?? new RecipeMetaSpec();
-        ItemKnowledgeSpec itemKnowledge = data.ItemKnowledge ?? new ItemKnowledgeSpec();
-        VfxManifestSpec vfxManifest = data.VfxManifest ?? new VfxManifestSpec();
-        string[] requiredAnchors = visual.RequiredAnchors ?? Array.Empty<string>();
-        BuffEntrySpec[] extraBuffs = gameplay.ExtraBuffs ?? Array.Empty<BuffEntrySpec>();
-        VfxSlotSpec[] vfxSlots = vfxManifest.Slots ?? Array.Empty<VfxSlotSpec>();
-
-        tooltips.Add(new TooltipLine(Mod, "InfiniParents", $"Recipe: {data.ParentA} + {data.ParentB}") { OverrideColor = Color.LightSkyBlue });
-        tooltips.Add(new TooltipLine(Mod, "InfiniMerge", $"Merge: {data.MergeMode} / {data.Category} / {data.SourceMode}") { OverrideColor = Color.Gray });
+        GeneratedItemData data = PresentationData();
+        tooltips.Add(new TooltipLine(Mod, "InfiniParents", $"Forged from {data.ParentA} + {data.ParentB}") { OverrideColor = Color.MediumPurple });
         if (!string.IsNullOrWhiteSpace(data.Tooltip))
-            tooltips.Add(new TooltipLine(Mod, "InfiniFlavor", data.Tooltip));
-
-        if (armor.Enabled)
-            tooltips.Add(new TooltipLine(Mod, "InfiniArmor", ArmorSummary()) { OverrideColor = Color.LightSteelBlue });
-        if (accessory.Enabled)
-            tooltips.Add(new TooltipLine(Mod, "InfiniAccessory", AccessorySummary()) { OverrideColor = Color.LightGreen });
-        string altSummary = AltUseSummary();
-        if (!string.IsNullOrWhiteSpace(altSummary))
-            tooltips.Add(new TooltipLine(Mod, "InfiniAltUse", altSummary) { OverrideColor = Color.LightGoldenrodYellow });
-        string useUtilitySummary = GeneratedUtilitySummary(gameplay.GeneratedBuff, "On use");
-        if (!string.IsNullOrWhiteSpace(useUtilitySummary))
-            tooltips.Add(new TooltipLine(Mod, "InfiniUseUtility", useUtilitySummary) { OverrideColor = Color.LightGreen });
-        string holdUtilitySummary = GeneratedUtilitySummary(gameplay.HoldGeneratedBuff, "While held");
-        if (!string.IsNullOrWhiteSpace(holdUtilitySummary))
-            tooltips.Add(new TooltipLine(Mod, "InfiniHoldUtility", holdUtilitySummary) { OverrideColor = Color.LightCyan });
-        string conditionSummary = UseConditionSummary(gameplay);
-        if (!string.IsNullOrWhiteSpace(conditionSummary))
-            tooltips.Add(new TooltipLine(Mod, "InfiniUseCondition", conditionSummary) { OverrideColor = Color.LightSalmon });
-        string generatedCombatSummary = CompactGeneratedCombatSummary(data);
-        if (!string.IsNullOrWhiteSpace(generatedCombatSummary))
-            tooltips.Add(new TooltipLine(Mod, "InfiniCombatQoL", generatedCombatSummary) { OverrideColor = Color.SandyBrown });
-
-        bool debugTooltips = Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift);
-        if (!debugTooltips)
-        {
-            tooltips.Add(new TooltipLine(Mod, "InfiniDebugHint", "Hold Shift for InfiniCraft debug") { OverrideColor = Color.DarkGray });
-            return;
-        }
-
-        if (recipeMeta.GenerationDepth > 0)
-            tooltips.Add(new TooltipLine(Mod, "InfiniDepth", $"Depth: {recipeMeta.GenerationDepth} / {recipeMeta.RecipeCoherence}") { OverrideColor = Color.MediumPurple });
-        if (!string.IsNullOrWhiteSpace(gameplay.Stage))
-            tooltips.Add(new TooltipLine(Mod, "InfiniStage", $"Stage: {gameplay.Stage} / budget {gameplay.PowerBudget:0.00}") { OverrideColor = Color.LightGoldenrodYellow });
-        if (!string.IsNullOrWhiteSpace(itemKnowledge.StrongestTier) && itemKnowledge.StrongestTier != "unknown")
-            tooltips.Add(new TooltipLine(Mod, "InfiniKnowledge", $"Input hint: {itemKnowledge.StrongestTier}") { OverrideColor = Color.LightCyan });
-        if (requiredAnchors.Length > 0)
-            tooltips.Add(new TooltipLine(Mod, "InfiniAnchors", "Anchors: " + string.Join(", ", requiredAnchors)) { OverrideColor = Color.Silver });
-        if (!string.IsNullOrWhiteSpace(visual.SpriteStatus))
-            tooltips.Add(new TooltipLine(Mod, "InfiniSpriteStatus", $"Sprite: {visual.SpriteStatus} technical {visual.SpriteTechnicalScore:0.00}; semantic {visual.SemanticReviewStatus}") { OverrideColor = Color.DarkGray });
-        if (extraBuffs.Length > 1)
-            tooltips.Add(new TooltipLine(Mod, "InfiniExtraBuffs", $"Use buffs: {extraBuffs.Length} channels") { OverrideColor = Color.LightGreen });
-        if (!string.IsNullOrWhiteSpace(gameplay.MobilityMode))
-            tooltips.Add(new TooltipLine(Mod, "InfiniMobility", $"Mobility: {gameplay.MobilityMode} / {gameplay.MobilityRangeTiles} tiles / cd {gameplay.MobilityCooldownTicks}t") { OverrideColor = Color.LightSteelBlue });
-        if (gameplay.ConsumeChancePercent < 100 && gameplay.Consumable)
-            tooltips.Add(new TooltipLine(Mod, "InfiniConsume", $"Consume chance: {gameplay.ConsumeChancePercent}%") { OverrideColor = Color.LightSalmon });
-        if (!string.IsNullOrWhiteSpace(attack.ProjectileSpriteStatus))
-            tooltips.Add(new TooltipLine(Mod, "InfiniProjectileSpriteStatus", $"Projectile sprite: {attack.ProjectileSpriteStatus} score {attack.ProjectileSpriteScore:0.00}") { OverrideColor = Color.DarkGray });
-        if (!string.IsNullOrWhiteSpace(attack.ChildSpriteStatus) || !string.IsNullOrWhiteSpace(attack.FieldSpriteStatus))
-            tooltips.Add(new TooltipLine(Mod, "InfiniVisualPackStatus", $"Visual pack: child {attack.ChildSpriteStatus}, field {attack.FieldSpriteStatus}") { OverrideColor = Color.DarkGray });
-        if (gameplay.ItemScale > 1.01f || visual.InventoryScale > 1.01f || visual.WorldScale > 1.01f)
-            tooltips.Add(new TooltipLine(Mod, "InfiniScale", $"Scale: item {gameplay.ItemScale:0.00}, inv {visual.InventoryScale:0.00}, world {visual.WorldScale:0.00}") { OverrideColor = Color.Goldenrod });
-
-        tooltips.Add(new TooltipLine(Mod, "InfiniDamagePath", DamagePathSummary(data)) { OverrideColor = Color.SandyBrown });
-        if (attack.Enabled)
-            tooltips.Add(new TooltipLine(Mod, "InfiniGeneratedExecutorProfile", $"Generated executor: {attack.RuntimeFamily} / {attack.Movement} / {attack.Effect} / {attack.OnHit}") { OverrideColor = Color.Orange });
-        if (attack.Enabled && !string.IsNullOrWhiteSpace(attack.VisualMode))
-            tooltips.Add(new TooltipLine(Mod, "InfiniPresentation", $"Visual: {attack.VisualMode} / {attack.TrailStyle} / {attack.ImpactStyle}") { OverrideColor = Color.LightPink });
-        if (vfxManifest.HasSlots)
-            tooltips.Add(new TooltipLine(Mod, "InfiniVfxManifest", $"VFX: {vfxManifest.RecipeId} ({vfxSlots.Length} slots, conf {vfxManifest.Confidence:0.00})") { OverrideColor = Color.MediumAquamarine });
-        if (attack.Enabled && (attack.ProjectileScale > 1.01f || attack.HitboxScale > 1.01f || attack.AoeDamageRadiusPx > 0 || attack.ImpactVfxRadiusPx > 0 || attack.ContactForgivenessPx > 0))
-            tooltips.Add(new TooltipLine(Mod, "InfiniAttackSize", $"Attack size: proj {attack.ProjectileScale:0.00}, hitbox {attack.HitboxScale:0.00}, aoe {attack.AoeDamageRadiusPx / 16f:0.00}t, vfx {attack.ImpactVfxRadiusPx}px, contact +{attack.ContactForgivenessPx}px") { OverrideColor = Color.OrangeRed });
-        if (attack.Enabled && attack.EngineMetrics is not null && attack.EngineMetrics.TryGetValue("activeProjectileEstimate", out float activeEstimate))
-        {
-            string dustText = attack.DustSpawnDenom <= 0 ? "off" : $"1/{Math.Max(1, attack.DustSpawnDenom)}";
-            tooltips.Add(new TooltipLine(Mod, "InfiniEnginePressure", $"Engine estimate: ~{activeEstimate:0.0} active proj, dust {dustText}") { OverrideColor = Color.DarkGray });
-        }
+            tooltips.Add(new TooltipLine(Mod, "InfiniGeneratedTooltip", data.Tooltip));
+        RuntimeProgramSpec program = data.RuntimeProgram;
+        string inputs = string.Join(", ", program.Bindings.Select(x => x.Input));
+        tooltips.Add(new TooltipLine(Mod, "InfiniRuntimeProgram", $"Low-level runtime: {program.Entities.Length} entities, {program.Bindings.Length} bindings{(inputs.Length > 0 ? $" [{inputs}]" : "")}") { OverrideColor = Color.Orange });
+        if (program.ItemContact.Enabled)
+            tooltips.Add(new TooltipLine(Mod, "InfiniContact", $"Item contact hitbox: ×{program.ItemContact.HitboxScale:0.00}, +{program.ItemContact.ContactForgivenessPx}px") { OverrideColor = Color.SandyBrown });
+        if (data.Accessory.Enabled)
+            tooltips.Add(new TooltipLine(Mod, "InfiniAccessory", AccessorySummary(data.Accessory)) { OverrideColor = Color.LightGreen });
+        if (data.Armor.Enabled)
+            tooltips.Add(new TooltipLine(Mod, "InfiniArmor", ArmorSummary(data.Armor)) { OverrideColor = Color.LightSkyBlue });
+        if (data.VfxManifest.HasSlots)
+            tooltips.Add(new TooltipLine(Mod, "InfiniVfx", $"VFX: {data.VfxManifest.Slots.Length} exact entity/event slots") { OverrideColor = Color.MediumAquamarine });
     }
 
-    private static bool HasVanillaItemHitboxDamage(GeneratedItemData? data)
+    private static string AccessorySummary(AccessorySpec a)
     {
-        if (data is null || data.Accessory.Enabled || data.Armor.Enabled)
-            return false;
-        if (data.Gameplay.Damage <= 0)
-            return false;
-        string kind = (data.Gameplay.Kind ?? "").Trim().ToLowerInvariant();
-        if (kind is "ammo" or "accessory" or "material" or "furniture")
-            return false;
-        // Attack.Enabled means "generated runtime executor exists"; vanilla item
-        // melee/tool hitboxes are a separate Terraria damage path.
-        if (data.Attack.Enabled && data.Attack.DisableItemMeleeHitbox)
-            return false;
-        return data.Gameplay.UseStyle > ItemUseStyleID.None;
+        var values = new List<string>();
+        if (a.Defense != 0) values.Add($"+{a.Defense} def");
+        if (a.MaxLife != 0) values.Add($"+{a.MaxLife} life");
+        if (a.MaxMana != 0) values.Add($"+{a.MaxMana} mana");
+        if (a.GenericDamage != 0) values.Add($"+{a.GenericDamage * 100f:0}% dmg");
+        if (a.MovementSpeed != 0) values.Add($"+{a.MovementSpeed * 100f:0}% move");
+        return values.Count == 0 ? "Accessory" : "Accessory: " + string.Join(", ", values);
     }
 
-    private static string DamagePathSummary(GeneratedItemData? data)
+    private static string ArmorSummary(ArmorSpec a)
     {
-        if (data is null)
-            return "Damage path: missing generated data";
-        bool generatedExecutor = data.Attack.Enabled;
-        bool vanillaHitbox = HasVanillaItemHitboxDamage(data);
-        if (generatedExecutor && vanillaHitbox)
-            return $"Damage path: generated executor + vanilla hitbox ({data.Gameplay.Damage} item dmg)";
-        if (generatedExecutor)
-            return $"Damage path: generated runtime executor ({data.Attack.RuntimeFamily})";
-        if (vanillaHitbox)
-            return $"Damage path: vanilla item/tool hitbox only ({data.Gameplay.Damage} item dmg; no generated projectile executor)";
-        if (data.Gameplay.Damage > 0)
-            return $"Damage path: item damage {data.Gameplay.Damage}, but vanilla hitbox disabled/unsupported";
-        return "Damage path: utility/non-damaging item";
+        var values = new List<string>();
+        if (a.Defense != 0) values.Add($"{a.Defense} def");
+        if (a.MaxLife != 0) values.Add($"+{a.MaxLife} life");
+        if (a.GenericDamage != 0) values.Add($"+{a.GenericDamage * 100f:0}% dmg");
+        return $"Armor ({a.Slot})" + (values.Count == 0 ? "" : ": " + string.Join(", ", values));
     }
 
-    private string ArmorSummary()
-    {
-        var a = Data.Armor;
-        var parts = new List<string>();
-        if (a.Defense != 0) parts.Add($"{a.Defense} def");
-        if (a.MaxLife != 0) parts.Add($"+{a.MaxLife} life");
-        if (a.MaxMana != 0) parts.Add($"+{a.MaxMana} mana");
-        if (a.LifeRegen != 0) parts.Add($"+{a.LifeRegen} life regen");
-        if (a.ManaRegen != 0) parts.Add($"+{a.ManaRegen} mana regen");
-        if (a.GenericDamage != 0) parts.Add($"+{a.GenericDamage * 100f:0}% dmg");
-        if (a.MeleeDamage != 0) parts.Add($"+{a.MeleeDamage * 100f:0}% melee");
-        if (a.RangedDamage != 0) parts.Add($"+{a.RangedDamage * 100f:0}% ranged");
-        if (a.MagicDamage != 0) parts.Add($"+{a.MagicDamage * 100f:0}% magic");
-        if (a.SummonDamage != 0) parts.Add($"+{a.SummonDamage * 100f:0}% summon");
-        if (a.GenericCrit != 0) parts.Add($"+{a.GenericCrit:0}% crit");
-        if (a.AttackSpeed != 0) parts.Add($"+{a.AttackSpeed * 100f:0}% speed");
-        if (a.Knockback != 0) parts.Add($"+{a.Knockback:0.##} kb");
-        if (a.MovementSpeed != 0) parts.Add($"+{a.MovementSpeed * 100f:0}% move");
-        if (a.MaxRunSpeed != 0) parts.Add($"+{a.MaxRunSpeed:0.##} run");
-        if (a.JumpSpeed != 0) parts.Add($"+{a.JumpSpeed:0.##} jump");
-        if (a.MinionSlots != 0) parts.Add($"+{a.MinionSlots} minions");
-        if (a.SentrySlots != 0) parts.Add($"+{a.SentrySlots} sentries");
-        if (a.ManaCostReduction != 0f) parts.Add($"-{a.ManaCostReduction * 100f:0}% mana cost");
-        if (a.AmmoSaveChance != 0f) parts.Add($"{a.AmmoSaveChance * 100f:0}% ammo save");
-        if (a.Aggro != 0) parts.Add($"{a.Aggro:+#;-#;0} aggro");
-        if (a.Endurance != 0f) parts.Add($"+{a.Endurance * 100f:0}% DR");
-        if (a.ArmorPenetration != 0f) parts.Add($"+{a.ArmorPenetration:0.#} armor pen");
-        if (a.WhipRange != 0f) parts.Add($"+{a.WhipRange * 100f:0}% whip range");
-        if (a.SummonTagDamage != 0f) parts.Add($"+{a.SummonTagDamage * 100f:0}% generated whip tag damage");
-        if (a.FallDamageImmune) parts.Add("fall immunity");
-        if (a.LavaImmune) parts.Add("lava immunity");
-        if (a.WaterWalk) parts.Add("water walk");
-        if (a.LightStrength > 0f) parts.Add(string.IsNullOrWhiteSpace(a.LightColorName) ? "light" : $"{a.LightColorName} light");
-        if (!string.IsNullOrWhiteSpace(a.SetKey)) parts.Add($"set {a.SetKey}");
-        if (!string.IsNullOrWhiteSpace(a.SetBonusText)) parts.Add("set bonus ready");
-        string slot = string.IsNullOrWhiteSpace(a.Slot) ? "body" : a.Slot;
-        string head = string.IsNullOrWhiteSpace(a.Archetype) || a.Archetype == "hybrid" ? $"Armor ({slot})" : $"Armor ({slot}, {a.Archetype})";
-        return parts.Count == 0 ? head : head + ": " + string.Join(", ", parts);
-    }
-
-    private string AccessorySummary()
-    {
-        var a = Data.Accessory;
-        var parts = new List<string>();
-        if (a.Defense != 0) parts.Add($"+{a.Defense} def");
-        if (a.MaxLife != 0) parts.Add($"+{a.MaxLife} life");
-        if (a.MaxMana != 0) parts.Add($"+{a.MaxMana} mana");
-        if (a.LifeRegen != 0) parts.Add($"+{a.LifeRegen} life regen");
-        if (a.ManaRegen != 0) parts.Add($"+{a.ManaRegen} mana regen");
-        if (a.GenericDamage != 0) parts.Add($"+{a.GenericDamage * 100f:0}% dmg");
-        if (a.MeleeDamage != 0) parts.Add($"+{a.MeleeDamage * 100f:0}% melee");
-        if (a.RangedDamage != 0) parts.Add($"+{a.RangedDamage * 100f:0}% ranged");
-        if (a.MagicDamage != 0) parts.Add($"+{a.MagicDamage * 100f:0}% magic");
-        if (a.SummonDamage != 0) parts.Add($"+{a.SummonDamage * 100f:0}% summon");
-        if (a.GenericCrit != 0) parts.Add($"+{a.GenericCrit:0}% crit");
-        if (a.AttackSpeed != 0) parts.Add($"+{a.AttackSpeed * 100f:0}% speed");
-        if (a.Knockback != 0) parts.Add($"+{a.Knockback:0.##} kb");
-        if (a.MovementSpeed != 0) parts.Add($"+{a.MovementSpeed * 100f:0}% move");
-        if (a.MaxRunSpeed != 0) parts.Add($"+{a.MaxRunSpeed:0.##} run");
-        if (a.JumpSpeed != 0) parts.Add($"+{a.JumpSpeed:0.##} jump");
-        if (a.MinionSlots != 0) parts.Add($"+{a.MinionSlots} minions");
-        if (a.SentrySlots != 0) parts.Add($"+{a.SentrySlots} sentries");
-        if (a.ManaCostReduction != 0f) parts.Add($"-{a.ManaCostReduction * 100f:0}% mana cost");
-        if (a.AmmoSaveChance != 0f) parts.Add($"{a.AmmoSaveChance * 100f:0}% ammo save");
-        if (a.Aggro != 0) parts.Add($"{a.Aggro:+#;-#;0} aggro");
-        if (a.Endurance != 0f) parts.Add($"+{a.Endurance * 100f:0}% DR");
-        if (a.ArmorPenetration != 0f) parts.Add($"+{a.ArmorPenetration:0.#} armor pen");
-        if (a.WhipRange != 0f) parts.Add($"+{a.WhipRange * 100f:0}% whip range");
-        if (a.SummonTagDamage != 0f) parts.Add($"+{a.SummonTagDamage * 100f:0}% generated whip tag damage");
-        if (a.FallDamageImmune) parts.Add("fall immunity");
-        if (a.LavaImmune) parts.Add("lava immunity");
-        if (a.WaterWalk) parts.Add("water walk");
-        if (a.LightStrength > 0f) parts.Add(string.IsNullOrWhiteSpace(a.LightColorName) ? "light" : $"{a.LightColorName} light");
-        string head = string.IsNullOrWhiteSpace(a.Archetype) || a.Archetype == "generic" ? "Accessory" : $"Accessory ({a.Archetype})";
-        return parts.Count == 0 ? head : head + ": " + string.Join(", ", parts);
-    }
+    private RuntimeBindingSpec? ActiveUseBinding(Player player)
+        => Data.RuntimeProgram.BindingForInput(player.altFunctionUse == 2 ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse);
 
     public override bool AltFunctionUse(Player player)
-    {
-        return HasExecutableAltUse(Data?.Gameplay);
-    }
+        => Data?.RuntimeProgram?.BindingForInput(RuntimeInputKind.AlternateUse) is not null;
 
-    private static bool HasExecutableAltUse(GameplaySpec? gp)
+    internal static string UseBlockedReason(Player player, GameplaySpec? gameplay)
     {
-        if (gp is null) return false;
-        string mode = (gp.AltUseMode ?? "").Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(mode) || mode == "none") return false;
-        if (mode == "mobility")
+        if (player is null || gameplay is null) return "";
+        return gameplay.UseConditionMode switch
         {
-            string mobilityMode = (gp.AltMobilityMode ?? "").Trim().ToLowerInvariant();
-            return mobilityMode == "recall_home"
-                || (mobilityMode == "blink_to_cursor" && gp.AltMobilityRangeTiles > 0);
-        }
-        if (mode == "generated_buff")
-            return gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect;
-        if (mode == "light")
-            return gp.AltGeneratedBuff is not null
-                && gp.AltGeneratedBuff.HasAnyEffect
-                && gp.AltGeneratedBuff.EmitLightStrength > 0f;
-        return false;
-    }
-
-    private string AltUseSummary()
-    {
-        var gp = Data?.Gameplay;
-        if (!HasExecutableAltUse(gp)) return "";
-        string mode = (gp!.AltUseMode ?? "").Trim().ToLowerInvariant();
-        string prefix = "Alt use (Right Click / ПКМ): ";
-        string cooldown = gp.AltUseCooldownTicks > 0 ? $", cooldown {Math.Max(1, (int)Math.Ceiling(gp.AltUseCooldownTicks / 60f))}s" : "";
-        if (mode == "mobility")
-        {
-            string kind = string.IsNullOrWhiteSpace(gp.AltMobilityMode) ? "mobility" : gp.AltMobilityMode.Trim();
-            string range = gp.AltMobilityRangeTiles > 0 ? $", {gp.AltMobilityRangeTiles} tiles" : "";
-            return prefix + kind + range + cooldown;
-        }
-        if (mode == "generated_buff" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
-            return prefix + GeneratedUtilitySummary(gp.AltGeneratedBuff, "") + cooldown;
-        if (mode == "light")
-            return prefix + $"light pulse ({AltLightStrength(gp):0.00}, {Math.Max(1, (int)Math.Ceiling((gp.AltGeneratedBuff?.DurationTicks ?? 0) / 60f))}s)" + cooldown;
-        return prefix + mode + cooldown;
-    }
-
-    private static string GeneratedUtilitySummary(GeneratedBuffSpec? buff, string prefix)
-    {
-        if (buff is null || !buff.HasAnyEffect) return "";
-        var parts = new List<string>();
-        if (Math.Abs(buff.MiningSpeedMultiplier - 1f) > 0.01f) parts.Add($"mining time x{buff.MiningSpeedMultiplier:0.00}");
-        if (buff.EmitLightStrength > 0f) parts.Add(string.IsNullOrWhiteSpace(buff.LightColorName) ? "light" : $"{buff.LightColorName} light");
-        if (buff.OreSenseRadiusTiles > 0) parts.Add($"ore sense {buff.OreSenseRadiusTiles} tiles");
-        if (buff.MovementSpeed != 0f) parts.Add($"{buff.MovementSpeed * 100f:+0;-0;0}% move");
-        if (buff.JumpBoost > 0f) parts.Add($"+{buff.JumpBoost:0.##} jump");
-        if (buff.ManaRegen > 0) parts.Add($"+{buff.ManaRegen} mana regen");
-        if (buff.LifeRegen > 0) parts.Add($"+{buff.LifeRegen} life regen");
-        int seconds = Math.Max(1, (int)Math.Ceiling(buff.DurationTicks / 60f));
-        string head = string.IsNullOrWhiteSpace(prefix) ? $"{seconds}s" : $"{prefix} ({seconds}s)";
-        return parts.Count == 0 ? head : head + ": " + string.Join(", ", parts);
-    }
-
-    private static float AltLightStrength(GameplaySpec? gp)
-    {
-        if (gp is null) return 0f;
-        return Math.Clamp(gp.AltGeneratedBuff?.EmitLightStrength ?? 0f, 0f, 1.5f);
-    }
-
-
-    private static string UseConditionSummary(GameplaySpec? gp)
-    {
-        if (gp is null) return "";
-        string mode = (gp.UseConditionMode ?? "").Trim().ToLowerInvariant();
-        return mode switch
-        {
-            "grounded" => "Requires ground contact",
-            "not_wet" => "Cannot be used while wet",
-            "life_above" => $"Requires at least {Math.Max(0, gp.UseConditionMinLife)} life",
-            "mana_above" => $"Requires at least {Math.Max(0, gp.UseConditionMinMana)} mana",
+            "grounded" when player.velocity.Y != 0f => "Requires solid ground",
+            "not_wet" when player.wet => "Cannot be used while wet",
+            "life_above" when player.statLife < gameplay.UseConditionMinLife => $"Requires {gameplay.UseConditionMinLife} life",
+            "mana_above" when player.statMana < gameplay.UseConditionMinMana => $"Requires {gameplay.UseConditionMinMana} mana",
             _ => "",
         };
-    }
-
-    private static string CompactGeneratedCombatSummary(GeneratedItemData? data)
-    {
-        if (data is null || data.Accessory.Enabled || data.Armor.Enabled) return "";
-        if (!data.Attack.Enabled)
-        {
-            if (data.Gameplay.PickPower > 0 || data.Gameplay.AxePower > 0 || data.Gameplay.HammerPower > 0)
-            {
-                string speed = Math.Abs(data.Gameplay.MiningSpeedScale - 1f) > 0.01f ? $", mine x{Math.Clamp(data.Gameplay.MiningSpeedScale, 0.25f, 2f):0.00}" : "";
-                return $"Tool QoL: pick {data.Gameplay.PickPower}, axe {data.Gameplay.AxePower * 5}, hammer {data.Gameplay.HammerPower}{speed}";
-            }
-            return "";
-        }
-
-        string runtime = string.IsNullOrWhiteSpace(data.Attack.RuntimeFamily) ? "generated" : data.Attack.RuntimeFamily.Trim();
-        string family = data.Attack.WeaponFamily?.Trim() ?? "";
-        string label = string.IsNullOrWhiteSpace(family) ? runtime : $"{runtime} / {family}";
-        string impactMobility = ImpactMobilitySummary(data.Attack);
-        string swingOnHit = SwingOnHitSummary(data.Attack);
-        return $"Generated combat: {label}{impactMobility}{swingOnHit}";
-    }
-
-    private static string SwingOnHitSummary(AttackSpec? attack)
-    {
-        if (attack is null) return "";
-        if (!GeneratedRuntimeFamilyPolicy.Is(attack.RuntimeFamily, GeneratedRuntimeFamilyPolicy.Swing)) return "";
-        string label = attack.OnHitCode switch
-        {
-            1 => "impact dust",
-            4 => "burn",
-            5 => "frostburn",
-            6 => "poison",
-            7 => "shadowflame",
-            9 => "bleed",
-            10 => "impact pulse",
-            17 => "small lifesteal",
-            18 => "overhead barrage",
-            _ => "",
-        };
-        return string.IsNullOrWhiteSpace(label) ? "" : $" · melee {label}";
-    }
-
-    private static string ImpactMobilitySummary(AttackSpec? attack)
-    {
-        if (attack is null) return "";
-        string mode = (attack.MobilityMode ?? "").Trim().ToLowerInvariant();
-        if (mode != "blink_to_projectile_impact") return "";
-        string range = attack.MobilityRangeTiles > 0 ? $", {Math.Clamp(attack.MobilityRangeTiles, 1, 80)}t" : "";
-        string cooldown = attack.MobilityCooldownTicks > 0 ? $", {Math.Max(1, (int)Math.Ceiling(attack.MobilityCooldownTicks / 60f))}s cd" : "";
-        return $" · impact blink{range}{cooldown}";
-    }
-
-    internal static string UseBlockedReason(Player player, GameplaySpec? gp)
-    {
-        if (gp is null) return "";
-        string mode = (gp.UseConditionMode ?? "").Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(mode) || mode == "none") return "";
-        if (mode == "grounded" && player.velocity.Y != 0f) return "Need solid ground";
-        if (mode == "not_wet" && player.wet) return "Cannot use while wet";
-        if (mode == "life_above" && player.statLife < gp.UseConditionMinLife) return $"Need {Math.Max(0, gp.UseConditionMinLife)} life";
-        if (mode == "mana_above" && player.statMana < gp.UseConditionMinMana) return $"Need {Math.Max(0, gp.UseConditionMinMana)} mana";
-        return "";
-    }
-
-    private string UseBlockedReason(Player player) => UseBlockedReason(player, Data?.Gameplay);
-
-    private void ShowLocalUseFeedback(Player player, string message, ref int lastTick, Color color)
-    {
-        if (string.IsNullOrWhiteSpace(message) || Main.netMode == NetmodeID.Server || player.whoAmI != Main.myPlayer)
-            return;
-        int tick = (int)Main.GameUpdateCount;
-        if (tick - lastTick < 45)
-            return;
-        lastTick = tick;
-        CombatText.NewText(player.Hitbox, color, message);
     }
 
     public override bool CanUseItem(Player player)
     {
         EnsureRuntimeHydration(player);
-        var gp = Data?.Gameplay;
-        if (gp is null) return base.CanUseItem(player);
-
-        if (player.altFunctionUse == 2 && HasExecutableAltUse(gp))
-        {
-            var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-            if (modPlayer.GeneratedAltUseCooldownTicks > 0)
-            {
-                ShowLocalUseFeedback(player, $"Alt-use cooldown: {modPlayer.GeneratedAltUseCooldownSeconds}s", ref _lastAltUseBlockedNoticeTick, Color.Orange);
-                return false;
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(gp.MobilityMode))
-        {
-            var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-            if (modPlayer.GeneratedMobilityCooldownTicks > 0)
-            {
-                ShowLocalUseFeedback(player, $"Mobility cooldown: {modPlayer.GeneratedMobilityCooldownSeconds}s", ref _lastUseBlockedNoticeTick, Color.Orange);
-                return false;
-            }
-        }
-
-        string runtimeFamily = AttackRuntimeFamily(Data?.Attack);
-        if (GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Beam)
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease))
-        {
-            int generatedProjectileType = ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>();
-            for (int i = 0; i < Main.maxProjectiles; i++)
-            {
-                Projectile active = Main.projectile[i];
-                if (!active.active || active.owner != player.whoAmI || active.type != generatedProjectileType)
-                    continue;
-                if (active.ModProjectile is global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile generated
-                    && (generated.IsActiveBeamFor(Data?.Id) || generated.IsActiveChargeFor(Data?.Id)))
-                    return false;
-            }
-        }
-
-        string blocked = UseBlockedReason(player);
+        string blocked = UseBlockedReason(player, Data.Gameplay);
         if (!string.IsNullOrWhiteSpace(blocked))
         {
-            ShowLocalUseFeedback(player, blocked, ref _lastUseBlockedNoticeTick, Color.Orange);
+            if (player.whoAmI == Main.myPlayer && (int)Main.GameUpdateCount - _lastBlockedNoticeTick > 30)
+            {
+                _lastBlockedNoticeTick = (int)Main.GameUpdateCount;
+                Main.NewText(blocked, Color.OrangeRed);
+            }
             return false;
         }
-        return base.CanUseItem(player);
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (binding is null) return false;
+        if (binding.Action == RuntimeBindingAction.SpawnEntity)
+        {
+            RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.Target);
+            if (entity?.IsOwnerAttached == true)
+            {
+                foreach (Projectile projectile in Main.ActiveProjectiles)
+                    if (projectile.owner == player.whoAmI && projectile.ModProjectile is GeneratedProjectile generated && generated.Matches(Data.Id, entity.Id))
+                        return false;
+            }
+        }
+        _itemEventSpawnBudget = Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation;
+        return true;
     }
 
     public override bool ConsumeItem(Player player)
     {
-        int chance = Data?.Gameplay?.ConsumeChancePercent ?? 100;
-        if (chance >= 100) return base.ConsumeItem(player);
-        if (chance <= 0) return false;
-        return Main.rand.Next(100) < chance;
+        int chance = Math.Clamp(Data?.Gameplay?.ConsumeChancePercent ?? 100, 0, 100);
+        return chance >= 100 || (chance > 0 && Main.rand.Next(100) < chance);
     }
-
 
     public override bool? UseItem(Player player)
     {
         EnsureRuntimeHydration(player);
-        var gp = Data?.Gameplay;
-        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        bool runLocalAction = InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player);
-        bool runPlayerGameplay = InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player);
-        bool alt = player.altFunctionUse == 2 && gp is not null && !string.IsNullOrWhiteSpace(gp.AltUseMode);
-        bool runItemUsePresentation = runLocalAction
-            || (Main.netMode == NetmodeID.Server && !Main.dedServ && player.whoAmI == Main.myPlayer);
-        if (runItemUsePresentation)
-            InfiniItemVfxRuntime.EmitAndSyncUse(player, Data, alt);
-        if (alt)
-        {
-            if (Main.netMode == NetmodeID.MultiplayerClient && runLocalAction)
-            {
-                modPlayer.RequestGeneratedAltUseFromServer(Data?.Id ?? "", alternateUse: true, Main.MouseWorld);
-                return true;
-            }
-            // Dedicated/listen servers execute generated alt effects only through
-            // the validated intent packet. Terraria may also call this hook for the
-            // same use; running both paths would refresh buffs and emit two syncs.
-            if (Main.netMode == NetmodeID.Server)
-                return true;
-            if (runLocalAction || runPlayerGameplay)
-            {
-                string mode = (gp!.AltUseMode ?? "").Trim().ToLowerInvariant();
-                bool used = false;
-                if (runLocalAction && mode == "mobility")
-                {
-                    used = modPlayer.TryRunGeneratedMobility(gp.AltMobilityMode, gp.AltMobilityRangeTiles, 0, gp.AltMobilitySafeTileOnly);
-                    if (!used)
-                        ShowLocalUseFeedback(player, modPlayer.LastGeneratedMobilityFailureMessage, ref _lastAltUseBlockedNoticeTick, Color.Orange);
-                }
-                if (runPlayerGameplay && mode == "generated_buff" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
-                {
-                    modPlayer.ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
-                    used = true;
-                }
-                if (runPlayerGameplay && mode == "light" && gp.AltGeneratedBuff is not null && gp.AltGeneratedBuff.HasAnyEffect)
-                {
-                    modPlayer.ApplyGeneratedUtilityBuff(gp.AltGeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
-                    used = gp.AltGeneratedBuff.EmitLightStrength > 0f;
-                }
-                if (used)
-                    modPlayer.StartGeneratedAltUseCooldown(gp.AltUseCooldownTicks);
-                return used;
-            }
-            return true;
-        }
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (binding is null) return false;
+        RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
+        if (binding.Action == RuntimeBindingAction.ApplyItemEffects)
+            ApplyItemEffects(player);
+        RunItemEvent(player, itemEntity, RuntimeEventKind.OnUse, null, 0);
+        InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnUse);
+        return true;
+    }
 
-        // Vanilla Item.buffType supports only one buff slot. Generated potion/utility items
-        // can carry a small explicit ExtraBuffs list so two potion parents do not collapse
-        // into one mismatched buffType/buffTime pair. This only executes concrete buff ids
-        // already serialized in Gameplay; no prompt text is interpreted here.
-        if (runPlayerGameplay && gp?.ExtraBuffs is { Length: > 0 })
-        {
-            foreach (var buff in gp.ExtraBuffs)
-            {
-                if (buff is null || buff.BuffCode <= InfiniTerrariaSentinels.NoBuffType || buff.BuffTime <= 0)
-                    continue;
+    private void ApplyItemEffects(Player player)
+    {
+        GameplaySpec gp = Data.Gameplay;
+        foreach (BuffEntrySpec buff in gp.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
+            if (buff.BuffCode > 0 && buff.BuffTime > 0)
                 player.AddBuff(buff.BuffCode, buff.BuffTime);
-            }
-        }
-        if (runPlayerGameplay && gp?.GeneratedBuff is not null && gp.GeneratedBuff.HasAnyEffect)
-            modPlayer.ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode == NetmodeID.Server);
-        if (runLocalAction && gp is not null && !string.IsNullOrWhiteSpace(gp.MobilityMode))
-        {
-            if (Main.netMode == NetmodeID.MultiplayerClient)
-                modPlayer.RequestGeneratedAltUseFromServer(Data?.Id ?? "", alternateUse: false, Main.MouseWorld);
-            else
-                modPlayer.TryRunGeneratedMobility(gp);
-        }
-        return base.UseItem(player);
+        if (gp.GeneratedBuff?.HasAnyEffect == true)
+            player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode != NetmodeID.SinglePlayer);
+        if (!string.IsNullOrWhiteSpace(gp.MobilityMode))
+            player.GetModPlayer<InfiniCraftPlayer>().TryRunGeneratedMobility(gp);
     }
 
     public override void HoldItem(Player player)
     {
         EnsureRuntimeHydration(player);
-        float strength = 0f;
-        string colorName = Data?.Attack?.PrimaryColorName ?? "";
-        if (Data?.Attack is not null && Data.Attack.RuntimeLightStrength > 0f)
-            strength = Math.Max(strength, Math.Clamp(Data.Attack.RuntimeLightStrength, 0.02f, 0.75f) * 0.8f);
-        if (Data?.Gameplay is not null && Data.Gameplay.HoldLightStrength > 0f)
+        GameplaySpec gp = Data.Gameplay;
+        if (gp.HoldLightStrength > 0f && Main.netMode != NetmodeID.Server)
         {
-            strength = Math.Max(strength, Math.Clamp(Data.Gameplay.HoldLightStrength, 0.02f, 1.5f));
-            if (!string.IsNullOrWhiteSpace(Data.Gameplay.HoldLightColorName))
-                colorName = Data.Gameplay.HoldLightColorName;
+            Color color = RuntimeColorPolicy.Resolve(gp.HoldLightColorName, Color.White);
+            float strength = Math.Clamp(gp.HoldLightStrength, 0f, 1.5f);
+            Lighting.AddLight(player.Center, color.R / 255f * strength, color.G / 255f * strength, color.B / 255f * strength);
         }
-        if (strength > 0f && Main.netMode != NetmodeID.Server)
+        if ((gp.PickPower > 0 || gp.AxePower > 0 || gp.HammerPower > 0) && Math.Abs(gp.MiningSpeedScale - 1f) > 0.001f)
+            player.pickSpeed /= Math.Clamp(gp.MiningSpeedScale, 0.1f, 4f);
+
+        RuntimeBindingSpec? hold = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Hold);
+        if (hold?.Action == RuntimeBindingAction.SpawnEntity && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
         {
-            Color c = RuntimeColorPolicy.Resolve(colorName, Color.White);
-            Lighting.AddLight(player.Center, c.R / 255f * strength, c.G / 255f * strength, c.B / 255f * strength);
+            RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(hold.Target);
+            bool exists = entity is not null && Main.ActiveProjectiles.Any(p => p.owner == player.whoAmI && p.ModProjectile is GeneratedProjectile g && g.Matches(Data.Id, entity.Id));
+            if (!exists && entity is not null)
+                GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, player.GetSource_ItemUse(Item), player.Center, new Vector2(player.direction, 0f), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         }
-
-
-        if (Data?.Gameplay?.HoldGeneratedBuff is not null && Data.Gameplay.HoldGeneratedBuff.HasAnyEffect && InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player))
-            player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(Data.Gameplay.HoldGeneratedBuff);
-
-        InfiniItemVfxRuntime.OnLive(player, Data, "while_held");
-        ApplyAuthoredToolMiningSpeed(player, Data?.Gameplay);
+        RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
+        RunPeriodicItemEvents(player, itemEntity);
+        InfiniItemVfxRuntime.OnPeriodic(player, Data, itemEntity.Id);
     }
 
-    private static void ApplyAuthoredToolMiningSpeed(Player player, GameplaySpec? gp)
+    private void RunPeriodicItemEvents(Player player, RuntimeEntitySpec entity)
     {
-        if (player is null || gp is null)
-            return;
-        if (gp.PickPower <= 0 && gp.AxePower <= 0 && gp.HammerPower <= 0)
-            return;
-        float scale = Math.Clamp(gp.MiningSpeedScale <= 0f ? 1f : gp.MiningSpeedScale, 0.25f, 2f);
-        if (Math.Abs(scale - 1f) <= 0.001f)
-            return;
-        // Player.pickSpeed is inverse speed in Terraria: lower values mine faster.
-        // miningSpeedScale is authored as intuitive multiplier, so x1.35 divides pickSpeed by 1.35.
-        player.pickSpeed /= scale;
+        foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.Periodic))
+        {
+            int period = Math.Max(6, action.PeriodTicks);
+            if ((Main.GameUpdateCount + (ulong)action.Id.GetHashCode()) % (ulong)period != 0) continue;
+            int budget = Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation;
+            RuntimeProgramExecutor.ExecuteAction(Data, action, player, player.GetSource_Misc("InfiniRuntimePeriodic"), player.Center, new Vector2(player.direction, 0f), null, Data.Gameplay.Damage, 0, ref budget);
+        }
     }
 
+    private void RunItemEvent(Player player, RuntimeEntitySpec entity, string eventName, NPC? target, int damageDone)
+    {
+        int budget = _itemEventSpawnBudget > 0 ? _itemEventSpawnBudget : Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation;
+        RuntimeProgramExecutor.RunEvent(Data, entity, eventName, player, player.GetSource_ItemUse(Item), target?.Center ?? player.Center, new Vector2(player.direction, 0f), target, damageDone, 0, ref budget);
+        _itemEventSpawnBudget = budget;
+    }
+
+    public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
+    {
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (binding?.Action != RuntimeBindingAction.SpawnEntity) return false;
+        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)) return false;
+        GeneratedProjectile.SpawnRuntimeEntity(Data, binding.Target, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        return false;
+    }
+
+    public override Vector2? HoldoutOffset()
+        => new(Data.RuntimeProgram.ItemUse.HoldoutOffsetX, Data.RuntimeProgram.ItemUse.HoldoutOffsetY);
+
+    public override void ModifyItemScale(Player player, ref float scale)
+        => scale *= Math.Clamp(Data.Gameplay.ItemScale, 0.25f, 4f);
+
+    public override void UseItemHitbox(Player player, ref Rectangle hitbox, ref bool noHitbox)
+    {
+        RuntimeItemContactSpec contact = Data.RuntimeProgram.ItemContact;
+        if (!contact.Enabled) { noHitbox = true; return; }
+        float scale = contact.HitboxScale;
+        int width = Math.Max(1, (int)MathF.Round(hitbox.Width * scale) + contact.ContactForgivenessPx * 2);
+        int height = Math.Max(1, (int)MathF.Round(hitbox.Height * scale) + contact.ContactForgivenessPx * 2);
+        hitbox = new Rectangle(hitbox.Center.X - width / 2, hitbox.Center.Y - height / 2, width, height);
+    }
+
+    public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
+    {
+        if (!Data.RuntimeProgram.ItemContact.Enabled) return;
+        RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
+        RunItemEvent(player, itemEntity, RuntimeEventKind.OnHit, target, damageDone);
+        if (hit.Crit) RunItemEvent(player, itemEntity, RuntimeEventKind.OnCrit, target, damageDone);
+        InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnHit);
+        if (hit.Crit) InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnCrit);
+    }
+
+    public override void UpdateAccessory(Player player, bool hideVisual)
+    {
+        EnsureRuntimeHydration(player);
+        RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
+        if (binding?.Action != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
+        ApplyEquipmentEffects(player, Data.Accessory);
+        InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId);
+    }
 
     public override void UpdateEquip(Player player)
     {
         EnsureRuntimeHydration(player);
-        ApplyGeneratedArmorEffects(player, Data?.Armor);
+        RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
+        if (binding?.Action != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
+        ApplyEquipmentEffects(player, Data.Armor);
+        InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId);
     }
 
-    private static void ApplyGeneratedArmorEffects(Player player, ArmorSpec? a)
+    private static void ApplyEquipmentEffects(Player player, AccessorySpec a)
     {
-        if (a is null || !a.Enabled)
-            return;
-
-        // Defense is carried by Item.defense for armor pieces.  UpdateEquip applies
-        // only non-defense modifiers so the stat is not double-counted.
-        player.statLifeMax2 += a.MaxLife;
-        player.statManaMax2 += a.MaxMana;
-        player.lifeRegen += a.LifeRegen;
-        player.manaRegenBonus += a.ManaRegen;
-        player.moveSpeed += a.MovementSpeed;
-        player.maxRunSpeed += a.MaxRunSpeed;
-        player.jumpSpeedBoost += a.JumpSpeed;
-        player.GetDamage(DamageClass.Generic) += a.GenericDamage;
-        player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
-        player.GetDamage(DamageClass.Ranged) += a.RangedDamage;
-        player.GetDamage(DamageClass.Magic) += a.MagicDamage;
-        player.GetDamage(DamageClass.Summon) += a.SummonDamage;
-        player.GetCritChance(DamageClass.Generic) += a.GenericCrit;
-        player.GetAttackSpeed(DamageClass.Generic) += a.AttackSpeed;
-        player.GetKnockback(DamageClass.Generic) += a.Knockback;
-        player.maxMinions += a.MinionSlots;
-        player.maxTurrets += a.SentrySlots;
-        if (a.ManaCostReduction > 0f)
-            player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
-        var generatedPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        generatedPlayer.AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
-        generatedPlayer.AddGeneratedSummonTagDamage(a.SummonTagDamage);
+        player.statDefense += a.Defense;
+        player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
+        player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
+        player.moveSpeed += a.MovementSpeed; player.maxRunSpeed += a.MaxRunSpeed; player.jumpSpeedBoost += a.JumpSpeed;
+        player.GetDamage(DamageClass.Generic) += a.GenericDamage; player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
+        player.GetDamage(DamageClass.Ranged) += a.RangedDamage; player.GetDamage(DamageClass.Magic) += a.MagicDamage; player.GetDamage(DamageClass.Summon) += a.SummonDamage;
+        player.GetCritChance(DamageClass.Generic) += a.GenericCrit; player.GetAttackSpeed(DamageClass.Generic) += a.AttackSpeed; player.GetKnockback(DamageClass.Generic) += a.Knockback;
+        player.maxMinions += a.MinionSlots; player.maxTurrets += a.SentrySlots;
+        if (a.ManaCostReduction > 0f) player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedSummonTagDamage(a.SummonTagDamage);
+        player.aggro += a.Aggro; player.endurance += a.Endurance; player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
         player.whipRangeMultiplier += a.WhipRange;
-        player.aggro += a.Aggro;
-        player.endurance += a.Endurance;
-        player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
-        if (a.FallDamageImmune) player.noFallDmg = true;
-        if (a.LavaImmune) player.lavaImmune = true;
-        if (a.WaterWalk) player.waterWalk = true;
+        if (a.FallDamageImmune) player.noFallDmg = true; if (a.LavaImmune) player.lavaImmune = true; if (a.WaterWalk) player.waterWalk = true;
+        AddEquipmentLight(player, a.LightStrength, a.LightColorName);
+    }
+
+    private static void ApplyEquipmentEffects(Player player, ArmorSpec a)
+    {
+        player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
+        player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
+        player.moveSpeed += a.MovementSpeed; player.maxRunSpeed += a.MaxRunSpeed; player.jumpSpeedBoost += a.JumpSpeed;
+        player.GetDamage(DamageClass.Generic) += a.GenericDamage; player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
+        player.GetDamage(DamageClass.Ranged) += a.RangedDamage; player.GetDamage(DamageClass.Magic) += a.MagicDamage; player.GetDamage(DamageClass.Summon) += a.SummonDamage;
+        player.GetCritChance(DamageClass.Generic) += a.GenericCrit; player.GetAttackSpeed(DamageClass.Generic) += a.AttackSpeed; player.GetKnockback(DamageClass.Generic) += a.Knockback;
+        player.maxMinions += a.MinionSlots; player.maxTurrets += a.SentrySlots;
+        if (a.ManaCostReduction > 0f) player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedSummonTagDamage(a.SummonTagDamage);
+        player.aggro += a.Aggro; player.endurance += a.Endurance; player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
+        player.whipRangeMultiplier += a.WhipRange;
+        if (a.FallDamageImmune) player.noFallDmg = true; if (a.LavaImmune) player.lavaImmune = true; if (a.WaterWalk) player.waterWalk = true;
+        AddEquipmentLight(player, a.LightStrength, a.LightColorName);
+    }
+
+    private static void AddEquipmentLight(Player player, float strength, string colorName)
+    {
+        if (strength <= 0f || Main.netMode == NetmodeID.Server) return;
+        Color color = RuntimeColorPolicy.Resolve(colorName, Color.White);
+        strength = Math.Clamp(strength, 0f, 1.5f);
+        Lighting.AddLight(player.Center, color.R / 255f * strength, color.G / 255f * strength, color.B / 255f * strength);
     }
 
     public override bool IsArmorSet(Item head, Item body, Item legs)
     {
-        if (Data?.Armor is null || !Data.Armor.Enabled || Data.Armor.Slot != "head" || string.IsNullOrWhiteSpace(Data.Armor.SetKey))
-            return false;
-        return HasGeneratedArmorSetPiece(head, "head", Data.Armor.SetKey)
-            && HasGeneratedArmorSetPiece(body, "body", Data.Armor.SetKey)
-            && HasGeneratedArmorSetPiece(legs, "legs", Data.Armor.SetKey);
+        ArmorSpec armor = Data.Armor;
+        if (!armor.Enabled || armor.Slot != "head" || string.IsNullOrWhiteSpace(armor.SetKey)) return false;
+        return IsSetPiece(head, "head", armor.SetKey) && IsSetPiece(body, "body", armor.SetKey) && IsSetPiece(legs, "legs", armor.SetKey);
     }
 
-    private static bool HasGeneratedArmorSetPiece(Item item, string slot, string setKey)
-    {
-        if (item?.ModItem is not GeneratedItem generated || generated.Data?.Armor is null)
-            return false;
-        var armor = generated.Data.Armor;
-        return armor.Enabled
-            && string.Equals(armor.Slot, slot, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(armor.SetKey, setKey, StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsSetPiece(Item item, string slot, string setKey)
+        => item?.ModItem is GeneratedItem generated && generated.Data.Armor.Enabled
+            && string.Equals(generated.Data.Armor.Slot, slot, StringComparison.Ordinal)
+            && string.Equals(generated.Data.Armor.SetKey, setKey, StringComparison.Ordinal);
 
     public override void UpdateArmorSet(Player player)
     {
-        var a = Data?.Armor;
-        if (a is null || !a.Enabled || a.Slot != "head")
-            return;
-        if (!string.IsNullOrWhiteSpace(a.SetBonusText))
-            player.setBonus = a.SetBonusText;
+        ArmorSpec a = Data.Armor;
+        if (!a.Enabled || a.Slot != "head") return;
+        player.setBonus = a.SetBonusText;
         player.GetDamage(DamageClass.Generic) += a.SetBonusGenericDamage;
         player.GetDamage(DamageClass.Melee) += a.SetBonusMeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.SetBonusRangedDamage;
         player.GetDamage(DamageClass.Magic) += a.SetBonusMagicDamage;
         player.GetDamage(DamageClass.Summon) += a.SetBonusSummonDamage;
         player.GetCritChance(DamageClass.Generic) += a.SetBonusGenericCrit;
-        player.moveSpeed += a.SetBonusMovementSpeed;
-        player.lifeRegen += a.SetBonusLifeRegen;
-        player.manaRegenBonus += a.SetBonusManaRegen;
-        player.maxMinions += a.SetBonusMinionSlots;
-        player.maxTurrets += a.SetBonusSentrySlots;
-        if (a.SetBonusManaCostReduction > 0f)
-            player.manaCost = Math.Max(0.1f, player.manaCost - a.SetBonusManaCostReduction);
+        player.moveSpeed += a.SetBonusMovementSpeed; player.lifeRegen += a.SetBonusLifeRegen; player.manaRegenBonus += a.SetBonusManaRegen;
+        player.maxMinions += a.SetBonusMinionSlots; player.maxTurrets += a.SetBonusSentrySlots;
+        if (a.SetBonusManaCostReduction > 0f) player.manaCost = Math.Max(0.1f, player.manaCost - a.SetBonusManaCostReduction);
         player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.SetBonusAmmoSaveChance);
-        player.aggro += a.SetBonusAggro;
-        player.endurance += a.SetBonusEndurance;
-        player.GetArmorPenetration(DamageClass.Generic) += a.SetBonusArmorPenetration;
+        player.aggro += a.SetBonusAggro; player.endurance += a.SetBonusEndurance; player.GetArmorPenetration(DamageClass.Generic) += a.SetBonusArmorPenetration;
     }
 
-    public override void UpdateAccessory(Player player, bool hideVisual)
-    {
-        EnsureRuntimeHydration(player);
-        if (Data?.Accessory is null || !Data.Accessory.Enabled)
-            return;
-
-        var a = Data.Accessory;
-        player.statDefense += a.Defense;
-        player.statLifeMax2 += a.MaxLife;
-        player.statManaMax2 += a.MaxMana;
-        player.lifeRegen += a.LifeRegen;
-        player.manaRegenBonus += a.ManaRegen;
-        player.moveSpeed += a.MovementSpeed;
-        player.maxRunSpeed += a.MaxRunSpeed;
-        player.jumpSpeedBoost += a.JumpSpeed;
-        player.GetDamage(DamageClass.Generic) += a.GenericDamage;
-        player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
-        player.GetDamage(DamageClass.Ranged) += a.RangedDamage;
-        player.GetDamage(DamageClass.Magic) += a.MagicDamage;
-        player.GetDamage(DamageClass.Summon) += a.SummonDamage;
-        player.GetCritChance(DamageClass.Generic) += a.GenericCrit;
-        player.GetAttackSpeed(DamageClass.Generic) += a.AttackSpeed;
-        player.GetKnockback(DamageClass.Generic) += a.Knockback;
-        player.maxMinions += a.MinionSlots;
-        player.maxTurrets += a.SentrySlots;
-        if (a.ManaCostReduction > 0f)
-            player.manaCost = Math.Max(0.1f, player.manaCost - a.ManaCostReduction);
-        var generatedPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        generatedPlayer.AddGeneratedAmmoSaveChance(a.AmmoSaveChance);
-        generatedPlayer.AddGeneratedSummonTagDamage(a.SummonTagDamage);
-        player.whipRangeMultiplier += a.WhipRange;
-        player.aggro += a.Aggro;
-        player.endurance += a.Endurance;
-        player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
-        if (a.FallDamageImmune) player.noFallDmg = true;
-        if (a.LavaImmune) player.lavaImmune = true;
-        if (a.WaterWalk) player.waterWalk = true;
-    }
-
-    public override Vector2? HoldoutOffset() => new Vector2(Data.Gameplay.HoldoutOffsetX, Data.Gameplay.HoldoutOffsetY);
-
-    public override void ModifyItemScale(Player player, ref float scale)
-    {
-        if (Data?.Gameplay is null) return;
-        scale *= Math.Clamp(Data.Gameplay.ItemScale, 0.55f, 1.55f);
-    }
-
-    public override void UseItemHitbox(Player player, ref Rectangle hitbox, ref bool noHitbox)
-    {
-        string runtimeFamily = AttackRuntimeFamily(Data.Attack);
-        if (!Data.Attack.Enabled
-            || (!GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Swing)
-                && !GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Thrust)))
-            return;
-
-        float scale = Math.Clamp(Math.Max(1f, Data.Attack.HitboxScale), 1f, 1.85f);
-        int radiusBonus = MeleeHitboxRadiusBonus(Data.Attack);
-        int inflateX = (int)(hitbox.Width * (scale - 1f) * 0.5f) + radiusBonus;
-        int inflateY = (int)(hitbox.Height * (scale - 1f) * 0.5f) + radiusBonus;
-        if (inflateX > 0 || inflateY > 0)
-            hitbox.Inflate(inflateX, inflateY);
-    }
-
-
-    private static int MeleeHitboxRadiusBonus(AttackSpec attack)
-    {
-        if (attack is null) return 0;
-        return attack.ContactForgivenessPx > 0
-            ? Math.Clamp(attack.ContactForgivenessPx, 0, 14)
-            : 0;
-    }
-
-    public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
-    {
-        if (_applyingGeneratedSwingAoeDamage
-            || player.whoAmI != Main.myPlayer
-            || Data?.Attack is null
-            || !Data.Attack.Enabled)
-            return;
-        if (!GeneratedRuntimeFamilyPolicy.Is(AttackRuntimeFamily(Data.Attack), GeneratedRuntimeFamilyPolicy.Swing))
-            return;
-        if (!Data.Attack.RuntimePlanAuthored)
-            return;
-
-        if (GeneratedMeleeOnHitEffectsEnabled())
-        {
-            ApplyGeneratedSwingAoeDamage(player, target, Data.Attack);
-            ApplyGeneratedSwingOnHitEffects(player, target, Data.Attack, damageDone, Data.Id);
-        }
-
-        // Explicit real secondary projectiles authored by runtimePlan stay allowed for
-        // melee-core swings, but only when the planner described an actual secondary
-        // body/material. Otherwise a sword/hammer with a purely visual impact role can
-        // accidentally become a hidden on-hit projectile weapon.
-        if (!HasExplicitSwingSecondaryProjectile(Data.Attack))
-            return;
-
-        int count = Math.Clamp(Data.Attack.SplitCount > 0 ? Data.Attack.SplitCount : Data.Attack.MaxChildProjectiles, 0, 3);
-        if (count <= 0 || Data.Attack.SecondaryDamageMultiplier <= 0f)
-            return;
-
-        int maxChildren = Math.Clamp(Data.Attack.MaxChildProjectiles <= 0 ? count : Data.Attack.MaxChildProjectiles, 0, 4);
-        count = Math.Min(count, maxChildren);
-        if (count <= 0)
-            return;
-
-        float damageMult = Math.Clamp(Data.Attack.SecondaryDamageMultiplier, 0.02f, 0.35f);
-        int childDamage = Math.Max(0, (int)Math.Round(Math.Max(0, damageDone) * damageMult));
-        float speed = Math.Clamp(Math.Max(4f, Data.Attack.Speed * 0.82f), 3f, 18f);
-        float spread = Math.Clamp(Data.Attack.SecondarySpreadRadians > 0f ? Data.Attack.SecondarySpreadRadians : Data.Attack.SpreadRadians, 0f, MathHelper.ToRadians(60f));
-        Vector2 baseDir = player.DirectionTo(target.Center);
-        if (baseDir.LengthSquared() < 0.01f)
-            baseDir = new Vector2(player.direction == 0 ? 1 : player.direction, 0f);
-
-        AttackSpec childSpec = SwingSecondarySpec(Data.Attack);
-        for (int i = 0; i < count; i++)
-        {
-            float offset = count == 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
-            Vector2 velocity = baseDir.SafeNormalize(Vector2.UnitX * player.direction).RotatedBy(offset) * speed;
-            Vector2 origin = target.Center - baseDir.SafeNormalize(Vector2.UnitX) * 12f;
-            int idx = Projectile.NewProjectile(
-                player.GetSource_Misc("InfiniCraftSwingSecondary"),
-                origin,
-                velocity,
-                ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>(),
-                childDamage,
-                Item.knockBack * 0.35f,
-                player.whoAmI,
-                childSpec.MovementCode,
-                childSpec.EffectCode,
-                childSpec.OnHitCode
-            );
-            if (idx >= 0 && idx < Main.maxProjectiles && Main.projectile[idx].ModProjectile is global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile generatedProjectile)
-            {
-                Main.projectile[idx].localAI[1] = 1f;
-                Main.projectile[idx].localAI[2] = Main.projectile[idx].identity + 1f;
-                generatedProjectile.ApplyGeneratedSpec(
-                    childSpec,
-                    new VfxManifestSpec(),
-                    Data.Id,
-                    GeneratedProjectileRuntimeVariant.SwingSecondary);
-                Main.projectile[idx].netUpdate = true;
-                generatedProjectile.BroadcastVisualSync();
-            }
-        }
-    }
-
-    private static bool GeneratedMeleeOnHitEffectsEnabled()
-    {
-        try { return ModContent.GetInstance<InfiniGameplayQolConfig>()?.EnableGeneratedMeleeOnHitEffects ?? true; }
-        catch { return true; }
-    }
-
-    private void ApplyGeneratedSwingAoeDamage(Player player, NPC directTarget, AttackSpec attack)
-    {
-        int radius = Math.Clamp(attack.AoeDamageRadiusPx, 0, 160);
-        if (radius <= 0
-            || _applyingGeneratedSwingAoeDamage
-            || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
-            return;
-
-        Vector2 center = directTarget.Center;
-        Rectangle aoeHitbox = new(
-            (int)center.X - radius,
-            (int)center.Y - radius,
-            radius * 2,
-            radius * 2);
-        int damage = Math.Max(1, player.GetWeaponDamage(Item));
-        float knockback = player.GetWeaponKnockback(Item);
-        int affectedTargets = 0;
-
-        _applyingGeneratedSwingAoeDamage = true;
-        try
-        {
-            for (int i = 0; i < Main.maxNPCs && affectedTargets < MaxGeneratedAoeTargetsPerHit; i++)
-            {
-                NPC npc = Main.npc[i];
-                if (npc is null
-                    || !npc.active
-                    || npc.life <= 0
-                    || npc.friendly
-                    || npc.dontTakeDamage
-                    || npc.whoAmI == directTarget.whoAmI
-                    || !aoeHitbox.Intersects(npc.Hitbox))
-                    continue;
-
-                int hitDirection = npc.Center.X >= center.X ? 1 : -1;
-                player.ApplyDamageToNPC(npc, damage, knockback, hitDirection, false, Item.DamageType, false);
-                affectedTargets++;
-            }
-        }
-        finally
-        {
-            _applyingGeneratedSwingAoeDamage = false;
-        }
-    }
-
-    private static void ApplyGeneratedSwingOnHitEffects(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
-    {
-        if (player is null || target is null || attack is null) return;
-        int onHit = attack.OnHitCode;
-        if (onHit <= 0) return;
-        int debuffTime = Math.Clamp(attack.DebuffTime, 0, 600);
-        switch (onHit)
-        {
-            case 1:
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 14), 1.25f);
-                break;
-            case 4:
-                if (debuffTime >= 30) target.AddBuff(BuffID.OnFire, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 10), 1.05f);
-                break;
-            case 5:
-                if (debuffTime >= 30) target.AddBuff(BuffID.Frostburn, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 10), 1.05f);
-                break;
-            case 6:
-                if (debuffTime >= 30) target.AddBuff(BuffID.Poisoned, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 10), 1.05f);
-                break;
-            case 7:
-                if (debuffTime >= 30) target.AddBuff(BuffID.ShadowFlame, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 12), 1.15f);
-                break;
-            case 9:
-                if (debuffTime >= 30) target.AddBuff(BuffID.Bleeding, debuffTime);
-                EmitGeneratedSwingImpactDust(target.Center, 9, Math.Min(attack.BurstDustCap, 8), 1.0f);
-                break;
-            case 10:
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Clamp(attack.BurstDustCap, 0, 24), 1.45f);
-                break;
-            case 17:
-                HealGeneratedSwingOwner(player, damageDone);
-                EmitGeneratedSwingImpactDust(target.Center, attack.EffectCode, Math.Min(attack.BurstDustCap, 8), 1.0f);
-                break;
-            case 18:
-                SpawnGeneratedSwingOverheadBarrage(player, target, attack, damageDone, generatedItemId);
-                break;
-        }
-    }
-
-
-
-    private static void HealGeneratedSwingOwner(Player player, int damageDone)
-    {
-        if (player is null || !player.active || player.dead) return;
-        int heal = Math.Clamp(Math.Max(1, damageDone / 5), 1, 4);
-        if (player.statLife >= player.statLifeMax2) return;
-        player.Heal(heal);
-    }
-
-    private static void SpawnGeneratedSwingOverheadBarrage(Player player, NPC target, AttackSpec attack, int damageDone, string generatedItemId)
-    {
-        if (player is null || target is null || attack is null) return;
-        if (player.whoAmI != Main.myPlayer) return;
-        int requested = Math.Max(0, attack.SplitCount > 0 ? attack.SplitCount : attack.MaxChildProjectiles);
-        int cap = Math.Clamp(attack.MaxChildProjectiles > 0 ? attack.MaxChildProjectiles : requested, 0, 8);
-        int count = Math.Min(requested, cap);
-        if (count <= 0 || attack.SecondaryDamageMultiplier <= 0f) return;
-
-        AttackSpec childSpec = SwingSecondarySpec(attack);
-        GeneratedOverheadBarragePolicy.ConfigureChild(childSpec, attack);
-        float damageMult = Math.Clamp(attack.SecondaryDamageMultiplier, 0f, 1f);
-        int childDamage = Math.Max(0, (int)Math.Round(Math.Max(0, damageDone) * damageMult));
-        float rootId = Main.rand.Next(1, 1_000_000);
-
-        for (int i = 0; i < count; i++)
-        {
-            (Vector2 origin, Vector2 velocity) = GeneratedOverheadBarragePolicy.Sample(
-                target.Center,
-                i,
-                count,
-                attack.SecondarySpreadRadians,
-                childSpec.Speed);
-            int idx = Projectile.NewProjectile(
-                player.GetSource_Misc("InfiniCraftSwingOverheadBarrage"),
-                origin,
-                velocity,
-                ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>(),
-                childDamage,
-                0.35f,
-                player.whoAmI,
-                childSpec.MovementCode,
-                childSpec.EffectCode,
-                childSpec.OnHitCode
-            );
-            if (idx >= 0 && idx < Main.maxProjectiles && Main.projectile[idx].ModProjectile is global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile generatedProjectile)
-            {
-                Main.projectile[idx].localAI[1] = 1f;
-                Main.projectile[idx].localAI[2] = rootId;
-                generatedProjectile.ApplyGeneratedSpec(
-                    childSpec,
-                    new VfxManifestSpec(),
-                    generatedItemId,
-                    GeneratedProjectileRuntimeVariant.SwingOverheadSecondary);
-                Main.projectile[idx].netUpdate = true;
-                generatedProjectile.BroadcastVisualSync();
-            }
-        }
-    }
-
-    private static void EmitGeneratedSwingImpactDust(Vector2 center, int effectCode, int requestedCount, float speedScale)
-    {
-        if (Main.netMode == NetmodeID.Server) return;
-        int dustType = GeneratedSwingDustType(effectCode);
-        int count = Math.Clamp(requestedCount, 0, 24);
-        for (int i = 0; i < count; i++)
-        {
-            Vector2 velocity = Vector2.UnitX.RotatedBy(MathHelper.TwoPi * i / Math.Max(1, count)) * Main.rand.NextFloat(0.8f, 2.2f) * Math.Clamp(speedScale, 0.4f, 2.5f);
-            int idx = Dust.NewDust(center - new Vector2(4f, 4f), 8, 8, dustType, velocity.X, velocity.Y, 120, default(Color), Main.rand.NextFloat(0.75f, 1.25f));
-            if (idx >= 0 && idx < Main.maxDust)
-                Main.dust[idx].noGravity = true;
-        }
-    }
-
-    private static int GeneratedSwingDustType(int effectCode)
-    {
-        return effectCode switch
-        {
-            1 => DustID.Electric,
-            2 => DustID.t_Slime,
-            3 => DustID.YellowStarDust,
-            4 => DustID.Torch,
-            5 => DustID.Ice,
-            6 => DustID.Grass,
-            7 => DustID.Shadowflame,
-            8 => DustID.GreenTorch,
-            9 => DustID.RedTorch,
-            10 => DustID.YellowTorch,
-            11 => DustID.Sand,
-            12 => DustID.PinkTorch,
-            13 => DustID.GemSapphire,
-            14 => DustID.PurpleTorch,
-            _ => DustID.Smoke,
-        };
-    }
-
-    private static bool HasExplicitSwingSecondaryProjectile(AttackSpec attack)
-    {
-        return !string.IsNullOrWhiteSpace(attack.SecondaryProjectileShape)
-            || !string.IsNullOrWhiteSpace(attack.SecondaryMaterial);
-    }
-
-    private static AttackSpec SwingSecondarySpec(AttackSpec parent)
-        => GeneratedChildSpecPolicy.CreateSwingSecondary(parent);
-
-    public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
-    {
-        if (!Data.Attack.Enabled) return false;
-        Vector2 safeVelocity = velocity.LengthSquared() < 0.01f
-            ? Vector2.UnitX.RotatedBy(player.direction == -1 ? MathHelper.Pi : 0) * Data.Attack.Speed
-            : velocity.SafeNormalize(Vector2.UnitX * player.direction) * Data.Attack.Speed;
-
-        if (!Data.Attack.RuntimePlanAuthored)
-            return false;
-
-        string runtimeFamily = AttackRuntimeFamily(Data.Attack);
-        // v0.4.109: a broadsword/axe/hammer swing is melee-core by default.
-        // Optional acorn/seed/shard emissions come from explicit secondary calls
-        // handled in OnHitNPC; do not materialize the held weapon as a flying sword.
-        if (GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Swing))
-            return false;
-        bool thrustLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Thrust);
-        bool chargeReleaseLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.ChargeRelease);
-        bool sentryLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
-        bool beamLike = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Beam);
-        bool overheadBarrage = GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.OverheadBarrage);
-        if (sentryLike)
-            return ShootGeneratedSentry(player, source, damage, knockback);
-        bool singleRuntime = IsSingleRuntimeProjectileFamily(runtimeFamily);
-        int shots = singleRuntime ? 1 : Math.Clamp(Data.Attack.ShotCount, 1, 9);
-        float spread = singleRuntime ? 0f : Math.Clamp(Data.Attack.SpreadRadians, 0f, MathHelper.ToRadians(60f));
-        bool lob = Data.Attack.MovementCode == 2 || Data.Attack.Movement == "gravity_arc";
-
-        for (int i = 0; i < shots; i++)
-        {
-            float offset = shots == 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(shots - 1));
-            Vector2 shotVelocity = overheadBarrage ? Vector2.Zero : safeVelocity.RotatedBy(offset);
-            if (lob && !overheadBarrage) shotVelocity.Y -= Math.Max(1.2f, Data.Attack.Speed * 0.18f);
-            Vector2 spawnPosition = overheadBarrage
-                ? OverheadBarrageTarget(player, position, safeVelocity, Data.Attack.RangeTiles)
-                : ((thrustLike || beamLike || chargeReleaseLike) ? player.MountedCenter : position);
-            int projectileIndex = Projectile.NewProjectile(
-                source,
-                spawnPosition,
-                shotVelocity,
-                ModContent.ProjectileType<global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile>(),
-                damage,
-                knockback,
-                player.whoAmI,
-                Data.Attack.MovementCode,
-                Data.Attack.EffectCode,
-                Data.Attack.OnHitCode
-            );
-
-            if (projectileIndex >= 0 && projectileIndex < Main.maxProjectiles && Main.projectile[projectileIndex].ModProjectile is global::InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile generatedProjectile)
-            {
-                // Vanilla-style combat: the projectile carries only a generated item id
-                // plus compact AI state. The full GeneratedItemData/VFX manifest was synced
-                // once when the item entered the world/registry.
-                generatedProjectile.ApplyGeneratedSpec(Data.Attack, Data.VfxManifest, Data.Id);
-                Main.projectile[projectileIndex].netUpdate = true;
-                generatedProjectile.BroadcastVisualSync();
-            }
-        }
-        return false;
-    }
-
-    private static string AttackRuntimeFamily(AttackSpec? attack)
-        => GeneratedRuntimeFamilyPolicy.Normalize(attack?.RuntimeFamily);
-
-    private static bool IsSingleRuntimeProjectileFamily(string runtimeFamily)
-        => GeneratedRuntimeFamilyPolicy.UsesHeldProjectile(runtimeFamily)
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.OverheadBarrage)
-            || GeneratedRuntimeFamilyPolicy.Is(runtimeFamily, GeneratedRuntimeFamilyPolicy.Sentry);
-
-    private static Vector2 OverheadBarrageTarget(Player player, Vector2 fallbackOrigin, Vector2 fallbackVelocity, float rangeTiles)
-    {
-        Vector2 origin = player.MountedCenter;
-        Vector2 requested = player.whoAmI == Main.myPlayer
-            ? Main.MouseWorld
-            : fallbackOrigin + fallbackVelocity.SafeNormalize(Vector2.UnitX * player.direction) * Math.Clamp(rangeTiles * 16f, 64f, 1920f);
-        Vector2 delta = requested - origin;
-        float maxRange = Math.Clamp(rangeTiles > 0f ? rangeTiles * 16f : 560f, 64f, 1920f);
-        if (delta.LengthSquared() > maxRange * maxRange)
-            requested = origin + delta.SafeNormalize(Vector2.UnitX * player.direction) * maxRange;
-        return requested;
-    }
-
-    // Experimental runtime inventory drawing. If it causes compile/API issues on your tML build,
-    // comment this method out; generated items will still function with the placeholder texture.
     public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
     {
         EnsureRuntimeHydration();
-        GeneratedItemData drawData = ResolveRuntimeDataForPresentation();
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(drawData.Visual.SpritePath);
+        GeneratedItemData data = PresentationData();
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath);
         if (texture is null) return true;
-        var source = new Rectangle(0, 0, texture.Width, texture.Height);
-        var drawOrigin = source.Size() / 2f;
-        // The incoming inventory scale was computed from the static 32 px ModItem placeholder.
-        // Rebase that fit component onto the actual per-instance PNG so 48/64 px authored
-        // canvases retain Terraria's slot extent instead of overflowing the inventory cell.
-        float staticFramePixels = Math.Max(frame.Width, frame.Height);
-        float runtimeTexturePixels = Math.Max(texture.Width, texture.Height);
-        float runtimeFitScale = Math.Min(1f, staticFramePixels / Math.Max(1f, runtimeTexturePixels));
-        float finalScale = scale * runtimeFitScale * Math.Clamp(drawData.Visual.InventoryScale, 0.55f, 1.55f);
-        Vector2 finalPos = position + new Vector2(drawData.Visual.DrawOffsetX, drawData.Visual.DrawOffsetY);
-        spriteBatch.Draw(texture, finalPos, source, drawColor, 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
+        Rectangle source = texture.Bounds;
+        Vector2 drawOrigin = source.Size() / 2f;
+        float fit = Math.Min(1f, Math.Max(frame.Width, frame.Height) / Math.Max(1f, Math.Max(texture.Width, texture.Height)));
+        spriteBatch.Draw(texture, position + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY), source, drawColor, 0f, drawOrigin, scale * fit * data.Visual.InventoryScale, SpriteEffects.None, 0f);
         return false;
     }
 
     public override bool PreDrawInWorld(SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI)
     {
         EnsureRuntimeHydration();
-        GeneratedItemData drawData = ResolveRuntimeDataForPresentation();
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(drawData.Visual.SpritePath);
+        GeneratedItemData data = PresentationData();
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath);
         if (texture is null) return true;
-        var source = new Rectangle(0, 0, texture.Width, texture.Height);
-        var drawOrigin = source.Size() / 2f;
-        float finalScale = scale * Math.Clamp(drawData.Visual.WorldScale, 0.55f, 1.75f);
-        Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0, drawOrigin.Y * finalScale);
-        drawPosition += new Vector2(drawData.Visual.DrawOffsetX, drawData.Visual.DrawOffsetY);
-        spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, drawOrigin, finalScale, SpriteEffects.None, 0f);
+        Rectangle source = texture.Bounds;
+        Vector2 origin = source.Size() / 2f;
+        float finalScale = scale * data.Visual.WorldScale;
+        Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0f, origin.Y * finalScale) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
+        spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f);
         return false;
     }
 }

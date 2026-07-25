@@ -1,674 +1,753 @@
 from __future__ import annotations
 
+"""Finite VFX Director contract over exact runtime entity/event pairs.
+
+Gameplay has already been accepted before this module runs.  VFX slots may only
+bind presentation to an existing ``entityId + event`` pair and cannot add or
+change gameplay, entities, hitboxes, damage, movement, or lifecycle.
+"""
+
+import copy
+import hashlib
 import json
-import math
-from typing import Any
+from typing import Any, Callable, Mapping
 
-from infini_local.core.json_debug import bounded_json_dumps
-from infini_local.core.boundary_models import validate_vfx_manifest_boundary
-
-from infini_local.core.effect_catalog import normalize_attack_pattern
-from infini_local.core.llm_stage_messages import agent_handoff, stage_chat_message
-from infini_local.core.vfx_composition_primitives import (
-    VFX_CUE_EVENTS,
-    _vfx_arbitrate_slots,
-    _vfx_available_roles,
-    _vfx_budget_for_recipe,
-    _vfx_default_backend,
-    _vfx_event_stage,
-    _vfx_motif_from_data,
-    _vfx_playback_mode_for_recipe,
-    _vfx_seed_int,
-    _vfx_unit,
-)
-from infini_local.core.vfx_runtime_slots import (
-    _vfx_compile_slot,
-    _vfx_runtime_plan_direct_manifest,
-    _vfx_should_bake_slot,
-)
-from infini_local.core.vfx_director_prompt import (
-    VFX_DIRECTOR_SYSTEM,
-    build_vfx_director_handoff_messages,
-    build_vfx_director_prompt,
-)
-from infini_local.core.vfx_director_contract import (
-    _vfx_director_enum_required,
-    _vfx_director_error_fields,
-    _vfx_director_number_required,
-    _vfx_director_repair_prompt,
-    _vfx_director_validation_report,
-    _vfx_particle_id_is_explicit,
-    vfx_director_surface,
-)
-from infini_local.core.vfx_recipe_library import get_vfx_recipes
-from infini_local.storage.trace_runtime import log_event
+from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.llm_stage_messages import stage_chat_message
+from infini_local.core.repair_merge import merge_frozen_subtree
+from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.vfx_manifest_config import (
-    VFX_LLM_DIRECTOR_ENABLED,
     VFX_LLM_DIRECTOR_MAX_SLOTS,
     VFX_LLM_DIRECTOR_MAX_TOKENS,
-    VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS,
     VFX_LLM_DIRECTOR_TEMPERATURE,
     VFX_LLM_DIRECTOR_TIMEOUT,
-    VFX_SELECTOR_DEBUG,
-    VFX_SELECTOR_JITTER,
-    VFX_SELECTOR_NOVELTY_WEIGHT,
-    VFX_SELECTOR_TOP,
 )
 
 
-# PRODUCT POLICY: the LLM VFX Director is the preferred presentation author, but VFX
-# is not important enough to discard an otherwise valid LLM-authored item.  After one
-# bounded same-request VFX repair is exhausted, generation keeps the item and uses the
-# stable procedural recipe selector as a visual safety net.  This safety net never owns
-# gameplay.  Every transition into it must emit ``infini.vfx-fallback-trace.v1`` so a
-# bad Director response, lost history, legacy standalone failure, or compile failure is
-# visible in events.ndjson instead of being hidden behind a merely acceptable manifest.
-#
-# AGENT MAP: Python VFX manifest authoring/normalization contract.
-# Owns VFX manifest assembly. Config/data/env ownership lives in
-# vfx_manifest_config.py; optional LLM Director context helpers live in
-# vfx_director_context.py. Keep gameplay out of motif/effect prose; combat
-# behavior belongs in explicit runtime fields compiled by the runtime_authoring package.
+VFX_MANIFEST_SCHEMA = "infini.vfx.runtime-events.v15"
+VFX_DIRECTOR_SCHEMA = "infini.vfx-director.runtime-events.v1"
+VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v1"
+
+_RENDERERS = (
+    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
+    "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
+    "actorAfterimage", "impactRing", "impactSprite", "childMotes",
+    "lightCue", "soundCue",
+)
+_BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
+_TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
+_ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
+_CHANNELS = ("motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound")
+_LANES = ("primary", "support", "accent", "ornament", "cue")
+_EMISSIONS = ("wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "none")
+_BLENDS = ("alpha", "additive")
+_PARTICLES = ("dust", "pl:glow", "pl:shard", "pl:smoke", "pl:spark", "none")
+_BUDGET_CLASSES = ("tiny", "small", "normal", "large", "signature")
 
 
-# VFX config constants are imported from vfx_manifest_config.py. Recipe macros
-# are imported from vfx_recipe_library.py and still expand lazily there.
+def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
+    debug = data.setdefault("debug", {})
+    accounting = debug.setdefault("llmStageAccounting", {})
+    for key in (
+        "gameplayAuthorCalls", "gameplayRepairCalls", "visualDirectorCalls",
+        "visualRepairCalls", "vfxDirectorCalls", "vfxRepairCalls",
+    ):
+        accounting.setdefault(key, 0)
+    return accounting
 
 
+def _seed(*parts: Any) -> int:
+    digest = hashlib.sha256("\x1f".join(str(part) for part in parts).encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "little") & 0x7FFFFFFF
 
 
-# VFX Director prompt/name-bank helpers live in vfx_director_prompt.py.
-
-VFX_FALLBACK_POLICY = "llm_vfx_then_explicit_direct_else_inert"
-
-
-def _log_vfx_fallback_policy(
-    data: dict[str, Any],
-    recipe_key_value: str,
-    *,
-    history_state: str,
-    request_mode: str,
-    failure_phase: str,
-    reason: str,
-) -> None:
-    """Emit one warning before explicit direct VFX or an inert manifest takes over."""
-    debug_value = data.get("debug")
-    debug: dict[str, Any] = debug_value if isinstance(debug_value, dict) else {}
-    validation_fields = debug.get("vfxLlmDirectorRepairLastFields") or debug.get("vfxLlmDirectorValidationFields") or []
-    log_event("warn", "VFX Director fallback policy activated", {
-        "schema": "infini.vfx-fallback-trace.v1",
-        "policy": VFX_FALLBACK_POLICY,
-        "recipeKey": str(recipe_key_value or ""),
-        "itemId": str(data.get("id") or ""),
-        "itemName": str(data.get("name") or ""),
-        "historyState": str(history_state or "unknown"),
-        "requestMode": str(request_mode or "unknown"),
-        "failurePhase": str(failure_phase or "unknown"),
-        "reason": str(reason or "unknown"),
-        "validationFields": [str(field) for field in validation_fields],
-        "repairAttempts": int(debug.get("vfxLlmDirectorRepairAttempts") or 0),
-        "fallbackTarget": "explicit_runtime_vfx_or_empty_manifest",
-    })
-
-
-_VFX_ITEM_EVENTS = frozenset({"while_held", "while_equipped", "on_use", "on_alt_use"})
-_VFX_PROJECTILE_EVENTS = VFX_CUE_EVENTS - _VFX_ITEM_EVENTS
-
-
-def _vfx_executable_events(data: dict[str, Any]) -> set[str]:
-    gameplay_raw = data.get("gameplay")
-    gameplay: dict[str, Any] = gameplay_raw if isinstance(gameplay_raw, dict) else {}
-    attack_raw = data.get("attack")
-    attack: dict[str, Any] = attack_raw if isinstance(attack_raw, dict) else {}
-    result_kind = str(gameplay.get("kind") or data.get("category") or "").strip().lower()
-    if result_kind in {"armor", "accessory"}:
-        allowed = {"while_equipped"}
-    else:
-        allowed = {"while_held", "on_use"}
-        alt_use_mode = str(gameplay.get("altUseMode") or "").strip().lower()
-        if alt_use_mode not in {"", "none"}:
-            allowed.add("on_alt_use")
-
-    runtime_family = str(attack.get("runtimeFamily") or "").strip().lower()
-    if bool(attack.get("enabled")) and runtime_family not in {"none", "swing"}:
-        allowed.update(_VFX_PROJECTILE_EVENTS)
-    return allowed
-
-
-def _vfx_director_runtime_event_errors(raw: Any, data: dict[str, Any]) -> list[dict[str, Any]]:
-    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
-        return []
-    allowed = sorted(_vfx_executable_events(data))
-    errors: list[dict[str, Any]] = []
-    for index, slot in enumerate(raw["slots"]):
-        if not isinstance(slot, dict):
+def _allowed_pairs(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in runtime_event_inventory(data):
+        if not isinstance(row, Mapping):
             continue
-        event = str(slot.get("event") or "").strip()
-        if event and event not in allowed:
-            errors.append({
-                "path": f"slots[{index}].event",
-                "error": "event_not_executable",
-                "actual": event,
-                "allowed": allowed,
-            })
-    return errors
+        pair = (str(row.get("entityId") or ""), str(row.get("event") or ""))
+        if not all(pair) or pair in seen:
+            continue
+        seen.add(pair)
+        rows.append({"entityId": pair[0], "event": pair[1]})
+    return sorted(rows, key=lambda row: (row["entityId"], row["event"]))
 
 
-def _vfx_director_item_validation_report(raw: Any, data: dict[str, Any]) -> dict[str, Any]:
-    report = _vfx_director_validation_report(raw)
-    runtime_errors = _vfx_director_runtime_event_errors(raw, data)
-    if runtime_errors:
-        report["errors"] = [*report.get("errors", []), *runtime_errors]
-        report["valid"] = False
-    return report
-
-
-def _vfx_validate_director_output(raw: dict[str, Any], data: dict[str, Any], recipe_key_value: str, parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    report = _vfx_director_item_validation_report(raw, data)
-    if not report.get("valid"):
-        return None
-    if not isinstance(raw, dict):
-        return None
-    surface = vfx_director_surface()
-    raw_slots = raw.get("slots")
-    if not isinstance(raw_slots, list):
-        return None
-    max_slots = max(2, min(8, VFX_LLM_DIRECTOR_MAX_SLOTS))
-    raw_slots = [s for s in raw_slots if isinstance(s, dict)][:max_slots]
-
-    attack = data.get("attack") if isinstance(data.get("attack"), dict) else {}
-    pattern = normalize_attack_pattern(
-        attack.get("pattern") or attack.get("attackPattern") or "basic"
-    ) or "basic"
-    gameplay: dict[str, Any] = {}
-    gameplay_value = data.get("gameplay")
-    if isinstance(gameplay_value, dict):
-        gameplay = gameplay_value
-    power = float(attack.get("powerBudget") or gameplay.get("powerBudget") or 1.0)
-    seed = _vfx_seed_int(recipe_key_value, data.get("id"), "llm_vfx_director")
-    if "effectMagnitude" not in raw:
-        return None
-    try:
-        effect_magnitude = float(raw.get("effectMagnitude"))
-    except Exception:
-        return None
-    if not math.isfinite(effect_magnitude) or effect_magnitude < 0.0 or effect_magnitude > 1.0:
-        return None
-    budget_class = str(raw.get("visualBudgetClass") or "").strip()
-    if budget_class not in {"tiny", "small", "normal", "large", "signature"}:
-        return None
-    budget = _vfx_budget_for_recipe({"id": "llm_vfx_director", "cost": "medium"}, power, seed, data)
-    budget["effectMagnitude"] = effect_magnitude
-    budget["visualBudgetClass"] = budget_class
-
-    compiled_raw: list[dict[str, Any]] = []
-    explicit_particle_count = 0
-    for i, slot in enumerate(raw_slots):
-        if "bakedCommands" in slot:
-            return None
-
-        # Strict Director contract: if Gemma gives an invalid/missing enum or out-of-range numeric
-        # field, reject the Director manifest and let the deterministic VFX pipeline take over.
-        # We do not silently replace bad enum values with inferred defaults here.
-        rk = _vfx_director_enum_required(slot, "rendererKind", surface["rendererKind"])
-        ev = _vfx_director_enum_required(slot, "event", surface["events"])
-        backend = _vfx_director_enum_required(slot, "backend", surface["backend"])
-        texture_role = _vfx_director_enum_required(slot, "textureRole", surface["textureRole"])
-        particle_role = _vfx_director_enum_required(slot, "particleRole", surface["particleRole"])
-        anchor = _vfx_director_enum_required(slot, "anchor", surface["anchor"])
-        channel = _vfx_director_enum_required(slot, "channel", surface["channel"])
-        lane = _vfx_director_enum_required(slot, "lane", surface["lane"])
-        emission_mode = _vfx_director_enum_required(slot, "emissionMode", surface["emissionMode"])
-        blend = _vfx_director_enum_required(slot, "blend", surface["blend"])
-        particle_system_id = _vfx_director_enum_required(slot, "particleSystemId", surface["particleSystemId"])
-        if not all([rk, ev, backend, texture_role, particle_role, anchor, channel, lane, emission_mode, blend, particle_system_id]):
-            return None
-
-        scale = _vfx_director_number_required(slot, "scale", 0.15, 5.0)
-        density = _vfx_director_number_required(slot, "density", 0.0, 1.0)
-        duration = _vfx_director_number_required(slot, "duration", 3, 120, integer=True)
-        alpha = _vfx_director_number_required(slot, "alpha", 0.0, 1.0)
-        spread = _vfx_director_number_required(slot, "spread", 0.0, 2.0)
-        jitter = _vfx_director_number_required(slot, "jitter", 0.0, 1.5)
-        budget_weight = _vfx_director_number_required(slot, "budgetWeight", 0.1, 4.0)
-        signature_weight = _vfx_director_number_required(slot, "signatureWeight", 0.0, 1.0)
-        visual_cost = _vfx_director_number_required(slot, "visualCost", 0.0, 1.0)
-        fade_in = _vfx_director_number_required(slot, "fadeIn", 0.0, 0.8)
-        fade_out = _vfx_director_number_required(slot, "fadeOut", 0.0, 0.8)
-        phase_offset = _vfx_director_number_required(slot, "phaseOffset", -1.0, 1.0) if "phaseOffset" in slot else 0.0
-        start_tick = _vfx_director_number_required(
-            slot, "startTick", 0, 120, integer=True
-        ) if "startTick" in slot else 0
-        repeat_every = _vfx_director_number_required(
-            slot, "repeatEvery", 0, 120, integer=True
-        ) if "repeatEvery" in slot else 0
-        if any(x is None for x in [scale, density, duration, alpha, spread, jitter, budget_weight, signature_weight, visual_cost, fade_in, fade_out, phase_offset, start_tick, repeat_every]):
-            return None
-
-        # Director must make an explicit particle material choice.
-        if _vfx_particle_id_is_explicit(particle_system_id):
-            explicit_particle_count += 1
-
-        compiled_raw.append({
-            "event": ev,
-            "rendererKind": rk,
-            "rendererKind": rk,
-            "backend": backend,
-            "textureRole": texture_role,
-            "particleRole": particle_role,
-            "anchor": anchor,
-            "channel": channel,
-            "lane": lane,
-            "emissionMode": emission_mode,
-            "blend": blend,
-            "particleSystemId": particle_system_id,
-            "scale": scale,
-            "density": density,
-            "duration": duration,
-            "alpha": alpha,
-            "spread": spread,
-            "jitter": jitter,
-            "phaseOffset": phase_offset,
-            "budgetWeight": budget_weight,
-            "signatureWeight": signature_weight,
-            "visualCost": visual_cost,
-            "fadeIn": fade_in,
-            "fadeOut": fade_out,
-            "startTick": start_tick,
-            "repeatEvery": repeat_every,
-            "source": "llmDirector",
-        })
-
-    slots = [_vfx_compile_slot(slot, seed, i, power, effect_magnitude) for i, slot in enumerate(compiled_raw)]
-    slots = _vfx_arbitrate_slots(slots, budget_class)
-    provenance = attack.get("runtimeAuthoringProvenance") if isinstance(attack.get("runtimeAuthoringProvenance"), dict) else {}
-    effect_lineage = {
-        "mode": "llm_vfx_director",
-        "gameplayChildren": provenance.get("gameplayChildren", {}),
-        "pureVfx": provenance.get("pureVfx", {}),
-        "fieldSources": provenance.get("fieldSources", {}),
-        "note": "VFX slots are visual execution of authored VFX intent; real damaging children are only those reported under gameplayChildren.",
+def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": VFX_DIRECTOR_SCHEMA,
+        "runtimePairs": _allowed_pairs(data),
+        "runtimeVisualRoles": runtime_visual_roles(data),
+        "rendererKind": list(_RENDERERS),
+        "backend": list(_BACKENDS),
+        "textureRole": list(_TEXTURE_ROLES),
+        "particleRole": list(_TEXTURE_ROLES),
+        "anchor": list(_ANCHORS),
+        "channel": list(_CHANNELS),
+        "lane": list(_LANES),
+        "emissionMode": list(_EMISSIONS),
+        "blend": list(_BLENDS),
+        "particleSystemId": list(_PARTICLES),
+        "visualBudgetClass": list(_BUDGET_CLASSES),
+        "numericRanges": {
+            "effectMagnitude": [0.0, 1.0], "scale": [0.15, 5.0],
+            "density": [0.0, 1.0], "duration": [3, 120], "alpha": [0.0, 1.0],
+            "spread": [0.0, 2.0], "jitter": [0.0, 1.5], "fadeIn": [0.0, 0.8],
+            "fadeOut": [0.0, 0.8], "budgetWeight": [0.1, 4.0],
+            "signatureWeight": [0.0, 1.0], "visualCost": [0.0, 1.0],
+            "startTick": [0, 120], "repeatEvery": [0, 120],
+        },
+        "maxSlots": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS))),
     }
-    manifest = {
-        "schema": "infini.vfx.hybrid.v14",
-        "recipeId": "llm_vfx_director",
-        "playbackMode": "Hybrid",
-        "seed": seed,
-        "confidence": 0.84,
-        "effectMagnitude": effect_magnitude,
-        "visualBudgetClass": budget_class,
-        "motif": _vfx_motif_from_data(data, set(), str(pattern or "basic")),
-        "overlayPolicy": "LocalOnly",
-        "budget": budget,
-        "slots": slots,
-        "debug": {
-            "composition": {
-                "mode": "llm_vfx_director",
-                "identity": str(raw.get("identity") or "")[:240],
-                "preArbitrationSlotCount": len(compiled_raw),
-                "postArbitrationSlotCount": len(slots),
-                "explicitParticleSystemSlots": explicit_particle_count,
-                "directorEnumMode": "strict",
-                "blendedSlots": [],
-                "proceduralSlots": [],
+
+
+def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
+    pairs = _allowed_pairs(data)
+    entity_ids = sorted({row["entityId"] for row in pairs})
+    events = sorted({row["event"] for row in pairs})
+    slot = {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "id": {"type": "string", "minLength": 1, "maxLength": 64},
+            "entityId": {"type": "string", "enum": entity_ids},
+            "event": {"type": "string", "enum": events},
+            "rendererKind": {"type": "string", "enum": list(_RENDERERS)},
+            "backend": {"type": "string", "enum": list(_BACKENDS)},
+            "textureRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
+            "particleRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
+            "anchor": {"type": "string", "enum": list(_ANCHORS)},
+            "channel": {"type": "string", "enum": list(_CHANNELS)},
+            "lane": {"type": "string", "enum": list(_LANES)},
+            "emissionMode": {"type": "string", "enum": list(_EMISSIONS)},
+            "blend": {"type": "string", "enum": list(_BLENDS)},
+            "particleSystemId": {"type": "string", "enum": list(_PARTICLES)},
+            "scale": {"type": "number", "minimum": 0.15, "maximum": 5.0},
+            "density": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "duration": {"type": "integer", "minimum": 3, "maximum": 120},
+            "alpha": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "spread": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+            "jitter": {"type": "number", "minimum": 0.0, "maximum": 1.5},
+            "fadeIn": {"type": "number", "minimum": 0.0, "maximum": 0.8},
+            "fadeOut": {"type": "number", "minimum": 0.0, "maximum": 0.8},
+            "budgetWeight": {"type": "number", "minimum": 0.1, "maximum": 4.0},
+            "signatureWeight": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "visualCost": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "startTick": {"type": "integer", "minimum": 0, "maximum": 120},
+            "repeatEvery": {"type": "integer", "minimum": 0, "maximum": 120},
+        },
+        "required": [
+            "id", "entityId", "event", "rendererKind", "backend", "textureRole",
+            "particleRole", "anchor", "channel", "lane", "emissionMode", "blend",
+            "particleSystemId", "scale", "density", "duration", "alpha", "spread",
+            "jitter", "fadeIn", "fadeOut", "budgetWeight", "signatureWeight",
+            "visualCost", "startTick", "repeatEvery",
+        ],
+    }
+    return {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "schema": {"const": VFX_DIRECTOR_SCHEMA},
+            "effectMagnitude": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "visualBudgetClass": {"type": "string", "enum": list(_BUDGET_CLASSES)},
+            "motif": {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "element": {"type": "string", "minLength": 1, "maxLength": 48},
+                    "shapeLanguage": {"type": "string", "minLength": 1, "maxLength": 96},
+                    "motionLanguage": {"type": "string", "minLength": 1, "maxLength": 96},
+                    "paletteRole": {"type": "string", "minLength": 1, "maxLength": 48},
+                    "rhythm": {"type": "number", "minimum": 0.2, "maximum": 3.0},
+                    "chaos": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                },
+                "required": ["element", "shapeLanguage", "motionLanguage", "paletteRole", "rhythm", "chaos"],
             },
-            "pattern": pattern,
-            "roles": sorted(_vfx_available_roles(data)),
-            "selectedReasons": ["llm_director_validated"],
-            "topCandidates": [],
-            "wordProbe": [],
-        }
+            "slots": {"type": "array", "items": slot, "minItems": 0, "maxItems": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS)))},
+        },
+        "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slots"],
     }
-    return manifest
 
 
-def try_llm_vfx_director(parent_a: dict[str, Any] | None, parent_b: dict[str, Any] | None, child_item: dict[str, Any], recipe_key_value: str, llm_client: Any = None) -> dict[str, Any] | None:
-    """Optional Gemma E4B VFX Director pass.
+def _number(value: Any, low: float, high: float, path: str, errors: list[dict[str, Any]], *, integer: bool = False) -> float | int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        errors.append({"path": path, "message": "number required"})
+        return int(low) if integer else low
+    numeric = float(value)
+    if numeric < low or numeric > high:
+        errors.append({"path": path, "message": f"must be within [{low}, {high}]"})
+    return int(value) if integer else numeric
 
-    Product policy: VFX is optional presentation, not the main authored gameplay feature.
-    One self-contained accepted-product dossier is sent to the Director. ``VFX repair``
-    appends the invalid Director artifact plus exact validator feedback and asks for a
-    corrected manifest; there is no second standalone author path.
 
-    If the bounded repair fails, keep the valid item and use only an explicit compiled
-    visual cue; absent that authority, the manifest is inert. The exact failure
-    phase/reason is emitted to events.ndjson.
-    """
-    if not VFX_LLM_DIRECTOR_ENABLED or llm_client is None:
-        return None
-    constraints = {
-        "attackPattern": (child_item.get("attack") or {}).get("pattern") if isinstance(child_item.get("attack"), dict) else "basic",
-        "allowedEvents": sorted(_vfx_executable_events(child_item)),
-        "noBakedCommands": True,
-        "slots": [0, max(2, VFX_LLM_DIRECTOR_MAX_SLOTS)],
+def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str, Any]:
+    errors: list[dict[str, Any]] = []
+    if not isinstance(raw, Mapping):
+        return {"ok": False, "errors": [{"path": "$", "message": "object required"}]}
+    if str(raw.get("schema") or "") != VFX_DIRECTOR_SCHEMA:
+        errors.append({"path": "$.schema", "message": f"expected {VFX_DIRECTOR_SCHEMA}"})
+    allowed = {(row["entityId"], row["event"]) for row in _allowed_pairs(data)}
+    budget_class = str(raw.get("visualBudgetClass") or "")
+    if budget_class not in _BUDGET_CLASSES:
+        errors.append({"path": "$.visualBudgetClass", "message": "unsupported budget class"})
+    magnitude = _number(raw.get("effectMagnitude"), 0.0, 1.0, "$.effectMagnitude", errors)
+    motif = raw.get("motif")
+    if not isinstance(motif, Mapping):
+        errors.append({"path": "$.motif", "message": "object required"})
+        motif = {}
+    else:
+        for field in ("element", "shapeLanguage", "motionLanguage", "paletteRole"):
+            if not str(motif.get(field) or "").strip():
+                errors.append({"path": f"$.motif.{field}", "message": "non-empty string required"})
+        _number(motif.get("rhythm"), 0.2, 3.0, "$.motif.rhythm", errors)
+        _number(motif.get("chaos"), 0.0, 1.0, "$.motif.chaos", errors)
+    slots = raw.get("slots")
+    if not isinstance(slots, list):
+        errors.append({"path": "$.slots", "message": "array required"})
+        slots = []
+    max_slots = max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS)))
+    if len(slots) > max_slots:
+        errors.append({"path": "$.slots", "message": f"at most {max_slots} slots"})
+    seen_ids: set[str] = set()
+    normalized_slots: list[dict[str, Any]] = []
+    enum_fields = {
+        "rendererKind": _RENDERERS, "backend": _BACKENDS, "textureRole": _TEXTURE_ROLES,
+        "particleRole": _TEXTURE_ROLES, "anchor": _ANCHORS, "channel": _CHANNELS,
+        "lane": _LANES, "emissionMode": _EMISSIONS, "blend": _BLENDS,
+        "particleSystemId": _PARTICLES,
     }
-    surface = vfx_director_surface()
-    system = VFX_DIRECTOR_SYSTEM
-    debug = child_item.setdefault("debug", {})
-    try:
-        input_packet = build_vfx_director_prompt(parent_a, parent_b, child_item, surface, constraints).get("vfxInputPacket", {})
-        debug["vfxLlmDirectorInputPacket"] = bounded_json_dumps(input_packet, max_chars=12000)
-    except Exception:
-        pass
+    number_fields = {
+        "scale": (0.15, 5.0, False), "density": (0.0, 1.0, False),
+        "duration": (3, 120, True), "alpha": (0.0, 1.0, False),
+        "spread": (0.0, 2.0, False), "jitter": (0.0, 1.5, False),
+        "fadeIn": (0.0, 0.8, False), "fadeOut": (0.0, 0.8, False),
+        "budgetWeight": (0.1, 4.0, False), "signatureWeight": (0.0, 1.0, False),
+        "visualCost": (0.0, 1.0, False), "startTick": (0, 120, True),
+        "repeatEvery": (0, 120, True),
+    }
+    for index, slot in enumerate(slots):
+        path = f"$.slots[{index}]"
+        if not isinstance(slot, Mapping):
+            errors.append({"path": path, "message": "object required"})
+            continue
+        slot_id = str(slot.get("id") or "").strip()
+        if not slot_id:
+            errors.append({"path": path + ".id", "message": "non-empty id required"})
+        elif slot_id in seen_ids:
+            errors.append({"path": path + ".id", "message": "duplicate id"})
+        seen_ids.add(slot_id)
+        entity_id = str(slot.get("entityId") or "")
+        event = str(slot.get("event") or "")
+        if (entity_id, event) not in allowed:
+            errors.append({"path": path, "message": f"entity/event pair {(entity_id, event)!r} is absent from runtimeProgram"})
+        clean: dict[str, Any] = {"id": slot_id, "entityId": entity_id, "event": event}
+        for field, values in enum_fields.items():
+            value = str(slot.get(field) or "")
+            if value not in values:
+                errors.append({"path": f"{path}.{field}", "message": f"unsupported value {value!r}"})
+            clean[field] = value
+        for field, (low, high, integer) in number_fields.items():
+            clean[field] = _number(slot.get(field), low, high, f"{path}.{field}", errors, integer=integer)
+        if clean["rendererKind"] == "soundCue" and (clean["channel"], clean["lane"]) != ("sound", "cue"):
+            errors.append({"path": path, "message": "soundCue requires channel=sound and lane=cue"})
+        if clean["rendererKind"] == "lightCue" and (clean["channel"], clean["lane"]) != ("light", "cue"):
+            errors.append({"path": path, "message": "lightCue requires channel=light and lane=cue"})
+        normalized_slots.append(clean)
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "normalized": {
+            "schema": VFX_DIRECTOR_SCHEMA,
+            "effectMagnitude": float(magnitude),
+            "visualBudgetClass": budget_class,
+            "motif": {
+                "element": str(motif.get("element") or "")[:48],
+                "shapeLanguage": str(motif.get("shapeLanguage") or "")[:96],
+                "motionLanguage": str(motif.get("motionLanguage") or "")[:96],
+                "paletteRole": str(motif.get("paletteRole") or "")[:48],
+                "rhythm": float(motif.get("rhythm") or 1.0),
+                "chaos": float(motif.get("chaos") or 0.0),
+            },
+            "slots": normalized_slots,
+        },
+    }
 
-    def validate_or_repair(raw: Any, mode: str, base_messages: list[dict[str, str]] | None = None) -> dict[str, Any] | None:
-        def _reason_key() -> str:
-            if mode == "authoritative_stage_dossier_v31":
-                return "vfxLlmDirectorStageFallbackReason"
-            return "vfxLlmDirectorUnknownModeFallbackReason"
 
-        def _set_mode_fallback(reason: str) -> None:
-            debug[_reason_key()] = reason
-            debug["vfxLlmDirectorLastFallbackReason"] = reason
+def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, parent_b: Mapping[str, Any] | None) -> dict[str, Any]:
+    return {
+        "schema": "infini.vfx-director-input.runtime-events.v1",
+        "item": {
+            "id": str(data.get("id") or ""), "name": str(data.get("name") or ""),
+            "description": str(data.get("description") or ""),
+        },
+        "parents": [copy.deepcopy(dict(parent_a or {})), copy.deepcopy(dict(parent_b or {}))],
+        "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
+        "runtimeSurface": vfx_director_surface(data),
+        "outputSchema": _director_schema(data),
+        "rules": [
+            "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
+            "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
+            "Use only enum values and numeric ranges from runtimeSurface.",
+            "Slots may be empty when presentation should be restrained.",
+            "Return only one JSON object matching outputSchema.",
+        ],
+    }
 
-        report = _vfx_director_item_validation_report(raw, child_item)
-        debug["vfxLlmDirectorValidationErrorCount"] = len(report.get("errors", []))
-        debug["vfxLlmDirectorValidationFields"] = _vfx_director_error_fields(report)
-        repair_budget = min(1, max(0, VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS))
-        debug["vfxLlmDirectorRepairAttempts"] = 0
-        debug["vfxLlmDirectorRepairEnabled"] = repair_budget
-        if report.get("valid"):
-            manifest = _vfx_validate_director_output(raw, child_item, recipe_key_value, parent_a, parent_b)
-            if isinstance(manifest, dict):
-                comp = manifest.setdefault("debug", {}).setdefault("composition", {})
-                comp["repairAttempted"] = False
-                comp["validationErrorCountBeforeRepair"] = 0
-                comp["vfxPath"] = "llm_director"
-                return manifest
-            _set_mode_fallback("valid_contract_but_compile_failed")
-            return None
 
-        if repair_budget <= 0:
-            _set_mode_fallback("invalid_director_output_repair_disabled")
-            debug["vfxLlmDirectorValidationReport"] = bounded_json_dumps(report, max_chars=6000)
-            return None
+def _vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
+    full = _director_schema(data)
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "schema": {"const": VFX_REPAIR_PATCH_SCHEMA},
+            "effectMagnitude": {"anyOf": [full["properties"]["effectMagnitude"], {"type": "null"}]},
+            "visualBudgetClass": {"anyOf": [full["properties"]["visualBudgetClass"], {"type": "null"}]},
+            "motif": {"anyOf": [full["properties"]["motif"], {"type": "null"}]},
+            "slotsUpsert": {"type": "array", "items": full["properties"]["slots"]["items"], "maxItems": full["properties"]["slots"]["maxItems"]},
+            "slotIdsDelete": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "maxItems": full["properties"]["slots"]["maxItems"]},
+            "slotIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, full["properties"]["slots"]["maxItems"] * 2)}, "maxItems": max(1, full["properties"]["slots"]["maxItems"] * 2)},
+            "note": {"type": "string", "minLength": 1, "maxLength": 500},
+        },
+        "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "note"],
+    }
 
-        repair_raw: Any = raw
-        last_report = report
-        for attempt in range(1, repair_budget + 1):
-            debug["vfxLlmDirectorRepairAttempts"] = attempt
-            debug["vfxLlmDirectorRepairFields"] = _vfx_director_error_fields(last_report)
-            repair_payload = _vfx_director_repair_prompt(repair_raw, last_report, surface)
-            repair_payload["agentHandoff"] = agent_handoff(
-                previous_speaker="vfx_director",
-                current_speaker="vfx_validator",
-                next_speaker="vfx_director",
-                cause_by="vfx_contract_validation_failed",
-                artifact_source="vfx_director.manifest",
-            )
-            if base_messages:
-                repair_messages = list(base_messages) + [
-                    stage_chat_message("assistant", "vfx_director", json.dumps(repair_raw, ensure_ascii=False, separators=(",", ":"))),
-                    stage_chat_message("user", "vfx_validator", json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))),
-                ]
-                repair_raw = llm_client("", {}, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT, messages=repair_messages)
+
+def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str, Any]:
+    source = raw if isinstance(raw, Mapping) else {}
+    slots = source.get("slots") if isinstance(source.get("slots"), list) else []
+    mutable_globals: set[str] = set()
+    global_paths: dict[str, set[str]] = {}
+    mutable_slot_ids: set[str] = set()
+    slot_paths: dict[str, set[str]] = {}
+    delete_indices: set[int] = set()
+    allow_create_slots = not isinstance(raw, Mapping)
+    whole_response = not isinstance(raw, Mapping)
+
+    def grant_global(field: str, relative: str) -> None:
+        mutable_globals.add(field)
+        global_paths.setdefault(field, set()).add(relative.strip("."))
+
+    def grant_slot(slot_id: str, relative: str) -> None:
+        if slot_id:
+            mutable_slot_ids.add(slot_id)
+            slot_paths.setdefault(slot_id, set()).add(relative.strip("."))
+
+    for error in errors:
+        path = str(error.get("path") or "$")
+        message = str(error.get("message") or "")
+        if path == "$":
+            whole_response = True
+        for field in ("effectMagnitude", "visualBudgetClass", "motif"):
+            prefix = f"$.{field}"
+            if path == prefix:
+                grant_global(field, "")
+            elif path.startswith(prefix + "."):
+                grant_global(field, path[len(prefix) + 1:])
+        match = __import__("re").match(r"^\$\.slots\[(\d+)\](?:\.(.*))?$", path)
+        if match:
+            index = int(match.group(1))
+            relative = str(match.group(2) or "")
+            if 0 <= index < len(slots) and isinstance(slots[index], Mapping):
+                slot_id = str(slots[index].get("id") or "")
+                if slot_id:
+                    if relative:
+                        grant_slot(slot_id, relative)
+                    elif "entity/event pair" in message:
+                        # Root-level semantic error, but only the exact pair is
+                        # broken. Keep timing, style and already-valid cue data
+                        # frozen while allowing the model to retarget the slot.
+                        grant_slot(slot_id, "entityId")
+                        grant_slot(slot_id, "event")
+                    elif "requires channel=" in message and "lane=cue" in message:
+                        grant_slot(slot_id, "channel")
+                        grant_slot(slot_id, "lane")
+                    else:
+                        grant_slot(slot_id, "")
+                else:
+                    delete_indices.add(index)
+                    allow_create_slots = True
             else:
-                repair_raw = llm_client(system, repair_payload, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE, VFX_LLM_DIRECTOR_TIMEOUT)
-            last_report = _vfx_director_item_validation_report(repair_raw, child_item)
-            debug["vfxLlmDirectorRepairLastErrorCount"] = len(last_report.get("errors", []))
-            debug["vfxLlmDirectorRepairLastFields"] = _vfx_director_error_fields(last_report)
-            if last_report.get("valid"):
-                manifest = _vfx_validate_director_output(repair_raw, child_item, recipe_key_value, parent_a, parent_b)
-                if isinstance(manifest, dict):
-                    comp = manifest.setdefault("debug", {}).setdefault("composition", {})
-                    comp["repairAttempted"] = True
-                    comp["repairAttempts"] = attempt
-                    comp["validationErrorCountBeforeRepair"] = len(report.get("errors", []))
-                    comp["repairedFields"] = _vfx_director_error_fields(report)
-                    comp["vfxPath"] = "llm_director"
-                    debug["vfxLlmDirectorRepairStatus"] = "success"
-                    return manifest
-                _set_mode_fallback("repair_valid_contract_but_compile_failed")
-                return None
-
-        debug["vfxLlmDirectorRepairStatus"] = "failed"
-        _set_mode_fallback("invalid_after_repair")
-        debug["vfxLlmDirectorValidationReport"] = bounded_json_dumps(last_report, max_chars=6000)
-        return None
-
-    try:
-        messages = build_vfx_director_handoff_messages(
-            child_item, parent_a, parent_b, surface, constraints
-        )
-        if not messages:
-            raise ValueError("self-contained VFX dossier was not built")
-        raw = llm_client(
-            system, {}, VFX_LLM_DIRECTOR_MAX_TOKENS, VFX_LLM_DIRECTOR_TEMPERATURE,
-            VFX_LLM_DIRECTOR_TIMEOUT, messages=messages,
-        )
-        manifest = validate_or_repair(
-            raw, "authoritative_stage_dossier_v31", base_messages=messages
-        )
-        if isinstance(manifest, dict):
-            debug["vfxLlmDirectorMode"] = "authoritative_stage_dossier_v31"
-            debug["vfxLlmDirectorMessages"] = len(messages)
-            debug["vfxPath"] = "llm_director" if manifest.get("slots") else "llm_director_empty"
-            return manifest
-        final_reason = (
-            debug.get("vfxLlmDirectorStageFallbackReason")
-            or "invalid_director_output"
-        )
-        debug["vfxLlmDirectorFinalFallbackReason"] = final_reason
-        debug["vfxLlmDirectorFallbackReason"] = final_reason
-        debug["vfxPath"] = "vfx_director_rejected"
-        repair_attempts = int(debug.get("vfxLlmDirectorRepairAttempts") or 0)
-        failure_phase = (
-            "repair_exhausted"
-            if repair_attempts > 0
-            else ("compile_failed" if "compile_failed" in str(final_reason) else "initial_validation")
-        )
-        _log_vfx_fallback_policy(
-            child_item,
-            recipe_key_value,
-            history_state="self_contained",
-            request_mode="authoritative_stage_dossier_v31",
-            failure_phase=failure_phase,
-            reason=str(final_reason),
-        )
-        return None
-    except Exception as e:
-        debug["vfxLlmDirectorError"] = repr(e)
-        debug["vfxLlmDirectorFinalFallbackReason"] = "exception"
-        debug["vfxLlmDirectorFallbackReason"] = "exception"
-        debug["vfxPath"] = "vfx_director_rejected"
-        _log_vfx_fallback_policy(
-            child_item,
-            recipe_key_value,
-            history_state=locals().get("history_state", "unknown"),
-            request_mode="vfx_director_exception",
-            failure_phase="exception",
-            reason=repr(e),
-        )
-        return None
+                delete_indices.add(index)
+                allow_create_slots = True
+        if path == "$.slots":
+            if "array required" in message or "missing" in message:
+                allow_create_slots = True
+            if "at most" in message:
+                for index, row in enumerate(slots):
+                    if isinstance(row, Mapping) and str(row.get("id") or ""):
+                        grant_slot(str(row.get("id") or ""), "")
+                    else:
+                        delete_indices.add(index)
+    if whole_response:
+        for field in ("effectMagnitude", "visualBudgetClass", "motif"):
+            grant_global(field, "")
+        allow_create_slots = True
+        for index, row in enumerate(slots):
+            if isinstance(row, Mapping) and str(row.get("id") or ""):
+                grant_slot(str(row.get("id") or ""), "")
+            else:
+                delete_indices.add(index)
+    return {
+        "schema": "infini.vfx-repair-scope.v3",
+        "mutableGlobals": sorted(mutable_globals),
+        "mutableSlotIds": sorted(mutable_slot_ids),
+        "deletableSlotIds": sorted(mutable_slot_ids),
+        "deletableSlotIndices": sorted(delete_indices),
+        "allowCreateSlots": allow_create_slots,
+        "fieldPermissions": {
+            "globals": {field: sorted(paths) for field, paths in sorted(global_paths.items())},
+            "slots": [{"slotId": slot_id, "paths": sorted(paths)} for slot_id, paths in sorted(slot_paths.items())],
+        },
+        "errorPaths": [str(row.get("path") or "$") for row in errors],
+    }
 
 
-# =============================================================================
-# NAV: VFX_MANIFEST_PIPELINE
-# =============================================================================
+def _vfx_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
+    source = raw if isinstance(raw, Mapping) else {}
+    mutable_globals = set(str(value) for value in scope.get("mutableGlobals") or [])
+    mutable_slot_ids = set(str(value) for value in scope.get("mutableSlotIds") or [])
+    slots = source.get("slots") if isinstance(source.get("slots"), list) else []
+    return {
+        "broken": {
+            "globals": {field: copy.deepcopy(source.get(field)) for field in mutable_globals},
+            "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") in mutable_slot_ids],
+        },
+        "validReadOnly": {
+            "globals": {field: copy.deepcopy(source.get(field)) for field in ("effectMagnitude", "visualBudgetClass", "motif") if field not in mutable_globals},
+            "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") not in mutable_slot_ids],
+        },
+    }
 
-def attach_hybrid_vfx_manifest(data: dict[str, Any], recipe_key_value: str, reroll_salt: Any = "", parent_a: dict[str, Any] | None = None, parent_b: dict[str, Any] | None = None, llm_director: Any = None) -> dict[str, Any]:
-    """Freeze a VFX manifest from typed runtime facts and explicit authored VFX cues.
 
-    Recipe selection uses compiled attack pattern, available asset roles, recipe cost,
-    renderer diversity, power budget, parent manifests, and a stable reroll seed. It
-    never tokenizes item names, tooltips, prompts, or free-form style prose.
-    """
-    attack_value = data.get("attack")
-    attack: dict[str, Any] = attack_value if isinstance(attack_value, dict) else {}
-    director_manifest = try_llm_vfx_director(parent_a, parent_b, data, recipe_key_value, llm_director)
-    if isinstance(director_manifest, dict):
-        wire_manifest = validate_vfx_manifest_boundary(director_manifest)
-        data["vfxManifest"] = director_manifest
-        attack["vfxManifestJson"] = json.dumps(wire_manifest, ensure_ascii=False, separators=(",", ":"))
-        data["attack"] = attack
-        data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(director_manifest, max_chars=12000)
-        data.setdefault("debug", {})["vfxLlmDirector"] = "used"
-        data.setdefault("debug", {})["vfxPath"] = (
-            "llm_director" if director_manifest.get("slots") else "llm_director_empty"
+def _vfx_filter_ignored(path: str, requested: Any, preserved: Any, reason: str) -> dict[str, Any]:
+    return {"path": path, "reason": reason, "requested": copy.deepcopy(requested), "preserved": copy.deepcopy(preserved)}
+
+
+def _filter_vfx_repair_patch(
+    data: Mapping[str, Any],
+    previous: Any,
+    patch: Mapping[str, Any],
+    scope: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    from infini_local.core.runtime_authoring import strict_schema_errors
+
+    schema_errors = strict_schema_errors(patch, _vfx_repair_schema(data))
+    filtered = {
+        "schema": VFX_REPAIR_PATCH_SCHEMA,
+        "effectMagnitude": None,
+        "visualBudgetClass": None,
+        "motif": None,
+        "slotsUpsert": [],
+        "slotIdsDelete": [],
+        "slotIndicesDelete": [],
+        "note": str(patch.get("note") or "deterministically filtered VFX Repair"),
+    }
+    if schema_errors:
+        return filtered, {"schema": "infini.vfx-repair-filter-report.v1", "ok": False, "errors": schema_errors, "acceptedPaths": [], "ignoredChanges": []}
+
+    source = previous if isinstance(previous, Mapping) else {}
+    mutable_globals = set(str(value) for value in scope.get("mutableGlobals") or [])
+    mutable_slot_ids = set(str(value) for value in scope.get("mutableSlotIds") or [])
+    deletable_slot_ids = set(str(value) for value in scope.get("deletableSlotIds") or [])
+    deletable_indices = set(int(value) for value in scope.get("deletableSlotIndices") or [])
+    permission_root = scope.get("fieldPermissions") if isinstance(scope.get("fieldPermissions"), Mapping) else {}
+    global_permissions = permission_root.get("globals") if isinstance(permission_root.get("globals"), Mapping) else {}
+    slot_permissions = {
+        str(row.get("slotId") or ""): tuple(str(value) for value in row.get("paths") or [])
+        for row in permission_root.get("slots") or [] if isinstance(row, Mapping)
+    }
+    ignored: list[dict[str, Any]] = []
+    accepted: list[str] = []
+
+    for field in ("effectMagnitude", "visualBudgetClass", "motif"):
+        candidate = patch.get(field)
+        if candidate is None:
+            continue
+        path = f"$.{field}"
+        original = source.get(field)
+        if field not in mutable_globals:
+            ignored.append(_vfx_filter_ignored(path, candidate, original, "valid_global_frozen"))
+            continue
+        if isinstance(original, Mapping) and isinstance(candidate, Mapping):
+            merged, row_ignored, row_accepted = merge_frozen_subtree(
+                original, candidate, mutable_paths=global_permissions.get(field) or (), audit_path=path, allow_additions=False,
+            )
+            filtered[field] = merged
+            ignored.extend(row_ignored)
+            accepted.extend(row_accepted)
+        else:
+            filtered[field] = copy.deepcopy(candidate)
+            accepted.append(path)
+
+    slots = source.get("slots") if isinstance(source.get("slots"), list) else []
+    for index, slot_id in enumerate(patch.get("slotIdsDelete") or []):
+        path = f"$.slotIdsDelete[{index}]"
+        if str(slot_id) in deletable_slot_ids:
+            filtered["slotIdsDelete"].append(str(slot_id))
+            accepted.append(path)
+        else:
+            ignored.append(_vfx_filter_ignored(path, slot_id, slot_id, "valid_slot_delete_ignored"))
+    for index, source_index in enumerate(patch.get("slotIndicesDelete") or []):
+        path = f"$.slotIndicesDelete[{index}]"
+        numeric = int(source_index)
+        if numeric in deletable_indices:
+            filtered["slotIndicesDelete"].append(numeric)
+            accepted.append(path)
+        else:
+            preserved = slots[numeric] if 0 <= numeric < len(slots) else None
+            ignored.append(_vfx_filter_ignored(path, numeric, preserved, "valid_slot_index_delete_ignored"))
+
+    by_id = {str(row.get("id") or ""): row for row in slots if isinstance(row, Mapping) and str(row.get("id") or "")}
+    for index, candidate in enumerate(patch.get("slotsUpsert") or []):
+        slot_id = str(candidate.get("id") or "")
+        path = f"$.slotsUpsert[{index}]"
+        original = by_id.get(slot_id)
+        if original is not None:
+            if slot_id not in mutable_slot_ids:
+                if dict(candidate) != dict(original):
+                    ignored.append(_vfx_filter_ignored(path, candidate, original, "independent_valid_slot_frozen"))
+                continue
+            merged, row_ignored, row_accepted = merge_frozen_subtree(
+                original, candidate, mutable_paths=slot_permissions.get(slot_id, ()), audit_path=path, allow_additions=False,
+            )
+            ignored.extend(row_ignored)
+            accepted.extend(row_accepted)
+            if merged != original:
+                filtered["slotsUpsert"].append(merged)
+            continue
+        if scope.get("allowCreateSlots"):
+            filtered["slotsUpsert"].append(copy.deepcopy(candidate))
+            accepted.append(path)
+        else:
+            ignored.append(_vfx_filter_ignored(path, candidate, None, "new_slot_not_required"))
+
+    return filtered, {
+        "schema": "infini.vfx-repair-filter-report.v1",
+        "ok": True,
+        "errors": [],
+        "acceptedPaths": sorted(set(accepted)),
+        "ignoredChanges": ignored,
+        "filteredPatch": copy.deepcopy(filtered),
+    }
+
+
+def _apply_vfx_repair_patch(
+    data: Mapping[str, Any],
+    previous: Any,
+    patch: Mapping[str, Any],
+    scope: Mapping[str, Any],
+    *,
+    return_audit: bool = False,
+) -> Any:
+    filtered, audit = _filter_vfx_repair_patch(data, previous, patch, scope)
+    if not audit.get("ok"):
+        raise PlannerUnavailable("VFX Repair patch shape rejected: " + json.dumps(audit.get("errors", [])[:16], ensure_ascii=False))
+
+    source = previous if isinstance(previous, Mapping) else {}
+    out = copy.deepcopy(dict(source))
+    out["schema"] = VFX_DIRECTOR_SCHEMA
+    for field in ("effectMagnitude", "visualBudgetClass", "motif"):
+        if filtered.get(field) is not None:
+            out[field] = copy.deepcopy(filtered[field])
+    slots = list(out.get("slots") or []) if isinstance(out.get("slots"), list) else []
+    slots = [row for index, row in enumerate(slots) if index not in set(filtered.get("slotIndicesDelete") or [])]
+    doomed = set(str(value) for value in filtered.get("slotIdsDelete") or [])
+    slots = [row for row in slots if not isinstance(row, Mapping) or str(row.get("id") or "") not in doomed]
+    by_id = {str(row.get("id") or ""): copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "")}
+    order = [str(row.get("id") or "") for row in slots if isinstance(row, Mapping) and str(row.get("id") or "")]
+    for row in filtered.get("slotsUpsert") or []:
+        slot_id = str(row.get("id") or "")
+        if slot_id not in by_id:
+            order.append(slot_id)
+        by_id[slot_id] = copy.deepcopy(row)
+    out["slots"] = [by_id[slot_id] for slot_id in order if slot_id in by_id]
+    return (out, audit) if return_audit else out
+
+
+
+def _director_system(*, repair: bool = False) -> str:
+    if repair:
+        return (
+            "You are the conditional VFX Repair. Repair only the explicit broken VFX fields. You may return a complete "
+            "broken slot; deterministic merge freezes already-valid old values and ignores extra rewrites. Bind only accepted "
+            "runtime entity/event pairs. Gameplay is immutable. Return strict JSON only."
         )
-        return data
-    direct_manifest = _vfx_runtime_plan_direct_manifest(data, recipe_key_value, reroll_salt)
-    if isinstance(direct_manifest, dict):
-        wire_manifest = validate_vfx_manifest_boundary(direct_manifest)
-        data["vfxManifest"] = direct_manifest
-        attack["vfxManifestJson"] = json.dumps(wire_manifest, ensure_ascii=False, separators=(",", ":"))
-        data["attack"] = attack
-        data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(direct_manifest, max_chars=12000)
-        data.setdefault("debug", {})["vfxPath"] = "runtime_plan_direct_empty" if not direct_manifest.get("slots") else "runtime_plan_direct"
-        return data
-    empty_manifest = validate_vfx_manifest_boundary({
+    return (
+        "You are the VFX Director. Author finite Terraria presentation only for accepted low-level runtime entity/event pairs. "
+        "Gameplay is immutable. Do not infer or create weapon families. Return strict JSON only."
+    )
+
+
+def _request(
+    llm_director: Callable[..., dict[str, Any] | None],
+    packet: dict[str, Any],
+    *,
+    repair_errors: list[dict[str, Any]] | None = None,
+    previous: Any = None,
+    repair_scope: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    messages = None
+    if repair_errors is not None:
+        context = _vfx_repair_context(previous, repair_scope or {})
+        user = {
+            "task": "Patch only exact invalid VFX fields/slots.",
+            "item": copy.deepcopy(packet.get("item") or {}),
+            "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
+            "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),
+            "exactErrors": copy.deepcopy(repair_errors[:24]),
+            "repairScope": copy.deepcopy(dict(repair_scope or {})),
+            "brokenFragments": context["broken"],
+            "validGeneratedContext": context["validReadOnly"],
+            "outputSchema": _vfx_repair_schema_from_packet(packet),
+            "rules": [
+                "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
+                "already-valid fields and independent slots are frozen; extra rewrites are ignored",
+                "bind only exact runtime entityId+event pairs",
+                "presentation only; gameplay is immutable",
+            ],
+        }
+        messages = [
+            stage_chat_message("system", "vfx_repair_contract", _director_system(repair=True)),
+            stage_chat_message("user", "vfx_repair_context", json.dumps(user, ensure_ascii=False, separators=(",", ":"))),
+        ]
+        return llm_director(
+            _director_system(repair=True), user, int(VFX_LLM_DIRECTOR_MAX_TOKENS),
+            float(VFX_LLM_DIRECTOR_TEMPERATURE), int(VFX_LLM_DIRECTOR_TIMEOUT), messages=messages,
+        )
+    user = copy.deepcopy(packet)
+    return llm_director(
+        _director_system(repair=False), user, int(VFX_LLM_DIRECTOR_MAX_TOKENS),
+        float(VFX_LLM_DIRECTOR_TEMPERATURE), int(VFX_LLM_DIRECTOR_TIMEOUT), messages=messages,
+    )
+
+
+def _vfx_repair_schema_from_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
+    # The packet's full output schema already contains the exact runtime pair enums.
+    full = packet.get("outputSchema") if isinstance(packet.get("outputSchema"), Mapping) else {}
+    if not full:
+        return {"schema": VFX_REPAIR_PATCH_SCHEMA}
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "schema": {"const": VFX_REPAIR_PATCH_SCHEMA},
+            "effectMagnitude": {"anyOf": [copy.deepcopy(full["properties"]["effectMagnitude"]), {"type": "null"}]},
+            "visualBudgetClass": {"anyOf": [copy.deepcopy(full["properties"]["visualBudgetClass"]), {"type": "null"}]},
+            "motif": {"anyOf": [copy.deepcopy(full["properties"]["motif"]), {"type": "null"}]},
+            "slotsUpsert": {"type": "array", "items": copy.deepcopy(full["properties"]["slots"]["items"]), "maxItems": full["properties"]["slots"]["maxItems"]},
+            "slotIdsDelete": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "maxItems": full["properties"]["slots"]["maxItems"]},
+            "slotIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, full["properties"]["slots"]["maxItems"] * 2)}, "maxItems": max(1, full["properties"]["slots"]["maxItems"] * 2)},
+            "note": {"type": "string", "minLength": 1, "maxLength": 500},
+        },
+        "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "note"],
+    }
+
+
+def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], recipe_key_value: str) -> dict[str, Any]:
+    magnitude = float(authored.get("effectMagnitude") or 0.0)
+    budget_class = str(authored.get("visualBudgetClass") or "normal")
+    slots: list[dict[str, Any]] = []
+    for index, source in enumerate(authored.get("slots") or []):
+        if not isinstance(source, Mapping):
+            continue
+        slot = dict(source)
+        slot.update({
+            "eventGroup": "auto", "stage": "loop", "layer": "BeforeProjectiles",
+            "source": "llm_vfx_director", "curve": "smooth",
+            "slotSeed": _seed(recipe_key_value, slot.get("id"), index), "variant": index,
+            "importance": "core" if index == 0 else "secondary",
+            "bakedClipId": "", "bakedClipHash": "", "bakedCommandCount": 0,
+            "bakedCommands": [], "effectName": "",
+        })
+        slots.append(slot)
+    return {
+        "schema": VFX_MANIFEST_SCHEMA,
+        "recipeId": str(recipe_key_value or data.get("id") or ""),
+        "effectName": "runtime_entity_events",
+        "inspirationNames": [],
+        "playbackMode": "Realtime",
+        "seed": _seed(recipe_key_value, data.get("id"), "vfx"),
+        "confidence": 1.0,
+        "effectMagnitude": magnitude,
+        "visualBudgetClass": budget_class,
+        "motif": copy.deepcopy(authored.get("motif") or {}),
+        "budget": {
+            "effectMagnitude": magnitude, "visualBudgetClass": budget_class,
+            "emergencyCap": True,
+            "maxParticlesPerTick": max(16, min(256, 32 + len(slots) * 24)),
+            "maxParticlesTotal": max(256, min(12000, 1000 + len(slots) * 1200)),
+            "maxDrawCalls": max(32, min(512, 64 + len(slots) * 36)),
+            "spawnRateMultiplier": 1.0,
+            "enableSoftGlow": True, "enablePointSparks": True,
+            "enablePersistentSmoke": budget_class in {"large", "signature"},
+        },
+        "slots": slots,
+        "overlayPolicy": "LocalOnly",
+        "debug": {
+            "pattern": "runtime_entity_events", "roles": [str(row.get("visualRole") or "") for row in runtime_visual_roles(data)],
+            "selectedScore": 1.0, "selectedReasons": ["exact_entity_event_binding"],
+            "topCandidates": [], "wordProbe": [],
+        },
+    }
+
+
+def _development_manifest(data: Mapping[str, Any], recipe_key_value: str) -> dict[str, Any]:
+    return _compile_manifest(data, {
         "effectMagnitude": 0.0,
         "visualBudgetClass": "tiny",
-        "budget": {
-            "effectMagnitude": 0.0,
-            "visualBudgetClass": "tiny",
-            "maxParticlesPerTick": 0,
-            "maxParticlesTotal": 0,
-            "maxDrawCalls": 0,
-            "spawnRateMultiplier": 0.0,
-            "enableSoftGlow": False,
-            "enablePointSparks": False,
-            "enablePersistentSmoke": False,
-            "emergencyCap": True,
-        },
+        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none", "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0},
         "slots": [],
-    })
-    data["vfxManifest"] = empty_manifest
-    attack["vfxManifestJson"] = json.dumps(
-        empty_manifest, ensure_ascii=False, separators=(",", ":")
-    )
-    data["attack"] = attack
-    debug = data.setdefault("debug", {})
-    debug["vfxPath"] = "empty_no_authored_vfx"
-    debug["vfxManifest"] = bounded_json_dumps(empty_manifest, max_chars=12000)
-    return data
+    }, recipe_key_value)
 
 
-# Debug endpoints only. Production attach_hybrid_vfx_manifest never calls these helpers.
-def _vfx_find_recipe(recipe_id: str) -> dict[str, Any] | None:
-    rid = str(recipe_id or "").strip()
-    if not rid:
-        return None
-    for recipe in get_vfx_recipes():
-        if str(recipe.get("id") or "") == rid:
-            return recipe
-    return None
-
-
-def _vfx_manifest_from_recipe(
+def attach_hybrid_vfx_manifest(
     data: dict[str, Any],
-    recipe: dict[str, Any],
     recipe_key_value: str,
     reroll_salt: Any = "",
-    forced: bool = False,
+    parent_a: dict[str, Any] | None = None,
+    parent_b: dict[str, Any] | None = None,
+    llm_director: Callable[..., dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
-    """Compile an explicitly requested recipe for the isolated debug API only."""
-    attack = data.setdefault("attack", {}) if isinstance(data.get("attack"), dict) else data.setdefault("attack", {})
-    pattern = normalize_attack_pattern(
-        attack.get("pattern") or attack.get("attackPattern") or attack.get("Pattern") or "basic"
-    )
-    selector_key = f"{recipe_key_value}|vfxsalt={str(reroll_salt or data.get('recipeMeta', {}).get('vfxRerollSalt', '') or '')}"
-    power = (
-        float(attack.get("powerBudget") or data.get("gameplay", {}).get("powerBudget") or 1.0)
-        if isinstance(data.get("gameplay"), dict)
-        else float(attack.get("powerBudget") or 1.0)
-    )
-    seed = _vfx_seed_int(selector_key, recipe.get("id"), data.get("id"), pattern)
-    budget = _vfx_budget_for_recipe(recipe, power, seed, data)
-    effect_magnitude = float(budget.get("effectMagnitude") or 0.5)
-    slots = [
-        _vfx_compile_slot(slot, seed, i, power, effect_magnitude)
-        for i, slot in enumerate(recipe.get("slots") or [])
-        if isinstance(slot, dict)
-    ]
-    slots = _vfx_arbitrate_slots(
-        slots, str(budget.get("visualBudgetClass") or "normal")
-    )
-    manifest = validate_vfx_manifest_boundary({
-        "schema": "infini.vfx.hybrid.v14",
-        "recipeId": str(recipe.get("id") or "unknown"),
-        "playbackMode": _vfx_playback_mode_for_recipe(recipe),
-        "seed": seed,
-        "confidence": 0.99 if forced else 0.72,
-        "effectMagnitude": effect_magnitude,
-        "visualBudgetClass": budget.get("visualBudgetClass"),
-        "motif": _vfx_motif_from_data(data, set(), str(pattern or "basic")),
-        "overlayPolicy": "LocalOnly",
-        "budget": budget,
-        "slots": slots,
-        "debug": {
-            "composition": {
-                "mode": "debug_forced_recipe" if forced else "debug_direct_recipe",
-                "baseRecipeId": str(recipe.get("id") or "unknown"),
-                "preArbitrationSlotCount": len(recipe.get("slots") or []),
-                "postArbitrationSlotCount": len(slots),
-                "blendedSlots": [],
-                "proceduralSlots": [],
-            },
-            "pattern": pattern,
-            "roles": sorted(_vfx_available_roles(data)),
-            "selectedScore": 999.0 if forced else 0.0,
-            "selectedReasons": ["explicit_debug_recipe"],
-            "topCandidates": [],
-            "wordProbe": [],
-        },
-    })
-    data["vfxManifest"] = manifest
-    attack["vfxManifestJson"] = json.dumps(
-        manifest, ensure_ascii=False, separators=(",", ":")
-    )
-    data["attack"] = attack
-    data.setdefault("debug", {})["vfxManifest"] = bounded_json_dumps(
-        manifest, max_chars=12000
-    )
+    """Run one VFX Director call and at most one conditional VFX Repair."""
+    del reroll_salt
+    if llm_director is None:
+        data["vfxManifest"] = _development_manifest(data, recipe_key_value)
+        data.setdefault("debug", {})["vfxDirectorStatus"] = "development_inert_manifest"
+        return data
+
+    packet = _prompt_packet(data, parent_a, parent_b)
+    accounting = _stage_accounting(data)
+    accounting["vfxDirectorCalls"] += 1
+    raw = _request(llm_director, packet)
+    report = validate_vfx_director_output(raw, data)
+    if not report["ok"]:
+        accounting["vfxRepairCalls"] += 1
+        repair_scope = _build_vfx_repair_scope(raw, report["errors"])
+        patch = _request(llm_director, packet, repair_errors=report["errors"], previous=raw, repair_scope=repair_scope)
+        repaired, repair_audit = _apply_vfx_repair_patch(data, raw, patch or {}, repair_scope, return_audit=True)
+        report = validate_vfx_director_output(repaired, data)
+        if not report["ok"]:
+            raise PlannerUnavailable("VFX Repair did not produce an exact entity/event manifest: " + json.dumps(report["errors"][:16], ensure_ascii=False))
+        raw = repaired
+        data.setdefault("debug", {})["vfxRepairRawPatch"] = copy.deepcopy(patch)
+        data["debug"]["vfxRepairPatch"] = copy.deepcopy(repair_audit.get("filteredPatch") or {})
+        data["debug"]["vfxRepairFilterAudit"] = copy.deepcopy(repair_audit)
+        data["debug"]["vfxRepairScope"] = copy.deepcopy(repair_scope)
+    data["vfxManifest"] = _compile_manifest(data, report["normalized"], recipe_key_value)
+    debug = data.setdefault("debug", {})
+    debug["vfxDirectorStatus"] = "validated_and_compiled"
+    debug["vfxDirectorRaw"] = copy.deepcopy(raw)
+    debug["vfxRuntimePairs"] = _allowed_pairs(data)
     return data
 
 
-def compact_vfx_recipe_card(recipe: dict[str, Any]) -> dict[str, Any]:
-    slots_value = recipe.get("slots")
-    slots: list[Any] = slots_value if isinstance(slots_value, list) else []
-    return {
-        "id": recipe.get("id", ""),
-        "compatiblePatterns": recipe.get("compatiblePatterns", []),
-        "requiredRoles": recipe.get("requiredRoles", []),
-        "optionalRoles": recipe.get("optionalRoles", []),
-        "forbiddenPatterns": recipe.get("forbiddenPatterns", []),
-        "cost": recipe.get("cost", "medium"),
-        "playbackMode": _vfx_playback_mode_for_recipe(recipe),
-        "hints": recipe.get("hints", []),
-        "slotCount": len(slots),
-        "renderers": [str(x.get("renderer", "")) for x in slots if isinstance(x, dict)],
-        "backends": sorted({
-            str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("rendererKind")))
-            for x in slots if isinstance(x, dict)
-        }),
-        "stages": sorted({
-            str(x.get("stage") or _vfx_event_stage(x.get("event"), x.get("rendererKind")))
-            for x in slots if isinstance(x, dict)
-        }),
-        "bakedEligibleSlots": sum(
-            1 for x in slots
-            if isinstance(x, dict) and _vfx_should_bake_slot(
-                x,
-                str(x.get("event") or ""),
-                str(x.get("rendererKind") or ""),
-                str(x.get("backend") or _vfx_default_backend(x.get("event"), x.get("rendererKind"))),
-            )
-        ),
-        "expandedFromMacros": bool(recipe.get("expandedFromMacros")),
-        "useMacros": recipe.get("useMacros", []),
-        "macroIds": sorted({
-            str(x.get("macroId"))
-            for x in slots if isinstance(x, dict) and x.get("macroId")
-        }),
-    }
+# The former recipe/macro selector is intentionally absent from production.  A
+# compact surface is retained only for diagnostics and tests.
+def compact_vfx_recipe_card(recipe: Mapping[str, Any]) -> dict[str, Any]:
+    return {"id": str(recipe.get("id") or ""), "status": "retired_recipe_macro"}
 
 
 __all__ = [
-    "_vfx_validate_director_output",
-    "try_llm_vfx_director",
-    "attach_hybrid_vfx_manifest",
-    "_vfx_find_recipe",
-    "_vfx_manifest_from_recipe",
-    "compact_vfx_recipe_card",
+    "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "attach_hybrid_vfx_manifest",
+    "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_surface",
 ]

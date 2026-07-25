@@ -15,6 +15,12 @@ using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Players;
 
+internal enum GeneratedHeldRenderRole
+{
+    Generic, Swing, Thrust, Tethered, Ranged, Magic
+}
+
+
 /// <summary>
 /// Runtime held-item renderer for generated items.
 ///
@@ -102,11 +108,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 
     private static bool ShouldDrawHeldSprite(GeneratedItemData data, Player player, HeldItemPresentationPayload? payload)
     {
-        string heldVisibility = (data.Gameplay?.HeldVisibility ?? "").Trim().ToLowerInvariant();
-        if (heldVisibility is "hide_item" or "show_projectile")
-            return false;
-
-        string releaseTiming = (data.Gameplay?.ReleaseTiming ?? "").Trim().ToLowerInvariant();
+        string releaseTiming = (data.RuntimeProgram?.ItemUse?.ReleaseTiming ?? "").Trim().ToLowerInvariant();
         if (releaseTiming == "instant")
             return false;
         if (releaseTiming == "early")
@@ -141,8 +143,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         if (texture is null)
         {
             RequestHeldItemCatchup(data?.Id ?? payload?.GeneratedItemId, spritePath);
-            try { texture = ModContent.Request<Texture2D>("InfiniCrafterLocal/Assets/GeneratedItem").Value; }
-            catch { return; }
+            return;
         }
 
         var source = new Rectangle(0, 0, texture.Width, texture.Height);
@@ -169,7 +170,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         Vector2 position = (itemLocation.LengthSquared() > 4f ? itemLocation : player.itemLocation) - Main.screenPosition + holdOffset;
         if (position.LengthSquared() < 4f)
             position = player.MountedCenter - Main.screenPosition + new Vector2(drawDirection * 8f, -4f * drawGravDir) + holdOffset;
-        position += RoleForwardOffset(role, drawDirection, drawGravDir, data?.Gameplay?.InitialOffsetPx ?? 0);
+        position += RoleForwardOffset(role, drawDirection, drawGravDir, 0);
         position = new Vector2((int)position.X, (int)position.Y);
 
         float rotation = payload is not null ? payload.ItemRotation : player.itemRotation;
@@ -357,23 +358,15 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 
     private static GeneratedHeldRenderRole ResolveHeldRenderRole(GeneratedItemData? data, Item? held)
     {
-        string family = GeneratedRuntimeFamilyPolicy.Normalize(data?.Attack?.RuntimeFamily);
-        GeneratedHeldRenderRole role = GeneratedRuntimeFamilyPolicy.HeldRenderRole(family, data?.Attack?.Delivery);
-        if (family != GeneratedRuntimeFamilyPolicy.None)
-            return role;
-
-        // Inert/non-combat items have no runtime family. Their fallback is limited
-        // to explicit presentation fields and Terraria's finite use-style enum.
-        string handPose = (data?.Gameplay?.HandPose ?? "").Trim().ToLowerInvariant();
-        if (handPose == "held_out" || held?.useStyle == ItemUseStyleID.Shoot)
-            return GeneratedHeldRenderRole.Ranged;
-        if (handPose == "staff")
-            return GeneratedHeldRenderRole.Magic;
-        if (held?.useStyle == ItemUseStyleID.Rapier)
-            return GeneratedHeldRenderRole.Thrust;
-        if (held?.useStyle == ItemUseStyleID.Swing)
-            return GeneratedHeldRenderRole.Swing;
-        return role;
+        // Presentation pose is derived only from the explicitly authored item-use
+        // component. It is not a gameplay family/classifier.
+        string pose = (data?.RuntimeProgram?.ItemUse?.HandPose ?? "").Trim().ToLowerInvariant();
+        string style = (data?.RuntimeProgram?.ItemUse?.UseStyle ?? "").Trim().ToLowerInvariant();
+        if (pose == "staff" || style == "hold_up") return GeneratedHeldRenderRole.Magic;
+        if (pose == "held_out" || style == "shoot") return GeneratedHeldRenderRole.Ranged;
+        if (style is "thrust" or "rapier") return GeneratedHeldRenderRole.Thrust;
+        if (style == "swing") return GeneratedHeldRenderRole.Swing;
+        return GeneratedHeldRenderRole.Generic;
     }
 
     private static Vector2 PayloadItemLocation(HeldItemPresentationPayload? payload)
@@ -416,8 +409,8 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 
     private static Vector2 HeldOffset(GeneratedItemData? data, float gravDir)
     {
-        int x = data?.Gameplay?.HoldoutOffsetX ?? 0;
-        int y = data?.Gameplay?.HoldoutOffsetY ?? 0;
+        int x = data?.RuntimeProgram?.ItemUse?.HoldoutOffsetX ?? 0;
+        int y = data?.RuntimeProgram?.ItemUse?.HoldoutOffsetY ?? 0;
         return new Vector2(x, y * gravDir);
     }
 

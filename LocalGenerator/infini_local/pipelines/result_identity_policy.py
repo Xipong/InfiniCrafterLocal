@@ -16,6 +16,11 @@ from infini_local.core.category_policy import (
 )
 from infini_local.core.env_utils import env_bool, env_float, env_str
 
+from infini_local.pipelines.pipeline_runtime_constants import (
+    BAD_NAME_PATTERNS,
+    PALETTES,
+)
+
 from infini_local.core.item_identity_tools import (
     generated_data_of,
     generation_depth,
@@ -39,45 +44,6 @@ from infini_local.core.item_signals import HARD_TAGS, VISUAL_SYNONYMS
 CATEGORY_CREATIVITY = env_float("INFINI_CATEGORY_CREATIVITY", 0.38)
 CATEGORY_ENFORCE_SAMPLED = env_bool("INFINI_CATEGORY_ENFORCE_SAMPLED", False)
 CATEGORY_SALT = env_str("INFINI_CATEGORY_SALT", "default")
-
-BAD_NAME_PATTERNS = [
-    re.compile(r"^\s*infini(?:\s|$|[-_])", re.I),
-    re.compile(r"^\s*generated(?:\s|$|[-_])", re.I),
-    re.compile(r"^\s*combined(?:\s|$|[-_])", re.I),
-    re.compile(r"\bhybrid\b", re.I),
-]
-
-PALETTES = {
-    "wood": ["brown", "tan", "dark_brown"],
-    "wire": ["dark_gray", "yellow"],
-    "electric": ["yellow", "cyan", "white"],
-    "star": ["gold", "white", "blue"],
-    "daybloom": ["yellow", "green", "white"],
-    "flower": ["green", "yellow", "pink"],
-    "slime": ["green", "cyan"],
-    "shadow": ["purple", "black"],
-    "fire": ["orange", "red", "yellow"],
-    "ice": ["cyan", "white", "blue"],
-    "technology": ["dark_gray", "cyan", "blue"],
-    "accessory": ["silver", "gold", "blue"],
-    "boots": ["brown", "silver", "blue"],
-    "wings": ["white", "blue", "gold"],
-    "shield": ["gray", "silver", "dark_gray"],
-    "emblem": ["gold", "red", "white"],
-    "charm": ["gold", "purple", "cyan"],
-    "tool": ["brown", "gray", "silver"],
-    "axe": ["brown", "steel", "green"],
-    "drill": ["gray", "yellow", "blue"],
-    "ammo": ["gray", "brass", "red"],
-    "armor": ["gray", "silver", "blue"],
-    "dirt": ["brown", "tan", "dark_brown"],
-    "earth": ["brown", "green", "tan"],
-    "stone": ["gray", "dark_gray", "white"],
-    "sand": ["tan", "yellow", "white"],
-    "block": ["gray", "brown", "tan"],
-    "material": ["gray", "tan", "white"],
-    "coin": ["gold", "silver", "copper"],
-}
 
 # Visual tag order must not depend on Python's randomized ``set`` iteration.
 # The insertion order of the canonical dictionaries is intentional and is the
@@ -417,7 +383,7 @@ def category_policy(tags: set[str], a: dict[str, Any], b: dict[str, Any], key: s
         if generated_weapon_chain or generated_weapon_spine:
             weights["weapon"] = max(weights.get("weapon", 80.0), weapon_pressure + 52.0)
             # Magic/star/shadow parents can rarely transmute a weapon spine into a summon-class
-            # combat outcome. attach_gameplay_and_attack maps selected "summon" to a combat
+            # combat outcome. the authored runtime program may still choose summon damage for a combat
             # item with summon damage, not to a nonfunctional generic object.
             if has_magic or "summon" in tags:
                 creative_allowed.add("summon")

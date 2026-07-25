@@ -37,7 +37,6 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     cross_mod_identity = {
         "sourceMod": str(item_field(item, "sourceMod", "Terraria")),
         "fullName": str(item_field(item, "fullName", "")),
-        "damageClassFullName": str(item_field(item, "damageClassFullName", "")),
         "shootProjectileFullName": str(item_field(item, "shootProjectileFullName", "")),
         "createTile": item.get("createTile"),
         "createWall": item.get("createWall"),
@@ -98,21 +97,60 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
         card["raw"]["runtimeProbe"] = _compact_raw_value(runtime_probe)
     gd = generated_data_of(item)
     if isinstance(gd, dict) and gd:
-        attack_raw = dict_get_ci(gd, "attack", {})
         gameplay_raw = dict_get_ci(gd, "gameplay", {})
+        runtime_raw = dict_get_ci(gd, "runtimeProgram", {})
         summary_raw = dict_get_ci(gd, "generatedParentSummary", {})
-        attack = attack_raw if isinstance(attack_raw, dict) else {}
         gameplay = gameplay_raw if isinstance(gameplay_raw, dict) else {}
+        runtime = runtime_raw if isinstance(runtime_raw, dict) else {}
         summary = summary_raw if isinstance(summary_raw, dict) else {}
-        accessory_raw = dict_get_ci(gd, "accessory", {})
-        accessory = accessory_raw if isinstance(accessory_raw, dict) else {}
+        entities = []
+        for row in runtime.get("entities") or []:
+            if not isinstance(row, dict):
+                continue
+            entity_fact = {
+                "id": row.get("id"),
+                "kind": row.get("kind"),
+                "visualRole": row.get("visualRole"),
+                "spawn": row.get("spawn") if isinstance(row.get("spawn"), dict) else None,
+                "damage": row.get("damage") if isinstance(row.get("damage"), dict) else None,
+                "lifetimeTicks": row.get("lifetimeTicks"),
+                "hitbox": row.get("hitbox") if isinstance(row.get("hitbox"), dict) else None,
+                "collision": row.get("collision") if isinstance(row.get("collision"), dict) else None,
+                "movement": row.get("movement") if isinstance(row.get("movement"), dict) else None,
+                "controller": row.get("controller") if isinstance(row.get("controller"), dict) else None,
+                "targeting": row.get("targeting") if isinstance(row.get("targeting"), dict) else None,
+                "light": row.get("light") if isinstance(row.get("light"), dict) else None,
+                "events": [
+                    {key: event.get(key) for key in (
+                        "id", "event", "action", "entityId", "count", "spreadRadians", "damageMultiplier",
+                        "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode",
+                        "strength", "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
+                    ) if key in event}
+                    for event in row.get("events") or [] if isinstance(event, dict)
+                ],
+            }
+            entities.append({key: value for key, value in entity_fact.items() if value not in (None, "", [], {})})
         generated_parent = {
-            "gameplay": {k: gameplay.get(k) for k in ("kind", "damageClass", "damage", "knockback", "useTime", "useAnimation", "useStyle", "autoReuse", "useTurn", "channelUse", "itemScale", "holdoutOffsetX", "holdoutOffsetY", "manaCost", "healLife", "healMana", "buffCode", "buffTime", "maxStack", "consumable", "consumeChancePercent", "ammoFor", "pickPower", "axePower", "hammerPower", "mobilityMode", "altUseMode", "holdLightStrength", "useConditionMode", "craftYield", "rarity", "value", "stage", "runtimeOutputKind") if k in gameplay},
-            "accessory": {k: accessory.get(k) for k in ("enabled", "archetype", "defense", "maxLife", "maxMana", "lifeRegen", "manaRegen", "movementSpeed", "maxRunSpeed", "jumpSpeed", "genericDamage", "meleeDamage", "rangedDamage", "magicDamage", "summonDamage", "genericCrit", "attackSpeed", "knockback", "fallDamageImmune", "lavaImmune", "waterWalk", "minionSlots", "lightStrength", "lightColorName") if k in accessory},
-            "attack": {k: attack.get(k) for k in ("enabled", "runtimePlanAuthored", "runtimeFamily", "delivery", "weaponFamily", "projectileFamily", "ammoKind", "movement", "effect", "onHit", "shotCount", "pierce", "splitCount", "chainCount", "speed", "lifetime", "rangeTiles", "projectileShape", "projectileMotion", "projectileTrail", "projectileImpact", "mobilityMode") if k in attack},
+            "gameplay": {key: gameplay.get(key) for key in (
+                "kind", "damageClass", "damage", "knockback", "useTime", "useAnimation", "useStyleName",
+                "autoReuse", "useTurn", "manaCost", "healLife", "healMana", "potion", "maxStack", "consumable",
+                "ammoCategory", "ammoProjectileId", "ammoShootSpeedPxPerTick", "notAmmo", "pickPower", "axePower", "hammerPower", "createTile", "createWall", "craftYield", "rarity", "value",
+            ) if key in gameplay},
+            "runtimeProgram": {
+                "apiVersion": runtime.get("apiVersion"),
+                "schema": runtime.get("schema"),
+                "itemEntityId": runtime.get("itemEntityId"),
+                "entities": entities,
+                "bindings": [
+                    {"input": row.get("input"), "action": row.get("action"), "target": row.get("target")}
+                    for row in runtime.get("bindings") or [] if isinstance(row, dict)
+                ],
+            },
         }
         if summary:
-            generated_parent["summary"] = {k: summary.get(k) for k in ("name", "fantasy", "category", "damageClass", "runtime", "visualIdentity", "notableEffects") if _compact_keep(summary.get(k))}
+            generated_parent["summary"] = {key: summary.get(key) for key in (
+                "name", "fantasy", "category", "damageClass", "runtime", "visualIdentity", "notableEffects",
+            ) if _compact_keep(summary.get(key))}
         card["raw"]["generatedParent"] = generated_parent
     # Do not send section bookkeeping or token-byte metadata to the LLM; the raw object keys are enough.
     return {k: v for k, v in card.items() if _compact_keep(v)}

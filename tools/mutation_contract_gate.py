@@ -1,343 +1,38 @@
 #!/usr/bin/env python3
-"""Prove the contract checker fails on representative agent mistakes.
-
-This gate never edits the checkout. It supplies in-memory source mutations to the
-same extractor used by release validation and expects each mutation to turn the
-report red. A mutation that remains green is itself a failed safety gate.
-"""
+"""Mutation witnesses for registry locality, duplicate writers, lowerers and final wire."""
 from __future__ import annotations
-
-import json
+import json, sys
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
-import sys
-from tempfile import TemporaryDirectory
-from typing import Any, Callable
+from types import MappingProxyType
+ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT/"LocalGenerator"))
+import infini_local.core.runtime_authoring.capability_registry as registry_module
+import infini_local.core.runtime_authoring.validator as validator_module
+from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, audit_compiler_receipts, compile_runtime_program, runtime_program_author_schema, validate_runtime_program, validate_runtime_wire
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
-
-import contract_parity  # noqa: E402
-from infini_local.qa.csharp_delivery_contract import (  # noqa: E402
-    CSharpContractGraph,
-    load_csharp_contract_graph,
-)
-
-
-def _replace_once(path: Path, old: str, new: str) -> str:
-    source = path.read_text(encoding="utf-8-sig")
-    if source.count(old) < 1:
-        raise RuntimeError(f"mutation anchor missing in {path}: {old!r}")
-    return source.replace(old, new, 1)
-
-
-def _run_mutation(name: str, overrides: dict[Path, str], expected: Callable[[dict[str, Any]], bool]) -> dict[str, Any]:
-    contract_parity.SOURCE_OVERRIDES.clear()
-    contract_parity.SOURCE_OVERRIDES.update({path.resolve(): text for path, text in overrides.items()})
+def build_report()->dict:
+    rows=[]
+    source=CAPABILITY_REGISTRY["emit_light_while_active"]
+    synthetic=replace(source,name="emit_mutation_light",compiler_owner="missing.vertical.slice",csharp_owner="MissingExecutor.cs")
+    mutated=MappingProxyType({**dict(CAPABILITY_REGISTRY),synthetic.name:synthetic})
+    old_r,old_v=registry_module.CAPABILITY_REGISTRY,validator_module.CAPABILITY_REGISTRY
     try:
-        report = contract_parity.build_report()
+        registry_module.CAPABILITY_REGISTRY=mutated; validator_module.CAPABILITY_REGISTRY=mutated
+        visible=any(x["properties"]["fn"].get("const")==synthetic.name for x in runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"])
+        doc=build_runtime_fixture("door_on_chain"); doc["runtimeProgram"]["calls"].append({"id":"mutation_light","fn":synthetic.name,"target":"chained_door","params":{"strength":0.5,"color":"white"}})
+        try: compile_runtime_program(doc); stayed_red=False
+        except AssertionError: stayed_red=True
     finally:
-        contract_parity.SOURCE_OVERRIDES.clear()
-    caught = (not report["ok"]) and expected(report)
-    return {
-        "name": name,
-        "kind": "source",
-        "caught": caught,
-        "errors": report.get("errors", [])[:12],
-    }
-
-
-def _run_delivery_mutation(
-    graph: CSharpContractGraph,
-    name: str,
-    payload: dict[str, Any],
-    expected_error: str,
-) -> dict[str, Any]:
-    errors = graph.validate(payload)
-    return {
-        "name": name,
-        "kind": "delivered_json",
-        "caught": expected_error in errors,
-        "expectedError": expected_error,
-        "errors": errors[:12],
-    }
-
-
-def _run_parser_mask_probe() -> dict[str, Any]:
-    with TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        (root / "GeneratedItemData.cs").write_text(
-            'public sealed class GeneratedItemData { public int Damage { get; set; } = 0; '
-            '/* public int Phantom { get; set; } = 1; */ '
-            'public string Note => "public int StringPhantom { get; set; }"; }',
-            encoding="utf-8",
-        )
-        graph = load_csharp_contract_graph(root)
-    actual = sorted(graph.classes["GeneratedItemData"].properties)
-    return {
-        "name": "delivery_parser_ignores_comment_and_string_tokens",
-        "kind": "parser_integrity",
-        "caught": actual == ["damage"],
-        "expectedProperties": ["damage"],
-        "actualProperties": actual,
-    }
-
-
-def build_report() -> dict[str, Any]:
-    projection = ROOT / "LocalGenerator/infini_local/pipelines/combine_gameplay.py"
-    normalize = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs"
-    net = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs"
-    child = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedChildSpecPolicy.cs"
-    dto = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs"
-    executor = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ChargeRelease.cs"
-    runtime = ROOT / "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Runtime.cs"
-
-    net_source = net.read_text(encoding="utf-8-sig")
-    old_pair = "_chargeTicksAccumulated = reader.ReadInt32();\n            _sentryFireTimer = reader.ReadInt32();"
-    new_pair = "_sentryFireTimer = reader.ReadInt32();\n            _chargeTicksAccumulated = reader.ReadInt32();"
-    if old_pair not in net_source:
-        raise RuntimeError("network mutation anchor missing")
-
-    rows = [
-        _run_parser_mask_probe(),
-        _run_mutation(
-            "python_projection_loses_charge_ticks",
-            {projection: _replace_once(projection, '"chargeTicks": max(', '"chargeTicksBROKEN": max(')},
-            lambda r: any("chargeTicks" in e and "pythonProjection" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "csharp_dto_loses_charge_ticks",
-            {dto: _replace_once(
-                dto,
-                "public int ChargeTicks { get; set; } = 45;",
-                "public int ChargeTicksBROKEN { get; set; } = 45;",
-            )},
-            lambda r: any("chargeTicks" in e and "csharpDto" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "csharp_default_drifts_from_python",
-            {dto: _replace_once(
-                dto,
-                "public int ChargeTicks { get; set; } = 45;",
-                "public int ChargeTicks { get; set; } = 46;",
-            )},
-            lambda r: any("chargeTicks" in e and "default mismatch" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "csharp_normalize_replaces_charge_ticks_with_constant",
-            {normalize: _replace_once(
-                normalize,
-                "Attack.ChargeTicks = ClampInt(Attack.ChargeTicks, 1, 300);",
-                "Attack.ChargeTicks = 1;",
-            )},
-            lambda r: any("chargeTicks" in e and "csharpNormalize" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "csharp_executor_stops_reading_charge_ticks",
-            {executor: executor.read_text(encoding="utf-8-sig").replace(
-                "_spec.ChargeTicks",
-                "_spec.ChargeTicksBROKEN",
-            )},
-            lambda r: any("chargeTicks" in e and "executorRead" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_network_read_order_swapped",
-            {net: net_source.replace(old_pair, new_pair, 1)},
-            lambda r: any("compact projectile network read order/type mismatch" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_network_extra_read_added",
-            {net: net_source.replace(
-                "_beamLengthPx = reader.ReadSingle();",
-                "_beamLengthPx = reader.ReadSingle();\n            _chargeTicksAccumulated = reader.ReadInt32();",
-                1,
-            )},
-            lambda r: any("compact projectile network read order/type mismatch" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_network_attack_spec_field_added",
-            {net: net_source.replace(
-                "writer.Write(_beamLengthPx);",
-                "writer.Write(_beamLengthPx);\n        writer.Write(_spec.ChargeTicks);",
-                1,
-            )},
-            lambda r: any("AttackSpec" in e or "write order mismatch" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_registry_lookup_removed",
-            {net: net_source.replace("TryGetAttack(_generatedItemId)", "TryGetAttackBROKEN(_generatedItemId)")},
-            lambda r: any("registryLookup" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_variant_reconstruction_removed",
-            {net: _replace_once(
-                net,
-                "GeneratedChildSpecPolicy.TryCreateRuntimeVariant(parent, _runtimeVariant, out AttackSpec resolved)",
-                "GeneratedChildSpecPolicy.CreateRuntimeVariantBROKEN(parent, _runtimeVariant, out AttackSpec resolved)",
-            )},
-            lambda r: any("variantReconstruction" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_variant_authorization_bypassed",
-            {child: _replace_once(
-                child,
-                "if (!IsVariantAllowedForParent(parent, variant))",
-                "if (false)",
-            )},
-            lambda r: any("variantAuthorization" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_variant_byte_bound_made_uncompilable",
-            {child: _replace_once(
-                child,
-                "(byte)variant <= (byte)GeneratedProjectileRuntimeVariant.SwingOverheadSecondary",
-                "variant <= GeneratedProjectileRuntimeVariant.SwingOverheadSecondary",
-            )},
-            lambda r: any("finiteVariantCheck" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_missing_registry_request_removed",
-            {net: net_source.replace(
-                "RequestOneGeneratedItemForMissingProjectile(_generatedItemId)",
-                "RequestOneGeneratedItemForMissingProjectileBROKEN(_generatedItemId)",
-            )},
-            lambda r: any("missingDataRequest" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_unconfigured_packet_no_longer_defers",
-            {net: _replace_once(net, "if (!packetConfigured)", "if (packetConfigured)")},
-            lambda r: any("unconfiguredDefersHarmlessly" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_deferred_state_becomes_damaging",
-            {net: _replace_once(net, "Projectile.damage = 0;", "Projectile.damage = 1;")},
-            lambda r: any("harmlessDamage" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_deferral_keeps_stale_resolved_spec",
-            {net: _replace_once(
-                net,
-                "ClearResolvedRuntimeSpec(Math.Max(_pendingNetworkSpecTicks, 45));",
-                "_pendingNetworkSpecTicks = 45;",
-            )},
-            lambda r: any("deferClearsResolvedSpec" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_received_charge_state_unbounded",
-            {net: _replace_once(
-                net,
-                "Math.Clamp(chargeTicks, 0, Math.Clamp(resolved.ChargeTicks, 1, 300))",
-                "chargeTicks",
-            )},
-            lambda r: any("chargeStateBounded" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_ai_hydration_retry_removed",
-            {runtime: _replace_once(runtime, "TryHydrateRuntimeVariantFromRegistry()", "TryHydrateRuntimeVariantFromRegistryBROKEN()")},
-            lambda r: any("aiRetry" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "projectile_visual_relay_assumes_root_variant",
-            {net: _replace_once(
-                net,
-                "restoredFromRegistry = true;",
-                "TryHydrateRuntimeVariantFromRegistry();\n                restoredFromRegistry = true;",
-            )},
-            lambda r: any("visualRelayPresentationOnly" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "dust_explicit_zero_destroyed",
-            {normalize: _replace_once(
-                normalize,
-                "Attack.DustSpawnDenom = Attack.DustSpawnDenom <= 0 ? 0 : ClampInt(Attack.DustSpawnDenom, 2, 240);",
-                "Attack.DustSpawnDenom = ClampInt(Attack.DustSpawnDenom, 1, 240);",
-            )},
-            lambda r: any("dustSpawnDenom" in e and "csharpNormalize" in e for e in r["errors"]),
-        ),
-        _run_mutation(
-            "sentry_shot_keeps_sentry_family",
-            {child: _replace_once(
-                child,
-                "shot.RuntimeFamily = GeneratedRuntimeFamilyPolicy.Shoot;",
-                "shot.RuntimeFamily = GeneratedRuntimeFamilyPolicy.Sentry;",
-            )},
-            lambda r: any("sentryShot" in e or ("runtimeFamily" in e and "childPolicy" in e) for e in r["errors"]),
-        ),
-    ]
-    graph = load_csharp_contract_graph()
-    rows.extend([
-        _run_delivery_mutation(
-            graph,
-            "delivery_object_expected_scalar_supplied",
-            {"visual": "not-an-object"},
-            "$.visual: expected object, got string",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_unknown_nested_field",
-            {"visual": {"futureNestedKey": True}},
-            "$.visual.futureNestedKey: unknown field for VisualSpec",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_string_expected_number_supplied",
-            {"visual": {"inventoryScale": "large"}},
-            "$.visual.inventoryScale: expected number, got string",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_list_expected_string_supplied",
-            {"visual": {"palette": "not-a-list"}},
-            "$.visual.palette: expected array, got string",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_dictionary_expected_list_supplied",
-            {"visual": {"palette": {}}},
-            "$.visual.palette: expected array, got object",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_nested_list_element_wrong_type",
-            {"visual": {"palette": [1]}},
-            "$.visual.palette[0]: expected string, got integer",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_int32_overflow",
-            {"schemaVersion": 2**40},
-            "$.schemaVersion: integer 1099511627776 out of range for int [-2147483648, 2147483647]",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_single_overflow",
-            {"visual": {"inventoryScale": 1e100}},
-            "$.visual.inventoryScale: number 1e+100 out of range for float [-3.4028234663852886e+38, 3.4028234663852886e+38]",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_nonfinite_number",
-            {"visual": {"inventoryScale": float("nan")}},
-            "$.visual.inventoryScale: non-finite number nan is invalid for float",
-        ),
-        _run_delivery_mutation(
-            graph,
-            "delivery_case_insensitive_alias_duplicate",
-            {"name": "one", "Name": "two"},
-            "$.Name: duplicate field for GeneratedItemData.name (already supplied as $.name)",
-        ),
-    ])
-    return {
-        "schema": "infini.contract-mutation-gate.v3",
-        "ok": all(row["caught"] for row in rows),
-        "mutations": rows,
-    }
-
-
-def main() -> int:
-    report = build_report()
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if report["ok"] else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        registry_module.CAPABILITY_REGISTRY=old_r; validator_module.CAPABILITY_REGISTRY=old_v
+    rows.append({"mutation":"new_capability_missing_executor","caught":visible and stayed_red})
+    dup=build_runtime_fixture("workbench_blade"); call=deepcopy(dup["runtimeProgram"]["calls"][0]); call["id"]="duplicate_writer"; dup["runtimeProgram"]["calls"].append(call)
+    rows.append({"mutation":"second_writer_existing_component","caught":any(x.get("code")=="duplicate_single_component" for x in validate_runtime_program(dup)["errors"])})
+    bad=audit_compiler_receipts([{"callId":"alias","fn":"emit_light_while_active","authoredPath":"x","finalPath":"runtimeProgram.entities[].movement.code","value":1,"status":"delivered"}])
+    rows.append({"mutation":"technical_alias_undeclared_output","caught":not bad["ok"]})
+    wire=compile_runtime_program(build_runtime_fixture("workbench_blade")); wire["runtimeProgram"]["entities"][0]["newFinalWireField"]={}
+    rows.append({"mutation":"new_final_wire_field_without_dto","caught":any(x.get("code")=="unknown_final_wire_field" for x in validate_runtime_wire(wire)["errors"])})
+    return {"schema":"infini.low-level-mutation-gate.v1","ok":all(x["caught"] for x in rows),"rows":rows}
+if __name__=="__main__":
+    r=build_report(); print(json.dumps(r,ensure_ascii=False,indent=2,sort_keys=True)); raise SystemExit(0 if r["ok"] else 1)
