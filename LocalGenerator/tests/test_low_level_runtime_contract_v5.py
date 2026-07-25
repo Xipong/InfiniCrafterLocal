@@ -18,6 +18,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     planner_prompt_usability_report,
 )
+from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -53,6 +54,25 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     assert rich_report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert rich_report["visibleCapabilities"] == len(names)
     assert rich_report["missingCapabilities"] == []
+
+
+def test_author_prompt_shape_card_matches_root_object_cardinality_without_provider_schema() -> None:
+    card = author_item_prompt_shape_card()
+    assert isinstance(card["concept"], dict)
+    assert set(card["concept"]) == {
+        "literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience",
+    }
+    contract = card["runtimeContract"]
+    assert contract["schema"] == "infini.runtime-contract.low-level.v1"
+    assert isinstance(contract["parentSynthesis"], dict)
+    assert isinstance(contract["parentSynthesis"]["parentA"]["facts"], list)
+    assert isinstance(contract["parentSynthesis"]["parentA"]["runtimeRoles"], list)
+    assert isinstance(contract["parentSynthesis"]["parentB"]["facts"], list)
+    assert isinstance(contract["claims"], list)
+    assert isinstance(contract["claims"][0]["backedBy"], list)
+    assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
+    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v1"
+    assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
 
 
 def test_all_non_archetypal_fixtures_compile_to_strict_wire() -> None:

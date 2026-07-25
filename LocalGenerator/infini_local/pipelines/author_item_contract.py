@@ -4,6 +4,9 @@ import copy
 from typing import Any, Mapping
 
 from infini_local.core.runtime_authoring import (
+    RUNTIME_CONTRACT_SCHEMA,
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
     apply_repair_patch,
     author_item_repair_schema as _repair_schema,
     author_item_response_schema as _author_schema,
@@ -19,16 +22,36 @@ def author_item_response_schema() -> dict[str, Any]:
 def author_item_prompt_shape_card() -> dict[str, Any]:
     return {
         "root": ["name", "tooltip", "category", "concept", "runtimeContract", "runtimeProgram"],
+        "name": "non-empty string",
+        "tooltip": "non-empty string",
+        "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
+        "concept": {
+            "literalSynthesis": "non-empty string",
+            "coreMechanic": "non-empty string",
+            "parentAContribution": "non-empty string",
+            "parentBContribution": "non-empty string",
+            "playerExperience": "non-empty string",
+        },
         "runtimeProgram": {
-            "apiVersion": "exact configured version",
-            "schema": "exact authoring schema",
+            "apiVersion": RUNTIME_PROGRAM_API_VERSION,
+            "schema": RUNTIME_PROGRAM_SCHEMA,
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
             "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "role": "primary|secondary", "target": "entity_id"}],
-            "calls": [{"id": "stable_id", "fn": "catalog capability", "role": "primary|secondary", "target": "entity_id", "params": "exact capability params"}],
+            "calls": [{"id": "stable_id", "fn": "catalog capability", "role": "primary|secondary", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
         },
         "runtimeContract": {
-            "parentSynthesis": "literal parent facts and runtime roles",
-            "claims": "every gameplay claim cites existing call/binding ids",
+            "schema": RUNTIME_CONTRACT_SCHEMA,
+            "parentSynthesis": {
+                "composition": "non-empty string",
+                "parentA": {"facts": ["source-backed fact"], "runtimeRoles": ["authored runtime role"]},
+                "parentB": {"facts": ["source-backed fact"], "runtimeRoles": ["authored runtime role"]},
+            },
+            "claims": [{
+                "id": "stable_claim_id",
+                "kind": "gameplay|physical|parent_synthesis",
+                "text": "non-empty claim",
+                "backedBy": ["existing call or binding id"],
+            }],
         },
         "forbidden": [
             "weapon archetype selector",
