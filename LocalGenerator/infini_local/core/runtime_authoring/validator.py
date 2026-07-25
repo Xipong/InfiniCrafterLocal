@@ -49,9 +49,12 @@ VALIDATION_ERROR_CODES = frozenset({
     "missing_claim_backing",
     "missing_dependency_param",
     "missing_entity_reference",
+    "missing_entity_role",
     "missing_item_capability_param",
     "missing_movement_component",
     "missing_required_component",
+    "mixed_entity_role",
+    "primary_entity_count",
     "self_reference_forbidden",
     "unknown_capability",
     "unknown_registry_requirement",
@@ -305,6 +308,56 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         issues.append(ValidationIssue("$.runtimeProgram.entities", "item_body_count", f"Exactly one item_body is required; found {len(item_entities)}.", ("add one item_body", "remove extras")))
     item_id = str(item_entities[0].get("id") or "") if len(item_entities) == 1 else ""
 
+    role_rows_by_target: dict[str, list[tuple[str, str, str]]] = {}
+    for namespace, rows in (("bindings", bindings), ("calls", calls)):
+        for row in rows:
+            target_id = str(row.get("target") or "")
+            if target_id not in entities_by_id:
+                continue
+            role_rows_by_target.setdefault(target_id, []).append(
+                (namespace, str(row.get("id") or ""), str(row.get("role") or ""))
+            )
+    for entity_id in entities_by_id:
+        role_rows = role_rows_by_target.get(entity_id, [])
+        if not role_rows:
+            issues.append(ValidationIssue(
+                "$.runtimeProgram",
+                "missing_entity_role",
+                f"Entity '{entity_id}' has no authored call/binding role rows.",
+                ("add an exact call or binding with role primary|secondary",),
+                (entity_id,),
+            ))
+            continue
+        roles = {role for _, _, role in role_rows}
+        if len(roles) != 1:
+            issues.append(ValidationIssue(
+                "$.runtimeProgram",
+                "mixed_entity_role",
+                f"Entity '{entity_id}' mixes authored primary and secondary rows.",
+                ("all rows targeting one entity must use one role",),
+                tuple(row_id for _, row_id, _ in role_rows if row_id),
+            ))
+    primary_targets = {
+        target_id
+        for target_id, role_rows in role_rows_by_target.items()
+        if any(role == "primary" for _, _, role in role_rows)
+    }
+    if len(primary_targets) != 1:
+        primary_row_ids = tuple(
+            row_id
+            for role_rows in role_rows_by_target.values()
+            for _, row_id, role in role_rows
+            if role == "primary" and row_id
+        )
+        issues.append(ValidationIssue(
+            "$.runtimeProgram",
+            "primary_entity_count",
+            f"Exactly one explicitly authored primary entity is required; found {len(primary_targets)}.",
+            ("mark every row of exactly one target entity primary and all other entity rows secondary",),
+            primary_row_ids,
+        ))
+    primary_entity_id = next(iter(primary_targets)) if len(primary_targets) == 1 else ""
+
     exclusive_inputs: dict[str, tuple[int, str]] = {}
     binding_spawn_roots: set[str] = set()
     for index, binding in enumerate(bindings):
@@ -533,6 +586,7 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         "eventSpawnBudget": event_spawn_budget,
         "spawnGraphDepth": depth,
         "capabilitiesUsed": sorted({str(row.get("fn")) for row in calls}),
+        "primaryEntityId": primary_entity_id,
         "registryDrivenChecks": {
             "typedReferences": sum(1 for cap in CAPABILITY_REGISTRY.values() for spec in cap.params.values() if spec.reference is not None),
             "requirements": sum(len(cap.requirements) for cap in CAPABILITY_REGISTRY.values()),

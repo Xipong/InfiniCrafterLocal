@@ -26,10 +26,12 @@ def _sample_data() -> dict[str, Any]:
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_WIRE_SCHEMA,
             "itemEntityId": "item",
+            "primaryEntityId": "orb",
+            "primaryOwner": "projectile",
             "limits": {"maxEntityCount": 12, "maxChildDepth": 4, "maxEventSpawnsPerActivation": 32},
             "itemUse": {"configured": True, "useStyle": "shoot", "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "one_handed", "releaseTiming": "immediate"},
             "itemContact": {"enabled": False, "hitboxScale": 1.0, "contactForgivenessPx": 0},
-            "bindings": [{"id": "primary", "input": "primary_use", "action": "spawn_entity", "target": "orb"}],
+            "bindings": [{"id": "primary", "input": "primary_use", "action": "spawn_entity", "role": "primary", "target": "orb"}],
             "entities": [
                 {"id": "item", "kind": "item_body", "visualRole": "inventory_item", "events": [], "visual": {"role": "inventory_item", "assetMode": "baked_sprite", "spriteStatus": "generated", "spritePath": "debug.png"}},
                 {"id": "orb", "kind": "free_projectile", "visualRole": "projectile", "spawn": {"enabled": True, "speedPxPerTick": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin", "overTarget": {"heightTiles": 0.0, "delayTicks": 0}}, "damage": {"enabled": True, "damageClass": "magic", "damage": 10, "knockback": 1.0, "ownerHitCheck": False}, "lifetimeTicks": 90, "hitbox": {"widthPx": 12, "heightPx": 12, "drawScale": 1.0, "hitboxScale": 1.0}, "collision": {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "owner", "localNpcHitCooldownTicks": -1}, "movement": {"code": 0, "name": "move_straight", "params": {}}, "controller": {"code": 0, "name": "", "params": {}}, "targeting": {"shotEntityId": "", "rangeTiles": 0.0, "intervalTicks": 0}, "events": [], "visual": {"role": "projectile", "assetMode": "runtime_geometry", "spriteStatus": "not_required", "spritePath": ""}},

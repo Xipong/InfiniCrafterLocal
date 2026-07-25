@@ -1,0 +1,3547 @@
+{
+  "cases": [
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Swings a literal reinforced door from a bounded tether.",
+          "literalSynthesis": "A full door remains intact and is fastened to a chain.",
+          "parentAContribution": "door slab",
+          "parentBContribution": "chain tether",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Door on a Chain",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "primary_chain",
+                "chained_door_motion"
+              ],
+              "id": "claim_chain",
+              "kind": "parent_synthesis",
+              "text": "The door itself is the damaging tethered entity."
+            },
+            {
+              "backedBy": [
+                "door_stun"
+              ],
+              "id": "claim_stun",
+              "kind": "gameplay",
+              "text": "Door impacts apply the authored status."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A full door remains intact and is fastened to a chain.",
+            "parentA": {
+              "facts": [
+                "door slab"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "chain tether"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_chain",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "chained_door"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 48,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "chained_door_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "role": "primary",
+              "target": "chained_door"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "chained_door_damage",
+              "params": {
+                "damage": 48,
+                "damageClass": "melee",
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "role": "primary",
+              "target": "chained_door"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "chained_door_life",
+              "params": {
+                "lifetimeTicks": 180
+              },
+              "role": "primary",
+              "target": "chained_door"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "chained_door_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 72,
+                "hitboxScale": 1.0,
+                "widthPx": 36
+              },
+              "role": "primary",
+              "target": "chained_door"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "chained_door_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": true
+              },
+              "role": "primary",
+              "target": "chained_door"
+            },
+            {
+              "fn": "move_flail_tether",
+              "id": "chained_door_motion",
+              "params": {
+                "rangeTiles": 10,
+                "returnSpeed": 14
+              },
+              "role": "primary",
+              "target": "chained_door"
+            },
+            {
+              "fn": "apply_status_on_event",
+              "id": "door_stun",
+              "params": {
+                "buffId": 31,
+                "durationTicks": 90,
+                "event": "on_hit"
+              },
+              "role": "primary",
+              "target": "chained_door"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "chained_door",
+              "kind": "owner_attached_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Swings a literal reinforced door from a bounded tether."
+      },
+      "capabilities": [
+        "apply_status_on_event",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "move_flail_tether",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "caseId": "door_on_chain",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Swings a literal reinforced door from a bounded tether.",
+          "literalSynthesis": "A full door remains intact and is fastened to a chain.",
+          "parentAContribution": "door slab",
+          "parentBContribution": "chain tether",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "channelUse": false,
+          "craftYield": 1,
+          "damage": 48,
+          "damageClass": "generic",
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Door on a Chain",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_chain",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "chained_door"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 48,
+                "damageClass": "melee",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "events": [
+                {
+                  "action": "apply_status_on_event",
+                  "actionCode": 2,
+                  "buffId": 31,
+                  "durationTicks": 90,
+                  "event": "on_hit",
+                  "id": "door_stun"
+                }
+              ],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 72,
+                "hitboxScale": 1.0,
+                "widthPx": 36
+              },
+              "id": "chained_door",
+              "kind": "owner_attached_projectile",
+              "lifetimeTicks": 180,
+              "movement": {
+                "code": 16,
+                "name": "move_flail_tether",
+                "params": {
+                  "rangeTiles": 10,
+                  "returnSpeed": 14
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "held_body"
+              },
+              "visualRole": "held_body"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "chained_door",
+          "primaryOwner": "projectile",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Swings a literal reinforced door from a bounded tether."
+      },
+      "expectedDeliveryWireSha256": "faab2a3566343960294747e1fafb4690679dbfb0701b921e1ee039223c6d8e7f"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Acts as an accessory, mining tool, placeable light and independent projectile launcher.",
+          "literalSynthesis": "A mining harness retains its drill heads, lamp and detachable ore charge.",
+          "parentAContribution": "mining harness/tool",
+          "parentBContribution": "projectile charge and lamp",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Mining Harness Cannon",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "passive_harness",
+                "harness_stats"
+              ],
+              "id": "claim_accessory",
+              "kind": "gameplay",
+              "text": "Equipping the item applies exact passive modifiers."
+            },
+            {
+              "backedBy": [
+                "mining_heads",
+                "place_torch"
+              ],
+              "id": "claim_mining",
+              "kind": "gameplay",
+              "text": "The item has explicit mining power and a concrete placeable result."
+            },
+            {
+              "backedBy": [
+                "primary_charge",
+                "ore_charge_motion",
+                "charge_burst"
+              ],
+              "id": "claim_combat",
+              "kind": "gameplay",
+              "text": "Primary use launches the independently configured ore charge."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A mining harness retains its drill heads, lamp and detachable ore charge.",
+            "parentA": {
+              "facts": [
+                "mining harness/tool"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "projectile charge and lamp"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_charge",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "action": "equip_passive",
+              "id": "passive_harness",
+              "input": "equipped",
+              "role": "primary",
+              "target": "item"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 28,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "ore_charge_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 10,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "ore_charge_damage",
+              "params": {
+                "damage": 28,
+                "damageClass": "ranged",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "ore_charge_life",
+              "params": {
+                "lifetimeTicks": 160
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "ore_charge_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 14,
+                "hitboxScale": 1.0,
+                "widthPx": 14
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "ore_charge_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 2,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "fn": "move_proximity_missile",
+              "id": "ore_charge_motion",
+              "params": {
+                "homingStrength": 0.06,
+                "proximityRadiusPx": 48,
+                "rangeTiles": 24
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            },
+            {
+              "fn": "configure_accessory",
+              "id": "harness_stats",
+              "params": {
+                "defense": 4,
+                "endurance": 0.02,
+                "genericCrit": 2.0,
+                "genericDamage": 0.05,
+                "lifeRegen": 0,
+                "lightColor": "yellow",
+                "lightStrength": 0.35,
+                "manaRegen": 0,
+                "maxLife": 0,
+                "maxMana": 0,
+                "minionSlots": 0,
+                "movementSpeed": 0.08,
+                "sentrySlots": 0
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_tool",
+              "id": "mining_heads",
+              "params": {
+                "axePower": 0,
+                "hammerPower": 0,
+                "miningSpeedScale": 0.85,
+                "pickPower": 55
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_placeable",
+              "id": "place_torch",
+              "params": {
+                "placeStyle": 0,
+                "tileId": 4,
+                "wallId": -1
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "damage_area_on_event",
+              "id": "charge_burst",
+              "params": {
+                "damageMultiplier": 0.65,
+                "event": "on_hit",
+                "radiusPx": 72
+              },
+              "role": "secondary",
+              "target": "ore_charge"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "ore_charge",
+              "kind": "free_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Acts as an accessory, mining tool, placeable light and independent projectile launcher."
+      },
+      "capabilities": [
+        "configure_accessory",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_placeable",
+        "configure_spawn",
+        "configure_tool",
+        "damage_area_on_event",
+        "move_proximity_missile",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "caseId": "equipment_tool_combat",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "defense": 4,
+          "enabled": true,
+          "endurance": 0.02,
+          "genericCrit": 2.0,
+          "genericDamage": 0.05,
+          "lifeRegen": 0,
+          "lightColorName": "yellow",
+          "lightStrength": 0.35,
+          "manaRegen": 0,
+          "maxLife": 0,
+          "maxMana": 0,
+          "minionSlots": 0,
+          "movementSpeed": 0.08,
+          "sentrySlots": 0
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Acts as an accessory, mining tool, placeable light and independent projectile launcher.",
+          "literalSynthesis": "A mining harness retains its drill heads, lamp and detachable ore charge.",
+          "parentAContribution": "mining harness/tool",
+          "parentBContribution": "projectile charge and lamp",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "axePower": 0,
+          "channelUse": false,
+          "craftYield": 1,
+          "createTile": 4,
+          "createWall": -1,
+          "damage": 28,
+          "damageClass": "generic",
+          "hammerPower": 0,
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "miningSpeedScale": 0.85,
+          "pickPower": 55,
+          "placeStyle": 0,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Mining Harness Cannon",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "equip_passive",
+              "id": "passive_harness",
+              "input": "equipped",
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "primary_charge",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "ore_charge"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 2,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 28,
+                "damageClass": "ranged",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [
+                {
+                  "action": "damage_area_on_event",
+                  "actionCode": 3,
+                  "damageMultiplier": 0.65,
+                  "event": "on_hit",
+                  "id": "charge_burst",
+                  "radiusPx": 72
+                }
+              ],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 14,
+                "hitboxScale": 1.0,
+                "widthPx": 14
+              },
+              "id": "ore_charge",
+              "kind": "free_projectile",
+              "lifetimeTicks": 160,
+              "movement": {
+                "code": 13,
+                "name": "move_proximity_missile",
+                "params": {
+                  "homingStrength": 0.06,
+                  "proximityRadiusPx": 48,
+                  "rangeTiles": 24
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 10,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "projectile"
+              },
+              "visualRole": "projectile"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "item",
+          "primaryOwner": "item_body",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Acts as an accessory, mining tool, placeable light and independent projectile launcher."
+      },
+      "expectedDeliveryWireSha256": "3a18aa704b1093fb7a6862039f25606175b6ad3cd38ae42487677b8896908a6b"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Functions as a tool and places a concrete temporary-looking platform tile.",
+          "literalSynthesis": "A fishing rod carries a fold-out platform panel as a literal placeable result.",
+          "parentAContribution": "fishing rod",
+          "parentBContribution": "platform tile",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Angler's Platform Rod",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "primary_place",
+                "platform_result"
+              ],
+              "id": "claim_platform",
+              "kind": "gameplay",
+              "text": "Use places the explicitly authored platform tile; no fishing-rod family route is involved."
+            },
+            {
+              "backedBy": [
+                "tool_heads"
+              ],
+              "id": "claim_tool",
+              "kind": "gameplay",
+              "text": "The same item has explicit pick and hammer power."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A fishing rod carries a fold-out platform panel as a literal placeable result.",
+            "parentA": {
+              "facts": [
+                "fishing rod"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "platform tile"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "place_item",
+              "id": "primary_place",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "item"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 8,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_tool",
+              "id": "tool_heads",
+              "params": {
+                "axePower": 0,
+                "hammerPower": 20,
+                "miningSpeedScale": 0.9,
+                "pickPower": 35
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_placeable",
+              "id": "platform_result",
+              "params": {
+                "placeStyle": 0,
+                "tileId": 19,
+                "wallId": -1
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_consumption",
+              "id": "consume_platform",
+              "params": {
+                "consumable": true,
+                "consumeChancePercent": 35
+              },
+              "role": "primary",
+              "target": "item"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Functions as a tool and places a concrete temporary-looking platform tile."
+      },
+      "capabilities": [
+        "configure_consumption",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_placeable",
+        "configure_tool"
+      ],
+      "caseId": "fishing_platform_tool",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Functions as a tool and places a concrete temporary-looking platform tile.",
+          "literalSynthesis": "A fishing rod carries a fold-out platform panel as a literal placeable result.",
+          "parentAContribution": "fishing rod",
+          "parentBContribution": "platform tile",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "axePower": 0,
+          "channelUse": false,
+          "consumable": true,
+          "consumeChancePercent": 35,
+          "craftYield": 1,
+          "createTile": 19,
+          "createWall": -1,
+          "damage": 8,
+          "damageClass": "generic",
+          "hammerPower": 20,
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "miningSpeedScale": 0.9,
+          "pickPower": 35,
+          "placeStyle": 0,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Angler's Platform Rod",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "place_item",
+              "id": "primary_place",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "item"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "item",
+          "primaryOwner": "item_body",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Functions as a tool and places a concrete temporary-looking platform tile."
+      },
+      "expectedDeliveryWireSha256": "207f849759b22616b08f6c7d53444e43c2a768bc468e3fb53ce26f32298faa1a"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
+          "literalSynthesis": "A lantern is mounted on a pike and can be planted without ceasing to be literal.",
+          "parentAContribution": "pike body",
+          "parentBContribution": "lantern targeter",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Lantern Pike Turret",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "primary_pike",
+                "held_lantern_pike_motion"
+              ],
+              "id": "claim_primary",
+              "kind": "gameplay",
+              "text": "Primary use creates only the held pike entity."
+            },
+            {
+              "backedBy": [
+                "alternate_deploy",
+                "deployed_targeter"
+              ],
+              "id": "claim_alt",
+              "kind": "gameplay",
+              "text": "Alternate use independently deploys a targeter that fires the authored bolt entity."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A lantern is mounted on a pike and can be planted without ceasing to be literal.",
+            "parentA": {
+              "facts": [
+                "pike body"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "lantern targeter"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_pike",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "alternate_deploy",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "deployed_lantern"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 36,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "held_lantern_pike_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "held_lantern_pike_damage",
+              "params": {
+                "damage": 36,
+                "damageClass": "generic",
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "held_lantern_pike_life",
+              "params": {
+                "lifetimeTicks": 30
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "held_lantern_pike_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 24,
+                "hitboxScale": 1.0,
+                "widthPx": 58
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "held_lantern_pike_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "move_forward_then_retract",
+              "id": "held_lantern_pike_motion",
+              "params": {
+                "durationTicks": 26,
+                "rangeTiles": 5
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "emit_light_while_active",
+              "id": "held_light",
+              "params": {
+                "color": "orange",
+                "strength": 0.9
+              },
+              "role": "primary",
+              "target": "held_lantern_pike"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "deployed_lantern_spawn",
+              "params": {
+                "aim": "none",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "ground_at_cursor",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "deployed_lantern"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "deployed_lantern_damage",
+              "params": {
+                "damage": 0,
+                "damageClass": "generic",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "deployed_lantern"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "deployed_lantern_life",
+              "params": {
+                "lifetimeTicks": 900
+              },
+              "role": "secondary",
+              "target": "deployed_lantern"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "deployed_lantern_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 42,
+                "hitboxScale": 1.0,
+                "widthPx": 28
+              },
+              "role": "secondary",
+              "target": "deployed_lantern"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "deployed_lantern_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "deployed_lantern"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "lantern_bolt_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 11,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "lantern_bolt"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "lantern_bolt_damage",
+              "params": {
+                "damage": 18,
+                "damageClass": "magic",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "lantern_bolt"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "lantern_bolt_life",
+              "params": {
+                "lifetimeTicks": 150
+              },
+              "role": "secondary",
+              "target": "lantern_bolt"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "lantern_bolt_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 12,
+                "hitboxScale": 1.0,
+                "widthPx": 12
+              },
+              "role": "secondary",
+              "target": "lantern_bolt"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "lantern_bolt_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "lantern_bolt"
+            },
+            {
+              "fn": "move_slow_homing",
+              "id": "lantern_bolt_motion",
+              "params": {
+                "homingStrength": 0.08,
+                "rangeTiles": 28
+              },
+              "role": "secondary",
+              "target": "lantern_bolt"
+            },
+            {
+              "fn": "target_and_fire",
+              "id": "deployed_targeter",
+              "params": {
+                "intervalTicks": 45,
+                "rangeTiles": 30,
+                "sameTargetBias": 0.35,
+                "shotEntity": "lantern_bolt"
+              },
+              "role": "secondary",
+              "target": "deployed_lantern"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "held_lantern_pike",
+              "kind": "owner_attached_projectile"
+            },
+            {
+              "id": "deployed_lantern",
+              "kind": "stationary_projectile"
+            },
+            {
+              "id": "lantern_bolt",
+              "kind": "child_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Primary use drives a held lighted body; alternate use deploys an independent targeter."
+      },
+      "capabilities": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "emit_light_while_active",
+        "move_forward_then_retract",
+        "move_slow_homing",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "target_and_fire"
+      ],
+      "caseId": "held_and_deployed",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
+          "literalSynthesis": "A lantern is mounted on a pike and can be planted without ceasing to be literal.",
+          "parentAContribution": "pike body",
+          "parentBContribution": "lantern targeter",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "channelUse": false,
+          "craftYield": 1,
+          "damage": 36,
+          "damageClass": "generic",
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Lantern Pike Turret",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "alternate_deploy",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "deployed_lantern"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "primary_pike",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "held_lantern_pike"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "damage": {
+                "damage": 36,
+                "damageClass": "generic",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 24,
+                "hitboxScale": 1.0,
+                "widthPx": 58
+              },
+              "id": "held_lantern_pike",
+              "kind": "owner_attached_projectile",
+              "lifetimeTicks": 30,
+              "light": {
+                "color": "orange",
+                "strength": 0.9
+              },
+              "movement": {
+                "code": 19,
+                "name": "move_forward_then_retract",
+                "params": {
+                  "durationTicks": 26,
+                  "rangeTiles": 5
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "held_body"
+              },
+              "visualRole": "held_body"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": true
+              },
+              "controller": {
+                "code": 3,
+                "name": "target_and_fire"
+              },
+              "damage": {
+                "damage": 0,
+                "damageClass": "generic",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 42,
+                "hitboxScale": 1.0,
+                "widthPx": 28
+              },
+              "id": "deployed_lantern",
+              "kind": "stationary_projectile",
+              "lifetimeTicks": 900,
+              "spawn": {
+                "aim": "none",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "ground_at_cursor",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "targeting": {
+                "intervalTicks": 45,
+                "rangeTiles": 30,
+                "sameTargetBias": 0.35,
+                "shotEntityId": "lantern_bolt"
+              },
+              "visual": {
+                "role": "deployed_entity"
+              },
+              "visualRole": "deployed_entity"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 18,
+                "damageClass": "magic",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 12,
+                "hitboxScale": 1.0,
+                "widthPx": 12
+              },
+              "id": "lantern_bolt",
+              "kind": "child_projectile",
+              "lifetimeTicks": 150,
+              "movement": {
+                "code": 1,
+                "name": "move_slow_homing",
+                "params": {
+                  "homingStrength": 0.08,
+                  "rangeTiles": 28
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 11,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "child_projectile"
+              },
+              "visualRole": "child_projectile"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "held_lantern_pike",
+          "primaryOwner": "projectile",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Primary use drives a held lighted body; alternate use deploys an independent targeter."
+      },
+      "expectedDeliveryWireSha256": "7eedfaadc0288dc75ec3165da3ff179c7e3118364077af31c450a985740b3e84"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Throws a potion flask that returns and heals its owner on a hit.",
+          "literalSynthesis": "A sealed potion bottle is thrown whole and returns like a boomerang.",
+          "parentAContribution": "potion bottle",
+          "parentBContribution": "returning-flight mechanism",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Returning Tonic",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "primary_tonic",
+                "tonic_flask_motion"
+              ],
+              "id": "claim_return",
+              "kind": "parent_synthesis",
+              "text": "The potion is an actual returning projectile."
+            },
+            {
+              "backedBy": [
+                "tonic_heal"
+              ],
+              "id": "claim_heal",
+              "kind": "gameplay",
+              "text": "Successful hits heal the owner within a hard cap."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A sealed potion bottle is thrown whole and returns like a boomerang.",
+            "parentA": {
+              "facts": [
+                "potion bottle"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "returning-flight mechanism"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_tonic",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "tonic_flask"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 24,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "tonic_flask_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 12,
+                "spreadRadians": 0.0
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "tonic_flask_damage",
+              "params": {
+                "damage": 24,
+                "damageClass": "magic",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "tonic_flask_life",
+              "params": {
+                "lifetimeTicks": 180
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "tonic_flask_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 24,
+                "hitboxScale": 1.0,
+                "widthPx": 18
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "tonic_flask_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 2,
+                "tileCollide": true
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "move_boomerang",
+              "id": "tonic_flask_motion",
+              "params": {
+                "returnAfterTicks": 36,
+                "returnSpeed": 15
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "heal_owner_on_event",
+              "id": "tonic_heal",
+              "params": {
+                "damageFraction": 0.18,
+                "event": "on_hit",
+                "maxHeal": 12
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            },
+            {
+              "fn": "apply_status_on_event",
+              "id": "tonic_splash",
+              "params": {
+                "buffId": 20,
+                "durationTicks": 120,
+                "event": "on_hit"
+              },
+              "role": "primary",
+              "target": "tonic_flask"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "tonic_flask",
+              "kind": "free_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Throws a potion flask that returns and heals its owner on a hit."
+      },
+      "capabilities": [
+        "apply_status_on_event",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "heal_owner_on_event",
+        "move_boomerang",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "caseId": "returning_potion",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Throws a potion flask that returns and heals its owner on a hit.",
+          "literalSynthesis": "A sealed potion bottle is thrown whole and returns like a boomerang.",
+          "parentAContribution": "potion bottle",
+          "parentBContribution": "returning-flight mechanism",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "channelUse": false,
+          "craftYield": 1,
+          "damage": 24,
+          "damageClass": "generic",
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Returning Tonic",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_tonic",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "tonic_flask"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 2,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 24,
+                "damageClass": "magic",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [
+                {
+                  "action": "heal_owner_on_event",
+                  "actionCode": 6,
+                  "damageFraction": 0.18,
+                  "event": "on_hit",
+                  "id": "tonic_heal",
+                  "maxHeal": 12
+                },
+                {
+                  "action": "apply_status_on_event",
+                  "actionCode": 2,
+                  "buffId": 20,
+                  "durationTicks": 120,
+                  "event": "on_hit",
+                  "id": "tonic_splash"
+                }
+              ],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 24,
+                "hitboxScale": 1.0,
+                "widthPx": 18
+              },
+              "id": "tonic_flask",
+              "kind": "free_projectile",
+              "lifetimeTicks": 180,
+              "movement": {
+                "code": 5,
+                "name": "move_boomerang",
+                "params": {
+                  "returnAfterTicks": 36,
+                  "returnSpeed": 15
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 12,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "projectile"
+              },
+              "visualRole": "projectile"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "tonic_flask",
+          "primaryOwner": "projectile",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Throws a potion flask that returns and heals its owner on a hit."
+      },
+      "expectedDeliveryWireSha256": "839ed99e564814183a5317461379f13b336db293e7ed45434bb9e7a31b25c5f3"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Primary use holds a contact shield; alternate use launches a returning disc.",
+          "literalSynthesis": "A shield stays whole while its central plate detaches as a disc.",
+          "parentAContribution": "shield body",
+          "parentBContribution": "detachable disc",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Shield with Breakaway Disc",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "primary_shield",
+                "shield_body_motion"
+              ],
+              "id": "claim_shield",
+              "kind": "gameplay",
+              "text": "Primary use explicitly spawns the held shield body."
+            },
+            {
+              "backedBy": [
+                "alternate_disc",
+                "shield_disc_motion"
+              ],
+              "id": "claim_disc",
+              "kind": "gameplay",
+              "text": "Alternate use independently spawns the returning disc."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A shield stays whole while its central plate detaches as a disc.",
+            "parentA": {
+              "facts": [
+                "shield body"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "detachable disc"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_shield",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "alternate_disc",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "shield_disc"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 32,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "shield_body_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "shield_body_damage",
+              "params": {
+                "damage": 16,
+                "damageClass": "melee",
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "shield_body_life",
+              "params": {
+                "lifetimeTicks": 40
+              },
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "shield_body_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 52,
+                "hitboxScale": 1.0,
+                "widthPx": 44
+              },
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "shield_body_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "fn": "move_forward_then_retract",
+              "id": "shield_body_motion",
+              "params": {
+                "durationTicks": 32,
+                "rangeTiles": 2
+              },
+              "role": "primary",
+              "target": "shield_body"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "shield_disc_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 14,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "shield_disc"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "shield_disc_damage",
+              "params": {
+                "damage": 32,
+                "damageClass": "melee",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "shield_disc"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "shield_disc_life",
+              "params": {
+                "lifetimeTicks": 150
+              },
+              "role": "secondary",
+              "target": "shield_disc"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "shield_disc_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 28,
+                "hitboxScale": 1.0,
+                "widthPx": 28
+              },
+              "role": "secondary",
+              "target": "shield_disc"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "shield_disc_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 3,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "shield_disc"
+            },
+            {
+              "fn": "move_returning_glaive",
+              "id": "shield_disc_motion",
+              "params": {
+                "returnAfterTicks": 30,
+                "returnSpeed": 16
+              },
+              "role": "secondary",
+              "target": "shield_disc"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "shield_body",
+              "kind": "owner_attached_projectile"
+            },
+            {
+              "id": "shield_disc",
+              "kind": "free_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Primary use holds a contact shield; alternate use launches a returning disc."
+      },
+      "capabilities": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "move_forward_then_retract",
+        "move_returning_glaive",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "caseId": "shield_and_disc",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Primary use holds a contact shield; alternate use launches a returning disc.",
+          "literalSynthesis": "A shield stays whole while its central plate detaches as a disc.",
+          "parentAContribution": "shield body",
+          "parentBContribution": "detachable disc",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "channelUse": false,
+          "craftYield": 1,
+          "damage": 32,
+          "damageClass": "generic",
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Shield with Breakaway Disc",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "alternate_disc",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "shield_disc"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "primary_shield",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "shield_body"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "damage": {
+                "damage": 16,
+                "damageClass": "melee",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 52,
+                "hitboxScale": 1.0,
+                "widthPx": 44
+              },
+              "id": "shield_body",
+              "kind": "owner_attached_projectile",
+              "lifetimeTicks": 40,
+              "movement": {
+                "code": 19,
+                "name": "move_forward_then_retract",
+                "params": {
+                  "durationTicks": 32,
+                  "rangeTiles": 2
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "held_body"
+              },
+              "visualRole": "held_body"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 3,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 32,
+                "damageClass": "melee",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 28,
+                "hitboxScale": 1.0,
+                "widthPx": 28
+              },
+              "id": "shield_disc",
+              "kind": "free_projectile",
+              "lifetimeTicks": 150,
+              "movement": {
+                "code": 14,
+                "name": "move_returning_glaive",
+                "params": {
+                  "returnAfterTicks": 30,
+                  "returnSpeed": 16
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 14,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "projectile"
+              },
+              "visualRole": "projectile"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "shield_body",
+          "primaryOwner": "projectile",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Primary use holds a contact shield; alternate use launches a returning disc."
+      },
+      "expectedDeliveryWireSha256": "07644b9668a69e4f1518f1e925b84367e47fc0a5441ada226099bdfbb29e69d4"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
+          "literalSynthesis": "The umbrella is a literal brace and its weighted tip becomes a grenade.",
+          "parentAContribution": "umbrella canopy and shaft",
+          "parentBContribution": "grenade charge",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Umbrella Grenadier",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "primary_guard",
+                "umbrella_guard_motion"
+              ],
+              "id": "claim_guard",
+              "kind": "gameplay",
+              "text": "Primary use creates the held umbrella body."
+            },
+            {
+              "backedBy": [
+                "alternate_grenade",
+                "grenade_burst"
+              ],
+              "id": "claim_burst",
+              "kind": "gameplay",
+              "text": "Alternate use creates a separate arcing grenade that bursts on expiry."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "The umbrella is a literal brace and its weighted tip becomes a grenade.",
+            "parentA": {
+              "facts": [
+                "umbrella canopy and shaft"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "grenade charge"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_guard",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "alternate_grenade",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "grenade_weight"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 34,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "secondary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "umbrella_guard_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "umbrella_guard_damage",
+              "params": {
+                "damage": 18,
+                "damageClass": "generic",
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "umbrella_guard_life",
+              "params": {
+                "lifetimeTicks": 32
+              },
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "umbrella_guard_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 28,
+                "hitboxScale": 1.0,
+                "widthPx": 54
+              },
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "umbrella_guard_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "fn": "move_yoyo_hover",
+              "id": "umbrella_guard_motion",
+              "params": {
+                "rangeTiles": 2,
+                "returnSpeed": 12
+              },
+              "role": "primary",
+              "target": "umbrella_guard"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "grenade_weight_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 9,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "grenade_weight_damage",
+              "params": {
+                "damage": 34,
+                "damageClass": "generic",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "grenade_weight_life",
+              "params": {
+                "lifetimeTicks": 90
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "grenade_weight_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 18,
+                "hitboxScale": 1.0,
+                "widthPx": 18
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "grenade_weight_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "fn": "move_gravity_arc",
+              "id": "grenade_weight_motion",
+              "params": {
+                "gravityPerTick": 0.25
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "fn": "damage_area_on_event",
+              "id": "grenade_burst",
+              "params": {
+                "damageMultiplier": 1.4,
+                "event": "on_expire",
+                "radiusPx": 112
+              },
+              "role": "secondary",
+              "target": "grenade_weight"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "umbrella_guard",
+              "kind": "owner_attached_projectile"
+            },
+            {
+              "id": "grenade_weight",
+              "kind": "free_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight."
+      },
+      "capabilities": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "damage_area_on_event",
+        "move_gravity_arc",
+        "move_yoyo_hover",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "caseId": "umbrella_grenade",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
+          "literalSynthesis": "The umbrella is a literal brace and its weighted tip becomes a grenade.",
+          "parentAContribution": "umbrella canopy and shaft",
+          "parentBContribution": "grenade charge",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "channelUse": false,
+          "craftYield": 1,
+          "damage": 34,
+          "damageClass": "generic",
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Umbrella Grenadier",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "alternate_grenade",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "grenade_weight"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "primary_guard",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "umbrella_guard"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "damage": {
+                "damage": 18,
+                "damageClass": "generic",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 28,
+                "hitboxScale": 1.0,
+                "widthPx": 54
+              },
+              "id": "umbrella_guard",
+              "kind": "owner_attached_projectile",
+              "lifetimeTicks": 32,
+              "movement": {
+                "code": 17,
+                "name": "move_yoyo_hover",
+                "params": {
+                  "rangeTiles": 2,
+                  "returnSpeed": 12
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "held_body"
+              },
+              "visualRole": "held_body"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 34,
+                "damageClass": "generic",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [
+                {
+                  "action": "damage_area_on_event",
+                  "actionCode": 3,
+                  "damageMultiplier": 1.4,
+                  "event": "on_expire",
+                  "id": "grenade_burst",
+                  "radiusPx": 112
+                }
+              ],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 18,
+                "hitboxScale": 1.0,
+                "widthPx": 18
+              },
+              "id": "grenade_weight",
+              "kind": "free_projectile",
+              "lifetimeTicks": 90,
+              "movement": {
+                "code": 2,
+                "name": "move_gravity_arc",
+                "params": {
+                  "gravityPerTick": 0.25
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 9,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "projectile"
+              },
+              "visualRole": "projectile"
+            }
+          ],
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": true,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "umbrella_guard",
+          "primaryOwner": "projectile",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight."
+      },
+      "expectedDeliveryWireSha256": "ba3383a63d6877bc0c45bf648a4b3bda465e3e96d8533dd390bfc0f375da7e1b"
+    },
+    {
+      "authored": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+          "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+          "parentAContribution": "workbench body",
+          "parentBContribution": "blade and nails",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "name": "Workbench-Backed Blade",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "item_stats",
+                "item_use",
+                "item_contact",
+                "primary_workbench",
+                "workbench_blade_motion"
+              ],
+              "id": "claim_literal_bench",
+              "kind": "parent_synthesis",
+              "text": "The item body is the primary contact blade; the workbench projectile is an explicit secondary held effect."
+            },
+            {
+              "backedBy": [
+                "shed_nails"
+              ],
+              "id": "claim_nails",
+              "kind": "gameplay",
+              "text": "Hits release five independently simulated nails."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+            "parentA": {
+              "facts": [
+                "workbench body"
+              ],
+              "runtimeRoles": [
+                "literal physical component"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "blade and nails"
+              ],
+              "runtimeRoles": [
+                "literal mechanical component"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_workbench",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "workbench_blade"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 42,
+                "damageClass": "generic",
+                "heightPx": 32,
+                "knockback": 4.0,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 2,
+                "scale": 1.0,
+                "useAnimationTicks": 24,
+                "useTimeTicks": 24,
+                "valueCopper": 7500,
+                "widthPx": 32
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "item_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": false,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "enable_item_contact_damage",
+              "id": "item_contact",
+              "params": {
+                "contactForgivenessPx": 4,
+                "hitboxScale": 1.0
+              },
+              "role": "primary",
+              "target": "item"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "workbench_blade_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "workbench_blade_damage",
+              "params": {
+                "damage": 42,
+                "damageClass": "melee",
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "workbench_blade_life",
+              "params": {
+                "lifetimeTicks": 28
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "workbench_blade_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 34,
+                "hitboxScale": 1.0,
+                "widthPx": 64
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "workbench_blade_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            },
+            {
+              "fn": "move_forward_then_retract",
+              "id": "workbench_blade_motion",
+              "params": {
+                "durationTicks": 24,
+                "rangeTiles": 6
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "nail_spawn",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 13,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "nail"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "nail_damage",
+              "params": {
+                "damage": 12,
+                "damageClass": "ranged",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "nail"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "nail_life",
+              "params": {
+                "lifetimeTicks": 120
+              },
+              "role": "secondary",
+              "target": "nail"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "nail_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 8,
+                "hitboxScale": 1.0,
+                "widthPx": 8
+              },
+              "role": "secondary",
+              "target": "nail"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "nail_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "nail"
+            },
+            {
+              "fn": "move_straight",
+              "id": "nail_motion",
+              "params": {},
+              "role": "secondary",
+              "target": "nail"
+            },
+            {
+              "fn": "spawn_entity_on_event",
+              "id": "shed_nails",
+              "params": {
+                "count": 5,
+                "damageMultiplier": 0.35,
+                "delayTicks": 0,
+                "entity": "nail",
+                "event": "on_hit",
+                "spreadRadians": 0.55
+              },
+              "role": "secondary",
+              "target": "workbench_blade"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "workbench_blade",
+              "kind": "owner_attached_projectile"
+            },
+            {
+              "id": "nail",
+              "kind": "child_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Thrusts a literal workbench-backed blade and knocks loose nails into targets."
+      },
+      "capabilities": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "enable_item_contact_damage",
+        "move_forward_then_retract",
+        "move_straight",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ],
+      "caseId": "workbench_blade",
+      "expectedDeliveryWire": {
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        },
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+          "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+          "parentAContribution": "workbench body",
+          "parentBContribution": "blade and nails",
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+        },
+        "gameplay": {
+          "autoReuse": true,
+          "channelUse": false,
+          "craftYield": 1,
+          "damage": 42,
+          "damageClass": "generic",
+          "handPose": "one_handed",
+          "height": 32,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "itemScale": 1.0,
+          "kind": "hybrid",
+          "knockback": 4.0,
+          "manaCost": 0,
+          "maxStack": 1,
+          "rarity": 2,
+          "releaseTiming": "immediate",
+          "useAnimation": 24,
+          "useStyleName": "shoot",
+          "useTime": 24,
+          "useTurn": true,
+          "value": 7500,
+          "width": 32
+        },
+        "name": "Workbench-Backed Blade",
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "primary_workbench",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "workbench_blade"
+            }
+          ],
+          "entities": [
+            {
+              "events": [],
+              "id": "item",
+              "kind": "item_body",
+              "visual": {
+                "role": "inventory_item"
+              },
+              "visualRole": "inventory_item"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "damage": {
+                "damage": 42,
+                "damageClass": "melee",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": true
+              },
+              "events": [
+                {
+                  "action": "spawn_entity_on_event",
+                  "actionCode": 1,
+                  "count": 5,
+                  "damageMultiplier": 0.35,
+                  "delayTicks": 0,
+                  "entityId": "nail",
+                  "event": "on_hit",
+                  "id": "shed_nails",
+                  "spreadRadians": 0.55
+                }
+              ],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 34,
+                "hitboxScale": 1.0,
+                "widthPx": 64
+              },
+              "id": "workbench_blade",
+              "kind": "owner_attached_projectile",
+              "lifetimeTicks": 28,
+              "movement": {
+                "code": 19,
+                "name": "move_forward_then_retract",
+                "params": {
+                  "durationTicks": 24,
+                  "rangeTiles": 6
+                }
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "held_body"
+              },
+              "visualRole": "held_body"
+            },
+            {
+              "collision": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": 10,
+                "npcImmunityMode": "local",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "damage": {
+                "damage": 12,
+                "damageClass": "ranged",
+                "enabled": true,
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "events": [],
+              "hitbox": {
+                "drawScale": 1.0,
+                "heightPx": 8,
+                "hitboxScale": 1.0,
+                "widthPx": 8
+              },
+              "id": "nail",
+              "kind": "child_projectile",
+              "lifetimeTicks": 120,
+              "movement": {
+                "code": 0,
+                "name": "move_straight",
+                "params": {}
+              },
+              "spawn": {
+                "aim": "cursor",
+                "count": 1,
+                "enabled": true,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 13,
+                "spreadRadians": 0.0
+              },
+              "visual": {
+                "role": "child_projectile"
+              },
+              "visualRole": "child_projectile"
+            }
+          ],
+          "itemContact": {
+            "contactForgivenessPx": 4,
+            "enabled": true,
+            "hitboxScale": 1.0
+          },
+          "itemEntityId": "item",
+          "itemUse": {
+            "channel": false,
+            "configured": true,
+            "disableMeleeHitbox": false,
+            "handPose": "one_handed",
+            "hideUseGraphic": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "releaseTiming": "immediate",
+            "useStyle": "shoot"
+          },
+          "limits": {
+            "maxChildDepth": 3,
+            "maxEntityCount": 12,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "primaryEntityId": "item",
+          "primaryOwner": "item_body",
+          "schema": "infini.runtime-program.wire.v1"
+        },
+        "tooltip": "Thrusts a literal workbench-backed blade and knocks loose nails into targets."
+      },
+      "expectedDeliveryWireSha256": "556f227558069228d84967b5866a659caef897f333c759a83531e5b8d1a698f0"
+    }
+  ],
+  "historicalLiveEvidence": false,
+  "provenance": "Frozen from manually authored non-archetypal v5 acceptance fixtures; no LLM or HTTP.",
+  "schema": "infini.runtime-program-v5-seed-corpus.v1"
+}

@@ -35,13 +35,13 @@ def _item_stats(*, damage: int = 30, damage_class: str = "generic", use_time: in
     }
 
 
-def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False) -> dict[str, Any]:
+def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False, disable_melee_hitbox: bool = True) -> dict[str, Any]:
     return {
         "useStyle": style,
         "autoReuse": True,
         "useTurn": True,
         "hideUseGraphic": hide,
-        "disableMeleeHitbox": True,
+        "disableMeleeHitbox": disable_melee_hitbox,
         "channel": channel,
         "holdoutOffsetX": 0,
         "holdoutOffsetY": 0,
@@ -87,7 +87,7 @@ def _collision(*, tile: bool = True, bounce: int = 0, pierce: int = 1) -> dict[s
 
 
 class _Builder:
-    def __init__(self, fixture_id: str, *, name: str, tooltip: str, category: str = "hybrid", damage: int = 30, channel: bool = False) -> None:
+    def __init__(self, fixture_id: str, *, name: str, tooltip: str, category: str = "hybrid", damage: int = 30, channel: bool = False, item_body_contact: bool = False) -> None:
         self.fixture_id = fixture_id
         self.name = name
         self.tooltip = tooltip
@@ -97,7 +97,9 @@ class _Builder:
         self.calls: list[dict[str, Any]] = []
         self.claims: list[dict[str, Any]] = []
         self.call("item_stats", "configure_item_stats", "item", _item_stats(damage=damage))
-        self.call("item_use", "configure_item_use", "item", _item_use(channel=channel))
+        self.call("item_use", "configure_item_use", "item", _item_use(channel=channel, disable_melee_hitbox=not item_body_contact))
+        if item_body_contact:
+            self.call("item_contact", "enable_item_contact_damage", "item", {"hitboxScale": 1.0, "contactForgivenessPx": 4})
 
     def entity(self, entity_id: str, kind: str) -> None:
         self.entities.append({"id": entity_id, "kind": kind})
@@ -138,7 +140,11 @@ class _Builder:
     def claim(self, claim_id: str, text: str, *backing: str, kind: str = "gameplay") -> None:
         self.claims.append({"id": claim_id, "kind": kind, "text": text, "backedBy": list(backing)})
 
-    def finish(self, *, composition: str, parent_a: str, parent_b: str) -> dict[str, Any]:
+    def finish(self, *, primary_entity_id: str, composition: str, parent_a: str, parent_b: str) -> dict[str, Any]:
+        if primary_entity_id not in {row["id"] for row in self.entities}:
+            raise ValueError(f"fixture primary entity {primary_entity_id!r} is absent")
+        for row in (*self.bindings, *self.calls):
+            row["role"] = "primary" if row["target"] == primary_entity_id else "secondary"
         return {
             "name": self.name,
             "tooltip": self.tooltip,
@@ -170,14 +176,14 @@ class _Builder:
 
 
 def _workbench_blade() -> dict[str, Any]:
-    b = _Builder("workbench_blade", name="Workbench-Backed Blade", tooltip="Thrusts a literal workbench-backed blade and knocks loose nails into targets.", damage=42)
+    b = _Builder("workbench_blade", name="Workbench-Backed Blade", tooltip="Thrusts a literal workbench-backed blade and knocks loose nails into targets.", damage=42, item_body_contact=True)
     b.projectile("workbench_blade", "owner_attached_projectile", speed=0, lifetime=28, damage=42, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 6, "durationTicks": 24}, width=64, height=34)
     b.projectile("nail", "child_projectile", speed=13, lifetime=120, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
     b.bind("primary_workbench", "primary_use", "spawn_entity", "workbench_blade")
     b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"event": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0})
-    b.claim("claim_literal_bench", "The workbench remains the held runtime body, not an abstract wood theme.", "primary_workbench", "workbench_blade_motion", kind="parent_synthesis")
+    b.claim("claim_literal_bench", "The item body is the primary contact blade; the workbench projectile is an explicit secondary held effect.", "item_stats", "item_use", "item_contact", "primary_workbench", "workbench_blade_motion", kind="parent_synthesis")
     b.claim("claim_nails", "Hits release five independently simulated nails.", "shed_nails")
-    return b.finish(composition="A literal workbench is bolted behind a blade and participates as the held body.", parent_a="workbench body", parent_b="blade and nails")
+    return b.finish(primary_entity_id="item", composition="A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.", parent_a="workbench body", parent_b="blade and nails")
 
 
 def _umbrella_grenade() -> dict[str, Any]:
@@ -189,7 +195,7 @@ def _umbrella_grenade() -> dict[str, Any]:
     b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"event": "on_expire", "radiusPx": 112, "damageMultiplier": 1.4})
     b.claim("claim_guard", "Primary use creates the held umbrella body.", "primary_guard", "umbrella_guard_motion")
     b.claim("claim_burst", "Alternate use creates a separate arcing grenade that bursts on expiry.", "alternate_grenade", "grenade_burst")
-    return b.finish(composition="The umbrella is a literal brace and its weighted tip becomes a grenade.", parent_a="umbrella canopy and shaft", parent_b="grenade charge")
+    return b.finish(primary_entity_id="umbrella_guard", composition="The umbrella is a literal brace and its weighted tip becomes a grenade.", parent_a="umbrella canopy and shaft", parent_b="grenade charge")
 
 
 def _door_on_chain() -> dict[str, Any]:
@@ -199,7 +205,7 @@ def _door_on_chain() -> dict[str, Any]:
     b.call("door_stun", "apply_status_on_event", "chained_door", {"event": "on_hit", "buffId": 31, "durationTicks": 90})
     b.claim("claim_chain", "The door itself is the damaging tethered entity.", "primary_chain", "chained_door_motion", kind="parent_synthesis")
     b.claim("claim_stun", "Door impacts apply the authored status.", "door_stun")
-    return b.finish(composition="A full door remains intact and is fastened to a chain.", parent_a="door slab", parent_b="chain tether")
+    return b.finish(primary_entity_id="chained_door", composition="A full door remains intact and is fastened to a chain.", parent_a="door slab", parent_b="chain tether")
 
 
 def _returning_potion() -> dict[str, Any]:
@@ -210,7 +216,7 @@ def _returning_potion() -> dict[str, Any]:
     b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"event": "on_hit", "buffId": 20, "durationTicks": 120})
     b.claim("claim_return", "The potion is an actual returning projectile.", "primary_tonic", "tonic_flask_motion", kind="parent_synthesis")
     b.claim("claim_heal", "Successful hits heal the owner within a hard cap.", "tonic_heal")
-    return b.finish(composition="A sealed potion bottle is thrown whole and returns like a boomerang.", parent_a="potion bottle", parent_b="returning-flight mechanism")
+    return b.finish(primary_entity_id="tonic_flask", composition="A sealed potion bottle is thrown whole and returns like a boomerang.", parent_a="potion bottle", parent_b="returning-flight mechanism")
 
 
 def _fishing_platform_tool() -> dict[str, Any]:
@@ -221,7 +227,7 @@ def _fishing_platform_tool() -> dict[str, Any]:
     b.call("consume_platform", "configure_consumption", "item", {"consumable": True, "consumeChancePercent": 35})
     b.claim("claim_platform", "Use places the explicitly authored platform tile; no fishing-rod family route is involved.", "primary_place", "platform_result")
     b.claim("claim_tool", "The same item has explicit pick and hammer power.", "tool_heads")
-    return b.finish(composition="A fishing rod carries a fold-out platform panel as a literal placeable result.", parent_a="fishing rod", parent_b="platform tile")
+    return b.finish(primary_entity_id="item", composition="A fishing rod carries a fold-out platform panel as a literal placeable result.", parent_a="fishing rod", parent_b="platform tile")
 
 
 def _shield_and_disc() -> dict[str, Any]:
@@ -232,7 +238,7 @@ def _shield_and_disc() -> dict[str, Any]:
     b.bind("alternate_disc", "alternate_use", "spawn_entity", "shield_disc")
     b.claim("claim_shield", "Primary use explicitly spawns the held shield body.", "primary_shield", "shield_body_motion")
     b.claim("claim_disc", "Alternate use independently spawns the returning disc.", "alternate_disc", "shield_disc_motion")
-    return b.finish(composition="A shield stays whole while its central plate detaches as a disc.", parent_a="shield body", parent_b="detachable disc")
+    return b.finish(primary_entity_id="shield_body", composition="A shield stays whole while its central plate detaches as a disc.", parent_a="shield body", parent_b="detachable disc")
 
 
 def _held_and_deployed() -> dict[str, Any]:
@@ -246,7 +252,7 @@ def _held_and_deployed() -> dict[str, Any]:
     b.bind("alternate_deploy", "alternate_use", "spawn_entity", "deployed_lantern")
     b.claim("claim_primary", "Primary use creates only the held pike entity.", "primary_pike", "held_lantern_pike_motion")
     b.claim("claim_alt", "Alternate use independently deploys a targeter that fires the authored bolt entity.", "alternate_deploy", "deployed_targeter")
-    return b.finish(composition="A lantern is mounted on a pike and can be planted without ceasing to be literal.", parent_a="pike body", parent_b="lantern targeter")
+    return b.finish(primary_entity_id="held_lantern_pike", composition="A lantern is mounted on a pike and can be planted without ceasing to be literal.", parent_a="pike body", parent_b="lantern targeter")
 
 
 def _equipment_tool_combat() -> dict[str, Any]:
@@ -261,7 +267,7 @@ def _equipment_tool_combat() -> dict[str, Any]:
     b.claim("claim_accessory", "Equipping the item applies exact passive modifiers.", "passive_harness", "harness_stats")
     b.claim("claim_mining", "The item has explicit mining power and a concrete placeable result.", "mining_heads", "place_torch")
     b.claim("claim_combat", "Primary use launches the independently configured ore charge.", "primary_charge", "ore_charge_motion", "charge_burst")
-    return b.finish(composition="A mining harness retains its drill heads, lamp and detachable ore charge.", parent_a="mining harness/tool", parent_b="projectile charge and lamp")
+    return b.finish(primary_entity_id="item", composition="A mining harness retains its drill heads, lamp and detachable ore charge.", parent_a="mining harness/tool", parent_b="projectile charge and lamp")
 
 
 _FIXTURE_BUILDERS = {

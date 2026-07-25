@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any, Mapping, MutableMapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
@@ -55,10 +54,6 @@ def _dict(value: Any) -> dict[str, Any]:
 
 def _copy_params(call: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(_dict(call.get("params")))
-
-
-def _entity_path(index: int, suffix: str) -> str:
-    return f"runtimeProgram.entities[{index}].{suffix}"
 
 
 def _compile_item_call(
@@ -361,6 +356,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
 
     item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")
     item_entity_id = str(item_entity["id"])
+    primary_entity_id = str(validation.get("stats", {}).get("primaryEntityId") or "")
+    primary_entity = next(row for row in authored_entities if str(row.get("id") or "") == primary_entity_id)
+    primary_owner = "item_body" if primary_entity.get("kind") == "item_body" else "projectile"
     entities: list[dict[str, Any]] = []
     entity_index_by_id: dict[str, int] = {}
     for source in authored_entities:
@@ -379,6 +377,8 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         "schema": RUNTIME_WIRE_SCHEMA,
         "itemEntityId": item_entity_id,
+        "primaryEntityId": primary_entity_id,
+        "primaryOwner": primary_owner,
         "limits": {
             "maxEntityCount": MAX_RUNTIME_ENTITIES,
             "maxChildDepth": MAX_CHILD_DEPTH,

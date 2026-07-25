@@ -174,6 +174,8 @@ public sealed partial class GeneratedItemData
             RuntimeProgram = new RuntimeProgramSpec
             {
                 ItemEntityId = itemEntityId,
+                PrimaryEntityId = itemEntityId,
+                PrimaryOwner = RuntimeProgramSpec.ItemBodyOwner,
                 Entities = new[]
                 {
                     new RuntimeEntitySpec

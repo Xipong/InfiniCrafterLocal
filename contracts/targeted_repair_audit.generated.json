@@ -4,13 +4,13 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 1,
-        "claims": 0,
+        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 10654,
+      "dossierChars": 11133,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -36,7 +36,7 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 0,
-        "claims": 0,
+        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -44,12 +44,14 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 9401,
+      "dossierChars": 12285,
       "errorCodes": [
-        "binding_dependency"
+        "binding_dependency",
+        "missing_claim_backing"
       ],
       "errorPaths": [
-        "$.runtimeProgram.bindings[0].input"
+        "$.runtimeProgram.bindings[0].input",
+        "$.runtimeContract.claims[0].backedBy"
       ],
       "existingBrokenCapabilities": [],
       "name": "missing_item_use_capability",
@@ -57,7 +59,7 @@
       "readOnlyDependencyCounts": {
         "bindings": 1,
         "calls": 0,
-        "claims": 1,
+        "claims": 0,
         "entities": 1
       },
       "supportingCapabilities": []
@@ -93,7 +95,7 @@
         "move_whip_lash",
         "move_yoyo_hover"
       ],
-      "dossierChars": 29506,
+      "dossierChars": 29831,
       "errorCodes": [
         "missing_movement_component",
         "missing_claim_backing"
@@ -117,7 +119,7 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 1,
-        "claims": 0,
+        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -125,12 +127,12 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 13124,
+      "dossierChars": 13428,
       "errorCodes": [
         "missing_item_capability_param"
       ],
       "errorPaths": [
-        "$.runtimeProgram.calls[7]"
+        "$.runtimeProgram.calls[8]"
       ],
       "existingBrokenCapabilities": [
         "channel_beam",
@@ -141,7 +143,7 @@
       "readOnlyDependencyCounts": {
         "bindings": 0,
         "calls": 1,
-        "claims": 1,
+        "claims": 0,
         "entities": 1
       },
       "supportingCapabilities": []
@@ -166,16 +168,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 70484,
+  "fullAuthorPayloadChars": 70528,
   "fullCapabilityCatalogCount": 52,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 33,
+    "declaredCodes": 36,
     "declaredEqualsEmitted": true,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 33,
+    "emittedCodes": 36,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 33
+    "policyCodes": 36
   },
   "schema": "infini.targeted-repair-audit.v1"
 }

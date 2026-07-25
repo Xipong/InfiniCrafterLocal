@@ -5,7 +5,6 @@ using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 using System;
-using System.Linq;
 using Terraria;
 using Terraria.ID;
 
@@ -41,11 +40,10 @@ public sealed partial class GeneratedProjectile
         {
             _spawnEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnSpawn, null, 0);
-            InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnSpawn, _data.VfxManifest, ref _vfxState, Projectile.Center);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnSpawn, Projectile.Center);
         }
 
         _age++;
-        ProcessPendingActions();
         RunPeriodicActions();
 
         bool controllerOwnsMotion = RunController();
@@ -67,7 +65,7 @@ public sealed partial class GeneratedProjectile
         {
             _expireEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);
-            InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnExpire, _data.VfxManifest, ref _vfxState, Projectile.Center);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
     }
 
@@ -104,10 +102,8 @@ public sealed partial class GeneratedProjectile
         Projectile.rotation = direction.ToRotation();
         Projectile.timeLeft = 2;
         Projectile.tileCollide = false;
-        owner.heldProj = Projectile.whoAmI;
-        owner.itemTime = Math.Max(owner.itemTime, 2);
-        owner.itemAnimation = Math.Max(owner.itemAnimation, 2);
-        int warmup = _entity!.Controller.Params.WarmupTicks;
+        ClaimHeldProjectile(owner, keepAnimation: true);
+        int warmup = AuthoredTicksToProjectileUpdates(_entity!.Controller.Params.WarmupTicks);
         Projectile.friendly = warmup <= 0 || _age >= warmup;
         return true;
     }
@@ -119,19 +115,18 @@ public sealed partial class GeneratedProjectile
         RuntimeParamsSpec p = _entity!.Controller.Params;
         if (!_released)
         {
-            _chargeTicks = Math.Min(Math.Max(1, p.ChargeTicks), _chargeTicks + 1);
+            int chargeDuration = Math.Max(1, AuthoredTicksToProjectileUpdates(p.ChargeTicks));
+            _chargeTicks = Math.Min(chargeDuration, _chargeTicks + 1);
             Vector2 direction = AimDirection(owner);
             if (_entity.IsOwnerAttached)
             {
                 Projectile.Center = owner.MountedCenter + direction * 18f;
                 Projectile.velocity = direction;
-                owner.heldProj = Projectile.whoAmI;
-                owner.itemTime = Math.Max(owner.itemTime, 2);
-                owner.itemAnimation = Math.Max(owner.itemAnimation, 2);
+                ClaimHeldProjectile(owner, keepAnimation: true);
             }
             else
                 Projectile.velocity = Vector2.Zero;
-            bool release = !owner.channel || !HoldingGeneratedItem(owner) || _chargeTicks >= Math.Max(1, p.ChargeTicks) && _entity.Controller.Params.DurationTicks > 0 && _age >= _entity.Controller.Params.DurationTicks;
+            bool release = !owner.channel || !HoldingGeneratedItem(owner) || _chargeTicks >= chargeDuration && _entity.Controller.Params.DurationTicks > 0 && _age >= AuthoredTicksToProjectileUpdates(_entity.Controller.Params.DurationTicks);
             if (!release)
             {
                 Projectile.timeLeft = Math.Max(Projectile.timeLeft, 2);
@@ -139,7 +134,7 @@ public sealed partial class GeneratedProjectile
                 return true;
             }
             _released = true;
-            float ratio = Math.Clamp(_chargeTicks / (float)Math.Max(1, p.ChargeTicks), 0f, 1f);
+            float ratio = Math.Clamp(_chargeTicks / (float)chargeDuration, 0f, 1f);
             float multiplier = MathHelper.Lerp(1f, Math.Max(1f, p.PowerMultiplier), ratio);
             Projectile.damage = Math.Max(0, (int)MathF.Round(_entity.Damage.Damage * multiplier));
             Projectile.knockBack = _entity.Damage.Knockback * multiplier;
@@ -147,8 +142,12 @@ public sealed partial class GeneratedProjectile
             Projectile.velocity = direction * Math.Max(1f, _entity.Spawn.SpeedPxPerTick) * multiplier;
             Projectile.tileCollide = _entity.Collision.TileCollide;
             RunRuntimeEvent(RuntimeEventKind.OnRelease, null, 0);
-            if (ratio >= 0.999f) RunRuntimeEvent(RuntimeEventKind.ChannelComplete, null, 0);
-            InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnRelease, _data!.VfxManifest, ref _vfxState, Projectile.Center);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnRelease, Projectile.Center);
+            if (ratio >= 0.999f)
+            {
+                RunRuntimeEvent(RuntimeEventKind.ChannelComplete, null, 0);
+                EmitAndSyncVfxEvent(RuntimeEventKind.ChannelComplete, Projectile.Center);
+            }
             Projectile.netUpdate = true;
         }
         return !_released;
@@ -158,7 +157,7 @@ public sealed partial class GeneratedProjectile
     {
         Projectile.velocity = Vector2.Zero;
         _controllerTimer++;
-        int interval = Math.Max(6, _entity!.Targeting.IntervalTicks > 0 ? _entity.Targeting.IntervalTicks : _entity.Controller.Params.IntervalTicks);
+        int interval = AuthoredTicksToProjectileUpdates(Math.Max(6, _entity!.Targeting.IntervalTicks > 0 ? _entity.Targeting.IntervalTicks : _entity.Controller.Params.IntervalTicks));
         if (_controllerTimer < interval || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
             return true;
         _controllerTimer = 0;
@@ -243,7 +242,7 @@ public sealed partial class GeneratedProjectile
         Vector2 previous = new(Projectile.ai[0], Projectile.ai[1]);
         Projectile.ai[0] = value.X;
         Projectile.ai[1] = value.Y;
-        if (_age - _lastOwnerVectorSyncAge < Math.Max(1, minSyncIntervalTicks)
+        if (_age - _lastOwnerVectorSyncAge < Math.Max(1, AuthoredTicksToProjectileUpdates(minSyncIntervalTicks))
             || Vector2.DistanceSquared(previous, value) <= Math.Max(0f, changeThresholdSquared))
             return;
         _lastOwnerVectorSyncAge = _age;
@@ -297,7 +296,7 @@ public sealed partial class GeneratedProjectile
     {
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
-        if (!_returning && _age >= Math.Max(1, returnAfterTicks)) _returning = true;
+        if (!_returning && _age >= Math.Max(1, AuthoredTicksToProjectileUpdates(returnAfterTicks))) _returning = true;
         if (!_returning) return;
         Projectile.tileCollide = false;
         float speed = Math.Max(1f, returnSpeed);
@@ -335,8 +334,15 @@ public sealed partial class GeneratedProjectile
     private static void PullNpcs(Vector2 center, float radius, float strength)
     {
         if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay() || radius <= 0f || strength <= 0f) return;
-        foreach (NPC npc in Main.ActiveNPCs.Where(n => n.CanBeChasedBy() && n.knockBackResist > 0f && Vector2.DistanceSquared(n.Center, center) <= radius * radius).Take(16))
+        int pulled = 0;
+        foreach (NPC npc in Main.ActiveNPCs)
+        {
+            if (!npc.CanBeChasedBy() || npc.knockBackResist <= 0f || Vector2.DistanceSquared(npc.Center, center) > radius * radius)
+                continue;
             npc.velocity += npc.DirectionTo(center) * strength * Math.Clamp(npc.knockBackResist, 0.1f, 1f);
+            if (++pulled >= 16)
+                break;
+        }
     }
 
     private void ProximityMissile(RuntimeParamsSpec p)
@@ -370,7 +376,7 @@ public sealed partial class GeneratedProjectile
             Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(owner.MountedCenter) * Math.Max(1f, p.ReturnSpeed), 0.25f);
             if (Projectile.Distance(owner.MountedCenter) < 20f) Projectile.Kill();
         }
-        owner.heldProj = Projectile.whoAmI;
+        ClaimHeldProjectile(owner);
         Projectile.rotation += 0.4f;
     }
 
@@ -392,7 +398,7 @@ public sealed partial class GeneratedProjectile
         }
         Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(target) * Math.Min(Math.Max(1f, p.ReturnSpeed), Projectile.Distance(target)), 0.28f);
         Projectile.tileCollide = false;
-        owner.heldProj = Projectile.whoAmI;
+        ClaimHeldProjectile(owner);
         Projectile.rotation += 0.35f;
         if (_returning && Projectile.Distance(owner.MountedCenter) < 20f) Projectile.Kill();
     }
@@ -408,8 +414,7 @@ public sealed partial class GeneratedProjectile
         Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;
         Projectile.timeLeft = 2;
         Projectile.tileCollide = false;
-        owner.heldProj = Projectile.whoAmI;
-        owner.MatchItemTimeToItemAnimation();
+        ClaimHeldProjectile(owner, matchAnimation: true);
     }
 
     private void BuildWhipPoints(Player owner, RuntimeParamsSpec p)
@@ -434,7 +439,7 @@ public sealed partial class GeneratedProjectile
     {
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
-        int duration = Math.Max(2, p.DurationTicks);
+        int duration = Math.Max(2, AuthoredTicksToProjectileUpdates(p.DurationTicks));
         float progress = Math.Clamp(_age / (float)duration, 0f, 1f);
         float reachProgress = 1f - Math.Abs(progress * 2f - 1f);
         Vector2 direction = AimDirection(owner);
@@ -443,7 +448,7 @@ public sealed partial class GeneratedProjectile
         Projectile.rotation = direction.ToRotation() + MathHelper.PiOver2;
         Projectile.timeLeft = Math.Max(2, duration - _age + 1);
         Projectile.tileCollide = false;
-        owner.heldProj = Projectile.whoAmI;
+        ClaimHeldProjectile(owner);
         if (_age >= duration) Projectile.Kill();
     }
 }

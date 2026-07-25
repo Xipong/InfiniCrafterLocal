@@ -74,6 +74,11 @@ public sealed class InfiniCrafterLocalMod : Mod
             InfiniCraftPlayer.HandleGeneratedUtilityBuffSyncPacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent)
+        {
+            GeneratedProjectile.HandleVfxEventSyncPacket(reader, whoAmI);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.NotifyGeneratedItem || packetType == InfiniNetPacketIds.RequestGeneratedRegistry || packetType == InfiniNetPacketIds.RequestGeneratedRegistryForceAssets || packetType == InfiniNetPacketIds.RequestGeneratedItemById)
         {
             GeneratedItems?.HandlePacket(packetType, reader, whoAmI);
@@ -119,6 +124,7 @@ public sealed class InfiniCrafterLocalMod : Mod
         GeneratedHeldItemDrawLayer.ClearNetCaches();
         GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         InfiniItemVfxRuntime.ClearUseEventCaches();
+        GeneratedProjectile.ClearVfxEventSyncCaches();
         GeneratedItems?.Dispose();
         AssetSync?.Dispose();
         Sprites?.Dispose();

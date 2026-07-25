@@ -20,8 +20,10 @@ public static class InfiniRuntimeLimits
     public const int MaxRuntimeEventSpawns = 32;
     public const int MaxRuntimeSpawnCount = 12;
     public const int MaxRuntimeLifetimeTicks = 21_600;
+    public const int MaxRuntimeRangeTiles = 120;
     public const int MaxRuntimeActiveProjectilesPerOwner = 96;
     public const int MaxRuntimePeriodicActionsPerTick = 16;
-    public const int MaxRuntimeEventActionsPerProjectileTick = 24;
+    public const int MaxPendingRuntimeActions = 256;
+    public const int MaxRuntimeDelayedActionsPerTick = 64;
 
 }

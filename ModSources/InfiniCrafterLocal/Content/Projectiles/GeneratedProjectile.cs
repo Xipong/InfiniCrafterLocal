@@ -1,4 +1,5 @@
 #nullable enable
+using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
@@ -33,6 +34,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _remainingBounces;
     private int _activationDelayTicks;
     private int _pendingHydrationTicks;
+    private bool _preserveSyncedStateOnHydrate;
     private bool _spawnEventRan;
     private bool _expireEventRan;
     private bool _returning;
@@ -43,16 +45,35 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _lastOwnerVectorSyncAge = -1000;
     private Vector2 _initialDirection = Vector2.UnitX;
     private Vector2 _spawnCenter;
-    private readonly List<PendingRuntimeAction> _pendingActions = new();
     private readonly List<Vector2> _whipPoints = new(32);
     private InfiniVfxState _vfxState = new();
 
-    private readonly record struct PendingRuntimeAction(RuntimeEventActionSpec Action, int Ticks, int NpcId, Vector2 Position, Vector2 Direction, int DamageDone);
+
+    private int AuthoredTicksToProjectileUpdates(int ticks)
+        => Math.Max(0, ticks) * Math.Max(1, Projectile.extraUpdates + 1);
 
     public bool IsGeneratedWhipTagSource => _configured && _entity?.Movement.Code == 18;
     internal bool Matches(string? generatedItemId, string? entityId)
         => _configured && string.Equals(_generatedItemId, generatedItemId?.Trim(), StringComparison.Ordinal)
             && string.Equals(_entityId, entityId?.Trim(), StringComparison.Ordinal);
+
+    private bool IsPrimaryRuntimeEntity
+        => _configured
+            && _data?.RuntimeProgram.PrimaryOwner == RuntimeProgramSpec.ProjectileOwner
+            && string.Equals(_data.RuntimeProgram.PrimaryEntityId, _entityId, StringComparison.Ordinal);
+
+    private void ClaimHeldProjectile(Player owner, bool keepAnimation = false, bool matchAnimation = false)
+    {
+        if (!IsPrimaryRuntimeEntity) return;
+        owner.heldProj = Projectile.whoAmI;
+        if (keepAnimation)
+        {
+            owner.itemTime = Math.Max(owner.itemTime, 2);
+            owner.itemAnimation = Math.Max(owner.itemAnimation, 2);
+        }
+        if (matchAnimation)
+            owner.MatchItemTimeToItemAnimation();
+    }
 
     public override void SetStaticDefaults()
     {
@@ -76,8 +97,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.netImportant = false;
     }
 
-    internal void Configure(GeneratedItemData data, RuntimeEntitySpec entity, int childDepth, int remainingSpawnBudget, Vector2 initialDirection)
+    internal void Configure(
+        GeneratedItemData data,
+        RuntimeEntitySpec entity,
+        int childDepth,
+        int remainingSpawnBudget,
+        Vector2 initialDirection,
+        bool preserveSyncedState = false)
     {
+        int syncedTimeLeft = Projectile.timeLeft;
+        int syncedBounces = _remainingBounces;
+        int syncedActivationDelay = _activationDelayTicks;
         _data = data;
         _entity = entity;
         _generatedItemId = data.Id;
@@ -88,10 +118,22 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _spawnCenter = Projectile.Center;
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
-        _vfxState = new InfiniVfxState { LocalSeed = data.VfxManifest.Seed };
+        if (!preserveSyncedState)
+            _vfxState = new InfiniVfxState { LocalSeed = data.VfxManifest.Seed };
+        else if (_vfxState.LocalSeed == 0)
+            _vfxState.LocalSeed = data.VfxManifest.Seed;
         _configured = true;
         _pendingHydrationTicks = 0;
         ApplyEntityStats();
+        if (preserveSyncedState)
+        {
+            Projectile.timeLeft = Math.Max(1, syncedTimeLeft);
+            _remainingBounces = Math.Clamp(syncedBounces, 0, entity.Collision.BounceCount);
+            _activationDelayTicks = Math.Max(0, syncedActivationDelay);
+            Projectile.friendly = _activationDelayTicks <= 0 && entity.Damage.Enabled && entity.Damage.Damage > 0;
+            Projectile.alpha = _activationDelayTicks > 0 ? 220 : 0;
+        }
+        _preserveSyncedStateOnHydrate = false;
     }
 
     private void ApplyEntityStats()
@@ -111,6 +153,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.tileCollide = entity.Collision.TileCollide;
         Projectile.ignoreWater = entity.Collision.IgnoreWater;
         Projectile.extraUpdates = entity.Collision.ExtraUpdates;
+        _activationDelayTicks = AuthoredTicksToProjectileUpdates(entity.Spawn.OverTarget.DelayTicks);
         Projectile.usesLocalNPCImmunity = entity.Collision.NpcImmunityMode == "local";
         Projectile.localNPCHitCooldown = Projectile.usesLocalNPCImmunity
             ? entity.Collision.LocalNpcHitCooldownTicks
@@ -118,7 +161,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.netImportant = entity.IsOwnerAttached
             || entity.IsStationary
             || entity.Controller.Code != RuntimeControllerCode.None;
-        Projectile.timeLeft = Math.Max(1, entity.LifetimeTicks + _activationDelayTicks);
+        Projectile.timeLeft = Math.Max(1, AuthoredTicksToProjectileUpdates(entity.LifetimeTicks) + _activationDelayTicks);
         if (entity.IsOwnerAttached || entity.IsStationary || entity.Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease)
             Projectile.tileCollide = false;
     }
@@ -142,6 +185,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         if (entity is null || !entity.IsProjectileEntity || !entity.Spawn.Enabled)
             return 0;
         if (childDepth > data.RuntimeProgram.Limits.MaxChildDepth)
+            return 0;
+        if (remainingSpawnBudget <= 0)
             return 0;
 
         Vector2 cursor = Main.MouseWorld;
@@ -167,7 +212,16 @@ public sealed partial class GeneratedProjectile : ModProjectile
         if (baseDirection != Vector2.Zero)
             position += baseDirection * entity.Spawn.OffsetPx;
 
-        int count = Math.Clamp(requestedCount ?? entity.Spawn.Count, 1, Math.Min(InfiniRuntimeLimits.MaxRuntimeSpawnCount, Math.Max(1, remainingSpawnBudget)));
+        int availableOwnerSlots = InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+            - CountActiveGeneratedProjectiles(owner.whoAmI);
+        if (availableOwnerSlots <= 0)
+            return 0;
+        int count = Math.Clamp(
+            requestedCount ?? entity.Spawn.Count,
+            1,
+            Math.Min(
+                availableOwnerSlots,
+                Math.Min(InfiniRuntimeLimits.MaxRuntimeSpawnCount, remainingSpawnBudget)));
         float spread = Math.Clamp(spreadOverride ?? entity.Spawn.SpreadRadians, 0f, MathHelper.TwoPi);
         int spawned = 0;
         for (int i = 0; i < count; i++)
@@ -191,6 +245,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
             spawned++;
         }
         return spawned;
+    }
+
+    private static int CountActiveGeneratedProjectiles(int ownerId)
+    {
+        int count = 0;
+        foreach (Projectile projectile in Main.ActiveProjectiles)
+        {
+            if (projectile.owner == ownerId && projectile.ModProjectile is GeneratedProjectile)
+                count++;
+        }
+        return count;
     }
 
     private static Vector2 FindGroundAtCursor(Vector2 cursor)
@@ -219,7 +284,13 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(_entityId);
                 if (entity is not null)
                 {
-                    Configure(data, entity, _childDepth, _remainingSpawnBudget, _initialDirection);
+                    Configure(
+                        data,
+                        entity,
+                        _childDepth,
+                        _remainingSpawnBudget,
+                        _initialDirection,
+                        preserveSyncedState: _preserveSyncedStateOnHydrate);
                     return true;
                 }
             }

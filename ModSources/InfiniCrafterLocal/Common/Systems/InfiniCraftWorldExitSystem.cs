@@ -29,8 +29,6 @@ public sealed class InfiniCraftWorldExitSystem : ModSystem
         {
             // Best-effort inventory protection on world exit. Avoid throwing while Terraria is unloading.
         }
-
-        catch { }
         try { GeneratedHeldItemDrawLayer.ClearNetCaches(); }
         catch { }
         try { GeneratedEquipOverlayDrawLayerBase.ClearNetCaches(); }

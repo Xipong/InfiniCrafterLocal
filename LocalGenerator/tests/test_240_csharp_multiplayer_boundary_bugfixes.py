@@ -59,23 +59,51 @@ def _contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed() -
     assert "Projectile.friendly = false" in receive
     assert "Projectile.velocity = Vector2.Zero" in receive
     assert "TryHydrate();" in receive
+    assert "_preserveSyncedStateOnHydrate = true" in receive
+
+    runtime = _text("Content/Projectiles/GeneratedProjectile.cs")
+    configure = _method(runtime, "internal void Configure", "private void ApplyEntityStats")
+    assert "preserveSyncedState" in configure
+    assert "Projectile.timeLeft = Math.Max(1, syncedTimeLeft)" in configure
+    assert "_remainingBounces = Math.Clamp(syncedBounces" in configure
+    assert "_activationDelayTicks = Math.Max(0, syncedActivationDelay)" in configure
 
 
-def _contract_check_deleted_projectile_presentation_packets_do_not_leave_dangling_routes() -> None:
+def _contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authored() -> None:
+    source = _text("Common/Runtime/RuntimeProgramExecutor.cs")
+    heal = _method(source, "private static void HealOwner", "private static void MoveOwner")
+    area = _method(source, "private static void DamageArea", "private static void ChainDamage")
+    chain = _method(source, "private static void ChainDamage", "private static void Pull")
+
+    assert "ShouldRunLocalPlayerAction(owner)" in heal
+    assert "ShouldRunPlayerGameplay(owner)" not in heal
+    assert "owner.Heal(heal)" in heal
+    assert "ShouldRunNpcGameplay()" in area
+    assert "ShouldRunNpcGameplay()" in chain
+
+
+def _contract_check_projectile_vfx_event_relay_is_owner_validated_exact_and_slot_preserving() -> None:
     root = _text("InfiniCrafterLocal.cs")
     packet_ids = _text("Common/InfiniNetPacketIds.cs")
-    registry = _text("Common/Services/GeneratedItemRegistryService.cs")
-    for legacy in [
-        "HandleProjectileVisualSyncPacket",
-        "HandleProjectileVfxEventSyncPacket",
-        "FlushPendingProjectileVisualSyncForGeneratedItem",
-        "FlushPendingVfxEventsForGeneratedItem",
-        "SyncGeneratedProjectileVisual",
-        "SyncGeneratedProjectileVfxEvent",
-    ]:
-        assert legacy not in root
-        assert legacy not in packet_ids
-        assert legacy not in registry
+    net_sync = _text("Content/Projectiles/GeneratedProjectile.NetSync.cs")
+    events = _text("Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs")
+    executors = _text("Content/Projectiles/GeneratedProjectile.Executors.cs")
+    handler = net_sync.split("public static void HandleVfxEventSyncPacket", 1)[1]
+
+    assert "SyncGeneratedProjectileVfxEvent = 9" in packet_ids
+    assert "GeneratedProjectile.HandleVfxEventSyncPacket(reader, whoAmI)" in root
+    assert "payload.Owner != whoAmI" in handler
+    assert "FindGeneratedProjectile(whoAmI, payload.Identity)" in handler
+    assert "HasExactVfxSlot(generated._data, generated._entity.Id, payload.EventName)" in handler
+    assert "MaxRuntimeRangeTiles" in handler
+    assert "(whoAmI, payload.Identity, payload.EventName)" in handler
+    assert "last == now" in handler
+    assert "relay.Send(-1, whoAmI)" in handler
+    assert "InfiniVfxRuntime.OnEvent" in handler
+    assert "EmitAndSyncVfxEvent" in events
+    assert "foreach (RuntimeEventActionSpec action" in events
+    assert "EmitAndSyncVfxEvent(RuntimeEventKind.OnRelease" in executors
+    assert "EmitAndSyncVfxEvent(RuntimeEventKind.ChannelComplete" in executors
 
 
 def _contract_check_server_craft_dedupe_and_cancel_caches_are_bounded() -> None:
@@ -131,7 +159,8 @@ def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
             '_contract_check_asset_notifications_are_server_authored_and_downloads_are_stream_bounded',
             '_contract_check_registry_bounds_only_hydration_request_state_not_authoritative_definitions',
             '_contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed',
-            '_contract_check_deleted_projectile_presentation_packets_do_not_leave_dangling_routes',
+            '_contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authored',
+            '_contract_check_projectile_vfx_event_relay_is_owner_validated_exact_and_slot_preserving',
             '_contract_check_server_craft_dedupe_and_cancel_caches_are_bounded',
             '_contract_check_generated_utility_sync_consumes_payload_before_every_reject',
             '_contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots',

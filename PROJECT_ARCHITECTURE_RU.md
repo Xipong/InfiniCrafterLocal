@@ -43,6 +43,12 @@ Gameplay/Visual/VFX Repair вызываются только после факт
 
 Schema, prompt catalog, machine manifest, docs inventory и audit проецируются из registry.
 
+## Explicit primary ownership
+
+Каждая authored `call` и `binding` обязана явно содержать `role: "primary" | "secondary"`. Все rows одного target entity имеют один role; ровно один entity во всей программе primary. Validator не выводит роль из имени, category, input, capability или entity kind. Compiler механически проецирует `primaryEntityId` и `primaryOwner: "item_body" | "projectile"` в final wire.
+
+`primaryOwner` — executable contract, а не telemetry: C# использует его для item `noMelee`/contact hitbox и разрешает `heldProj`/item-animation ownership только primary projectile. Secondary projectile может быть явно spawned тем же use как дополнительная атака/VFX body, но не отбирает melee/held ownership.
+
 ## C# runtime
 
 - `Common/Models/RuntimeProgramSpec.cs` — строгий v5 DTO и normalize/validation;
@@ -64,7 +70,7 @@ Visual Director выбирает `baked_sprite`, `reuse_item_icon`, `runtime_geo
 ## Доказательства
 
 - 52 capability vertical witnesses;
-- восемь non-archetypal acceptance fixtures;
+- восемь non-archetypal acceptance fixtures и frozen v5 seed replay corpus;
 - registry/schema/prompt/compiler/C# owner parity;
 - range parity Python↔C#;
 - technical lowering mutation gates;

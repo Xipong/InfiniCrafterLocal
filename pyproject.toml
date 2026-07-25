@@ -19,8 +19,11 @@ select = ["E9", "F63", "F7", "F82"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
 include = [
-  "LocalGenerator/infini_local/core/boundary_models.py",
-  "LocalGenerator/infini_local/core/runtime_authoring/engine_call_contracts.py",
+  "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
+  "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
+  "LocalGenerator/infini_local/core/runtime_authoring/program_schema.py",
+  "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py",
+  "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
   "tools/agentctl.py",
   "tools/config_registry.py",
   "tools/contract_parity.py",

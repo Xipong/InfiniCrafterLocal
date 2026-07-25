@@ -46,12 +46,17 @@ def binding_schema() -> dict[str, Any]:
             "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
             "input": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
             "action": {"type": "string", "enum": list(BINDING_ACTION_REGISTRY)},
+            "role": {
+                "type": "string",
+                "enum": ["primary", "secondary"],
+                "description": "Explicit executable-owner role; never inferred from input, category, name, or target kind.",
+            },
             "target": {
                 **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
                 "x-infini-reference": {"namespace": "entity", "targetKinds": list(ENTITY_KIND_REGISTRY), "allowSelf": True, "graphEdge": False},
             },
         },
-        "required": ["id", "input", "action", "target"],
+        "required": ["id", "input", "action", "role", "target"],
     }
 
 
@@ -327,8 +332,10 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                     break
 
     if isinstance(value, dict):
-        properties = schema.get("properties") if isinstance(schema.get("properties"), Mapping) else {}
-        required = schema.get("required") if isinstance(schema.get("required"), list) else []
+        raw_properties = schema.get("properties")
+        properties: Mapping[str, Any] = raw_properties if isinstance(raw_properties, Mapping) else {}
+        raw_required = schema.get("required")
+        required: list[Any] = raw_required if isinstance(raw_required, list) else []
         for key in required:
             if key not in value:
                 add("required", f"{path}.{key}")
@@ -337,7 +344,7 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 if key not in properties:
                     add("additional_property", f"{path}.{key}")
         for key, child in value.items():
-            child_schema = properties.get(key) if isinstance(properties, Mapping) else None
+            child_schema = properties.get(key)
             if isinstance(child_schema, Mapping):
                 errors.extend(strict_schema_errors(child, child_schema, path=f"{path}.{key}", root=root_schema, limit=max(0, limit - len(errors))))
                 if len(errors) >= limit:

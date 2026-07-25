@@ -3,12 +3,19 @@ using InfiniCrafterLocal.Common.Models;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
+using System.Collections.Generic;
 using Terraria;
 using Terraria.Audio;
 using Terraria.GameContent;
 using Terraria.ID;
 
 namespace InfiniCrafterLocal.Common.VFX;
+
+public readonly record struct InfiniVfxSlotEmissionKey(
+    int ProjectileIdentity,
+    string EntityId,
+    string EventName,
+    string SlotId);
 
 /// <summary>Per-projectile presentation state. It never contains gameplay state.</summary>
 public sealed class InfiniVfxState
@@ -18,6 +25,8 @@ public sealed class InfiniVfxState
     public int ParticlesThisTick;
     public int ParticlesTotal;
     public int DrawCallsThisFrame;
+    public ulong LastGameUpdate = ulong.MaxValue;
+    public Dictionary<InfiniVfxSlotEmissionKey, ulong> LastSlotEmission { get; } = new();
     public Vector2[] CenterHistory = Array.Empty<Vector2>();
 
     public void Push(Vector2 center)
@@ -39,27 +48,55 @@ public static class InfiniVfxRuntime
     public static void OnTick(Projectile projectile, string entityId, VfxManifestSpec manifest, ref InfiniVfxState state)
     {
         if (Main.dedServ || manifest is null || !manifest.HasSlots) return;
-        state.Tick++;
-        state.ParticlesThisTick = 0;
-        state.DrawCallsThisFrame = 0;
+        BeginWorldTick(projectile, ref state);
         if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
-        state.Push(projectile.Center);
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
             if (!Matches(slot, entityId, RuntimeEventKind.Periodic) || !Cadence(slot, state.Tick)) continue;
+            if (!TryMarkSlotEmission(projectile, entityId, RuntimeEventKind.Periodic, slot, ref state)) continue;
             EmitSlot(projectile.Center, projectile.velocity, slot, manifest, ref state);
         }
     }
 
-    public static void OnEvent(Projectile projectile, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center)
+    public static bool OnEvent(Projectile projectile, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center)
     {
-        if (Main.dedServ || manifest is null || !manifest.HasSlots) return;
+        if (Main.dedServ || manifest is null || !manifest.HasSlots) return false;
+        BeginWorldTick(projectile, ref state);
         if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
+        bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
             if (!Matches(slot, entityId, eventName)) continue;
+            if (!TryMarkSlotEmission(projectile, entityId, eventName, slot, ref state)) continue;
+            emitted = true;
             EmitSlot(center, projectile.velocity, slot, manifest, ref state);
         }
+        return emitted;
+    }
+
+    private static void BeginWorldTick(Projectile projectile, ref InfiniVfxState state)
+    {
+        if (state.LastGameUpdate == Main.GameUpdateCount) return;
+        state.LastGameUpdate = Main.GameUpdateCount;
+        state.Tick++;
+        state.ParticlesThisTick = 0;
+        state.DrawCallsThisFrame = 0;
+        state.Push(projectile.Center);
+    }
+
+    private static bool TryMarkSlotEmission(
+        Projectile projectile,
+        string entityId,
+        string eventName,
+        VfxSlotSpec slot,
+        ref InfiniVfxState state)
+    {
+        var key = new InfiniVfxSlotEmissionKey(projectile.identity, entityId, eventName, slot.Id);
+        ulong gameUpdate = Main.GameUpdateCount;
+        if (state.LastSlotEmission.TryGetValue(key, out ulong previous) && previous == gameUpdate)
+            return false;
+        state.LastSlotEmission[key] = gameUpdate;
+        return true;
     }
 
     public static void Draw(Projectile projectile, string entityId, VfxManifestSpec manifest, ref InfiniVfxState state, Color lightColor, InfiniVfxDrawPass pass = InfiniVfxDrawPass.All)

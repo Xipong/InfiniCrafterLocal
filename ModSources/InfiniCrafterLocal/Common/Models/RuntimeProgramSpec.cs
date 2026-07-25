@@ -19,10 +19,14 @@ public sealed class RuntimeProgramSpec
 {
     public const string CurrentApiVersion = "infini.runtime-program.v5";
     public const string CurrentWireSchema = "infini.runtime-program.wire.v1";
+    public const string ItemBodyOwner = "item_body";
+    public const string ProjectileOwner = "projectile";
 
     public string ApiVersion { get; set; } = CurrentApiVersion;
     public string Schema { get; set; } = CurrentWireSchema;
     public string ItemEntityId { get; set; } = "";
+    public string PrimaryEntityId { get; set; } = "";
+    public string PrimaryOwner { get; set; } = "";
     public RuntimeLimitsSpec Limits { get; set; } = new();
     public RuntimeEntitySpec[] Entities { get; set; } = Array.Empty<RuntimeEntitySpec>();
     public RuntimeBindingSpec[] Bindings { get; set; } = Array.Empty<RuntimeBindingSpec>();
@@ -36,6 +40,8 @@ public sealed class RuntimeProgramSpec
         ApiVersion = (ApiVersion ?? "").Trim();
         Schema = (Schema ?? "").Trim();
         ItemEntityId = RuntimeText.Id(ItemEntityId);
+        PrimaryEntityId = RuntimeText.Id(PrimaryEntityId);
+        PrimaryOwner = (PrimaryOwner ?? "").Trim().ToLowerInvariant();
         if (!string.Equals(ApiVersion, CurrentApiVersion, StringComparison.Ordinal)
             || !string.Equals(Schema, CurrentWireSchema, StringComparison.Ordinal))
             throw new InvalidDataException($"Unsupported runtime program contract: {ApiVersion}/{Schema}");
@@ -68,6 +74,12 @@ public sealed class RuntimeProgramSpec
         RuntimeEntitySpec? item = TryGetEntity(ItemEntityId);
         if (item is null || item.Kind != RuntimeEntityKind.ItemBody)
             throw new InvalidDataException("runtimeProgram.itemEntityId must reference item_body");
+        RuntimeEntitySpec? primary = TryGetEntity(PrimaryEntityId);
+        if (primary is null)
+            throw new InvalidDataException("runtimeProgram.primaryEntityId must reference an entity");
+        string expectedOwner = primary.Kind == RuntimeEntityKind.ItemBody ? ItemBodyOwner : ProjectileOwner;
+        if (PrimaryOwner != expectedOwner)
+            throw new InvalidDataException($"runtimeProgram.primaryOwner must be '{expectedOwner}' for primary entity '{PrimaryEntityId}'");
 
         var bindingIds = new HashSet<string>(StringComparer.Ordinal);
         var exclusiveInputs = new HashSet<string>(StringComparer.Ordinal);
@@ -96,6 +108,9 @@ public sealed class RuntimeProgramSpec
             {
                 throw new InvalidDataException($"binding '{binding.Id}' action '{binding.Action}' requires item_body target");
             }
+            string expectedRole = binding.Target == PrimaryEntityId ? RuntimeEntityRole.Primary : RuntimeEntityRole.Secondary;
+            if (binding.Role != expectedRole)
+                throw new InvalidDataException($"binding '{binding.Id}' role must be '{expectedRole}' for target '{binding.Target}'");
         }
 
         ItemUse.Normalize();
@@ -292,6 +307,7 @@ public sealed class RuntimeBindingSpec
     public string Id { get; set; } = "";
     public string Input { get; set; } = "";
     public string Action { get; set; } = "";
+    public string Role { get; set; } = "";
     public string Target { get; set; } = "";
 
     public void NormalizeAndValidate()
@@ -299,17 +315,28 @@ public sealed class RuntimeBindingSpec
         Id = RuntimeText.Id(Id);
         Input = (Input ?? "").Trim().ToLowerInvariant();
         Action = (Action ?? "").Trim().ToLowerInvariant();
+        Role = (Role ?? "").Trim().ToLowerInvariant();
         Target = RuntimeText.Id(Target);
         if (!IsActiveInput(Input))
             throw new InvalidDataException($"unknown runtime input '{Input}'");
         if (!RuntimeBindingAction.IsKnown(Action))
             throw new InvalidDataException($"unknown runtime binding action '{Action}'");
+        if (!RuntimeEntityRole.IsKnown(Role))
+            throw new InvalidDataException($"unknown runtime binding role '{Role}'");
     }
 
     public static bool IsActiveInput(string? input)
         => input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse or RuntimeInputKind.Hold or RuntimeInputKind.Equipped;
     public static bool IsExclusiveInput(string? input)
         => input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse or RuntimeInputKind.Hold;
+}
+
+public static class RuntimeEntityRole
+{
+    public const string Primary = "primary";
+    public const string Secondary = "secondary";
+
+    public static bool IsKnown(string? value) => value is Primary or Secondary;
 }
 
 public sealed class RuntimeEntitySpec
@@ -598,7 +625,7 @@ public sealed class RuntimeParamsSpec
 
     public void Normalize()
     {
-        RangeTiles = Math.Clamp(RangeTiles, 0f, 120f);
+        RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
         HomingStrength = Math.Clamp(HomingStrength, 0f, 1f);
         GravityPerTick = Math.Clamp(GravityPerTick, -2f, 2f);
         VelocityRetention = Math.Clamp(VelocityRetention, 0f, 1.2f);
@@ -635,7 +662,7 @@ public sealed class RuntimeTargetingSpec
     {
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
-        RangeTiles = Math.Clamp(RangeTiles, 0f, 120f);
+        RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
         SameTargetBias = Math.Clamp(SameTargetBias, 0f, 1f);
     }
 }
@@ -715,10 +742,10 @@ public sealed class RuntimeEventActionSpec
             throw new InvalidDataException($"buff ID {BuffId} is not loaded");
         DurationTicks = Math.Clamp(DurationTicks, 0, 21600);
         RadiusPx = Math.Clamp(RadiusPx, 0, 1024);
-        RangeTiles = Math.Clamp(RangeTiles, 0f, 120f);
+        RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
         Mode = RuntimeText.Safe(Mode, 32).ToLowerInvariant();
         Strength = Math.Clamp(Strength, 0f, 4f);
-        RadiusTiles = Math.Clamp(RadiusTiles, 0f, 120f);
+        RadiusTiles = Math.Clamp(RadiusTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
         DamageFraction = Math.Clamp(DamageFraction, 0f, 1f);
         MaxHeal = Math.Clamp(MaxHeal, 0, 500);
         CooldownTicks = Math.Clamp(CooldownTicks, 0, 36000);

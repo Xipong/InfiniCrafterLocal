@@ -747,7 +747,20 @@ def compact_vfx_recipe_card(recipe: Mapping[str, Any]) -> dict[str, Any]:
     return {"id": str(recipe.get("id") or ""), "status": "retired_recipe_macro"}
 
 
+def vfx_director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Public generated schema owned by the VFX Director contract module."""
+
+    return _director_schema(data)
+
+
+def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Public generated schema for the bounded VFX Repair patch."""
+
+    return _vfx_repair_schema(data)
+
+
 __all__ = [
     "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "attach_hybrid_vfx_manifest",
-    "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_surface",
+    "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_schema", "vfx_director_surface",
+    "vfx_repair_schema",
 ]

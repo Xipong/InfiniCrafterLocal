@@ -54,7 +54,9 @@ public sealed partial class GeneratedItemData
         item.useTurn = Gameplay.UseTurn;
         item.channel = RuntimeProgram.ItemUse.Channel;
         item.noUseGraphic = RuntimeProgram.ItemUse.HideUseGraphic;
-        item.noMelee = RuntimeProgram.ItemUse.DisableMeleeHitbox || !RuntimeProgram.ItemContact.Enabled;
+        item.noMelee = RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner
+            || RuntimeProgram.ItemUse.DisableMeleeHitbox
+            || !RuntimeProgram.ItemContact.Enabled;
         item.mana = Math.Max(0, Gameplay.ManaCost);
         item.consumable = Gameplay.Consumable;
         item.healLife = Math.Max(0, Gameplay.HealLife);

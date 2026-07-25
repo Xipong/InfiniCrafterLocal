@@ -34,6 +34,8 @@
 
 ### Projectile semantics
 
+Primary executable ownership is authored explicitly per runtime row. For normal swords, pickaxes, axes and hammers the `item_body` is primary; a projectile on the same use is secondary unless the authored mechanic is explicitly projectile-owned (throw/flail/yoyo/whip/laser drill/held beam and similar). Final wire carries `primaryEntityId` and `primaryOwner`; C# gates `Item.noMelee`, contact hitbox and `Player.heldProj` writes from these fields. Entity/input/category names are never ownership classifiers.
+
 - proxy projectile начинает с Terraria defaults: `ignoreWater=false`, `netImportant=false`;
 - liquid collision, tile collision, penetrate, extra updates и NPC immunity задаются явно;
 - поддерживаются owner immunity и per-projectile local immunity;

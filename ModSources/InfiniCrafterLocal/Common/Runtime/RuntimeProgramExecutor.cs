@@ -6,7 +6,6 @@ using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Terraria;
 using Terraria.DataStructures;
 
@@ -19,30 +18,6 @@ namespace InfiniCrafterLocal.Common.Runtime;
 /// </summary>
 internal static class RuntimeProgramExecutor
 {
-    public static void RunEvent(
-        GeneratedItemData data,
-        RuntimeEntitySpec sourceEntity,
-        string eventName,
-        Player owner,
-        IEntitySource source,
-        Vector2 eventPosition,
-        Vector2 direction,
-        NPC? directTarget,
-        int damageDone,
-        int childDepth,
-        ref int remainingSpawnBudget,
-        bool includeDelayed = false)
-    {
-        if (data is null || sourceEntity is null || owner is null || !owner.active)
-            return;
-        foreach (RuntimeEventActionSpec action in sourceEntity.ActionsFor(eventName))
-        {
-            if (action.DelayTicks > 0 && !includeDelayed)
-                continue;
-            ExecuteAction(data, action, owner, source, eventPosition, direction, directTarget, damageDone, childDepth, ref remainingSpawnBudget);
-        }
-    }
-
     public static void ExecuteAction(
         GeneratedItemData data,
         RuntimeEventActionSpec action,
@@ -141,12 +116,18 @@ internal static class RuntimeProgramExecutor
             return;
         float range = Math.Max(16f, action.RangeTiles * 16f);
         int damage = Math.Max(1, (int)MathF.Round(Math.Max(1, data.Gameplay.Damage) * Math.Max(0.05f, action.DamageMultiplier)));
-        var candidates = Main.ActiveNPCs
-            .Where(n => n.CanBeChasedBy() && n != directTarget && Vector2.DistanceSquared(n.Center, center) <= range * range)
-            .OrderBy(n => Vector2.DistanceSquared(n.Center, center))
-            .Take(Math.Clamp(action.Count, 1, 12));
-        foreach (NPC npc in candidates)
+        var candidates = new List<NPC>();
+        foreach (NPC npc in Main.ActiveNPCs)
         {
+            if (npc.CanBeChasedBy() && npc != directTarget && Vector2.DistanceSquared(npc.Center, center) <= range * range)
+                candidates.Add(npc);
+        }
+        candidates.Sort((left, right) =>
+            Vector2.DistanceSquared(left.Center, center).CompareTo(Vector2.DistanceSquared(right.Center, center)));
+        int candidateCount = Math.Min(candidates.Count, Math.Clamp(action.Count, 1, 12));
+        for (int i = 0; i < candidateCount; i++)
+        {
+            NPC npc = candidates[i];
             int hitDirection = npc.Center.X >= owner.Center.X ? 1 : -1;
             owner.ApplyDamageToNPC(npc, damage, 0f, hitDirection, false, TerrariaRuntimeVocabulary.ResolveDamageClass(data.Gameplay.DamageClass), false);
         }
@@ -163,27 +144,35 @@ internal static class RuntimeProgramExecutor
         }
         if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay())
             return;
-        IEnumerable<NPC> targets = directTarget is { active: true }
-            ? new[] { directTarget }
-            : Main.ActiveNPCs.Where(n => n.CanBeChasedBy() && Vector2.DistanceSquared(n.Center, eventPosition) <= radius * radius);
         Vector2 destination = action.Mode == "target_to_owner" ? owner.Center : eventPosition;
-        foreach (NPC npc in targets.Take(16))
-            if (npc.knockBackResist > 0f)
-                npc.velocity += (destination - npc.Center).SafeNormalize(Vector2.Zero) * strength * npc.knockBackResist;
+        if (directTarget is { active: true })
+        {
+            if (directTarget.knockBackResist > 0f)
+                directTarget.velocity += (destination - directTarget.Center).SafeNormalize(Vector2.Zero) * strength * directTarget.knockBackResist;
+            return;
+        }
+        int pulled = 0;
+        foreach (NPC npc in Main.ActiveNPCs)
+        {
+            if (!npc.CanBeChasedBy() || npc.knockBackResist <= 0f || Vector2.DistanceSquared(npc.Center, eventPosition) > radius * radius)
+                continue;
+            npc.velocity += (destination - npc.Center).SafeNormalize(Vector2.Zero) * strength * npc.knockBackResist;
+            if (++pulled >= 16)
+                break;
+        }
     }
 
     private static void HealOwner(RuntimeEventActionSpec action, Player owner, int damageDone)
     {
-        if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner) || damageDone <= 0)
+        // Lifesteal follows owner-local projectile proc authority. Running it on both
+        // the server and owning client applies one authored hit heal twice in multiplayer.
+        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner) || damageDone <= 0)
             return;
         int heal = Math.Clamp((int)MathF.Round(damageDone * action.DamageFraction), 0, action.MaxHeal);
         if (heal <= 0)
             return;
-        int before = owner.statLife;
-        owner.statLife = Math.Min(owner.statLifeMax2, owner.statLife + heal);
-        int applied = owner.statLife - before;
-        if (applied > 0)
-            owner.HealEffect(applied, true);
+        if (owner.statLife < owner.statLifeMax2)
+            owner.Heal(heal);
     }
 
     private static void MoveOwner(RuntimeEventActionSpec action, Player owner, Vector2 eventPosition)

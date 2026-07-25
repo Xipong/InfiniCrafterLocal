@@ -122,26 +122,27 @@ public static class TerrariaRuntimeVocabulary
         };
 
     public static string CanonicalAmmoCategoryToken(int value)
-        => value switch
-        {
-            AmmoID.None => "",
-            AmmoID.Arrow => "arrow",
-            AmmoID.Bullet => "bullet",
-            AmmoID.CandyCorn => "candy_corn",
-            AmmoID.Coin => "coin",
-            AmmoID.Dart => "dart",
-            AmmoID.FallenStar => "fallen_star",
-            AmmoID.Flare => "flare",
-            AmmoID.Gel => "gel",
-            AmmoID.JackOLantern => "jack_o_lantern",
-            AmmoID.NailFriendly => "nail_friendly",
-            AmmoID.Rocket => "rocket",
-            AmmoID.Snowball => "snowball",
-            AmmoID.Solution => "solution",
-            AmmoID.Stake => "stake",
-            AmmoID.StyngerBolt => "stynger_bolt",
-            _ => "",
-        };
+    {
+        // AmmoID members are runtime-initialized fields in tModLoader, not C#
+        // constants, so they cannot be switch-pattern labels.
+        if (value == AmmoID.None) return "";
+        if (value == AmmoID.Arrow) return "arrow";
+        if (value == AmmoID.Bullet) return "bullet";
+        if (value == AmmoID.CandyCorn) return "candy_corn";
+        if (value == AmmoID.Coin) return "coin";
+        if (value == AmmoID.Dart) return "dart";
+        if (value == AmmoID.FallenStar) return "fallen_star";
+        if (value == AmmoID.Flare) return "flare";
+        if (value == AmmoID.Gel) return "gel";
+        if (value == AmmoID.JackOLantern) return "jack_o_lantern";
+        if (value == AmmoID.NailFriendly) return "nail_friendly";
+        if (value == AmmoID.Rocket) return "rocket";
+        if (value == AmmoID.Snowball) return "snowball";
+        if (value == AmmoID.Solution) return "solution";
+        if (value == AmmoID.Stake) return "stake";
+        if (value == AmmoID.StyngerBolt) return "stynger_bolt";
+        return "";
+    }
 
     public static int ResolveAmmoCategory(string? value)
         => value switch

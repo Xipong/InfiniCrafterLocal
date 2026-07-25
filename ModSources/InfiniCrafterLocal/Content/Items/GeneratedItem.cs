@@ -1,4 +1,5 @@
 #nullable enable
+using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Runtime;
@@ -33,7 +34,14 @@ public partial class GeneratedItem : ModItem
     private static int _warningCount;
     private int _lastHydrationTick = -9999;
     private int _lastBlockedNoticeTick = -9999;
-    private int _itemEventSpawnBudget;
+    private ItemEventBudgetState _itemEventBudget = new(0);
+
+    private sealed class ItemEventBudgetState
+    {
+        public int Remaining;
+        public ItemEventBudgetState(int remaining) => Remaining = Math.Max(0, remaining);
+    }
+
 
     private static void Warn(string context, Exception ex)
     {
@@ -47,6 +55,7 @@ public partial class GeneratedItem : ModItem
         var clone = (GeneratedItem)base.Clone(newEntity);
         try { clone.Data = GeneratedItemData.FromJson((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()) ?? GeneratedItemData.Placeholder(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
+        clone._itemEventBudget = new ItemEventBudgetState(0);
         return clone;
     }
 
@@ -54,6 +63,7 @@ public partial class GeneratedItem : ModItem
 
     private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal, bool notifyNetState = true)
     {
+        _itemEventBudget = new ItemEventBudgetState(0);
         Data = data ?? GeneratedItemData.Placeholder();
         try { Data.ApplyToItem(Item); }
         catch (Exception ex)
@@ -245,7 +255,7 @@ public partial class GeneratedItem : ModItem
                         return false;
             }
         }
-        _itemEventSpawnBudget = Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation;
+        _itemEventBudget = new ItemEventBudgetState(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return true;
     }
 
@@ -297,7 +307,18 @@ public partial class GeneratedItem : ModItem
         if (hold?.Action == RuntimeBindingAction.SpawnEntity && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
         {
             RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(hold.Target);
-            bool exists = entity is not null && Main.ActiveProjectiles.Any(p => p.owner == player.whoAmI && p.ModProjectile is GeneratedProjectile g && g.Matches(Data.Id, entity.Id));
+            bool exists = false;
+            if (entity is not null)
+            {
+                foreach (Projectile projectile in Main.ActiveProjectiles)
+                {
+                    if (projectile.owner == player.whoAmI && projectile.ModProjectile is GeneratedProjectile generated && generated.Matches(Data.Id, entity.Id))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+            }
             if (!exists && entity is not null)
                 GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, player.GetSource_ItemUse(Item), player.Center, new Vector2(player.direction, 0f), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         }
@@ -306,23 +327,79 @@ public partial class GeneratedItem : ModItem
         InfiniItemVfxRuntime.OnPeriodic(player, Data, itemEntity.Id);
     }
 
+
     private void RunPeriodicItemEvents(Player player, RuntimeEntitySpec entity)
     {
+        var budget = new ItemEventBudgetState(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.Periodic))
         {
             int period = Math.Max(6, action.PeriodTicks);
             if ((Main.GameUpdateCount + (ulong)action.Id.GetHashCode()) % (ulong)period != 0) continue;
-            int budget = Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation;
-            RuntimeProgramExecutor.ExecuteAction(Data, action, player, player.GetSource_Misc("InfiniRuntimePeriodic"), player.Center, new Vector2(player.direction, 0f), null, Data.Gameplay.Damage, 0, ref budget);
+            QueueOrExecuteItemAction(
+                player,
+                action,
+                null,
+                player.Center,
+                new Vector2(player.direction, 0f),
+                Data.Gameplay.Damage,
+                budget,
+                player.GetSource_Misc("InfiniRuntimePeriodic"));
         }
     }
 
     private void RunItemEvent(Player player, RuntimeEntitySpec entity, string eventName, NPC? target, int damageDone)
     {
-        int budget = _itemEventSpawnBudget > 0 ? _itemEventSpawnBudget : Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation;
-        RuntimeProgramExecutor.RunEvent(Data, entity, eventName, player, player.GetSource_ItemUse(Item), target?.Center ?? player.Center, new Vector2(player.direction, 0f), target, damageDone, 0, ref budget);
-        _itemEventSpawnBudget = budget;
+        Vector2 position = target?.Center ?? player.Center;
+        Vector2 direction = new(player.direction, 0f);
+        foreach (RuntimeEventActionSpec action in entity.ActionsFor(eventName))
+            QueueOrExecuteItemAction(
+                player,
+                action,
+                target,
+                position,
+                direction,
+                damageDone,
+                _itemEventBudget,
+                player.GetSource_ItemUse(Item));
     }
+
+    private void QueueOrExecuteItemAction(
+        Player player,
+        RuntimeEventActionSpec action,
+        NPC? target,
+        Vector2 position,
+        Vector2 direction,
+        int damageDone,
+        ItemEventBudgetState budget,
+        IEntitySource source)
+    {
+        if (action.DelayTicks > 0)
+        {
+            RuntimeDelayedActionScheduler.TrySchedule(
+                Data,
+                action,
+                player,
+                position,
+                direction,
+                target,
+                damageDone,
+                0,
+                ref budget.Remaining);
+            return;
+        }
+        RuntimeProgramExecutor.ExecuteAction(
+            Data,
+            action,
+            player,
+            source,
+            position,
+            direction,
+            target,
+            damageDone,
+            0,
+            ref budget.Remaining);
+    }
+
 
     public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
     {
@@ -342,7 +419,11 @@ public partial class GeneratedItem : ModItem
     public override void UseItemHitbox(Player player, ref Rectangle hitbox, ref bool noHitbox)
     {
         RuntimeItemContactSpec contact = Data.RuntimeProgram.ItemContact;
-        if (!contact.Enabled) { noHitbox = true; return; }
+        if (Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner || !contact.Enabled)
+        {
+            noHitbox = true;
+            return;
+        }
         float scale = contact.HitboxScale;
         int width = Math.Max(1, (int)MathF.Round(hitbox.Width * scale) + contact.ContactForgivenessPx * 2);
         int height = Math.Max(1, (int)MathF.Round(hitbox.Height * scale) + contact.ContactForgivenessPx * 2);
@@ -351,7 +432,8 @@ public partial class GeneratedItem : ModItem
 
     public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
     {
-        if (!Data.RuntimeProgram.ItemContact.Enabled) return;
+        if (Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner
+            || !Data.RuntimeProgram.ItemContact.Enabled) return;
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
         RunItemEvent(player, itemEntity, RuntimeEventKind.OnHit, target, damageDone);
         if (hit.Crit) RunItemEvent(player, itemEntity, RuntimeEventKind.OnCrit, target, damageDone);

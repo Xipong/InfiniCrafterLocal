@@ -23,8 +23,8 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "apiVersion": "exact configured version",
             "schema": "exact authoring schema",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
-            "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "target": "entity_id"}],
-            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": "exact capability params"}],
+            "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "role": "primary|secondary", "target": "entity_id"}],
+            "calls": [{"id": "stable_id", "fn": "catalog capability", "role": "primary|secondary", "target": "entity_id", "params": "exact capability params"}],
         },
         "runtimeContract": {
             "parentSynthesis": "literal parent facts and runtime roles",

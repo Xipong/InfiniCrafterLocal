@@ -1,4 +1,5 @@
 #nullable enable
+using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.VFX;
@@ -19,42 +20,64 @@ public sealed partial class GeneratedProjectile
         {
             if (action.DelayTicks > 0)
             {
-                if (_pendingActions.Count < 32)
-                    _pendingActions.Add(new PendingRuntimeAction(action, action.DelayTicks, target?.whoAmI ?? -1, target?.Center ?? Projectile.Center, direction, damageDone));
+                if (RuntimeDelayedActionScheduler.TrySchedule(
+                    _data,
+                    action,
+                    Owner(),
+                    target?.Center ?? Projectile.Center,
+                    direction,
+                    target,
+                    damageDone,
+                    _childDepth,
+                    ref _remainingSpawnBudget)
+                    && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                    Projectile.netUpdate = true;
                 continue;
             }
             RuntimeProgramExecutor.ExecuteAction(_data, action, Owner(), Projectile.GetSource_FromThis(), target?.Center ?? Projectile.Center, direction, target, damageDone, _childDepth, ref _remainingSpawnBudget);
         }
     }
 
-    private void ProcessPendingActions()
+    private void EmitAndSyncVfxEvent(string eventName, Vector2 center)
     {
-        if (_data is null || _pendingActions.Count == 0) return;
-        for (int i = _pendingActions.Count - 1; i >= 0; i--)
-        {
-            PendingRuntimeAction pending = _pendingActions[i];
-            int ticks = pending.Ticks - 1;
-            if (ticks > 0)
-            {
-                _pendingActions[i] = pending with { Ticks = ticks };
-                continue;
-            }
-            NPC? target = pending.NpcId >= 0 && pending.NpcId < Main.maxNPCs && Main.npc[pending.NpcId].active ? Main.npc[pending.NpcId] : null;
-            RuntimeProgramExecutor.ExecuteAction(_data, pending.Action, Owner(), Projectile.GetSource_FromThis(), pending.Position, pending.Direction, target, pending.DamageDone, _childDepth, ref _remainingSpawnBudget);
-            _pendingActions.RemoveAt(i);
-        }
+        if (_data is null || _entity is null) return;
+        if (InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center))
+            BroadcastVfxEventSync(eventName, center);
     }
 
     private void RunPeriodicActions()
     {
         if (_data is null || _entity is null) return;
+        int dueActions = 0;
+        bool emitted = false;
         foreach (RuntimeEventActionSpec action in _entity.ActionsFor(RuntimeEventKind.Periodic))
         {
-            int period = Math.Max(6, action.PeriodTicks);
+            int period = AuthoredTicksToProjectileUpdates(Math.Max(6, action.PeriodTicks));
             if (_age % period != 0) continue;
-            RuntimeProgramExecutor.ExecuteAction(_data, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, Projectile.velocity.SafeNormalize(_initialDirection), null, Projectile.damage, _childDepth, ref _remainingSpawnBudget);
-            InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.Periodic, _data.VfxManifest, ref _vfxState, Projectile.Center);
+            if (dueActions++ >= InfiniRuntimeLimits.MaxRuntimePeriodicActionsPerTick)
+                break;
+            Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
+            if (action.DelayTicks > 0)
+            {
+                if (RuntimeDelayedActionScheduler.TrySchedule(
+                    _data,
+                    action,
+                    Owner(),
+                    Projectile.Center,
+                    direction,
+                    null,
+                    Projectile.damage,
+                    _childDepth,
+                    ref _remainingSpawnBudget)
+                    && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                    Projectile.netUpdate = true;
+            }
+            else
+                RuntimeProgramExecutor.ExecuteAction(_data, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, ref _remainingSpawnBudget);
+            emitted = true;
         }
+        if (emitted)
+            EmitAndSyncVfxEvent(RuntimeEventKind.Periodic, Projectile.Center);
     }
 
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
@@ -100,11 +123,11 @@ public sealed partial class GeneratedProjectile
     {
         if (_data is null || _entity is null) return;
         RunRuntimeEvent(RuntimeEventKind.OnHit, target, damageDone);
-        InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnHit, _data.VfxManifest, ref _vfxState, target.Center);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnHit, target.Center);
         if (hit.Crit)
         {
             RunRuntimeEvent(RuntimeEventKind.OnCrit, target, damageDone);
-            InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnCrit, _data.VfxManifest, ref _vfxState, target.Center);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnCrit, target.Center);
         }
     }
 
@@ -112,7 +135,7 @@ public sealed partial class GeneratedProjectile
     {
         if (_data is null || _entity is null) return true;
         RunRuntimeEvent(RuntimeEventKind.OnTileCollision, null, Projectile.damage);
-        InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnTileCollision, _data.VfxManifest, ref _vfxState, Projectile.Center);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnTileCollision, Projectile.Center);
         if (_entity.Movement.Code is 5 or 14 or 16)
         {
             _returning = true;
@@ -136,9 +159,9 @@ public sealed partial class GeneratedProjectile
         {
             _expireEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, Projectile.damage);
-            InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnExpire, _data.VfxManifest, ref _vfxState, Projectile.Center);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
         RunRuntimeEvent(RuntimeEventKind.OnKill, null, Projectile.damage);
-        InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, RuntimeEventKind.OnKill, _data.VfxManifest, ref _vfxState, Projectile.Center);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnKill, Projectile.Center);
     }
 }

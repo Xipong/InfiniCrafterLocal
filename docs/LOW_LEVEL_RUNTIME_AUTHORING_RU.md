@@ -11,12 +11,27 @@ Gameplay Author returns metadata, concept, claim-backed runtime contract and:
     "schema": "infini.runtime-program.authoring.v1",
     "entities": [{"id": "item", "kind": "item_body"}],
     "bindings": [],
-    "calls": []
+    "calls": [{
+      "id": "item_stats",
+      "fn": "configure_item_stats",
+      "role": "primary",
+      "target": "item",
+      "params": {
+        "damageClass": "generic", "damage": 0, "knockback": 0,
+        "useTimeTicks": 20, "useAnimationTicks": 20, "manaCost": 0,
+        "valueCopper": 100, "rarity": 0, "maxStack": 1,
+        "critBonus": 0, "scale": 1, "craftYield": 1
+      }
+    }]
   }
 }
 ```
 
 IDs are stable lowercase snake_case. Exactly one `item_body` exists. Every projectile entity explicitly receives spawn, lifetime, hitbox, collision and a position driver where its kind requires one.
+
+Every authored `call` and `binding` has `role: primary|secondary`. All rows targeting one entity must use the same role, and exactly one entity is primary. This is the only owner declaration: code must not infer ownership from `primary_use`, projectile kind, item category, names, or capability choice. Compiler emits `primaryEntityId` plus `primaryOwner=item_body|projectile`; C# uses them to gate item contact and projectile held-owner writes.
+
+Terraria-native default: a sword/tool body is primary and a projectile spawned on the same use is secondary. Projectile-primary is valid only when the Author explicitly designs the action as a throw, flail/yoyo/whip, laser/beam drill, held shield/beam, or another projectile-owned action.
 
 ## Composition
 

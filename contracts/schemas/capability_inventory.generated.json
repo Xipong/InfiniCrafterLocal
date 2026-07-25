@@ -4083,7 +4083,7 @@
         "runtimeProgram.entities[].events[].maxHeal"
       ],
       "multiplicity": "many_per_target",
-      "networkAuthority": "owner_request_server_execute",
+      "networkAuthority": "owner_execute_sync",
       "parameters": {
         "damageFraction": {
           "enum": [],

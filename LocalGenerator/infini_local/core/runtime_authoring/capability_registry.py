@@ -272,6 +272,11 @@ class CapabilitySpec:
                     "description": "Stable call id used by claims and repair.",
                 },
                 "fn": {"const": self.name},
+                "role": {
+                    "type": "string",
+                    "enum": ["primary", "secondary"],
+                    "description": "Explicit executable-owner role of the target entity.",
+                },
                 "target": {
                     "type": "string",
                     "pattern": r"^[a-z][a-z0-9_]{0,47}$",
@@ -290,7 +295,7 @@ class CapabilitySpec:
                     "required": required,
                 },
             },
-            "required": ["id", "fn", "target", "params"],
+            "required": ["id", "fn", "role", "target", "params"],
         }
 
     def prompt_card(self) -> dict[str, Any]:
@@ -1419,7 +1424,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
     if cap.name in {"spawn_entity_on_event", "move_owner_on_event", "move_player_on_use"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
-        return "owner_request_server_execute", {}
+        return "owner_execute_sync", {}
     if cap.name in {"emit_light_while_active", "add_hold_light"}:
         return "client_visual_only", {}
     if cap.category == "equipment":
@@ -1558,16 +1563,26 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     )
 
 
-_CAPS = [_enrich_capability(cap) for cap in _CAPS]
+_ENRICHED_CAPS: Final[tuple[CapabilitySpec, ...]] = tuple(
+    _enrich_capability(cap) for cap in _CAPS
+)
 
 
-CAPABILITY_REGISTRY: Final[Mapping[str, CapabilitySpec]] = MappingProxyType({cap.name: cap for cap in _CAPS})
-if len(CAPABILITY_REGISTRY) != len(_CAPS):
+CAPABILITY_REGISTRY: Final[Mapping[str, CapabilitySpec]] = MappingProxyType(
+    {cap.name: cap for cap in _ENRICHED_CAPS}
+)
+if len(CAPABILITY_REGISTRY) != len(_ENRICHED_CAPS):
     raise RuntimeError("duplicate capability name in CAPABILITY_REGISTRY")
 
-MOVEMENT_CAPABILITIES: Final[frozenset[str]] = frozenset(cap.name for cap in _CAPS if cap.category == "movement")
-EVENT_CAPABILITIES: Final[frozenset[str]] = frozenset(cap.name for cap in _CAPS if cap.category == "event")
-ITEM_CAPABILITIES: Final[frozenset[str]] = frozenset(cap.name for cap in _CAPS if cap.target_kinds == ("item_body",))
+MOVEMENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
+    cap.name for cap in _ENRICHED_CAPS if cap.category == "movement"
+)
+EVENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
+    cap.name for cap in _ENRICHED_CAPS if cap.category == "event"
+)
+ITEM_CAPABILITIES: Final[frozenset[str]] = frozenset(
+    cap.name for cap in _ENRICHED_CAPS if cap.target_kinds == ("item_body",)
+)
 
 MOVEMENT_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "move_straight": 0,

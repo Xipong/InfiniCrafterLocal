@@ -232,6 +232,14 @@
                 ],
                 "type": "string"
               },
+              "role": {
+                "description": "Explicit executable-owner role; never inferred from input, category, name, or target kind.",
+                "enum": [
+                  "primary",
+                  "secondary"
+                ],
+                "type": "string"
+              },
               "target": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -257,6 +265,7 @@
               "id",
               "input",
               "action",
+              "role",
               "target"
             ],
             "type": "object"
@@ -395,6 +404,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -412,6 +429,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -528,6 +546,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -545,6 +571,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -586,6 +613,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -603,6 +638,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -642,6 +678,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -659,6 +703,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -729,6 +774,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -746,6 +799,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -792,6 +846,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -809,6 +871,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -850,6 +913,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -867,6 +938,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -976,6 +1048,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -993,6 +1073,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1050,6 +1131,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1067,6 +1156,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1115,6 +1205,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1132,6 +1230,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1182,6 +1281,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1199,6 +1306,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1250,6 +1358,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1267,6 +1383,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1325,6 +1442,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1342,6 +1467,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1481,6 +1607,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1498,6 +1632,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1614,6 +1749,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1631,6 +1774,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1715,6 +1859,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1737,6 +1889,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1790,6 +1943,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1812,6 +1973,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1845,6 +2007,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1867,6 +2037,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -1925,6 +2096,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -1947,6 +2126,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2026,6 +2206,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2048,6 +2236,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2070,6 +2259,14 @@
                     "required": [],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2092,6 +2289,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2133,6 +2331,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2155,6 +2361,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2188,6 +2395,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2210,6 +2425,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2242,6 +2458,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2264,6 +2488,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2297,6 +2522,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2319,6 +2552,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2361,6 +2595,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2383,6 +2625,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2416,6 +2659,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2438,6 +2689,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2488,6 +2740,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2510,6 +2770,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2542,6 +2803,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2564,6 +2833,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2605,6 +2875,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2627,6 +2905,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2660,6 +2939,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2682,6 +2969,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2723,6 +3011,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2745,6 +3041,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2786,6 +3083,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2808,6 +3113,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2858,6 +3164,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2880,6 +3194,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2922,6 +3237,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -2944,6 +3267,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -2984,6 +3308,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3006,6 +3338,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3048,6 +3381,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3065,6 +3406,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3107,6 +3449,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3124,6 +3474,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3165,6 +3516,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3182,6 +3541,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3224,6 +3584,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3241,6 +3609,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3292,6 +3661,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3309,6 +3686,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3350,6 +3728,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3368,6 +3754,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3438,6 +3825,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3456,6 +3851,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3498,6 +3894,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3520,6 +3924,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3624,6 +4029,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3647,6 +4060,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3698,6 +4112,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3721,6 +4143,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3775,6 +4198,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3798,6 +4229,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3857,6 +4289,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3880,6 +4320,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -3951,6 +4392,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -3973,6 +4422,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -4023,6 +4473,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -4046,6 +4504,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -4115,6 +4574,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -4137,6 +4604,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],
@@ -4188,6 +4656,14 @@
                     ],
                     "type": "object"
                   },
+                  "role": {
+                    "description": "Explicit executable-owner role of the target entity.",
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ],
+                    "type": "string"
+                  },
                   "target": {
                     "description": "Authored entity id. Target kind is checked locally.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -4210,6 +4686,7 @@
                 "required": [
                   "id",
                   "fn",
+                  "role",
                   "target",
                   "params"
                 ],

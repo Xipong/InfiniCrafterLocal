@@ -25,7 +25,7 @@ _FORBIDDEN_ROUTER_KEYS = {
     "family",
 }
 
-_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "limits", "entities", "bindings", "itemUse", "itemContact"})
+_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
 _ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events"})
 _VISUAL_KEYS = frozenset({"role", "assetMode", "prompt", "silhouette", "visualIdentity", "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore"})
@@ -48,7 +48,7 @@ _EVENT_KEYS = frozenset({
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
 })
-_BINDING_KEYS = frozenset({"id", "input", "action", "target"})
+_BINDING_KEYS = frozenset({"id", "input", "action", "role", "target"})
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
 _ITEM_CONTACT_KEYS = frozenset({"enabled", "hitboxScale", "contactForgivenessPx"})
 
@@ -228,6 +228,15 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         errors.append({"path": "$.runtimeProgram.itemEntityId", "code": "invalid_item_entity", "message": "itemEntityId must reference the unique item_body."})
 
     entity_kind_by_id = {str(row.get("id") or ""): str(row.get("kind") or "") for row in entities}
+    primary_entity_id = str(runtime.get("primaryEntityId") or "")
+    primary_kind = entity_kind_by_id.get(primary_entity_id)
+    primary_owner = str(runtime.get("primaryOwner") or "")
+    if primary_kind is None:
+        errors.append({"path": "$.runtimeProgram.primaryEntityId", "code": "invalid_primary_entity", "message": "primaryEntityId must reference one compiled runtime entity."})
+    else:
+        expected_owner = "item_body" if primary_kind == "item_body" else "projectile"
+        if primary_owner != expected_owner:
+            errors.append({"path": "$.runtimeProgram.primaryOwner", "code": "primary_owner_mismatch", "message": f"Primary entity kind {primary_kind!r} requires primaryOwner {expected_owner!r}."})
     exclusive_inputs: set[str] = set()
     bindings = runtime.get("bindings") or []
     if not isinstance(bindings, list):
@@ -241,6 +250,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         _reject_unknown(binding, _BINDING_KEYS, binding_path, errors)
         input_name = str(binding.get("input") or "")
         action_name = str(binding.get("action") or "")
+        role = str(binding.get("role") or "")
         target = str(binding.get("target") or "")
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
@@ -260,6 +270,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": f"{binding_path}.target", "code": "missing_entity_reference", "message": f"Unknown binding target {target!r}."})
         elif action_spec is not None and target_kind not in action_spec.target_kinds:
             errors.append({"path": f"{binding_path}.target", "code": "binding_target_kind", "message": f"Action {action_name!r} cannot target entity kind {target_kind!r}."})
+        expected_role = "primary" if target == primary_entity_id else "secondary"
+        if role != expected_role:
+            errors.append({"path": f"{binding_path}.role", "code": "binding_primary_role_mismatch", "message": f"Binding target {target!r} requires explicit role {expected_role!r}."})
 
     active_use = any(isinstance(row, Mapping) and str(row.get("input") or "") in {"primary_use", "alternate_use"} for row in bindings)
     item_use = item_use_raw if isinstance(item_use_raw, Mapping) else {}

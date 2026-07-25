@@ -58,9 +58,12 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "missing_claim_backing": {"strategy": "patch_or_delete_claim", "llmRepairable": True, "allowNodeDelete": True},
     "missing_dependency_param": {"strategy": "patch_exact_missing_param", "llmRepairable": True, "allowNodeDelete": False},
     "missing_entity_reference": {"strategy": "retarget_or_create_exact_missing_entity", "llmRepairable": True, "allowNodeDelete": False},
+    "missing_entity_role": {"strategy": "synthesize_exact_role_row", "llmRepairable": True, "allowNodeDelete": False},
     "missing_item_capability_param": {"strategy": "patch_or_synthesize_exact_item_dependency", "llmRepairable": True, "allowNodeDelete": False},
     "missing_movement_component": {"strategy": "choose_one_compatible_position_driver", "llmRepairable": True, "allowNodeDelete": False},
     "missing_required_component": {"strategy": "synthesize_exact_required_component", "llmRepairable": True, "allowNodeDelete": False},
+    "mixed_entity_role": {"strategy": "patch_exact_row_roles", "llmRepairable": True, "allowNodeDelete": False},
+    "primary_entity_count": {"strategy": "choose_exact_single_primary_entity", "llmRepairable": True, "allowNodeDelete": False},
     "self_reference_forbidden": {"strategy": "patch_exact_reference", "llmRepairable": True, "allowNodeDelete": False},
     "unknown_capability": {"strategy": "replace_or_delete_unknown_call", "llmRepairable": True, "allowNodeDelete": True},
     "unknown_registry_requirement": {"strategy": "developer_contract_defect", "llmRepairable": False, "allowNodeDelete": False},
@@ -674,6 +677,18 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
         if code == "unknown_registry_requirement":
             pass
+        elif code in {"mixed_entity_role", "primary_entity_count"}:
+            role_row_ids = related or [
+                str(row.get("id") or "")
+                for namespace in ("bindings", "calls")
+                for row in rows[namespace]
+                if str(row.get("id") or "")
+            ]
+            for row_id in role_row_ids:
+                namespace = namespace_by_id.get(row_id)
+                if namespace in {"bindings", "calls"}:
+                    mark(namespace, row_id)
+                    grant(namespace, row_id, "role")
         elif code in {"duplicate_id", "ambiguous_global_id"}:
             # IDs are structural identity.  Do not let Repair rename a valid
             # row through a broad upsert; allow dropping the exact offending

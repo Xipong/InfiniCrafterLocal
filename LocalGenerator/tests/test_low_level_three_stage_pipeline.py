@@ -330,6 +330,8 @@ def test_vfx_repair_freezes_valid_fields_and_accepts_missing_broken_slot_params(
 def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     current = build_runtime_fixture("workbench_blade")
     current["runtimeProgram"]["calls"] = [row for row in current["runtimeProgram"]["calls"] if row["id"] != "item_use"]
+    for claim in current["runtimeContract"]["claims"]:
+        claim["backedBy"] = [row_id for row_id in claim["backedBy"] if row_id != "item_use"]
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["binding_dependency"]
     scope = build_runtime_repair_scope(current, report["errors"])
@@ -339,7 +341,7 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
 
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [{
-        "id": "repair_item_use", "fn": "configure_item_use", "target": "item",
+        "id": "repair_item_use", "fn": "configure_item_use", "role": "primary", "target": "item",
         "params": {
             "useStyle": "shoot", "autoReuse": True, "useTurn": True,
             "hideUseGraphic": False, "disableMeleeHitbox": True, "channel": False,
@@ -618,3 +620,34 @@ def test_repair_transport_stage_names_are_finite_and_enabled() -> None:
     for stage in ("author_repair", "visual_repair", "vfx_repair"):
         payload = with_llm_stage({"model": "test"}, stage)
         assert payload["_infini_stage"] == stage
+
+
+def test_visual_request_uses_real_strict_json_schema_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    captured: dict[str, object] = {}
+
+    def fake_chat(request: dict, **_kwargs):
+        captured["request"] = request
+        return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr(visual_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(
+        visual_stage,
+        "apply_llm_common_options",
+        lambda request, **_kwargs: request,
+    )
+    monkeypatch.setattr(visual_stage, "with_llm_stage", lambda request, _stage: request)
+    monkeypatch.setattr(visual_stage, "llm_chat_json", fake_chat)
+
+    assert visual_stage._request_visual_kit(compiled, {}, {}, {}, {}) == {}
+    request = captured["request"]
+    assert isinstance(request, dict)
+    response_format = request["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    schema = response_format["json_schema"]["schema"]
+    assert schema["properties"]["entities"]["minItems"] == len(
+        compiled["runtimeProgram"]["entities"]
+    )

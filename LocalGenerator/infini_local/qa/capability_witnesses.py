@@ -190,6 +190,10 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             if not any(row["id"] == "witness_call" for row in calls):
                 calls.append(_call("witness_call", fn, witness_target))
 
+    primary_target = "item" if item_target and not projectile_target else witness_target
+    for row in (*bindings, *calls):
+        row["role"] = "primary" if row["target"] == primary_target else "secondary"
+
     return {
         "name": f"Capability Witness {fn}",
         "tooltip": f"Executable vertical-slice witness for {fn}.",

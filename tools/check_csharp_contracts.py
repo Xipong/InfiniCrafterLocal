@@ -75,6 +75,9 @@ def check_runtime_contract() -> None:
     for needle in [
         'CurrentApiVersion = "infini.runtime-program.v5"',
         'CurrentWireSchema = "infini.runtime-program.wire.v1"',
+        "public string PrimaryEntityId { get; set; }",
+        "public string PrimaryOwner { get; set; }",
+        "public string Role { get; set; }",
         "NormalizeAndValidate()",
         "exactly one item_body",
         "multiple exclusive owners",
@@ -82,6 +85,7 @@ def check_runtime_contract() -> None:
         "event spawn budget exceeded",
         "target_and_fire has no explicit shotEntityId",
         "active primary/alternate binding requires explicit configure_item_use",
+        "binding.Role != expectedRole",
     ]:
         require(dto, needle, "RuntimeProgramSpec.cs")
     require(data, "JsonUnmappedMemberHandling.Disallow", "GeneratedItemData.cs")
@@ -132,6 +136,7 @@ def check_runtime_contract() -> None:
     for needle in ["item.potion = Gameplay.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
         require(apply, needle, "GeneratedItemData.Apply.cs")
     forbid(apply, "item.potion = Gameplay.HealLife > 0", "GeneratedItemData.Apply.cs")
+    require(apply, "RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner", "GeneratedItemData.Apply.cs")
 
 
 def check_item_dispatch() -> None:
@@ -141,6 +146,7 @@ def check_item_dispatch() -> None:
         "BindingForInput(RuntimeInputKind.AlternateUse)",
         "RuntimeProgramExecutor",
         "SpawnRuntimeEntity",
+        "Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner",
     ]:
         require(item, needle, "GeneratedItem v5 dispatch")
     for legacy in ["AttackSpec", "RuntimeFamily", "WeaponFamily", "AltUseMode", "perform_melee_attack", "shoot_projectile"]:
@@ -153,6 +159,8 @@ def check_projectile_dispatch() -> None:
     events = read("Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs")
     net = read("Content/Projectiles/GeneratedProjectile.NetSync.cs")
     runtime = read("Common/Runtime/RuntimeProgramExecutor.cs")
+    packet_ids = read("Common/InfiniNetPacketIds.cs")
+    packet_router = read("InfiniCrafterLocal.cs")
     for needle in [
         "RuntimeEntitySpec? _entity",
         "SpawnRuntimeEntity(",
@@ -170,6 +178,13 @@ def check_projectile_dispatch() -> None:
     require(executors, "Projectile.Kill();", "GeneratedProjectile.Executors.cs")
     require(executors, "RejectUnknownController", "GeneratedProjectile.Executors.cs")
     require(events, "RuntimeProgramExecutor.ExecuteAction", "GeneratedProjectile.RuntimeEvents.cs")
+    require(events, "EmitAndSyncVfxEvent", "GeneratedProjectile.RuntimeEvents.cs")
+    require(executors, "EmitAndSyncVfxEvent(RuntimeEventKind.ChannelComplete", "GeneratedProjectile.Executors.cs")
+    require(projectile, "IsPrimaryRuntimeEntity", "GeneratedProjectile.cs")
+    require(projectile, "PrimaryOwner == RuntimeProgramSpec.ProjectileOwner", "GeneratedProjectile.cs")
+    require(projectile, "PrimaryEntityId", "GeneratedProjectile.cs")
+    require(projectile, "owner.heldProj = Projectile.whoAmI;", "GeneratedProjectile.cs")
+    forbid(executors, "owner.heldProj = Projectile.whoAmI;", "GeneratedProjectile.Executors.cs")
     require(runtime, "switch (action.ActionCode)", "RuntimeProgramExecutor.cs")
     require(runtime, "default:\n                return;", "RuntimeProgramExecutor.cs")
     for needle in [
@@ -179,8 +194,15 @@ def check_projectile_dispatch() -> None:
         "_generatedItemId.Length > 96",
         "_entityId.Length > 48",
         "Projectile.friendly = false",
+        "HandleVfxEventSyncPacket",
+        "payload.Owner != whoAmI",
+        "FindGeneratedProjectile(whoAmI, payload.Identity)",
+        "HasExactVfxSlot(generated._data, generated._entity.Id, payload.EventName)",
+        "relay.Send(-1, whoAmI)",
     ]:
         require(net, needle, "GeneratedProjectile.NetSync.cs")
+    require(packet_ids, "SyncGeneratedProjectileVfxEvent", "InfiniNetPacketIds.cs")
+    require(packet_router, "GeneratedProjectile.HandleVfxEventSyncPacket(reader, whoAmI)", "InfiniCrafterLocal.cs")
     for legacy in ["AttackSpec", "RuntimeFamily", "WeaponFamily", "GeneratedChildSpecPolicy", "GeneratedRuntimeFamilyPolicy"]:
         forbid(projectile + executors + events + net + runtime, legacy, "projectile v5 runtime")
 
@@ -195,6 +217,8 @@ def check_visual_vfx_contract() -> None:
     require(manifest, "Event", "VfxManifestSpec.cs")
     require(runtime, "entityId", "InfiniVfxRuntime.cs")
     require(runtime, "eventName", "InfiniVfxRuntime.cs")
+    require(runtime, "InfiniVfxSlotEmissionKey", "InfiniVfxRuntime.cs")
+    require(runtime, "slot.Id", "InfiniVfxRuntime.cs")
     for legacy in ["RuntimeFamily", "WeaponFamily", "AttackSpec"]:
         forbid(visual + manifest + runtime, legacy, "entity/event VFX")
 

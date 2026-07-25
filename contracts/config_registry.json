@@ -452,11 +452,25 @@
           "maximum": null,
           "minimum": null,
           "type": "path"
+        },
+        {
+          "default": {
+            "expression": "_LOCAL_GEN / \"cache\""
+          },
+          "file": "tools/replay_generation_case.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "path"
         }
       ],
-      "default": {
-        "expression": "ROOT / \"cache\""
-      },
+      "default": [
+        {
+          "expression": "ROOT / \"cache\""
+        },
+        {
+          "expression": "_LOCAL_GEN / \"cache\""
+        }
+      ],
       "documented": false,
       "example": null,
       "gui": false,
@@ -2796,30 +2810,6 @@
       "secret": false,
       "type": "string",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "tools/replay_generation_case.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_MULTIPASS_AUTHORING",
-      "owners": [
-        "tools/replay_generation_case.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -5363,8 +5353,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 221,
-  "fingerprint": "22ca67fe3ca828e3bb1624b6d7b4641ac30f57109ab029882d79a9ab29b65660",
+  "fieldCount": 220,
+  "fingerprint": "8617cf102d193ce654b8ff86fad377a84402c7a58a96e32ee7bfe7eb9627daed",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

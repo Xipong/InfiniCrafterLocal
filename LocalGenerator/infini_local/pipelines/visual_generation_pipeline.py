@@ -535,7 +535,12 @@ def _request_visual_kit(
         ],
         "temperature": env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.45),
         "max_tokens": visual_director_max_tokens(),
-        "response_format": llm_json_response_format("infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities", schema),
+        "response_format": llm_json_response_format(
+            "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",
+            schema=schema,
+            strict=True,
+            auto_preference="json_schema",
+        ),
     }
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
@@ -650,10 +655,24 @@ def build_image_prompt(data: dict[str, Any], visual: dict[str, Any]) -> str:
     return str(visual.get("imagePrompt") or "")[:1400]
 
 
+def visual_response_schema(entity_ids: list[str]) -> dict[str, Any]:
+    """Public generated schema owned by the Visual Director contract module."""
+
+    return _response_schema(entity_ids)
+
+
+def visual_repair_schema(entity_ids: list[str]) -> dict[str, Any]:
+    """Public generated schema for the bounded Visual Repair patch."""
+
+    return _visual_repair_schema(entity_ids)
+
+
 __all__ = [
     "VISUAL_KIT_SCHEMA",
     "VISUAL_REPAIR_PATCH_SCHEMA",
     "apply_visual_director",
     "attach_visual",
     "build_image_prompt",
+    "visual_repair_schema",
+    "visual_response_schema",
 ]
