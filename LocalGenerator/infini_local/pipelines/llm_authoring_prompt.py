@@ -21,7 +21,7 @@ from infini_local.pipelines.item_power_knowledge import tags_of
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 
-PLANNER_PROMPT_LIMIT_CHARS = 80_000
+PLANNER_PROMPT_LIMIT_CHARS = 96_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "

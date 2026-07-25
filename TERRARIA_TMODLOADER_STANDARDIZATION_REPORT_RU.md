@@ -40,16 +40,17 @@ Runtime сохранён low-level и LLM-authored, но технические 
 
 ## Проверка
 
-- Python suite: **77 passed**, 6 warnings;
+- Python suite: **85 passed**;
 - capability library: **100/100**, 52/52 vertical slices;
 - Terraria standardization: **87/87**;
-- Author prompt: **52/52** capabilities, 70 685 / 80 000 символов;
-- mutation gate: **4/4**;
+- Author prompt: **52/52** capabilities; обычный probe 70 729 / 96 000, rich generated-parent fixture 82 532 / 96 000 символов;
+- mutation gate: **5/5**;
 - non-archetypal fixtures: **8/8**;
-- C# static contract, delivery/parity, generated docs/schema, config, hygiene и portable sandbox: passed.
+- C# Debug и Release: **0 warnings, 0 errors** с `ParticleLibrary.dll`/`Luminance.dll` из внешнего dependency root;
+- C# static contract, delivery/parity, generated docs/schema, config, Ruff, Pyright, hygiene и portable sandbox: passed.
 
-Реальный C# build/tModLoader smoke не выполнен: в окружении отсутствуют .NET/tModLoader и обязательные mod references. Полный список `notRun` находится в `TERRARIA_TMODLOADER_STANDARDIZATION_VERIFICATION.json` и `TEST_SUITE_AND_TOOLBOX_AUDIT_RU.md`.
+Реальный tModLoader runtime self-test и host/client игровой smoke не выполнялись. Они остаются `notRun`, а не объявляются успехом; сборка DLL и deterministic/source gates их не заменяют.
 
 ## Проверка упакованного deliverable
 
-Предварительный ZIP повторно распакован в чистую директорию. До тестов и после удаления созданных тестами cache-файлов внутренний manifest подтвердил **368/368 source files**. Из распакованной копии повторно прошли **77 pytest**, standardization **87/87**, capability library **100/100**, Repair policy **33/33**, mutation **4/4**, non-archetypal fixtures **8/8**, C# static contract и project hygiene.
+Финальный Git ZIP должен собираться только из clean tracked tree, содержать `.git`, повторно распаковываться в отдельную директорию и проходить `git fsck`, проверку HEAD/manifest и ключевые Python/C# gates. Результат конкретной упаковки фиксируется во внешнем integration report вместе с SHA-256 архива, а не заранее в этом source-документе.

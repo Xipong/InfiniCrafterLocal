@@ -219,7 +219,7 @@ def audit_markdown() -> str:
         "- Cross-entity references доступны только там, где runtime реально их исполняет (`target_and_fire`, event child spawn).",
         "- Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.",
         "- Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.",
-        "- Prompt catalog крупный, но self-contained: около 64k символов при лимите 80k; retrieval/tool loop не используется.",
+        "- Prompt catalog крупный, но self-contained: около 71k символов на обычных parents и до 83k на rich generated-parent fixture при hard limit 96k; retrieval/tool loop не используется.",
         f"- Каталог покрывает реализованные {len(CAPABILITY_REGISTRY)} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
         "",
         "## Практическая оценка",

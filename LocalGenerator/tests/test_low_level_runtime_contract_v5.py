@@ -36,7 +36,7 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     parent_b = {"name": "Blade", "id": "b", "damage": 18, "useTime": 24, "tags": ["metal"]}
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
     assert report["ok"] is True
-    assert PLANNER_PROMPT_LIMIT_CHARS == 80_000
+    assert PLANNER_PROMPT_LIMIT_CHARS == 96_000
     assert report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
     assert report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert report["visibleCapabilities"] == len(names)
@@ -44,6 +44,15 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     assert report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False
     assert report["containsFamilyRouter"] is False
+
+    rich_parent = build_runtime_fixture("held_and_deployed")
+    rich_report = planner_prompt_usability_report(
+        rich_parent, rich_parent, rich_parent, rich_parent, "rich+rich"
+    )
+    assert rich_report["ok"] is True
+    assert rich_report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    assert rich_report["visibleCapabilities"] == len(names)
+    assert rich_report["missingCapabilities"] == []
 
 
 def test_all_non_archetypal_fixtures_compile_to_strict_wire() -> None:

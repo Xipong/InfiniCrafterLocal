@@ -79,7 +79,7 @@ Visual Repair получает broken item/entity/animation fragments, вали�
 ## Проверка
 
 - targeted three-stage/Repair suite: **19 passed**;
-- полный Python suite: **77 passed**, 6 multiprocessing deprecation warnings;
+- полный Python suite: **85 passed**;
 - machine blocker audit: passed;
 - generated Repair scope schema: current;
 - stage accounting happy path: `1/0/1/0/1/0`.
