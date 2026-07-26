@@ -99,6 +99,35 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
     properties = schema.get("properties") or {}
     placeholders: dict[str, Any] = {}
     for key, child in properties.items():
+        if key == "entitiesUpsert":
+            placeholders[key] = [{"id": "stable_entity_id", "kind": "catalog entity kind"}]
+            continue
+        if key == "bindingsUpsert":
+            placeholders[key] = [{
+                "id": "stable_binding_id",
+                "input": "primary_use|alternate_use|hold|equipped",
+                "action": "catalog action",
+                "role": "primary|secondary",
+                "target": "existing entity id",
+            }]
+            continue
+        if key == "callsUpsert":
+            placeholders[key] = [{
+                "id": "stable_call_id",
+                "fn": "catalog capability",
+                "role": "primary|secondary",
+                "target": "existing entity id",
+                "params": {"everyRequiredCapabilityParam": "typed value"},
+            }]
+            continue
+        if key == "claimsUpsert":
+            placeholders[key] = [{
+                "id": "stable_claim_id",
+                "kind": "gameplay|physical|parent_synthesis",
+                "text": "non-empty claim",
+                "backedBy": ["existing binding or call id"],
+            }]
+            continue
         if key == "primaryEntitySelection":
             placeholders[key] = "entity_id chosen from repairScope.repairTransactions.entityRoleSelection.candidateEntityIds, or null"
             continue

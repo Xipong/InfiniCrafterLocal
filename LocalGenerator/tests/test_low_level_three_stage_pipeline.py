@@ -307,6 +307,53 @@ def test_repair_transactions_apply_llm_primary_and_exclusive_input_choices() -> 
     )
 
 
+def test_redundant_exclusive_selection_is_ignored_after_binding_retarget() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["runtimeProgram"]["bindings"].append({
+        "id": "bad_primary",
+        "input": "primary_use",
+        "action": "spawn_entity",
+        "role": "secondary",
+        "target": "workbench_blade",
+    })
+    report = validate_runtime_program(current)
+    error = next(row for row in report["errors"] if row["code"] == "duplicate_exclusive_input")
+    scope = build_runtime_repair_scope(current, [error])
+    assert scope["repairTransactions"]["exclusiveInputSelections"] == [{
+        "input": "primary_use",
+        "candidateBindingIds": ["bad_primary", "primary_workbench"],
+        "mustKeepExactlyOne": True,
+    }]
+
+    patch = _empty_gameplay_patch()
+    patch["bindingsUpsert"] = [{
+        "id": "bad_primary",
+        "input": "alternate_use",
+        "action": "spawn_entity",
+        "role": "secondary",
+        "target": "workbench_blade",
+    }]
+    patch["exclusiveInputSelections"] = [{
+        "input": "primary_use",
+        "keepBindingId": "not_a_candidate",
+    }]
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+
+    assert audit["ok"], audit
+    assert filtered["exclusiveInputSelections"] == []
+    assert any(
+        row.get("reason") == "exclusive_input_conflict_already_resolved"
+        for row in audit["ignoredChanges"]
+    )
+    repaired = apply_repair_patch(current, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    repaired_binding = next(
+        row for row in repaired["runtimeProgram"]["bindings"]
+        if row["id"] == "bad_primary"
+    )
+    assert repaired_binding["input"] == "alternate_use"
+
+
 def test_mixed_role_without_primary_count_uses_atomic_entity_selection() -> None:
     current = build_runtime_fixture("workbench_blade")
     valid = validate_runtime_program(current)
@@ -719,6 +766,9 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     repair_rules = " ".join(dossier["rules"])
     assert "Every upsert entry must be a complete schema-valid node" in repair_rules
     assert "id, fn, role, target, and the complete params object" in repair_rules
+    required_shape = dossier["requiredJsonShape"]
+    assert required_shape["claimsUpsert"][0]["kind"] == "gameplay|physical|parent_synthesis"
+    assert set(required_shape["callsUpsert"][0]) == {"id", "fn", "role", "target", "params"}
     card_fns = {
         card["fn"]
         for key in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards")

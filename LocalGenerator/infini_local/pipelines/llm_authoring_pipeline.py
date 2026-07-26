@@ -270,7 +270,7 @@ def build_gameplay_repair_dossier(
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
             "When repairTransactions.entityRoleSelection.allowed is true, set primaryEntitySelection to exactly one listed candidate; code applies that authored partition to every affected row.",
-            "For every repairTransactions.exclusiveInputSelections group, emit one exclusiveInputSelections row choosing the keepBindingId; code removes only the other listed owners.",
+            "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
         ],
         "runtimeVersions": {
             "authorSchema": RUNTIME_PROGRAM_SCHEMA,
@@ -336,7 +336,7 @@ def repair_author_item_after_failure(
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
         "For every coupledFieldGroup, emit every affected row and use one identical allowed value for its field across the entire group. "
-        "Use primaryEntitySelection and exclusiveInputSelections whenever their repairTransactions are enabled; those are authored transactional choices, not notes. "
+        "Use primaryEntitySelection whenever its repairTransaction is enabled. For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
         "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
         "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."

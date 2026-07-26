@@ -20,7 +20,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
 )
 from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_shape_report
 
 
 RUNTIME_REPAIR_SCOPE_SCHEMA = "infini.runtime-repair-scope.v5"
@@ -1418,8 +1418,35 @@ def filter_repair_patch_scope(
         filtered["primaryEntitySelection"] = copy.deepcopy(patch.get("primaryEntitySelection"))
         accepted.append("$.primaryEntitySelection")
     if "exclusiveInputSelections" in patch:
-        filtered["exclusiveInputSelections"] = copy.deepcopy(patch.get("exclusiveInputSelections"))
-        accepted.append("$.exclusiveInputSelections")
+        filtered["exclusiveInputSelections"] = []
+        preview_patch = copy.deepcopy(filtered)
+        preview_patch["exclusiveInputSelections"] = []
+        preview_raw = apply_repair_patch(current, preview_patch)
+        preview: Mapping[str, Any] = preview_raw if isinstance(preview_raw, Mapping) else {}
+        preview_program_raw = preview.get("runtimeProgram")
+        preview_program: Mapping[str, Any] = preview_program_raw if isinstance(preview_program_raw, Mapping) else {}
+        preview_bindings_raw = preview_program.get("bindings")
+        preview_bindings = preview_bindings_raw if isinstance(preview_bindings_raw, list) else []
+        for index, selection in enumerate(patch.get("exclusiveInputSelections") or []):
+            if not isinstance(selection, Mapping):
+                continue
+            input_name = str(selection.get("input") or "")
+            remaining_owners = [
+                str(row.get("id") or "")
+                for row in preview_bindings
+                if isinstance(row, Mapping) and str(row.get("input") or "") == input_name
+            ]
+            path = f"$.exclusiveInputSelections[{index}]"
+            if len(remaining_owners) <= 1:
+                ignored.append(_filter_ignored(
+                    path,
+                    selection,
+                    {"remainingBindingIds": remaining_owners},
+                    "exclusive_input_conflict_already_resolved",
+                ))
+                continue
+            filtered["exclusiveInputSelections"].append(copy.deepcopy(dict(selection)))
+            accepted.append(path)
 
     strict_filtered_scope = validate_repair_patch_scope(current, filtered, scope)
     report = {
