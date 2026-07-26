@@ -93,6 +93,130 @@ def _calls_by_target(program: Mapping[str, Any]) -> dict[str, list[dict[str, Any
     return out
 
 
+def _entity_role_issues(
+    entities_by_id: Mapping[str, Mapping[str, Any]],
+    bindings: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+) -> tuple[list[ValidationIssue], str]:
+    issues: list[ValidationIssue] = []
+    role_rows_by_target: dict[str, list[tuple[str, str, str]]] = {}
+    for namespace, rows in (("bindings", bindings), ("calls", calls)):
+        for row in rows:
+            target_id = str(row.get("target") or "")
+            if target_id not in entities_by_id:
+                continue
+            role_rows_by_target.setdefault(target_id, []).append(
+                (namespace, str(row.get("id") or ""), str(row.get("role") or ""))
+            )
+    for entity_id in entities_by_id:
+        role_rows = role_rows_by_target.get(entity_id, [])
+        if not role_rows:
+            issues.append(ValidationIssue(
+                "$.runtimeProgram",
+                "missing_entity_role",
+                f"Entity '{entity_id}' has no authored call/binding role rows.",
+                ("add an exact call or binding with role primary|secondary",),
+                (entity_id,),
+            ))
+            continue
+        roles = {role for _, _, role in role_rows}
+        if len(roles) != 1:
+            issues.append(ValidationIssue(
+                "$.runtimeProgram",
+                "mixed_entity_role",
+                f"Entity '{entity_id}' mixes authored primary and secondary rows.",
+                ("all rows targeting one entity must use one role",),
+                tuple(row_id for _, row_id, _ in role_rows if row_id),
+            ))
+    primary_targets = {
+        target_id
+        for target_id, role_rows in role_rows_by_target.items()
+        if any(role == "primary" for _, _, role in role_rows)
+    }
+    if len(primary_targets) != 1:
+        primary_row_ids = tuple(
+            row_id
+            for role_rows in role_rows_by_target.values()
+            for _, row_id, role in role_rows
+            if role == "primary" and row_id
+        )
+        issues.append(ValidationIssue(
+            "$.runtimeProgram",
+            "primary_entity_count",
+            f"Exactly one explicitly authored primary entity is required; found {len(primary_targets)}.",
+            ("mark every row of exactly one target entity primary and all other entity rows secondary",),
+            primary_row_ids,
+        ))
+    primary_entity_id = next(iter(primary_targets)) if len(primary_targets) == 1 else ""
+    return issues, primary_entity_id
+
+
+def _exclusive_input_issues(bindings: list[dict[str, Any]]) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    exclusive_inputs: dict[str, tuple[int, str]] = {}
+    for index, binding in enumerate(bindings):
+        binding_id = str(binding.get("id") or "")
+        input_name = str(binding.get("input") or "")
+        input_spec = INPUT_KIND_REGISTRY.get(input_name)
+        if input_spec is None or not input_spec.exclusive:
+            continue
+        if input_name in exclusive_inputs:
+            previous_index, previous_id = exclusive_inputs[input_name]
+            issues.append(ValidationIssue(
+                f"$.runtimeProgram.bindings[{index}].input",
+                "duplicate_exclusive_input",
+                f"bindings[{previous_index}] ('{previous_id}') and bindings[{index}] ('{binding_id}') both own exclusive input {input_name}.",
+                ("use another input", "sequence through an event", "remove one binding"),
+                (previous_id, binding_id),
+            ))
+        else:
+            exclusive_inputs[input_name] = (index, binding_id)
+    return issues
+
+
+def _safe_shape_semantic_issues(document: Mapping[str, Any]) -> list[ValidationIssue]:
+    """Collect semantics that need only a traversable role/input shell.
+
+    Deep capability params remain owned by strict shape validation. This collector
+    exists so one scoped Repair sees latent role/input blockers in the same pass
+    as a leaf-level shape error without walking arbitrary malformed structures.
+    """
+
+    program = document.get("runtimeProgram")
+    if not isinstance(program, Mapping):
+        return []
+    raw_entities = program.get("entities")
+    raw_bindings = program.get("bindings")
+    raw_calls = program.get("calls")
+    if not all(isinstance(rows, list) and all(isinstance(row, dict) for row in rows) for rows in (
+        raw_entities,
+        raw_bindings,
+        raw_calls,
+    )):
+        return []
+    entities = _rows(raw_entities)
+    bindings = _rows(raw_bindings)
+    calls = _rows(raw_calls)
+    if any(not isinstance(row.get("id"), str) or not row.get("id") for row in entities):
+        return []
+    if len({str(row["id"]) for row in entities}) != len(entities):
+        return []
+    role_rows = [*bindings, *calls]
+    if any(
+        not isinstance(row.get("id"), str)
+        or not row.get("id")
+        or not isinstance(row.get("target"), str)
+        or row.get("role") not in {"primary", "secondary"}
+        for row in role_rows
+    ):
+        return []
+    if any(not isinstance(row.get("input"), str) for row in bindings):
+        return []
+    entities_by_id = {str(row["id"]): row for row in entities}
+    role_issues, _ = _entity_role_issues(entities_by_id, bindings, calls)
+    return [*role_issues, *_exclusive_input_issues(bindings)]
+
+
 def _graph_cycle(edges: Mapping[str, set[str]]) -> tuple[str, ...]:
     visited: set[str] = set()
     active: list[str] = []
@@ -254,19 +378,20 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     issues: list[ValidationIssue] = []
     shape = strict_author_shape_report(document)
     if not shape["ok"]:
+        shape_issues = [
+            ValidationIssue(
+                path=str(row.get("path") or "$"),
+                code=f"shape_{row.get('kind', 'invalid')}",
+                message=f"Strict schema violation: {row}",
+            )
+            for row in shape["errors"]
+        ]
+        safe_semantic_issues = _safe_shape_semantic_issues(document)
+        errors = [issue.row() for issue in (*shape_issues, *safe_semantic_issues)]
         return {
             "schema": "infini.runtime-program-validation.v1",
             "ok": False,
-            "errors": [
-                {
-                    "path": row.get("path", "$"),
-                    "code": f"shape_{row.get('kind', 'invalid')}",
-                    "message": f"Strict schema violation: {row}",
-                    "allowed": [],
-                    "relatedIds": [],
-                }
-                for row in shape["errors"]
-            ],
+            "errors": errors,
             "stats": {},
         }
 
@@ -308,57 +433,10 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         issues.append(ValidationIssue("$.runtimeProgram.entities", "item_body_count", f"Exactly one item_body is required; found {len(item_entities)}.", ("add one item_body", "remove extras")))
     item_id = str(item_entities[0].get("id") or "") if len(item_entities) == 1 else ""
 
-    role_rows_by_target: dict[str, list[tuple[str, str, str]]] = {}
-    for namespace, rows in (("bindings", bindings), ("calls", calls)):
-        for row in rows:
-            target_id = str(row.get("target") or "")
-            if target_id not in entities_by_id:
-                continue
-            role_rows_by_target.setdefault(target_id, []).append(
-                (namespace, str(row.get("id") or ""), str(row.get("role") or ""))
-            )
-    for entity_id in entities_by_id:
-        role_rows = role_rows_by_target.get(entity_id, [])
-        if not role_rows:
-            issues.append(ValidationIssue(
-                "$.runtimeProgram",
-                "missing_entity_role",
-                f"Entity '{entity_id}' has no authored call/binding role rows.",
-                ("add an exact call or binding with role primary|secondary",),
-                (entity_id,),
-            ))
-            continue
-        roles = {role for _, _, role in role_rows}
-        if len(roles) != 1:
-            issues.append(ValidationIssue(
-                "$.runtimeProgram",
-                "mixed_entity_role",
-                f"Entity '{entity_id}' mixes authored primary and secondary rows.",
-                ("all rows targeting one entity must use one role",),
-                tuple(row_id for _, row_id, _ in role_rows if row_id),
-            ))
-    primary_targets = {
-        target_id
-        for target_id, role_rows in role_rows_by_target.items()
-        if any(role == "primary" for _, _, role in role_rows)
-    }
-    if len(primary_targets) != 1:
-        primary_row_ids = tuple(
-            row_id
-            for role_rows in role_rows_by_target.values()
-            for _, row_id, role in role_rows
-            if role == "primary" and row_id
-        )
-        issues.append(ValidationIssue(
-            "$.runtimeProgram",
-            "primary_entity_count",
-            f"Exactly one explicitly authored primary entity is required; found {len(primary_targets)}.",
-            ("mark every row of exactly one target entity primary and all other entity rows secondary",),
-            primary_row_ids,
-        ))
-    primary_entity_id = next(iter(primary_targets)) if len(primary_targets) == 1 else ""
+    role_issues, primary_entity_id = _entity_role_issues(entities_by_id, bindings, calls)
+    issues.extend(role_issues)
 
-    exclusive_inputs: dict[str, tuple[int, str]] = {}
+    issues.extend(_exclusive_input_issues(bindings))
     binding_spawn_roots: set[str] = set()
     for index, binding in enumerate(bindings):
         binding_id = str(binding.get("id") or "")
@@ -373,18 +451,6 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             continue
         if input_spec is None or action_spec is None:
             continue  # strict schema already reports this case
-        if input_spec.exclusive:
-            if input_name in exclusive_inputs:
-                previous_index, previous_id = exclusive_inputs[input_name]
-                issues.append(ValidationIssue(
-                    f"$.runtimeProgram.bindings[{index}].input",
-                    "duplicate_exclusive_input",
-                    f"bindings[{previous_index}] ('{previous_id}') and bindings[{index}] ('{binding_id}') both own exclusive input {input_name}.",
-                    ("use another input", "sequence through an event", "remove one binding"),
-                    (previous_id, binding_id),
-                ))
-            else:
-                exclusive_inputs[input_name] = (index, binding_id)
         if action_name not in input_spec.allowed_actions or input_name not in action_spec.allowed_inputs:
             issues.append(ValidationIssue(
                 f"$.runtimeProgram.bindings[{index}]",

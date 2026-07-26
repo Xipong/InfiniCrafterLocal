@@ -217,6 +217,41 @@ def test_author_validation_exposes_only_canonical_shape_codes_to_repair() -> Non
     assert any(row.get("kind") == "pattern" for row in report["shape"]["errors"])
 
 
+def test_shape_failure_still_exposes_safe_role_and_exclusive_input_blockers() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    stats = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_stats")
+    stats["params"]["damageClass"] = "none"
+    binding = current["runtimeProgram"]["bindings"][0]
+    binding["role"] = "primary"
+    current["runtimeProgram"]["bindings"].append({
+        **binding,
+        "id": "duplicate_primary_use",
+        "target": "nail",
+        "role": "secondary",
+    })
+
+    report = authored_item_validation_report(current)
+    codes = {row.get("code") for row in report["errors"]}
+
+    assert {"shape_one_of", "shape_pattern"}.issubset(codes)
+    assert {"mixed_entity_role", "primary_entity_count", "duplicate_exclusive_input"}.issubset(codes)
+
+    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = scope["repairTransactions"]["entityRoleSelection"]
+    assert transaction["allowed"] is True
+    assert transaction["candidateEntityIds"] == ["item", "nail", "workbench_blade"]
+    assert scope["repairTransactions"]["exclusiveInputSelections"] == [{
+        "input": "primary_use",
+        "candidateBindingIds": ["duplicate_primary_use", "primary_workbench"],
+        "mustKeepExactlyOne": True,
+    }]
+    call_permissions = {
+        row["id"]: set(row["paths"])
+        for row in scope["fieldPermissions"]["calls"]
+    }
+    assert "params.damageClass" in call_permissions["item_stats"]
+
+
 def test_repair_transactions_apply_llm_primary_and_exclusive_input_choices() -> None:
     current = build_runtime_fixture("workbench_blade")
     for namespace in ("bindings", "calls"):
