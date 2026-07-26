@@ -179,18 +179,24 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
         "entityRolePartition": {
             "exactlyOnePrimaryEntity": True,
             "allBindingAndCallRowsForOneTargetUseOneRole": True,
-            "primaryRule": "Choose exactly one entity id. Every binding/call targeting it uses primary; every binding/call targeting every other entity uses secondary.",
+            "primaryRule": "Before authoring rows, choose exactly one existing entity id as the primary target. Then set row.role = primary exactly for rows targeting that entity; every other row is secondary. Primary means ownership partition, not importance.",
         },
         "exclusiveInputs": {
             "maxBindingsPerInput": 1,
             "inputs": sorted(
                 name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
             ),
+            "authoringProcedure": "Choose one action root per exclusive input. Never author separate use_item_body and spawn_entity binding rows with the same input; sequence additional behavior through a supported event or another input.",
         },
         "damageClass": {
             "builtInTokens": list(DAMAGE_CLASS_TOKENS),
             "moddedTokenShape": "ModName/ClassName copied from parent facts",
             "otherTokensAllowed": False,
+            "sourceSentinelRule": "Parent fact damageClass=none is read-only source data and is never a valid runtime token; choose one exact built-in token or an exact parent-backed ModName/ClassName.",
+        },
+        "capabilityParams": {
+            "exactCardMatch": True,
+            "sourceSentinelRule": "Do not copy Terraria sentinel -1 into a runtime param whose capability card minimum is 0; use an allowed value or omit the unnecessary capability.",
         },
     }
 
@@ -210,10 +216,11 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         "requiredJsonShape": author_item_prompt_shape_card(),
         "runtimeContractSchema": RUNTIME_CONTRACT_SCHEMA,
         "selfCheck": [
-            "all refs exist and target kinds match",
-            "exactly one entity is primary; every binding/call for one target uses the same role",
-            "one item_body and at most one binding owns each runtimeProgramInvariants.exclusiveInputs input",
-            "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName",
+            "choose exactly one existing entity id as primary, then verify all and only rows targeting that entity have role=primary",
+            "all refs exist and binding/call target kinds match their registry cards",
+            "one item_body and exactly one binding row at most owns each runtimeProgramInvariants.exclusiveInputs input; never pair use_item_body plus spawn_entity on one input",
+            "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName; parent sentinel none is forbidden and the Author must choose the exact canonical token",
+            "every call params object exactly matches its capability card; no below-minimum source sentinel such as -1 is copied",
             "every spawned entity has explicit spawn/lifetime/hitbox/collision",
             "moving entities have exactly one movement/controller",
             "event graph is acyclic and within depth/count limits",

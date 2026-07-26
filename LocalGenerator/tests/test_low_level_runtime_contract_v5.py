@@ -53,7 +53,9 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     assert invariants["damageClass"]["builtInTokens"] == list(DAMAGE_CLASS_TOKENS)
     assert invariants["damageClass"]["otherTokensAllowed"] is False
     self_check = " ".join(payload["selfCheck"])
-    assert "exactly one entity is primary" in self_check
+    assert "choose exactly one existing entity id as primary" in self_check
+    assert "all and only rows targeting that entity have role=primary" in self_check
+    assert "parent sentinel none is forbidden" in self_check
     assert "every damageClass" in self_check
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
     assert report["ok"] is True

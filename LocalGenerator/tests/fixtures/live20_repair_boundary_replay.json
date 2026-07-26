@@ -1,0 +1,1159 @@
+{
+  "gameplayApplyCases": {
+    "obsidian_pickaxe": {
+      "expectedInitialCodes": [
+        "binding_dependency",
+        "duplicate_exclusive_input",
+        "mixed_entity_role"
+      ],
+      "initialAuthor": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Инструмент для шахтерских работ с возможностью установки обсидиана через альтернативное использование",
+          "literalSynthesis": "Соединение литой кирки и обсидиана как расходуемого строительного материала",
+          "parentAContribution": "Предоставляет базовую механику кирки, скорость и шахтерские характеристики",
+          "parentBContribution": "Предоставляет обсидиан для размещения в мире в качестве тайла",
+          "playerExperience": "Игрок может эффективно добывать блоки и одновременно устанавливать обсидиан вторым действием"
+        },
+        "name": "Обсидиановая литая кирка",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "b_primary_use",
+                "c_stats",
+                "c_tool"
+              ],
+              "id": "claim_mining",
+              "kind": "gameplay",
+              "text": "Предмет функционирует как кирка с силой копания 100 и наносит 12 урона в ближнем бою"
+            },
+            {
+              "backedBy": [
+                "b_alternate_use",
+                "b_consumption",
+                "c_placeable",
+                "c_consumption"
+              ],
+              "id": "claim_placement",
+              "kind": "physical",
+              "text": "Альтернативное использование размещает обсидиан как тайл с расходом из стопки"
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "Объединение параметров Литой кирки и Обсидиана в единый предмет с функцией шахтерского инструмента и размещаемого блока",
+            "parentA": {
+              "facts": [
+                "Terraria/MoltenPickaxe",
+                "pickPower: 100",
+                "damage: 12"
+              ],
+              "runtimeRoles": [
+                "item_body"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "Terraria/Obsidian",
+                "createTile: 56",
+                "consumable: true"
+              ],
+              "runtimeRoles": [
+                "item_body"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "use_item_body",
+              "id": "b_primary_use",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "molten_obsidian_pickaxe_body"
+            },
+            {
+              "action": "place_item",
+              "id": "b_alternate_use",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "molten_obsidian_pickaxe_body"
+            },
+            {
+              "action": "apply_item_effects",
+              "id": "b_consumption",
+              "input": "alternate_use",
+              "role": "secondary",
+              "target": "molten_obsidian_pickaxe_body"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "c_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 12,
+                "damageClass": "melee",
+                "heightPx": 24,
+                "knockback": 2,
+                "manaCost": 0,
+                "maxStack": 9999,
+                "rarity": 3,
+                "scale": 1,
+                "useAnimationTicks": 22,
+                "useTimeTicks": 18,
+                "valueCopper": 27000,
+                "widthPx": 24
+              },
+              "role": "primary",
+              "target": "molten_obsidian_pickaxe_body"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "c_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": false,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "",
+                "useStyle": "swing",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "molten_obsidian_pickaxe_body"
+            },
+            {
+              "fn": "configure_tool",
+              "id": "c_tool",
+              "params": {
+                "axePower": 0,
+                "hammerPower": 0,
+                "miningSpeedScale": 1,
+                "pickPower": 100
+              },
+              "role": "primary",
+              "target": "molten_obsidian_pickaxe_body"
+            },
+            {
+              "fn": "configure_placeable",
+              "id": "c_placeable",
+              "params": {
+                "placeStyle": 0,
+                "tileId": 56,
+                "wallId": -1
+              },
+              "role": "secondary",
+              "target": "molten_obsidian_pickaxe_body"
+            },
+            {
+              "fn": "configure_consumption",
+              "id": "c_consumption",
+              "params": {
+                "consumable": true,
+                "consumeChancePercent": 100
+              },
+              "role": "secondary",
+              "target": "molten_obsidian_pickaxe_body"
+            }
+          ],
+          "entities": [
+            {
+              "id": "molten_obsidian_pickaxe_body",
+              "kind": "item_body"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Способна добывать твердые породы и расходует обсидиан как ресурс"
+      },
+      "repairPatch": {
+        "bindingIdsDelete": [
+          "b_consumption"
+        ],
+        "bindingIndicesDelete": [],
+        "bindingsUpsert": [
+          {
+            "action": "use_item_body",
+            "id": "b_primary_use",
+            "input": "primary_use",
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          },
+          {
+            "action": "place_item",
+            "id": "b_alternate_use",
+            "input": "alternate_use",
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          }
+        ],
+        "callIdsDelete": [],
+        "callIndicesDelete": [],
+        "callsUpsert": [
+          {
+            "fn": "configure_item_stats",
+            "id": "c_stats",
+            "params": {
+              "craftYield": 1,
+              "damage": 12,
+              "damageClass": "melee",
+              "heightPx": 24,
+              "knockback": 2,
+              "manaCost": 0,
+              "maxStack": 9999,
+              "rarity": 3,
+              "scale": 1,
+              "useAnimationTicks": 22,
+              "useTimeTicks": 18,
+              "valueCopper": 27000,
+              "widthPx": 24
+            },
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          },
+          {
+            "fn": "configure_item_use",
+            "id": "c_use",
+            "params": {
+              "autoReuse": true,
+              "channel": false,
+              "disableMeleeHitbox": false,
+              "handPose": "one_handed",
+              "hideUseGraphic": false,
+              "holdoutOffsetX": 0,
+              "holdoutOffsetY": 0,
+              "releaseTiming": "",
+              "useStyle": "swing",
+              "useTurn": true
+            },
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          },
+          {
+            "fn": "configure_tool",
+            "id": "c_tool",
+            "params": {
+              "axePower": 0,
+              "hammerPower": 0,
+              "miningSpeedScale": 1,
+              "pickPower": 100
+            },
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          },
+          {
+            "fn": "configure_placeable",
+            "id": "c_placeable",
+            "params": {
+              "placeStyle": 0,
+              "tileId": 56,
+              "wallId": -1
+            },
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          },
+          {
+            "fn": "configure_consumption",
+            "id": "c_consumption",
+            "params": {
+              "consumable": true,
+              "consumeChancePercent": 100
+            },
+            "role": "primary",
+            "target": "molten_obsidian_pickaxe_body"
+          }
+        ],
+        "claimIdsDelete": [],
+        "claimIndicesDelete": [],
+        "claimsUpsert": [
+          {
+            "backedBy": [
+              "b_primary_use",
+              "c_stats",
+              "c_tool"
+            ],
+            "id": "claim_mining",
+            "kind": "gameplay",
+            "text": "Предмет функционирует как кирка с силой копания 100 и наносит 12 урона в ближнем бою"
+          },
+          {
+            "backedBy": [
+              "b_alternate_use",
+              "c_placeable",
+              "c_consumption"
+            ],
+            "id": "claim_placement",
+            "kind": "physical",
+            "text": "Альтернативное использование размещает обсидиан как тайл с расходом из стопки"
+          }
+        ],
+        "entitiesUpsert": [],
+        "entityIdsDelete": [],
+        "entityIndicesDelete": [],
+        "exclusiveInputSelections": [
+          {
+            "input": "alternate_use",
+            "keepBindingId": "b_alternate_use"
+          }
+        ],
+        "metadataPatch": {},
+        "note": "Resolved mixed entity roles by setting all bindings and calls to primary, removed conflicting b_consumption binding to resolve duplicate exclusive input and missing capability dependency.",
+        "primaryEntitySelection": "molten_obsidian_pickaxe_body"
+      }
+    },
+    "ropebound_spear": {
+      "expectedInitialCodes": [
+        "duplicate_exclusive_input",
+        "mixed_entity_role"
+      ],
+      "initialAuthor": {
+        "category": "hybrid",
+        "concept": {
+          "coreMechanic": "Основное использование выполняет колющий удар копья с выдвижным хитбоксом и одновременно размещает плитку веревки.",
+          "literalSynthesis": "Сохраняет физику и спрайты Копья и Веревки, объединяя колющий удар с размещением плитки веревки.",
+          "parentAContribution": "Предоставляет механику колющего оружия, спрайт и форму копья.",
+          "parentBContribution": "Предоставляет свойство размещения плитки веревки.",
+          "playerExperience": "Игрок наносит колющий удар оружием, которое также устанавливает веревку в точке использования."
+        },
+        "name": "Веревочное Копье",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "call_stats"
+              ],
+              "id": "claim_stats",
+              "kind": "gameplay",
+              "text": "Предмет наносит 16 урона ближнего боя с отталкиванием 6.5."
+            },
+            {
+              "backedBy": [
+                "call_movement"
+              ],
+              "id": "claim_thrust",
+              "kind": "physical",
+              "text": "Проектиль копья движется вперед и возвращается обратно за время анимации."
+            },
+            {
+              "backedBy": [
+                "call_placeable",
+                "bind_place_rope"
+              ],
+              "id": "claim_place",
+              "kind": "gameplay",
+              "text": "При использовании предмет размещает плитку веревки в мире."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "Копье и веревка совмещены в единый предмет, выполняющий колющий удар с одновременным размещением веревочного блока.",
+            "parentA": {
+              "facts": [
+                "Terraria/Spear damage 8, knockback 6.5, useStyle 5, shoot 49"
+              ],
+              "runtimeRoles": [
+                "item_body",
+                "owner_attached_projectile"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "Terraria/Rope createTile 213, consumable true"
+              ],
+              "runtimeRoles": [
+                "placeable"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "use_item_body",
+              "id": "bind_primary",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "bind_spawn_spear",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "spear_proj"
+            },
+            {
+              "action": "place_item",
+              "id": "bind_place_rope",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "item_body"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "call_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 16,
+                "damageClass": "melee",
+                "heightPx": 21,
+                "knockback": 6.5,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 0,
+                "scale": 1.2,
+                "useAnimationTicks": 31,
+                "useTimeTicks": 31,
+                "valueCopper": 500,
+                "widthPx": 21
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "call_use",
+              "params": {
+                "autoReuse": false,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "forward",
+                "hideUseGraphic": true,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "",
+                "useStyle": "thrust",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_placeable",
+              "id": "call_placeable",
+              "params": {
+                "placeStyle": 0,
+                "tileId": 213,
+                "wallId": -1
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "call_spawn",
+              "params": {
+                "aim": "facing",
+                "count": 1,
+                "offsetPx": 0,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 3.7,
+                "spreadRadians": 0
+              },
+              "role": "secondary",
+              "target": "spear_proj"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "call_damage",
+              "params": {
+                "damage": 16,
+                "damageClass": "melee",
+                "knockback": 6.5,
+                "ownerHitCheck": true
+              },
+              "role": "secondary",
+              "target": "spear_proj"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "call_lifetime",
+              "params": {
+                "lifetimeTicks": 31
+              },
+              "role": "secondary",
+              "target": "spear_proj"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "call_hitbox",
+              "params": {
+                "drawScale": 1.2,
+                "heightPx": 21,
+                "hitboxScale": 1.0,
+                "widthPx": 21
+              },
+              "role": "secondary",
+              "target": "spear_proj"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "call_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": -1,
+                "npcImmunityMode": "owner",
+                "pierce": -1,
+                "tileCollide": false
+              },
+              "role": "secondary",
+              "target": "spear_proj"
+            },
+            {
+              "fn": "move_forward_then_retract",
+              "id": "call_movement",
+              "params": {
+                "durationTicks": 31,
+                "rangeTiles": 5
+              },
+              "role": "secondary",
+              "target": "spear_proj"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item_body",
+              "kind": "item_body"
+            },
+            {
+              "id": "spear_proj",
+              "kind": "owner_attached_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Выпад копьем с установкой веревки"
+      },
+      "repairPatch": {
+        "bindingIdsDelete": [],
+        "bindingIndicesDelete": [],
+        "bindingsUpsert": [
+          {
+            "action": "use_item_body",
+            "id": "bind_primary",
+            "input": "primary_use",
+            "role": "primary",
+            "target": "item_body"
+          },
+          {
+            "action": "spawn_entity",
+            "id": "bind_spawn_spear",
+            "input": "alternate_use",
+            "role": "primary",
+            "target": "spear_proj"
+          },
+          {
+            "action": "place_item",
+            "id": "bind_place_rope",
+            "input": "primary_use",
+            "role": "primary",
+            "target": "item_body"
+          }
+        ],
+        "callIdsDelete": [],
+        "callIndicesDelete": [],
+        "callsUpsert": [
+          {
+            "fn": "configure_item_stats",
+            "id": "call_stats",
+            "params": {
+              "craftYield": 1,
+              "damage": 16,
+              "damageClass": "melee",
+              "heightPx": 21,
+              "knockback": 6.5,
+              "manaCost": 0,
+              "maxStack": 1,
+              "rarity": 0,
+              "scale": 1.2,
+              "useAnimationTicks": 31,
+              "useTimeTicks": 31,
+              "valueCopper": 500,
+              "widthPx": 21
+            },
+            "role": "primary",
+            "target": "item_body"
+          },
+          {
+            "fn": "configure_item_use",
+            "id": "call_use",
+            "params": {
+              "autoReuse": false,
+              "channel": false,
+              "disableMeleeHitbox": true,
+              "handPose": "forward",
+              "hideUseGraphic": true,
+              "holdoutOffsetX": 0,
+              "holdoutOffsetY": 0,
+              "releaseTiming": "",
+              "useStyle": "thrust",
+              "useTurn": true
+            },
+            "role": "primary",
+            "target": "item_body"
+          },
+          {
+            "fn": "configure_placeable",
+            "id": "call_placeable",
+            "params": {
+              "placeStyle": 0,
+              "tileId": 213,
+              "wallId": -1
+            },
+            "role": "primary",
+            "target": "item_body"
+          }
+        ],
+        "claimIdsDelete": [],
+        "claimIndicesDelete": [],
+        "claimsUpsert": [],
+        "entitiesUpsert": [],
+        "entityIdsDelete": [],
+        "entityIndicesDelete": [],
+        "exclusiveInputSelections": [
+          {
+            "input": "primary_use",
+            "keepBindingId": "bind_primary"
+          }
+        ],
+        "metadataPatch": {},
+        "note": "Repair mixed entity roles by setting all affected rows targeting item_body to primary, and resolve exclusive input conflict by moving bind_spawn_spear to alternate_use.",
+        "primaryEntitySelection": "item_body"
+      }
+    }
+  },
+  "gameplayDiagnosticCases": {
+    "jester_bow": {
+      "expectedInitialCodes": [
+        "duplicate_exclusive_input",
+        "entity_not_binding_spawnable",
+        "shape_minimum",
+        "shape_one_of",
+        "wrong_binding_target_kind"
+      ],
+      "expectedMutableBindingPaths": {
+        "b_primary_use": [
+          "action",
+          "input",
+          "target"
+        ],
+        "b_spawn_arrow": [
+          "input"
+        ]
+      },
+      "expectedRetargetBindingTargetIds": [
+        "jesters_arrow_proj"
+      ],
+      "initialAuthor": {
+        "category": "combat",
+        "concept": {
+          "coreMechanic": "Стрельба бесплатными снарядами при использовании лука",
+          "literalSynthesis": "Сочетание деревянного лука и стрелы Джестера без потери их исходной физики",
+          "parentAContribution": "Предоставляет базовую структуру деревянного лука и тайминги использования",
+          "parentBContribution": "Предоставляет свойства снаряда стрелы Джестера (бесконечное пробивание и свет)",
+          "playerExperience": "Атака на расстоянии пробивающими снарядами с помощью лука"
+        },
+        "name": "Деревянный лук со стрелами Джестера",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "c_item_stats",
+                "c_item_use"
+              ],
+              "id": "cl_item_stats",
+              "kind": "gameplay",
+              "text": "Предмет имеет настроенные характеристики урона и скорости использования"
+            },
+            {
+              "backedBy": [
+                "c_spawn_cfg",
+                "c_proj_dmg",
+                "c_proj_life",
+                "c_proj_hitbox",
+                "c_proj_col",
+                "c_proj_mov",
+                "c_proj_light",
+                "b_spawn_arrow"
+              ],
+              "id": "cl_projectile_behavior",
+              "kind": "physical",
+              "text": "Снаряд выпускается со свечением, бесконечным пробиванием и прямым движением"
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "Соединение деревянного лука как базы для стрельбы и стрелы Джестера как источника снарядов",
+            "parentA": {
+              "facts": [
+                "Terraria/WoodenBow",
+                "damage 4",
+                "ranged class"
+              ],
+              "runtimeRoles": [
+                "item_body"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "Terraria/JestersArrow",
+                "damage 10",
+                "infinite penetration"
+              ],
+              "runtimeRoles": [
+                "free_projectile"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "spawn_entity",
+              "id": "b_primary_use",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "wooden_bow_body"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "b_spawn_arrow",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "c_item_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 19,
+                "damageClass": "ranged",
+                "heightPx": 32,
+                "knockback": 4,
+                "manaCost": 0,
+                "maxStack": 1,
+                "rarity": 1,
+                "scale": 1.0,
+                "useAnimationTicks": 30,
+                "useTimeTicks": 30,
+                "valueCopper": 100,
+                "widthPx": 16
+              },
+              "role": "primary",
+              "target": "wooden_bow_body"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "c_item_use",
+              "params": {
+                "autoReuse": false,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "two_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "shoot",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "wooden_bow_body"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "c_spawn_cfg",
+              "params": {
+                "aim": "cursor",
+                "count": 1,
+                "offsetPx": 16,
+                "placement": "item_use_origin",
+                "speedPxPerTick": 6.1,
+                "spreadRadians": 0.0
+              },
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            },
+            {
+              "fn": "set_projectile_damage",
+              "id": "c_proj_dmg",
+              "params": {
+                "damage": 10,
+                "damageClass": "ranged",
+                "knockback": 4.0,
+                "ownerHitCheck": false
+              },
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "c_proj_life",
+              "params": {
+                "lifetimeTicks": 1200
+              },
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "c_proj_hitbox",
+              "params": {
+                "drawScale": 1.0,
+                "heightPx": 10,
+                "hitboxScale": 1.0,
+                "widthPx": 10
+              },
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "c_proj_col",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 1,
+                "ignoreWater": true,
+                "localNpcHitCooldownTicks": -2,
+                "npcImmunityMode": "local",
+                "pierce": -1,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            },
+            {
+              "fn": "move_straight",
+              "id": "c_proj_mov",
+              "params": {},
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            },
+            {
+              "fn": "emit_light_while_active",
+              "id": "c_proj_light",
+              "params": {
+                "color": "yellow",
+                "strength": 0.4
+              },
+              "role": "secondary",
+              "target": "jesters_arrow_proj"
+            }
+          ],
+          "entities": [
+            {
+              "id": "wooden_bow_body",
+              "kind": "item_body"
+            },
+            {
+              "id": "jesters_arrow_proj",
+              "kind": "free_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Выпускает стрелы Джестера из деревянного лука"
+      }
+    },
+    "silt_extractinator": {
+      "createAllowedFnsFromErrorCode": "inert_stationary_entity",
+      "expectedCreateCallTargetIds": [
+        "extractinator_helper"
+      ],
+      "expectedInitialCodes": [
+        "duplicate_exclusive_input",
+        "inert_stationary_entity",
+        "shape_one_of",
+        "shape_pattern"
+      ],
+      "initialAuthor": {
+        "category": "placeable",
+        "concept": {
+          "coreMechanic": "Primary use places the item as a tile, while spawning a stationary helper block nearby.",
+          "literalSynthesis": "Combines Extractinator and SiltBlock into a placeable item body that drops an extractinator-themed helper.",
+          "parentAContribution": "Provides Extractinator base type and placement stats.",
+          "parentBContribution": "Provides SiltBlock base stacking and tile creation.",
+          "playerExperience": "Deploys a literal extractinator and silt block structure upon use."
+        },
+        "name": "Обогатительный Ил",
+        "runtimeContract": {
+          "claims": [
+            {
+              "backedBy": [
+                "b_primary_use",
+                "c_placeable"
+              ],
+              "id": "claim_placeable",
+              "kind": "physical",
+              "text": "Places tile 219 on primary use."
+            },
+            {
+              "backedBy": [
+                "b_spawn_helper",
+                "c_helper_spawn"
+              ],
+              "id": "claim_spawn_helper",
+              "kind": "gameplay",
+              "text": "Spawns a stationary extractinator helper near cursor."
+            }
+          ],
+          "parentSynthesis": {
+            "composition": "Combines Extractinator and SiltBlock into a placeable tile item that spawns a stationary extractinator helper.",
+            "parentA": {
+              "facts": [
+                "Extractinator placeable tile 219"
+              ],
+              "runtimeRoles": [
+                "item_body placeable configuration"
+              ]
+            },
+            "parentB": {
+              "facts": [
+                "SiltBlock consumable block item"
+              ],
+              "runtimeRoles": [
+                "consumption and stacking source"
+              ]
+            }
+          },
+          "schema": "infini.runtime-contract.low-level.v1"
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "bindings": [
+            {
+              "action": "place_item",
+              "id": "b_primary_use",
+              "input": "primary_use",
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "action": "spawn_entity",
+              "id": "b_spawn_helper",
+              "input": "primary_use",
+              "role": "secondary",
+              "target": "extractinator_helper"
+            }
+          ],
+          "calls": [
+            {
+              "fn": "configure_item_stats",
+              "id": "c_stats",
+              "params": {
+                "craftYield": 1,
+                "damage": 0,
+                "damageClass": "none",
+                "heightPx": 24,
+                "knockback": 0,
+                "manaCost": 0,
+                "maxStack": 9999,
+                "rarity": 0,
+                "scale": 1,
+                "useAnimationTicks": 14,
+                "useTimeTicks": 10,
+                "valueCopper": 100000,
+                "widthPx": 24
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_item_use",
+              "id": "c_use",
+              "params": {
+                "autoReuse": true,
+                "channel": false,
+                "disableMeleeHitbox": true,
+                "handPose": "one_handed",
+                "hideUseGraphic": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "releaseTiming": "immediate",
+                "useStyle": "swing",
+                "useTurn": true
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_consumption",
+              "id": "c_consumption",
+              "params": {
+                "consumable": true,
+                "consumeChancePercent": 100
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_placeable",
+              "id": "c_placeable",
+              "params": {
+                "placeStyle": 0,
+                "tileId": 219,
+                "wallId": -1
+              },
+              "role": "primary",
+              "target": "item_body"
+            },
+            {
+              "fn": "configure_spawn",
+              "id": "c_helper_spawn",
+              "params": {
+                "aim": "none",
+                "count": 1,
+                "offsetPx": 16,
+                "placement": "cursor",
+                "speedPxPerTick": 0,
+                "spreadRadians": 0
+              },
+              "role": "secondary",
+              "target": "extractinator_helper"
+            },
+            {
+              "fn": "set_projectile_lifetime",
+              "id": "c_helper_lifetime",
+              "params": {
+                "lifetimeTicks": 300
+              },
+              "role": "secondary",
+              "target": "extractinator_helper"
+            },
+            {
+              "fn": "set_projectile_hitbox",
+              "id": "c_helper_hitbox",
+              "params": {
+                "drawScale": 1,
+                "heightPx": 16,
+                "hitboxScale": 1,
+                "widthPx": 16
+              },
+              "role": "secondary",
+              "target": "extractinator_helper"
+            },
+            {
+              "fn": "set_projectile_collision",
+              "id": "c_helper_collision",
+              "params": {
+                "bounceCount": 0,
+                "extraUpdates": 0,
+                "ignoreWater": false,
+                "localNpcHitCooldownTicks": -1,
+                "npcImmunityMode": "owner",
+                "pierce": 1,
+                "tileCollide": true
+              },
+              "role": "secondary",
+              "target": "extractinator_helper"
+            }
+          ],
+          "entities": [
+            {
+              "id": "item_body",
+              "kind": "item_body"
+            },
+            {
+              "id": "extractinator_helper",
+              "kind": "stationary_projectile"
+            }
+          ],
+          "schema": "infini.runtime-program.authoring.v1"
+        },
+        "tooltip": "Places Extractinator and Silt Block via literal synthesis"
+      }
+    }
+  },
+  "schema": "infini.live20-repair-boundary-replay.v1",
+  "sourceHead": "e73db62bde4bfa0254d79444faa4374efe9d15b3",
+  "sourceRun": "live20-ic241-v5-e73db62-final",
+  "visualApplyCases": {
+    "woodwork_blade": {
+      "entityIds": [
+        "item_body"
+      ],
+      "expectedInitialErrorPaths": [
+        "$.item.:palette"
+      ],
+      "itemBodyId": "item_body",
+      "visualRaw": {
+        "animationPlan": "Standard Terraria item swing animation for melee use, with alternate use flashing the workbench component.",
+        "entities": [
+          {
+            "assetMode": "baked_sprite",
+            "entityId": "item_body",
+            "prompt": "A 32x32 pixel art item combining a wooden sword with a miniature wooden workbench affixed to the blade. Terraria inventory icon style, clean outlines, wood grain texture.",
+            "scale": 1.0,
+            "silhouette": "Distinct wooden sword blade and hilt with an integrated workbench structure near the base of the blade.",
+            "visualIdentity": "Handcrafted wooden tool combining sword and workbench features, brown pixel art palette."
+          }
+        ],
+        "item": {
+          ":palette": [
+            "#5c3a21",
+            "#8b5a2b",
+            "#a06634",
+            "#c4915c",
+            "#3d2314"
+          ],
+          "inventoryScale": 1.0,
+          "negativePrompt": "blurry, low resolution, smooth shading, modern, realistic",
+          "palette": [
+            "#5c3a21",
+            "#8b5a2b",
+            "#a06634",
+            "#c4915c",
+            "#3d2314"
+          ],
+          "preferredCanvasSize": 32,
+          "prompt": "A detailed pixel art item combining a wooden sword and a small wooden workbench attached near the blade. Brown wood planks, rustic texture, Terraria style weapon sprite on transparent background.",
+          "silhouette": "A wooden sword shape with a miniature wooden workbench block merged securely onto the lower blade section.",
+          "visualIdentity": "Rustic wooden texture, warm brown tones, pixel art style.",
+          "worldScale": 1.0
+        },
+        "schema": "infini.visual-kit.runtime-entities.v1"
+      },
+      "visualRepairPatch": {
+        "animationPlan": null,
+        "entitiesUpsert": [],
+        "entityIdsDelete": [],
+        "entityIndicesDelete": [],
+        "itemPatch": {
+          "inventoryScale": 1.0,
+          "negativePrompt": "blurry, low resolution, smooth shading, modern, realistic",
+          "palette": [
+            "#5c3a21",
+            "#8b5a2b",
+            "#a06634",
+            "#c4915c",
+            "#3d2314"
+          ],
+          "preferredCanvasSize": 32,
+          "prompt": "A detailed pixel art item combining a wooden sword and a small wooden workbench attached near the blade. Brown wood planks, rustic texture, Terraria style weapon sprite on transparent background.",
+          "silhouette": "A wooden sword shape with a miniature wooden workbench block merged securely onto the lower blade section.",
+          "visualIdentity": "Rustic wooden texture, warm brown tones, pixel art style.",
+          "worldScale": 1.0
+        },
+        "note": "Removed additional property :palette from item.",
+        "schema": "infini.visual-kit-repair-patch.runtime-entities.v1"
+      }
+    }
+  }
+}

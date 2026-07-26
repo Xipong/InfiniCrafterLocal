@@ -1598,6 +1598,11 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
         if isinstance(row, Mapping) and str(row.get("input") or "")
     }
     seen_inputs: set[str] = set()
+    preview_rows = rows
+    if patch.get("exclusiveInputSelections"):
+        preview_patch = copy.deepcopy(dict(patch))
+        preview_patch["exclusiveInputSelections"] = []
+        preview_rows = _program_rows(apply_repair_patch(current, preview_patch))
     for index, selection in enumerate(patch.get("exclusiveInputSelections") or []):
         if not isinstance(selection, Mapping):
             continue
@@ -1606,6 +1611,18 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
         group = exclusive_groups.get(input_name) if input_name not in seen_inputs else None
         raw_candidates = group.get("candidateBindingIds") if isinstance(group, Mapping) else []
         candidates = set(str(value) for value in raw_candidates or [])
+        if group is not None:
+            preview_candidates = [
+                str(row.get("id") or "")
+                for row in preview_rows.get("bindings", [])
+                if str(row.get("input") or "") == input_name and str(row.get("id") or "")
+            ]
+            if len(preview_candidates) > 1:
+                candidates = set(_reachability_safe_exclusive_candidates(
+                    preview_rows,
+                    input_name=input_name,
+                    candidate_ids=preview_candidates,
+                ))
         if group is None or keep_id not in candidates:
             errors.append(_scope_error(
                 f"$.exclusiveInputSelections[{index}]",

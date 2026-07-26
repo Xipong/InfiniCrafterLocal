@@ -217,7 +217,7 @@ def test_author_validation_exposes_only_canonical_shape_codes_to_repair() -> Non
     assert any(row.get("kind") == "pattern" for row in report["shape"]["errors"])
 
 
-def test_shape_failure_still_exposes_safe_role_and_exclusive_input_blockers() -> None:
+def test_shape_failure_still_exposes_graph_semantic_blockers() -> None:
     current = build_runtime_fixture("workbench_blade")
     stats = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_stats")
     stats["params"]["damageClass"] = "none"
@@ -229,17 +229,40 @@ def test_shape_failure_still_exposes_safe_role_and_exclusive_input_blockers() ->
         "target": "nail",
         "role": "secondary",
     })
+    current["runtimeProgram"]["bindings"].append({
+        "id": "wrong_item_spawn",
+        "input": "alternate_use",
+        "action": "spawn_entity",
+        "role": "primary",
+        "target": "item",
+    })
+    current["runtimeProgram"]["entities"].append({"id": "idle_helper", "kind": "temporary_helper"})
+    current["runtimeProgram"]["bindings"].append({
+        "id": "spawn_idle_helper",
+        "input": "hold",
+        "action": "spawn_entity",
+        "role": "secondary",
+        "target": "idle_helper",
+    })
+    current["runtimeProgram"]["calls"].append({
+        "id": "invalid_placeable",
+        "fn": "configure_placeable",
+        "role": "primary",
+        "target": "item",
+        "params": {"tileId": -2, "wallId": -1, "placeStyle": 0},
+    })
 
     report = authored_item_validation_report(current)
     codes = {row.get("code") for row in report["errors"]}
 
-    assert {"shape_one_of", "shape_pattern"}.issubset(codes)
+    assert {"shape_one_of", "shape_pattern", "shape_minimum"}.issubset(codes)
     assert {"mixed_entity_role", "primary_entity_count", "duplicate_exclusive_input"}.issubset(codes)
+    assert {"wrong_binding_target_kind", "entity_not_binding_spawnable", "inert_stationary_entity", "empty_component"}.issubset(codes)
 
     scope = build_runtime_repair_scope(current, report["errors"])
     transaction = scope["repairTransactions"]["entityRoleSelection"]
     assert transaction["allowed"] is True
-    assert transaction["candidateEntityIds"] == ["item", "nail", "workbench_blade"]
+    assert transaction["candidateEntityIds"] == ["idle_helper", "item", "nail", "workbench_blade"]
     assert scope["repairTransactions"]["exclusiveInputSelections"] == [{
         "input": "primary_use",
         "candidateBindingIds": ["primary_workbench"],
@@ -352,6 +375,87 @@ def test_redundant_exclusive_selection_is_ignored_after_binding_retarget() -> No
         if row["id"] == "bad_primary"
     )
     assert repaired_binding["input"] == "alternate_use"
+
+
+def test_exclusive_selection_candidates_recompute_after_scoped_retarget() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    original = next(row for row in program["bindings"] if row["input"] == "primary_use")
+    item_id = next(row["id"] for row in program["entities"] if row["kind"] == "item_body")
+    current["runtimeContract"]["claims"][0]["backedBy"].append(original["id"])
+    program["bindings"].extend([
+        {
+            "id": "item_primary",
+            "input": "primary_use",
+            "action": "use_item_body",
+            "role": "primary",
+            "target": item_id,
+        },
+        {
+            "id": "item_place",
+            "input": "primary_use",
+            "action": "place_item",
+            "role": "primary",
+            "target": item_id,
+        },
+    ])
+    errors = [
+        row for row in validate_runtime_program(current)["errors"]
+        if row["code"] == "duplicate_exclusive_input"
+    ]
+    scope = build_runtime_repair_scope(current, errors)
+    transaction = scope["repairTransactions"]["exclusiveInputSelections"][0]
+    assert transaction["candidateBindingIds"] == [original["id"]]
+
+    patch = _empty_gameplay_patch()
+    patch["bindingsUpsert"] = [{**original, "input": "alternate_use"}]
+    patch["exclusiveInputSelections"] = [{
+        "input": "primary_use",
+        "keepBindingId": "item_primary",
+    }]
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+
+    assert audit["ok"], audit
+    assert filtered["exclusiveInputSelections"] == [{
+        "input": "primary_use",
+        "keepBindingId": "item_primary",
+    }]
+    repaired = apply_repair_patch(current, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    repaired_claim = next(
+        row for row in repaired["runtimeContract"]["claims"]
+        if row["id"] == current["runtimeContract"]["claims"][0]["id"]
+    )
+    assert original["id"] in repaired_claim["backedBy"]
+
+
+def test_direct_runtime_id_delete_closes_claim_backing() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    binding = copy.deepcopy(current["runtimeProgram"]["bindings"][0])
+    binding_id = binding["id"]
+    claim = current["runtimeContract"]["claims"][0]
+    claim["backedBy"].append(binding_id)
+    patch = _empty_gameplay_patch()
+    patch["bindingIdsDelete"] = [binding_id]
+
+    repaired = apply_repair_patch(current, patch)
+
+    repaired_claim = next(
+        row for row in repaired["runtimeContract"]["claims"]
+        if row["id"] == claim["id"]
+    )
+    assert binding_id not in repaired_claim["backedBy"]
+    assert repaired_claim["backedBy"]
+
+    replacement_patch = _empty_gameplay_patch()
+    replacement_patch["bindingIdsDelete"] = [binding_id]
+    replacement_patch["bindingsUpsert"] = [binding]
+    replaced = apply_repair_patch(current, replacement_patch)
+    replaced_claim = next(
+        row for row in replaced["runtimeContract"]["claims"]
+        if row["id"] == claim["id"]
+    )
+    assert binding_id in replaced_claim["backedBy"]
 
 
 def test_mixed_role_without_primary_count_uses_atomic_entity_selection() -> None:

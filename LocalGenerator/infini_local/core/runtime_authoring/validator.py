@@ -174,47 +174,28 @@ def _exclusive_input_issues(bindings: list[dict[str, Any]]) -> list[ValidationIs
     return issues
 
 
-def _safe_shape_semantic_issues(document: Mapping[str, Any]) -> list[ValidationIssue]:
-    """Collect semantics that need only a traversable role/input shell.
+def _traversable_runtime_shell(document: Mapping[str, Any]) -> bool:
+    """Return whether the single semantic validator can safely traverse row headers.
 
-    Deep capability params remain owned by strict shape validation. This collector
-    exists so one scoped Repair sees latent role/input blockers in the same pass
-    as a leaf-level shape error without walking arbitrary malformed structures.
+    Capability parameter shape remains independently owned by the strict schema.
+    A malformed leaf must not hide graph/role/input blockers, but malformed list or
+    object containers do not provide a trustworthy graph and stay shape-only.
     """
 
     program = document.get("runtimeProgram")
-    if not isinstance(program, Mapping):
-        return []
-    raw_entities = program.get("entities")
-    raw_bindings = program.get("bindings")
-    raw_calls = program.get("calls")
-    if not all(isinstance(rows, list) and all(isinstance(row, dict) for row in rows) for rows in (
-        raw_entities,
-        raw_bindings,
-        raw_calls,
-    )):
-        return []
-    entities = _rows(raw_entities)
-    bindings = _rows(raw_bindings)
-    calls = _rows(raw_calls)
-    if any(not isinstance(row.get("id"), str) or not row.get("id") for row in entities):
-        return []
-    if len({str(row["id"]) for row in entities}) != len(entities):
-        return []
-    role_rows = [*bindings, *calls]
-    if any(
-        not isinstance(row.get("id"), str)
-        or not row.get("id")
-        or not isinstance(row.get("target"), str)
-        or row.get("role") not in {"primary", "secondary"}
-        for row in role_rows
-    ):
-        return []
-    if any(not isinstance(row.get("input"), str) for row in bindings):
-        return []
-    entities_by_id = {str(row["id"]): row for row in entities}
-    role_issues, _ = _entity_role_issues(entities_by_id, bindings, calls)
-    return [*role_issues, *_exclusive_input_issues(bindings)]
+    contract = document.get("runtimeContract")
+    if not isinstance(program, Mapping) or not isinstance(contract, Mapping):
+        return False
+    containers = (
+        program.get("entities"),
+        program.get("bindings"),
+        program.get("calls"),
+        contract.get("claims"),
+    )
+    return all(
+        isinstance(rows, list) and all(isinstance(row, dict) for row in rows)
+        for rows in containers
+    )
 
 
 def _graph_cycle(edges: Mapping[str, set[str]]) -> tuple[str, ...]:
@@ -260,15 +241,22 @@ def _max_depth(edges: Mapping[str, set[str]], roots: Iterable[str]) -> int:
     return max((depth(root) for root in roots), default=0)
 
 
+def _numeric_param(params: Mapping[str, Any], key: str, default: float) -> float:
+    value = params.get(key)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return default
+
+
 def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
     return any((
-        float(params.get("miningSpeedMultiplier", 1)) != 1,
-        float(params.get("lightStrength", 0)) > 0,
-        int(params.get("oreSenseRadiusTiles", 0)) > 0,
-        float(params.get("movementSpeed", 0)) != 0,
-        float(params.get("jumpBoost", 0)) > 0,
-        int(params.get("manaRegen", 0)) > 0,
-        int(params.get("lifeRegen", 0)) > 0,
+        _numeric_param(params, "miningSpeedMultiplier", 1) != 1,
+        _numeric_param(params, "lightStrength", 0) > 0,
+        _numeric_param(params, "oreSenseRadiusTiles", 0) > 0,
+        _numeric_param(params, "movementSpeed", 0) != 0,
+        _numeric_param(params, "jumpBoost", 0) > 0,
+        _numeric_param(params, "manaRegen", 0) > 0,
+        _numeric_param(params, "lifeRegen", 0) > 0,
     ))
 
 
@@ -296,13 +284,17 @@ def _event_available(
         return required in fns, (required,), f"{event} requires explicit damaging contact on the same entity"
     if event == "on_tile_collision":
         collision = next((row for row in target_calls if row.get("fn") == "set_projectile_collision"), None)
-        tile_collide = bool((collision or {}).get("params", {}).get("tileCollide"))
+        raw_collision_params = (collision or {}).get("params")
+        collision_params: Mapping[str, Any] = raw_collision_params if isinstance(raw_collision_params, Mapping) else {}
+        tile_collide = collision_params.get("tileCollide") is True
         return tile_collide, ("set_projectile_collision(tileCollide=true)",), "on_tile_collision requires tileCollide=true"
     if event in {"on_release", "channel_complete"}:
         return "charge_then_release" in fns, ("charge_then_release",), f"{event} is emitted only by charge_then_release"
     if event == "periodic":
         return True, (), ""
-    kind_spec = ENTITY_KIND_REGISTRY[kind]
+    kind_spec = ENTITY_KIND_REGISTRY.get(kind)
+    if kind_spec is None:
+        return False, tuple(ENTITY_KIND_REGISTRY), f"unknown entity kind '{kind}'"
     if event in kind_spec.base_events or spec.always_available_on_projectile and kind_spec.projectile:
         return True, (), ""
     if spec.producer_capabilities:
@@ -323,7 +315,8 @@ def _validate_requirement(
     bindings: list[dict[str, Any]],
 ) -> ValidationIssue | None:
     target_id = str(call.get("target") or "")
-    params = call.get("params") if isinstance(call.get("params"), dict) else {}
+    raw_params = call.get("params")
+    params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
     target_calls = calls_by_target.get(item_id if requirement.target == "item_body" else target_id, [])
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
@@ -338,17 +331,20 @@ def _validate_requirement(
         return None
     if requirement.kind == "item_capability_param":
         dependency = next((row for row in target_calls if row.get("fn") == requirement.capability), None)
-        actual = (dependency or {}).get("params", {}).get(requirement.param)
+        raw_dependency_params = (dependency or {}).get("params")
+        dependency_params: Mapping[str, Any] = raw_dependency_params if isinstance(raw_dependency_params, Mapping) else {}
+        actual = dependency_params.get(requirement.param)
         if dependency is None or actual != requirement.equals:
             return ValidationIssue(path, "missing_item_capability_param", requirement.message, (f"{requirement.capability}.{requirement.param}={requirement.equals}",), (item_id,))
         return None
     if requirement.kind == "at_least_one_param_nonnegative":
         names = requirement.param.split("|")
-        if not any(int(params.get(name, -1)) >= 0 for name in names):
+        if not any(_numeric_param(params, name, -1) >= 0 for name in names):
             return ValidationIssue(f"{path}.params", "empty_component", requirement.message, tuple(f"{name} >= 0" for name in names))
         return None
     if requirement.kind == "conditional_param":
-        mode = str(params.get(requirement.param) or "")
+        raw_mode = params.get(requirement.param)
+        mode = raw_mode if isinstance(raw_mode, str) else ""
         for encoded in requirement.any_of:
             expected, required_param = encoded.split(":", 1)
             if mode == expected and required_param not in params:
@@ -359,7 +355,8 @@ def _validate_requirement(
             return ValidationIssue(f"{path}.params", "inert_component", requirement.message, ("set one non-neutral effect", "remove the call"))
         return None
     if requirement.kind == "event_available":
-        event = str(params.get(requirement.param) or "")
+        raw_event = params.get(requirement.param)
+        event = raw_event if isinstance(raw_event, str) else ""
         kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
         ok, allowed, message = _event_available(
             event=event,
@@ -374,29 +371,18 @@ def _validate_requirement(
     return ValidationIssue(path, "unknown_registry_requirement", f"Registry requirement kind '{requirement.kind}' has no validator implementation.")
 
 
-def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
-    issues: list[ValidationIssue] = []
-    shape = strict_author_shape_report(document)
-    if not shape["ok"]:
-        shape_issues = [
-            ValidationIssue(
-                path=str(row.get("path") or "$"),
-                code=f"shape_{row.get('kind', 'invalid')}",
-                message=f"Strict schema violation: {row}",
-            )
-            for row in shape["errors"]
-        ]
-        safe_semantic_issues = _safe_shape_semantic_issues(document)
-        errors = [issue.row() for issue in (*shape_issues, *safe_semantic_issues)]
-        return {
-            "schema": "infini.runtime-program-validation.v1",
-            "ok": False,
-            "errors": errors,
-            "stats": {},
-        }
+def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Run the one canonical graph/semantic pass over a traversable shell.
 
-    program = document["runtimeProgram"]
-    contract = document["runtimeContract"]
+    Every finite requirement evaluator is type-safe: strict shape errors and all
+    still-readable graph blockers are aggregated without inferring gameplay.
+    """
+
+    issues: list[ValidationIssue] = []
+    program_raw = document.get("runtimeProgram")
+    contract_raw = document.get("runtimeContract")
+    program: Mapping[str, Any] = program_raw if isinstance(program_raw, Mapping) else {}
+    contract: Mapping[str, Any] = contract_raw if isinstance(contract_raw, Mapping) else {}
     entities = _rows(program.get("entities"))
     bindings = _rows(program.get("bindings"))
     calls = _rows(program.get("calls"))
@@ -469,7 +455,9 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                 (target_id,),
             ))
         if action_name == "spawn_entity":
-            kind_spec = ENTITY_KIND_REGISTRY[kind]
+            kind_spec = ENTITY_KIND_REGISTRY.get(kind)
+            if kind_spec is None:
+                continue  # strict shape owns unknown entity kinds
             if not kind_spec.spawnable_by_binding:
                 issues.append(ValidationIssue(
                     f"$.runtimeProgram.bindings[{index}].target",
@@ -492,7 +480,8 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         call_id = str(call.get("id") or "")
         fn = str(call.get("fn") or "")
         target_id = str(call.get("target") or "")
-        params = call.get("params") if isinstance(call.get("params"), dict) else {}
+        raw_params = call.get("params")
+        params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
         cap = CAPABILITY_REGISTRY.get(fn)
         entity = entities_by_id.get(target_id)
         if cap is None:
@@ -546,7 +535,9 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             if event not in cap.allowed_events:
                 issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.event", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
         if cap.activation_spawn_count_param:
-            event_spawn_budget += int(params.get(cap.activation_spawn_count_param, 0))
+            raw_spawn_count = params.get(cap.activation_spawn_count_param)
+            if isinstance(raw_spawn_count, int) and not isinstance(raw_spawn_count, bool) and raw_spawn_count >= 0:
+                event_spawn_budget += raw_spawn_count
 
     for index, call in enumerate(calls):
         cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
@@ -568,7 +559,9 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
 
     for entity_id, entity in entities_by_id.items():
         kind = str(entity.get("kind") or "")
-        kind_spec = ENTITY_KIND_REGISTRY[kind]
+        kind_spec = ENTITY_KIND_REGISTRY.get(kind)
+        if kind_spec is None:
+            continue  # strict shape owns unknown entity kinds
         target_calls = calls_by_target.get(entity_id, [])
         fns = {str(row.get("fn") or "") for row in target_calls}
         for required in kind_spec.required_components:
@@ -610,9 +603,11 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     for index, binding in enumerate(bindings):
         input_name = str(binding.get("input") or "")
         action_name = str(binding.get("action") or "")
+        input_spec = INPUT_KIND_REGISTRY.get(input_name)
+        action_spec = BINDING_ACTION_REGISTRY.get(action_name)
         dependencies = (
-            ("input", INPUT_KIND_REGISTRY.get(input_name).required_item_capabilities_any_of if input_name in INPUT_KIND_REGISTRY else ()),
-            ("action", BINDING_ACTION_REGISTRY.get(action_name).required_item_capabilities_any_of if action_name in BINDING_ACTION_REGISTRY else ()),
+            ("input", input_spec.required_item_capabilities_any_of if input_spec is not None else ()),
+            ("action", action_spec.required_item_capabilities_any_of if action_spec is not None else ()),
         )
         for source, required_any_of in dependencies:
             if required_any_of and not item_fns.intersection(required_any_of):
@@ -637,7 +632,8 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
 
     backing_ids = set(entities_by_id) | set(bindings_by_id) | set(calls_by_id)
     for index, claim in enumerate(claims):
-        backed = [str(value) for value in claim.get("backedBy") or []]
+        raw_backing = claim.get("backedBy")
+        backed = [str(value) for value in raw_backing] if isinstance(raw_backing, list) else []
         missing = [value for value in backed if value not in backing_ids]
         if missing:
             issues.append(ValidationIssue(f"$.runtimeContract.claims[{index}].backedBy", "missing_claim_backing", f"Claim '{claim.get('id')}' references missing ids: {', '.join(missing)}.", tuple(sorted(backing_ids)), tuple(missing)))
@@ -660,6 +656,35 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         },
     }
     return {"schema": "infini.runtime-program-validation.v1", "ok": not issues, "errors": [issue.row() for issue in issues], "stats": stats}
+
+
+def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
+    shape = strict_author_shape_report(document)
+    if shape["ok"]:
+        return _validate_runtime_program_semantics(document)
+
+    raw_shape_errors = [
+        row for row in shape.get("errors") or []
+        if isinstance(row, Mapping)
+    ]
+    shape_issues = [
+        ValidationIssue(
+            path=str(row.get("path") or "$"),
+            code=f"shape_{row.get('kind', 'invalid')}",
+            message=f"Strict schema violation: {row}",
+        )
+        for row in raw_shape_errors
+    ]
+    semantic_errors: list[dict[str, Any]] = []
+    if _traversable_runtime_shell(document):
+        semantic_report = _validate_runtime_program_semantics(document)
+        semantic_errors = list(semantic_report.get("errors") or [])
+    return {
+        "schema": "infini.runtime-program-validation.v1",
+        "ok": False,
+        "errors": [issue.row() for issue in shape_issues] + semantic_errors,
+        "stats": {},
+    }
 
 
 def assert_valid_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:

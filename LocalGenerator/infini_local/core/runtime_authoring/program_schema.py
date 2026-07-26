@@ -391,8 +391,12 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
     out = copy.deepcopy(dict(current))
     program = out.setdefault("runtimeProgram", {})
     contract = out.setdefault("runtimeContract", {})
-    original_bindings = list(program.get("bindings") or []) if isinstance(program, dict) else []
-    transaction_deleted_binding_ids: set[str] = set()
+    original_runtime_ids = {
+        str(row.get("id") or "")
+        for list_key in ("entities", "bindings", "calls")
+        for row in program.get(list_key) or []
+        if isinstance(row, Mapping) and str(row.get("id") or "")
+    }
 
     def upsert(rows: list[Any], replacements: list[Any]) -> list[Any]:
         by_id = {str(row.get("id")): copy.deepcopy(row) for row in rows if isinstance(row, dict) and row.get("id")}
@@ -434,16 +438,9 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
             continue
         input_name = str(selection.get("input") or "")
         keep_id = str(selection.get("keepBindingId") or "")
-        transaction_deleted_binding_ids.update(
-            str(row.get("id") or "")
-            for row in original_bindings
-            if isinstance(row, Mapping)
-            and str(row.get("input") or "") == input_name
-            and str(row.get("id") or "") != keep_id
-            and str(row.get("id") or "")
-        )
+        before_bindings = list(program.get("bindings") or [])
         program["bindings"] = [
-            row for row in program.get("bindings") or []
+            row for row in before_bindings
             if not isinstance(row, Mapping)
             or str(row.get("input") or "") != input_name
             or str(row.get("id") or "") == keep_id
@@ -453,15 +450,29 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
     claims = delete_indices(claims, list(patch.get("claimIndicesDelete") or []))
     claims = delete(claims, list(patch.get("claimIdsDelete") or []))
     claims = upsert(claims, list(patch.get("claimsUpsert") or []))
-    if transaction_deleted_binding_ids:
+    final_runtime_ids = {
+        str(row.get("id") or "")
+        for list_key in ("entities", "bindings", "calls")
+        for row in program.get(list_key) or []
+        if isinstance(row, Mapping) and str(row.get("id") or "")
+    }
+    deleted_runtime_ids = original_runtime_ids - final_runtime_ids
+    if deleted_runtime_ids:
+        cleaned_claims: list[Any] = []
         for claim in claims:
             if not isinstance(claim, dict) or not isinstance(claim.get("backedBy"), list):
+                cleaned_claims.append(claim)
                 continue
+            previous_backing = list(claim["backedBy"])
             claim["backedBy"] = [
                 value
-                for value in claim["backedBy"]
-                if str(value) not in transaction_deleted_binding_ids
+                for value in previous_backing
+                if str(value) not in deleted_runtime_ids
             ]
+            if previous_backing and not claim["backedBy"]:
+                continue
+            cleaned_claims.append(claim)
+        claims = cleaned_claims
     contract["claims"] = claims
 
     metadata = patch.get("metadataPatch")

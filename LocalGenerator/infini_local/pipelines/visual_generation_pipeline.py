@@ -322,6 +322,33 @@ def _visual_filter_ignored(path: str, requested: Any, preserved: Any, reason: st
     return {"path": path, "reason": reason, "requested": copy.deepcopy(requested), "preserved": copy.deepcopy(preserved)}
 
 
+def _drop_schema_forbidden_mutable_fields(
+    source: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    mutable_paths: tuple[str, ...],
+    schema: Mapping[str, Any],
+    audit_path: str,
+    accepted: list[str],
+) -> dict[str, Any]:
+    """Delete only exact mutable fields forbidden by the strict row schema."""
+
+    out: dict[str, Any] = copy.deepcopy(dict(candidate))
+    if schema.get("additionalProperties") is not False:
+        return out
+    valid_fields = set(schema.get("properties") or {})
+    forbidden_fields = {
+        path.split(".", 1)[0]
+        for path in mutable_paths
+        if path and path.split(".", 1)[0] not in valid_fields
+    }
+    for field in sorted(forbidden_fields):
+        if field in source and field in out:
+            out.pop(field, None)
+            accepted.append(f"{audit_path}.{field}")
+    return out
+
+
 def _filter_visual_repair_patch(
     previous: Any,
     patch: Mapping[str, Any],
@@ -370,6 +397,22 @@ def _filter_visual_repair_patch(
             filtered["itemPatch"] = copy.deepcopy(item_patch)
             accepted.append("$.itemPatch")
 
+    # Strict Repair rows cannot repeat a schema-forbidden source field. Its
+    # exact diagnostic path authorizes structural deletion instead of preserving
+    # the invalid key through frozen merge.
+    original_item = source.get("item")
+    if scope.get("itemMutable") and isinstance(original_item, Mapping):
+        candidate_item = filtered.get("itemPatch")
+        repair_source: Mapping[str, Any] = candidate_item if isinstance(candidate_item, Mapping) else original_item
+        filtered["itemPatch"] = _drop_schema_forbidden_mutable_fields(
+            original_item,
+            repair_source,
+            mutable_paths=item_paths,
+            schema=_visual_item_schema(),
+            audit_path="$.itemPatch",
+            accepted=accepted,
+        )
+
     if patch.get("animationPlan") is not None:
         if scope.get("animationPlanMutable"):
             filtered["animationPlan"] = str(patch["animationPlan"])
@@ -408,11 +451,20 @@ def _filter_visual_repair_patch(
             filtered["entitiesUpsert"].append(copy.deepcopy(candidate))
             accepted.append(path)
             continue
+        permissions = entity_permissions.get(entity_id, ())
         merged, row_ignored, row_accepted = merge_frozen_subtree(
-            original, candidate, mutable_paths=entity_permissions.get(entity_id, ()), audit_path=path, allow_additions=False,
+            original, candidate, mutable_paths=permissions, audit_path=path, allow_additions=False,
         )
         ignored.extend(row_ignored)
         accepted.extend(row_accepted)
+        merged = _drop_schema_forbidden_mutable_fields(
+            original,
+            merged,
+            mutable_paths=permissions,
+            schema=_visual_entity_schema(entity_ids),
+            audit_path=path,
+            accepted=accepted,
+        )
         if merged != original:
             filtered["entitiesUpsert"].append(merged)
 

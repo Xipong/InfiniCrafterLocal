@@ -14,7 +14,12 @@ from infini_local.core.vfx_manifest import (
     validate_vfx_director_output,
     vfx_director_surface,
 )
-from infini_local.pipelines.visual_generation_pipeline import _validate_kit
+from infini_local.pipelines.visual_generation_pipeline import (
+    VISUAL_REPAIR_PATCH_SCHEMA,
+    _apply_visual_repair_patch,
+    _build_visual_repair_scope,
+    _validate_kit,
+)
 from infini_local.pipelines.visual_asset_plan import (
     apply_visual_asset_runtime_gates,
     build_visual_asset_plan,
@@ -45,6 +50,73 @@ def test_visual_requires_exact_entity_rows_and_item_png() -> None:
     assert kit is None
     assert any("must use baked_sprite" in row["message"] for row in errors)
     assert any("missing entity rows" in row["message"] for row in errors)
+
+
+def test_visual_repair_deletes_exact_unknown_item_property() -> None:
+    item = {
+        "prompt": "wooden blade with a literal workbench guard",
+        "negativePrompt": "",
+        "silhouette": "broad blade and square guard",
+        "visualIdentity": "carpentry sword",
+        "palette": ["brown", "steel"],
+        ":palette": ["invalid duplicate key"],
+        "preferredCanvasSize": 32,
+        "inventoryScale": 1.0,
+        "worldScale": 1.0,
+    }
+    entity = {
+        "entityId": "item",
+        "assetMode": "baked_sprite",
+        "prompt": "wooden blade",
+        "silhouette": "blade",
+        "visualIdentity": "carpentry sword",
+        "scale": 1.0,
+        ":scale": 2.0,
+    }
+    previous = {
+        "schema": "infini.visual-kit.runtime-entities.v1",
+        "item": item,
+        "entities": [entity],
+        "animationPlan": "static inventory sprite",
+    }
+    errors = [
+        {
+            "path": "$.item.:palette",
+            "code": "schema_additional_property",
+            "message": "additional property ':palette' is not allowed",
+        },
+        {
+            "path": "$.entities[0].:scale",
+            "code": "schema_additional_property",
+            "message": "additional property ':scale' is not allowed",
+        },
+    ]
+    scope = _build_visual_repair_scope(previous, errors, ["item"], "item")
+    patch = {
+        "schema": VISUAL_REPAIR_PATCH_SCHEMA,
+        "itemPatch": {key: copy.deepcopy(value) for key, value in item.items() if key != ":palette"},
+        "entitiesUpsert": [{key: copy.deepcopy(value) for key, value in entity.items() if key != ":scale"}],
+        "entityIdsDelete": [],
+        "entityIndicesDelete": [],
+        "animationPlan": None,
+        "note": "remove invalid duplicate palette key",
+    }
+
+    repaired, audit = _apply_visual_repair_patch(
+        previous,
+        patch,
+        scope,
+        ["item"],
+        return_audit=True,
+    )
+
+    assert audit["ok"], audit
+    assert ":palette" not in repaired["item"]
+    assert repaired["item"]["palette"] == ["brown", "steel"]
+    assert ":scale" not in repaired["entities"][0]
+    assert repaired["entities"][0]["scale"] == 1.0
+    kit, validation_errors = _validate_kit(repaired, ["item"], "item")
+    assert kit is not None, validation_errors
 
 
 def test_visual_gate_reason_stays_in_asset_plan_not_executable_runtime_wire() -> None:

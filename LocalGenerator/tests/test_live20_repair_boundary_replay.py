@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from infini_local.core.runtime_authoring import (
+    apply_repair_patch,
+    build_runtime_repair_scope,
+    filter_repair_patch_scope,
+    validate_runtime_program,
+)
+from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
+from infini_local.pipelines.visual_generation_pipeline import (
+    _apply_visual_repair_patch,
+    _build_visual_repair_scope,
+    _validate_kit,
+)
+
+
+FIXTURE_PATH = Path(__file__).with_name("fixtures") / "live20_repair_boundary_replay.json"
+
+
+def _fixture() -> dict[str, Any]:
+    return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _codes(report: dict[str, Any]) -> set[str]:
+    return {str(row.get("code") or "") for row in report.get("errors") or []}
+
+
+def test_captured_live20_repair_boundaries_close_offline() -> None:
+    fixture = _fixture()
+    assert fixture["schema"] == "infini.live20-repair-boundary-replay.v1"
+    assert fixture["sourceHead"] == "e73db62bde4bfa0254d79444faa4374efe9d15b3"
+
+    for case, replay in fixture["gameplayApplyCases"].items():
+        initial = replay["initialAuthor"]
+        report = validate_runtime_program(initial)
+        assert _codes(report) == set(replay["expectedInitialCodes"]), case
+        scope = build_runtime_repair_scope(initial, report["errors"])
+        filtered, audit = filter_repair_patch_scope(initial, replay["repairPatch"], scope)
+        assert audit["ok"], {"case": case, "audit": audit}
+        repaired = apply_repair_patch(initial, filtered)
+        final = validate_runtime_program(repaired)
+        assert final["ok"], {"case": case, "errors": final["errors"]}
+
+    for case, replay in fixture["gameplayDiagnosticCases"].items():
+        initial = replay["initialAuthor"]
+        report = validate_runtime_program(initial)
+        assert _codes(report) == set(replay["expectedInitialCodes"]), case
+        scope = build_runtime_repair_scope(initial, report["errors"])
+        dossier = build_gameplay_repair_dossier(
+            initial,
+            {},
+            {},
+            {},
+            {},
+            failure_report=report,
+        )
+        assert dossier["repairScope"] == scope
+
+        expected_paths = replay.get("expectedMutableBindingPaths")
+        if expected_paths is not None:
+            actual_paths = {
+                row["id"]: row["paths"]
+                for row in scope["fieldPermissions"]["bindings"]
+            }
+            assert actual_paths == expected_paths, case
+            assert scope["retarget"]["bindingTargetIds"] == replay["expectedRetargetBindingTargetIds"]
+
+        source_code = replay.get("createAllowedFnsFromErrorCode")
+        if source_code is not None:
+            source_error = next(row for row in report["errors"] if row["code"] == source_code)
+            create_calls = scope["create"]["calls"]
+            assert create_calls["allowed"] is True, case
+            assert create_calls["allowedTargetIds"] == replay["expectedCreateCallTargetIds"]
+            assert set(create_calls["allowedFns"]) == set(source_error["allowed"])
+            assert {
+                row["fn"] for row in dossier["blockerCapabilities"]
+            } == set(source_error["allowed"])
+
+    for case, replay in fixture["visualApplyCases"].items():
+        raw = replay["visualRaw"]
+        entity_ids = replay["entityIds"]
+        item_body_id = replay["itemBodyId"]
+        kit, errors = _validate_kit(raw, entity_ids, item_body_id)
+        assert kit is None, case
+        assert [row["path"] for row in errors] == replay["expectedInitialErrorPaths"]
+        scope = _build_visual_repair_scope(raw, errors, entity_ids, item_body_id)
+        repaired, audit = _apply_visual_repair_patch(
+            raw,
+            replay["visualRepairPatch"],
+            scope,
+            entity_ids,
+            return_audit=True,
+        )
+        assert audit["ok"], {"case": case, "audit": audit}
+        final, final_errors = _validate_kit(repaired, entity_ids, item_body_id)
+        assert final is not None, {"case": case, "errors": final_errors}
