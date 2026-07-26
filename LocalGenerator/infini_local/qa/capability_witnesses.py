@@ -191,8 +191,6 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 calls.append(_call("witness_call", fn, witness_target))
 
     primary_target = "item" if item_target and not projectile_target else witness_target
-    for row in (*bindings, *calls):
-        row["role"] = "primary" if row["target"] == primary_target else "secondary"
 
     return {
         "name": f"Capability Witness {fn}",
@@ -217,6 +215,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_PROGRAM_SCHEMA,
+            "primaryEntityId": primary_target,
             "entities": entities,
             "bindings": bindings,
             "calls": calls,

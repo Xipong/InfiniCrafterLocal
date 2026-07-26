@@ -46,17 +46,12 @@ def binding_schema() -> dict[str, Any]:
             "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
             "input": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
             "action": {"type": "string", "enum": list(BINDING_ACTION_REGISTRY)},
-            "role": {
-                "type": "string",
-                "enum": ["primary", "secondary"],
-                "description": "Explicit executable-owner role; never inferred from input, category, name, or target kind.",
-            },
             "target": {
                 **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
                 "x-infini-reference": {"namespace": "entity", "targetKinds": list(ENTITY_KIND_REGISTRY), "allowSelf": True, "graphEdge": False},
             },
         },
-        "required": ["id", "input", "action", "role", "target"],
+        "required": ["id", "input", "action", "target"],
     }
 
 
@@ -86,6 +81,11 @@ def runtime_program_author_schema() -> dict[str, Any]:
         "properties": {
             "apiVersion": {"const": RUNTIME_PROGRAM_API_VERSION},
             "schema": {"const": RUNTIME_PROGRAM_SCHEMA},
+            "primaryEntityId": {
+                **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+                "description": "The exact model-authored primary entity id. Technical row roles are lowered from exact target equality.",
+                "x-infini-reference": {"namespace": "entity", "targetKinds": list(ENTITY_KIND_REGISTRY), "allowSelf": True, "graphEdge": False},
+            },
             "entities": {
                 "type": "array",
                 "items": entity_schema(),
@@ -105,7 +105,7 @@ def runtime_program_author_schema() -> dict[str, Any]:
                 "maxItems": 48,
             },
         },
-        "required": ["apiVersion", "schema", "entities", "bindings", "calls"],
+        "required": ["apiVersion", "schema", "primaryEntityId", "entities", "bindings", "calls"],
     }
 
 
@@ -218,7 +218,12 @@ def author_item_repair_schema() -> dict[str, Any]:
             "claimsUpsert": {"type": "array", "items": claim_schema(), "maxItems": 24},
             "claimIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 24},
             "claimIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 23}, "maxItems": 24},
-            "primaryEntitySelection": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+            "primaryEntitySelection": {
+                "oneOf": [
+                    _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+                    {"type": "null"},
+                ],
+            },
             "exclusiveInputSelections": {
                 "type": "array",
                 "maxItems": 8,
@@ -454,10 +459,7 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
 
     selected_primary = str(patch.get("primaryEntitySelection") or "").strip()
     if selected_primary:
-        for list_key in ("bindings", "calls"):
-            for row in program.get(list_key) or []:
-                if isinstance(row, dict):
-                    row["role"] = "primary" if str(row.get("target") or "") == selected_primary else "secondary"
+        program["primaryEntityId"] = selected_primary
 
     for selection in patch.get("exclusiveInputSelections") or []:
         if not isinstance(selection, Mapping):

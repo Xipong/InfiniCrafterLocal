@@ -29,6 +29,13 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "preserves": ["entity kind", "entity identity", "all gameplay components"],
     },
     {
+        "id": "primary_entity_to_binding_role",
+        "inputs": ["runtimeProgram.primaryEntityId", "runtimeProgram.bindings[].target"],
+        "outputs": ["runtimeProgram.bindings[].role"],
+        "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
+        "preserves": ["primary entity identity", "binding identity", "binding target", "input", "action"],
+    },
+    {
         "id": "capability_name_to_opcode",
         "inputs": ["runtimeProgram.calls[].fn"],
         "outputs": ["runtimeProgram.entities[].movement.code", "runtimeProgram.entities[].controller.code", "runtimeProgram.entities[].events[].actionCode"],
@@ -62,19 +69,43 @@ def declared_outputs_for(fn: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*cap.final_wire_paths, *cap.technical_lowering_outputs)))
 
 
+def declared_global_outputs_for(lowerer_id: str) -> tuple[str, ...]:
+    for lowerer in GLOBAL_TECHNICAL_LOWERINGS:
+        if str(lowerer.get("id") or "") == lowerer_id:
+            return tuple(str(path) for path in lowerer.get("outputs") or ())
+    return ()
+
+
+def declared_global_inputs_for(lowerer_id: str) -> tuple[str, ...]:
+    for lowerer in GLOBAL_TECHNICAL_LOWERINGS:
+        if str(lowerer.get("id") or "") == lowerer_id:
+            return tuple(str(path) for path in lowerer.get("inputs") or ())
+    return ()
+
+
 def audit_compiler_receipts(receipts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     violations: list[dict[str, Any]] = []
     for receipt in receipts:
         fn = str(receipt.get("fn") or "")
+        lowerer_id = str(receipt.get("lowererId") or "")
         path = str(receipt.get("finalPath") or "")
-        declared = declared_outputs_for(fn)
-        if not declared or not any(path_matches(pattern, path) for pattern in declared):
+        declared = declared_global_outputs_for(lowerer_id) if lowerer_id else declared_outputs_for(fn)
+        declared_inputs = declared_global_inputs_for(lowerer_id) if lowerer_id else ()
+        authored_paths = tuple(str(value) for value in receipt.get("authoredPaths") or ())
+        inputs_match = not lowerer_id or (
+            all(any(path_matches(pattern, value) for value in authored_paths) for pattern in declared_inputs)
+            and all(any(path_matches(pattern, value) for pattern in declared_inputs) for value in authored_paths)
+        )
+        if not declared or not any(path_matches(pattern, path) for pattern in declared) or not inputs_match:
             violations.append({
                 "callId": str(receipt.get("callId") or ""),
                 "fn": fn,
+                "lowererId": lowerer_id,
                 "finalPath": path,
+                "authoredPaths": list(authored_paths),
+                "declaredInputs": list(declared_inputs),
                 "declaredOutputs": list(declared),
-                "reason": "compiler wrote an undeclared field",
+                "reason": "compiler receipt used an undeclared input or output field",
             })
     return {
         "schema": "infini.technical-lowering-audit.v1",
@@ -106,6 +137,8 @@ __all__ = [
     "GLOBAL_TECHNICAL_LOWERINGS",
     "TECHNICAL_LOWERING_SCHEMA",
     "audit_compiler_receipts",
+    "declared_global_inputs_for",
+    "declared_global_outputs_for",
     "declared_outputs_for",
     "path_matches",
     "technical_lowering_manifest",

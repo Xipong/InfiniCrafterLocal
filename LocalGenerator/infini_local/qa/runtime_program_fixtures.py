@@ -143,8 +143,6 @@ class _Builder:
     def finish(self, *, primary_entity_id: str, composition: str, parent_a: str, parent_b: str) -> dict[str, Any]:
         if primary_entity_id not in {row["id"] for row in self.entities}:
             raise ValueError(f"fixture primary entity {primary_entity_id!r} is absent")
-        for row in (*self.bindings, *self.calls):
-            row["role"] = "primary" if row["target"] == primary_entity_id else "secondary"
         return {
             "name": self.name,
             "tooltip": self.tooltip,
@@ -168,6 +166,7 @@ class _Builder:
             "runtimeProgram": {
                 "apiVersion": RUNTIME_PROGRAM_API_VERSION,
                 "schema": RUNTIME_PROGRAM_SCHEMA,
+                "primaryEntityId": primary_entity_id,
                 "entities": self.entities,
                 "bindings": self.bindings,
                 "calls": self.calls,

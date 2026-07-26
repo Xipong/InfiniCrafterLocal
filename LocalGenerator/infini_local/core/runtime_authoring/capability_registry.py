@@ -14,7 +14,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v1"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v2"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v1"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
@@ -272,11 +272,6 @@ class CapabilitySpec:
                     "description": "Stable call id used by claims and repair.",
                 },
                 "fn": {"const": self.name},
-                "role": {
-                    "type": "string",
-                    "enum": ["primary", "secondary"],
-                    "description": "Explicit executable-owner role of the target entity.",
-                },
                 "target": {
                     "type": "string",
                     "pattern": r"^[a-z][a-z0-9_]{0,47}$",
@@ -295,7 +290,7 @@ class CapabilitySpec:
                     "required": required,
                 },
             },
-            "required": ["id", "fn", "role", "target", "params"],
+            "required": ["id", "fn", "target", "params"],
         }
 
     def prompt_card(self) -> dict[str, Any]:

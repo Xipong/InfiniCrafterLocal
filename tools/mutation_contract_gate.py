@@ -52,7 +52,6 @@ def build_report() -> dict[str, Any]:
             {
                 "id": "mutation_light",
                 "fn": synthetic.name,
-                "role": "primary",
                 "target": "chained_door",
                 "params": {"strength": 0.5, "color": "white"},
             }

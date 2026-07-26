@@ -45,9 +45,9 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     parent_b = {"name": "Blade", "id": "b", "damage": 18, "useTime": 24, "tags": ["metal"]}
     payload = build_llm_author_payload(parent_a, parent_b, parent_a, parent_b, "a+b")
     invariants = payload["runtimeProgramInvariants"]
-    assert invariants["entityRolePartition"]["exactlyOnePrimaryEntity"] is True
-    assert invariants["entityRolePartition"]["allBindingAndCallRowsForOneTargetUseOneRole"] is True
-    assert "roleByTarget" in invariants["entityRolePartition"]["preEmissionCheck"]
+    assert invariants["primaryEntitySelection"]["authoredField"] == "runtimeProgram.primaryEntityId"
+    assert invariants["primaryEntitySelection"]["exactlyOnePrimaryEntity"] is True
+    assert "do not carry role" in invariants["primaryEntitySelection"]["preEmissionCheck"]
     assert invariants["exclusiveInputs"]["inputs"] == sorted(
         name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
     )
@@ -60,8 +60,8 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     )
     assert "never pair it with spawn_entity" in use_item_body_card["does"]
     self_check = " ".join(payload["selfCheck"])
-    assert "choose exactly one existing entity id as primary" in self_check
-    assert "all and only rows targeting that entity have role=primary" in self_check
+    assert "set runtimeProgram.primaryEntityId" in self_check
+    assert "never emit role in Author bindings or calls" in self_check
     assert "parent sentinel none is forbidden" in self_check
     assert "every damageClass" in self_check
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
@@ -100,7 +100,10 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert isinstance(contract["claims"], list)
     assert isinstance(contract["claims"][0]["backedBy"], list)
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
-    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v1"
+    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v2"
+    assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
+    assert "role" not in card["runtimeProgram"]["bindings"][0]
+    assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
 
     repair_card = author_item_repair_prompt_shape_card()
@@ -203,21 +206,43 @@ def test_explicit_primary_entity_projects_to_wire_and_gates_csharp_item_and_held
     assert projectile_primary["runtimeProgram"]["primaryOwner"] == "projectile"
     assert projectile_primary["runtimeProgram"]["bindings"][0]["role"] == "primary"
 
-    mixed = build_runtime_fixture("workbench_blade")
-    next(row for row in mixed["runtimeProgram"]["calls"] if row["id"] == "workbench_blade_damage")["role"] = "primary"
-    mixed_report = validate_runtime_program(mixed)
-    assert "mixed_entity_role" in _codes(mixed_report)
-    mixed_error = next(row for row in mixed_report["errors"] if row["code"] == "mixed_entity_role")
-    mixed_scope = build_runtime_repair_scope(mixed, [mixed_error])
-    mixed_requirement = mixed_scope["repairRequirements"][0]
-    assert mixed_requirement["coupledFieldGroup"] == {
-        "entityId": "workbench_blade",
-        "field": "role",
-        "constraint": "all_equal",
-        "allowedValues": ["primary", "secondary"],
-        "affectedIds": sorted(mixed_error["relatedIds"]),
-        "mustEmitAllAffectedRows": True,
-    }
+    authored_receipts = item_wire["runtimeContract"]["finalWireReceipts"]
+    binding_receipts = [
+        row for row in authored_receipts
+        if row.get("lowererId") == "primary_entity_to_binding_role"
+    ]
+    assert len(binding_receipts) == len(item_wire["runtimeProgram"]["bindings"])
+    assert all(row["status"] == "technical_projection" for row in binding_receipts)
+    assert audit_compiler_receipts(binding_receipts)["ok"] is True
+
+    undeclared_input = copy.deepcopy(binding_receipts)
+    undeclared_input[0]["authoredPaths"][0] = "runtimeProgram.entities[0].kind"
+    assert audit_compiler_receipts(undeclared_input)["ok"] is False
+
+    reordered = build_runtime_fixture("umbrella_grenade")
+    reordered["runtimeProgram"]["bindings"].reverse()
+    reordered_wire = compile_runtime_program(reordered)
+    reordered_receipts = [
+        row for row in reordered_wire["runtimeContract"]["finalWireReceipts"]
+        if row.get("lowererId") == "primary_entity_to_binding_role"
+    ]
+    for receipt in reordered_receipts:
+        target_path = receipt["authoredPaths"][1]
+        source_index = int(target_path.split("[")[1].split("]")[0])
+        final_index = int(receipt["finalPath"].split("[")[1].split("]")[0])
+        source_binding = reordered["runtimeProgram"]["bindings"][source_index]
+        wire_binding = reordered_wire["runtimeProgram"]["bindings"][final_index]
+        expected_role = (
+            "primary"
+            if source_binding["target"] == reordered["runtimeProgram"]["primaryEntityId"]
+            else "secondary"
+        )
+        assert wire_binding["id"] == source_binding["id"]
+        assert receipt["value"] == wire_binding["role"] == expected_role
+
+    stale_role = build_runtime_fixture("workbench_blade")
+    stale_role["runtimeProgram"]["calls"][0]["role"] = "primary"
+    assert "shape_additional_property" in _codes(validate_runtime_program(stale_role))
 
     tampered = copy.deepcopy(item_wire)
     tampered["runtimeProgram"]["primaryOwner"] = "projectile"

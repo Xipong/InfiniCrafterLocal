@@ -743,6 +743,24 @@
       ]
     },
     {
+      "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
+      "id": "primary_entity_to_binding_role",
+      "inputs": [
+        "runtimeProgram.primaryEntityId",
+        "runtimeProgram.bindings[].target"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].role"
+      ],
+      "preserves": [
+        "primary entity identity",
+        "binding identity",
+        "binding target",
+        "input",
+        "action"
+      ]
+    },
+    {
       "equivalence": "finite numeric wire opcode for the exact authored capability name",
       "id": "capability_name_to_opcode",
       "inputs": [

@@ -35,9 +35,10 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_PROGRAM_SCHEMA,
+            "primaryEntityId": "exact existing entity id chosen once by the model",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
-            "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "role": "primary|secondary", "target": "entity_id"}],
-            "calls": [{"id": "stable_id", "fn": "catalog capability", "role": "primary|secondary", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
+            "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "target": "entity_id"}],
+            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
         },
         "runtimeContract": {
             "schema": RUNTIME_CONTRACT_SCHEMA,
@@ -107,7 +108,6 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
                 "id": "stable_binding_id",
                 "input": "primary_use|alternate_use|hold|equipped",
                 "action": "catalog action",
-                "role": "primary|secondary",
                 "target": "existing entity id",
             }]
             continue
@@ -115,7 +115,6 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
             placeholders[key] = [{
                 "id": "stable_call_id",
                 "fn": "catalog capability",
-                "role": "primary|secondary",
                 "target": "existing entity id",
                 "params": {"everyRequiredCapabilityParam": "typed value"},
             }]
@@ -135,7 +134,7 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
             }]
             continue
         if key == "primaryEntitySelection":
-            placeholders[key] = "entity_id chosen from repairScope.repairTransactions.entityRoleSelection.candidateEntityIds, or null"
+            placeholders[key] = "entity_id chosen from repairScope.repairTransactions.primaryEntitySelection.candidateEntityIds, or null"
             continue
         if key == "exclusiveInputSelections":
             placeholders[key] = [{"input": "conflicting exclusive input", "keepBindingId": "chosen candidate binding id"}]

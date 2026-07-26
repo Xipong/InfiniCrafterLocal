@@ -178,11 +178,11 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 def runtime_program_invariants_for_llm() -> dict[str, Any]:
     return {
-        "entityRolePartition": {
+        "primaryEntitySelection": {
             "exactlyOnePrimaryEntity": True,
-            "allBindingAndCallRowsForOneTargetUseOneRole": True,
-            "primaryRule": "Before authoring rows, choose exactly one existing entity id as the primary target. Then set row.role = primary exactly for rows targeting that entity; every other row is secondary. Primary means ownership partition, not importance.",
-            "preEmissionCheck": "Build roleByTarget once, then copy roleByTarget[row.target] into every binding and call. Reject your draft if one target has two role values.",
+            "authoredField": "runtimeProgram.primaryEntityId",
+            "primaryRule": "Choose exactly one id from runtimeProgram.entities and emit it once as runtimeProgram.primaryEntityId. Primary means executable ownership, not importance.",
+            "preEmissionCheck": "Reject your draft unless primaryEntityId exactly equals one emitted entity id. Binding and call rows do not carry role; technical wire roles are losslessly lowered from exact target equality.",
         },
         "exclusiveInputs": {
             "maxBindingsPerInput": 1,
@@ -214,7 +214,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         "requiredJsonShape": author_item_prompt_shape_card(),
         "runtimeContractSchema": RUNTIME_CONTRACT_SCHEMA,
         "selfCheck": [
-            "choose exactly one existing entity id as primary, then verify all and only rows targeting that entity have role=primary",
+            "set runtimeProgram.primaryEntityId to exactly one existing entity id and never emit role in Author bindings or calls; Lowery materializes wire roles from exact target equality",
             "all refs exist and binding/call target kinds match their registry cards",
             "one item_body and exactly one binding row at most owns each runtimeProgramInvariants.exclusiveInputs input; never pair use_item_body plus spawn_entity on one input",
             "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName; parent sentinel none is forbidden and the Author must choose the exact canonical token",

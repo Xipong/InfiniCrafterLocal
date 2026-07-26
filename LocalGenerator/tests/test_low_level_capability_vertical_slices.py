@@ -42,7 +42,7 @@ def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeyp
 
     authored = build_runtime_fixture("door_on_chain")
     authored["runtimeProgram"]["calls"].append({
-        "id": "synthetic_light", "fn": synthetic.name, "role": "primary", "target": "chained_door",
+        "id": "synthetic_light", "fn": synthetic.name, "target": "chained_door",
         "params": {"strength": 0.5, "color": "white"},
     })
     with pytest.raises(AssertionError, match="unhandled runtime entity capability"):

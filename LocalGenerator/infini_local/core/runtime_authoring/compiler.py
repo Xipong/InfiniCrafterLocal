@@ -359,6 +359,28 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     primary_entity_id = str(validation.get("stats", {}).get("primaryEntityId") or "")
     primary_entity = next(row for row in authored_entities if str(row.get("id") or "") == primary_entity_id)
     primary_owner = "item_body" if primary_entity.get("kind") == "item_body" else "projectile"
+    ctx = _CompileContext(receipts=[])
+    binding_sources = [
+        (index, copy.deepcopy(dict(source)))
+        for index, source in enumerate(authored_program.get("bindings") or [])
+        if isinstance(source, Mapping)
+    ]
+    def binding_source_sort_key(pair: tuple[int, dict[str, Any]]) -> str:
+        return str(pair[1].get("id") or "")
+
+    binding_sources.sort(key=binding_source_sort_key)
+    bindings: list[dict[str, Any]] = []
+    for source_index, binding in binding_sources:
+        binding["role"] = "primary" if str(binding.get("target") or "") == primary_entity_id else "secondary"
+        final_index = len(bindings)
+        bindings.append(binding)
+        ctx.receipts.append({
+            "lowererId": "primary_entity_to_binding_role",
+            "authoredPaths": ["runtimeProgram.primaryEntityId", f"runtimeProgram.bindings[{source_index}].target"],
+            "finalPath": f"runtimeProgram.bindings[{final_index}].role",
+            "value": binding["role"],
+            "status": "technical_projection",
+        })
     entities: list[dict[str, Any]] = []
     entity_index_by_id: dict[str, int] = {}
     for source in authored_entities:
@@ -385,13 +407,11 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             "maxEventSpawnsPerActivation": MAX_EVENT_SPAWNS_PER_ACTIVATION,
         },
         "entities": entities,
-        "bindings": copy.deepcopy(authored_program.get("bindings") or []),
+        "bindings": bindings,
     }
     gameplay: dict[str, Any] = {"kind": str(out.get("category") or "generic")}
     accessory: dict[str, Any] = {"enabled": False}
     armor: dict[str, Any] = {"enabled": False}
-    ctx = _CompileContext(receipts=[])
-
     for call in calls:
         target = str(call.get("target") or "")
         entity_index = entity_index_by_id[target]

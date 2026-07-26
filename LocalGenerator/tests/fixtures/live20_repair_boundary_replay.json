@@ -3,8 +3,7 @@
     "obsidian_pickaxe": {
       "expectedInitialCodes": [
         "binding_dependency",
-        "duplicate_exclusive_input",
-        "mixed_entity_role"
+        "duplicate_exclusive_input"
       ],
       "initialAuthor": {
         "category": "hybrid",
@@ -72,21 +71,18 @@
               "action": "use_item_body",
               "id": "b_primary_use",
               "input": "primary_use",
-              "role": "primary",
               "target": "molten_obsidian_pickaxe_body"
             },
             {
               "action": "place_item",
               "id": "b_alternate_use",
               "input": "alternate_use",
-              "role": "secondary",
               "target": "molten_obsidian_pickaxe_body"
             },
             {
               "action": "apply_item_effects",
               "id": "b_consumption",
               "input": "alternate_use",
-              "role": "secondary",
               "target": "molten_obsidian_pickaxe_body"
             }
           ],
@@ -109,7 +105,6 @@
                 "valueCopper": 27000,
                 "widthPx": 24
               },
-              "role": "primary",
               "target": "molten_obsidian_pickaxe_body"
             },
             {
@@ -127,7 +122,6 @@
                 "useStyle": "swing",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "molten_obsidian_pickaxe_body"
             },
             {
@@ -139,7 +133,6 @@
                 "miningSpeedScale": 1,
                 "pickPower": 100
               },
-              "role": "primary",
               "target": "molten_obsidian_pickaxe_body"
             },
             {
@@ -150,7 +143,6 @@
                 "tileId": 56,
                 "wallId": -1
               },
-              "role": "secondary",
               "target": "molten_obsidian_pickaxe_body"
             },
             {
@@ -160,7 +152,6 @@
                 "consumable": true,
                 "consumeChancePercent": 100
               },
-              "role": "secondary",
               "target": "molten_obsidian_pickaxe_body"
             }
           ],
@@ -170,7 +161,8 @@
               "kind": "item_body"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "molten_obsidian_pickaxe_body",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Способна добывать твердые породы и расходует обсидиан как ресурс"
       },
@@ -184,14 +176,12 @@
             "action": "use_item_body",
             "id": "b_primary_use",
             "input": "primary_use",
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           },
           {
             "action": "place_item",
             "id": "b_alternate_use",
             "input": "alternate_use",
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           }
         ],
@@ -216,7 +206,6 @@
               "valueCopper": 27000,
               "widthPx": 24
             },
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           },
           {
@@ -234,7 +223,6 @@
               "useStyle": "swing",
               "useTurn": true
             },
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           },
           {
@@ -246,7 +234,6 @@
               "miningSpeedScale": 1,
               "pickPower": 100
             },
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           },
           {
@@ -257,7 +244,6 @@
               "tileId": 56,
               "wallId": -1
             },
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           },
           {
@@ -267,7 +253,6 @@
               "consumable": true,
               "consumeChancePercent": 100
             },
-            "role": "primary",
             "target": "molten_obsidian_pickaxe_body"
           }
         ],
@@ -306,13 +291,12 @@
         ],
         "metadataPatch": {},
         "note": "Resolved mixed entity roles by setting all bindings and calls to primary, removed conflicting b_consumption binding to resolve duplicate exclusive input and missing capability dependency.",
-        "primaryEntitySelection": "molten_obsidian_pickaxe_body"
+        "primaryEntitySelection": null
       }
     },
     "ropebound_spear": {
       "expectedInitialCodes": [
-        "duplicate_exclusive_input",
-        "mixed_entity_role"
+        "duplicate_exclusive_input"
       ],
       "initialAuthor": {
         "category": "hybrid",
@@ -381,21 +365,18 @@
               "action": "use_item_body",
               "id": "bind_primary",
               "input": "primary_use",
-              "role": "primary",
               "target": "item_body"
             },
             {
               "action": "spawn_entity",
               "id": "bind_spawn_spear",
               "input": "primary_use",
-              "role": "secondary",
               "target": "spear_proj"
             },
             {
               "action": "place_item",
               "id": "bind_place_rope",
               "input": "primary_use",
-              "role": "secondary",
               "target": "item_body"
             }
           ],
@@ -418,7 +399,6 @@
                 "valueCopper": 500,
                 "widthPx": 21
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -436,7 +416,6 @@
                 "useStyle": "thrust",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -447,7 +426,6 @@
                 "tileId": 213,
                 "wallId": -1
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -461,7 +439,6 @@
                 "speedPxPerTick": 3.7,
                 "spreadRadians": 0
               },
-              "role": "secondary",
               "target": "spear_proj"
             },
             {
@@ -473,7 +450,6 @@
                 "knockback": 6.5,
                 "ownerHitCheck": true
               },
-              "role": "secondary",
               "target": "spear_proj"
             },
             {
@@ -482,7 +458,6 @@
               "params": {
                 "lifetimeTicks": 31
               },
-              "role": "secondary",
               "target": "spear_proj"
             },
             {
@@ -494,7 +469,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 21
               },
-              "role": "secondary",
               "target": "spear_proj"
             },
             {
@@ -509,7 +483,6 @@
                 "pierce": -1,
                 "tileCollide": false
               },
-              "role": "secondary",
               "target": "spear_proj"
             },
             {
@@ -519,7 +492,6 @@
                 "durationTicks": 31,
                 "rangeTiles": 5
               },
-              "role": "secondary",
               "target": "spear_proj"
             }
           ],
@@ -533,7 +505,8 @@
               "kind": "owner_attached_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "item_body",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Выпад копьем с установкой веревки"
       },
@@ -545,21 +518,18 @@
             "action": "use_item_body",
             "id": "bind_primary",
             "input": "primary_use",
-            "role": "primary",
             "target": "item_body"
           },
           {
             "action": "spawn_entity",
             "id": "bind_spawn_spear",
             "input": "alternate_use",
-            "role": "primary",
             "target": "spear_proj"
           },
           {
             "action": "place_item",
             "id": "bind_place_rope",
             "input": "primary_use",
-            "role": "primary",
             "target": "item_body"
           }
         ],
@@ -584,7 +554,6 @@
               "valueCopper": 500,
               "widthPx": 21
             },
-            "role": "primary",
             "target": "item_body"
           },
           {
@@ -602,7 +571,6 @@
               "useStyle": "thrust",
               "useTurn": true
             },
-            "role": "primary",
             "target": "item_body"
           },
           {
@@ -613,7 +581,6 @@
               "tileId": 213,
               "wallId": -1
             },
-            "role": "primary",
             "target": "item_body"
           }
         ],
@@ -631,7 +598,7 @@
         ],
         "metadataPatch": {},
         "note": "Repair mixed entity roles by setting all affected rows targeting item_body to primary, and resolve exclusive input conflict by moving bind_spawn_spear to alternate_use.",
-        "primaryEntitySelection": "item_body"
+        "primaryEntitySelection": null
       }
     }
   },
@@ -648,7 +615,6 @@
         "b_primary_use": [
           "action",
           "input",
-          "role",
           "target"
         ],
         "b_spawn_arrow": [
@@ -728,14 +694,12 @@
               "action": "spawn_entity",
               "id": "b_primary_use",
               "input": "primary_use",
-              "role": "primary",
               "target": "wooden_bow_body"
             },
             {
               "action": "spawn_entity",
               "id": "b_spawn_arrow",
               "input": "primary_use",
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             }
           ],
@@ -758,7 +722,6 @@
                 "valueCopper": 100,
                 "widthPx": 16
               },
-              "role": "primary",
               "target": "wooden_bow_body"
             },
             {
@@ -776,7 +739,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "wooden_bow_body"
             },
             {
@@ -790,7 +752,6 @@
                 "speedPxPerTick": 6.1,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             },
             {
@@ -802,7 +763,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             },
             {
@@ -811,7 +771,6 @@
               "params": {
                 "lifetimeTicks": 1200
               },
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             },
             {
@@ -823,7 +782,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 10
               },
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             },
             {
@@ -838,14 +796,12 @@
                 "pierce": -1,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             },
             {
               "fn": "move_straight",
               "id": "c_proj_mov",
               "params": {},
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             },
             {
@@ -855,7 +811,6 @@
                 "color": "yellow",
                 "strength": 0.4
               },
-              "role": "secondary",
               "target": "jesters_arrow_proj"
             }
           ],
@@ -869,7 +824,8 @@
               "kind": "free_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "wooden_bow_body",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Выпускает стрелы Джестера из деревянного лука"
       }
@@ -944,14 +900,12 @@
               "action": "place_item",
               "id": "b_primary_use",
               "input": "primary_use",
-              "role": "primary",
               "target": "item_body"
             },
             {
               "action": "spawn_entity",
               "id": "b_spawn_helper",
               "input": "primary_use",
-              "role": "secondary",
               "target": "extractinator_helper"
             }
           ],
@@ -974,7 +928,6 @@
                 "valueCopper": 100000,
                 "widthPx": 24
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -992,7 +945,6 @@
                 "useStyle": "swing",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -1002,7 +954,6 @@
                 "consumable": true,
                 "consumeChancePercent": 100
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -1013,7 +964,6 @@
                 "tileId": 219,
                 "wallId": -1
               },
-              "role": "primary",
               "target": "item_body"
             },
             {
@@ -1027,7 +977,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0
               },
-              "role": "secondary",
               "target": "extractinator_helper"
             },
             {
@@ -1036,7 +985,6 @@
               "params": {
                 "lifetimeTicks": 300
               },
-              "role": "secondary",
               "target": "extractinator_helper"
             },
             {
@@ -1048,7 +996,6 @@
                 "hitboxScale": 1,
                 "widthPx": 16
               },
-              "role": "secondary",
               "target": "extractinator_helper"
             },
             {
@@ -1063,7 +1010,6 @@
                 "pierce": 1,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "extractinator_helper"
             }
           ],
@@ -1077,7 +1023,8 @@
               "kind": "stationary_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "item_body",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Places Extractinator and Silt Block via literal synthesis"
       }

@@ -3,6 +3,63 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "bindingAlternatives": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "spawn_entity",
+                    "use_item_body",
+                    "apply_item_effects",
+                    "place_item",
+                    "equip_passive"
+                  ],
+                  "type": "string"
+                },
+                "input": {
+                  "enum": [
+                    "primary_use",
+                    "alternate_use",
+                    "hold",
+                    "equipped"
+                  ],
+                  "type": "string"
+                },
+                "target": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "input",
+                "action",
+                "target"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bindingId": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "bindingId",
+          "allowed"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8,
+      "type": "array"
+    },
     "blockerPlan": {
       "additionalProperties": false,
       "properties": {
@@ -192,39 +249,13 @@
               },
               "type": "array",
               "uniqueItems": true
-            },
-            "requiredRolesByTarget": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "role": {
-                    "enum": [
-                      "primary",
-                      "secondary"
-                    ]
-                  },
-                  "targetId": {
-                    "maxLength": 48,
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "targetId",
-                  "role"
-                ],
-                "type": "object"
-              },
-              "type": "array",
-              "uniqueItems": true
             }
           },
           "required": [
             "allowed",
             "allowedTargetIds",
             "allowedFns",
-            "requiredReferenceEntityIds",
-            "requiredRolesByTarget"
+            "requiredReferenceEntityIds"
           ],
           "type": "object"
         },
@@ -396,6 +427,195 @@
         "type": "string"
       },
       "minItems": 1,
+      "type": "array"
+    },
+    "eventAlternatives": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "event": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "requiredBindings": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "anyOfInputs": {
+                        "items": {
+                          "enum": [
+                            "primary_use",
+                            "alternate_use",
+                            "hold",
+                            "equipped"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 8,
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "anyOfInputs"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4,
+                  "type": "array"
+                },
+                "requiredCalls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "exactParams": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "param": {
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "value": {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "param",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 16,
+                        "type": "array"
+                      },
+                      "fn": {
+                        "enum": [
+                          "configure_item_stats",
+                          "configure_item_use",
+                          "enable_item_contact_damage",
+                          "configure_consumption",
+                          "configure_vanilla_ammo_item",
+                          "restore_resources_on_use",
+                          "apply_vanilla_buff_on_use",
+                          "apply_generated_buff_on_use",
+                          "configure_tool",
+                          "configure_placeable",
+                          "require_use_condition",
+                          "add_hold_light",
+                          "move_player_on_use",
+                          "configure_accessory",
+                          "configure_armor",
+                          "configure_spawn",
+                          "set_projectile_damage",
+                          "set_projectile_lifetime",
+                          "set_projectile_hitbox",
+                          "set_projectile_collision",
+                          "move_straight",
+                          "move_slow_homing",
+                          "move_gravity_arc",
+                          "move_drift",
+                          "move_orbit",
+                          "move_boomerang",
+                          "move_bounce",
+                          "move_sine_homing",
+                          "move_phase",
+                          "move_accelerate",
+                          "move_spiral",
+                          "move_vortex_orb",
+                          "move_blackhole_pull",
+                          "move_proximity_missile",
+                          "move_returning_glaive",
+                          "move_expanding_wave",
+                          "move_flail_tether",
+                          "move_yoyo_hover",
+                          "move_whip_lash",
+                          "move_forward_then_retract",
+                          "channel_beam",
+                          "charge_then_release",
+                          "target_and_fire",
+                          "spawn_over_target",
+                          "spawn_entity_on_event",
+                          "apply_status_on_event",
+                          "damage_area_on_event",
+                          "chain_damage_on_event",
+                          "pull_on_event",
+                          "heal_owner_on_event",
+                          "move_owner_on_event",
+                          "emit_light_while_active"
+                        ],
+                        "type": "string"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "fn",
+                      "targetId",
+                      "exactParams"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 8,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "event",
+                "requiredCalls",
+                "requiredBindings"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "callId": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          },
+          "mustChooseOneCompleteAlternative": {
+            "const": true
+          },
+          "targetId": {
+            "maxLength": 48,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "callId",
+          "targetId",
+          "allowed",
+          "mustChooseOneCompleteAlternative"
+        ],
+        "type": "object"
+      },
+      "maxItems": 48,
       "type": "array"
     },
     "fieldPermissions": {
@@ -699,55 +919,6 @@
           "code": {
             "type": "string"
           },
-          "coupledFieldGroup": {
-            "additionalProperties": false,
-            "properties": {
-              "affectedIds": {
-                "items": {
-                  "maxLength": 48,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              "allowedValues": {
-                "items": {
-                  "enum": [
-                    "primary",
-                    "secondary"
-                  ]
-                },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array",
-                "uniqueItems": true
-              },
-              "constraint": {
-                "const": "all_equal"
-              },
-              "entityId": {
-                "maxLength": 48,
-                "minLength": 1,
-                "type": "string"
-              },
-              "field": {
-                "const": "role"
-              },
-              "mustEmitAllAffectedRows": {
-                "const": true
-              }
-            },
-            "required": [
-              "entityId",
-              "field",
-              "constraint",
-              "allowedValues",
-              "affectedIds",
-              "mustEmitAllAffectedRows"
-            ],
-            "type": "object"
-          },
           "errorPath": {
             "type": "string"
           },
@@ -795,42 +966,6 @@
     "repairTransactions": {
       "additionalProperties": false,
       "properties": {
-        "entityRoleSelection": {
-          "additionalProperties": false,
-          "properties": {
-            "affectedRowIds": {
-              "items": {
-                "maxLength": 48,
-                "minLength": 1,
-                "type": "string"
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
-            "allowed": {
-              "type": "boolean"
-            },
-            "candidateEntityIds": {
-              "items": {
-                "maxLength": 48,
-                "minLength": 1,
-                "type": "string"
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
-            "mustSelectExactlyOne": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "allowed",
-            "candidateEntityIds",
-            "affectedRowIds",
-            "mustSelectExactlyOne"
-          ],
-          "type": "object"
-        },
         "exclusiveInputSelections": {
           "items": {
             "additionalProperties": false,
@@ -861,10 +996,36 @@
             "type": "object"
           },
           "type": "array"
+        },
+        "primaryEntitySelection": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "candidateEntityIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "mustSelectExactlyOne": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "allowed",
+            "candidateEntityIds",
+            "mustSelectExactlyOne"
+          ],
+          "type": "object"
         }
       },
       "required": [
-        "entityRoleSelection",
+        "primaryEntitySelection",
         "exclusiveInputSelections"
       ],
       "type": "object"
@@ -908,7 +1069,7 @@
       "type": "object"
     },
     "schema": {
-      "const": "infini.runtime-repair-scope.v5"
+      "const": "infini.runtime-repair-scope.v6"
     }
   },
   "required": [
@@ -919,6 +1080,8 @@
     "retarget",
     "identityChanges",
     "metadataFields",
+    "bindingAlternatives",
+    "eventAlternatives",
     "contextIds",
     "fieldPermissions",
     "repairTransactions",

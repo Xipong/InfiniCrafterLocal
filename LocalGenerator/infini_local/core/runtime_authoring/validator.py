@@ -49,12 +49,10 @@ VALIDATION_ERROR_CODES = frozenset({
     "missing_claim_backing",
     "missing_dependency_param",
     "missing_entity_reference",
-    "missing_entity_role",
     "missing_item_capability_param",
     "missing_movement_component",
     "missing_required_component",
-    "mixed_entity_role",
-    "primary_entity_count",
+    "invalid_primary_entity_reference",
     "self_reference_forbidden",
     "unknown_capability",
     "unknown_registry_requirement",
@@ -93,62 +91,20 @@ def _calls_by_target(program: Mapping[str, Any]) -> dict[str, list[dict[str, Any
     return out
 
 
-def _entity_role_issues(
+def _primary_entity_issues(
     entities_by_id: Mapping[str, Mapping[str, Any]],
-    bindings: list[dict[str, Any]],
-    calls: list[dict[str, Any]],
+    program: Mapping[str, Any],
 ) -> tuple[list[ValidationIssue], str]:
-    issues: list[ValidationIssue] = []
-    role_rows_by_target: dict[str, list[tuple[str, str, str]]] = {}
-    for namespace, rows in (("bindings", bindings), ("calls", calls)):
-        for row in rows:
-            target_id = str(row.get("target") or "")
-            if target_id not in entities_by_id:
-                continue
-            role_rows_by_target.setdefault(target_id, []).append(
-                (namespace, str(row.get("id") or ""), str(row.get("role") or ""))
-            )
-    for entity_id in entities_by_id:
-        role_rows = role_rows_by_target.get(entity_id, [])
-        if not role_rows:
-            issues.append(ValidationIssue(
-                "$.runtimeProgram",
-                "missing_entity_role",
-                f"Entity '{entity_id}' has no authored call/binding role rows.",
-                ("add an exact call or binding with role primary|secondary",),
-                (entity_id,),
-            ))
-            continue
-        roles = {role for _, _, role in role_rows}
-        if len(roles) != 1:
-            issues.append(ValidationIssue(
-                "$.runtimeProgram",
-                "mixed_entity_role",
-                f"Entity '{entity_id}' mixes authored primary and secondary rows.",
-                ("all rows targeting one entity must use one role",),
-                tuple(row_id for _, row_id, _ in role_rows if row_id),
-            ))
-    primary_targets = {
-        target_id
-        for target_id, role_rows in role_rows_by_target.items()
-        if any(role == "primary" for _, _, role in role_rows)
-    }
-    if len(primary_targets) != 1:
-        primary_row_ids = tuple(
-            row_id
-            for role_rows in role_rows_by_target.values()
-            for _, row_id, role in role_rows
-            if role == "primary" and row_id
-        )
-        issues.append(ValidationIssue(
-            "$.runtimeProgram",
-            "primary_entity_count",
-            f"Exactly one explicitly authored primary entity is required; found {len(primary_targets)}.",
-            ("mark every row of exactly one target entity primary and all other entity rows secondary",),
-            primary_row_ids,
-        ))
-    primary_entity_id = next(iter(primary_targets)) if len(primary_targets) == 1 else ""
-    return issues, primary_entity_id
+    primary_entity_id = str(program.get("primaryEntityId") or "")
+    if primary_entity_id in entities_by_id:
+        return [], primary_entity_id
+    return [ValidationIssue(
+        "$.runtimeProgram.primaryEntityId",
+        "invalid_primary_entity_reference",
+        f"primaryEntityId '{primary_entity_id}' must equal one exact authored entity id.",
+        tuple(entities_by_id),
+        (primary_entity_id,) if primary_entity_id else (),
+    )], ""
 
 
 def _exclusive_input_issues(bindings: list[dict[str, Any]]) -> list[ValidationIssue]:
@@ -260,6 +216,54 @@ def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
     ))
 
 
+def event_dependency_alternatives(event: str, kind: str) -> tuple[dict[str, Any], ...]:
+    """Return exact executable producer alternatives for one event/entity-kind pair.
+
+    Empty dependency lists mean the event is intrinsic for that exact kind.  The
+    function never chooses an alternative; validator checks whether one is
+    present and Repair exposes the same finite alternatives to the model.
+    """
+
+    spec = EVENT_KIND_REGISTRY.get(event)
+    if spec is None or kind not in spec.source_kinds:
+        return ()
+    if event == "on_use":
+        return ({
+            "requiredCalls": [],
+            "requiredBindings": [{"anyOfInputs": ["primary_use", "alternate_use"]}],
+        },)
+    if event in {"on_hit", "on_crit"}:
+        required = "enable_item_contact_damage" if kind == "item_body" else "set_projectile_damage"
+        return ({
+            "requiredCalls": [{"fn": required, "exactParams": {}}],
+            "requiredBindings": [],
+        },)
+    if event == "on_tile_collision":
+        return ({
+            "requiredCalls": [{"fn": "set_projectile_collision", "exactParams": {"tileCollide": True}}],
+            "requiredBindings": [],
+        },)
+    if event in {"on_release", "channel_complete"}:
+        return ({
+            "requiredCalls": [{"fn": "charge_then_release", "exactParams": {}}],
+            "requiredBindings": [],
+        },)
+    if event == "periodic":
+        return ({"requiredCalls": [], "requiredBindings": []},)
+    kind_spec = ENTITY_KIND_REGISTRY.get(kind)
+    if kind_spec is None:
+        return ()
+    if event in kind_spec.base_events or spec.always_available_on_projectile and kind_spec.projectile:
+        return ({"requiredCalls": [], "requiredBindings": []},)
+    return tuple(
+        {
+            "requiredCalls": [{"fn": name, "exactParams": {}}],
+            "requiredBindings": [],
+        }
+        for name in spec.producer_capabilities
+    )
+
+
 def _event_available(
     *,
     event: str,
@@ -275,32 +279,41 @@ def _event_available(
         return False, spec.source_kinds, f"{kind} cannot emit {event}"
 
     target_calls = calls_by_target.get(target_id, [])
-    fns = {str(row.get("fn") or "") for row in target_calls}
-    if event == "on_use":
-        active = any(str(row.get("input") or "") in {"primary_use", "alternate_use"} for row in bindings)
-        return active, ("add a primary_use or alternate_use binding",), "on_use requires an active item-use binding"
-    if event in {"on_hit", "on_crit"}:
-        required = "enable_item_contact_damage" if kind == "item_body" else "set_projectile_damage"
-        return required in fns, (required,), f"{event} requires explicit damaging contact on the same entity"
-    if event == "on_tile_collision":
-        collision = next((row for row in target_calls if row.get("fn") == "set_projectile_collision"), None)
-        raw_collision_params = (collision or {}).get("params")
-        collision_params: Mapping[str, Any] = raw_collision_params if isinstance(raw_collision_params, Mapping) else {}
-        tile_collide = collision_params.get("tileCollide") is True
-        return tile_collide, ("set_projectile_collision(tileCollide=true)",), "on_tile_collision requires tileCollide=true"
-    if event in {"on_release", "channel_complete"}:
-        return "charge_then_release" in fns, ("charge_then_release",), f"{event} is emitted only by charge_then_release"
-    if event == "periodic":
-        return True, (), ""
-    kind_spec = ENTITY_KIND_REGISTRY.get(kind)
-    if kind_spec is None:
-        return False, tuple(ENTITY_KIND_REGISTRY), f"unknown entity kind '{kind}'"
-    if event in kind_spec.base_events or spec.always_available_on_projectile and kind_spec.projectile:
-        return True, (), ""
-    if spec.producer_capabilities:
-        producers = tuple(name for name in spec.producer_capabilities if name in fns)
-        return bool(producers), spec.producer_capabilities, f"{event} requires one declared producer capability"
-    return False, (), f"{event} has no executable producer on {target_id}"
+    alternatives = event_dependency_alternatives(event, kind)
+
+    def call_present(requirement: Mapping[str, Any]) -> bool:
+        expected_fn = str(requirement.get("fn") or "")
+        raw_expected = requirement.get("exactParams")
+        expected: Mapping[str, Any] = raw_expected if isinstance(raw_expected, Mapping) else {}
+        for call in target_calls:
+            if str(call.get("fn") or "") != expected_fn:
+                continue
+            raw_params = call.get("params")
+            params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
+            if all(params.get(key) == value for key, value in expected.items()):
+                return True
+        return False
+
+    def binding_present(requirement: Mapping[str, Any]) -> bool:
+        allowed_inputs = {str(value) for value in requirement.get("anyOfInputs") or []}
+        return any(str(row.get("input") or "") in allowed_inputs for row in bindings)
+
+    for alternative in alternatives:
+        if (
+            all(call_present(row) for row in alternative.get("requiredCalls") or [])
+            and all(binding_present(row) for row in alternative.get("requiredBindings") or [])
+        ):
+            return True, (), ""
+
+    allowed: list[str] = []
+    for alternative in alternatives:
+        for row in alternative.get("requiredCalls") or []:
+            exact = row.get("exactParams") or {}
+            suffix = "" if not exact else "(" + ",".join(f"{key}={value!r}" for key, value in exact.items()) + ")"
+            allowed.append(str(row.get("fn") or "") + suffix)
+        for row in alternative.get("requiredBindings") or []:
+            allowed.append("binding input one of: " + ",".join(str(value) for value in row.get("anyOfInputs") or []))
+    return False, tuple(allowed), f"{event} requires one exact declared producer alternative on {target_id}"
 
 
 def _validate_requirement(
@@ -419,8 +432,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         issues.append(ValidationIssue("$.runtimeProgram.entities", "item_body_count", f"Exactly one item_body is required; found {len(item_entities)}.", ("add one item_body", "remove extras")))
     item_id = str(item_entities[0].get("id") or "") if len(item_entities) == 1 else ""
 
-    role_issues, primary_entity_id = _entity_role_issues(entities_by_id, bindings, calls)
-    issues.extend(role_issues)
+    primary_issues, primary_entity_id = _primary_entity_issues(entities_by_id, program)
+    issues.extend(primary_issues)
 
     issues.extend(_exclusive_input_issues(bindings))
     binding_spawn_roots: set[str] = set()

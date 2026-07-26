@@ -58,7 +58,7 @@ _AUTHOR_SYSTEM = (
     "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Every gameplay "
     "claim must cite existing entity/binding/call ids. Use only catalog capabilities. Check every reference, "
     "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
-    "Before returning, group every binding/call by target and reject your draft if one target has multiple role values; group bindings by input and reject it if an exclusive input has more than one row. configure_item_use never requires a companion use_item_body binding. "
+    "Before returning, require runtimeProgram.primaryEntityId to equal exactly one emitted entity id; binding/call rows do not carry role because Lowery derives technical wire roles from exact target equality. Group bindings by input and reject the draft if an exclusive input has more than one row. configure_item_use never requires a companion use_item_body binding. "
     "Return JSON only; no markdown or reasoning."
 )
 
@@ -263,15 +263,16 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return exactly the repair patch schema; never return the full item.",
-            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, role, target, and the complete params object from brokenFragments, changing only permitted fields; never omit unchanged required fields.",
+            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from brokenFragments, changing only permitted fields; never omit unchanged required fields.",
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
             "Use create permissions only for the exact blocker or its declared support dependency.",
             "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
-            "When repairTransactions.entityRoleSelection.allowed is true, set primaryEntitySelection to exactly one listed candidate; code applies that authored partition to every affected row.",
+            "When repairTransactions.primaryEntitySelection.allowed is true, set primaryEntitySelection to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
             "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
+            "For each repairScope.eventAlternatives row, choose one complete alternative: author its exact event plus every listed required call/binding in the same patch, and emit no support from unselected alternatives. The engine never chooses or inserts an event producer for you.",
         ],
         "runtimeVersions": {
             "authorSchema": RUNTIME_PROGRAM_SCHEMA,
@@ -336,10 +337,9 @@ def repair_author_item_after_failure(
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
-        "For every coupledFieldGroup, emit every affected row and use one identical allowed value for its field across the entire group. "
         "Use primaryEntitySelection whenever its repairTransaction is enabled. For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
-        "For a new call, copy the exact role listed for its target in repairScope.create.calls.requiredRolesByTarget; do not create a conflicting role partition. "
-        "For every bindingId in repairScope.bindingAlternatives, copy one complete input/action/target/role tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. "
+        "For every bindingId in repairScope.bindingAlternatives, copy one complete input/action/target tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. "
+        "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty is mandatory post-patch closure: callsUpsert must patch or create at least one complete allowed call on an affected target. A note claiming the capability exists does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
         "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "

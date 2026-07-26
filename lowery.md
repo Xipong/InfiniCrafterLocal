@@ -138,6 +138,10 @@ Event actions:
 
 Visual role — renderer handoff, а не gameplay-классификатор.
 
+### Primary entity → binding role
+
+`runtimeProgram.primaryEntityId` выбирается Author как точный существующий `entityId`. Lowery сравнивает его только с точным `binding.target`: равный target materializes wire `role=primary`, остальные — `role=secondary`. Это one-to-one техническая проекция authored identity; она не выбирает entity, input, action, attachment, delivery или gameplay importance.
+
 ## Удалённые gameplay aliases и archetype routers
 
 Физически удалены `effect_catalog.py` и `effect_archetypes.json`, включая `basic/projectile/bolt → thrown_simple`, `spear/lance/pike → spear_thrust`, `slash/held/swing → slash_holdout`, `beam/laser/ray → laser_beam` и другие whole-pattern aliases. Они не являются compatibility API и не должны восстанавливаться.

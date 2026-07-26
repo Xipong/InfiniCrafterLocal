@@ -21,11 +21,14 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_shape_report
-from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES
+from infini_local.core.runtime_authoring.validator import (
+    VALIDATION_ERROR_CODES,
+    event_dependency_alternatives,
+)
 
 
-RUNTIME_REPAIR_SCOPE_SCHEMA = "infini.runtime-repair-scope.v5"
-RUNTIME_REPAIR_SCOPE_REPORT_SCHEMA = "infini.runtime-repair-scope-report.v5"
+RUNTIME_REPAIR_SCOPE_SCHEMA = "infini.runtime-repair-scope.v6"
+RUNTIME_REPAIR_SCOPE_REPORT_SCHEMA = "infini.runtime-repair-scope-report.v6"
 RUNTIME_REPAIR_FILTER_REPORT_SCHEMA = "infini.runtime-repair-filter-report.v3"
 
 _NODE_PATH_RE = re.compile(
@@ -59,12 +62,11 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "missing_claim_backing": {"strategy": "patch_or_delete_claim", "llmRepairable": True, "allowNodeDelete": True},
     "missing_dependency_param": {"strategy": "patch_exact_missing_param", "llmRepairable": True, "allowNodeDelete": False},
     "missing_entity_reference": {"strategy": "retarget_or_create_exact_missing_entity", "llmRepairable": True, "allowNodeDelete": False},
-    "missing_entity_role": {"strategy": "synthesize_exact_role_row", "llmRepairable": True, "allowNodeDelete": False},
+
     "missing_item_capability_param": {"strategy": "patch_or_synthesize_exact_item_dependency", "llmRepairable": True, "allowNodeDelete": False},
     "missing_movement_component": {"strategy": "choose_one_compatible_position_driver", "llmRepairable": True, "allowNodeDelete": False},
     "missing_required_component": {"strategy": "synthesize_exact_required_component", "llmRepairable": True, "allowNodeDelete": False},
-    "mixed_entity_role": {"strategy": "patch_exact_row_roles", "llmRepairable": True, "allowNodeDelete": False},
-    "primary_entity_count": {"strategy": "choose_exact_single_primary_entity", "llmRepairable": True, "allowNodeDelete": False},
+    "invalid_primary_entity_reference": {"strategy": "choose_exact_existing_primary_entity", "llmRepairable": True, "allowNodeDelete": False},
     "self_reference_forbidden": {"strategy": "patch_exact_reference", "llmRepairable": True, "allowNodeDelete": False},
     "unknown_capability": {"strategy": "replace_or_delete_unknown_call", "llmRepairable": True, "allowNodeDelete": True},
     "unknown_registry_requirement": {"strategy": "developer_contract_defect", "llmRepairable": False, "allowNodeDelete": False},
@@ -355,21 +357,8 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         "properties": {
                             "allowed": {"type": "boolean"}, "allowedTargetIds": copy.deepcopy(id_array),
                             "allowedFns": copy.deepcopy(id_array), "requiredReferenceEntityIds": copy.deepcopy(id_array),
-                            "requiredRolesByTarget": {
-                                "type": "array",
-                                "uniqueItems": True,
-                                "items": {
-                                    "type": "object",
-                                    "additionalProperties": False,
-                                    "properties": {
-                                        "targetId": _strict_scope_string_schema(),
-                                        "role": {"enum": ["primary", "secondary"]},
-                                    },
-                                    "required": ["targetId", "role"],
-                                },
-                            },
                         },
-                        "required": ["allowed", "allowedTargetIds", "allowedFns", "requiredReferenceEntityIds", "requiredRolesByTarget"],
+                        "required": ["allowed", "allowedTargetIds", "allowedFns", "requiredReferenceEntityIds"],
                     },
                     "claims": {
                         "type": "object", "additionalProperties": False,
@@ -419,13 +408,89 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                                     "input": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
                                     "action": {"type": "string", "enum": list(BINDING_ACTION_REGISTRY)},
                                     "target": _strict_scope_string_schema(),
-                                    "role": {"type": "string", "enum": ["primary", "secondary"]},
                                 },
-                                "required": ["input", "action", "target", "role"],
+                                "required": ["input", "action", "target"],
                             },
                         },
                     },
                     "required": ["bindingId", "allowed"],
+                },
+            },
+            "eventAlternatives": {
+                "type": "array",
+                "maxItems": 48,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "callId": _strict_scope_string_schema(),
+                        "targetId": _strict_scope_string_schema(),
+                        "allowed": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 32,
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "event": _strict_scope_string_schema(),
+                                    "requiredCalls": {
+                                        "type": "array",
+                                        "maxItems": 8,
+                                        "items": {
+                                            "type": "object",
+                                            "additionalProperties": False,
+                                            "properties": {
+                                                "fn": {"type": "string", "enum": list(CAPABILITY_REGISTRY)},
+                                                "targetId": _strict_scope_string_schema(),
+                                                "exactParams": {
+                                                    "type": "array",
+                                                    "maxItems": 16,
+                                                    "items": {
+                                                        "type": "object",
+                                                        "additionalProperties": False,
+                                                        "properties": {
+                                                            "param": _strict_scope_string_schema(),
+                                                            "value": {
+                                                                "oneOf": [
+                                                                    {"type": "string"},
+                                                                    {"type": "number"},
+                                                                    {"type": "boolean"},
+                                                                    {"type": "null"},
+                                                                ],
+                                                            },
+                                                        },
+                                                        "required": ["param", "value"],
+                                                    },
+                                                },
+                                            },
+                                            "required": ["fn", "targetId", "exactParams"],
+                                        },
+                                    },
+                                    "requiredBindings": {
+                                        "type": "array",
+                                        "maxItems": 4,
+                                        "items": {
+                                            "type": "object",
+                                            "additionalProperties": False,
+                                            "properties": {
+                                                "anyOfInputs": {
+                                                    "type": "array",
+                                                    "minItems": 1,
+                                                    "maxItems": 8,
+                                                    "items": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
+                                                },
+                                            },
+                                            "required": ["anyOfInputs"],
+                                        },
+                                    },
+                                },
+                                "required": ["event", "requiredCalls", "requiredBindings"],
+                            },
+                        },
+                        "mustChooseOneCompleteAlternative": {"const": True},
+                    },
+                    "required": ["callId", "targetId", "allowed", "mustChooseOneCompleteAlternative"],
                 },
             },
             "contextIds": {
@@ -455,16 +520,15 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "entityRoleSelection": {
+                    "primaryEntitySelection": {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
                             "allowed": {"type": "boolean"},
                             "candidateEntityIds": copy.deepcopy(id_array),
-                            "affectedRowIds": copy.deepcopy(id_array),
                             "mustSelectExactlyOne": {"type": "boolean"},
                         },
-                        "required": ["allowed", "candidateEntityIds", "affectedRowIds", "mustSelectExactlyOne"],
+                        "required": ["allowed", "candidateEntityIds", "mustSelectExactlyOne"],
                     },
                     "exclusiveInputSelections": {
                         "type": "array",
@@ -480,7 +544,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         },
                     },
                 },
-                "required": ["entityRoleSelection", "exclusiveInputSelections"],
+                "required": ["primaryEntitySelection", "exclusiveInputSelections"],
             },
             "repairRequirements": {
                 "type": "array",
@@ -497,19 +561,6 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         "allowedValues": {"type": "array"},
                         "repairStrategy": {"type": "string", "minLength": 1},
                         "llmRepairable": {"type": "boolean"},
-                        "coupledFieldGroup": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {
-                                "entityId": _strict_scope_string_schema(),
-                                "field": {"const": "role"},
-                                "constraint": {"const": "all_equal"},
-                                "allowedValues": {"type": "array", "items": {"enum": ["primary", "secondary"]}, "minItems": 2, "maxItems": 2, "uniqueItems": True},
-                                "affectedIds": copy.deepcopy(id_array),
-                                "mustEmitAllAffectedRows": {"const": True},
-                            },
-                            "required": ["entityId", "field", "constraint", "allowedValues", "affectedIds", "mustEmitAllAffectedRows"],
-                        },
                     },
                     "required": [
                         "errorPath", "code", "message", "affectedIds",
@@ -533,7 +584,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
             "capabilitySubset": copy.deepcopy(id_array),
             "nonRepairableErrors": {"type": "array", "items": {"type": "object"}},
         },
-        "required": ["schema", "mutable", "deletable", "create", "retarget", "identityChanges", "metadataFields", "bindingAlternatives", "contextIds", "fieldPermissions", "repairTransactions", "repairRequirements", "blockerPlan", "errorPaths", "capabilitySubset", "nonRepairableErrors"],
+        "required": ["schema", "mutable", "deletable", "create", "retarget", "identityChanges", "metadataFields", "bindingAlternatives", "eventAlternatives", "contextIds", "fieldPermissions", "repairTransactions", "repairRequirements", "blockerPlan", "errorPaths", "capabilitySubset", "nonRepairableErrors"],
     }
 
 def _new_scope() -> dict[str, Any]:
@@ -553,7 +604,7 @@ def _new_scope() -> dict[str, Any]:
             },
             "calls": {
                 "allowed": False, "allowedTargetIds": [], "allowedFns": [],
-                "requiredReferenceEntityIds": [], "requiredRolesByTarget": [],
+                "requiredReferenceEntityIds": [],
             },
             "claims": {"allowed": False},
         },
@@ -566,13 +617,13 @@ def _new_scope() -> dict[str, Any]:
         },
         "metadataFields": [],
         "bindingAlternatives": [],
+        "eventAlternatives": [],
         "contextIds": {"entityIds": [], "bindingIds": [], "callIds": [], "claimIds": []},
         "fieldPermissions": {"entities": [], "bindings": [], "calls": [], "claims": []},
         "repairTransactions": {
-            "entityRoleSelection": {
+            "primaryEntitySelection": {
                 "allowed": False,
                 "candidateEntityIds": [],
-                "affectedRowIds": [],
                 "mustSelectExactlyOne": True,
             },
             "exclusiveInputSelections": [],
@@ -647,16 +698,12 @@ def _binding_repair_alternatives(
     input_mutable: bool,
     action_mutable: bool,
     target_mutable: bool,
-    primary_entity_candidates: Iterable[str] = (),
 ) -> list[dict[str, str]]:
     """Project registry-valid binding tuples without choosing gameplay for Repair."""
 
-    binding_id = str(binding.get("id") or "")
     original_input = str(binding.get("input") or "")
     original_action = str(binding.get("action") or "")
     original_target = str(binding.get("target") or "")
-    original_role = str(binding.get("role") or "")
-    role_selection_candidates = {str(value) for value in primary_entity_candidates if str(value)}
     input_names = sorted(INPUT_KIND_REGISTRY) if input_mutable else [original_input]
     action_names = sorted(BINDING_ACTION_REGISTRY) if action_mutable else [original_action]
     entity_kind_by_id = {
@@ -664,16 +711,6 @@ def _binding_repair_alternatives(
         for row in rows.get("entities", [])
         if str(row.get("id") or "")
     }
-
-    roles_by_target: dict[str, set[str]] = {}
-    for namespace in ("bindings", "calls"):
-        for row in rows.get(namespace, []):
-            if namespace == "bindings" and str(row.get("id") or "") == binding_id:
-                continue
-            target = str(row.get("target") or "")
-            role = str(row.get("role") or "")
-            if target and role in {"primary", "secondary"}:
-                roles_by_target.setdefault(target, set()).add(role)
 
     alternatives: list[dict[str, str]] = []
     for input_name in input_names:
@@ -697,32 +734,17 @@ def _binding_repair_alternatives(
             for target_id in target_ids:
                 if entity_kind_by_id.get(target_id) not in action_spec.target_kinds:
                     continue
-                if role_selection_candidates:
-                    roles = []
-                    if target_id in role_selection_candidates:
-                        roles.append("primary")
-                    if any(candidate != target_id for candidate in role_selection_candidates):
-                        roles.append("secondary")
-                    if not roles:
-                        roles.append("secondary")
-                else:
-                    target_roles = roles_by_target.get(target_id, set())
-                    roles = sorted(target_roles) if len(target_roles) == 1 else [original_role]
-                for role in roles:
-                    if role not in {"primary", "secondary"}:
-                        continue
-                    alternatives.append({
-                        "input": input_name,
-                        "action": action_name,
-                        "target": target_id,
-                        "role": role,
-                    })
+                alternatives.append({
+                    "input": input_name,
+                    "action": action_name,
+                    "target": target_id,
+                })
     unique = sorted({
-        tuple(row[key] for key in ("input", "action", "target", "role"))
+        tuple(row[key] for key in ("input", "action", "target"))
         for row in alternatives
     })
     return [
-        {"input": values[0], "action": values[1], "target": values[2], "role": values[3]}
+        {"input": values[0], "action": values[1], "target": values[2]}
         for values in unique
     ]
 
@@ -762,6 +784,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     field_permissions: dict[str, dict[str, set[str]]] = {
         namespace: {} for namespace in ("entities", "bindings", "calls", "claims")
     }
+    event_alternative_rows: list[dict[str, Any]] = []
+    event_supporting_capabilities: set[str] = set()
     repair_requirements: list[dict[str, Any]] = []
     direct_blocker_capabilities: set[str] = set()
     existing_broken_capabilities: set[str] = set()
@@ -820,21 +844,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "repairStrategy": str((policy or {}).get("strategy") or ("patch_exact_schema_path" if code.startswith("shape_") else "unmapped_validator_error")),
             "llmRepairable": bool((policy or {}).get("llmRepairable", code.startswith("shape_"))),
         }
-        if code == "mixed_entity_role":
-            target_ids = sorted({
-                str((row_by_id.get(row_id) or {}).get("target") or "")
-                for row_id in related
-                if str((row_by_id.get(row_id) or {}).get("target") or "")
-            })
-            if len(target_ids) == 1:
-                requirement_row["coupledFieldGroup"] = {
-                    "entityId": target_ids[0],
-                    "field": "role",
-                    "constraint": "all_equal",
-                    "allowedValues": ["primary", "secondary"],
-                    "affectedIds": sorted(set(related)),
-                    "mustEmitAllAffectedRows": True,
-                }
         repair_requirements.append(requirement_row)
         error_paths.append(path)
         node = _node_from_path(path, rows)
@@ -944,18 +953,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
         if code == "unknown_registry_requirement":
             pass
-        elif code in {"mixed_entity_role", "primary_entity_count"}:
-            role_row_ids = related or [
-                str(row.get("id") or "")
-                for namespace in ("bindings", "calls")
-                for row in rows[namespace]
-                if str(row.get("id") or "")
-            ]
-            for row_id in role_row_ids:
-                namespace = namespace_by_id.get(row_id)
-                if namespace in {"bindings", "calls"}:
-                    mark(namespace, row_id)
-                    grant(namespace, row_id, "role")
         elif code in {"duplicate_id", "ambiguous_global_id"}:
             # IDs are structural identity.  Do not let Repair rename a valid
             # row through a broad upsert; allow dropping the exact offending
@@ -1042,6 +1039,79 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 else:
                     call_target_change_ids.add(node_id)
                 retarget_call_ids.update(_matching_entity_ids(rows, _call_target_kinds(node_row, param_name=param_match.group(1) if param_match else "")))
+        elif code == "capability_event_incompatible":
+            if node_namespace == "calls":
+                cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
+                target_id = str(node_row.get("target") or "")
+                target_kind = str(row_by_id.get(target_id, {}).get("kind") or "")
+                allowed_alternatives: list[dict[str, Any]] = []
+                if cap is not None:
+                    call_event_change_ids.add(node_id)
+                    grant("calls", node_id, "params.event")
+                    for event in cap.allowed_events:
+                        for dependency in event_dependency_alternatives(event, target_kind):
+                            required_calls: list[dict[str, Any]] = []
+                            viable = True
+                            for raw_requirement in dependency.get("requiredCalls") or []:
+                                required_fn = str(raw_requirement.get("fn") or "")
+                                if not _candidate_capability_viable(required_fn, [target_id], rows):
+                                    viable = False
+                                    break
+                                raw_exact = raw_requirement.get("exactParams")
+                                exact: Mapping[str, Any] = raw_exact if isinstance(raw_exact, Mapping) else {}
+                                required_calls.append({
+                                    "fn": required_fn,
+                                    "targetId": target_id,
+                                    "exactParams": [
+                                        {"param": key, "value": value}
+                                        for key, value in sorted(exact.items())
+                                    ],
+                                })
+                                event_supporting_capabilities.add(required_fn)
+                                existing = next((
+                                    call for call in rows["calls"]
+                                    if str(call.get("target") or "") == target_id
+                                    and str(call.get("fn") or "") == required_fn
+                                ), None)
+                                if existing is None:
+                                    allow_new_call([target_id], [required_fn])
+                                else:
+                                    existing_id = str(existing.get("id") or "")
+                                    raw_params = existing.get("params")
+                                    params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
+                                    missing_exact = [key for key, value in exact.items() if params.get(key) != value]
+                                    if missing_exact:
+                                        mark("calls", existing_id)
+                                        existing_broken_capabilities.add(required_fn)
+                                        for key in missing_exact:
+                                            grant("calls", existing_id, f"params.{key}")
+                            if not viable:
+                                continue
+                            required_bindings = [
+                                {"anyOfInputs": [str(value) for value in requirement.get("anyOfInputs") or []]}
+                                for requirement in dependency.get("requiredBindings") or []
+                            ]
+                            for requirement in required_bindings:
+                                allowed_inputs = set(requirement["anyOfInputs"])
+                                if not any(str(binding.get("input") or "") in allowed_inputs for binding in rows["bindings"]):
+                                    create_binding_targets.add(target_id)
+                                    create_binding_inputs.update(allowed_inputs)
+                                    for input_name in allowed_inputs:
+                                        input_spec = INPUT_KIND_REGISTRY.get(input_name)
+                                        if input_spec is not None:
+                                            create_binding_actions.update(input_spec.allowed_actions)
+                            allowed_alternatives.append({
+                                "event": event,
+                                "requiredCalls": required_calls,
+                                "requiredBindings": required_bindings,
+                            })
+                if allowed_alternatives:
+                    event_alternative_rows.append({
+                        "callId": node_id,
+                        "targetId": target_id,
+                        "allowed": allowed_alternatives,
+                        "mustChooseOneCompleteAlternative": True,
+                    })
         elif code in {
             "missing_required_component", "missing_movement_component", "inert_stationary_entity",
             "binding_dependency", "event_not_emitted", "missing_item_capability_param",
@@ -1183,8 +1253,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
     # The Repair prompt distinguishes direct blockers from their technical
     # support dependencies.  It never receives the full full capability catalog.
-    direct_blocker_capabilities.update(name for name in create_call_fns if name in CAPABILITY_REGISTRY)
-    supporting_capabilities = _capability_dependency_closure(direct_blocker_capabilities) - direct_blocker_capabilities
+    direct_blocker_capabilities.update(
+        name for name in create_call_fns
+        if name in CAPABILITY_REGISTRY and name not in event_supporting_capabilities
+    )
+    supporting_capabilities = (
+        _capability_dependency_closure(direct_blocker_capabilities) - direct_blocker_capabilities
+    ) | event_supporting_capabilities
     if create_call_fns:
         create_call_fns.update(supporting_capabilities)
     capability_subset = direct_blocker_capabilities | supporting_capabilities | existing_broken_capabilities
@@ -1199,7 +1274,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         grant("bindings", row_id, "action")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
-        grant("bindings", row_id, "role")
     for row_id in call_fn_change_ids:
         grant("calls", row_id, "fn")
     for row_id in call_target_change_ids:
@@ -1215,17 +1289,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         grant("claims", row_id, "backedBy")
 
     scope = _new_scope()
-    roles_by_target: dict[str, set[str]] = {}
-    for role_row in [*rows["bindings"], *rows["calls"]]:
-        target_id = str(role_row.get("target") or "")
-        role = str(role_row.get("role") or "")
-        if target_id and role in {"primary", "secondary"}:
-            roles_by_target.setdefault(target_id, set()).add(role)
-    required_roles_by_target = [
-        {"targetId": target_id, "role": next(iter(roles))}
-        for target_id in sorted(create_call_targets)
-        if len((roles := roles_by_target.get(target_id, set()))) == 1
-    ]
     scope["mutable"] = {
         "entityIds": sorted(mutable["entities"]),
         "bindingIds": sorted(mutable["bindings"]),
@@ -1264,7 +1327,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "allowedTargetIds": sorted(create_call_targets),
             "allowedFns": sorted(name for name in create_call_fns if name in CAPABILITY_REGISTRY),
             "requiredReferenceEntityIds": sorted(required_reference_entities),
-            "requiredRolesByTarget": required_roles_by_target,
         },
         "claims": {"allowed": allow_create_claim},
     }
@@ -1298,33 +1360,20 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         for namespace in ("entities", "bindings", "calls", "claims")
     }
     error_codes = {str(row.get("code") or row.get("kind") or "") for row in error_rows}
-    role_rows = [
-        row
-        for namespace in ("bindings", "calls")
-        for row in rows[namespace]
-        if str(row.get("id") or "") and str(row.get("target") or "")
-    ]
-    role_candidates: list[str] = []
-    if "primary_entity_count" in error_codes:
-        role_candidates = sorted({str(row.get("target") or "") for row in role_rows})
-    elif "mixed_entity_role" in error_codes:
-        mixed_entity_ids = {
-            str(group.get("entityId") or "")
-            for requirement in repair_requirements
-            if isinstance((group := requirement.get("coupledFieldGroup")), Mapping)
-            and str(group.get("entityId") or "")
-        }
-        current_primary_ids = {
-            str(row.get("target") or "")
-            for row in role_rows
-            if str(row.get("role") or "") == "primary"
-        }
-        role_candidates = sorted(mixed_entity_ids.intersection(current_primary_ids) or mixed_entity_ids)
-    if role_candidates:
-        scope["repairTransactions"]["entityRoleSelection"] = {
+    primary_candidates = sorted(
+        str(row.get("id") or "")
+        for row in rows["entities"]
+        if str(row.get("id") or "")
+    )
+    primary_shape_error = any(
+        str(row.get("path") or "") == "$.runtimeProgram.primaryEntityId"
+        and str(row.get("code") or row.get("kind") or "").startswith("shape_")
+        for row in error_rows
+    )
+    if ("invalid_primary_entity_reference" in error_codes or primary_shape_error) and primary_candidates:
+        scope["repairTransactions"]["primaryEntitySelection"] = {
             "allowed": True,
-            "candidateEntityIds": role_candidates,
-            "affectedRowIds": sorted({str(row.get("id") or "") for row in role_rows}),
+            "candidateEntityIds": primary_candidates,
             "mustSelectExactlyOne": True,
         }
 
@@ -1346,11 +1395,11 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             input_mutable=row_id in binding_input_change_ids,
             action_mutable=row_id in binding_action_change_ids,
             target_mutable=row_id in binding_target_change_ids,
-            primary_entity_candidates=role_candidates,
         )
         binding_alternatives.append({"bindingId": row_id, "allowed": allowed})
         retarget_binding_ids.update(row["target"] for row in allowed)
     scope["bindingAlternatives"] = binding_alternatives
+    scope["eventAlternatives"] = event_alternative_rows
     scope["retarget"]["bindingTargetIds"] = sorted(retarget_binding_ids)
 
     bindings_by_id = {
@@ -1460,14 +1509,6 @@ def _new_row_allowed(namespace: str, row: Mapping[str, Any], policy: Mapping[str
         required_refs = set(str(value) for value in policy.get("requiredReferenceEntityIds") or [])
         if required_refs and not required_refs.intersection(_entity_reference_params(row)):
             return False, "missing_required_affected_entity_reference"
-        required_roles = {
-            str(value.get("targetId") or ""): str(value.get("role") or "")
-            for value in policy.get("requiredRolesByTarget") or []
-            if isinstance(value, Mapping)
-        }
-        target_id = str(row.get("target") or "")
-        if target_id in required_roles and str(row.get("role") or "") != required_roles[target_id]:
-            return False, "call_role_conflicts_with_target_partition"
         return True, ""
     if namespace == "claims":
         return bool(policy.get("allowed")), "claim_creation_not_required"
@@ -1653,7 +1694,7 @@ def filter_repair_patch_scope(
         else:
             ignored.append(_filter_ignored(path, candidate, preserved, "valid_metadata_frozen"))
 
-    if "primaryEntitySelection" in patch:
+    if patch.get("primaryEntitySelection") is not None:
         filtered["primaryEntitySelection"] = copy.deepcopy(patch.get("primaryEntitySelection"))
         accepted.append("$.primaryEntitySelection")
     if "exclusiveInputSelections" in patch:
@@ -1720,7 +1761,6 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 str(value.get("input") or ""),
                 str(value.get("action") or ""),
                 str(value.get("target") or ""),
-                str(value.get("role") or ""),
             )
             for value in row.get("allowed") or []
             if isinstance(value, Mapping)
@@ -1798,17 +1838,6 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 required_refs = set(str(value) for value in create_policy.get("requiredReferenceEntityIds") or [])
                 if required_refs and not required_refs.intersection(_entity_reference_params(row)):
                     errors.append(_scope_error(path + ".params", "new event call must reference the affected unreachable entity"))
-                required_roles: dict[str, str] = {}
-                for value in create_policy.get("requiredRolesByTarget") or []:
-                    if isinstance(value, Mapping):
-                        required_roles[str(value.get("targetId") or "")] = str(value.get("role") or "")
-                target_id = str(row.get("target") or "")
-                if target_id in required_roles and str(row.get("role") or "") != required_roles[target_id]:
-                    errors.append(_scope_error(
-                        path + ".role",
-                        "new call role conflicts with the existing authored target partition",
-                        actual=row.get("role"),
-                    ))
 
             if row_id in existing[namespace]:
                 original = next((value for value in rows[namespace] if str(value.get("id") or "") == row_id), {})
@@ -1826,15 +1855,14 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                         str(row.get("input") or ""),
                         str(row.get("action") or ""),
                         str(row.get("target") or ""),
-                        str(row.get("role") or ""),
                     )
                     if allowed_tuples is not None and actual_tuple not in allowed_tuples:
                         errors.append(_scope_error(
                             path,
-                            "binding input/action/target/role tuple is outside canonical repair alternatives",
+                            "binding input/action/target tuple is outside canonical repair alternatives",
                             actual={
                                 "input": actual_tuple[0], "action": actual_tuple[1],
-                                "target": actual_tuple[2], "role": actual_tuple[3],
+                                "target": actual_tuple[2],
                             },
                         ))
                 if namespace == "calls":
@@ -1876,16 +1904,203 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
 
     raw_transactions = scope.get("repairTransactions")
     transactions: Mapping[str, Any] = raw_transactions if isinstance(raw_transactions, Mapping) else {}
-    raw_role_transaction = transactions.get("entityRoleSelection")
-    role_transaction: Mapping[str, Any] = raw_role_transaction if isinstance(raw_role_transaction, Mapping) else {}
-    if "primaryEntitySelection" in patch:
+    raw_primary_transaction = transactions.get("primaryEntitySelection")
+    primary_transaction: Mapping[str, Any] = raw_primary_transaction if isinstance(raw_primary_transaction, Mapping) else {}
+    if patch.get("primaryEntitySelection") is not None:
         selected = str(patch.get("primaryEntitySelection") or "")
-        candidates = set(str(value) for value in role_transaction.get("candidateEntityIds") or [])
-        if not bool(role_transaction.get("allowed")) or selected not in candidates:
+        candidates = set(str(value) for value in primary_transaction.get("candidateEntityIds") or [])
+        if not bool(primary_transaction.get("allowed")) or selected not in candidates:
             errors.append(_scope_error(
                 "$.primaryEntitySelection",
-                "primary entity choice is outside the exact role-partition transaction",
+                "primary entity choice is outside the exact authored-identity transaction",
                 actual=selected,
+            ))
+
+    raw_event_alternatives = scope.get("eventAlternatives")
+    event_transactions = raw_event_alternatives if isinstance(raw_event_alternatives, list) else []
+    if event_transactions:
+        preview_raw = apply_repair_patch(current, patch)
+        preview: Mapping[str, Any] = preview_raw if isinstance(preview_raw, Mapping) else {}
+        raw_preview_program = preview.get("runtimeProgram")
+        preview_program: Mapping[str, Any] = raw_preview_program if isinstance(raw_preview_program, Mapping) else {}
+        preview_calls = [row for row in preview_program.get("calls") or [] if isinstance(row, Mapping)]
+        preview_bindings = [row for row in preview_program.get("bindings") or [] if isinstance(row, Mapping)]
+        preview_calls_by_id = {
+            str(row.get("id") or ""): row
+            for row in preview_calls
+            if str(row.get("id") or "")
+        }
+        all_event_call_keys: set[tuple[str, str]] = set()
+        selected_event_call_keys: set[tuple[str, str]] = set()
+        all_event_binding_inputs: set[str] = set()
+        selected_event_binding_inputs: set[str] = set()
+        for transaction in event_transactions:
+            if not isinstance(transaction, Mapping):
+                continue
+            call_id = str(transaction.get("callId") or "")
+            target_id = str(transaction.get("targetId") or "")
+            call = preview_calls_by_id.get(call_id, {})
+            raw_params = call.get("params")
+            params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
+            selected_event = str(params.get("event") or "")
+            allowed_rows = [row for row in transaction.get("allowed") or [] if isinstance(row, Mapping)]
+            alternatives = [
+                row for row in allowed_rows
+                if str(row.get("event") or "") == selected_event
+            ]
+            for alternative in allowed_rows:
+                is_selected = str(alternative.get("event") or "") == selected_event
+                for requirement in alternative.get("requiredCalls") or []:
+                    if not isinstance(requirement, Mapping):
+                        continue
+                    key = (
+                        str(requirement.get("fn") or ""),
+                        str(requirement.get("targetId") or ""),
+                    )
+                    all_event_call_keys.add(key)
+                    if is_selected:
+                        selected_event_call_keys.add(key)
+                for requirement in alternative.get("requiredBindings") or []:
+                    if not isinstance(requirement, Mapping):
+                        continue
+                    inputs = {str(value) for value in requirement.get("anyOfInputs") or []}
+                    all_event_binding_inputs.update(inputs)
+                    if is_selected:
+                        selected_event_binding_inputs.update(inputs)
+
+            def alternative_complete(alternative: Mapping[str, Any]) -> bool:
+                for requirement in alternative.get("requiredCalls") or []:
+                    if not isinstance(requirement, Mapping):
+                        return False
+                    required_fn = str(requirement.get("fn") or "")
+                    required_target = str(requirement.get("targetId") or "")
+                    exact_rows = [row for row in requirement.get("exactParams") or [] if isinstance(row, Mapping)]
+                    def candidate_satisfies(candidate: Mapping[str, Any]) -> bool:
+                        if (
+                            str(candidate.get("fn") or "") != required_fn
+                            or str(candidate.get("target") or "") != required_target
+                        ):
+                            return False
+                        raw_candidate_params = candidate.get("params")
+                        candidate_params: Mapping[str, Any] = (
+                            raw_candidate_params if isinstance(raw_candidate_params, Mapping) else {}
+                        )
+                        return all(
+                            candidate_params.get(str(exact.get("param") or "")) == exact.get("value")
+                            for exact in exact_rows
+                        )
+
+                    if not any(candidate_satisfies(candidate) for candidate in preview_calls):
+                        return False
+                for requirement in alternative.get("requiredBindings") or []:
+                    if not isinstance(requirement, Mapping):
+                        return False
+                    allowed_inputs = {str(value) for value in requirement.get("anyOfInputs") or []}
+                    if not any(str(binding.get("input") or "") in allowed_inputs for binding in preview_bindings):
+                        return False
+                return True
+
+            if not any(alternative_complete(row) for row in alternatives):
+                errors.append(_scope_error(
+                    f"$.runtimeProgram.calls[{call_id}].params.event",
+                    "event selection must include one complete exact producer alternative in the same repair",
+                    actual={"event": selected_event, "targetId": target_id},
+                ))
+
+        independent_affected_ids: set[str] = set()
+        independent_required_fns: set[str] = set()
+        independent_binding_target_ids: set[str] = set()
+        raw_requirements = scope.get("repairRequirements")
+        for requirement in raw_requirements if isinstance(raw_requirements, list) else []:
+            if not isinstance(requirement, Mapping):
+                continue
+            code = str(requirement.get("code") or "")
+            if code == "capability_event_incompatible":
+                continue
+            affected = {str(value) for value in requirement.get("affectedIds") or []}
+            independent_affected_ids.update(affected)
+            independent_required_fns.update(
+                str(value) for value in requirement.get("requiredOneOfCapabilities") or []
+            )
+            if code in {"event_not_emitted", "unreachable_entity"}:
+                independent_binding_target_ids.update(affected)
+
+        selected_event_new_calls: dict[tuple[str, str], list[tuple[int, str]]] = {}
+        for index, row in enumerate(patch.get("callsUpsert") or []):
+            if not isinstance(row, Mapping):
+                continue
+            row_id = str(row.get("id") or "")
+            fn = str(row.get("fn") or "")
+            key = (fn, str(row.get("target") or ""))
+            if (
+                key in all_event_call_keys
+                and key not in selected_event_call_keys
+                and row_id not in independent_affected_ids
+                and fn not in independent_required_fns
+            ):
+                errors.append(_scope_error(
+                    f"$.callsUpsert[{index}]",
+                    "event producer belongs to an unselected event alternative",
+                    actual={"id": row_id, "fn": fn, "targetId": key[1]},
+                ))
+            if row_id not in existing["calls"] and key in selected_event_call_keys:
+                selected_event_new_calls.setdefault(key, []).append((index, row_id))
+
+        current_call_keys = {
+            (str(row.get("fn") or ""), str(row.get("target") or ""))
+            for row in rows["calls"]
+        }
+        for key, candidates in selected_event_new_calls.items():
+            redundant = candidates if key in current_call_keys else candidates[1:]
+            for index, row_id in redundant:
+                errors.append(_scope_error(
+                    f"$.callsUpsert[{index}]",
+                    "selected event alternative requires at most one new producer call per exact fn/target",
+                    actual={"id": row_id, "fn": key[0], "targetId": key[1]},
+                ))
+
+        selected_event_new_bindings: list[tuple[int, str, str, str]] = []
+        for index, row in enumerate(patch.get("bindingsUpsert") or []):
+            if not isinstance(row, Mapping):
+                continue
+            row_id = str(row.get("id") or "")
+            input_name = str(row.get("input") or "")
+            target_id = str(row.get("target") or "")
+            independently_required = (
+                row_id in independent_affected_ids
+                or target_id in independent_binding_target_ids
+            )
+            if (
+                input_name in all_event_binding_inputs
+                and input_name not in selected_event_binding_inputs
+                and not independently_required
+            ):
+                errors.append(_scope_error(
+                    f"$.bindingsUpsert[{index}]",
+                    "event binding belongs to an unselected event alternative",
+                    actual={"id": row_id, "input": input_name, "targetId": target_id},
+                ))
+            if (
+                row_id not in existing["bindings"]
+                and input_name in selected_event_binding_inputs
+                and not independently_required
+            ):
+                selected_event_new_bindings.append((index, row_id, input_name, target_id))
+
+        current_has_selected_event_binding = any(
+            str(row.get("input") or "") in selected_event_binding_inputs
+            for row in rows["bindings"]
+        )
+        redundant_event_bindings = (
+            selected_event_new_bindings
+            if current_has_selected_event_binding
+            else selected_event_new_bindings[1:]
+        )
+        for index, row_id, input_name, target_id in redundant_event_bindings:
+            errors.append(_scope_error(
+                f"$.bindingsUpsert[{index}]",
+                "selected event alternative requires at most one new binding from its any-of set",
+                actual={"id": row_id, "input": input_name, "targetId": target_id},
             ))
 
     raw_exclusive_groups = transactions.get("exclusiveInputSelections")

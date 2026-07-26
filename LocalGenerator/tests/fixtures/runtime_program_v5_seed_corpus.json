@@ -59,7 +59,6 @@
               "action": "spawn_entity",
               "id": "primary_chain",
               "input": "primary_use",
-              "role": "primary",
               "target": "chained_door"
             }
           ],
@@ -82,7 +81,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -100,7 +98,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -114,7 +111,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0.0
               },
-              "role": "primary",
               "target": "chained_door"
             },
             {
@@ -126,7 +122,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": true
               },
-              "role": "primary",
               "target": "chained_door"
             },
             {
@@ -135,7 +130,6 @@
               "params": {
                 "lifetimeTicks": 180
               },
-              "role": "primary",
               "target": "chained_door"
             },
             {
@@ -147,7 +141,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 36
               },
-              "role": "primary",
               "target": "chained_door"
             },
             {
@@ -162,7 +155,6 @@
                 "pierce": -1,
                 "tileCollide": true
               },
-              "role": "primary",
               "target": "chained_door"
             },
             {
@@ -172,7 +164,6 @@
                 "rangeTiles": 10,
                 "returnSpeed": 14
               },
-              "role": "primary",
               "target": "chained_door"
             },
             {
@@ -183,7 +174,6 @@
                 "durationTicks": 90,
                 "event": "on_hit"
               },
-              "role": "primary",
               "target": "chained_door"
             }
           ],
@@ -197,7 +187,8 @@
               "kind": "owner_attached_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "chained_door",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Swings a literal reinforced door from a bounded tether."
       },
@@ -428,14 +419,12 @@
               "action": "spawn_entity",
               "id": "primary_charge",
               "input": "primary_use",
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
               "action": "equip_passive",
               "id": "passive_harness",
               "input": "equipped",
-              "role": "primary",
               "target": "item"
             }
           ],
@@ -458,7 +447,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -476,7 +464,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -490,7 +477,6 @@
                 "speedPxPerTick": 10,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
@@ -502,7 +488,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
@@ -511,7 +496,6 @@
               "params": {
                 "lifetimeTicks": 160
               },
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
@@ -523,7 +507,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 14
               },
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
@@ -538,7 +521,6 @@
                 "pierce": 2,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
@@ -549,7 +531,6 @@
                 "proximityRadiusPx": 48,
                 "rangeTiles": 24
               },
-              "role": "secondary",
               "target": "ore_charge"
             },
             {
@@ -570,7 +551,6 @@
                 "movementSpeed": 0.08,
                 "sentrySlots": 0
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -582,7 +562,6 @@
                 "miningSpeedScale": 0.85,
                 "pickPower": 55
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -593,7 +572,6 @@
                 "tileId": 4,
                 "wallId": -1
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -604,7 +582,6 @@
                 "event": "on_hit",
                 "radiusPx": 72
               },
-              "role": "secondary",
               "target": "ore_charge"
             }
           ],
@@ -618,7 +595,8 @@
               "kind": "free_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "item",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Acts as an accessory, mining tool, placeable light and independent projectile launcher."
       },
@@ -869,7 +847,6 @@
               "action": "place_item",
               "id": "primary_place",
               "input": "primary_use",
-              "role": "primary",
               "target": "item"
             }
           ],
@@ -892,7 +869,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -910,7 +886,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -922,7 +897,6 @@
                 "miningSpeedScale": 0.9,
                 "pickPower": 35
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -933,7 +907,6 @@
                 "tileId": 19,
                 "wallId": -1
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -943,7 +916,6 @@
                 "consumable": true,
                 "consumeChancePercent": 35
               },
-              "role": "primary",
               "target": "item"
             }
           ],
@@ -953,7 +925,8 @@
               "kind": "item_body"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "item",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Functions as a tool and places a concrete temporary-looking platform tile."
       },
@@ -1121,14 +1094,12 @@
               "action": "spawn_entity",
               "id": "primary_pike",
               "input": "primary_use",
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
               "action": "spawn_entity",
               "id": "alternate_deploy",
               "input": "alternate_use",
-              "role": "secondary",
               "target": "deployed_lantern"
             }
           ],
@@ -1151,7 +1122,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -1169,7 +1139,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -1183,7 +1152,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0.0
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1195,7 +1163,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": true
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1204,7 +1171,6 @@
               "params": {
                 "lifetimeTicks": 30
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1216,7 +1182,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 58
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1231,7 +1196,6 @@
                 "pierce": -1,
                 "tileCollide": false
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1241,7 +1205,6 @@
                 "durationTicks": 26,
                 "rangeTiles": 5
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1251,7 +1214,6 @@
                 "color": "orange",
                 "strength": 0.9
               },
-              "role": "primary",
               "target": "held_lantern_pike"
             },
             {
@@ -1265,7 +1227,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "deployed_lantern"
             },
             {
@@ -1277,7 +1238,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "deployed_lantern"
             },
             {
@@ -1286,7 +1246,6 @@
               "params": {
                 "lifetimeTicks": 900
               },
-              "role": "secondary",
               "target": "deployed_lantern"
             },
             {
@@ -1298,7 +1257,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 28
               },
-              "role": "secondary",
               "target": "deployed_lantern"
             },
             {
@@ -1313,7 +1271,6 @@
                 "pierce": -1,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "deployed_lantern"
             },
             {
@@ -1327,7 +1284,6 @@
                 "speedPxPerTick": 11,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "lantern_bolt"
             },
             {
@@ -1339,7 +1295,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "lantern_bolt"
             },
             {
@@ -1348,7 +1303,6 @@
               "params": {
                 "lifetimeTicks": 150
               },
-              "role": "secondary",
               "target": "lantern_bolt"
             },
             {
@@ -1360,7 +1314,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 12
               },
-              "role": "secondary",
               "target": "lantern_bolt"
             },
             {
@@ -1375,7 +1328,6 @@
                 "pierce": 1,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "lantern_bolt"
             },
             {
@@ -1385,7 +1337,6 @@
                 "homingStrength": 0.08,
                 "rangeTiles": 28
               },
-              "role": "secondary",
               "target": "lantern_bolt"
             },
             {
@@ -1397,7 +1348,6 @@
                 "sameTargetBias": 0.35,
                 "shotEntity": "lantern_bolt"
               },
-              "role": "secondary",
               "target": "deployed_lantern"
             }
           ],
@@ -1419,7 +1369,8 @@
               "kind": "child_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "held_lantern_pike",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Primary use drives a held lighted body; alternate use deploys an independent targeter."
       },
@@ -1743,7 +1694,6 @@
               "action": "spawn_entity",
               "id": "primary_tonic",
               "input": "primary_use",
-              "role": "primary",
               "target": "tonic_flask"
             }
           ],
@@ -1766,7 +1716,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -1784,7 +1733,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -1798,7 +1746,6 @@
                 "speedPxPerTick": 12,
                 "spreadRadians": 0.0
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1810,7 +1757,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1819,7 +1765,6 @@
               "params": {
                 "lifetimeTicks": 180
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1831,7 +1776,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 18
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1846,7 +1790,6 @@
                 "pierce": 2,
                 "tileCollide": true
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1856,7 +1799,6 @@
                 "returnAfterTicks": 36,
                 "returnSpeed": 15
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1867,7 +1809,6 @@
                 "event": "on_hit",
                 "maxHeal": 12
               },
-              "role": "primary",
               "target": "tonic_flask"
             },
             {
@@ -1878,7 +1819,6 @@
                 "durationTicks": 120,
                 "event": "on_hit"
               },
-              "role": "primary",
               "target": "tonic_flask"
             }
           ],
@@ -1892,7 +1832,8 @@
               "kind": "free_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "tonic_flask",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Throws a potion flask that returns and heals its owner on a hit."
       },
@@ -2122,14 +2063,12 @@
               "action": "spawn_entity",
               "id": "primary_shield",
               "input": "primary_use",
-              "role": "primary",
               "target": "shield_body"
             },
             {
               "action": "spawn_entity",
               "id": "alternate_disc",
               "input": "alternate_use",
-              "role": "secondary",
               "target": "shield_disc"
             }
           ],
@@ -2152,7 +2091,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -2170,7 +2108,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -2184,7 +2121,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0.0
               },
-              "role": "primary",
               "target": "shield_body"
             },
             {
@@ -2196,7 +2132,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": true
               },
-              "role": "primary",
               "target": "shield_body"
             },
             {
@@ -2205,7 +2140,6 @@
               "params": {
                 "lifetimeTicks": 40
               },
-              "role": "primary",
               "target": "shield_body"
             },
             {
@@ -2217,7 +2151,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 44
               },
-              "role": "primary",
               "target": "shield_body"
             },
             {
@@ -2232,7 +2165,6 @@
                 "pierce": -1,
                 "tileCollide": false
               },
-              "role": "primary",
               "target": "shield_body"
             },
             {
@@ -2242,7 +2174,6 @@
                 "durationTicks": 32,
                 "rangeTiles": 2
               },
-              "role": "primary",
               "target": "shield_body"
             },
             {
@@ -2256,7 +2187,6 @@
                 "speedPxPerTick": 14,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "shield_disc"
             },
             {
@@ -2268,7 +2198,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "shield_disc"
             },
             {
@@ -2277,7 +2206,6 @@
               "params": {
                 "lifetimeTicks": 150
               },
-              "role": "secondary",
               "target": "shield_disc"
             },
             {
@@ -2289,7 +2217,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 28
               },
-              "role": "secondary",
               "target": "shield_disc"
             },
             {
@@ -2304,7 +2231,6 @@
                 "pierce": 3,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "shield_disc"
             },
             {
@@ -2314,7 +2240,6 @@
                 "returnAfterTicks": 30,
                 "returnSpeed": 16
               },
-              "role": "secondary",
               "target": "shield_disc"
             }
           ],
@@ -2332,7 +2257,8 @@
               "kind": "free_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "shield_body",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Primary use holds a contact shield; alternate use launches a returning disc."
       },
@@ -2600,14 +2526,12 @@
               "action": "spawn_entity",
               "id": "primary_guard",
               "input": "primary_use",
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
               "action": "spawn_entity",
               "id": "alternate_grenade",
               "input": "alternate_use",
-              "role": "secondary",
               "target": "grenade_weight"
             }
           ],
@@ -2630,7 +2554,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -2648,7 +2571,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "secondary",
               "target": "item"
             },
             {
@@ -2662,7 +2584,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0.0
               },
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
@@ -2674,7 +2595,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": true
               },
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
@@ -2683,7 +2603,6 @@
               "params": {
                 "lifetimeTicks": 32
               },
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
@@ -2695,7 +2614,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 54
               },
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
@@ -2710,7 +2628,6 @@
                 "pierce": -1,
                 "tileCollide": false
               },
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
@@ -2720,7 +2637,6 @@
                 "rangeTiles": 2,
                 "returnSpeed": 12
               },
-              "role": "primary",
               "target": "umbrella_guard"
             },
             {
@@ -2734,7 +2650,6 @@
                 "speedPxPerTick": 9,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "grenade_weight"
             },
             {
@@ -2746,7 +2661,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "grenade_weight"
             },
             {
@@ -2755,7 +2669,6 @@
               "params": {
                 "lifetimeTicks": 90
               },
-              "role": "secondary",
               "target": "grenade_weight"
             },
             {
@@ -2767,7 +2680,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 18
               },
-              "role": "secondary",
               "target": "grenade_weight"
             },
             {
@@ -2782,7 +2694,6 @@
                 "pierce": 1,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "grenade_weight"
             },
             {
@@ -2791,7 +2702,6 @@
               "params": {
                 "gravityPerTick": 0.25
               },
-              "role": "secondary",
               "target": "grenade_weight"
             },
             {
@@ -2802,7 +2712,6 @@
                 "event": "on_expire",
                 "radiusPx": 112
               },
-              "role": "secondary",
               "target": "grenade_weight"
             }
           ],
@@ -2820,7 +2729,8 @@
               "kind": "free_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "umbrella_guard",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight."
       },
@@ -3099,7 +3009,6 @@
               "action": "spawn_entity",
               "id": "primary_workbench",
               "input": "primary_use",
-              "role": "secondary",
               "target": "workbench_blade"
             }
           ],
@@ -3122,7 +3031,6 @@
                 "valueCopper": 7500,
                 "widthPx": 32
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -3140,7 +3048,6 @@
                 "useStyle": "shoot",
                 "useTurn": true
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -3150,7 +3057,6 @@
                 "contactForgivenessPx": 4,
                 "hitboxScale": 1.0
               },
-              "role": "primary",
               "target": "item"
             },
             {
@@ -3164,7 +3070,6 @@
                 "speedPxPerTick": 0,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "workbench_blade"
             },
             {
@@ -3176,7 +3081,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": true
               },
-              "role": "secondary",
               "target": "workbench_blade"
             },
             {
@@ -3185,7 +3089,6 @@
               "params": {
                 "lifetimeTicks": 28
               },
-              "role": "secondary",
               "target": "workbench_blade"
             },
             {
@@ -3197,7 +3100,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 64
               },
-              "role": "secondary",
               "target": "workbench_blade"
             },
             {
@@ -3212,7 +3114,6 @@
                 "pierce": -1,
                 "tileCollide": false
               },
-              "role": "secondary",
               "target": "workbench_blade"
             },
             {
@@ -3222,7 +3123,6 @@
                 "durationTicks": 24,
                 "rangeTiles": 6
               },
-              "role": "secondary",
               "target": "workbench_blade"
             },
             {
@@ -3236,7 +3136,6 @@
                 "speedPxPerTick": 13,
                 "spreadRadians": 0.0
               },
-              "role": "secondary",
               "target": "nail"
             },
             {
@@ -3248,7 +3147,6 @@
                 "knockback": 4.0,
                 "ownerHitCheck": false
               },
-              "role": "secondary",
               "target": "nail"
             },
             {
@@ -3257,7 +3155,6 @@
               "params": {
                 "lifetimeTicks": 120
               },
-              "role": "secondary",
               "target": "nail"
             },
             {
@@ -3269,7 +3166,6 @@
                 "hitboxScale": 1.0,
                 "widthPx": 8
               },
-              "role": "secondary",
               "target": "nail"
             },
             {
@@ -3284,14 +3180,12 @@
                 "pierce": 1,
                 "tileCollide": true
               },
-              "role": "secondary",
               "target": "nail"
             },
             {
               "fn": "move_straight",
               "id": "nail_motion",
               "params": {},
-              "role": "secondary",
               "target": "nail"
             },
             {
@@ -3305,7 +3199,6 @@
                 "event": "on_hit",
                 "spreadRadians": 0.55
               },
-              "role": "secondary",
               "target": "workbench_blade"
             }
           ],
@@ -3323,7 +3216,8 @@
               "kind": "child_projectile"
             }
           ],
-          "schema": "infini.runtime-program.authoring.v1"
+          "primaryEntityId": "item",
+          "schema": "infini.runtime-program.authoring.v2"
         },
         "tooltip": "Thrusts a literal workbench-backed blade and knocks loose nails into targets."
       },
