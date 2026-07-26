@@ -788,6 +788,84 @@ def test_gameplay_scope_can_fix_existing_dependency_parameter() -> None:
     assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
 
 
+def test_gameplay_scope_does_not_require_role_for_mixed_target_partition() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["runtimeProgram"]["calls"] = [
+        row for row in current["runtimeProgram"]["calls"] if row["id"] != "item_use"
+    ]
+    for claim in current["runtimeContract"]["claims"]:
+        claim["backedBy"] = [value for value in claim["backedBy"] if value != "item_use"]
+    report = validate_runtime_program(current)
+    assert any(row["code"] == "binding_dependency" for row in report["errors"])
+
+    secondary = copy.deepcopy(current["runtimeProgram"]["calls"][0])
+    secondary["id"] = "existing_secondary_item_call"
+    secondary["role"] = "secondary"
+    current["runtimeProgram"]["calls"].append(secondary)
+
+    scope = build_runtime_repair_scope(current, report["errors"])
+    assert all(
+        row["target"] != "item"
+        for row in scope["create"]["calls"]["requiredRolesByTarget"]
+    )
+
+
+def test_gameplay_scope_rejects_param_delete_for_new_call() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["runtimeProgram"]["calls"] = [
+        row for row in current["runtimeProgram"]["calls"] if row["id"] != "item_use"
+    ]
+    for claim in current["runtimeContract"]["claims"]:
+        claim["backedBy"] = [value for value in claim["backedBy"] if value != "item_use"]
+    report = validate_runtime_program(current)
+    scope = build_runtime_repair_scope(current, report["errors"])
+
+    patch = _empty_gameplay_patch()
+    patch["callsUpsert"] = [
+        {
+            "id": "repair_item_use",
+            "fn": "configure_item_use",
+            "role": "primary",
+            "target": "item",
+            "params": {
+                "useStyle": "shoot",
+                "autoReuse": True,
+                "useTurn": True,
+                "hideUseGraphic": False,
+                "disableMeleeHitbox": True,
+                "channel": False,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "handPose": "one_handed",
+                "releaseTiming": "immediate",
+            },
+        }
+    ]
+    patch["callParamKeysDelete"] = [
+        {"callId": "repair_item_use", "key": "releaseTiming"}
+    ]
+
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert [row["id"] for row in filtered["callsUpsert"]] == ["repair_item_use"]
+    assert filtered["callParamKeysDelete"] == []
+    assert any(
+        row.get("reason") == "call_param_delete_outside_exact_error_scope"
+        for row in audit["ignoredChanges"]
+    )
+    scope_report = validate_repair_patch_scope(current, patch, scope)
+    assert any(row["path"] == "$.callParamKeysDelete[0]" for row in scope_report["errors"])
+
+
+def test_gameplay_scope_does_not_widen_nested_call_param_error() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    nested_error = {
+        "code": "shape_additional_property",
+        "path": "$.runtimeProgram.calls[0].params.nested.extra",
+        "message": "nested additional property",
+    }
+    scope = build_runtime_repair_scope(current, [nested_error])
+    assert scope["deletable"]["callParamKeys"] == []
+
 
 def test_gameplay_blocker_extraction_sends_only_direct_and_supporting_capabilities() -> None:
     current = build_runtime_fixture("workbench_blade")
