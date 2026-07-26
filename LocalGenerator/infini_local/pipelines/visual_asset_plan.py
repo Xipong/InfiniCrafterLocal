@@ -48,11 +48,12 @@ def visual_asset_runtime_gate(data: dict[str, Any], role: str, authored_mode: st
 def apply_visual_asset_runtime_gates(data: dict[str, Any], kit: dict[str, Any]) -> None:
     del kit
     for entity in _entity_rows(data):
-        visual = entity.get("visual") if isinstance(entity.get("visual"), dict) else {}
+        raw_visual = entity.get("visual")
+        visual = raw_visual if isinstance(raw_visual, dict) else {}
         role = "item" if entity.get("kind") == "item_body" else "entity:" + str(entity.get("id") or "")
-        mode, reason = visual_asset_runtime_gate(data, role, str(visual.get("assetMode") or ""))
+        mode, _reason = visual_asset_runtime_gate(data, role, str(visual.get("assetMode") or ""))
         visual["assetMode"] = mode
-        visual["runtimeGateReason"] = reason
+        visual.pop("runtimeGateReason", None)
         entity["visual"] = visual
 
 

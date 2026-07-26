@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import copy
 
-from infini_local.core.runtime_authoring import compile_runtime_program, runtime_event_inventory, runtime_visual_roles
+from infini_local.core.runtime_authoring import (
+    compile_runtime_program,
+    runtime_event_inventory,
+    runtime_visual_roles,
+    validate_runtime_wire,
+)
 from infini_local.core.vfx_manifest import (
     VFX_DIRECTOR_SCHEMA,
     attach_hybrid_vfx_manifest,
@@ -10,6 +15,10 @@ from infini_local.core.vfx_manifest import (
     vfx_director_surface,
 )
 from infini_local.pipelines.visual_generation_pipeline import _validate_kit
+from infini_local.pipelines.visual_asset_plan import (
+    apply_visual_asset_runtime_gates,
+    build_visual_asset_plan,
+)
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -36,6 +45,22 @@ def test_visual_requires_exact_entity_rows_and_item_png() -> None:
     assert kit is None
     assert any("must use baked_sprite" in row["message"] for row in errors)
     assert any("missing entity rows" in row["message"] for row in errors)
+
+
+def test_visual_gate_reason_stays_in_asset_plan_not_executable_runtime_wire() -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    for entity in compiled["runtimeProgram"]["entities"]:
+        visual = entity.setdefault("visual", {})
+        visual["assetMode"] = "baked_sprite" if entity["kind"] == "item_body" else "reuse_item_icon"
+        visual["runtimeGateReason"] = "stale_control_plane_value"
+
+    apply_visual_asset_runtime_gates(compiled, {})
+    plan = build_visual_asset_plan(compiled)
+
+    assert plan
+    assert all(row["runtimeGateReason"] == "authored_runtime_entity_asset_mode" for row in plan)
+    assert all("runtimeGateReason" not in entity["visual"] for entity in compiled["runtimeProgram"]["entities"])
+    assert validate_runtime_wire(compiled)["ok"] is True
 
 
 def test_vfx_rejects_nonexistent_entity_event_pair() -> None:
