@@ -893,9 +893,13 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     wrong_call["id"] = "wrong_dependency"
     wrong["callsUpsert"] = [wrong_call]
     filtered_wrong, wrong_audit = filter_repair_patch_scope(current, wrong, scope)
-    assert wrong_audit["ok"]
+    assert not wrong_audit["ok"]
     assert not filtered_wrong["callsUpsert"]
     assert any(row.get("reason") == "capability_not_in_blocker_closure" for row in wrong_audit["ignoredChanges"])
+    assert any(
+        "leaves a mandatory repair requirement open" in row["message"]
+        for row in wrong_audit["errors"]
+    )
 
 
 def test_gameplay_repair_removes_only_exact_invalid_call_param_key() -> None:
@@ -1074,6 +1078,43 @@ def test_unselected_event_alternative_cannot_smuggle_its_support_call() -> None:
         "at most one new producer call" in row["message"]
         for row in duplicate_audit["errors"]
     )
+
+
+def test_event_repair_must_also_close_independent_required_component() -> None:
+    current = build_capability_witness("damage_area_on_event")
+    program = current["runtimeProgram"]
+    event_call = next(row for row in program["calls"] if row["id"] == "witness_call")
+    lifetime = next(
+        row for row in program["calls"]
+        if row["fn"] == "set_projectile_lifetime" and row["target"] == event_call["target"]
+    )
+    program["calls"] = [row for row in program["calls"] if row["id"] != lifetime["id"]]
+    event_call = next(row for row in program["calls"] if row["id"] == "witness_call")
+    event_call["params"]["event"] = "on_spawn"
+
+    report = validate_runtime_program(current)
+    assert {
+        "capability_event_incompatible",
+        "missing_required_component",
+    }.issubset({row["code"] for row in report["errors"]})
+    scope = build_runtime_repair_scope(current, report["errors"])
+    repaired_event = copy.deepcopy(event_call)
+    repaired_event["params"]["event"] = "on_expire"
+
+    incomplete = _empty_gameplay_patch()
+    incomplete["callsUpsert"] = [repaired_event]
+    _, incomplete_audit = filter_repair_patch_scope(current, incomplete, scope)
+    assert not incomplete_audit["ok"]
+    assert any(
+        "leaves a mandatory repair requirement open" in row["message"]
+        for row in incomplete_audit["errors"]
+    )
+
+    complete = _empty_gameplay_patch()
+    complete["callsUpsert"] = [repaired_event, lifetime]
+    filtered, complete_audit = filter_repair_patch_scope(current, complete, scope)
+    assert complete_audit["ok"], complete_audit
+    assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
 
 
 def test_selected_event_any_of_binding_adds_exactly_one_input_root() -> None:
@@ -1280,6 +1321,20 @@ def test_gameplay_dependency_blocker_prefers_existing_exact_parameter() -> None:
     assert [row["id"] for row in fragments["broken"]["calls"]] == ["item_use"]
     assert [row["id"] for row in fragments["dependencyContext"]["calls"]] == ["workbench_blade_motion"]
     assert all(row["id"] != "item_stats" for row in fragments["dependencyContext"]["calls"])
+
+    incomplete = _empty_gameplay_patch()
+    _, incomplete_audit = filter_repair_patch_scope(current, incomplete, scope)
+    assert not incomplete_audit["ok"]
+
+    repaired_item_use = copy.deepcopy(next(
+        row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_use"
+    ))
+    repaired_item_use["params"]["channel"] = True
+    complete = _empty_gameplay_patch()
+    complete["callsUpsert"] = [repaired_item_use]
+    filtered, complete_audit = filter_repair_patch_scope(current, complete, scope)
+    assert complete_audit["ok"], complete_audit
+    assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
 
 
 def test_vfx_root_pair_error_only_thaws_entity_and_event() -> None:

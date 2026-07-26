@@ -24,6 +24,7 @@ from infini_local.core.runtime_authoring.program_schema import apply_repair_patc
 from infini_local.core.runtime_authoring.validator import (
     VALIDATION_ERROR_CODES,
     event_dependency_alternatives,
+    validate_runtime_program,
 )
 
 
@@ -2149,6 +2150,50 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
     for key in metadata:
         if key not in allowed_metadata:
             errors.append(_scope_error(f"$.metadataPatch.{key}", f"metadata field '{key}' is valid and immutable in this Repair"))
+
+    preview = apply_repair_patch(current, patch)
+    preview_errors = _rows(validate_runtime_program(preview).get("errors"))
+    for requirement_index, requirement in enumerate(scope.get("repairRequirements") or []):
+        if not isinstance(requirement, Mapping) or not bool(requirement.get("llmRepairable", False)):
+            continue
+        required_capabilities = {
+            str(value) for value in requirement.get("requiredOneOfCapabilities") or []
+            if str(value)
+        }
+        if not required_capabilities:
+            continue
+        requirement_code = str(requirement.get("code") or "")
+        requirement_path = str(requirement.get("errorPath") or "")
+        affected_ids = {
+            str(value) for value in requirement.get("affectedIds") or []
+            if str(value)
+        }
+
+        def is_same_open_requirement(error: Mapping[str, Any]) -> bool:
+            if str(error.get("code") or "") != requirement_code:
+                return False
+            related_ids = {
+                str(value) for value in error.get("relatedIds") or []
+                if str(value)
+            }
+            if affected_ids:
+                return bool(affected_ids.intersection(related_ids)) or (
+                    not related_ids and str(error.get("path") or "") == requirement_path
+                )
+            return str(error.get("path") or "") == requirement_path
+
+        if any(is_same_open_requirement(error) for error in preview_errors):
+            errors.append(_scope_error(
+                "$.callsUpsert",
+                "patch leaves a mandatory repair requirement open after all authorized structural changes",
+                actual={
+                    "requirementIndex": requirement_index,
+                    "code": requirement_code,
+                    "affectedIds": sorted(affected_ids),
+                    "requiredOneOfCapabilities": sorted(required_capabilities),
+                    "exactCapabilityParams": copy.deepcopy(requirement.get("exactCapabilityParams") or []),
+                },
+            ))
 
     return {"schema": RUNTIME_REPAIR_SCOPE_REPORT_SCHEMA, "ok": not errors, "errors": errors}
 
