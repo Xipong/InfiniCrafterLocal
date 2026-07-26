@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring import (
 from infini_local.pipelines.author_item_contract import (
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
+    author_item_repair_prompt_shape_card,
     project_provider_author_item_to_local,
     project_provider_nullable_optionals_to_local,
     strict_author_item_repair_report,
@@ -287,6 +288,7 @@ def build_gameplay_repair_dossier(
         "exactValidationErrors": exact_errors,
         "failureStage": str(failure_report.get("stage") or "runtime_program_validation"),
         "repairScope": scope,
+        "requiredJsonShape": author_item_repair_prompt_shape_card(),
         "blockerPlan": copy.deepcopy(blocker_plan),
         "brokenFragments": fragments["broken"],
         "brokenFragmentsByIndex": fragments["brokenByIndex"],

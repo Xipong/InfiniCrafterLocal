@@ -93,6 +93,26 @@ def author_item_repair_response_schema() -> dict[str, Any]:
     return copy.deepcopy(_repair_schema())
 
 
+def author_item_repair_prompt_shape_card() -> dict[str, Any]:
+    """Expose the repair root cardinality when provider JSON Schema is unavailable."""
+    schema = author_item_repair_response_schema()
+    properties = schema.get("properties") or {}
+    placeholders: dict[str, Any] = {}
+    for key, child in properties.items():
+        child_type = child.get("type") if isinstance(child, Mapping) else None
+        if child_type == "array":
+            placeholders[key] = []
+        elif child_type == "object":
+            placeholders[key] = {}
+        elif child_type == "boolean":
+            placeholders[key] = False
+        elif child_type in {"integer", "number"}:
+            placeholders[key] = 0
+        else:
+            placeholders[key] = "non-empty repair note"
+    return placeholders
+
+
 def author_item_provider_repair_response_schema(*_: Any, **__: Any) -> dict[str, Any]:
     return _provider_strict_projection(author_item_repair_response_schema())
 
@@ -153,6 +173,7 @@ __all__ = [
     "author_item_provider_repair_response_schema",
     "author_item_provider_response_schema",
     "author_item_provider_targeted_repair_delta_schema",
+    "author_item_repair_prompt_shape_card",
     "author_item_repair_response_schema",
     "author_item_response_schema",
     "author_item_targeted_repair_delta_schema",

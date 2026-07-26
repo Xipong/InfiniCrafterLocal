@@ -18,7 +18,11 @@ from infini_local.pipelines.llm_authoring_prompt import (
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     planner_prompt_usability_report,
 )
-from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
+from infini_local.pipelines.author_item_contract import (
+    author_item_prompt_shape_card,
+    author_item_repair_prompt_shape_card,
+    author_item_repair_response_schema,
+)
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -73,6 +77,16 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
     assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v1"
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
+
+    repair_card = author_item_repair_prompt_shape_card()
+    repair_schema = author_item_repair_response_schema()
+    assert set(repair_card) == set(repair_schema["properties"])
+    assert all(isinstance(repair_card[key], list) for key in (
+        "entitiesUpsert", "entityIdsDelete", "bindingsUpsert", "bindingIdsDelete",
+        "callsUpsert", "callIdsDelete", "claimsUpsert", "claimIdsDelete",
+    ))
+    assert isinstance(repair_card["metadataPatch"], dict)
+    assert isinstance(repair_card["note"], str)
 
 
 def test_all_non_archetypal_fixtures_compile_to_strict_wire() -> None:
