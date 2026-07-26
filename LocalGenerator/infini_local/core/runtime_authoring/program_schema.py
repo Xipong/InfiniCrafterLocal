@@ -205,6 +205,20 @@ def author_item_repair_schema() -> dict[str, Any]:
             "claimsUpsert": {"type": "array", "items": claim_schema(), "maxItems": 24},
             "claimIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 24},
             "claimIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 23}, "maxItems": 24},
+            "primaryEntitySelection": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+            "exclusiveInputSelections": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "input": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
+                        "keepBindingId": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+                    },
+                    "required": ["input", "keepBindingId"],
+                },
+            },
             "metadataPatch": {
                 "type": "object",
                 "additionalProperties": False,
@@ -405,6 +419,25 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         current_rows = delete_indices(current_rows, list(patch.get(index_delete_key) or []))
         current_rows = delete(current_rows, list(patch.get(delete_key) or []))
         program[list_key] = upsert(current_rows, list(patch.get(upsert_key) or []))
+
+    selected_primary = str(patch.get("primaryEntitySelection") or "").strip()
+    if selected_primary:
+        for list_key in ("bindings", "calls"):
+            for row in program.get(list_key) or []:
+                if isinstance(row, dict):
+                    row["role"] = "primary" if str(row.get("target") or "") == selected_primary else "secondary"
+
+    for selection in patch.get("exclusiveInputSelections") or []:
+        if not isinstance(selection, Mapping):
+            continue
+        input_name = str(selection.get("input") or "")
+        keep_id = str(selection.get("keepBindingId") or "")
+        program["bindings"] = [
+            row for row in program.get("bindings") or []
+            if not isinstance(row, Mapping)
+            or str(row.get("input") or "") != input_name
+            or str(row.get("id") or "") == keep_id
+        ]
 
     claims = list(contract.get("claims") or []) if isinstance(contract, dict) else []
     claims = delete_indices(claims, list(patch.get("claimIndicesDelete") or []))

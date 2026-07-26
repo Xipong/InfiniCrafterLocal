@@ -741,6 +741,83 @@
       },
       "type": "array"
     },
+    "repairTransactions": {
+      "additionalProperties": false,
+      "properties": {
+        "entityRoleSelection": {
+          "additionalProperties": false,
+          "properties": {
+            "affectedRowIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "allowed": {
+              "type": "boolean"
+            },
+            "candidateEntityIds": {
+              "items": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "mustSelectExactlyOne": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "allowed",
+            "candidateEntityIds",
+            "affectedRowIds",
+            "mustSelectExactlyOne"
+          ],
+          "type": "object"
+        },
+        "exclusiveInputSelections": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "candidateBindingIds": {
+                "items": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "input": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "mustKeepExactlyOne": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "input",
+              "candidateBindingIds",
+              "mustKeepExactlyOne"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entityRoleSelection",
+        "exclusiveInputSelections"
+      ],
+      "type": "object"
+    },
     "retarget": {
       "additionalProperties": false,
       "properties": {
@@ -793,6 +870,7 @@
     "metadataFields",
     "contextIds",
     "fieldPermissions",
+    "repairTransactions",
     "repairRequirements",
     "blockerPlan",
     "errorPaths",

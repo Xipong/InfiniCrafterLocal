@@ -35,6 +35,7 @@ from infini_local.core.vfx_manifest import (
     vfx_director_surface,
 )
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
+from infini_local.pipelines.combine_validation import authored_item_validation_report
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -200,6 +201,75 @@ def _empty_gameplay_patch() -> dict:
         "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": "targeted repair",
     }
+
+
+def test_author_validation_exposes_only_canonical_shape_codes_to_repair() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    stats = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_stats")
+    stats["params"]["damageClass"] = "none"
+
+    report = authored_item_validation_report(current)
+
+    assert report["ok"] is False
+    assert {"shape_one_of", "shape_pattern"}.issubset({row.get("code") for row in report["errors"]})
+    assert all(str(row.get("code") or "").startswith("shape_") for row in report["errors"])
+    assert all("kind" not in row for row in report["errors"])
+    assert any(row.get("kind") == "pattern" for row in report["shape"]["errors"])
+
+
+def test_repair_transactions_apply_llm_primary_and_exclusive_input_choices() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    for namespace in ("bindings", "calls"):
+        for row in current["runtimeProgram"][namespace]:
+            if row.get("target") == "workbench_blade":
+                row["role"] = "primary"
+    report = validate_runtime_program(current)
+    primary_error = next(row for row in report["errors"] if row["code"] == "primary_entity_count")
+    scope = build_runtime_repair_scope(current, [primary_error])
+    transaction = scope["repairTransactions"]["entityRoleSelection"]
+    assert transaction["candidateEntityIds"] == ["item", "nail", "workbench_blade"]
+    assert transaction["mustSelectExactlyOne"] is True
+
+    patch = _empty_gameplay_patch()
+    patch["primaryEntitySelection"] = "workbench_blade"
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(current, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    for namespace in ("bindings", "calls"):
+        for row in repaired["runtimeProgram"][namespace]:
+            expected = "primary" if row.get("target") == "workbench_blade" else "secondary"
+            assert row["role"] == expected
+
+    duplicate = build_runtime_fixture("workbench_blade")
+    duplicate["runtimeProgram"]["bindings"].append({
+        "id": "bad_primary", "input": "primary_use", "action": "spawn_entity",
+        "role": "secondary", "target": "nail",
+    })
+    duplicate_report = validate_runtime_program(duplicate)
+    duplicate_error = next(row for row in duplicate_report["errors"] if row["code"] == "duplicate_exclusive_input")
+    duplicate_scope = build_runtime_repair_scope(duplicate, [duplicate_error])
+    exclusive = duplicate_scope["repairTransactions"]["exclusiveInputSelections"]
+    assert exclusive == [{
+        "input": "primary_use",
+        "candidateBindingIds": ["bad_primary", "primary_workbench"],
+        "mustKeepExactlyOne": True,
+    }]
+
+    duplicate_patch = _empty_gameplay_patch()
+    duplicate_patch["exclusiveInputSelections"] = [{
+        "input": "primary_use", "keepBindingId": "primary_workbench",
+    }]
+    filtered_duplicate, duplicate_audit = filter_repair_patch_scope(
+        duplicate, duplicate_patch, duplicate_scope,
+    )
+    assert duplicate_audit["ok"], duplicate_audit
+    repaired_duplicate = apply_repair_patch(duplicate, filtered_duplicate)
+    assert validate_runtime_program(repaired_duplicate)["ok"]
+    assert all(
+        row["id"] != "bad_primary"
+        for row in repaired_duplicate["runtimeProgram"]["bindings"]
+    )
 
 
 def test_gameplay_scope_freezes_old_values_and_accepts_missing_parameters_in_broken_call() -> None:

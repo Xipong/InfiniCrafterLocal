@@ -99,6 +99,12 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
     properties = schema.get("properties") or {}
     placeholders: dict[str, Any] = {}
     for key, child in properties.items():
+        if key == "primaryEntitySelection":
+            placeholders[key] = "entity_id chosen from repairScope.repairTransactions.entityRoleSelection.candidateEntityIds, or null"
+            continue
+        if key == "exclusiveInputSelections":
+            placeholders[key] = [{"input": "conflicting exclusive input", "keepBindingId": "chosen candidate binding id"}]
+            continue
         child_type = child.get("type") if isinstance(child, Mapping) else None
         if child_type == "array":
             placeholders[key] = []

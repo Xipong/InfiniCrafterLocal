@@ -50,7 +50,10 @@ def authored_item_validation_report(
     runtime = validate_runtime_program(data)
     identity = _identity_errors(data, a, b)
     errors = [
-        *copy.deepcopy(shape.get("errors") or []),
+        # validate_runtime_program is the canonical Repair-facing boundary. It
+        # already converts strict-schema kinds to finite ``shape_*`` codes.
+        # Keep the raw shape report below for diagnostics, but never mix its
+        # kind-only rows into author_repair_targets.
         *copy.deepcopy(runtime.get("errors") or []),
         *identity,
     ]

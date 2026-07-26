@@ -4650,6 +4650,35 @@
       "maxItems": 12,
       "type": "array"
     },
+    "exclusiveInputSelections": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "enum": [
+              "primary_use",
+              "alternate_use",
+              "hold",
+              "equipped"
+            ],
+            "type": "string"
+          },
+          "keepBindingId": {
+            "maxLength": 48,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]{0,47}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input",
+          "keepBindingId"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8,
+      "type": "array"
+    },
     "metadataPatch": {
       "additionalProperties": false,
       "properties": {
@@ -4796,6 +4825,12 @@
     "note": {
       "maxLength": 500,
       "minLength": 1,
+      "type": "string"
+    },
+    "primaryEntitySelection": {
+      "maxLength": 48,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]{0,47}$",
       "type": "string"
     }
   },

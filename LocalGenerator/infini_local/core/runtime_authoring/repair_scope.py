@@ -394,6 +394,37 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                 },
                 "required": ["entities", "bindings", "calls", "claims"],
             },
+            "repairTransactions": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "entityRoleSelection": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "allowed": {"type": "boolean"},
+                            "candidateEntityIds": copy.deepcopy(id_array),
+                            "affectedRowIds": copy.deepcopy(id_array),
+                            "mustSelectExactlyOne": {"type": "boolean"},
+                        },
+                        "required": ["allowed", "candidateEntityIds", "affectedRowIds", "mustSelectExactlyOne"],
+                    },
+                    "exclusiveInputSelections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "input": _strict_scope_string_schema(),
+                                "candidateBindingIds": copy.deepcopy(id_array),
+                                "mustKeepExactlyOne": {"type": "boolean"},
+                            },
+                            "required": ["input", "candidateBindingIds", "mustKeepExactlyOne"],
+                        },
+                    },
+                },
+                "required": ["entityRoleSelection", "exclusiveInputSelections"],
+            },
             "repairRequirements": {
                 "type": "array",
                 "items": {
@@ -445,7 +476,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
             "capabilitySubset": copy.deepcopy(id_array),
             "nonRepairableErrors": {"type": "array", "items": {"type": "object"}},
         },
-        "required": ["schema", "mutable", "deletable", "create", "retarget", "identityChanges", "metadataFields", "contextIds", "fieldPermissions", "repairRequirements", "blockerPlan", "errorPaths", "capabilitySubset", "nonRepairableErrors"],
+        "required": ["schema", "mutable", "deletable", "create", "retarget", "identityChanges", "metadataFields", "contextIds", "fieldPermissions", "repairTransactions", "repairRequirements", "blockerPlan", "errorPaths", "capabilitySubset", "nonRepairableErrors"],
     }
 
 def _new_scope() -> dict[str, Any]:
@@ -478,6 +509,15 @@ def _new_scope() -> dict[str, Any]:
         "metadataFields": [],
         "contextIds": {"entityIds": [], "bindingIds": [], "callIds": [], "claimIds": []},
         "fieldPermissions": {"entities": [], "bindings": [], "calls": [], "claims": []},
+        "repairTransactions": {
+            "entityRoleSelection": {
+                "allowed": False,
+                "candidateEntityIds": [],
+                "affectedRowIds": [],
+                "mustSelectExactlyOne": True,
+            },
+            "exclusiveInputSelections": [],
+        },
         "repairRequirements": [],
         "blockerPlan": {
             "directCapabilityNames": [],
@@ -1040,6 +1080,53 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         namespace: _field_permission_rows(field_permissions[namespace])
         for namespace in ("entities", "bindings", "calls", "claims")
     }
+    error_codes = {str(row.get("code") or row.get("kind") or "") for row in error_rows}
+    if "primary_entity_count" in error_codes:
+        role_rows = [
+            row
+            for namespace in ("bindings", "calls")
+            for row in rows[namespace]
+            if str(row.get("id") or "") and str(row.get("target") or "")
+        ]
+        scope["repairTransactions"]["entityRoleSelection"] = {
+            "allowed": True,
+            "candidateEntityIds": sorted({str(row.get("target") or "") for row in role_rows}),
+            "affectedRowIds": sorted({str(row.get("id") or "") for row in role_rows}),
+            "mustSelectExactlyOne": True,
+        }
+
+    bindings_by_id = {
+        str(row.get("id") or ""): row
+        for row in rows["bindings"]
+        if str(row.get("id") or "")
+    }
+    exclusive_inputs: set[str] = set()
+    for error in error_rows:
+        if str(error.get("code") or error.get("kind") or "") != "duplicate_exclusive_input":
+            continue
+        related_ids = [str(value) for value in error.get("relatedIds") or [] if str(value)]
+        if not related_ids:
+            node = _node_from_path(str(error.get("path") or "$"), rows)
+            if node is not None and node[0] == "bindings" and node[2]:
+                related_ids = [node[2]]
+        exclusive_inputs.update(
+            str(bindings_by_id[row_id].get("input") or "")
+            for row_id in related_ids
+            if row_id in bindings_by_id and str(bindings_by_id[row_id].get("input") or "")
+        )
+    scope["repairTransactions"]["exclusiveInputSelections"] = [
+        {
+            "input": input_name,
+            "candidateBindingIds": sorted(
+                row_id
+                for row_id, row in bindings_by_id.items()
+                if str(row.get("input") or "") == input_name
+            ),
+            "mustKeepExactlyOne": True,
+        }
+        for input_name in sorted(exclusive_inputs)
+        if sum(1 for row in bindings_by_id.values() if str(row.get("input") or "") == input_name) > 1
+    ]
     scope["repairRequirements"] = repair_requirements
     scope["blockerPlan"] = {
         "directCapabilityNames": sorted(direct_blocker_capabilities),
@@ -1261,6 +1348,13 @@ def filter_repair_patch_scope(
         else:
             ignored.append(_filter_ignored(path, candidate, preserved, "valid_metadata_frozen"))
 
+    if "primaryEntitySelection" in patch:
+        filtered["primaryEntitySelection"] = copy.deepcopy(patch.get("primaryEntitySelection"))
+        accepted.append("$.primaryEntitySelection")
+    if "exclusiveInputSelections" in patch:
+        filtered["exclusiveInputSelections"] = copy.deepcopy(patch.get("exclusiveInputSelections"))
+        accepted.append("$.exclusiveInputSelections")
+
     strict_filtered_scope = validate_repair_patch_scope(current, filtered, scope)
     report = {
         "schema": RUNTIME_REPAIR_FILTER_REPORT_SCHEMA,
@@ -1388,6 +1482,44 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 allowed_targets.add(str(original.get("target") or ""))
                 if str(row.get("target") or "") not in allowed_targets:
                     errors.append(_scope_error(path + ".target", "call retargets outside compatible repair context", actual=row.get("target")))
+
+    raw_transactions = scope.get("repairTransactions")
+    transactions: Mapping[str, Any] = raw_transactions if isinstance(raw_transactions, Mapping) else {}
+    raw_role_transaction = transactions.get("entityRoleSelection")
+    role_transaction: Mapping[str, Any] = raw_role_transaction if isinstance(raw_role_transaction, Mapping) else {}
+    if "primaryEntitySelection" in patch:
+        selected = str(patch.get("primaryEntitySelection") or "")
+        candidates = set(str(value) for value in role_transaction.get("candidateEntityIds") or [])
+        if not bool(role_transaction.get("allowed")) or selected not in candidates:
+            errors.append(_scope_error(
+                "$.primaryEntitySelection",
+                "primary entity choice is outside the exact role-partition transaction",
+                actual=selected,
+            ))
+
+    raw_exclusive_groups = transactions.get("exclusiveInputSelections")
+    exclusive_rows = raw_exclusive_groups if isinstance(raw_exclusive_groups, list) else []
+    exclusive_groups = {
+        str(row.get("input") or ""): row
+        for row in exclusive_rows
+        if isinstance(row, Mapping) and str(row.get("input") or "")
+    }
+    seen_inputs: set[str] = set()
+    for index, selection in enumerate(patch.get("exclusiveInputSelections") or []):
+        if not isinstance(selection, Mapping):
+            continue
+        input_name = str(selection.get("input") or "")
+        keep_id = str(selection.get("keepBindingId") or "")
+        group = exclusive_groups.get(input_name) if input_name not in seen_inputs else None
+        raw_candidates = group.get("candidateBindingIds") if isinstance(group, Mapping) else []
+        candidates = set(str(value) for value in raw_candidates or [])
+        if group is None or keep_id not in candidates:
+            errors.append(_scope_error(
+                f"$.exclusiveInputSelections[{index}]",
+                "exclusive input choice is outside the exact conflicting-binding transaction",
+                actual={"input": input_name, "keepBindingId": keep_id},
+            ))
+        seen_inputs.add(input_name)
 
     allowed_metadata = set(str(value) for value in scope.get("metadataFields") or [])
     metadata = patch.get("metadataPatch") if isinstance(patch.get("metadataPatch"), Mapping) else {}
