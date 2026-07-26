@@ -531,6 +531,50 @@ def _new_scope() -> dict[str, Any]:
     }
 
 
+def _reachable_runtime_entity_ids(rows: Mapping[str, list[dict[str, Any]]]) -> set[str]:
+    reachable = {
+        str(row.get("target") or "")
+        for row in rows.get("bindings", [])
+        if str(row.get("action") or "") == "spawn_entity" and str(row.get("target") or "")
+    }
+    for call in rows.get("calls", []):
+        cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        raw_params = call.get("params")
+        params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
+        if cap is None:
+            continue
+        for param_name, param_spec in cap.params.items():
+            reference = param_spec.reference
+            if reference is None or not reference.graph_edge or param_name not in params:
+                continue
+            referenced_id = str(params.get(param_name) or "")
+            if referenced_id:
+                reachable.add(referenced_id)
+    return reachable
+
+
+def _reachability_safe_exclusive_candidates(
+    rows: Mapping[str, list[dict[str, Any]]],
+    *,
+    input_name: str,
+    candidate_ids: list[str],
+) -> list[str]:
+    """Keep choices must not orphan an entity that is reachable before repair."""
+
+    baseline = _reachable_runtime_entity_ids(rows)
+    viable: list[str] = []
+    for keep_id in candidate_ids:
+        candidate_rows = {name: list(values) for name, values in rows.items()}
+        candidate_rows["bindings"] = [
+            row
+            for row in rows.get("bindings", [])
+            if str(row.get("input") or "") != input_name or str(row.get("id") or "") == keep_id
+        ]
+        if baseline.issubset(_reachable_runtime_entity_ids(candidate_rows)):
+            viable.append(keep_id)
+    return viable or candidate_ids
+
+
 def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     error_rows = [dict(row) for row in errors if isinstance(row, Mapping)]
     rows = _program_rows(current)
@@ -1081,16 +1125,32 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         for namespace in ("entities", "bindings", "calls", "claims")
     }
     error_codes = {str(row.get("code") or row.get("kind") or "") for row in error_rows}
+    role_rows = [
+        row
+        for namespace in ("bindings", "calls")
+        for row in rows[namespace]
+        if str(row.get("id") or "") and str(row.get("target") or "")
+    ]
+    role_candidates: list[str] = []
     if "primary_entity_count" in error_codes:
-        role_rows = [
-            row
-            for namespace in ("bindings", "calls")
-            for row in rows[namespace]
-            if str(row.get("id") or "") and str(row.get("target") or "")
-        ]
+        role_candidates = sorted({str(row.get("target") or "") for row in role_rows})
+    elif "mixed_entity_role" in error_codes:
+        mixed_entity_ids = {
+            str(group.get("entityId") or "")
+            for requirement in repair_requirements
+            if isinstance((group := requirement.get("coupledFieldGroup")), Mapping)
+            and str(group.get("entityId") or "")
+        }
+        current_primary_ids = {
+            str(row.get("target") or "")
+            for row in role_rows
+            if str(row.get("role") or "") == "primary"
+        }
+        role_candidates = sorted(mixed_entity_ids.intersection(current_primary_ids) or mixed_entity_ids)
+    if role_candidates:
         scope["repairTransactions"]["entityRoleSelection"] = {
             "allowed": True,
-            "candidateEntityIds": sorted({str(row.get("target") or "") for row in role_rows}),
+            "candidateEntityIds": role_candidates,
             "affectedRowIds": sorted({str(row.get("id") or "") for row in role_rows}),
             "mustSelectExactlyOne": True,
         }
@@ -1114,19 +1174,25 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             for row_id in related_ids
             if row_id in bindings_by_id and str(bindings_by_id[row_id].get("input") or "")
         )
-    scope["repairTransactions"]["exclusiveInputSelections"] = [
-        {
+    exclusive_transactions: list[dict[str, Any]] = []
+    for input_name in sorted(exclusive_inputs):
+        candidate_ids = sorted(
+            row_id
+            for row_id, row in bindings_by_id.items()
+            if str(row.get("input") or "") == input_name
+        )
+        if len(candidate_ids) <= 1:
+            continue
+        exclusive_transactions.append({
             "input": input_name,
-            "candidateBindingIds": sorted(
-                row_id
-                for row_id, row in bindings_by_id.items()
-                if str(row.get("input") or "") == input_name
+            "candidateBindingIds": _reachability_safe_exclusive_candidates(
+                rows,
+                input_name=input_name,
+                candidate_ids=candidate_ids,
             ),
             "mustKeepExactlyOne": True,
-        }
-        for input_name in sorted(exclusive_inputs)
-        if sum(1 for row in bindings_by_id.values() if str(row.get("input") or "") == input_name) > 1
-    ]
+        })
+    scope["repairTransactions"]["exclusiveInputSelections"] = exclusive_transactions
     scope["repairRequirements"] = repair_requirements
     scope["blockerPlan"] = {
         "directCapabilityNames": sorted(direct_blocker_capabilities),

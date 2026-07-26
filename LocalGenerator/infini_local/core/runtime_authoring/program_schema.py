@@ -391,6 +391,8 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
     out = copy.deepcopy(dict(current))
     program = out.setdefault("runtimeProgram", {})
     contract = out.setdefault("runtimeContract", {})
+    original_bindings = list(program.get("bindings") or []) if isinstance(program, dict) else []
+    transaction_deleted_binding_ids: set[str] = set()
 
     def upsert(rows: list[Any], replacements: list[Any]) -> list[Any]:
         by_id = {str(row.get("id")): copy.deepcopy(row) for row in rows if isinstance(row, dict) and row.get("id")}
@@ -432,6 +434,14 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
             continue
         input_name = str(selection.get("input") or "")
         keep_id = str(selection.get("keepBindingId") or "")
+        transaction_deleted_binding_ids.update(
+            str(row.get("id") or "")
+            for row in original_bindings
+            if isinstance(row, Mapping)
+            and str(row.get("input") or "") == input_name
+            and str(row.get("id") or "") != keep_id
+            and str(row.get("id") or "")
+        )
         program["bindings"] = [
             row for row in program.get("bindings") or []
             if not isinstance(row, Mapping)
@@ -442,7 +452,17 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
     claims = list(contract.get("claims") or []) if isinstance(contract, dict) else []
     claims = delete_indices(claims, list(patch.get("claimIndicesDelete") or []))
     claims = delete(claims, list(patch.get("claimIdsDelete") or []))
-    contract["claims"] = upsert(claims, list(patch.get("claimsUpsert") or []))
+    claims = upsert(claims, list(patch.get("claimsUpsert") or []))
+    if transaction_deleted_binding_ids:
+        for claim in claims:
+            if not isinstance(claim, dict) or not isinstance(claim.get("backedBy"), list):
+                continue
+            claim["backedBy"] = [
+                value
+                for value in claim["backedBy"]
+                if str(value) not in transaction_deleted_binding_ids
+            ]
+    contract["claims"] = claims
 
     metadata = patch.get("metadataPatch")
     if isinstance(metadata, Mapping):

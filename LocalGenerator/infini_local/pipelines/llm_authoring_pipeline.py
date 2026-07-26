@@ -262,7 +262,7 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return exactly the repair patch schema; never return the full item.",
-            "Return the broken node as a complete object when convenient. Deterministic merge preserves every already-valid old value.",
+            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, role, target, and the complete params object from brokenFragments, changing only permitted fields; never omit unchanged required fields.",
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
             "Use create permissions only for the exact blocker or its declared support dependency.",
@@ -337,8 +337,8 @@ def repair_author_item_after_failure(
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
         "For every coupledFieldGroup, emit every affected row and use one identical allowed value for its field across the entire group. "
         "Use primaryEntitySelection and exclusiveInputSelections whenever their repairTransactions are enabled; those are authored transactional choices, not notes. "
-        "Return complete broken nodes when useful: deterministic merge will freeze already-valid old values, accept the exact "
-        "broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
+        "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
+        "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."
     )
     messages = [

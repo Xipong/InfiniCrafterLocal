@@ -15,6 +15,7 @@ from infini_local.core.runtime_authoring import (
     RUNTIME_PROGRAM_SCHEMA,
     compact_capability_catalog,
 )
+from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
 from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
 from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.item_power_knowledge import tags_of
@@ -173,6 +174,27 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def runtime_program_invariants_for_llm() -> dict[str, Any]:
+    return {
+        "entityRolePartition": {
+            "exactlyOnePrimaryEntity": True,
+            "allBindingAndCallRowsForOneTargetUseOneRole": True,
+            "primaryRule": "Choose exactly one entity id. Every binding/call targeting it uses primary; every binding/call targeting every other entity uses secondary.",
+        },
+        "exclusiveInputs": {
+            "maxBindingsPerInput": 1,
+            "inputs": sorted(
+                name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
+            ),
+        },
+        "damageClass": {
+            "builtInTokens": list(DAMAGE_CLASS_TOKENS),
+            "moddedTokenShape": "ModName/ClassName copied from parent facts",
+            "otherTokensAllowed": False,
+        },
+    }
+
+
 def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
     corridor = _balance_corridor(a, b)
     payload = {
@@ -183,12 +205,15 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "B": {"packet": raw_parent_card_for_llm(b), "canonical": copy.deepcopy(cb)},
         },
         "balanceCorridor": corridor,
+        "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
         "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(a, b, corridor),
         "requiredJsonShape": author_item_prompt_shape_card(),
         "runtimeContractSchema": RUNTIME_CONTRACT_SCHEMA,
         "selfCheck": [
             "all refs exist and target kinds match",
-            "one item_body and no duplicate exclusive input",
+            "exactly one entity is primary; every binding/call for one target uses the same role",
+            "one item_body and at most one binding owns each runtimeProgramInvariants.exclusiveInputs input",
+            "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName",
             "every spawned entity has explicit spawn/lifetime/hitbox/collision",
             "moving entities have exactly one movement/controller",
             "event graph is acyclic and within depth/count limits",
