@@ -4,6 +4,11 @@ import re
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    MIN_AUTHORING_REPETITION_COMPRESSION,
+    PRIMARY_BINDING_ROLE_LOWERER_ID,
+    PRIMARY_ENTITY_AUTHOR_PATH,
+)
 
 
 TECHNICAL_LOWERING_SCHEMA = "infini.technical-lowering-manifest.v1"
@@ -27,13 +32,20 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "outputs": ["runtimeProgram.entities[].visualRole"],
         "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
         "preserves": ["entity kind", "entity identity", "all gameplay components"],
+        "addsDesignChoice": False,
     },
     {
-        "id": "primary_entity_to_binding_role",
-        "inputs": ["runtimeProgram.primaryEntityId", "runtimeProgram.bindings[].target"],
+        "id": PRIMARY_BINDING_ROLE_LOWERER_ID,
+        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].target"],
         "outputs": ["runtimeProgram.bindings[].role"],
         "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
         "preserves": ["primary entity identity", "binding identity", "binding target", "input", "action"],
+        "addsDesignChoice": False,
+        "authoringCompression": {
+            "kind": "exact_repetition",
+            "minimumRepeatedPlacements": MIN_AUTHORING_REPETITION_COMPRESSION,
+            "equality": "binding.target == runtimeProgram.primaryEntityId",
+        },
     },
     {
         "id": "capability_name_to_opcode",
@@ -41,6 +53,7 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "outputs": ["runtimeProgram.entities[].movement.code", "runtimeProgram.entities[].controller.code", "runtimeProgram.entities[].events[].actionCode"],
         "equivalence": "finite numeric wire opcode for the exact authored capability name",
         "preserves": ["capability identity", "target", "params", "event links"],
+        "addsDesignChoice": False,
     },
     {
         "id": "item_fields_to_tml_projection",
@@ -48,6 +61,7 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "outputs": list(_ITEM_TECHNICAL_OUTPUTS),
         "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
         "preserves": ["all authored item values", "explicit zero", "units"],
+        "addsDesignChoice": False,
     },
 )
 

@@ -9,12 +9,19 @@ from infini_local.core.runtime_authoring.capability_registry import (
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
-    MOVEMENT_CAPABILITIES,
-    PROJECTILE_ENTITY_KINDS,
     CapabilitySpec,
     RequirementSpec,
 )
 from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
+from infini_local.core.runtime_authoring.event_dependency_contract import (
+    event_alternative_is_present,
+    event_dependency_alternatives,
+    event_dependency_descriptors,
+)
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    PRIMARY_ENTITY_JSON_PATH,
+    authored_primary_entity_id,
+)
 
 
 MAX_RUNTIME_ENTITIES = 12
@@ -95,11 +102,11 @@ def _primary_entity_issues(
     entities_by_id: Mapping[str, Mapping[str, Any]],
     program: Mapping[str, Any],
 ) -> tuple[list[ValidationIssue], str]:
-    primary_entity_id = str(program.get("primaryEntityId") or "")
+    primary_entity_id = authored_primary_entity_id(program)
     if primary_entity_id in entities_by_id:
         return [], primary_entity_id
     return [ValidationIssue(
-        "$.runtimeProgram.primaryEntityId",
+        PRIMARY_ENTITY_JSON_PATH,
         "invalid_primary_entity_reference",
         f"primaryEntityId '{primary_entity_id}' must equal one exact authored entity id.",
         tuple(entities_by_id),
@@ -216,54 +223,6 @@ def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
     ))
 
 
-def event_dependency_alternatives(event: str, kind: str) -> tuple[dict[str, Any], ...]:
-    """Return exact executable producer alternatives for one event/entity-kind pair.
-
-    Empty dependency lists mean the event is intrinsic for that exact kind.  The
-    function never chooses an alternative; validator checks whether one is
-    present and Repair exposes the same finite alternatives to the model.
-    """
-
-    spec = EVENT_KIND_REGISTRY.get(event)
-    if spec is None or kind not in spec.source_kinds:
-        return ()
-    if event == "on_use":
-        return ({
-            "requiredCalls": [],
-            "requiredBindings": [{"anyOfInputs": ["primary_use", "alternate_use"]}],
-        },)
-    if event in {"on_hit", "on_crit"}:
-        required = "enable_item_contact_damage" if kind == "item_body" else "set_projectile_damage"
-        return ({
-            "requiredCalls": [{"fn": required, "exactParams": {}}],
-            "requiredBindings": [],
-        },)
-    if event == "on_tile_collision":
-        return ({
-            "requiredCalls": [{"fn": "set_projectile_collision", "exactParams": {"tileCollide": True}}],
-            "requiredBindings": [],
-        },)
-    if event in {"on_release", "channel_complete"}:
-        return ({
-            "requiredCalls": [{"fn": "charge_then_release", "exactParams": {}}],
-            "requiredBindings": [],
-        },)
-    if event == "periodic":
-        return ({"requiredCalls": [], "requiredBindings": []},)
-    kind_spec = ENTITY_KIND_REGISTRY.get(kind)
-    if kind_spec is None:
-        return ()
-    if event in kind_spec.base_events or spec.always_available_on_projectile and kind_spec.projectile:
-        return ({"requiredCalls": [], "requiredBindings": []},)
-    return tuple(
-        {
-            "requiredCalls": [{"fn": name, "exactParams": {}}],
-            "requiredBindings": [],
-        }
-        for name in spec.producer_capabilities
-    )
-
-
 def _event_available(
     *,
     event: str,
@@ -281,39 +240,10 @@ def _event_available(
     target_calls = calls_by_target.get(target_id, [])
     alternatives = event_dependency_alternatives(event, kind)
 
-    def call_present(requirement: Mapping[str, Any]) -> bool:
-        expected_fn = str(requirement.get("fn") or "")
-        raw_expected = requirement.get("exactParams")
-        expected: Mapping[str, Any] = raw_expected if isinstance(raw_expected, Mapping) else {}
-        for call in target_calls:
-            if str(call.get("fn") or "") != expected_fn:
-                continue
-            raw_params = call.get("params")
-            params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
-            if all(params.get(key) == value for key, value in expected.items()):
-                return True
-        return False
-
-    def binding_present(requirement: Mapping[str, Any]) -> bool:
-        allowed_inputs = {str(value) for value in requirement.get("anyOfInputs") or []}
-        return any(str(row.get("input") or "") in allowed_inputs for row in bindings)
-
     for alternative in alternatives:
-        if (
-            all(call_present(row) for row in alternative.get("requiredCalls") or [])
-            and all(binding_present(row) for row in alternative.get("requiredBindings") or [])
-        ):
+        if event_alternative_is_present(alternative, target_calls=target_calls, bindings=bindings):
             return True, (), ""
-
-    allowed: list[str] = []
-    for alternative in alternatives:
-        for row in alternative.get("requiredCalls") or []:
-            exact = row.get("exactParams") or {}
-            suffix = "" if not exact else "(" + ",".join(f"{key}={value!r}" for key, value in exact.items()) + ")"
-            allowed.append(str(row.get("fn") or "") + suffix)
-        for row in alternative.get("requiredBindings") or []:
-            allowed.append("binding input one of: " + ",".join(str(value) for value in row.get("anyOfInputs") or []))
-    return False, tuple(allowed), f"{event} requires one exact declared producer alternative on {target_id}"
+    return False, event_dependency_descriptors(alternatives), f"{event} requires one exact declared producer alternative on {target_id}"
 
 
 def _validate_requirement(

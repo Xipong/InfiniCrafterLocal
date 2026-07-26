@@ -13,6 +13,10 @@ from infini_local.core.runtime_authoring import (
     strict_repair_shape_report,
     validate_runtime_program,
 )
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    PRIMARY_ENTITY_FIELD,
+    PRIMARY_ENTITY_SELECTION_FIELD,
+)
 
 
 def author_item_response_schema() -> dict[str, Any]:
@@ -35,7 +39,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_PROGRAM_SCHEMA,
-            "primaryEntityId": "exact existing entity id chosen once by the model",
+            PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
             "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "target": "entity_id"}],
             "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
@@ -133,8 +137,8 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
                 "backedBy": ["existing binding or call id"],
             }]
             continue
-        if key == "primaryEntitySelection":
-            placeholders[key] = "entity_id chosen from repairScope.repairTransactions.primaryEntitySelection.candidateEntityIds, or null"
+        if key == PRIMARY_ENTITY_SELECTION_FIELD:
+            placeholders[key] = f"entity_id chosen from repairScope.repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.candidateEntityIds, or null"
             continue
         if key == "exclusiveInputSelections":
             placeholders[key] = [{"input": "conflicting exclusive input", "keepBindingId": "chosen candidate binding id"}]

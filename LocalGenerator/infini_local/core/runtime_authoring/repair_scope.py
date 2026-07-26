@@ -21,9 +21,14 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_shape_report
+from infini_local.core.runtime_authoring.event_dependency_contract import event_dependency_alternatives
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    PRIMARY_ENTITY_JSON_PATH,
+    PRIMARY_ENTITY_SELECTION_FIELD,
+    primary_entity_repair_transaction,
+)
 from infini_local.core.runtime_authoring.validator import (
     VALIDATION_ERROR_CODES,
-    event_dependency_alternatives,
     validate_runtime_program,
 )
 
@@ -521,7 +526,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "primaryEntitySelection": {
+                    PRIMARY_ENTITY_SELECTION_FIELD: {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
@@ -545,7 +550,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         },
                     },
                 },
-                "required": ["primaryEntitySelection", "exclusiveInputSelections"],
+                "required": [PRIMARY_ENTITY_SELECTION_FIELD, "exclusiveInputSelections"],
             },
             "repairRequirements": {
                 "type": "array",
@@ -622,7 +627,7 @@ def _new_scope() -> dict[str, Any]:
         "contextIds": {"entityIds": [], "bindingIds": [], "callIds": [], "claimIds": []},
         "fieldPermissions": {"entities": [], "bindings": [], "calls": [], "claims": []},
         "repairTransactions": {
-            "primaryEntitySelection": {
+            PRIMARY_ENTITY_SELECTION_FIELD: {
                 "allowed": False,
                 "candidateEntityIds": [],
                 "mustSelectExactlyOne": True,
@@ -1053,13 +1058,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         for dependency in event_dependency_alternatives(event, target_kind):
                             required_calls: list[dict[str, Any]] = []
                             viable = True
-                            for raw_requirement in dependency.get("requiredCalls") or []:
-                                required_fn = str(raw_requirement.get("fn") or "")
+                            for raw_requirement in dependency.required_calls:
+                                required_fn = raw_requirement.fn
                                 if not _candidate_capability_viable(required_fn, [target_id], rows):
                                     viable = False
                                     break
-                                raw_exact = raw_requirement.get("exactParams")
-                                exact: Mapping[str, Any] = raw_exact if isinstance(raw_exact, Mapping) else {}
+                                exact = raw_requirement.exact_params_dict()
                                 required_calls.append({
                                     "fn": required_fn,
                                     "targetId": target_id,
@@ -1089,8 +1093,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             if not viable:
                                 continue
                             required_bindings = [
-                                {"anyOfInputs": [str(value) for value in requirement.get("anyOfInputs") or []]}
-                                for requirement in dependency.get("requiredBindings") or []
+                                {"anyOfInputs": list(requirement.any_of_inputs)}
+                                for requirement in dependency.required_bindings
                             ]
                             for requirement in required_bindings:
                                 allowed_inputs = set(requirement["anyOfInputs"])
@@ -1367,16 +1371,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         if str(row.get("id") or "")
     )
     primary_shape_error = any(
-        str(row.get("path") or "") == "$.runtimeProgram.primaryEntityId"
+        str(row.get("path") or "") == PRIMARY_ENTITY_JSON_PATH
         and str(row.get("code") or row.get("kind") or "").startswith("shape_")
         for row in error_rows
     )
     if ("invalid_primary_entity_reference" in error_codes or primary_shape_error) and primary_candidates:
-        scope["repairTransactions"]["primaryEntitySelection"] = {
-            "allowed": True,
-            "candidateEntityIds": primary_candidates,
-            "mustSelectExactlyOne": True,
-        }
+        scope["repairTransactions"][PRIMARY_ENTITY_SELECTION_FIELD] = primary_entity_repair_transaction(primary_candidates)
 
     binding_alternatives: list[dict[str, Any]] = []
     binding_rows_by_id = {
@@ -1695,8 +1695,8 @@ def filter_repair_patch_scope(
         else:
             ignored.append(_filter_ignored(path, candidate, preserved, "valid_metadata_frozen"))
 
-    if patch.get("primaryEntitySelection") is not None:
-        filtered["primaryEntitySelection"] = copy.deepcopy(patch.get("primaryEntitySelection"))
+    if patch.get(PRIMARY_ENTITY_SELECTION_FIELD) is not None:
+        filtered[PRIMARY_ENTITY_SELECTION_FIELD] = copy.deepcopy(patch.get(PRIMARY_ENTITY_SELECTION_FIELD))
         accepted.append("$.primaryEntitySelection")
     if "exclusiveInputSelections" in patch:
         filtered["exclusiveInputSelections"] = []
@@ -1905,10 +1905,10 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
 
     raw_transactions = scope.get("repairTransactions")
     transactions: Mapping[str, Any] = raw_transactions if isinstance(raw_transactions, Mapping) else {}
-    raw_primary_transaction = transactions.get("primaryEntitySelection")
+    raw_primary_transaction = transactions.get(PRIMARY_ENTITY_SELECTION_FIELD)
     primary_transaction: Mapping[str, Any] = raw_primary_transaction if isinstance(raw_primary_transaction, Mapping) else {}
-    if patch.get("primaryEntitySelection") is not None:
-        selected = str(patch.get("primaryEntitySelection") or "")
+    if patch.get(PRIMARY_ENTITY_SELECTION_FIELD) is not None:
+        selected = str(patch.get(PRIMARY_ENTITY_SELECTION_FIELD) or "")
         candidates = set(str(value) for value in primary_transaction.get("candidateEntityIds") or [])
         if not bool(primary_transaction.get("allowed")) or selected not in candidates:
             errors.append(_scope_error(

@@ -28,6 +28,11 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
     validate_runtime_wire,
 )
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    PRIMARY_AUTHOR_SYSTEM_RULE,
+    PRIMARY_ENTITY_SELECTION_FIELD,
+    PRIMARY_REPAIR_SYSTEM_RULE,
+)
 from infini_local.pipelines.author_item_contract import (
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
@@ -58,7 +63,7 @@ _AUTHOR_SYSTEM = (
     "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Every gameplay "
     "claim must cite existing entity/binding/call ids. Use only catalog capabilities. Check every reference, "
     "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
-    "Before returning, require runtimeProgram.primaryEntityId to equal exactly one emitted entity id; binding/call rows do not carry role because Lowery derives technical wire roles from exact target equality. Group bindings by input and reject the draft if an exclusive input has more than one row. configure_item_use never requires a companion use_item_body binding. "
+    f"{PRIMARY_AUTHOR_SYSTEM_RULE} Group bindings by input and reject the draft if an exclusive input has more than one row. configure_item_use never requires a companion use_item_body binding. "
     "Return JSON only; no markdown or reasoning."
 )
 
@@ -270,7 +275,7 @@ def build_gameplay_repair_dossier(
             "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
-            "When repairTransactions.primaryEntitySelection.allowed is true, set primaryEntitySelection to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
+            f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
             "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
             "For each repairScope.eventAlternatives row, choose one complete alternative: author its exact event plus every listed required call/binding in the same patch, and emit no support from unselected alternatives. The engine never chooses or inserts an event producer for you.",
         ],
@@ -337,7 +342,7 @@ def repair_author_item_after_failure(
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
-        "Use primaryEntitySelection whenever its repairTransaction is enabled. For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
+        f"{PRIMARY_REPAIR_SYSTEM_RULE} For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
         "For every bindingId in repairScope.bindingAlternatives, copy one complete input/action/target tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. "
         "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "

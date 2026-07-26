@@ -13,6 +13,12 @@ from infini_local.core.runtime_authoring.capability_registry import (
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    authored_primary_entity_id,
+    primary_binding_role,
+    primary_binding_role_receipt,
+    primary_owner_for_kind,
+)
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH,
     MAX_EVENT_SPAWNS_PER_ACTIVATION,
@@ -356,9 +362,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
 
     item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")
     item_entity_id = str(item_entity["id"])
-    primary_entity_id = str(validation.get("stats", {}).get("primaryEntityId") or "")
+    primary_entity_id = authored_primary_entity_id(authored_program)
     primary_entity = next(row for row in authored_entities if str(row.get("id") or "") == primary_entity_id)
-    primary_owner = "item_body" if primary_entity.get("kind") == "item_body" else "projectile"
+    primary_owner = primary_owner_for_kind(str(primary_entity.get("kind") or ""))
     ctx = _CompileContext(receipts=[])
     binding_sources = [
         (index, copy.deepcopy(dict(source)))
@@ -371,16 +377,14 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     binding_sources.sort(key=binding_source_sort_key)
     bindings: list[dict[str, Any]] = []
     for source_index, binding in binding_sources:
-        binding["role"] = "primary" if str(binding.get("target") or "") == primary_entity_id else "secondary"
+        binding["role"] = primary_binding_role(primary_entity_id, str(binding.get("target") or ""))
         final_index = len(bindings)
         bindings.append(binding)
-        ctx.receipts.append({
-            "lowererId": "primary_entity_to_binding_role",
-            "authoredPaths": ["runtimeProgram.primaryEntityId", f"runtimeProgram.bindings[{source_index}].target"],
-            "finalPath": f"runtimeProgram.bindings[{final_index}].role",
-            "value": binding["role"],
-            "status": "technical_projection",
-        })
+        ctx.receipts.append(primary_binding_role_receipt(
+            source_index=source_index,
+            final_index=final_index,
+            role=binding["role"],
+        ))
     entities: list[dict[str, Any]] = []
     entity_index_by_id: dict[str, int] = {}
     for source in authored_entities:

@@ -13,6 +13,10 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_SCHEMA,
     capability_provider_union,
 )
+from infini_local.core.runtime_authoring.primary_entity_contract import (
+    PRIMARY_ENTITY_FIELD,
+    PRIMARY_ENTITY_SELECTION_FIELD,
+)
 
 
 RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.low-level.v1"
@@ -81,7 +85,7 @@ def runtime_program_author_schema() -> dict[str, Any]:
         "properties": {
             "apiVersion": {"const": RUNTIME_PROGRAM_API_VERSION},
             "schema": {"const": RUNTIME_PROGRAM_SCHEMA},
-            "primaryEntityId": {
+            PRIMARY_ENTITY_FIELD: {
                 **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
                 "description": "The exact model-authored primary entity id. Technical row roles are lowered from exact target equality.",
                 "x-infini-reference": {"namespace": "entity", "targetKinds": list(ENTITY_KIND_REGISTRY), "allowSelf": True, "graphEdge": False},
@@ -105,7 +109,7 @@ def runtime_program_author_schema() -> dict[str, Any]:
                 "maxItems": 48,
             },
         },
-        "required": ["apiVersion", "schema", "primaryEntityId", "entities", "bindings", "calls"],
+        "required": ["apiVersion", "schema", PRIMARY_ENTITY_FIELD, "entities", "bindings", "calls"],
     }
 
 
@@ -218,7 +222,7 @@ def author_item_repair_schema() -> dict[str, Any]:
             "claimsUpsert": {"type": "array", "items": claim_schema(), "maxItems": 24},
             "claimIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 24},
             "claimIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 23}, "maxItems": 24},
-            "primaryEntitySelection": {
+            PRIMARY_ENTITY_SELECTION_FIELD: {
                 "oneOf": [
                     _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
                     {"type": "null"},
@@ -457,9 +461,9 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         if call is not None and key and isinstance(call.get("params"), dict):
             call["params"].pop(key, None)
 
-    selected_primary = str(patch.get("primaryEntitySelection") or "").strip()
+    selected_primary = str(patch.get(PRIMARY_ENTITY_SELECTION_FIELD) or "").strip()
     if selected_primary:
-        program["primaryEntityId"] = selected_primary
+        program[PRIMARY_ENTITY_FIELD] = selected_primary
 
     for selection in patch.get("exclusiveInputSelections") or []:
         if not isinstance(selection, Mapping):
