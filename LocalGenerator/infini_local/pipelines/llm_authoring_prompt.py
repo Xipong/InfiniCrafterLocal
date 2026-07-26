@@ -113,10 +113,12 @@ def engine_runtime_capability_contract_for_llm(
     return {
         "principle": "The author composes the item. Deterministic code only type-checks, bounds, compiles and executes explicit choices.",
         "catalog": sharp_engine_fn_catalog_for_llm(),
-        "balanceCorridor": copy.deepcopy(envelope or {}),
         "technicalNotes": concise_terraria_tick_guide_for_llm(),
         "claimRule": "Every gameplay claim in runtimeContract.claims.backedBy cites one or more existing call/binding ids.",
         "literalSynthesisRule": "Keep concrete parent objects/parts literal when the concept uses them; do not code-normalize furniture into a material theme.",
+        # Keep the one recipe-specific field after the invariant catalog so
+        # provider prefix caches can reuse the exact contract prefill.
+        "balanceCorridor": copy.deepcopy(envelope or {}),
     }
 
 
@@ -207,12 +209,6 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
     corridor = _balance_corridor(a, b)
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),
-        "recipeKey": key,
-        "parents": {
-            "A": {"packet": raw_parent_card_for_llm(a), "canonical": copy.deepcopy(ca)},
-            "B": {"packet": raw_parent_card_for_llm(b), "canonical": copy.deepcopy(cb)},
-        },
-        "balanceCorridor": corridor,
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
         "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(a, b, corridor),
         "requiredJsonShape": author_item_prompt_shape_card(),
@@ -230,6 +226,15 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "no family/archetype/semantic default is requested",
             "no unsupported vanilla useAmmo/PickAmmo behaviour is claimed",
         ],
+        # Recipe-specific values stay last. JSON object order is not semantic,
+        # but this preserves a large exact request prefix without hiding or
+        # removing any Author capability.
+        "recipeKey": key,
+        "parents": {
+            "A": {"packet": raw_parent_card_for_llm(a), "canonical": copy.deepcopy(ca)},
+            "B": {"packet": raw_parent_card_for_llm(b), "canonical": copy.deepcopy(cb)},
+        },
+        "balanceCorridor": corridor,
     }
     chars = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     if chars > PLANNER_PROMPT_LIMIT_CHARS:

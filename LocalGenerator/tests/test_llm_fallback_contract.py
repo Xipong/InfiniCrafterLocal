@@ -159,6 +159,22 @@ def _check_network_attempt_budget_one_disables_inner_retry(monkeypatch) -> None:
         None,
     )]
 
+    content_calls = []
+
+    def fake_single(payload, timeout, context):
+        content_calls.append(payload)
+        return {"choices": [{"finish_reason": "stop", "message": {"content": '{"broken":'}}]}
+
+    monkeypatch.setattr(lp, "_llm_json_single_context", fake_single)
+    malformed = lp._llm_json_single_context_with_length_retry(
+        {"messages": [], "response_format": {"type": "json_object"}},
+        1,
+        {"model": "single-model"},
+    )
+    assert len(content_calls) == 1
+    assert malformed["choices"][0]["message"]["content"] == '{"broken":'
+    assert "transportRetryCount" not in malformed.get("_debug", {})
+
 
 def _check_gemini_length_response_retries_once_with_minimal_reasoning(monkeypatch) -> None:
     calls = []

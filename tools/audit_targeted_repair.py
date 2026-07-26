@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "LocalGenerator"))
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
     REPAIR_ERROR_POLICY,
+    REPAIR_VALIDATION_ERROR_CODES,
     VALIDATION_ERROR_CODES,
     apply_repair_patch,
     build_runtime_repair_scope,
@@ -223,14 +224,15 @@ def render() -> dict[str, Any]:
 
     emitted_codes = _emitted_validator_codes()
     policy_coverage = {
-        "declaredCodes": len(VALIDATION_ERROR_CODES),
+        "declaredCodes": len(REPAIR_VALIDATION_ERROR_CODES),
+        "runtimeDeclaredCodes": len(VALIDATION_ERROR_CODES),
         "emittedCodes": len(emitted_codes),
         "policyCodes": len(REPAIR_ERROR_POLICY),
-        "declaredEqualsEmitted": set(VALIDATION_ERROR_CODES) == emitted_codes,
-        "declaredEqualsPolicy": set(VALIDATION_ERROR_CODES) == set(REPAIR_ERROR_POLICY),
+        "runtimeDeclaredEqualsEmitted": set(VALIDATION_ERROR_CODES) == emitted_codes,
+        "declaredEqualsPolicy": set(REPAIR_VALIDATION_ERROR_CODES) == set(REPAIR_ERROR_POLICY),
         "nonRepairableRegistryDefect": REPAIR_ERROR_POLICY.get("unknown_registry_requirement", {}).get("llmRepairable") is False,
     }
-    if not all(value for key, value in policy_coverage.items() if key not in {"declaredCodes", "emittedCodes", "policyCodes"}):
+    if not all(value for key, value in policy_coverage.items() if key not in {"declaredCodes", "runtimeDeclaredCodes", "emittedCodes", "policyCodes"}):
         errors.append("validator error inventory and Repair policy are not in exact parity")
 
     frozen_merge = _frozen_merge_probe()

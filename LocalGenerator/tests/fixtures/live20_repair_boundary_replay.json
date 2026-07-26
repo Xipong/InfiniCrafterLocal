@@ -648,6 +648,7 @@
         "b_primary_use": [
           "action",
           "input",
+          "role",
           "target"
         ],
         "b_spawn_arrow": [
@@ -655,7 +656,8 @@
         ]
       },
       "expectedRetargetBindingTargetIds": [
-        "jesters_arrow_proj"
+        "jesters_arrow_proj",
+        "wooden_bow_body"
       ],
       "initialAuthor": {
         "category": "combat",

@@ -339,6 +339,7 @@ def repair_author_item_after_failure(
         "For every coupledFieldGroup, emit every affected row and use one identical allowed value for its field across the entire group. "
         "Use primaryEntitySelection whenever its repairTransaction is enabled. For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
         "For a new call, copy the exact role listed for its target in repairScope.create.calls.requiredRolesByTarget; do not create a conflicting role partition. "
+        "For every bindingId in repairScope.bindingAlternatives, copy one complete input/action/target/role tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty is mandatory post-patch closure: callsUpsert must patch or create at least one complete allowed call on an affected target. A note claiming the capability exists does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
         "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "

@@ -21,6 +21,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_shape_report
+from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES
 
 
 RUNTIME_REPAIR_SCOPE_SCHEMA = "infini.runtime-repair-scope.v5"
@@ -68,11 +69,17 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "unknown_capability": {"strategy": "replace_or_delete_unknown_call", "llmRepairable": True, "allowNodeDelete": True},
     "unknown_registry_requirement": {"strategy": "developer_contract_defect", "llmRepairable": False, "allowNodeDelete": False},
     "unreachable_entity": {"strategy": "bind_reference_or_delete_entity", "llmRepairable": True, "allowNodeDelete": True},
+    "uncombined_identity": {"strategy": "patch_exact_name", "llmRepairable": True, "allowNodeDelete": False},
     "unsupported_input_action": {"strategy": "patch_exact_input_or_action", "llmRepairable": True, "allowNodeDelete": False},
     "wrong_binding_target_kind": {"strategy": "retarget_exact_binding", "llmRepairable": True, "allowNodeDelete": False},
     "wrong_reference_target_kind": {"strategy": "patch_exact_reference", "llmRepairable": True, "allowNodeDelete": False},
     "wrong_target_kind": {"strategy": "retarget_exact_call", "llmRepairable": True, "allowNodeDelete": False},
 }
+
+# Repair consumes both the low-level runtime validator inventory and exact
+# author/combine validation failures. Keep the union explicit so policy parity
+# remains fail-closed instead of treating non-runtime codes as silent extras.
+REPAIR_VALIDATION_ERROR_CODES = frozenset((*VALIDATION_ERROR_CODES, "uncombined_identity"))
 
 
 
@@ -397,6 +404,30 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                 ],
             },
             "metadataFields": copy.deepcopy(id_array),
+            "bindingAlternatives": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                    "type": "object", "additionalProperties": False,
+                    "properties": {
+                        "bindingId": _strict_scope_string_schema(),
+                        "allowed": {
+                            "type": "array",
+                            "items": {
+                                "type": "object", "additionalProperties": False,
+                                "properties": {
+                                    "input": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
+                                    "action": {"type": "string", "enum": list(BINDING_ACTION_REGISTRY)},
+                                    "target": _strict_scope_string_schema(),
+                                    "role": {"type": "string", "enum": ["primary", "secondary"]},
+                                },
+                                "required": ["input", "action", "target", "role"],
+                            },
+                        },
+                    },
+                    "required": ["bindingId", "allowed"],
+                },
+            },
             "contextIds": {
                 "type": "object", "additionalProperties": False,
                 "properties": {name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds", "claimIds")},
@@ -502,7 +533,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
             "capabilitySubset": copy.deepcopy(id_array),
             "nonRepairableErrors": {"type": "array", "items": {"type": "object"}},
         },
-        "required": ["schema", "mutable", "deletable", "create", "retarget", "identityChanges", "metadataFields", "contextIds", "fieldPermissions", "repairTransactions", "repairRequirements", "blockerPlan", "errorPaths", "capabilitySubset", "nonRepairableErrors"],
+        "required": ["schema", "mutable", "deletable", "create", "retarget", "identityChanges", "metadataFields", "bindingAlternatives", "contextIds", "fieldPermissions", "repairTransactions", "repairRequirements", "blockerPlan", "errorPaths", "capabilitySubset", "nonRepairableErrors"],
     }
 
 def _new_scope() -> dict[str, Any]:
@@ -534,6 +565,7 @@ def _new_scope() -> dict[str, Any]:
             "claimKindIds": [], "claimBackingIds": [],
         },
         "metadataFields": [],
+        "bindingAlternatives": [],
         "contextIds": {"entityIds": [], "bindingIds": [], "callIds": [], "claimIds": []},
         "fieldPermissions": {"entities": [], "bindings": [], "calls": [], "claims": []},
         "repairTransactions": {
@@ -559,10 +591,16 @@ def _new_scope() -> dict[str, Any]:
 
 
 def _reachable_runtime_entity_ids(rows: Mapping[str, list[dict[str, Any]]]) -> set[str]:
+    entity_kind_by_id = {
+        str(row.get("id") or ""): str(row.get("kind") or "")
+        for row in rows.get("entities", [])
+        if str(row.get("id") or "")
+    }
     reachable = {
         str(row.get("target") or "")
         for row in rows.get("bindings", [])
         if str(row.get("action") or "") == "spawn_entity" and str(row.get("target") or "")
+        and entity_kind_by_id.get(str(row.get("target") or "")) != "item_body"
     }
     for call in rows.get("calls", []):
         cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
@@ -599,7 +637,94 @@ def _reachability_safe_exclusive_candidates(
         ]
         if baseline.issubset(_reachable_runtime_entity_ids(candidate_rows)):
             viable.append(keep_id)
-    return viable or candidate_ids
+    return viable
+
+
+def _binding_repair_alternatives(
+    rows: Mapping[str, list[dict[str, Any]]],
+    binding: Mapping[str, Any],
+    *,
+    input_mutable: bool,
+    action_mutable: bool,
+    target_mutable: bool,
+    primary_entity_candidates: Iterable[str] = (),
+) -> list[dict[str, str]]:
+    """Project registry-valid binding tuples without choosing gameplay for Repair."""
+
+    binding_id = str(binding.get("id") or "")
+    original_input = str(binding.get("input") or "")
+    original_action = str(binding.get("action") or "")
+    original_target = str(binding.get("target") or "")
+    original_role = str(binding.get("role") or "")
+    role_selection_candidates = {str(value) for value in primary_entity_candidates if str(value)}
+    input_names = sorted(INPUT_KIND_REGISTRY) if input_mutable else [original_input]
+    action_names = sorted(BINDING_ACTION_REGISTRY) if action_mutable else [original_action]
+    entity_kind_by_id = {
+        str(row.get("id") or ""): str(row.get("kind") or "")
+        for row in rows.get("entities", [])
+        if str(row.get("id") or "")
+    }
+
+    roles_by_target: dict[str, set[str]] = {}
+    for namespace in ("bindings", "calls"):
+        for row in rows.get(namespace, []):
+            if namespace == "bindings" and str(row.get("id") or "") == binding_id:
+                continue
+            target = str(row.get("target") or "")
+            role = str(row.get("role") or "")
+            if target and role in {"primary", "secondary"}:
+                roles_by_target.setdefault(target, set()).add(role)
+
+    alternatives: list[dict[str, str]] = []
+    for input_name in input_names:
+        input_spec = INPUT_KIND_REGISTRY.get(input_name)
+        if input_spec is None:
+            continue
+        for action_name in action_names:
+            action_spec = BINDING_ACTION_REGISTRY.get(action_name)
+            if action_spec is None:
+                continue
+            if action_name not in input_spec.allowed_actions or input_name not in action_spec.allowed_inputs:
+                continue
+            target_ids = (
+                sorted(
+                    entity_id
+                    for entity_id, entity_kind in entity_kind_by_id.items()
+                    if entity_kind in action_spec.target_kinds
+                )
+                if target_mutable else [original_target]
+            )
+            for target_id in target_ids:
+                if entity_kind_by_id.get(target_id) not in action_spec.target_kinds:
+                    continue
+                if role_selection_candidates:
+                    roles = []
+                    if target_id in role_selection_candidates:
+                        roles.append("primary")
+                    if any(candidate != target_id for candidate in role_selection_candidates):
+                        roles.append("secondary")
+                    if not roles:
+                        roles.append("secondary")
+                else:
+                    target_roles = roles_by_target.get(target_id, set())
+                    roles = sorted(target_roles) if len(target_roles) == 1 else [original_role]
+                for role in roles:
+                    if role not in {"primary", "secondary"}:
+                        continue
+                    alternatives.append({
+                        "input": input_name,
+                        "action": action_name,
+                        "target": target_id,
+                        "role": role,
+                    })
+    unique = sorted({
+        tuple(row[key] for key in ("input", "action", "target", "role"))
+        for row in alternatives
+    })
+    return [
+        {"input": values[0], "action": values[1], "target": values[2], "role": values[3]}
+        for values in unique
+    ]
 
 
 def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -1074,6 +1199,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         grant("bindings", row_id, "action")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
+        grant("bindings", row_id, "role")
     for row_id in call_fn_change_ids:
         grant("calls", row_id, "fn")
     for row_id in call_target_change_ids:
@@ -1160,6 +1286,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         "claimBackingIds": sorted(claim_backing_change_ids),
     }
     scope["metadataFields"] = sorted(metadata_fields)
+
     scope["contextIds"] = {
         "entityIds": sorted(context["entities"]),
         "bindingIds": sorted(context["bindings"]),
@@ -1200,6 +1327,31 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "affectedRowIds": sorted({str(row.get("id") or "") for row in role_rows}),
             "mustSelectExactlyOne": True,
         }
+
+    binding_alternatives: list[dict[str, Any]] = []
+    binding_rows_by_id = {
+        str(row.get("id") or ""): row
+        for row in rows["bindings"]
+        if str(row.get("id") or "")
+    }
+    for row_id in sorted(
+        binding_input_change_ids | binding_action_change_ids | binding_target_change_ids
+    ):
+        binding = binding_rows_by_id.get(row_id)
+        if binding is None:
+            continue
+        allowed = _binding_repair_alternatives(
+            rows,
+            binding,
+            input_mutable=row_id in binding_input_change_ids,
+            action_mutable=row_id in binding_action_change_ids,
+            target_mutable=row_id in binding_target_change_ids,
+            primary_entity_candidates=role_candidates,
+        )
+        binding_alternatives.append({"bindingId": row_id, "allowed": allowed})
+        retarget_binding_ids.update(row["target"] for row in allowed)
+    scope["bindingAlternatives"] = binding_alternatives
+    scope["retarget"]["bindingTargetIds"] = sorted(retarget_binding_ids)
 
     bindings_by_id = {
         str(row.get("id") or ""): row
@@ -1562,6 +1714,20 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
     create: Mapping[str, Any] = create_raw if isinstance(create_raw, Mapping) else {}
     retarget = scope.get("retarget") if isinstance(scope.get("retarget"), Mapping) else {}
     identity = scope.get("identityChanges") if isinstance(scope.get("identityChanges"), Mapping) else {}
+    binding_alternative_map = {
+        str(row.get("bindingId") or ""): {
+            (
+                str(value.get("input") or ""),
+                str(value.get("action") or ""),
+                str(value.get("target") or ""),
+                str(value.get("role") or ""),
+            )
+            for value in row.get("allowed") or []
+            if isinstance(value, Mapping)
+        }
+        for row in scope.get("bindingAlternatives") or []
+        if isinstance(row, Mapping) and str(row.get("bindingId") or "")
+    }
 
     allowed_param_deletes: set[tuple[str, str]] = set()
     for value in deletable.get("callParamKeys") or []:
@@ -1655,6 +1821,22 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                         errors.append(_scope_error(path + ".input", "binding input is immutable for this repair", actual=row.get("input")))
                     if row_id not in set(identity.get("bindingActionIds") or []) and row.get("action") != original.get("action"):
                         errors.append(_scope_error(path + ".action", "binding action is immutable for this repair", actual=row.get("action")))
+                    allowed_tuples = binding_alternative_map.get(row_id)
+                    actual_tuple = (
+                        str(row.get("input") or ""),
+                        str(row.get("action") or ""),
+                        str(row.get("target") or ""),
+                        str(row.get("role") or ""),
+                    )
+                    if allowed_tuples is not None and actual_tuple not in allowed_tuples:
+                        errors.append(_scope_error(
+                            path,
+                            "binding input/action/target/role tuple is outside canonical repair alternatives",
+                            actual={
+                                "input": actual_tuple[0], "action": actual_tuple[1],
+                                "target": actual_tuple[2], "role": actual_tuple[3],
+                            },
+                        ))
                 if namespace == "calls":
                     if row_id not in set(identity.get("callFnIds") or []) and row.get("fn") != original.get("fn"):
                         errors.append(_scope_error(path + ".fn", "capability identity is immutable; repair params or the reported reference instead", actual=row.get("fn")))

@@ -1322,6 +1322,12 @@ def _llm_json_single_context_with_length_retry(
     )
     if not gemini_length and not malformed_json:
         return result
+    # A total network-attempt budget of one is an acceptance contract: no
+    # content retry may silently turn one logical stage into a second HTTP
+    # request. The malformed response is returned to the caller for normal
+    # domain failure accounting.
+    if int(LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
+        return result
 
     retry_payload = copy.deepcopy(payload)
     if gemini_length:

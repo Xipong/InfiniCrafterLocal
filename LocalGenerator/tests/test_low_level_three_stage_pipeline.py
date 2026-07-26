@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring import (
     compile_runtime_program,
     filter_repair_patch_scope,
     REPAIR_ERROR_POLICY,
+    REPAIR_VALIDATION_ERROR_CODES,
     runtime_repair_fragments,
     runtime_repair_scope_schema,
     strict_schema_errors,
@@ -355,6 +356,159 @@ def test_repair_transactions_apply_llm_primary_and_exclusive_input_choices() -> 
         row["id"] != "bad_primary"
         for row in repaired_duplicate["runtimeProgram"]["bindings"]
     )
+
+
+def test_binding_retarget_scope_requires_registry_compatible_target_role_tuple() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    binding = current["runtimeProgram"]["bindings"][0]
+    binding["target"] = "item"
+    binding["role"] = "primary"
+    report = validate_runtime_program(current)
+    errors = [
+        row for row in report["errors"]
+        if row["code"] in {"wrong_binding_target_kind", "entity_not_binding_spawnable"}
+    ]
+    assert errors
+
+    scope = build_runtime_repair_scope(current, errors)
+    alternatives = next(
+        row for row in scope["bindingAlternatives"]
+        if row["bindingId"] == binding["id"]
+    )
+    assert {
+        "input": "primary_use",
+        "action": "spawn_entity",
+        "target": "workbench_blade",
+        "role": "secondary",
+    } in alternatives["allowed"]
+    assert all(
+        row["role"] == "secondary"
+        for row in alternatives["allowed"]
+        if row["target"] == "workbench_blade"
+    )
+
+    patch = _empty_gameplay_patch()
+    patch["bindingsUpsert"] = [{
+        **binding,
+        "target": "workbench_blade",
+        "role": "secondary",
+    }]
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(current, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+
+
+def test_binding_repair_rejects_cross_product_input_action_pair() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    binding = current["runtimeProgram"]["bindings"][0]
+    error = {
+        "path": "$.runtimeProgram.bindings[0]",
+        "code": "unsupported_input_action",
+        "message": "repair the exact binding tuple",
+        "relatedIds": [binding["id"]],
+    }
+    scope = build_runtime_repair_scope(current, [error])
+    alternatives = next(
+        row for row in scope["bindingAlternatives"]
+        if row["bindingId"] == binding["id"]
+    )
+    assert all(
+        not (row["input"] == "hold" and row["action"] == "use_item_body")
+        for row in alternatives["allowed"]
+    )
+
+    patch = _empty_gameplay_patch()
+    patch["bindingsUpsert"] = [{
+        **binding,
+        "input": "hold",
+        "action": "use_item_body",
+        "target": "item",
+        "role": "primary",
+    }]
+    _, audit = filter_repair_patch_scope(current, patch, scope)
+    assert not audit["ok"]
+    assert any(row["code"] == "repair_scope_violation" for row in audit["errors"])
+
+
+def test_exclusive_reachability_ignores_item_body_and_never_falls_back_to_unsafe_keep() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["runtimeProgram"]["bindings"].append({
+        "id": "bad_item_spawn",
+        "input": "primary_use",
+        "action": "spawn_entity",
+        "role": "primary",
+        "target": "item",
+    })
+    report = validate_runtime_program(current)
+    error = next(row for row in report["errors"] if row["code"] == "duplicate_exclusive_input")
+
+    scope = build_runtime_repair_scope(current, [error])
+
+    assert scope["repairTransactions"]["exclusiveInputSelections"] == [{
+        "input": "primary_use",
+        "candidateBindingIds": ["primary_workbench"],
+        "mustKeepExactlyOne": True,
+    }]
+
+
+def test_uncombined_identity_opens_only_model_authored_name_metadata() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["name"] = "Workbench"
+    error = {
+        "path": "$.name",
+        "code": "uncombined_identity",
+        "message": "provide an authored combined identity",
+    }
+    scope = build_runtime_repair_scope(current, [error])
+    assert scope["nonRepairableErrors"] == []
+    assert scope["metadataFields"] == ["name"]
+
+    patch = _empty_gameplay_patch()
+    patch["metadataPatch"] = {"name": "Workbench Blade"}
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(current, filtered)
+    assert repaired["name"] == "Workbench Blade"
+    assert repaired["tooltip"] == current["tooltip"]
+
+
+def test_uncombined_identity_closes_through_same_author_repair_stage(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["name"] = "Workbench"
+    current["debug"] = {"llmStageAccounting": {"gameplayAuthorCalls": 1}}
+    failure = {
+        "stage": "strict_author_validation",
+        "errors": [{
+            "path": "$.name", "code": "uncombined_identity",
+            "message": "provide an authored combined identity",
+        }],
+    }
+    authored_patch = _empty_gameplay_patch()
+    authored_patch["metadataPatch"] = {"name": "Workbench Blade"}
+    authored_patch["note"] = "author a combined identity"
+    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
+    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(
+        gameplay_stage,
+        "llm_chat_json",
+        lambda *_args, **_kwargs: {
+            "choices": [{"message": {"content": json.dumps(authored_patch)}}]
+        },
+    )
+
+    repaired = gameplay_stage.repair_author_item_after_failure(
+        current,
+        {"name": "Workbench"},
+        {"name": "Sword"},
+        {"name": "Workbench"},
+        {"name": "Sword"},
+        "workbench+sword",
+        failure_report=failure,
+    )
+
+    assert repaired["name"] == "Workbench Blade"
+    assert repaired["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
 
 
 def test_redundant_exclusive_selection_is_ignored_after_binding_retarget() -> None:
@@ -995,7 +1149,8 @@ def test_every_validator_error_has_explicit_repair_policy() -> None:
         if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
             emitted.add(node.args[1].value)
     assert emitted == set(VALIDATION_ERROR_CODES)
-    assert set(REPAIR_ERROR_POLICY) == set(VALIDATION_ERROR_CODES)
+    assert set(REPAIR_VALIDATION_ERROR_CODES) == set(REPAIR_ERROR_POLICY)
+    assert REPAIR_ERROR_POLICY["uncombined_identity"]["strategy"] == "patch_exact_name"
     assert REPAIR_ERROR_POLICY["unknown_registry_requirement"]["llmRepairable"] is False
 
 
@@ -1043,6 +1198,32 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     )
     repair_payload = json.dumps(dossier, ensure_ascii=False, separators=(",", ":"))
     assert len(repair_payload) < len(author_payload) / 2
+
+
+def test_initial_author_packet_places_unchanged_contract_before_recipe_specific_facts() -> None:
+    _, first, _ = gameplay_stage.build_initial_author_request(
+        {"name": "Workbench"}, {"name": "Sword"},
+        {"name": "Workbench", "facts": ["wood"]},
+        {"name": "Sword", "facts": ["blade"]},
+        "workbench+sword", model_name="test-model",
+    )
+    _, second, _ = gameplay_stage.build_initial_author_request(
+        {"name": "Lens"}, {"name": "Bird"},
+        {"name": "Lens", "facts": ["glass"]},
+        {"name": "Bird", "facts": ["feather"]},
+        "lens+bird", model_name="test-model",
+    )
+
+    common_prefix = 0
+    for left, right in zip(first, second):
+        if left != right:
+            break
+        common_prefix += 1
+    assert common_prefix > 65_000
+
+    payload = json.loads(first)
+    assert list(payload).index("runtimeCapabilityContract") < list(payload).index("recipeKey")
+    assert list(payload["runtimeCapabilityContract"])[-1] == "balanceCorridor"
 
 
 def test_gameplay_repair_keeps_useful_fix_and_ignores_frozen_rewrite_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
