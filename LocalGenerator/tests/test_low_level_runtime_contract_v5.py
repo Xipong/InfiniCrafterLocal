@@ -47,11 +47,18 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     invariants = payload["runtimeProgramInvariants"]
     assert invariants["entityRolePartition"]["exactlyOnePrimaryEntity"] is True
     assert invariants["entityRolePartition"]["allBindingAndCallRowsForOneTargetUseOneRole"] is True
+    assert "roleByTarget" in invariants["entityRolePartition"]["preEmissionCheck"]
     assert invariants["exclusiveInputs"]["inputs"] == sorted(
         name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
     )
     assert invariants["damageClass"]["builtInTokens"] == list(DAMAGE_CLASS_TOKENS)
     assert invariants["damageClass"]["otherTokensAllowed"] is False
+    assert "does not require a use_item_body binding" in invariants["exclusiveInputs"]["configureItemUseRule"]
+    use_item_body_card = next(
+        row for row in payload["runtimeCapabilityContract"]["catalog"]["bindingActions"]
+        if row["action"] == "use_item_body"
+    )
+    assert "never pair it with spawn_entity" in use_item_body_card["does"]
     self_check = " ".join(payload["selfCheck"])
     assert "choose exactly one existing entity id as primary" in self_check
     assert "all and only rows targeting that entity have role=primary" in self_check

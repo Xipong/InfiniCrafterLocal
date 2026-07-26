@@ -202,6 +202,19 @@ def author_item_repair_schema() -> dict[str, Any]:
             "callsUpsert": {"type": "array", "items": {"oneOf": capability_provider_union()}, "maxItems": 48},
             "callIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 48},
             "callIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 47}, "maxItems": 48},
+            "callParamKeysDelete": {
+                "type": "array",
+                "maxItems": 48,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "callId": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+                        "key": _strict_string(min_len=1, max_len=64),
+                    },
+                    "required": ["callId", "key"],
+                },
+            },
             "claimsUpsert": {"type": "array", "items": claim_schema(), "maxItems": 24},
             "claimIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 24},
             "claimIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 23}, "maxItems": 24},
@@ -425,6 +438,19 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         current_rows = delete_indices(current_rows, list(patch.get(index_delete_key) or []))
         current_rows = delete(current_rows, list(patch.get(delete_key) or []))
         program[list_key] = upsert(current_rows, list(patch.get(upsert_key) or []))
+
+    calls_by_id = {
+        str(row.get("id") or ""): row
+        for row in program.get("calls") or []
+        if isinstance(row, dict) and str(row.get("id") or "")
+    }
+    for deletion in patch.get("callParamKeysDelete") or []:
+        if not isinstance(deletion, Mapping):
+            continue
+        call = calls_by_id.get(str(deletion.get("callId") or ""))
+        key = str(deletion.get("key") or "")
+        if call is not None and key and isinstance(call.get("params"), dict):
+            call["params"].pop(key, None)
 
     selected_primary = str(patch.get("primaryEntitySelection") or "").strip()
     if selected_primary:

@@ -111,6 +111,31 @@
       "maxItems": 48,
       "type": "array"
     },
+    "callParamKeysDelete": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "callId": {
+            "maxLength": 48,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]{0,47}$",
+            "type": "string"
+          },
+          "key": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "callId",
+          "key"
+        ],
+        "type": "object"
+      },
+      "maxItems": 48,
+      "type": "array"
+    },
     "callsUpsert": {
       "items": {
         "oneOf": [

@@ -58,6 +58,7 @@ _AUTHOR_SYSTEM = (
     "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Every gameplay "
     "claim must cite existing entity/binding/call ids. Use only catalog capabilities. Check every reference, "
     "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
+    "Before returning, group every binding/call by target and reject your draft if one target has multiple role values; group bindings by input and reject it if an exclusive input has more than one row. configure_item_use never requires a companion use_item_body binding. "
     "Return JSON only; no markdown or reasoning."
 )
 
@@ -337,6 +338,9 @@ def repair_author_item_after_failure(
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
         "For every coupledFieldGroup, emit every affected row and use one identical allowed value for its field across the entire group. "
         "Use primaryEntitySelection whenever its repairTransaction is enabled. For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
+        "For a new call, copy the exact role listed for its target in repairScope.create.calls.requiredRolesByTarget; do not create a conflicting role partition. "
+        "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty is mandatory post-patch closure: callsUpsert must patch or create at least one complete allowed call on an affected target. A note claiming the capability exists does not satisfy it. "
+        "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
         "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
         "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."

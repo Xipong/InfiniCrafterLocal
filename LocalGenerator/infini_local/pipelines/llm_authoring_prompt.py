@@ -180,6 +180,7 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
             "exactlyOnePrimaryEntity": True,
             "allBindingAndCallRowsForOneTargetUseOneRole": True,
             "primaryRule": "Before authoring rows, choose exactly one existing entity id as the primary target. Then set row.role = primary exactly for rows targeting that entity; every other row is secondary. Primary means ownership partition, not importance.",
+            "preEmissionCheck": "Build roleByTarget once, then copy roleByTarget[row.target] into every binding and call. Reject your draft if one target has two role values.",
         },
         "exclusiveInputs": {
             "maxBindingsPerInput": 1,
@@ -187,6 +188,7 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
                 name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
             ),
             "authoringProcedure": "Choose one action root per exclusive input. Never author separate use_item_body and spawn_entity binding rows with the same input; sequence additional behavior through a supported event or another input.",
+            "configureItemUseRule": "configure_item_use supplies item-use parameters for whichever single action root you choose. It does not require a use_item_body binding. Presence of item_body also does not require use_item_body.",
         },
         "damageClass": {
             "builtInTokens": list(DAMAGE_CLASS_TOKENS),

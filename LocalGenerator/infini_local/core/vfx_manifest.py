@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring import runtime_event_inventory, runtime
 from infini_local.core.vfx_manifest_config import (
     VFX_LLM_DIRECTOR_MAX_SLOTS,
     VFX_LLM_DIRECTOR_MAX_TOKENS,
+    VFX_LLM_REPAIR_TEMPERATURE,
     VFX_LLM_DIRECTOR_TEMPERATURE,
     VFX_LLM_DIRECTOR_TIMEOUT,
 )
@@ -612,7 +613,7 @@ def _request(
         ]
         return llm_director(
             _director_system(repair=True), user, int(VFX_LLM_DIRECTOR_MAX_TOKENS),
-            float(VFX_LLM_DIRECTOR_TEMPERATURE), int(VFX_LLM_DIRECTOR_TIMEOUT), messages=messages,
+            float(VFX_LLM_REPAIR_TEMPERATURE), int(VFX_LLM_DIRECTOR_TIMEOUT), messages=messages,
         )
     user = copy.deepcopy(packet)
     return llm_director(

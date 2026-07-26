@@ -585,7 +585,11 @@ def _request_visual_kit(
             stage_chat_message("system", "visual_repair_contract" if repair else "visual_director_contract", system + llm_reasoning_system_suffix(model)),
             stage_chat_message("user", "visual_repair_context" if repair else "visual_director_context", json.dumps(payload, ensure_ascii=False, separators=(",", ":"))),
         ],
-        "temperature": env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.45),
+        "temperature": (
+            env_float("INFINI_VISUAL_REPAIR_TEMPERATURE", 0.12)
+            if repair
+            else env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.45)
+        ),
         "max_tokens": visual_director_max_tokens(),
         "response_format": llm_json_response_format(
             "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",

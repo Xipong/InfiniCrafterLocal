@@ -192,13 +192,39 @@
               },
               "type": "array",
               "uniqueItems": true
+            },
+            "requiredRolesByTarget": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "primary",
+                      "secondary"
+                    ]
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "targetId",
+                  "role"
+                ],
+                "type": "object"
+              },
+              "type": "array",
+              "uniqueItems": true
             }
           },
           "required": [
             "allowed",
             "allowedTargetIds",
             "allowedFns",
-            "requiredReferenceEntityIds"
+            "requiredReferenceEntityIds",
+            "requiredRolesByTarget"
           ],
           "type": "object"
         },
@@ -292,6 +318,30 @@
           "type": "array",
           "uniqueItems": true
         },
+        "callParamKeys": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "callId": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "key": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "callId",
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "claimIds": {
           "items": {
             "maxLength": 48,
@@ -335,7 +385,8 @@
         "entityIndices",
         "bindingIndices",
         "callIndices",
-        "claimIndices"
+        "claimIndices",
+        "callParamKeys"
       ],
       "type": "object"
     },

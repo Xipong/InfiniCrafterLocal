@@ -1241,7 +1241,7 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
     ),
     "use_item_body": BindingActionSpec(
         "use_item_body", ("item_body",), ("primary_use", "alternate_use"),
-        "Run item-body use/contact/placeable behaviour without spawning a runtime entity.",
+        "One standalone input root for item-body use/contact behaviour without spawning a runtime entity. configure_item_use and the mere presence of item_body do not require this binding; never pair it with spawn_entity on the same input.",
     ),
     "apply_item_effects": BindingActionSpec(
         "apply_item_effects", ("item_body",), ("primary_use", "alternate_use"),
@@ -1261,8 +1261,8 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
 })
 
 INPUT_KIND_REGISTRY: Final[Mapping[str, InputKindSpec]] = MappingProxyType({
-    "primary_use": InputKindSpec("primary_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Primary item-use input.", ("configure_item_use",)),
-    "alternate_use": InputKindSpec("alternate_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Alternate item-use input.", ("configure_item_use",)),
+    "primary_use": InputKindSpec("primary_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Primary item-use input: choose exactly one action root; configure_item_use configures the input but is not another binding.", ("configure_item_use",)),
+    "alternate_use": InputKindSpec("alternate_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Alternate item-use input: choose exactly one action root; configure_item_use configures the input but is not another binding.", ("configure_item_use",)),
     "hold": InputKindSpec("hold", True, ("spawn_entity",), "While-held binding; currently supports maintaining one spawned runtime entity."),
     "equipped": InputKindSpec("equipped", False, ("equip_passive",), "Accessory/armor equipped state."),
 })

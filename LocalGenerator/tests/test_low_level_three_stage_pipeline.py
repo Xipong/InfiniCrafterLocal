@@ -10,6 +10,7 @@ import pytest
 
 import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
 import infini_local.pipelines.visual_generation_pipeline as visual_stage
+import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
@@ -160,18 +161,43 @@ def test_visual_and_vfx_repairs_are_conditional_and_local(monkeypatch: pytest.Mo
     }
     vfx_responses = iter([bad_vfx, vfx_patch])
     calls = 0
+    temperatures: list[float] = []
+    monkeypatch.setattr(vfx_stage, "VFX_LLM_DIRECTOR_TEMPERATURE", 0.5)
+    monkeypatch.setattr(vfx_stage, "VFX_LLM_REPAIR_TEMPERATURE", 0.12)
 
-    def director(*_args, **_kwargs):
+    def director(*args, **_kwargs):
         nonlocal calls
         calls += 1
+        temperatures.append(float(args[3]))
         return next(vfx_responses)
 
     final = attach_hybrid_vfx_manifest(visual, "door", llm_director=director)
     assert calls == 2
+    assert temperatures == [0.5, 0.12]
     assert final["debug"]["llmStageAccounting"]["vfxDirectorCalls"] == 1
     assert final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1
     assert final["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
     assert final["vfxManifest"]["slots"][0]["id"] == bad_vfx["slots"][0]["id"]
+
+
+def test_visual_director_and_repair_use_stage_specific_temperatures(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    temperatures: list[float] = []
+
+    def capture(request: dict, **_kwargs):
+        temperatures.append(float(request["temperature"]))
+        return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setenv("INFINI_VISUAL_DIRECTOR_TEMPERATURE", "0.5")
+    monkeypatch.setenv("INFINI_VISUAL_REPAIR_TEMPERATURE", "0.12")
+    monkeypatch.setattr(visual_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_stage, "llm_chat_json", capture)
+    visual_stage._request_visual_kit(data, {}, {}, {}, {})
+    visual_stage._request_visual_kit(
+        data, {}, {}, {}, {}, repair_errors=[], previous={}, repair_scope={},
+    )
+
+    assert temperatures == [0.5, 0.12]
 
 
 def test_gameplay_repair_runs_only_after_exact_validator_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,6 +224,7 @@ def _empty_gameplay_patch() -> dict:
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "bindingsUpsert": [], "bindingIdsDelete": [], "bindingIndicesDelete": [],
         "callsUpsert": [], "callIdsDelete": [], "callIndicesDelete": [],
+        "callParamKeysDelete": [],
         "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": "targeted repair",
     }
@@ -665,6 +692,7 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     assert scope["mutable"]["bindingIds"] == []
     assert scope["create"]["calls"]["allowedFns"] == ["configure_item_use"]
     assert scope["create"]["calls"]["allowedTargetIds"] == ["item"]
+    assert scope["create"]["calls"]["requiredRolesByTarget"] == [{"targetId": "item", "role": "primary"}]
 
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [{
@@ -680,6 +708,16 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     assert audit["ok"]
     assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
 
+    wrong_role = copy.deepcopy(patch)
+    wrong_role["callsUpsert"][0]["role"] = "secondary"
+    filtered_role, role_audit = filter_repair_patch_scope(current, wrong_role, scope)
+    assert role_audit["ok"]
+    assert not filtered_role["callsUpsert"]
+    assert any(
+        row.get("reason") == "call_role_conflicts_with_target_partition"
+        for row in role_audit["ignoredChanges"]
+    )
+
     wrong = copy.deepcopy(patch)
     wrong_call = copy.deepcopy(next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_stats"))
     wrong_call["id"] = "wrong_dependency"
@@ -688,6 +726,46 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     assert wrong_audit["ok"]
     assert not filtered_wrong["callsUpsert"]
     assert any(row.get("reason") == "capability_not_in_blocker_closure" for row in wrong_audit["ignoredChanges"])
+
+
+def test_gameplay_repair_removes_only_exact_invalid_call_param_key() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    stats = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_stats")
+    stats["params"]["invalidExtra"] = 7
+    report = validate_runtime_program(current)
+    assert any(
+        row["code"] == "shape_additional_property"
+        and row["path"].endswith(".params.invalidExtra")
+        for row in report["errors"]
+    )
+
+    scope = build_runtime_repair_scope(current, report["errors"])
+    assert scope["deletable"]["callParamKeys"] == [{"callId": "item_stats", "key": "invalidExtra"}]
+    candidate = copy.deepcopy(stats)
+    del candidate["params"]["invalidExtra"]
+    patch = _empty_gameplay_patch()
+    patch["callsUpsert"] = [candidate]
+
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    assert filtered["callParamKeysDelete"] == [{"callId": "item_stats", "key": "invalidExtra"}]
+    repaired = apply_repair_patch(current, filtered)
+    repaired_stats = next(
+        row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "item_stats"
+    )
+    assert "invalidExtra" not in repaired_stats["params"]
+    assert validate_runtime_program(repaired)["ok"]
+
+    out_of_scope = _empty_gameplay_patch()
+    out_of_scope["callParamKeysDelete"] = [{"callId": "item_stats", "key": "damage"}]
+    rejected, rejected_audit = filter_repair_patch_scope(current, out_of_scope, scope)
+    assert rejected["callParamKeysDelete"] == []
+    assert any(
+        row.get("reason") == "call_param_delete_outside_exact_error_scope"
+        for row in rejected_audit["ignoredChanges"]
+    )
+    scope_report = validate_repair_patch_scope(current, out_of_scope, scope)
+    assert any(row["path"] == "$.callParamKeysDelete[0]" for row in scope_report["errors"])
 
 
 def test_gameplay_scope_can_fix_existing_dependency_parameter() -> None:

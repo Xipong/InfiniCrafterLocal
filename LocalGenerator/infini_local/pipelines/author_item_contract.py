@@ -120,6 +120,12 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
                 "params": {"everyRequiredCapabilityParam": "typed value"},
             }]
             continue
+        if key == "callParamKeysDelete":
+            placeholders[key] = [{
+                "callId": "exact call id from repairScope.deletable.callParamKeys",
+                "key": "exact invalid parameter key from repairScope.deletable.callParamKeys",
+            }]
+            continue
         if key == "claimsUpsert":
             placeholders[key] = [{
                 "id": "stable_claim_id",
