@@ -409,6 +409,19 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         "allowedValues": {"type": "array"},
                         "repairStrategy": {"type": "string", "minLength": 1},
                         "llmRepairable": {"type": "boolean"},
+                        "coupledFieldGroup": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "entityId": _strict_scope_string_schema(),
+                                "field": {"const": "role"},
+                                "constraint": {"const": "all_equal"},
+                                "allowedValues": {"type": "array", "items": {"enum": ["primary", "secondary"]}, "minItems": 2, "maxItems": 2, "uniqueItems": True},
+                                "affectedIds": copy.deepcopy(id_array),
+                                "mustEmitAllAffectedRows": {"const": True},
+                            },
+                            "required": ["entityId", "field", "constraint", "allowedValues", "affectedIds", "mustEmitAllAffectedRows"],
+                        },
                     },
                     "required": [
                         "errorPath", "code", "message", "affectedIds",
@@ -570,6 +583,21 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "repairStrategy": str((policy or {}).get("strategy") or ("patch_exact_schema_path" if code.startswith("shape_") else "unmapped_validator_error")),
             "llmRepairable": bool((policy or {}).get("llmRepairable", code.startswith("shape_"))),
         }
+        if code == "mixed_entity_role":
+            target_ids = sorted({
+                str((row_by_id.get(row_id) or {}).get("target") or "")
+                for row_id in related
+                if str((row_by_id.get(row_id) or {}).get("target") or "")
+            })
+            if len(target_ids) == 1:
+                requirement_row["coupledFieldGroup"] = {
+                    "entityId": target_ids[0],
+                    "field": "role",
+                    "constraint": "all_equal",
+                    "allowedValues": ["primary", "secondary"],
+                    "affectedIds": sorted(set(related)),
+                    "mustEmitAllAffectedRows": True,
+                }
         repair_requirements.append(requirement_row)
         error_paths.append(path)
         node = _node_from_path(path, rows)

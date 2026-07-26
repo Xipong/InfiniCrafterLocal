@@ -648,6 +648,55 @@
           "code": {
             "type": "string"
           },
+          "coupledFieldGroup": {
+            "additionalProperties": false,
+            "properties": {
+              "affectedIds": {
+                "items": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "allowedValues": {
+                "items": {
+                  "enum": [
+                    "primary",
+                    "secondary"
+                  ]
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "constraint": {
+                "const": "all_equal"
+              },
+              "entityId": {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              "field": {
+                "const": "role"
+              },
+              "mustEmitAllAffectedRows": {
+                "const": true
+              }
+            },
+            "required": [
+              "entityId",
+              "field",
+              "constraint",
+              "allowedValues",
+              "affectedIds",
+              "mustEmitAllAffectedRows"
+            ],
+            "type": "object"
+          },
           "errorPath": {
             "type": "string"
           },

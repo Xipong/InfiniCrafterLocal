@@ -7,6 +7,7 @@ from pathlib import Path
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
     audit_compiler_receipts,
+    build_runtime_repair_scope,
     capability_provider_union,
     compile_runtime_program,
     compact_capability_catalog,
@@ -180,7 +181,19 @@ def test_explicit_primary_entity_projects_to_wire_and_gates_csharp_item_and_held
 
     mixed = build_runtime_fixture("workbench_blade")
     next(row for row in mixed["runtimeProgram"]["calls"] if row["id"] == "workbench_blade_damage")["role"] = "primary"
-    assert "mixed_entity_role" in _codes(validate_runtime_program(mixed))
+    mixed_report = validate_runtime_program(mixed)
+    assert "mixed_entity_role" in _codes(mixed_report)
+    mixed_error = next(row for row in mixed_report["errors"] if row["code"] == "mixed_entity_role")
+    mixed_scope = build_runtime_repair_scope(mixed, [mixed_error])
+    mixed_requirement = mixed_scope["repairRequirements"][0]
+    assert mixed_requirement["coupledFieldGroup"] == {
+        "entityId": "workbench_blade",
+        "field": "role",
+        "constraint": "all_equal",
+        "allowedValues": ["primary", "secondary"],
+        "affectedIds": sorted(mixed_error["relatedIds"]),
+        "mustEmitAllAffectedRows": True,
+    }
 
     tampered = copy.deepcopy(item_wire)
     tampered["runtimeProgram"]["primaryOwner"] = "projectile"

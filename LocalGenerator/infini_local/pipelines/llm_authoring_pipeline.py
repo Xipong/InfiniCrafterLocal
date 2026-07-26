@@ -333,6 +333,7 @@ def repair_author_item_after_failure(
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
+        "For every coupledFieldGroup, emit every affected row and use one identical allowed value for its field across the entire group. "
         "Return complete broken nodes when useful: deterministic merge will freeze already-valid old values, accept the exact "
         "broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."
