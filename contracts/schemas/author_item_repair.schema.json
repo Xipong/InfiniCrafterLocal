@@ -342,7 +342,7 @@
                     "x-infini-units": "pixels"
                   },
                   "releaseTiming": {
-                    "description": "Exact release timing",
+                    "description": "Held-item presentation lifetime hint; immediate hides the held sprite, on_release/after_charge keep it while use is active",
                     "enum": [
                       "",
                       "immediate",
@@ -1513,7 +1513,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "aim": {
-                    "description": "Initial aim source",
+                    "description": "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity",
                     "enum": [
                       "cursor",
                       "facing",
@@ -1974,7 +1974,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "homingStrength": {
-                    "description": "Steering strength",
+                    "description": "Per movement-update linear interpolation fraction toward target velocity",
                     "maximum": 1,
                     "minimum": 0.001,
                     "type": "number",
@@ -2320,7 +2320,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "homingStrength": {
-                    "description": "Steering strength",
+                    "description": "Per movement-update linear interpolation fraction toward target velocity",
                     "maximum": 1,
                     "minimum": 0.001,
                     "type": "number",
@@ -2690,7 +2690,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "homingStrength": {
-                    "description": "Steering strength",
+                    "description": "Per movement-update linear interpolation fraction toward target velocity",
                     "maximum": 1,
                     "minimum": 0.001,
                     "type": "number",
@@ -2833,7 +2833,7 @@
                     "x-infini-semanticType": "unitless_scalar"
                   },
                   "scalePerTick": {
-                    "description": "Scale increase",
+                    "description": "Additive Projectile.scale delta per movement update, capped by maxScale",
                     "maximum": 0.5,
                     "minimum": 0.001,
                     "type": "number",
@@ -3409,7 +3409,7 @@
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
                   "damageMultiplier": {
-                    "description": "Multiplier applied to target entity base damage",
+                    "description": "Multiplier applied to the referenced child entity's authored base damage",
                     "maximum": 4,
                     "minimum": 0,
                     "type": "number",
@@ -3603,7 +3603,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "damageMultiplier": {
-                    "description": "Source damage multiplier",
+                    "description": "Multiplier applied to this call target entity's authored projectile damage",
                     "maximum": 4,
                     "minimum": 0.05,
                     "type": "number",
@@ -3687,7 +3687,7 @@
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
                   "damageMultiplier": {
-                    "description": "Source damage multiplier",
+                    "description": "Multiplier applied to this call target entity's authored projectile damage",
                     "maximum": 2,
                     "minimum": 0.05,
                     "type": "number",

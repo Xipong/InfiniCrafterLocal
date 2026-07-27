@@ -726,8 +726,15 @@
       ]
     }
   ],
+  "exactRepetitionCompressionPolicy": {
+    "kind": "exact_repetition",
+    "mayAddDesignChoice": false,
+    "minimumRepeatedPlacements": 5,
+    "requiresLiteralEquality": true
+  },
   "globalLowerers": [
     {
+      "addsDesignChoice": false,
       "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
       "id": "entity_kind_to_visual_role",
       "inputs": [
@@ -743,6 +750,7 @@
       ]
     },
     {
+      "addsDesignChoice": false,
       "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
       "id": "primary_entity_to_binding_role",
       "inputs": [
@@ -761,6 +769,24 @@
       ]
     },
     {
+      "addsDesignChoice": false,
+      "equivalence": "wire owner family for the exact kind of the exact authored primary entity id",
+      "id": "primary_entity_kind_to_owner",
+      "inputs": [
+        "runtimeProgram.primaryEntityId",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind"
+      ],
+      "outputs": [
+        "runtimeProgram.primaryOwner"
+      ],
+      "preserves": [
+        "primary entity identity",
+        "entity kind"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
       "equivalence": "finite numeric wire opcode for the exact authored capability name",
       "id": "capability_name_to_opcode",
       "inputs": [
@@ -779,6 +805,7 @@
       ]
     },
     {
+      "addsDesignChoice": false,
       "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
       "id": "item_fields_to_tml_projection",
       "inputs": [
