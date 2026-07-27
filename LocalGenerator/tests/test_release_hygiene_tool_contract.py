@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -11,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "tools" / "check_project_hygiene.py"
 SANDBOX_TOOL = ROOT / "tools" / "validate_sandbox.py"
 PYTEST_RUNNER = ROOT / "tools" / "run_pytest_shards.py"
+RELEASE_RENDERER = ROOT / "tools" / "render_validation_report.py"
+SELFTEST_CHECKER = ROOT / "tools" / "check_tml_selftest_report.py"
+SELFTEST_EMITTER = (
+    ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Systems" / "InfiniAgentContractSelfTestSystem.cs"
+)
 
 
 def _load_hygiene_module():
@@ -91,6 +97,66 @@ def _contract_check_dependency_free_sandbox_gate_is_honest_and_bounded(tmp_path:
     assert runner_report["portableCommand"].endswith("tools/validate_sandbox.py")
 
 
+def _contract_check_release_report_rejects_an_incomplete_roster(tmp_path: Path) -> None:
+    status_path = tmp_path / "status.tsv"
+    report_path = tmp_path / "report.json"
+    status_path.write_text("", encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, str(RELEASE_RENDERER), "--status-file", str(status_path), "--out", str(report_path)],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        timeout=15,
+    )
+    assert proc.returncode == 1, proc.stdout
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["ok"] is False
+    assert {"pytest", "schema_check", "tml_build", "tml_runtime_selftest"}.issubset(report["missingChecks"])
+    assert report["duplicateChecks"] == []
+
+
+def _contract_check_runtime_selftest_checker_matches_the_csharp_emitter(tmp_path: Path) -> None:
+    source = SELFTEST_EMITTER.read_text(encoding="utf-8")
+    schema_match = re.search(r'schema\s*=\s*"([^"]+)"', source)
+    assert schema_match is not None
+    check_ids = sorted(set(re.findall(r'Check\(\s*"([^"]+)"', source)))
+    assert check_ids
+    report_path = tmp_path / "tml-selftest.json"
+    payload = {
+        "schema": schema_match.group(1),
+        "runtimeApi": "infini.runtime-program.v5",
+        "ok": True,
+        "checks": [{"id": check_id, "ok": True, "detail": "test"} for check_id in check_ids],
+        "failures": [],
+    }
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+    accepted = subprocess.run(
+        [sys.executable, str(SELFTEST_CHECKER), str(report_path)],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        timeout=15,
+    )
+    assert accepted.returncode == 0, accepted.stdout
+
+    payload["checks"][0]["ok"] = "true"
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+    rejected = subprocess.run(
+        [sys.executable, str(SELFTEST_CHECKER), str(report_path)],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        timeout=15,
+    )
+    assert rejected.returncode == 1, rejected.stdout
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_release_hygiene_tool_contract_module_contract(request):
     from contract_checks import run_contract_checks
@@ -102,5 +168,7 @@ def test_release_hygiene_tool_contract_module_contract(request):
             '_contract_check_release_metadata_patterns_are_rejected',
             '_contract_check_strict_archive_runtime_junk_patterns_are_recognized',
             '_contract_check_dependency_free_sandbox_gate_is_honest_and_bounded',
+            '_contract_check_release_report_rejects_an_incomplete_roster',
+            '_contract_check_runtime_selftest_checker_matches_the_csharp_emitter',
         ),
     )
