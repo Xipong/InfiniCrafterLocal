@@ -3,15 +3,70 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable, Mapping
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.primary_entity_contract import (
-    MIN_AUTHORING_REPETITION_COMPRESSION,
-    PRIMARY_BINDING_ROLE_LOWERER_ID,
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
+    ENTITY_KIND_REGISTRY,
+)
+from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
 )
 
 
 TECHNICAL_LOWERING_SCHEMA = "infini.technical-lowering-manifest.v1"
+MIN_EXACT_REPETITION_COMPRESSION = 5
+PRIMARY_BINDING_ROLE_LOWERER_ID = "primary_entity_to_binding_role"
+PRIMARY_OWNER_LOWERER_ID = "primary_entity_kind_to_owner"
+PRIMARY_OWNER_FINAL_PATH = "runtimeProgram.primaryOwner"
+EXACT_REPETITION_COMPRESSION_POLICY = {
+    "kind": "exact_repetition",
+    "minimumRepeatedPlacements": MIN_EXACT_REPETITION_COMPRESSION,
+    "requiresLiteralEquality": True,
+    "mayAddDesignChoice": False,
+}
+
+
+def primary_binding_role(primary_entity_id: str, binding_target: str) -> str:
+    return "primary" if binding_target == primary_entity_id else "secondary"
+
+
+def primary_owner_for_kind(entity_kind: str) -> str:
+    spec = ENTITY_KIND_REGISTRY.get(entity_kind)
+    if spec is None:
+        return ""
+    return "projectile" if spec.projectile else "item_body"
+
+
+def primary_binding_role_receipt(
+    *,
+    source_index: int,
+    final_index: int,
+    role: str,
+) -> dict[str, Any]:
+    return {
+        "lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID,
+        "authoredPaths": [
+            PRIMARY_ENTITY_AUTHOR_PATH,
+            f"runtimeProgram.bindings[{source_index}].target",
+        ],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].role",
+        "value": role,
+        "status": "technical_projection",
+    }
+
+
+def primary_owner_receipt(*, source_index: int, owner: str) -> dict[str, Any]:
+    entity_path = f"runtimeProgram.entities[{source_index}]"
+    return {
+        "lowererId": PRIMARY_OWNER_LOWERER_ID,
+        "authoredPaths": [
+            PRIMARY_ENTITY_AUTHOR_PATH,
+            f"{entity_path}.id",
+            f"{entity_path}.kind",
+        ],
+        "finalPath": PRIMARY_OWNER_FINAL_PATH,
+        "value": owner,
+        "status": "technical_projection",
+    }
 
 # These are the only non-capability design-neutral projections. They serialize one
 # authored value into the tModLoader-facing DTO shape or derive an opcode/role from
@@ -41,11 +96,14 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
         "preserves": ["primary entity identity", "binding identity", "binding target", "input", "action"],
         "addsDesignChoice": False,
-        "authoringCompression": {
-            "kind": "exact_repetition",
-            "minimumRepeatedPlacements": MIN_AUTHORING_REPETITION_COMPRESSION,
-            "equality": "binding.target == runtimeProgram.primaryEntityId",
-        },
+    },
+    {
+        "id": PRIMARY_OWNER_LOWERER_ID,
+        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind"],
+        "outputs": [PRIMARY_OWNER_FINAL_PATH],
+        "equivalence": "wire owner family for the exact kind of the exact authored primary entity id",
+        "preserves": ["primary entity identity", "entity kind"],
+        "addsDesignChoice": False,
     },
     {
         "id": "capability_name_to_opcode",
@@ -142,18 +200,28 @@ def technical_lowering_manifest() -> dict[str, Any]:
         })
     return {
         "schema": TECHNICAL_LOWERING_SCHEMA,
+        "exactRepetitionCompressionPolicy": dict(EXACT_REPETITION_COMPRESSION_POLICY),
         "globalLowerers": list(GLOBAL_TECHNICAL_LOWERINGS),
         "capabilities": capability_rows,
     }
 
 
 __all__ = [
+    "EXACT_REPETITION_COMPRESSION_POLICY",
     "GLOBAL_TECHNICAL_LOWERINGS",
+    "MIN_EXACT_REPETITION_COMPRESSION",
+    "PRIMARY_BINDING_ROLE_LOWERER_ID",
+    "PRIMARY_OWNER_FINAL_PATH",
+    "PRIMARY_OWNER_LOWERER_ID",
     "TECHNICAL_LOWERING_SCHEMA",
     "audit_compiler_receipts",
     "declared_global_inputs_for",
     "declared_global_outputs_for",
     "declared_outputs_for",
     "path_matches",
+    "primary_binding_role",
+    "primary_binding_role_receipt",
+    "primary_owner_for_kind",
+    "primary_owner_receipt",
     "technical_lowering_manifest",
 ]

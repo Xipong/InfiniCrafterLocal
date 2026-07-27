@@ -1,6 +1,7 @@
 # Аудит машиночитаемости библиотеки компонентов
 
 > Генерируется `python tools/generate_low_level_runtime_docs.py` из live registry и audit-кода.
+> Каноническая архитектурная граница и owner routing: `lowery.md`; этот файл только измеряет projection.
 
 ## Вердикт: 100/100
 
@@ -22,7 +23,7 @@
 - capabilities: **52**; parameters: **185**; numeric: **143/143 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
 - typed entity references: **2**; requirements: **15**; binding dependency edges: **9**;
-- exact wire paths: **257**; global technical lowerer outputs: **100**;
+- exact wire paths: **257**; global technical lowerer outputs: **102**;
 - Python↔C# range parity rows: **79**; vertical witnesses: **52**;
 - errors: **0**; warnings: **0**.
 

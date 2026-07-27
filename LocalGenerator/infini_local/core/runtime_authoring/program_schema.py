@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import math
 import re
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
@@ -13,14 +13,28 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_SCHEMA,
     capability_provider_union,
 )
-from infini_local.core.runtime_authoring.primary_entity_contract import (
-    PRIMARY_ENTITY_FIELD,
-    PRIMARY_ENTITY_SELECTION_FIELD,
-)
-
-
 RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.low-level.v1"
 _ID_PATTERN = r"^[a-z][a-z0-9_]{0,47}$"
+PRIMARY_ENTITY_FIELD = "primaryEntityId"
+PRIMARY_ENTITY_AUTHOR_PATH = f"runtimeProgram.{PRIMARY_ENTITY_FIELD}"
+PRIMARY_ENTITY_JSON_PATH = f"$.{PRIMARY_ENTITY_AUTHOR_PATH}"
+PRIMARY_ENTITY_SELECTION_FIELD = "primaryEntitySelection"
+PRIMARY_ENTITY_SELECTION_JSON_PATH = f"$.{PRIMARY_ENTITY_SELECTION_FIELD}"
+
+
+def authored_primary_entity_id(program: Mapping[str, Any]) -> str:
+    return str(program.get(PRIMARY_ENTITY_FIELD) or "")
+
+
+def primary_entity_repair_transaction(entity_ids: Iterable[str]) -> dict[str, Any]:
+    candidates = sorted({str(entity_id) for entity_id in entity_ids if str(entity_id)})
+    if not candidates:
+        return {}
+    return {
+        "allowed": True,
+        "candidateEntityIds": candidates,
+        "mustSelectExactlyOne": True,
+    }
 
 
 def _strict_string(*, min_len: int = 0, max_len: int = 256, pattern: str | None = None) -> dict[str, Any]:
@@ -518,8 +532,14 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
 
 
 __all__ = [
+    "PRIMARY_ENTITY_AUTHOR_PATH",
+    "PRIMARY_ENTITY_FIELD",
+    "PRIMARY_ENTITY_JSON_PATH",
+    "PRIMARY_ENTITY_SELECTION_FIELD",
+    "PRIMARY_ENTITY_SELECTION_JSON_PATH",
     "RUNTIME_CONTRACT_SCHEMA",
     "apply_repair_patch",
+    "authored_primary_entity_id",
     "author_item_repair_schema",
     "author_item_response_schema",
     "binding_schema",
@@ -527,6 +547,7 @@ __all__ = [
     "entity_schema",
     "runtime_contract_schema",
     "runtime_program_author_schema",
+    "primary_entity_repair_transaction",
     "strict_author_shape_report",
     "strict_repair_shape_report",
     "strict_schema_errors",

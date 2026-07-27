@@ -1,5 +1,7 @@
 # Targeted Repair Protocol — InfiniCrafterLocal v0.4.241
 
+> Это protocol projection, а не второй owner. Каноническая граница и edit-routing: [`../lowery.md`](../lowery.md). Exact repair shape принадлежит `program_schema.py`; permissions/filter — `repair_scope.py`; requirement closure — `validator.py`; event alternatives — `capability_registry.py`.
+
 ## Цель
 
 Conditional Repair не переавторивает предмет и не возвращается к weapon-family архитектуре. Он получает только:
@@ -49,7 +51,7 @@ Malformed provider/patch shape остаётся фатальным: deterministi
 - `capabilitySubset` — только эти capabilities;
 - `nonRepairableErrors` — внутренние registry/runtime defects, которые нельзя скрывать LLM-ремонтом.
 
-Все 33 semantic validator codes перечислены в `VALIDATION_ERROR_CODES` и обязаны иметь явную запись в `REPAIR_ERROR_POLICY`. Добавление нового validator-кода без Repair-политики краснит тесты.
+Все machine validator codes из `VALIDATION_ERROR_CODES` обязаны иметь явную запись в `REPAIR_ERROR_POLICY`. Число не дублируется в prose: добавление/удаление кода без parity краснит тесты.
 
 Особый случай `missing_movement_component`: deterministic code не выбирает movement за модель. Repair получает только совместимые position drivers, которые могут замкнуть программу за один проход с frozen context. Несовместимые варианты отфильтровываются; если остаётся несколько честных вариантов, выбор делает модель.
 

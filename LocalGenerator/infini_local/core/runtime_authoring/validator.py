@@ -11,16 +11,14 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     CapabilitySpec,
     RequirementSpec,
-)
-from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
-from infini_local.core.runtime_authoring.event_dependency_contract import (
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
 )
-from infini_local.core.runtime_authoring.primary_entity_contract import (
+from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     authored_primary_entity_id,
+    strict_author_shape_report,
 )
 
 

@@ -1,56 +1,55 @@
-# Low-level Runtime Authoring
+# Low-level Runtime Authoring — projection
+
+> Не является владельцем контракта. Каноническая замороженная граница, owner routing и generated lowering manifest находятся в [`../lowery.md`](../lowery.md).
+> Exact Author/Repair JSON shape владеет `LocalGenerator/infini_local/core/runtime_authoring/program_schema.py`; registry facts — `capability_registry.py`.
 
 ## Author response
 
-Gameplay Author returns metadata, concept, claim-backed runtime contract and:
+Gameplay Author возвращает metadata, concept, claim-backed `runtimeContract` и `runtimeProgram` схемы `infini.runtime-program.authoring.v1`.
 
-```json
-{
-  "runtimeProgram": {
-    "apiVersion": "infini.runtime-program.v5",
-    "schema": "infini.runtime-program.authoring.v1",
-    "entities": [{"id": "item", "kind": "item_body"}],
-    "bindings": [],
-    "calls": [{
-      "id": "item_stats",
-      "fn": "configure_item_stats",
-      "role": "primary",
-      "target": "item",
-      "params": {
-        "damageClass": "generic", "damage": 0, "knockback": 0,
-        "useTimeTicks": 20, "useAnimationTicks": 20, "manaCost": 0,
-        "valueCopper": 100, "rarity": 0, "maxStack": 1,
-        "critBonus": 0, "scale": 1, "craftYield": 1
-      }
-    }]
-  }
-}
+`runtimeProgram` содержит:
+
+- `apiVersion` и `schema`;
+- `primaryEntityId` — один точный существующий authored entity id;
+- `entities[]` — явные ids и low-level kinds;
+- `bindings[]` — явные `input + action + target`;
+- `calls[]` — явные `fn + target + params`.
+
+Author bindings/calls **не содержат `role`**. Код не определяет primary entity по input, capability, kind, имени, tooltip или category. После валидации compiler только материализует wire role из exact equality:
+
+```text
+binding.target == runtimeProgram.primaryEntityId -> primary
+otherwise                                      -> secondary
 ```
 
-IDs are stable lowercase snake_case. Exactly one `item_body` exists. Every projectile entity explicitly receives spawn, lifetime, hitbox, collision and a position driver where its kind requires one.
-
-Every authored `call` and `binding` has `role: primary|secondary`. All rows targeting one entity must use the same role, and exactly one entity is primary. This is the only owner declaration: code must not infer ownership from `primary_use`, projectile kind, item category, names, or capability choice. Compiler emits `primaryEntityId` plus `primaryOwner=item_body|projectile`; C# uses them to gate item contact and projectile held-owner writes.
-
-Terraria-native default: a sword/tool body is primary and a projectile spawned on the same use is secondary. Projectile-primary is valid only when the Author explicitly designs the action as a throw, flail/yoyo/whip, laser/beam drill, held shield/beam, or another projectile-owned action.
+Это mandatory technical projection уже authored identity, а не выбор механики и не authoring compression.
 
 ## Composition
 
-Bindings map a concrete input to a concrete action and entity. Calls attach one capability to one entity. Cross-entity behavior uses typed parameters such as `shotEntity`/`entity`; validator checks target kinds and graph depth.
+Bindings связывают конкретный input с конкретным action/target. Calls прикрепляют одну capability к одной entity. Cross-entity behavior использует typed references. Movement, controller, damage, input, lifecycle, targeting и event actions остаются независимыми решениями модели; whole-weapon macro отсутствует.
 
-Movement, controller, damage, targeting, child spawn, item effects and equipment are independent decisions. No single call means «make a spear» or «make a sentry».
+Event producer alternatives выводятся только из `EVENT_KIND_REGISTRY` и `ENTITY_KIND_REGISTRY.base_events`. Author или Repair выбирает один полный вариант и явно пишет необходимые call/binding; код не вставляет producer автоматически.
 
-## Validation
+Полный generated registry inventory: [`LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).
 
-Validator checks strict shape, IDs, target kinds, one-per-slot components, dependencies, event producers, illegal cycles, child depth/count, periods, lifetime and authority. It reports exact paths. It never chooses what to keep or substitutes a weapon family.
+## Validation и compilation
 
-## Compiler
+Validator проверяет strict shape, references, target kinds, slots, dependencies, event producers, cycles и budgets. Он сообщает exact paths и не выбирает замену.
 
-Compiler writes only declared final-wire paths and emits receipts. Numeric opcodes are technical encodings of already selected names. The wire program remains entity/component/event-based.
+Compiler пишет только declared final-wire paths и создаёт receipts. Global receipts доказывают authored inputs и exact output; capability receipts доказывают exact call delivery. Numeric opcode — кодирование уже выбранного capability name.
 
 ## Repair
 
-Gameplay Repair возвращает narrow upsert/delete patch. Deterministic code выводит exact mutable leaf paths, missing-dependency create policy и минимальный blocker capability subset. Модель может вернуть полный broken node для удобства, но frozen merge применяет только reported broken/mandatory missing fields. Изменения валидных старых значений и необязательные additions вне scope игнорируются и аудируются, не отменяя полезное исправление. Полный предыдущий item/history не отправляется. See `TARGETED_REPAIR_PROTOCOL_RU.md`.
+Gameplay Repair получает frozen accepted state, exact errors, finite registry-derived alternatives и exact create/retarget/delete permissions. Filter принимает только разрешённые leaves/nodes; затем canonical validator обязан подтвердить исчезновение исходных требований. Полный protocol: [`TARGETED_REPAIR_PROTOCOL_RU.md`](TARGETED_REPAIR_PROTOCOL_RU.md).
 
 ## Visual/VFX
 
-Visual roles are derived mechanically from accepted entity kinds. VFX slots must reference an accepted entity and one of its actual runtime events. Neither stage can add gameplay.
+Visual roles losslessly выводятся из accepted entity kinds. Visual и VFX могут ссылаться только на accepted runtime entities/events и не могут добавлять gameplay.
+
+## Проверка projection
+
+```bash
+python tools/generate_lowery.py --check
+python tools/generate_low_level_runtime_docs.py --check
+python -m pytest -q LocalGenerator/tests/test_runtime_authoring_change_locality.py LocalGenerator/tests/test_low_level_runtime_contract_v5.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py
+```

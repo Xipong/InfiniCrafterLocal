@@ -109,16 +109,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
     private static bool ShouldDrawHeldSprite(GeneratedItemData data, Player player, HeldItemPresentationPayload? payload)
     {
         string releaseTiming = (data.RuntimeProgram?.ItemUse?.ReleaseTiming ?? "").Trim().ToLowerInvariant();
-        if (releaseTiming == "instant")
-            return false;
-        if (releaseTiming == "early")
-        {
-            float remaining = payload is not null
-                ? payload.AnimationRemaining / 255f
-                : Math.Clamp(player.itemAnimation / (float)Math.Max(1, player.itemAnimationMax), 0f, 1f);
-            return remaining >= 0.65f;
-        }
-        return true;
+        return releaseTiming != "immediate";
     }
 
     protected override void Draw(ref PlayerDrawSet drawInfo)

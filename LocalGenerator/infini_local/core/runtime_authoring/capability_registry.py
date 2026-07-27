@@ -174,19 +174,76 @@ class BindingActionSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class EventCallRequirement:
+    capability: str
+    exact_params: tuple[tuple[str, Any], ...] = ()
+
+    @classmethod
+    def create(
+        cls,
+        capability: str,
+        exact_params: Mapping[str, Any] | None = None,
+    ) -> EventCallRequirement:
+        return cls(
+            capability=capability,
+            exact_params=tuple(sorted((exact_params or {}).items())),
+        )
+
+    def exact_params_dict(self) -> dict[str, Any]:
+        return dict(self.exact_params)
+
+
+@dataclass(frozen=True, slots=True)
+class EventBindingRequirement:
+    any_of_inputs: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EventDependencyAlternative:
+    required_calls: tuple[EventCallRequirement, ...] = ()
+    required_bindings: tuple[EventBindingRequirement, ...] = ()
+
+    @classmethod
+    def required_call(
+        cls,
+        capability: str,
+        exact_params: Mapping[str, Any] | None = None,
+    ) -> EventDependencyAlternative:
+        return cls(required_calls=(EventCallRequirement.create(capability, exact_params),))
+
+    @classmethod
+    def any_binding_input(cls, inputs: Iterable[str]) -> EventDependencyAlternative:
+        return cls(required_bindings=(EventBindingRequirement(tuple(inputs)),))
+
+
+@dataclass(frozen=True, slots=True)
 class EventKindSpec:
     name: str
     source_kinds: tuple[str, ...]
     producer_capabilities: tuple[str, ...]
-    always_available_on_projectile: bool
     summary: str
+    producer_binding_inputs: tuple[str, ...] = ()
+    producer_exact_params: Mapping[str, Mapping[str, Any]] = field(
+        default_factory=lambda: MappingProxyType({}),
+        compare=False,
+    )
 
     def prompt_card(self) -> dict[str, Any]:
+        producer_free_kinds = [
+            kind.name
+            for kind in ENTITY_KIND_REGISTRY.values()
+            if self.name in kind.base_events
+        ]
         return {
             "event": self.name,
             "sources": list(self.source_kinds),
             "producedBy": list(self.producer_capabilities),
-            "projectileBaseEvent": self.always_available_on_projectile,
+            "producedByBindingInputs": list(self.producer_binding_inputs),
+            "producerFreeKinds": producer_free_kinds,
+            "producerExactParams": {
+                capability: dict(params)
+                for capability, params in self.producer_exact_params.items()
+            },
             "does": self.summary,
         }
 
@@ -307,6 +364,8 @@ class CapabilitySpec:
                 row["max"] = spec.maximum
             if spec.enum:
                 row["enum"] = list(spec.enum)
+            if spec.pattern:
+                row["pattern"] = spec.pattern
             if spec.units:
                 row["units"] = spec.units
             if spec.semantic_type:
@@ -484,7 +543,7 @@ _CAPS: list[CapabilitySpec] = [
             "holdoutOffsetX": _p("integer", "Held draw offset X", minimum=-96, maximum=96, units="pixels"),
             "holdoutOffsetY": _p("integer", "Held draw offset Y", minimum=-96, maximum=96, units="pixels"),
             "handPose": _p("string", "Exact renderer hint", required=False, enum=("", "one_handed", "two_handed", "overhead", "forward")),
-            "releaseTiming": _p("string", "Exact release timing", required=False, enum=("", "immediate", "on_release", "after_charge")),
+            "releaseTiming": _p("string", "Held-item presentation lifetime hint; immediate hides the held sprite, on_release/after_charge keep it while use is active", required=False, enum=("", "immediate", "on_release", "after_charge")),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem/UseStyle",
@@ -756,7 +815,7 @@ _CAPS: list[CapabilitySpec] = [
             "count": _p("integer", "Entities spawned per activation", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim source", enum=("cursor", "facing", "velocity", "none")),
+            "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
             "placement": _p("string", "Spawn position", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor")),
         },
         py=_COMPILER_OWNER,
@@ -863,7 +922,7 @@ _CAPS.extend([
     _movement("move_straight", "Keep initial velocity.", 0, provenance="existing movement code 0"),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
-        "homingStrength": _p("number", "Steering strength", minimum=0.001, maximum=1),
+        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
     }, provenance="existing movement code 1"),
     _movement("move_gravity_arc", "Apply downward acceleration each tick.", 2, {
         "gravityPerTick": _p("number", "Vertical acceleration", minimum=0.001, maximum=2, units="pixels/tick^2"),
@@ -883,7 +942,7 @@ _CAPS.extend([
     }, provenance="existing movement code 6"),
     _movement("move_sine_homing", "Combine sinusoidal drift with bounded homing.", 7, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
-        "homingStrength": _p("number", "Steering strength", minimum=0.001, maximum=1),
+        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
         "waveAmplitude": _p("number", "Lateral wave amplitude", minimum=0, maximum=64, units="pixels"),
     }, provenance="existing movement code 7"),
     _movement("move_phase", "Phase-drift with explicit tile collision still controlled separately.", 8, {
@@ -906,7 +965,7 @@ _CAPS.extend([
     }, provenance="existing movement code 12"),
     _movement("move_proximity_missile", "Home and trigger the authored on-expire/on-hit actions near a target.", 13, {
         "rangeTiles": _p("number", "Detection/search radius", minimum=1, maximum=120, units="tiles"),
-        "homingStrength": _p("number", "Steering strength", minimum=0.001, maximum=1),
+        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
         "proximityRadiusPx": _p("integer", "Trigger radius", minimum=4, maximum=512, units="pixels"),
     }, provenance="existing movement code 13"),
     _movement("move_returning_glaive", "Fly, spin and return to the owner.", 14, {
@@ -914,7 +973,7 @@ _CAPS.extend([
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/tick"),
     }, provenance="existing movement code 14"),
     _movement("move_expanding_wave", "Expand the entity while preserving authored collision/damage.", 15, {
-        "scalePerTick": _p("number", "Scale increase", minimum=0.001, maximum=0.5),
+        "scalePerTick": _p("number", "Additive Projectile.scale delta per movement update, capped by maxScale", minimum=0.001, maximum=0.5),
         "maxScale": _p("number", "Scale cap", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
     _movement("move_flail_tether", "Tether to owner, fly out and return; only movement/owner controller.", 16, {
@@ -1009,7 +1068,7 @@ _CAPS.extend([
             "entity": _p("string", "Referenced entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$"),
             "count": _p("integer", "Spawn count", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
-            "damageMultiplier": _p("number", "Multiplier applied to target entity base damage", minimum=0, maximum=4),
+            "damageMultiplier": _p("number", "Multiplier applied to the referenced child entity's authored base damage", minimum=0, maximum=4),
             "delayTicks": _p("integer", "Delay after event", minimum=0, maximum=600, units="ticks"),
             "periodTicks": _p("integer", "Required for periodic event", required=False, minimum=6, maximum=3600, units="ticks"),
         },
@@ -1048,7 +1107,7 @@ _CAPS.extend([
         {
             "event": _p("string", "Source event", enum=("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill")),
             "radiusPx": _p("integer", "Damage radius", minimum=8, maximum=768, units="pixels"),
-            "damageMultiplier": _p("number", "Source damage multiplier", minimum=0.05, maximum=4),
+            "damageMultiplier": _p("number", "Multiplier applied to this call target entity's authored projectile damage", minimum=0.05, maximum=4),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1067,7 +1126,7 @@ _CAPS.extend([
             "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
             "count": _p("integer", "Maximum chained targets", minimum=1, maximum=12),
             "rangeTiles": _p("number", "Search radius", minimum=1, maximum=60, units="tiles"),
-            "damageMultiplier": _p("number", "Source damage multiplier", minimum=0.05, maximum=2),
+            "damageMultiplier": _p("number", "Multiplier applied to this call target entity's authored projectile damage", minimum=0.05, maximum=2),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1162,7 +1221,7 @@ ENTITY_KIND_REGISTRY: Final[Mapping[str, EntityKindSpec]] = MappingProxyType({
         False,
         "not_applicable",
         ("configure_item_stats",),
-        ("on_use", "periodic"),
+        ("periodic",),
     ),
     "owner_attached_projectile": EntityKindSpec(
         "owner_attached_projectile",
@@ -1263,17 +1322,126 @@ INPUT_KIND_REGISTRY: Final[Mapping[str, InputKindSpec]] = MappingProxyType({
 })
 
 EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
-    "on_use": EventKindSpec("on_use", ("item_body",), (), False, "Emitted when an active item-body use binding succeeds."),
-    "on_spawn": EventKindSpec("on_spawn", PROJECTILE_ENTITY_KIND_ORDER, (), True, "Emitted once when a runtime projectile entity activates."),
-    "on_hit": EventKindSpec("on_hit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), ("enable_item_contact_damage", "set_projectile_damage"), False, "Emitted after explicit contact/projectile damage hits an NPC."),
-    "on_crit": EventKindSpec("on_crit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), ("enable_item_contact_damage", "set_projectile_damage"), False, "Emitted after an explicitly damaging hit is critical."),
-    "on_tile_collision": EventKindSpec("on_tile_collision", PROJECTILE_ENTITY_KIND_ORDER, ("set_projectile_collision",), False, "Emitted when explicit tile collision occurs."),
-    "on_expire": EventKindSpec("on_expire", PROJECTILE_ENTITY_KIND_ORDER, ("set_projectile_lifetime",), True, "Emitted immediately before normal lifetime expiration."),
-    "on_kill": EventKindSpec("on_kill", PROJECTILE_ENTITY_KIND_ORDER, (), True, "Emitted when the projectile entity is killed."),
-    "periodic": EventKindSpec("periodic", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), (), False, "Bounded periodic event; each action must declare periodTicks >= 6."),
-    "on_release": EventKindSpec("on_release", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",), False, "Emitted by charge_then_release when the held charge is released."),
-    "channel_complete": EventKindSpec("channel_complete", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",), False, "Emitted by charge_then_release after a full authored charge."),
+    "on_use": EventKindSpec(
+        "on_use",
+        ("item_body",),
+        (),
+        "Emitted when an active item-body use binding succeeds.",
+        producer_binding_inputs=("primary_use", "alternate_use"),
+    ),
+    "on_spawn": EventKindSpec(
+        "on_spawn", PROJECTILE_ENTITY_KIND_ORDER, (),
+        "Emitted once when a runtime projectile entity activates.",
+    ),
+    "on_hit": EventKindSpec(
+        "on_hit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        ("enable_item_contact_damage", "set_projectile_damage"),
+        "Emitted after explicit contact/projectile damage hits an NPC.",
+    ),
+    "on_crit": EventKindSpec(
+        "on_crit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        ("enable_item_contact_damage", "set_projectile_damage"),
+        "Emitted after an explicitly damaging hit is critical.",
+    ),
+    "on_tile_collision": EventKindSpec(
+        "on_tile_collision",
+        PROJECTILE_ENTITY_KIND_ORDER,
+        ("set_projectile_collision",),
+        "Emitted when explicit tile collision occurs.",
+        producer_exact_params=MappingProxyType({
+            "set_projectile_collision": MappingProxyType({"tileCollide": True}),
+        }),
+    ),
+    "on_expire": EventKindSpec(
+        "on_expire", PROJECTILE_ENTITY_KIND_ORDER, ("set_projectile_lifetime",),
+        "Emitted immediately before normal lifetime expiration.",
+    ),
+    "on_kill": EventKindSpec(
+        "on_kill", PROJECTILE_ENTITY_KIND_ORDER, (),
+        "Emitted when the projectile entity is killed.",
+    ),
+    "periodic": EventKindSpec(
+        "periodic", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), (),
+        "Bounded periodic event; each action must declare periodTicks >= 6.",
+    ),
+    "on_release": EventKindSpec(
+        "on_release", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",),
+        "Emitted by charge_then_release when the held charge is released.",
+    ),
+    "channel_complete": EventKindSpec(
+        "channel_complete", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",),
+        "Emitted by charge_then_release after a full authored charge.",
+    ),
 })
+
+
+def event_dependency_alternatives(event: str, kind: str) -> tuple[EventDependencyAlternative, ...]:
+    """Project finite producer alternatives from registry data without choosing one."""
+
+    event_spec = EVENT_KIND_REGISTRY.get(event)
+    kind_spec = ENTITY_KIND_REGISTRY.get(kind)
+    if event_spec is None or kind_spec is None or kind not in event_spec.source_kinds:
+        return ()
+    if event_spec.producer_binding_inputs:
+        return (EventDependencyAlternative.any_binding_input(event_spec.producer_binding_inputs),)
+    if event in kind_spec.base_events:
+        return (EventDependencyAlternative(),)
+    alternatives: list[EventDependencyAlternative] = []
+    for capability_name in event_spec.producer_capabilities:
+        capability = CAPABILITY_REGISTRY.get(capability_name)
+        if capability is None or kind not in capability.target_kinds:
+            continue
+        alternatives.append(EventDependencyAlternative.required_call(
+            capability_name,
+            event_spec.producer_exact_params.get(capability_name),
+        ))
+    return tuple(alternatives)
+
+
+def event_alternative_is_present(
+    alternative: EventDependencyAlternative,
+    *,
+    target_calls: Iterable[Mapping[str, Any]],
+    bindings: Iterable[Mapping[str, Any]],
+) -> bool:
+    call_rows = tuple(target_calls)
+    binding_rows = tuple(bindings)
+
+    def call_present(requirement: EventCallRequirement) -> bool:
+        expected = requirement.exact_params_dict()
+        for call in call_rows:
+            if str(call.get("fn") or "") != requirement.capability:
+                continue
+            raw_params = call.get("params")
+            params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
+            if all(params.get(key) == value for key, value in expected.items()):
+                return True
+        return False
+
+    def binding_present(requirement: EventBindingRequirement) -> bool:
+        allowed_inputs = set(requirement.any_of_inputs)
+        return any(str(row.get("input") or "") in allowed_inputs for row in binding_rows)
+
+    return (
+        all(call_present(requirement) for requirement in alternative.required_calls)
+        and all(binding_present(requirement) for requirement in alternative.required_bindings)
+    )
+
+
+def event_dependency_descriptors(
+    alternatives: Iterable[EventDependencyAlternative],
+) -> tuple[str, ...]:
+    allowed: list[str] = []
+    for alternative in alternatives:
+        for requirement in alternative.required_calls:
+            exact = requirement.exact_params_dict()
+            suffix = "" if not exact else "(" + ",".join(
+                f"{key}={value!r}" for key, value in exact.items()
+            ) + ")"
+            allowed.append(requirement.capability + suffix)
+        for requirement in alternative.required_bindings:
+            allowed.append("binding input one of: " + ",".join(requirement.any_of_inputs))
+    return tuple(allowed)
 
 
 if tuple(ENTITY_KIND_REGISTRY) != ENTITY_KINDS:
@@ -1631,6 +1799,69 @@ def compact_capability_catalog() -> list[dict[str, Any]]:
     return [cap.prompt_card() for cap in visible_capabilities()]
 
 
+def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
+    """Project shared low-level field semantics without duplicating capability rules."""
+
+    semantic_types: dict[str, dict[str, set[str]]] = {}
+    for capability in visible_capabilities():
+        for spec in capability.params.values():
+            if not spec.semantic_type:
+                continue
+            row = semantic_types.setdefault(
+                spec.semantic_type,
+                {"valueKinds": set(), "units": set()},
+            )
+            row["valueKinds"].add(spec.kind)
+            if spec.units:
+                row["units"].add(spec.units)
+
+    return {
+        "stableIdPattern": r"^[a-z][a-z0-9_]{0,47}$",
+        "semanticTypeRule": (
+            "semanticType is a low-level quantity/category label, not a gameplay classifier; "
+            "the owning parameter's meaning, type, enum/pattern, min/max and units remain authoritative"
+        ),
+        "semanticTypes": {
+            name: {
+                "valueKinds": sorted(values["valueKinds"]),
+                "units": sorted(values["units"]),
+            }
+            for name, values in sorted(semantic_types.items())
+        },
+        "exclusiveGroup": {
+            "scope": "per exact target entity",
+            "rule": "At most one call in the same non-empty exclusiveGroup may target one entity.",
+            "groups": sorted({
+                capability.exclusive_group
+                for capability in visible_capabilities()
+                if capability.exclusive_group
+            }),
+        },
+        "bindingTarget": (
+            "bindings[].target is the exact entity acted on. The selected action's targets list "
+            "is the entity-kind allowlist; spawn_entity targets the entity created, while "
+            "use_item_body targets the item body being used."
+        ),
+        "positionOwnership": {
+            "none": "Does not author movement or position ownership.",
+            "velocity_or_position_controller": "Owns velocity or position updates while active.",
+            "owns_position_until_release": "Owns position until the authored release transition.",
+            "owns_position_while_active": "Owns position for the capability's active lifetime.",
+            "owns_stationary_position": "Keeps an explicitly stationary entity positioned.",
+        },
+        "authority": {
+            "client_visual_only": "Client-only presentation; no authoritative gameplay mutation.",
+            "owner_execute_sync": "Owning client executes and synchronizes bounded state.",
+            "owner_request_server_execute": "Owner requests; server validates and executes.",
+            "server_execute": "Server executes authoritative gameplay.",
+        },
+        "meaningfulForStationary": (
+            "Machine readability hint only. targets is the validity allowlist; true says the "
+            "capability still has an effect when the target is stationary."
+        ),
+    }
+
+
 def capability_provider_union() -> list[dict[str, Any]]:
     return [cap.provider_variant_schema() for cap in visible_capabilities()]
 
@@ -1695,9 +1926,16 @@ def runtime_authoring_registry_manifest() -> dict[str, Any]:
 
 __all__ = [
     "runtime_authoring_registry_manifest",
+    "runtime_authoring_prompt_field_guide",
+    "event_alternative_is_present",
+    "event_dependency_alternatives",
+    "event_dependency_descriptors",
     "RequirementSpec",
     "ReferenceSpec",
     "InputKindSpec",
+    "EventBindingRequirement",
+    "EventCallRequirement",
+    "EventDependencyAlternative",
     "EventKindSpec",
     "EntityKindSpec",
     "BindingActionSpec",

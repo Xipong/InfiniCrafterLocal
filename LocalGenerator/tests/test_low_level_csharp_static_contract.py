@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CS = ROOT / "ModSources" / "InfiniCrafterLocal"
@@ -44,3 +46,13 @@ def test_unknown_opcodes_fail_closed_in_csharp() -> None:
     executor = _read("Content/Projectiles/GeneratedProjectile.Executors.cs") + _read("Common/Runtime/RuntimeProgramExecutor.cs")
     assert "default:" in executor
     assert "Kill" in executor or "return false" in executor or "InvalidOperationException" in executor
+
+
+def test_release_timing_prompt_tokens_match_held_sprite_projection() -> None:
+    release = CAPABILITY_REGISTRY["configure_item_use"].params["releaseTiming"]
+    assert release.enum == ("", "immediate", "on_release", "after_charge")
+    assert "presentation" in release.description
+    draw = _read("Common/Players/GeneratedHeldItemDrawLayer.cs")
+    assert 'releaseTiming != "immediate"' in draw
+    assert 'releaseTiming == "instant"' not in draw
+    assert 'releaseTiming == "early"' not in draw

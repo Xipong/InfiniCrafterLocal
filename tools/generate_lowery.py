@@ -12,9 +12,22 @@ sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
     CONTROLLER_OPCODE,
+    ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
     EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
+    RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
+)
+from infini_local.core.runtime_authoring.program_schema import (  # noqa: E402
+    PRIMARY_ENTITY_AUTHOR_PATH,
+    PRIMARY_ENTITY_SELECTION_FIELD,
+)
+from infini_local.core.runtime_authoring.technical_lowering import (  # noqa: E402
+    EXACT_REPETITION_COMPRESSION_POLICY,
+    GLOBAL_TECHNICAL_LOWERINGS,
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E402
     AMMO_CATEGORY_TMODLOADER_NAMES,
@@ -33,9 +46,88 @@ def table(headers: tuple[str, ...], rows: list[tuple[object, ...]]) -> list[str]
 
 def render() -> str:
     lines: list[str] = [
-        "# lowery.md — canonical lowering и aliases",
+        "# Low-level authoring и Lowery — канонический контракт",
         "",
-        "Версия проекта: **0.4.241**.",
+        "> Этот файл генерируется `python tools/generate_lowery.py`. Не редактировать вручную. "
+        "Source of truth — перечисленные ниже Python owners; inventory/audit docs являются projections.",
+        "",
+        f"Schemas: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
+        "",
+        "## READ THIS FIRST — замороженная граница",
+        "",
+        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и claims. "
+        "Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.",
+        "2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.",
+        "3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology или fallback mechanic.",
+        "4. Authoring compression допустима только для буквально одинакового low-level значения, повторённого минимум "
+        f"**{EXACT_REPETITION_COMPRESSION_POLICY['minimumRepeatedPlacements']}** раз. Она обязана сохранять literal equality и не может добавлять design choice.",
+        "5. Обязательная wire projection из уже authored identity (например, exact entity kind → renderer role или exact primary id/target equality → binding role) не считается authoring compression: она сериализует одно решение, а не заменяет несколько решений модели.",
+        "6. Repair получает конечные registry-derived alternatives и exact permissions. Модель выбирает и явно пишет полный вариант; код ничего не вставляет и после merge повторно запускает canonical validator.",
+        "",
+        "## Единственные owners",
+        "",
+    ]
+    lines += table(("что меняется", "единственный owner", "derived consumers"), [
+        ("Author JSON shape, primaryEntity fields, repair patch shape", "runtime_authoring/program_schema.py", "prompt schema, validator, Repair filter"),
+        ("capabilities, entity/input/action/event facts and event producers", "runtime_authoring/capability_registry.py", "Author catalog, validator, Repair alternatives, docs"),
+        ("lossless projections, exact outputs, receipts, repetition policy", "runtime_authoring/technical_lowering.py", "compiler, audits, this document"),
+        ("Author/Repair model-facing prose", "pipelines/author_item_contract.py", "Author and Repair system prompts"),
+        ("validation truth", "runtime_authoring/validator.py", "Repair requirements and final acceptance"),
+        ("Repair permissions/filter", "runtime_authoring/repair_scope.py", "conditional Repair dossier and merge report"),
+        ("wire materialization", "runtime_authoring/compiler.py", "RuntimeProgram wire + finalWireReceipts"),
+        ("runtime execution", "ModSources/.../RuntimeProgramSpec.cs + executors", "tModLoader behavior"),
+    ])
+    lines += [
+        "",
+        "Правило меняется у owner-а. Нельзя создавать facade, shadow constant, prose-router или второй event/primary contract рядом. "
+        "Generated projections обновляются командами в разделе «Проверка».",
+        "",
+        "## Authoring → wire boundary",
+        "",
+        f"- `{PRIMARY_ENTITY_AUTHOR_PATH}` — ровно один model-authored существующий entity id.",
+        "- Author bindings/calls не содержат `role`. Compiler сравнивает exact `binding.target` с exact `primaryEntityId`: equality → wire `primary`, иначе wire `secondary`.",
+        "- `primaryOwner` выводится только из exact kind выбранной entity через `ENTITY_KIND_REGISTRY.projectile`; неизвестный kind fail-closed валидатором, а не становится projectile default.",
+        "- Каждая такая projection имеет manifest row и compiler receipt с authored paths, exact final path и value.",
+        f"- Repair может менять primary identity только через `{PRIMARY_ENTITY_SELECTION_FIELD}` и только выбирая один id из transaction candidates.",
+        "",
+        "### Event producer contract",
+        "",
+        "`EventKindSpec` владеет producer calls, producer binding inputs и exact producer params; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. "
+        "Validator и Repair вызывают одну generic registry projection. Event-name `if/elif` вне registry запрещён.",
+        "",
+    ]
+    event_rows: list[tuple[object, ...]] = []
+    for event in EVENT_KIND_REGISTRY.values():
+        base_kinds = [kind.name for kind in ENTITY_KIND_REGISTRY.values() if event.name in kind.base_events]
+        exact = "; ".join(
+            f"{capability}({','.join(f'{name}={value!r}' for name, value in params.items())})"
+            for capability, params in event.producer_exact_params.items()
+        ) or "—"
+        event_rows.append((
+            event.name,
+            ", ".join(event.producer_capabilities) or "—",
+            ", ".join(event.producer_binding_inputs) or "—",
+            ", ".join(base_kinds) or "—",
+            exact,
+        ))
+    lines += table(("event", "producer calls", "producer binding inputs", "producer-free kinds", "exact params"), event_rows)
+    lines += [
+        "",
+        "## Lossless lowering manifest",
+        "",
+        f"Exact-repetition policy: `{EXACT_REPETITION_COMPRESSION_POLICY}`.",
+        "",
+    ]
+    lines += table(("lowerer", "authored inputs", "wire outputs", "adds design"), [
+        (
+            row["id"],
+            ", ".join(row["inputs"]),
+            ", ".join(row["outputs"]),
+            str(row["addsDesignChoice"]).lower(),
+        )
+        for row in GLOBAL_TECHNICAL_LOWERINGS
+    ])
+    lines += [
         "",
         "## Неподвижное правило",
         "",
@@ -153,9 +245,20 @@ def render() -> str:
         "6. **Custom hydration/network identity.** `entityId` и generated item ID синхронизируют параметры proxy projectile. `Projectile.identity/whoAmI` остаются Terraria-идентификаторами конкретного экземпляра, но не заменяют authored subtype ID.",
         "7. **Сложные held/beam/field controllers.** Используются обычные ModProjectile hooks и Terraria collision/network fields, но orchestration остаётся bounded custom runtime, потому что она составляется LLM после загрузки контента.",
         "",
+        "## Проверка",
+        "",
+        "```bash",
+        "python tools/generate_lowery.py --check",
+        "python tools/generate_low_level_runtime_docs.py --check",
+        "python tools/run_pyright.py --pythonpath /path/to/venv/bin/python",
+        "python -m pytest -q LocalGenerator/tests/test_runtime_authoring_change_locality.py LocalGenerator/tests/test_low_level_runtime_contract_v5.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py",
+        "```",
+        "",
+        "Change-locality acceptance: изменить один canonical owner, обновить generated projections, пройти affected replay; не редактировать параллельные prose contracts и не запускать Live как замену локальному доказательству.",
+        "",
         "## Запрет на добавление alias",
         "",
-        "Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует обновить этот файл и пройти `tools/audit_terraria_standardization.py`.",
+        "Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует изменить canonical vocabulary owner, перегенерировать этот файл и пройти `tools/audit_terraria_standardization.py`.",
         "",
     ]
     return "\n".join(lines)

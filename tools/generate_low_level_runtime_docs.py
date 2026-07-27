@@ -82,6 +82,7 @@ def inventory_markdown() -> str:
         "# Низкоуровневый capability inventory InfiniCrafterLocal",
         "",
         "> Этот файл генерируется `python tools/generate_low_level_runtime_docs.py`. Не редактировать таблицы вручную.",
+        "> Каноническая граница Author/Repair/Lowery и edit-routing: `lowery.md`. Этот файл — registry projection.",
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -120,11 +121,34 @@ def inventory_markdown() -> str:
     lines += ["", "| action | target kinds | inputs | requires item capability any of | смысл |", "|---|---|---|---|---|"]
     for row in BINDING_ACTION_REGISTRY.values():
         lines.append(f"| `{row.name}` | {esc(', '.join(row.target_kinds))} | {esc(', '.join(row.allowed_inputs))} | {esc(', '.join(row.required_item_capabilities_any_of) or '—')} | {esc(row.summary)} |")
-    lines += ["", "## Events", "", "| event | source kinds | producer capabilities | base projectile event | смысл |", "|---|---|---|---:|---|"]
+    lines += [
+        "",
+        "## Events",
+        "",
+        "| event | source kinds | producer calls | producer binding inputs | producer-free base kinds | exact producer params | смысл |",
+        "|---|---|---|---|---|---|---|",
+    ]
     for row in EVENT_KIND_REGISTRY.values():
+        base_kinds = [
+            kind.name
+            for kind in ENTITY_KIND_REGISTRY.values()
+            if row.name in kind.base_events
+        ]
+        exact_params = json.dumps(
+            {
+                capability: dict(params)
+                for capability, params in row.producer_exact_params.items()
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         lines.append(
-            f"| `{row.name}` | {esc(', '.join(row.source_kinds))} | {esc(', '.join(row.producer_capabilities) or '—')} | "
-            f"{'да' if row.always_available_on_projectile else 'нет'} | {esc(row.summary)} |"
+            f"| `{row.name}` | {esc(', '.join(row.source_kinds))} | "
+            f"{esc(', '.join(row.producer_capabilities) or '—')} | "
+            f"{esc(', '.join(row.producer_binding_inputs) or '—')} | "
+            f"{esc(', '.join(base_kinds) or '—')} | {esc(exact_params if exact_params != '{}' else '—')} | "
+            f"{esc(row.summary)} |"
         )
     lines += [
         "",
@@ -178,6 +202,7 @@ def audit_markdown() -> str:
         "# Аудит машиночитаемости библиотеки компонентов",
         "",
         "> Генерируется `python tools/generate_low_level_runtime_docs.py` из live registry и audit-кода.",
+        "> Каноническая архитектурная граница и owner routing: `lowery.md`; этот файл только измеряет projection.",
         "",
         f"## Вердикт: {audit['score']}/{audit['scoreMax']}",
         "",
@@ -237,12 +262,17 @@ def audit_markdown() -> str:
 
 def lowering_markdown() -> str:
     manifest = technical_lowering_manifest()
+    compression = manifest["exactRepetitionCompressionPolicy"]
     lines = [
         "# TECHNICAL LOWERING AUDIT",
+        "",
+        "> Generated projection. Каноническая политика и owner routing находятся в `lowery.md`.",
         "",
         f"Schema: `{manifest['schema']}`.",
         "",
         "Lowering разрешён только как семантически без потерь технический перевод. Ни один lowerer не выбирает entity kind, movement, attachment, delivery, input, lifecycle, targeting или visual topology.",
+        "",
+        f"Authoring compression: только `{compression['kind']}`, минимум `{compression['minimumRepeatedPlacements']}` literally equal placements, requiresLiteralEquality=`{str(compression['requiresLiteralEquality']).lower()}`, mayAddDesignChoice=`{str(compression['mayAddDesignChoice']).lower()}`. Mandatory wire projection уже authored identity не является compression.",
         "",
         "## Global lowerers",
         "",
@@ -259,8 +289,8 @@ def lowering_markdown() -> str:
         "",
         "## Capability-level proof",
         "",
-        "Каждая compiler receipt содержит `callId`, `fn`, `finalPath`. `audit_compiler_receipts` принимает запись только когда `finalPath` объявлен в exact outputs соответствующей capability. "
-        "Mutation test добавляет недекларированный output и обязан получить отказ.",
+        "Capability receipts содержат `callId`, `fn`, `finalPath`; global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`. "
+        "`audit_compiler_receipts` принимает запись только когда authored inputs и final output объявлены соответствующим owner manifest. Mutation test добавляет недекларированный input/output и обязан получить отказ.",
         "",
         "## Решение по старому lowering",
         "",

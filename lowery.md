@@ -1,6 +1,69 @@
-# lowery.md — canonical lowering и aliases
+# Low-level authoring и Lowery — канонический контракт
 
-Версия проекта: **0.4.241**.
+> Этот файл генерируется `python tools/generate_lowery.py`. Не редактировать вручную. Source of truth — перечисленные ниже Python owners; inventory/audit docs являются projections.
+
+Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v2` / `infini.runtime-program.wire.v1`.
+
+## READ THIS FIRST — замороженная граница
+
+1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и claims. Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.
+2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.
+3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology или fallback mechanic.
+4. Authoring compression допустима только для буквально одинакового low-level значения, повторённого минимум **5** раз. Она обязана сохранять literal equality и не может добавлять design choice.
+5. Обязательная wire projection из уже authored identity (например, exact entity kind → renderer role или exact primary id/target equality → binding role) не считается authoring compression: она сериализует одно решение, а не заменяет несколько решений модели.
+6. Repair получает конечные registry-derived alternatives и exact permissions. Модель выбирает и явно пишет полный вариант; код ничего не вставляет и после merge повторно запускает canonical validator.
+
+## Единственные owners
+
+| что меняется | единственный owner | derived consumers |
+|---|---|---|
+| Author JSON shape, primaryEntity fields, repair patch shape | runtime_authoring/program_schema.py | prompt schema, validator, Repair filter |
+| capabilities, entity/input/action/event facts and event producers | runtime_authoring/capability_registry.py | Author catalog, validator, Repair alternatives, docs |
+| lossless projections, exact outputs, receipts, repetition policy | runtime_authoring/technical_lowering.py | compiler, audits, this document |
+| Author/Repair model-facing prose | pipelines/author_item_contract.py | Author and Repair system prompts |
+| validation truth | runtime_authoring/validator.py | Repair requirements and final acceptance |
+| Repair permissions/filter | runtime_authoring/repair_scope.py | conditional Repair dossier and merge report |
+| wire materialization | runtime_authoring/compiler.py | RuntimeProgram wire + finalWireReceipts |
+| runtime execution | ModSources/.../RuntimeProgramSpec.cs + executors | tModLoader behavior |
+
+Правило меняется у owner-а. Нельзя создавать facade, shadow constant, prose-router или второй event/primary contract рядом. Generated projections обновляются командами в разделе «Проверка».
+
+## Authoring → wire boundary
+
+- `runtimeProgram.primaryEntityId` — ровно один model-authored существующий entity id.
+- Author bindings/calls не содержат `role`. Compiler сравнивает exact `binding.target` с exact `primaryEntityId`: equality → wire `primary`, иначе wire `secondary`.
+- `primaryOwner` выводится только из exact kind выбранной entity через `ENTITY_KIND_REGISTRY.projectile`; неизвестный kind fail-closed валидатором, а не становится projectile default.
+- Каждая такая projection имеет manifest row и compiler receipt с authored paths, exact final path и value.
+- Repair может менять primary identity только через `primaryEntitySelection` и только выбирая один id из transaction candidates.
+
+### Event producer contract
+
+`EventKindSpec` владеет producer calls, producer binding inputs и exact producer params; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. Validator и Repair вызывают одну generic registry projection. Event-name `if/elif` вне registry запрещён.
+
+| event | producer calls | producer binding inputs | producer-free kinds | exact params |
+|---|---|---|---|---|
+| on_use | — | primary_use, alternate_use | — | — |
+| on_spawn | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
+| on_hit | enable_item_contact_damage, set_projectile_damage | — | — | — |
+| on_crit | enable_item_contact_damage, set_projectile_damage | — | — | — |
+| on_tile_collision | set_projectile_collision | — | — | set_projectile_collision(tileCollide=True) |
+| on_expire | set_projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
+| on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
+| periodic | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
+| on_release | charge_then_release | — | — | — |
+| channel_complete | charge_then_release | — | — | — |
+
+## Lossless lowering manifest
+
+Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacements': 5, 'requiresLiteralEquality': True, 'mayAddDesignChoice': False}`.
+
+| lowerer | authored inputs | wire outputs | adds design |
+|---|---|---|---|
+| entity_kind_to_visual_role | runtimeProgram.entities[].kind | runtimeProgram.entities[].visualRole | false |
+| primary_entity_to_binding_role | runtimeProgram.primaryEntityId, runtimeProgram.bindings[].target | runtimeProgram.bindings[].role | false |
+| primary_entity_kind_to_owner | runtimeProgram.primaryEntityId, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.primaryOwner | false |
+| capability_name_to_opcode | runtimeProgram.calls[].fn | runtimeProgram.entities[].movement.code, runtimeProgram.entities[].controller.code, runtimeProgram.entities[].events[].actionCode | false |
+| item_fields_to_tml_projection | item_body capability params | gameplay.damageClass, gameplay.damage, gameplay.knockback, gameplay.useTime, gameplay.useAnimation, gameplay.manaCost, gameplay.rarity, gameplay.value, gameplay.maxStack, gameplay.craftYield, gameplay.width, gameplay.height, gameplay.itemScale, gameplay.useStyleName, gameplay.autoReuse, gameplay.useTurn, gameplay.channelUse, gameplay.holdoutOffsetX, gameplay.holdoutOffsetY, gameplay.handPose, gameplay.releaseTiming, runtimeProgram.itemUse.configured, runtimeProgram.itemUse.useStyle, runtimeProgram.itemUse.hideUseGraphic, runtimeProgram.itemUse.disableMeleeHitbox, runtimeProgram.itemUse.channel, runtimeProgram.itemUse.handPose, runtimeProgram.itemUse.releaseTiming, runtimeProgram.itemUse.holdoutOffsetX, runtimeProgram.itemUse.holdoutOffsetY, runtimeProgram.itemContact.enabled, runtimeProgram.itemContact.hitboxScale, runtimeProgram.itemContact.contactForgivenessPx, gameplay.consumable, gameplay.consumeChancePercent, gameplay.ammoCategory, gameplay.ammoProjectileId, gameplay.ammoShootSpeedPxPerTick, gameplay.notAmmo, gameplay.healLife, gameplay.healMana, gameplay.potion, gameplay.extraBuffs[].buffCode, gameplay.extraBuffs[].buffTime, gameplay.generatedBuff.durationTicks, gameplay.generatedBuff.miningSpeedMultiplier, gameplay.generatedBuff.emitLightStrength, gameplay.generatedBuff.lightColorName, gameplay.generatedBuff.oreSenseRadiusTiles, gameplay.generatedBuff.movementSpeed, gameplay.generatedBuff.jumpBoost, gameplay.generatedBuff.manaRegen, gameplay.generatedBuff.lifeRegen, gameplay.pickPower, gameplay.axePower, gameplay.hammerPower, gameplay.miningSpeedScale, gameplay.createTile, gameplay.createWall, gameplay.placeStyle, gameplay.useConditionMode, gameplay.useConditionMinLife, gameplay.useConditionMinMana, gameplay.holdLightStrength, gameplay.holdLightColorName, gameplay.mobilityMode, gameplay.mobilityRangeTiles, gameplay.mobilityCooldownTicks, gameplay.mobilitySafeTileOnly, accessory.enabled, accessory.defense, accessory.maxLife, accessory.maxMana, accessory.lifeRegen, accessory.manaRegen, accessory.movementSpeed, accessory.genericDamage, accessory.genericCrit, accessory.endurance, accessory.minionSlots, accessory.sentrySlots, accessory.lightStrength, accessory.lightColorName, armor.enabled, armor.slot, armor.setKey, armor.defense, armor.maxLife, armor.maxMana, armor.movementSpeed, armor.genericDamage, armor.genericCrit, armor.setBonusText, armor.setBonusGenericDamage, armor.setBonusMovementSpeed, armor.setBonusLifeRegen | false |
 
 ## Неподвижное правило
 
@@ -203,6 +266,17 @@ Visual role — renderer handoff, а не gameplay-классификатор.
 6. **Custom hydration/network identity.** `entityId` и generated item ID синхронизируют параметры proxy projectile. `Projectile.identity/whoAmI` остаются Terraria-идентификаторами конкретного экземпляра, но не заменяют authored subtype ID.
 7. **Сложные held/beam/field controllers.** Используются обычные ModProjectile hooks и Terraria collision/network fields, но orchestration остаётся bounded custom runtime, потому что она составляется LLM после загрузки контента.
 
+## Проверка
+
+```bash
+python tools/generate_lowery.py --check
+python tools/generate_low_level_runtime_docs.py --check
+python tools/run_pyright.py --pythonpath /path/to/venv/bin/python
+python -m pytest -q LocalGenerator/tests/test_runtime_authoring_change_locality.py LocalGenerator/tests/test_low_level_runtime_contract_v5.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py
+```
+
+Change-locality acceptance: изменить один canonical owner, обновить generated projections, пройти affected replay; не редактировать параллельные prose contracts и не запускать Live как замену локальному доказательству.
+
 ## Запрет на добавление alias
 
-Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует обновить этот файл и пройти `tools/audit_terraria_standardization.py`.
+Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует изменить canonical vocabulary owner, перегенерировать этот файл и пройти `tools/audit_terraria_standardization.py`.

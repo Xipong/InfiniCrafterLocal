@@ -15,12 +15,15 @@ from infini_local.core.runtime_authoring import (
     RUNTIME_PROGRAM_SCHEMA,
     compact_capability_catalog,
 )
-from infini_local.core.runtime_authoring.primary_entity_contract import (
+from infini_local.core.runtime_authoring.capability_registry import (
+    runtime_authoring_prompt_field_guide,
+)
+from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
+from infini_local.pipelines.author_item_contract import (
+    author_item_prompt_shape_card,
     primary_entity_llm_invariant,
     primary_entity_self_check,
 )
-from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
-from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
 from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.item_power_knowledge import tags_of
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
@@ -103,6 +106,7 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
         "inputs": [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()],
         "bindingActions": [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()],
         "events": [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()],
+        "fieldGuide": runtime_authoring_prompt_field_guide(),
         "limits": {"entities": 12, "bindings": 8, "calls": 48, "childDepth": 3, "eventSpawnsPerActivation": 32},
         "capabilities": compact_capability_catalog(),
     }
@@ -218,6 +222,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "one item_body and exactly one binding row at most owns each runtimeProgramInvariants.exclusiveInputs input; never pair use_item_body plus spawn_entity on one input",
             "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName; parent sentinel none is forbidden and the Author must choose the exact canonical token",
             "every call params object exactly matches its capability card; no below-minimum source sentinel such as -1 is copied",
+            "for every selected call, every required param and every exact requires row is satisfied on the required target",
             "every spawned entity has explicit spawn/lifetime/hitbox/collision",
             "moving entities have exactly one movement/controller",
             "event graph is acyclic and within depth/count limits",

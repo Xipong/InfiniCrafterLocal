@@ -2,6 +2,8 @@
 
 Current source-facing documents:
 
+Canonical boundary и owner routing находятся только в корневом `lowery.md`; перечисленные ниже документы — generated либо hand-written projections без отдельного contract ownership.
+
 - `LOW_LEVEL_CAPABILITY_INVENTORY_RU.md` — generated complete registry table;
 - `CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md` — generated structural/expressiveness audit;
 - `LOW_LEVEL_RUNTIME_AUTHORING_RU.md` — Author contract;

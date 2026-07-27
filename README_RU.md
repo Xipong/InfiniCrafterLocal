@@ -21,10 +21,10 @@ parents
 - `AGENTS.md` — hard rules;
 - `PROJECT_ARCHITECTURE_RU.md` / `PROJECT_MAP_RU.md` — архитектура и карта;
 - `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md` — generated inventory 52 capabilities;
-- `lowery.md` — полный finite alias/lowering inventory;
+- `lowery.md` — generated canonical Author/Repair/Lowery boundary, owner routing и finite mappings;
 - `docs/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md` — граница official tModLoader mappings и custom runtime;
 - `docs/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md` — machine-readable quality audit;
-- `docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` — Author contract;
+- `docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` — короткая projection канонического Author contract;
 - `docs/THREE_STAGE_LLM_PIPELINE_RU.md` — baseline 3 calls;
 - `TECHNICAL_LOWERING_AUDIT_RU.md` — lossless lowering proof.
 

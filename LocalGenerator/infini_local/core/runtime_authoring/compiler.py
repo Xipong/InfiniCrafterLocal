@@ -12,12 +12,13 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring.primary_entity_contract import (
-    authored_primary_entity_id,
+from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
+from infini_local.core.runtime_authoring.technical_lowering import (
+    audit_compiler_receipts,
     primary_binding_role,
     primary_binding_role_receipt,
     primary_owner_for_kind,
+    primary_owner_receipt,
 )
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH,
@@ -363,9 +364,17 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")
     item_entity_id = str(item_entity["id"])
     primary_entity_id = authored_primary_entity_id(authored_program)
-    primary_entity = next(row for row in authored_entities if str(row.get("id") or "") == primary_entity_id)
+    primary_entity_source_index, primary_entity = next(
+        (index, row)
+        for index, row in enumerate(authored_entities)
+        if str(row.get("id") or "") == primary_entity_id
+    )
     primary_owner = primary_owner_for_kind(str(primary_entity.get("kind") or ""))
     ctx = _CompileContext(receipts=[])
+    ctx.receipts.append(primary_owner_receipt(
+        source_index=primary_entity_source_index,
+        owner=primary_owner,
+    ))
     binding_sources = [
         (index, copy.deepcopy(dict(source)))
         for index, source in enumerate(authored_program.get("bindings") or [])

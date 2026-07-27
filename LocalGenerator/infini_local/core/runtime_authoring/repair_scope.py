@@ -18,14 +18,15 @@ from infini_local.core.runtime_authoring.capability_registry import (
     ENTITY_KIND_REGISTRY,
     EVENT_CAPABILITIES,
     INPUT_KIND_REGISTRY,
+    event_dependency_alternatives,
 )
 from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_shape_report
-from infini_local.core.runtime_authoring.event_dependency_contract import event_dependency_alternatives
-from infini_local.core.runtime_authoring.primary_entity_contract import (
+from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     PRIMARY_ENTITY_SELECTION_FIELD,
+    apply_repair_patch,
     primary_entity_repair_transaction,
+    strict_repair_shape_report,
 )
 from infini_local.core.runtime_authoring.validator import (
     VALIDATION_ERROR_CODES,
@@ -1059,7 +1060,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             required_calls: list[dict[str, Any]] = []
                             viable = True
                             for raw_requirement in dependency.required_calls:
-                                required_fn = raw_requirement.fn
+                                required_fn = raw_requirement.capability
                                 if not _candidate_capability_viable(required_fn, [target_id], rows):
                                     viable = False
                                     break
@@ -2160,8 +2161,6 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
             str(value) for value in requirement.get("requiredOneOfCapabilities") or []
             if str(value)
         }
-        if not required_capabilities:
-            continue
         requirement_code = str(requirement.get("code") or "")
         requirement_path = str(requirement.get("errorPath") or "")
         affected_ids = {
@@ -2184,8 +2183,8 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
 
         if any(is_same_open_requirement(error) for error in preview_errors):
             errors.append(_scope_error(
-                "$.callsUpsert",
-                "patch leaves a mandatory repair requirement open after all authorized structural changes",
+                f"$.repairRequirements[{requirement_index}]",
+                "patch leaves a reported repair error open after all authorized structural changes",
                 actual={
                     "requirementIndex": requirement_index,
                     "code": requirement_code,

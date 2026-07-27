@@ -28,12 +28,12 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
     validate_runtime_wire,
 )
-from infini_local.core.runtime_authoring.primary_entity_contract import (
-    PRIMARY_AUTHOR_SYSTEM_RULE,
+from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
-    PRIMARY_REPAIR_SYSTEM_RULE,
 )
 from infini_local.pipelines.author_item_contract import (
+    PRIMARY_AUTHOR_SYSTEM_RULE,
+    PRIMARY_REPAIR_SYSTEM_RULE,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
     author_item_repair_prompt_shape_card,
@@ -273,6 +273,7 @@ def build_gameplay_repair_dossier(
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
             "Use create permissions only for the exact blocker or its declared support dependency.",
             "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
+            "immutableProgramIndex.entities[*].id is the exact entity-id allowlist for every target and entity-reference value in this patch; copy ids from it and never invent or carry an id from another item.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
             f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
@@ -341,8 +342,9 @@ def repair_author_item_after_failure(
         )
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
-        "You are the conditional Gameplay Repair for InfiniCrafterLocal. Repair the explicit blocker plan, not the whole item. "
+        "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and blockerPlan; never repair the whole item. "
         f"{PRIMARY_REPAIR_SYSTEM_RULE} For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
+        "Every target or entity-reference id in the patch must be copied from immutableProgramIndex.entities[*].id; never invent or carry an id from another item. "
         "For every bindingId in repairScope.bindingAlternatives, copy one complete input/action/target tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. "
         "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "

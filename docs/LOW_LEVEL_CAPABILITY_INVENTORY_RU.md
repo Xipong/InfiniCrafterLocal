@@ -1,8 +1,9 @@
 # Низкоуровневый capability inventory InfiniCrafterLocal
 
 > Этот файл генерируется `python tools/generate_low_level_runtime_docs.py`. Не редактировать таблицы вручную.
+> Каноническая граница Author/Repair/Lowery и edit-routing: `lowery.md`. Этот файл — registry projection.
 
-Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v1` / `infini.runtime-program.wire.v1`.
+Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v2` / `infini.runtime-program.wire.v1`.
 
 Inventory: **52 capabilities**, **7 entity kinds**, **4 inputs**, **5 binding actions**, **10 events**. Machine audit: **100/100**, errors=0, warnings=0.
 
@@ -17,7 +18,7 @@ Inventory: **52 capabilities**, **7 entity kinds**, **4 inputs**, **5 binding ac
 
 | kind | назначение | spawn binding | позиция | обязательные компоненты | базовые события | visual role |
 |---|---|---:|---|---|---|---|
-| `item_body` | The inventory/equipment/tool/placeable body. It is never spawned as a projectile. | нет | not_applicable | configure_item_stats | on_use, periodic | `inventory_item` |
+| `item_body` | The inventory/equipment/tool/placeable body. It is never spawned as a projectile. | нет | not_applicable | configure_item_stats | periodic | `inventory_item` |
 | `owner_attached_projectile` | Projectile entity whose controller/movement may keep it attached to the owning player. | да | explicit movement or a position-owning controller | configure_spawn, set_projectile_lifetime, set_projectile_hitbox, set_projectile_collision | on_spawn, on_expire, on_kill, periodic | `held_body` |
 | `free_projectile` | Independent projectile spawned from an input or another entity. | да | one explicit movement or a position-owning controller | configure_spawn, set_projectile_lifetime, set_projectile_hitbox, set_projectile_collision | on_spawn, on_expire, on_kill, periodic | `projectile` |
 | `stationary_projectile` | Deployed stationary runtime projectile such as a trap or targeting platform. | да | stationary by kind; movement is optional | configure_spawn, set_projectile_lifetime, set_projectile_hitbox, set_projectile_collision | on_spawn, on_expire, on_kill, periodic | `deployed_entity` |
@@ -29,33 +30,33 @@ Inventory: **52 capabilities**, **7 entity kinds**, **4 inputs**, **5 binding ac
 
 | input | exclusive | actions | requires item capability any of | смысл |
 |---|---:|---|---|---|
-| `primary_use` | да | spawn_entity, use_item_body, apply_item_effects, place_item | configure_item_use | Primary item-use input. |
-| `alternate_use` | да | spawn_entity, use_item_body, apply_item_effects, place_item | configure_item_use | Alternate item-use input. |
+| `primary_use` | да | spawn_entity, use_item_body, apply_item_effects, place_item | configure_item_use | Primary item-use input: choose exactly one action root; configure_item_use configures the input but is not another binding. |
+| `alternate_use` | да | spawn_entity, use_item_body, apply_item_effects, place_item | configure_item_use | Alternate item-use input: choose exactly one action root; configure_item_use configures the input but is not another binding. |
 | `hold` | да | spawn_entity | — | While-held binding; currently supports maintaining one spawned runtime entity. |
 | `equipped` | нет | equip_passive | — | Accessory/armor equipped state. |
 
 | action | target kinds | inputs | requires item capability any of | смысл |
 |---|---|---|---|---|
 | `spawn_entity` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field | primary_use, alternate_use, hold | — | Spawn the referenced runtime entity. Hold keeps one owner-held instance alive where supported. |
-| `use_item_body` | item_body | primary_use, alternate_use | — | Run item-body use/contact/placeable behaviour without spawning a runtime entity. |
+| `use_item_body` | item_body | primary_use, alternate_use | — | One standalone input root for item-body use/contact behaviour without spawning a runtime entity. configure_item_use and the mere presence of item_body do not require this binding; never pair it with spawn_entity on the same input. |
 | `apply_item_effects` | item_body | primary_use, alternate_use | restore_resources_on_use, apply_vanilla_buff_on_use, apply_generated_buff_on_use, move_player_on_use | Apply explicitly authored item buffs/resource/mobility effects on use. |
 | `place_item` | item_body | primary_use, alternate_use | configure_placeable | Use the explicitly configured tile/wall placement result. |
 | `equip_passive` | item_body | equipped | configure_accessory, configure_armor | Enable explicitly configured accessory or armor behaviour while equipped. |
 
 ## Events
 
-| event | source kinds | producer capabilities | base projectile event | смысл |
-|---|---|---|---:|---|
-| `on_use` | item_body | — | нет | Emitted when an active item-body use binding succeeds. |
-| `on_spawn` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | да | Emitted once when a runtime projectile entity activates. |
-| `on_hit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | enable_item_contact_damage, set_projectile_damage | нет | Emitted after explicit contact/projectile damage hits an NPC. |
-| `on_crit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | enable_item_contact_damage, set_projectile_damage | нет | Emitted after an explicitly damaging hit is critical. |
-| `on_tile_collision` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_collision | нет | Emitted when explicit tile collision occurs. |
-| `on_expire` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_lifetime | да | Emitted immediately before normal lifetime expiration. |
-| `on_kill` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | да | Emitted when the projectile entity is killed. |
-| `periodic` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | нет | Bounded periodic event; each action must declare periodTicks >= 6. |
-| `on_release` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | charge_then_release | нет | Emitted by charge_then_release when the held charge is released. |
-| `channel_complete` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | charge_then_release | нет | Emitted by charge_then_release after a full authored charge. |
+| event | source kinds | producer calls | producer binding inputs | producer-free base kinds | exact producer params | смысл |
+|---|---|---|---|---|---|---|
+| `on_use` | item_body | — | primary_use, alternate_use | — | — | Emitted when an active item-body use binding succeeds. |
+| `on_spawn` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | Emitted once when a runtime projectile entity activates. |
+| `on_hit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | enable_item_contact_damage, set_projectile_damage | — | — | — | Emitted after explicit contact/projectile damage hits an NPC. |
+| `on_crit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | enable_item_contact_damage, set_projectile_damage | — | — | — | Emitted after an explicitly damaging hit is critical. |
+| `on_tile_collision` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_collision | — | — | {"set_projectile_collision":{"tileCollide":true}} | Emitted when explicit tile collision occurs. |
+| `on_expire` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | Emitted immediately before normal lifetime expiration. |
+| `on_kill` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | Emitted when the projectile entity is killed. |
+| `periodic` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | Bounded periodic event; each action must declare periodTicks >= 6. |
+| `on_release` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | charge_then_release | — | — | — | Emitted by charge_then_release when the held charge is released. |
+| `channel_complete` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | charge_then_release | — | — | — | Emitted by charge_then_release after a full authored charge. |
 
 ## Capability catalog
 

@@ -13,10 +13,42 @@ from infini_local.core.runtime_authoring import (
     strict_repair_shape_report,
     validate_runtime_program,
 )
-from infini_local.core.runtime_authoring.primary_entity_contract import (
+from infini_local.core.runtime_authoring.program_schema import (
+    PRIMARY_ENTITY_AUTHOR_PATH,
     PRIMARY_ENTITY_FIELD,
     PRIMARY_ENTITY_SELECTION_FIELD,
 )
+
+
+PRIMARY_AUTHOR_SYSTEM_RULE = (
+    f"Before returning, require {PRIMARY_ENTITY_AUTHOR_PATH} to equal exactly one emitted entity id; "
+    "binding/call rows do not carry role because Lowery derives technical wire roles from exact target equality."
+)
+PRIMARY_REPAIR_SYSTEM_RULE = (
+    f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
+)
+
+
+def primary_entity_llm_invariant() -> dict[str, Any]:
+    return {
+        "exactlyOnePrimaryEntity": True,
+        "authoredField": PRIMARY_ENTITY_AUTHOR_PATH,
+        "primaryRule": (
+            f"Choose exactly one id from runtimeProgram.entities and emit it once as {PRIMARY_ENTITY_AUTHOR_PATH}. "
+            "Primary means executable ownership, not importance."
+        ),
+        "preEmissionCheck": (
+            f"Reject your draft unless {PRIMARY_ENTITY_FIELD} exactly equals one emitted entity id. "
+            "Binding and call rows do not carry role; technical wire roles are losslessly lowered from exact target equality."
+        ),
+    }
+
+
+def primary_entity_self_check() -> str:
+    return (
+        f"set {PRIMARY_ENTITY_AUTHOR_PATH} to exactly one existing entity id and never emit role in Author "
+        "bindings or calls; Lowery materializes wire roles from exact target equality"
+    )
 
 
 def author_item_response_schema() -> dict[str, Any]:
@@ -212,6 +244,8 @@ def apply_author_item_repair_patch(current: Mapping[str, Any], patch: Mapping[st
 
 
 __all__ = [
+    "PRIMARY_AUTHOR_SYSTEM_RULE",
+    "PRIMARY_REPAIR_SYSTEM_RULE",
     "apply_author_item_repair_patch",
     "author_item_prompt_shape_card",
     "author_item_provider_repair_response_schema",
@@ -224,6 +258,8 @@ __all__ = [
     "normalize_author_item_targeted_repair_delta_text_limits",
     "project_provider_author_item_to_local",
     "project_provider_nullable_optionals_to_local",
+    "primary_entity_llm_invariant",
+    "primary_entity_self_check",
     "strict_author_item_repair_report",
     "strict_author_item_targeted_repair_delta_report",
     "strict_author_item_v3_report",

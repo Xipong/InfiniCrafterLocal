@@ -355,6 +355,48 @@ def test_repair_transactions_apply_exact_primary_identity_and_exclusive_input_ch
     )
 
 
+def test_repair_dossier_exposes_one_exact_entity_allowlist_and_empty_patch_cannot_pass() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["runtimeProgram"]["primaryEntityId"] = "foreign_item_entity"
+    report = validate_runtime_program(current)
+    assert not report["ok"]
+
+    dossier = gameplay_stage.build_gameplay_repair_dossier(
+        current,
+        {"name": "Parent A"},
+        {"name": "Parent B"},
+        {},
+        {},
+        failure_report=report,
+    )
+    scope = dossier["repairScope"]
+    exact_entity_ids = sorted(
+        str(row["id"])
+        for row in current["runtimeProgram"]["entities"]
+    )
+    assert sorted(
+        str(row["id"])
+        for row in dossier["immutableProgramIndex"]["entities"]
+    ) == exact_entity_ids
+    assert scope["repairTransactions"]["primaryEntitySelection"] == {
+        "allowed": True,
+        "candidateEntityIds": exact_entity_ids,
+        "mustSelectExactlyOne": True,
+    }
+    assert any(
+        "immutableProgramIndex.entities[*].id" in rule
+        for rule in dossier["rules"]
+    )
+
+    empty = _empty_gameplay_patch()
+    _, audit = filter_repair_patch_scope(current, empty, scope)
+    assert not audit["ok"]
+    assert any(
+        "leaves a reported repair error open" in row["message"]
+        for row in audit["errors"]
+    )
+
+
 def test_binding_retarget_scope_requires_registry_compatible_target_tuple() -> None:
     current = build_runtime_fixture("workbench_blade")
     binding = current["runtimeProgram"]["bindings"][0]
@@ -685,9 +727,10 @@ def test_primary_selection_null_is_a_true_noop() -> None:
 
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
 
-    assert audit["ok"], audit
+    assert not audit["ok"]
     assert filtered.get("primaryEntitySelection") is None
     assert "$.primaryEntitySelection" not in audit["acceptedPaths"]
+    assert apply_repair_patch(current, filtered) == current
 
 
 def test_exclusive_input_transaction_preserves_reachability_and_claim_references() -> None:
@@ -897,7 +940,7 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     assert not filtered_wrong["callsUpsert"]
     assert any(row.get("reason") == "capability_not_in_blocker_closure" for row in wrong_audit["ignoredChanges"])
     assert any(
-        "leaves a mandatory repair requirement open" in row["message"]
+        "leaves a reported repair error open" in row["message"]
         for row in wrong_audit["errors"]
     )
 
@@ -1106,7 +1149,7 @@ def test_event_repair_must_also_close_independent_required_component() -> None:
     _, incomplete_audit = filter_repair_patch_scope(current, incomplete, scope)
     assert not incomplete_audit["ok"]
     assert any(
-        "leaves a mandatory repair requirement open" in row["message"]
+        "leaves a reported repair error open" in row["message"]
         for row in incomplete_audit["errors"]
     )
 
