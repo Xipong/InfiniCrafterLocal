@@ -9,6 +9,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
+    VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 
@@ -167,6 +168,27 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             entity_by_id[entity_id] = entity
         if kind not in ENTITY_KINDS:
             errors.append({"path": f"$.runtimeProgram.entities[{index}].kind", "code": "unknown_entity_kind", "message": f"Unknown entity kind {kind!r}."})
+        else:
+            expected_visual_role = VISUAL_ROLE_BY_ENTITY_KIND[kind]
+            if entity.get("visualRole") != expected_visual_role:
+                errors.append({
+                    "path": f"$.runtimeProgram.entities[{index}].visualRole",
+                    "code": "visual_role_mismatch",
+                    "message": f"Entity kind {kind!r} requires technical visualRole {expected_visual_role!r}.",
+                })
+            visual = entity.get("visual")
+            if not isinstance(visual, Mapping):
+                errors.append({
+                    "path": f"$.runtimeProgram.entities[{index}].visual",
+                    "code": "required_object",
+                    "message": "Compiled entity visual handoff must be an object.",
+                })
+            elif visual.get("role") != expected_visual_role:
+                errors.append({
+                    "path": f"$.runtimeProgram.entities[{index}].visual.role",
+                    "code": "visual_role_mismatch",
+                    "message": f"Entity kind {kind!r} requires technical visual.role {expected_visual_role!r}.",
+                })
         if kind != "item_body":
             for required in ("spawn", "lifetimeTicks", "hitbox", "collision"):
                 if required not in entity:

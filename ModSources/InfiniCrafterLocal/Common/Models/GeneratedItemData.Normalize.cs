@@ -227,7 +227,10 @@ public sealed partial class GeneratedItemData
         Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName, "white");
 
         Armor.Slot = SafeText(Armor.Slot, 16).ToLowerInvariant();
-        if (Armor.Slot is not ("head" or "body" or "legs")) Armor.Slot = "body";
+        if (Armor.Enabled && Armor.Slot is not ("head" or "body" or "legs"))
+            throw new InvalidDataException($"Unsupported enabled armor slot '{Armor.Slot}'");
+        if (!Armor.Enabled && Armor.Slot is not ("" or "head" or "body" or "legs"))
+            Armor.Slot = "";
         Armor.SetKey = SafeText(Armor.SetKey, 64);
         Armor.Defense = ClampInt(Armor.Defense, 0, 500);
         Armor.MaxLife = ClampInt(Armor.MaxLife, -500, 5000);

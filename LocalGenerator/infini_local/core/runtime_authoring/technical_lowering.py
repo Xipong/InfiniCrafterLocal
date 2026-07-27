@@ -84,7 +84,7 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
     {
         "id": "entity_kind_to_visual_role",
         "inputs": ["runtimeProgram.entities[].kind"],
-        "outputs": ["runtimeProgram.entities[].visualRole"],
+        "outputs": ["runtimeProgram.entities[].visualRole", "runtimeProgram.entities[].visual.role"],
         "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
         "preserves": ["entity kind", "entity identity", "all gameplay components"],
         "addsDesignChoice": False,

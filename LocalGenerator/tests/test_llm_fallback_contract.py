@@ -176,6 +176,38 @@ def _check_network_attempt_budget_one_disables_inner_retry(monkeypatch) -> None:
     assert "transportRetryCount" not in malformed.get("_debug", {})
 
 
+def _check_network_attempt_budget_one_disables_pool_failover(monkeypatch) -> None:
+    monkeypatch.setattr(lp, "LLM_FALLBACK_NETWORK_FAILS", 1)
+    calls: list[str] = []
+    primary = {"profile_id": "llm_1", "provider": "local", "model": "one"}
+    secondary = {"profile_id": "llm_2", "provider": "local", "model": "two"}
+    lease = lp.LlmItemLease(
+        recipe_key="single-attempt-pool",
+        lease_id="llm_1:single",
+        profile_id="llm_1",
+        context=primary,
+        pool_size=2,
+        profiles=(primary, secondary),
+    )
+
+    def fake_single(_payload, _timeout, context):
+        calls.append(context["profile_id"])
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(lp, "_llm_json_single_context_with_length_retry", fake_single)
+    token = lp._CURRENT_LLM_ITEM_LEASE.set(lease)
+    try:
+        try:
+            lp.llm_chat_json({"messages": []}, timeout=1)
+        except urllib.error.URLError:
+            pass
+        else:
+            raise AssertionError("expected the sole transport attempt to fail")
+    finally:
+        lp._CURRENT_LLM_ITEM_LEASE.reset(token)
+    assert calls == ["llm_1"]
+
+
 def _check_gemini_length_response_retries_once_with_minimal_reasoning(monkeypatch) -> None:
     calls = []
 
@@ -291,6 +323,7 @@ def _run_coarse_contracts(tmp_path):
     '_check_llm_chat_json_switches_to_fallback_after_two_transport_failures',
     '_check_llm_chat_json_retries_transient_http_without_fallback',
     '_check_network_attempt_budget_one_disables_inner_retry',
+    '_check_network_attempt_budget_one_disables_pool_failover',
     '_check_gemini_length_response_retries_once_with_minimal_reasoning',
     '_check_gemini_length_complete_json_prefix_is_not_retried',
     '_check_malformed_json_response_retries_once_inside_logical_call'

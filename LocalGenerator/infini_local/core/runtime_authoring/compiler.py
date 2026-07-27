@@ -396,17 +396,30 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         ))
     entities: list[dict[str, Any]] = []
     entity_index_by_id: dict[str, int] = {}
-    for source in authored_entities:
+    for source_index, source in enumerate(authored_entities):
         entity_id = str(source["id"])
         kind = str(source["kind"])
-        entity_index_by_id[entity_id] = len(entities)
+        entity_index = len(entities)
+        visual_role = VISUAL_ROLE_BY_ENTITY_KIND[kind]
+        entity_index_by_id[entity_id] = entity_index
         entities.append({
             "id": entity_id,
             "kind": kind,
-            "visualRole": VISUAL_ROLE_BY_ENTITY_KIND[kind],
+            "visualRole": visual_role,
             "events": [],
-            "visual": {"role": VISUAL_ROLE_BY_ENTITY_KIND[kind]},
+            "visual": {"role": visual_role},
         })
+        for final_path in (
+            f"runtimeProgram.entities[{entity_index}].visualRole",
+            f"runtimeProgram.entities[{entity_index}].visual.role",
+        ):
+            ctx.receipts.append({
+                "lowererId": "entity_kind_to_visual_role",
+                "authoredPaths": [f"runtimeProgram.entities[{source_index}].kind"],
+                "finalPath": final_path,
+                "value": visual_role,
+                "status": "technical_projection",
+            })
 
     runtime: dict[str, Any] = {
         "apiVersion": RUNTIME_PROGRAM_API_VERSION,
@@ -445,8 +458,22 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             _compile_entity_call(ctx, call, entity=compiled_entity, entity_index=entity_index)
 
     # Canonical ordering makes cache/network fingerprints stable without changing semantics.
-    for entity in entities:
+    for entity_index, entity in enumerate(entities):
         entity["events"] = sorted(entity.get("events") or [], key=lambda row: str(row.get("id") or ""))
+        event_index_by_id = {
+            str(event.get("id") or ""): event_index
+            for event_index, event in enumerate(entity["events"])
+        }
+        prefix = f"runtimeProgram.entities[{entity_index}].events["
+        for receipt in ctx.receipts:
+            final_path = str(receipt.get("finalPath") or "")
+            if not final_path.startswith(prefix):
+                continue
+            event_id = str(receipt.get("callId") or "")
+            if event_id not in event_index_by_id:
+                raise RuntimeError(f"event receipt references absent event {event_id!r}")
+            suffix = final_path[len(prefix):].split("]", 1)[1]
+            receipt["finalPath"] = f"{prefix}{event_index_by_id[event_id]}]{suffix}"
     runtime["bindings"] = sorted(runtime["bindings"], key=lambda row: str(row.get("id") or ""))
 
     lowering_audit = audit_compiler_receipts(ctx.receipts)

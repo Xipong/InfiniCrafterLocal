@@ -741,7 +741,8 @@
         "runtimeProgram.entities[].kind"
       ],
       "outputs": [
-        "runtimeProgram.entities[].visualRole"
+        "runtimeProgram.entities[].visualRole",
+        "runtimeProgram.entities[].visual.role"
       ],
       "preserves": [
         "entity kind",

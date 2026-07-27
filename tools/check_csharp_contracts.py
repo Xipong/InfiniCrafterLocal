@@ -86,6 +86,8 @@ def check_runtime_contract() -> None:
         "target_and_fire has no explicit shotEntityId",
         "active primary/alternate binding requires explicit configure_item_use",
         "binding.Role != expectedRole",
+        "VisualRoleFor(string? value)",
+        "visual roles must equal",
     ]:
         require(dto, needle, "RuntimeProgramSpec.cs")
     require(data, "JsonUnmappedMemberHandling.Disallow", "GeneratedItemData.cs")

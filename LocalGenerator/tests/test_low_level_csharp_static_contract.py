@@ -56,3 +56,17 @@ def test_release_timing_prompt_tokens_match_held_sprite_projection() -> None:
     assert 'releaseTiming != "immediate"' in draw
     assert 'releaseTiming == "instant"' not in draw
     assert 'releaseTiming == "early"' not in draw
+
+
+def test_equipment_overlay_uses_only_explicit_equipment_capabilities() -> None:
+    overlay = _read("Common/Players/GeneratedEquipOverlayDrawLayer.cs")
+    assert "data.Accessory?.Enabled == true" in overlay
+    assert "Gameplay?.Kind" not in overlay
+
+
+def test_enabled_armor_rejects_an_unauthored_slot() -> None:
+    model = _read("Common/Models/GeneratedItemData.Model.cs")
+    normalize = _read("Common/Models/GeneratedItemData.Normalize.cs")
+    assert 'public string Slot { get; set; } = "";' in model
+    assert 'if (Armor.Enabled && Armor.Slot is not ("head" or "body" or "legs"))' in normalize
+    assert 'Armor.Slot = "body";' not in normalize

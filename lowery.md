@@ -59,7 +59,7 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 
 | lowerer | authored inputs | wire outputs | adds design |
 |---|---|---|---|
-| entity_kind_to_visual_role | runtimeProgram.entities[].kind | runtimeProgram.entities[].visualRole | false |
+| entity_kind_to_visual_role | runtimeProgram.entities[].kind | runtimeProgram.entities[].visualRole, runtimeProgram.entities[].visual.role | false |
 | primary_entity_to_binding_role | runtimeProgram.primaryEntityId, runtimeProgram.bindings[].target | runtimeProgram.bindings[].role | false |
 | primary_entity_kind_to_owner | runtimeProgram.primaryEntityId, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.primaryOwner | false |
 | capability_name_to_opcode | runtimeProgram.calls[].fn | runtimeProgram.entities[].movement.code, runtimeProgram.entities[].controller.code, runtimeProgram.entities[].events[].actionCode | false |

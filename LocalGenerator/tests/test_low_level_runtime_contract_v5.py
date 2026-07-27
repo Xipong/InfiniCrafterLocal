@@ -193,6 +193,39 @@ def test_technical_lowering_may_write_only_declared_paths() -> None:
     assert rejected["violations"]
 
 
+def test_entity_kind_visual_role_and_sorted_event_receipts_remain_exact() -> None:
+    authored = build_runtime_fixture("returning_potion")
+    calls = authored["runtimeProgram"]["calls"]
+    healer_index = next(index for index, row in enumerate(calls) if row["id"] == "tonic_heal")
+    splash_index = next(index for index, row in enumerate(calls) if row["id"] == "tonic_splash")
+    calls[healer_index], calls[splash_index] = calls[splash_index], calls[healer_index]
+
+    compiled = compile_runtime_program(authored)
+    assert validate_runtime_wire(compiled)["ok"] is True
+    runtime = compiled["runtimeProgram"]
+    visual_receipts = [
+        row for row in compiled["runtimeContract"]["finalWireReceipts"]
+        if row.get("lowererId") == "entity_kind_to_visual_role"
+    ]
+    assert len(visual_receipts) == len(runtime["entities"]) * 2
+    assert audit_compiler_receipts(visual_receipts)["ok"] is True
+
+    for receipt in compiled["runtimeContract"]["finalWireReceipts"]:
+        path = str(receipt.get("finalPath") or "")
+        if ".events[" not in path:
+            continue
+        entity_index = int(path.split("entities[")[1].split("]", 1)[0])
+        event_index = int(path.split(".events[")[1].split("]", 1)[0])
+        assert runtime["entities"][entity_index]["events"][event_index]["id"] == receipt["callId"]
+
+    mismatched_role = copy.deepcopy(compiled)
+    mismatched_role["runtimeProgram"]["entities"][0]["visualRole"] = "projectile"
+    assert "visual_role_mismatch" in _codes(validate_runtime_wire(mismatched_role))
+    missing_visual = copy.deepcopy(compiled)
+    missing_visual["runtimeProgram"]["entities"][0].pop("visual")
+    assert "required_object" in _codes(validate_runtime_wire(missing_visual))
+
+
 def test_explicit_primary_entity_projects_to_wire_and_gates_csharp_item_and_held_ownership() -> None:
     item_primary = build_runtime_fixture("workbench_blade")
     assert validate_runtime_program(item_primary)["stats"]["primaryEntityId"] == "item"

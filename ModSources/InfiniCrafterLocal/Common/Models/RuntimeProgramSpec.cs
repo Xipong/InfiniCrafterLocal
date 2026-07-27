@@ -221,6 +221,18 @@ public static class RuntimeEntityKind
     public static bool IsProjectile(string? value) => value is not null && value != ItemBody && Known.Contains(value);
     public static bool IsBindingSpawnable(string? value)
         => value is OwnerAttachedProjectile or FreeProjectile or StationaryProjectile or TemporaryHelper or Field;
+    public static string VisualRoleFor(string? value)
+        => value switch
+        {
+            ItemBody => "inventory_item",
+            OwnerAttachedProjectile => "held_body",
+            FreeProjectile => "projectile",
+            StationaryProjectile => "deployed_entity",
+            TemporaryHelper => "helper",
+            Field => "field",
+            ChildProjectile => "child_projectile",
+            _ => "",
+        };
 }
 
 public static class RuntimeInputKind
@@ -381,6 +393,10 @@ public sealed class RuntimeEntitySpec
             throw new InvalidDataException($"entity '{Id}' has too many event actions");
 
         Visual.Normalize();
+        string expectedVisualRole = RuntimeEntityKind.VisualRoleFor(Kind);
+        if (!string.Equals(VisualRole, expectedVisualRole, StringComparison.Ordinal)
+            || !string.Equals(Visual.Role, expectedVisualRole, StringComparison.Ordinal))
+            throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
             if (Spawn.Enabled || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)

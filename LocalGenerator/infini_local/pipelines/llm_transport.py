@@ -1436,6 +1436,8 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
                 if not _is_profile_failover_failure(profile_error):
                     raise
                 _mark_profile_failed(context, profile_error)
+                if int(LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
+                    raise
                 next_context = _next_lease_profile(lease, attempted)
                 if next_context is None:
                     raise

@@ -317,7 +317,7 @@ public sealed class AccessorySpec
 public sealed class ArmorSpec
 {
     public bool Enabled { get; set; } = false;
-    public string Slot { get; set; } = "body"; // head, body, legs
+    public string Slot { get; set; } = ""; // head, body, legs; required when enabled
     public string SetKey { get; set; } = "";
     public string Archetype { get; set; } = "hybrid";
     public int Defense { get; set; } = 0;

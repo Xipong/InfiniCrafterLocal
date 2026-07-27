@@ -175,7 +175,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             return;
         GeneratedItemData data = ResolveEquipPresentationData(generated.Data);
         bool roleMatches = slot == "accessory"
-            ? data.Accessory?.Enabled == true || string.Equals(data.Gameplay?.Kind, "accessory", StringComparison.Ordinal)
+            ? data.Accessory?.Enabled == true
             : data.Armor?.Enabled == true && string.Equals(data.Armor.Slot, slot, StringComparison.Ordinal);
         if (roleMatches)
             entries.Add(new OverlayEntry(data, slot, accessoryIndex));
