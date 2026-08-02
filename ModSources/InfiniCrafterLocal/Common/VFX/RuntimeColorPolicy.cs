@@ -1,5 +1,6 @@
 #nullable enable
 using Microsoft.Xna.Framework;
+using System.IO;
 
 namespace InfiniCrafterLocal.Common.VFX;
 
@@ -9,17 +10,28 @@ namespace InfiniCrafterLocal.Common.VFX;
 /// </summary>
 public static class RuntimeColorPolicy
 {
-    public static string Normalize(string? value, string fallback = "")
+    public static string NormalizeRequired(string? value, bool allowEmpty = false)
+    {
+        string token = (value ?? "").Trim().ToLowerInvariant();
+        if (allowEmpty && token.Length == 0)
+            return token;
+        if (token is "white" or "red" or "orange" or "yellow" or "green" or "cyan" or
+            "blue" or "purple" or "pink" or "gray" or "black")
+            return token;
+        throw new InvalidDataException($"unknown runtime color '{token}'");
+    }
+
+    private static string NormalizeForRendering(string? value)
     {
         string token = (value ?? "").Trim().ToLowerInvariant();
         return token is "white" or "gray" or "brown" or "tan" or "red" or "orange" or
-            "yellow" or "gold" or "green" or "cyan" or "blue" or "purple" or "pink"
+            "yellow" or "gold" or "green" or "cyan" or "blue" or "purple" or "pink" or "black"
             ? token
-            : fallback;
+            : "";
     }
 
     public static Color Resolve(string? value, Color fallback)
-        => Normalize(value) switch
+        => NormalizeForRendering(value) switch
         {
             "white" => new Color(235, 235, 235),
             "gray" => new Color(170, 170, 180),
@@ -34,6 +46,7 @@ public static class RuntimeColorPolicy
             "blue" => new Color(120, 190, 255),
             "purple" => new Color(190, 110, 255),
             "pink" => new Color(255, 145, 215),
+            "black" => new Color(25, 25, 30),
             _ => fallback,
         };
 }

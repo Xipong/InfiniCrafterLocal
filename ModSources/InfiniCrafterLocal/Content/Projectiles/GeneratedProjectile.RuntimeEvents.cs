@@ -41,8 +41,12 @@ public sealed partial class GeneratedProjectile
     private void EmitAndSyncVfxEvent(string eventName, Vector2 center)
     {
         if (_data is null || _entity is null) return;
-        if (InfiniVfxRuntime.OnEvent(Projectile, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center))
-            BroadcastVfxEventSync(eventName, center);
+        if (Main.netMode == Terraria.ID.NetmodeID.Server)
+        {
+            BroadcastAuthoritativeVfxEvent(eventName, center);
+            return;
+        }
+        InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center);
     }
 
     private void RunPeriodicActions()

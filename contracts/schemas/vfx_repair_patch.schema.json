@@ -187,7 +187,8 @@
               "on_kill",
               "on_spawn",
               "on_tile_collision",
-              "on_use"
+              "on_use",
+              "periodic"
             ],
             "type": "string"
           },
@@ -202,8 +203,7 @@
             "type": "number"
           },
           "id": {
-            "maxLength": 64,
-            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "type": "string"
           },
           "jitter": {
@@ -218,6 +218,13 @@
               "accent",
               "ornament",
               "cue"
+            ],
+            "type": "string"
+          },
+          "layer": {
+            "enum": [
+              "BeforeProjectiles",
+              "AfterProjectiles"
             ],
             "type": "string"
           },
@@ -283,6 +290,14 @@
             "minimum": 0.0,
             "type": "number"
           },
+          "spriteNegativePrompt": {
+            "maxLength": 700,
+            "type": "string"
+          },
+          "spritePrompt": {
+            "maxLength": 1400,
+            "type": "string"
+          },
           "startTick": {
             "maximum": 120,
             "minimum": 0,
@@ -318,6 +333,7 @@
           "lane",
           "emissionMode",
           "blend",
+          "layer",
           "particleSystemId",
           "scale",
           "density",
@@ -331,7 +347,9 @@
           "signatureWeight",
           "visualCost",
           "startTick",
-          "repeatEvery"
+          "repeatEvery",
+          "spritePrompt",
+          "spriteNegativePrompt"
         ],
         "type": "object"
       },
