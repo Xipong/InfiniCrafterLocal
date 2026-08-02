@@ -300,14 +300,10 @@ class SettingsGuiTraceStateMixin:
 
         image_active = backend != "off"
         asset_pack_active = image_active and visual_mode in {"full", "all", "projectile", "visualpack", "assetpack"}
-        full_asset_pack = image_active and visual_mode in {"full", "all", "visualpack", "assetpack"}
-        projectile_asset_pack = image_active and visual_mode in {"full", "all", "projectile", "visualpack", "assetpack"}
 
         for key in ["INFINI_VISUAL_DIRECTOR_LLM", "INFINI_VFX_LLM_DIRECTOR"]:
             self._set_field_enabled(key, asset_pack_active, "Visual asset mode сейчас off или image backend выключен; director-pass не вызывается.")
-        self._set_field_enabled("INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES", projectile_asset_pack, "Projectile asset pack выключен текущим Visual asset mode/backend.")
-        self._set_field_enabled("INFINI_VISUAL_GENERATE_IMPACT_IMAGES", full_asset_pack, "Baked impact images доступны только в full visual asset mode; флаг разрешает, но не принуждает.")
-        self._set_field_enabled("INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES", full_asset_pack, "Baked child/field images доступны только в full visual asset mode; флаг разрешает, но не принуждает.")
+        self._set_field_enabled("INFINI_IMAGE_MAX_CONCURRENCY", image_active, "Image backend=off; image request gate не участвует.")
 
         sprite_processing_active = image_active
         for key in [

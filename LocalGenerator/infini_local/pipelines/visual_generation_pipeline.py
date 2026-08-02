@@ -27,12 +27,18 @@ from infini_local.pipelines.llm_transport import (
     visual_director_max_tokens,
     with_llm_stage,
 )
-from infini_local.pipelines.pipeline_visual_config import VISUAL_ASSET_MODE, VISUAL_DIRECTOR_LLM
+from infini_local.pipelines.pipeline_visual_config import VISUAL_DIRECTOR_LLM
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
+from infini_local.pipelines.visual_asset_modes import (
+    VISUAL_ASSET_MODES,
+    visual_asset_mode_catalog,
+)
 
 
 VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v1"
 VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v1"
-_ALLOWED_ASSET_MODES = {"baked_sprite", "reuse_item_icon", "runtime_geometry", "no_asset"}
+_ALLOWED_ASSET_MODES = set(VISUAL_ASSET_MODES)
 
 
 def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
@@ -89,50 +95,102 @@ def _visual_item_schema() -> dict[str, Any]:
     }
 
 
-def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
+def _visual_equip_overlay_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "entityId": {"type": "string", "enum": entity_ids},
-            "assetMode": {"type": "string", "enum": sorted(_ALLOWED_ASSET_MODES)},
             "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
-            "scale": {"type": "number", "minimum": 0.25, "maximum": 4.0},
+            "preferredCanvasSize": {"type": "integer", "enum": [32, 48, 64, 96]},
         },
-        "required": ["entityId", "assetMode", "prompt", "silhouette", "visualIdentity", "scale"],
+        "required": ["prompt", "silhouette", "visualIdentity", "preferredCanvasSize"],
     }
 
 
-def _visual_repair_schema(entity_ids: list[str]) -> dict[str, Any]:
-    return {
+def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
+    entity_id = {"type": "string", "enum": entity_ids}
+    scale = {"type": "number", "minimum": 0.25, "maximum": 4.0}
+    authored = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "schema": {"const": VISUAL_REPAIR_PATCH_SCHEMA},
-            "itemPatch": {"anyOf": [_visual_item_schema(), {"type": "null"}]},
-            "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids), "maxItems": len(entity_ids)},
-            "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
-            "entityIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
-            "animationPlan": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 1200}, {"type": "null"}]},
-            "note": {"type": "string", "minLength": 1, "maxLength": 500},
+            "entityId": copy.deepcopy(entity_id),
+            "assetMode": {"const": "baked_sprite"},
+            "visualProjectRef": {"type": "string", "enum": ["item", "entity"]},
+            "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
+            "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
+            "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
+            "scale": copy.deepcopy(scale),
         },
-        "required": ["schema", "itemPatch", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete", "animationPlan", "note"],
+        "required": ["entityId", "assetMode", "visualProjectRef", "prompt", "silhouette", "visualIdentity", "scale"],
+    }
+    reuse = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "entityId": copy.deepcopy(entity_id),
+            "assetMode": {"const": "reuse_item_icon"},
+            "visualProjectRef": {"const": "item"},
+            "scale": copy.deepcopy(scale),
+        },
+        "required": ["entityId", "assetMode", "visualProjectRef", "scale"],
+    }
+    non_sprite_branches = []
+    for mode in ("runtime_geometry", "no_asset"):
+        non_sprite_branches.append({
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "entityId": copy.deepcopy(entity_id),
+                "assetMode": {"const": mode},
+                "visualProjectRef": {"const": "none"},
+                "scale": copy.deepcopy(scale),
+            },
+            "required": ["entityId", "assetMode", "visualProjectRef", "scale"],
+        })
+    return {"oneOf": [authored, reuse, *non_sprite_branches]}
+
+
+def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False) -> dict[str, Any]:
+    properties: dict[str, Any] = {
+        "schema": {"const": VISUAL_REPAIR_PATCH_SCHEMA},
+        "itemPatch": {"anyOf": [_visual_item_schema(), {"type": "null"}]},
+        "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids), "maxItems": len(entity_ids)},
+        "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
+        "entityIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
+        "animationPlan": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 1200}, {"type": "null"}]},
+        "note": {"type": "string", "minLength": 1, "maxLength": 500},
+    }
+    required = ["schema", "itemPatch", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete", "animationPlan", "note"]
+    if equipment_overlay_required:
+        properties["equipOverlayPatch"] = {"anyOf": [_visual_equip_overlay_schema(), {"type": "null"}]}
+        required.insert(2, "equipOverlayPatch")
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": required,
     }
 
 
-def _response_schema(entity_ids: list[str]) -> dict[str, Any]:
+def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = False) -> dict[str, Any]:
+    properties: dict[str, Any] = {
+        "schema": {"const": VISUAL_KIT_SCHEMA},
+        "item": _visual_item_schema(),
+        "entities": {"type": "array", "items": _visual_entity_schema(entity_ids), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
+        "animationPlan": {"type": "string", "minLength": 1, "maxLength": 1200},
+    }
+    required = ["schema", "item", "entities", "animationPlan"]
+    if equipment_overlay_required:
+        properties["equipOverlay"] = _visual_equip_overlay_schema()
+        required.insert(2, "equipOverlay")
     return {
         "type": "object",
         "additionalProperties": False,
-        "properties": {
-            "schema": {"const": VISUAL_KIT_SCHEMA},
-            "item": _visual_item_schema(),
-            "entities": {"type": "array", "items": _visual_entity_schema(entity_ids), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
-            "animationPlan": {"type": "string", "minLength": 1, "maxLength": 1200},
-        },
-        "required": ["schema", "item", "entities", "animationPlan"],
+        "properties": properties,
+        "required": required,
     }
 
 
@@ -160,11 +218,39 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _validate_kit(raw: Any, entity_ids: list[str], item_body_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+def _validate_kit(
+    raw: Any,
+    entity_ids: list[str],
+    item_body_id: str,
+    *,
+    equipment_overlay_required: bool = False,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     errors: list[dict[str, Any]] = []
     if not isinstance(raw, dict):
         return None, [{"path": "$", "message": "Visual Director response must be an object"}]
-    for schema_error in strict_schema_errors(raw, _response_schema(entity_ids)):
+    # Declared lossless normalization: the exact asset mode plus exact entity id
+    # uniquely determines project ownership. The only missing-mode Fix remains
+    # the complete item-body design -> baked inventory project case.
+    candidate = copy.deepcopy(raw)
+    candidate_rows_raw = candidate.get("entities")
+    candidate_rows: list[Any] = candidate_rows_raw if isinstance(candidate_rows_raw, list) else []
+    for row in candidate_rows:
+        if not isinstance(row, dict):
+            continue
+        entity_id = str(row.get("entityId") or "")
+        mode = str(row.get("assetMode") or "").strip().lower()
+        complete = all(str(row.get(field) or "").strip() for field in ("prompt", "silhouette", "visualIdentity"))
+        if not mode and entity_id == item_body_id and complete:
+            mode = "baked_sprite"
+            row["assetMode"] = mode
+        if mode and not str(row.get("visualProjectRef") or "").strip():
+            row["visualProjectRef"] = (
+                "item" if entity_id == item_body_id or mode == "reuse_item_icon"
+                else "entity" if mode == "baked_sprite"
+                else "none"
+            )
+    raw = candidate
+    for schema_error in strict_schema_errors(raw, _response_schema(entity_ids, equipment_overlay_required)):
         errors.append({
             "path": str(schema_error.get("path") or "$"),
             "message": f"schema {schema_error.get('kind')}: expected {schema_error.get('expected')!r}",
@@ -180,6 +266,14 @@ def _validate_kit(raw: Any, entity_ids: list[str], item_body_id: str) -> tuple[d
                 errors.append({"path": f"$.item.{field}", "message": "required non-empty string"})
         if not isinstance(item.get("palette"), list) or not [x for x in item.get("palette", []) if str(x).strip()]:
             errors.append({"path": "$.item.palette", "message": "at least one palette entry required"})
+    if equipment_overlay_required:
+        overlay = raw.get("equipOverlay")
+        if not isinstance(overlay, dict):
+            errors.append({"path": "$.equipOverlay", "message": "equipment item requires a separate authored overlay object"})
+        else:
+            for field in ("prompt", "silhouette", "visualIdentity"):
+                if not str(overlay.get(field) or "").strip():
+                    errors.append({"path": f"$.equipOverlay.{field}", "message": "required non-empty string"})
     rows = raw.get("entities")
     if not isinstance(rows, list):
         errors.append({"path": "$.entities", "message": "required array"})
@@ -196,31 +290,55 @@ def _validate_kit(raw: Any, entity_ids: list[str], item_body_id: str) -> tuple[d
         elif entity_id in seen:
             errors.append({"path": path + ".entityId", "message": "duplicate entity id"})
         seen.add(entity_id)
-        mode = str(row.get("assetMode") or "")
+        mode = str(row.get("assetMode") or "").strip().lower()
+        project_ref = str(row.get("visualProjectRef") or "").strip().lower()
         if mode not in _ALLOWED_ASSET_MODES:
             errors.append({"path": path + ".assetMode", "message": f"unsupported mode {mode!r}"})
-        for field in ("prompt", "silhouette", "visualIdentity"):
-            if not str(row.get(field) or "").strip():
-                errors.append({"path": path + "." + field, "message": "required non-empty string"})
+        if entity_id == item_body_id:
+            if mode != "baked_sprite":
+                errors.append({"path": path + ".assetMode", "message": f"item entity {item_body_id!r} must use baked_sprite"})
+            if project_ref != "item":
+                errors.append({"path": path + ".visualProjectRef", "message": "item body must reference the single item visual project"})
+            if isinstance(item, dict):
+                for field in ("prompt", "silhouette", "visualIdentity"):
+                    if row.get(field) != item.get(field):
+                        errors.append({"path": path + "." + field, "message": "item body must copy the exact item visual project field"})
+        elif mode == "baked_sprite" and project_ref != "entity":
+            errors.append({"path": path + ".visualProjectRef", "message": "distinct baked entity must own the entity visual project"})
+        elif mode == "reuse_item_icon" and project_ref != "item":
+            errors.append({"path": path + ".visualProjectRef", "message": "reuse_item_icon must reference the item visual project"})
+        elif mode in {"runtime_geometry", "no_asset"} and project_ref != "none":
+            errors.append({"path": path + ".visualProjectRef", "message": f"{mode} must not claim a sprite project"})
     missing = [entity_id for entity_id in entity_ids if entity_id not in seen]
     if missing:
         errors.append({"path": "$.entities", "message": "missing entity rows: " + ", ".join(missing)})
     if len(rows) != len(entity_ids):
         errors.append({"path": "$.entities", "message": f"expected exactly {len(entity_ids)} rows"})
-    # Item body always needs the canonical generated inventory PNG.
-    item_row = next((row for row in rows if isinstance(row, dict) and row.get("entityId") == item_body_id), None)
-    if isinstance(item_row, dict) and item_row.get("assetMode") != "baked_sprite":
-        errors.append({"path": "$.entities", "message": f"item entity {item_body_id!r} must use baked_sprite"})
     return (copy.deepcopy(raw) if not errors else None), errors
 
 
-def _build_visual_repair_scope(raw: Any, errors: list[dict[str, Any]], entity_ids: list[str], item_body_id: str) -> dict[str, Any]:
+def _build_visual_repair_scope(
+    raw: Any,
+    errors: list[dict[str, Any]],
+    entity_ids: list[str],
+    item_body_id: str,
+    *,
+    equipment_overlay_required: bool = False,
+) -> dict[str, Any]:
     rows = raw.get("entities") if isinstance(raw, Mapping) and isinstance(raw.get("entities"), list) else []
+    entity_child_error_indices: set[int] = set()
+    for diagnostic in errors:
+        child_match = __import__("re").match(r"^\$\.entities\[(\d+)\]\.(.+)$", str(diagnostic.get("path") or ""))
+        if child_match:
+            entity_child_error_indices.add(int(child_match.group(1)))
     mutable_ids: set[str] = set()
     delete_indices: set[int] = set()
+    missing_ids: set[str] = set()
     item_mutable = False
+    overlay_mutable = False
     animation_mutable = False
     item_paths: set[str] = set()
+    overlay_paths: set[str] = set()
     entity_paths: dict[str, set[str]] = {}
     whole_response = not isinstance(raw, Mapping)
 
@@ -237,12 +355,19 @@ def _build_visual_repair_scope(raw: Any, errors: list[dict[str, Any]], entity_id
         if path.startswith("$.item"):
             item_mutable = True
             item_paths.add("" if path == "$.item" else path.removeprefix("$.item."))
+        if equipment_overlay_required and path.startswith("$.equipOverlay"):
+            overlay_mutable = True
+            overlay_paths.add("" if path == "$.equipOverlay" else path.removeprefix("$.equipOverlay."))
         if path.startswith("$.animationPlan"):
             animation_mutable = True
         match = __import__("re").match(r"^\$\.entities\[(\d+)\](?:\.(.*))?$", path)
         if match:
             index = int(match.group(1))
             relative = str(match.group(2) or "")
+            if not relative and index in entity_child_error_indices and "schema one_of" in message:
+                # oneOf emits an aggregate row marker alongside exact branch
+                # diagnostics. The aggregate must not widen exact field scope.
+                continue
             if 0 <= index < len(rows) and isinstance(rows[index], Mapping):
                 entity_id = str(rows[index].get("entityId") or "")
                 if entity_id in entity_ids:
@@ -257,6 +382,7 @@ def _build_visual_repair_scope(raw: Any, errors: list[dict[str, Any]], entity_id
                 for value in tail.split(","):
                     entity_id = value.strip()
                     if entity_id in entity_ids:
+                        missing_ids.add(entity_id)
                         grant_entity(entity_id, "")
             if "item entity" in message:
                 grant_entity(item_body_id, "assetMode")
@@ -277,20 +403,33 @@ def _build_visual_repair_scope(raw: Any, errors: list[dict[str, Any]], entity_id
                     grant_entity(entity_id, "")
     if whole_response:
         item_mutable = True
+        overlay_mutable = equipment_overlay_required
         animation_mutable = True
         item_paths.add("")
+        if equipment_overlay_required:
+            overlay_paths.add("")
         for entity_id in entity_ids:
             grant_entity(entity_id, "")
         delete_indices.update(range(len(rows)))
+    replacement_transactions: list[dict[str, Any]] = []
+    if not whole_response and len(delete_indices) == 1 and len(missing_ids) == 1:
+        replacement_transactions.append({
+            "entityId": next(iter(missing_ids)),
+            "replaceIndex": next(iter(delete_indices)),
+        })
     return {
         "schema": "infini.visual-repair-scope.v3",
         "itemMutable": item_mutable,
+        "equipmentOverlayRequired": equipment_overlay_required,
+        "equipOverlayMutable": overlay_mutable,
         "animationPlanMutable": animation_mutable,
         "mutableEntityIds": sorted(mutable_ids),
         "deletableEntityIds": [],
         "deletableEntityIndices": sorted(delete_indices),
+        "entityReplacementTransactions": replacement_transactions,
         "fieldPermissions": {
             "itemPaths": sorted(item_paths),
+            "equipOverlayPaths": sorted(overlay_paths),
             "entities": [
                 {"entityId": entity_id, "paths": sorted(paths)}
                 for entity_id, paths in sorted(entity_paths.items())
@@ -307,11 +446,13 @@ def _visual_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]
     return {
         "broken": {
             "item": copy.deepcopy(source.get("item")) if scope.get("itemMutable") else None,
+            "equipOverlay": copy.deepcopy(source.get("equipOverlay")) if scope.get("equipOverlayMutable") else None,
             "entities": [copy.deepcopy(row) for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "") in mutable_ids],
             "animationPlan": copy.deepcopy(source.get("animationPlan")) if scope.get("animationPlanMutable") else None,
         },
         "validReadOnly": {
             "item": copy.deepcopy(source.get("item")) if not scope.get("itemMutable") else None,
+            "equipOverlay": copy.deepcopy(source.get("equipOverlay")) if scope.get("equipmentOverlayRequired") and not scope.get("equipOverlayMutable") else None,
             "entities": [copy.deepcopy(row) for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "") not in mutable_ids],
             "animationPlan": copy.deepcopy(source.get("animationPlan")) if not scope.get("animationPlanMutable") else None,
         },
@@ -334,9 +475,15 @@ def _drop_schema_forbidden_mutable_fields(
     """Delete only exact mutable fields forbidden by the strict row schema."""
 
     out: dict[str, Any] = copy.deepcopy(dict(candidate))
-    if schema.get("additionalProperties") is not False:
+    branches = [row for row in schema.get("oneOf") or [] if isinstance(row, Mapping)]
+    strict_shapes = branches or [schema]
+    if not strict_shapes or any(row.get("additionalProperties") is not False for row in strict_shapes):
         return out
-    valid_fields = set(schema.get("properties") or {})
+    valid_fields = {
+        str(field)
+        for row in strict_shapes
+        for field in (row.get("properties") or {})
+    }
     forbidden_fields = {
         path.split(".", 1)[0]
         for path in mutable_paths
@@ -355,7 +502,8 @@ def _filter_visual_repair_patch(
     scope: Mapping[str, Any],
     entity_ids: list[str],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    schema_errors = strict_schema_errors(patch, _visual_repair_schema(entity_ids))
+    equipment_overlay_required = bool(scope.get("equipmentOverlayRequired"))
+    schema_errors = strict_schema_errors(patch, _visual_repair_schema(entity_ids, equipment_overlay_required))
     filtered = {
         "schema": VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": None,
@@ -365,6 +513,8 @@ def _filter_visual_repair_patch(
         "animationPlan": None,
         "note": str(patch.get("note") or "deterministically filtered Visual Repair"),
     }
+    if equipment_overlay_required:
+        filtered["equipOverlayPatch"] = None
     if schema_errors:
         return filtered, {"schema": "infini.visual-repair-filter-report.v1", "ok": False, "errors": schema_errors, "acceptedPaths": [], "ignoredChanges": []}
 
@@ -372,8 +522,10 @@ def _filter_visual_repair_patch(
     mutable_ids = set(str(value) for value in scope.get("mutableEntityIds") or [])
     deletable_ids = set(str(value) for value in scope.get("deletableEntityIds") or [])
     deletable_indices = set(int(value) for value in scope.get("deletableEntityIndices") or [])
-    permission_root = scope.get("fieldPermissions") if isinstance(scope.get("fieldPermissions"), Mapping) else {}
+    raw_permissions = scope.get("fieldPermissions")
+    permission_root: Mapping[str, Any] = raw_permissions if isinstance(raw_permissions, Mapping) else {}
     item_paths = tuple(str(value) for value in permission_root.get("itemPaths") or [])
+    overlay_paths = tuple(str(value) for value in permission_root.get("equipOverlayPaths") or [])
     entity_permissions = {
         str(row.get("entityId") or ""): tuple(str(value) for value in row.get("paths") or [])
         for row in permission_root.get("entities") or [] if isinstance(row, Mapping)
@@ -413,6 +565,38 @@ def _filter_visual_repair_patch(
             accepted=accepted,
         )
 
+    if equipment_overlay_required:
+        overlay_patch = patch.get("equipOverlayPatch")
+        original_overlay = source.get("equipOverlay")
+        if overlay_patch is not None:
+            if not scope.get("equipOverlayMutable"):
+                ignored.append(_visual_filter_ignored("$.equipOverlayPatch", overlay_patch, original_overlay, "valid_equip_overlay_block_frozen"))
+            elif isinstance(original_overlay, Mapping):
+                merged, row_ignored, row_accepted = merge_frozen_subtree(
+                    original_overlay,
+                    overlay_patch,
+                    mutable_paths=overlay_paths,
+                    audit_path="$.equipOverlayPatch",
+                    allow_additions=False,
+                )
+                filtered["equipOverlayPatch"] = merged
+                ignored.extend(row_ignored)
+                accepted.extend(row_accepted)
+            else:
+                filtered["equipOverlayPatch"] = copy.deepcopy(overlay_patch)
+                accepted.append("$.equipOverlayPatch")
+        if scope.get("equipOverlayMutable") and isinstance(original_overlay, Mapping):
+            candidate_overlay = filtered.get("equipOverlayPatch")
+            repair_overlay: Mapping[str, Any] = candidate_overlay if isinstance(candidate_overlay, Mapping) else original_overlay
+            filtered["equipOverlayPatch"] = _drop_schema_forbidden_mutable_fields(
+                original_overlay,
+                repair_overlay,
+                mutable_paths=overlay_paths,
+                schema=_visual_equip_overlay_schema(),
+                audit_path="$.equipOverlayPatch",
+                accepted=accepted,
+            )
+
     if patch.get("animationPlan") is not None:
         if scope.get("animationPlanMutable"):
             filtered["animationPlan"] = str(patch["animationPlan"])
@@ -439,6 +623,14 @@ def _filter_visual_repair_patch(
             ignored.append(_visual_filter_ignored(path, numeric, preserved, "valid_entity_index_delete_ignored"))
 
     by_id = {str(row.get("entityId") or ""): row for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "")}
+    replacement_indices: dict[str, int] = {}
+    for transaction in scope.get("entityReplacementTransactions") or []:
+        if not isinstance(transaction, Mapping):
+            continue
+        entity_id = str(transaction.get("entityId") or "")
+        replace_index = transaction.get("replaceIndex")
+        if entity_id and isinstance(replace_index, int) and not isinstance(replace_index, bool):
+            replacement_indices[entity_id] = replace_index
     for index, candidate in enumerate(patch.get("entitiesUpsert") or []):
         entity_id = str(candidate.get("entityId") or "")
         path = f"$.entitiesUpsert[{index}]"
@@ -450,6 +642,11 @@ def _filter_visual_repair_patch(
         if original is None:
             filtered["entitiesUpsert"].append(copy.deepcopy(candidate))
             accepted.append(path)
+            replace_index = replacement_indices.get(entity_id)
+            if replace_index is not None and replace_index in deletable_indices:
+                if replace_index not in filtered["entityIndicesDelete"]:
+                    filtered["entityIndicesDelete"].append(replace_index)
+                accepted.append(f"$.entityReplacementTransactions[{entity_id}]")
             continue
         permissions = entity_permissions.get(entity_id, ())
         merged, row_ignored, row_accepted = merge_frozen_subtree(
@@ -468,6 +665,7 @@ def _filter_visual_repair_patch(
         if merged != original:
             filtered["entitiesUpsert"].append(merged)
 
+    filtered["entityIndicesDelete"] = sorted(set(filtered["entityIndicesDelete"]))
     return filtered, {
         "schema": "infini.visual-repair-filter-report.v1",
         "ok": True,
@@ -494,6 +692,8 @@ def _apply_visual_repair_patch(
     out["schema"] = VISUAL_KIT_SCHEMA
     if filtered.get("itemPatch") is not None:
         out["item"] = copy.deepcopy(filtered["itemPatch"])
+    if filtered.get("equipOverlayPatch") is not None:
+        out["equipOverlay"] = copy.deepcopy(filtered["equipOverlayPatch"])
     if filtered.get("animationPlan") is not None:
         out["animationPlan"] = str(filtered["animationPlan"])
     rows = list(out.get("entities") or []) if isinstance(out.get("entities"), list) else []
@@ -525,13 +725,22 @@ def _request_visual_kit(
 ) -> dict[str, Any]:
     runtime_rows = _runtime_card(data)
     entity_ids = [row["id"] for row in runtime_rows]
+    equipment_overlay = equipment_overlay_requirement(data)
+    equipment_overlay_required = bool(equipment_overlay["required"])
+    _ = (ca, cb)
     repair = repair_errors is not None
-    schema = _visual_repair_schema(entity_ids) if repair else _response_schema(entity_ids)
+    schema = (
+        _visual_repair_schema(entity_ids, equipment_overlay_required)
+        if repair
+        else _response_schema(entity_ids, equipment_overlay_required)
+    )
     if repair:
         system = (
             "You are the conditional Visual Repair. Return only a narrow patch for exact invalid visual fields/rows. "
             "You may return a complete broken row; deterministic merge freezes every already-valid old field and keeps "
-            "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. Return JSON only."
+            "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. "
+            "When an accepted runtime entity is the same physical object as item_body, it must use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
+            "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. Return JSON only."
         )
         context = _visual_repair_context(previous, repair_scope or {})
         payload: dict[str, Any] = {
@@ -541,15 +750,25 @@ def _request_visual_kit(
             "brokenFragments": context["broken"],
             "validGeneratedContext": context["validReadOnly"],
             "parentFactsReadOnly": {
-                "parentA": {"item": copy.deepcopy(a), "facts": copy.deepcopy(ca)},
-                "parentB": {"item": copy.deepcopy(b), "facts": copy.deepcopy(cb)},
+                "parentA": {"packet": raw_parent_card_for_llm(a)},
+                "parentB": {"packet": raw_parent_card_for_llm(b)},
             },
             "runtimeEntitiesReadOnly": runtime_rows,
+            "itemReadOnly": {
+                "name": data.get("name"),
+                "realization": copy.deepcopy(data.get("realization") or {}),
+                "claims": copy.deepcopy((data.get("runtimeContract") or {}).get("claims") or [])
+                if isinstance(data.get("runtimeContract"), Mapping) else [],
+            },
+            "equipmentOverlayReadOnly": copy.deepcopy(equipment_overlay),
+            "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
                 "already-valid fields and independent rows are frozen; extra rewrites are ignored",
                 "preserve valid literal parent composition and accepted runtime entity set",
                 "item_body must use baked_sprite; no placeholder PNG",
+                "when an accepted runtime entity is the same physical object as item_body, use reuse_item_icon with visualProjectRef=item and do not author a second visual project",
+                "when equipmentOverlayReadOnly.required is true, repair equipOverlayPatch as a separate wearable presentation asset",
             ],
             "responseSchema": schema,
         }
@@ -558,23 +777,41 @@ def _request_visual_kit(
             "You are Visual Director for InfiniCrafterLocal. Design appearance only for the accepted runtime entities. "
             "Do not add, remove, merge, rename or reinterpret gameplay entities/events. Do not classify the item as a weapon family. "
             "Preserve literal parent objects and their physical relationships. For each exact entityId choose one finite assetMode: "
-            "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. item_body must be baked_sprite. "
+            "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. item_body must be baked_sprite with visualProjectRef=item and exact copies of item prompt/silhouette/visualIdentity. "
+            "A distinct baked entity uses visualProjectRef=entity and authors prompt/silhouette/visualIdentity. reuse_item_icon uses visualProjectRef=item and omits those fields; runtime_geometry/no_asset use visualProjectRef=none and omit them. "
+            "When an accepted runtime entity is the same physical object as item_body, it must use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
+            "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. "
             "A baked sprite is mandatory delivery: never request or accept a placeholder. Return JSON only."
         )
+        runtime_contract_raw = data.get("runtimeContract")
+        runtime_contract: Mapping[str, Any] = runtime_contract_raw if isinstance(runtime_contract_raw, Mapping) else {}
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
-            "item": {"name": data.get("name"), "tooltip": data.get("tooltip"), "concept": copy.deepcopy(data.get("concept") or {})},
+            "item": {
+                "name": data.get("name"),
+                "realization": copy.deepcopy(data.get("realization") or {}),
+                "claims": copy.deepcopy(runtime_contract.get("claims") or []),
+            },
             "parents": {
-                "parentA": {"item": copy.deepcopy(a), "facts": copy.deepcopy(ca)},
-                "parentB": {"item": copy.deepcopy(b), "facts": copy.deepcopy(cb)},
+                "parentA": {"packet": raw_parent_card_for_llm(a)},
+                "parentB": {"packet": raw_parent_card_for_llm(b)},
             },
             "runtimeEntities": runtime_rows,
             "requiredEntityIds": entity_ids,
+            "equipmentOverlayReadOnly": copy.deepcopy(equipment_overlay),
+            "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "appearance only; runtime program is immutable",
                 "literal furniture, tools and materials may remain literal",
                 "movement/controller names describe motion, not a weapon taxonomy",
                 "baked_sprite requires a real generated PNG; no placeholder",
+                "item.prompt and every baked_sprite entity prompt must require a transparent background; never request a solid, black, white or otherwise opaque background",
+                "never author impact sprite prompts here; VFX owns them only when it selects rendererKind=impactSprite",
+                "item_body is one item visual project: copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
+                "when an accepted runtime entity is the same physical object as item_body, use reuse_item_icon with visualProjectRef=item and do not author a second visual project",
+                "reuse_item_icon carries only entityId, assetMode, visualProjectRef=item and scale; do not duplicate prompt or identity fields",
+                "runtime_geometry/no_asset carry only entityId, assetMode, visualProjectRef=none and scale",
+                "when equipmentOverlayReadOnly.required is true, author equipOverlay as a separate transparent wearable layer for that exact slot, without drawing a player body",
             ],
             "responseSchema": schema,
         }
@@ -619,6 +856,15 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
         "inventoryScale": float(item.get("inventoryScale") or 1.0),
         "worldScale": float(item.get("worldScale") or 1.0),
     })
+    overlay = kit.get("equipOverlay")
+    if isinstance(overlay, Mapping):
+        visual.update({
+            "equipOverlayPrompt": str(overlay.get("prompt") or "")[:1400],
+            "equipOverlayPath": "",
+            "equipOverlayUrl": "",
+            "equipOverlayStatus": "pending",
+            "equipOverlayTechnicalScore": 0.0,
+        })
     runtime = out.get("runtimeProgram") if isinstance(out.get("runtimeProgram"), dict) else {}
     by_id = {str(row.get("entityId")): row for row in kit.get("entities") or [] if isinstance(row, dict)}
     for entity in runtime.get("entities") or []:
@@ -626,12 +872,19 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
             continue
         row = by_id[str(entity.get("id") or "")]
         entity_visual = entity.setdefault("visual", {})
+        for stale_impact_field in (
+            "impactPrompt", "impactNegativePrompt", "impactSpritePath", "impactSpriteUrl",
+            "impactSpriteStatus", "impactSpriteTechnicalScore",
+        ):
+            entity_visual.pop(stale_impact_field, None)
+        project_ref = str(row.get("visualProjectRef") or "")
+        project = item if project_ref == "item" else row
         entity_visual.update({
             "role": str(entity.get("visualRole") or ""),
             "assetMode": str(row.get("assetMode") or ""),
-            "prompt": str(row.get("prompt") or "")[:1400],
-            "silhouette": str(row.get("silhouette") or "")[:700],
-            "visualIdentity": str(row.get("visualIdentity") or "")[:700],
+            "prompt": str(project.get("prompt") or "")[:1400],
+            "silhouette": str(project.get("silhouette") or "")[:700],
+            "visualIdentity": str(project.get("visualIdentity") or "")[:700],
             "scale": float(row.get("scale") or 1.0),
             "spritePath": "",
             "spriteUrl": "",
@@ -648,6 +901,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     entities = [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
     entity_ids = [str(row.get("id") or "") for row in entities]
     item_body_id = next((str(row.get("id") or "") for row in entities if row.get("kind") == "item_body"), "")
+    equipment_overlay_required = bool(equipment_overlay_requirement(data)["required"])
     if not entity_ids or not item_body_id:
         raise PlannerUnavailable("Visual Director has no accepted runtime entities")
     if not (USE_LLM and VISUAL_DIRECTOR_LLM):
@@ -655,28 +909,37 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         # manufacture a visual design in code.
         if str((data.get("debug") or {}).get("planner") or "").startswith("llm_"):
             raise PlannerUnavailable("Visual Director is required for LLM-authored craft")
+        if equipment_overlay_required:
+            raise PlannerUnavailable("Equipment overlay requires a model-authored Visual Director response")
+        dev_item = {
+            "prompt": f"Terraria pixel-art inventory sprite of {data.get('name')}; literal combined parent object, transparent background",
+            "negativePrompt": "placeholder, text, watermark",
+            "silhouette": "compact readable combined object",
+            "visualIdentity": str((data.get("realization") or {}).get("description") or data.get("name") or "generated item"),
+            "palette": ["neutral", "accent"],
+            "preferredCanvasSize": 32,
+            "inventoryScale": 1.0,
+            "worldScale": 1.0,
+        }
         kit = {
             "schema": VISUAL_KIT_SCHEMA,
-            "item": {
-                "prompt": f"Terraria pixel-art inventory sprite of {data.get('name')}; literal combined parent object, transparent background",
-                "negativePrompt": "placeholder, text, watermark",
-                "silhouette": "compact readable combined object",
-                "visualIdentity": str((data.get("concept") or {}).get("literalSynthesis") or data.get("name") or "generated item"),
-                "palette": ["neutral", "accent"],
-                "preferredCanvasSize": 32,
-                "inventoryScale": 1.0,
-                "worldScale": 1.0,
-            },
+            "item": dev_item,
             "entities": [
-                {
+                ({
                     "entityId": entity_id,
-                    "assetMode": "baked_sprite" if entity_id == item_body_id else "reuse_item_icon",
-                    "prompt": f"Terraria pixel-art visual for runtime entity {entity_id}",
-                    "silhouette": "readable runtime entity",
-                    "visualIdentity": entity_id,
+                    "assetMode": "baked_sprite",
+                    "visualProjectRef": "item",
+                    "prompt": dev_item["prompt"],
+                    "silhouette": dev_item["silhouette"],
+                    "visualIdentity": dev_item["visualIdentity"],
                     "scale": 1.0,
-                }
-                for index, entity_id in enumerate(entity_ids)
+                } if entity_id == item_body_id else {
+                    "entityId": entity_id,
+                    "assetMode": "reuse_item_icon",
+                    "visualProjectRef": "item",
+                    "scale": 1.0,
+                })
+                for entity_id in entity_ids
             ],
             "animationPlan": "Use the authored runtime movement without changing gameplay.",
         }
@@ -686,13 +949,29 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     accounting = _stage_accounting(data)
     accounting["visualDirectorCalls"] += 1
     raw = _request_visual_kit(data, a, b, ca, cb)
-    kit, errors = _validate_kit(raw, entity_ids, item_body_id)
+    kit, errors = _validate_kit(
+        raw,
+        entity_ids,
+        item_body_id,
+        equipment_overlay_required=equipment_overlay_required,
+    )
     if kit is None:
         accounting["visualRepairCalls"] += 1
-        repair_scope = _build_visual_repair_scope(raw, errors, entity_ids, item_body_id)
+        repair_scope = _build_visual_repair_scope(
+            raw,
+            errors,
+            entity_ids,
+            item_body_id,
+            equipment_overlay_required=equipment_overlay_required,
+        )
         patch = _request_visual_kit(data, a, b, ca, cb, repair_errors=errors, previous=raw, repair_scope=repair_scope)
         repaired, repair_audit = _apply_visual_repair_patch(raw, patch, repair_scope, entity_ids, return_audit=True)
-        kit, errors = _validate_kit(repaired, entity_ids, item_body_id)
+        kit, errors = _validate_kit(
+            repaired,
+            entity_ids,
+            item_body_id,
+            equipment_overlay_required=equipment_overlay_required,
+        )
         if kit is None:
             raise PlannerUnavailable("Visual Repair did not produce an entity-complete visual kit: " + json.dumps(errors[:16], ensure_ascii=False))
         raw = repaired
@@ -711,16 +990,24 @@ def build_image_prompt(data: dict[str, Any], visual: dict[str, Any]) -> str:
     return str(visual.get("imagePrompt") or "")[:1400]
 
 
-def visual_response_schema(entity_ids: list[str]) -> dict[str, Any]:
-    """Public generated schema owned by the Visual Director contract module."""
+def visual_response_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None) -> dict[str, Any]:
+    """Public schema; ``None`` exports the capability-neutral optional superset."""
 
-    return _response_schema(entity_ids)
+    if equipment_overlay_required is not None:
+        return _response_schema(entity_ids, equipment_overlay_required)
+    schema = _response_schema(entity_ids, False)
+    schema["properties"]["equipOverlay"] = _visual_equip_overlay_schema()
+    return schema
 
 
-def visual_repair_schema(entity_ids: list[str]) -> dict[str, Any]:
-    """Public generated schema for the bounded Visual Repair patch."""
+def visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None) -> dict[str, Any]:
+    """Public Repair schema; ``None`` exports the optional capability superset."""
 
-    return _visual_repair_schema(entity_ids)
+    if equipment_overlay_required is not None:
+        return _visual_repair_schema(entity_ids, equipment_overlay_required)
+    schema = _visual_repair_schema(entity_ids, False)
+    schema["properties"]["equipOverlayPatch"] = {"anyOf": [_visual_equip_overlay_schema(), {"type": "null"}]}
+    return schema
 
 
 __all__ = [

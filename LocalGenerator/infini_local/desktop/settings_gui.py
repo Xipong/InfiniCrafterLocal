@@ -33,8 +33,8 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1040x760")
-        self.minsize(900, 660)
+        self.geometry("1160x820")
+        self.minsize(960, 700)
         self._configure_theme()
         self.proc: subprocess.Popen | None = None
         self.data = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
@@ -49,7 +49,7 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self.secret_entries: list[tk.Widget] = []
         self.show_secrets = tk.BooleanVar(value=False)
         self.radmin_enabled = tk.BooleanVar(value=(self.data.get("INFINI_HOST") == "0.0.0.0" or bool(self.data.get("INFINI_ASSET_PUBLIC_BASE_URL"))))
-        self.status_var = tk.StringVar(value="Готово. Выбери pipeline preset, отдельно включи Radmin/LAN если нужен, нажми Save и Start.")
+        self.status_var = tk.StringVar(value="Готово. Выбери профиль генерации, при необходимости включи Radmin/LAN, затем сохрани настройки и запусти сервер.")
         self._build_ui()
         self._install_global_edit_shortcuts()
         self._refresh_visibility()

@@ -146,13 +146,18 @@ class SettingsGuiUiMixin:
             style.configure("Hint.TLabel", background=CARD_BG, foreground=MUTED_FG, font=("Segoe UI", 8))
             style.configure("HintMuted.TLabel", background=CARD_MUTED_BG, foreground=MUTED_FG, font=("Segoe UI", 8))
             style.configure("Status.TLabel", background=CARD_BG, foreground=MUTED_FG, padding=(10, 7))
-            style.configure("TNotebook", background=APP_BG, borderwidth=0, tabmargins=(0, 6, 0, 0))
-            style.configure("TNotebook.Tab", padding=(18, 10), font=("Segoe UI", 9, "bold"), background="#eef2f7", foreground="#475569")
+            style.configure("TNotebook", background=APP_BG, borderwidth=0, tabmargins=(0, 0, 0, 0))
+            style.configure("TNotebook.Tab", padding=(14, 8), font=("Segoe UI", 9, "bold"), background="#eef2f7", foreground="#475569")
             style.map(
                 "TNotebook.Tab",
                 background=[("selected", CARD_BG), ("active", "#f8fafc")],
                 foreground=[("selected", ACCENT_BG), ("active", TEXT_FG)],
             )
+            # Pages are switched by the custom single-row navigation strip below.
+            # Keeping the real Notebook preserves keyboard/page ownership without
+            # the wrapped/clipped Windows ttk tab row visible in the old GUI.
+            style.configure("Hidden.TNotebook", background=APP_BG, borderwidth=0, tabmargins=(0, 0, 0, 0))
+            style.layout("Hidden.TNotebook.Tab", [])
             style.configure("Accent.TButton", padding=(12, 7), font=("Segoe UI", 9, "bold"))
             style.configure("Ghost.TButton", padding=(10, 6), font=("Segoe UI", 9))
             style.configure("TEntry", padding=(7, 5), fieldbackground="#ffffff", bordercolor=BORDER_DARK_FG, lightcolor=BORDER_DARK_FG, darkcolor=BORDER_DARK_FG)
@@ -236,6 +241,74 @@ class SettingsGuiUiMixin:
         except (AttributeError, RuntimeError, TypeError):
             return ttk.Label(parent, text=text)
 
+    def _paint_tab_navigation(self):
+        """Keep the custom navigation strip in sync with the hidden Notebook."""
+        try:
+            selected = self.tabs.index(self.tabs.select())
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            selected = 0
+        for index, button in enumerate(getattr(self, "tab_nav_buttons", [])):
+            active = index == selected
+            try:
+                button.configure(
+                    bg=ACCENT_SOFT_BG if active else CARD_BG,
+                    fg=ACCENT_BG if active else "#475569",
+                    activebackground=ACCENT_SOFT_BG if active else "#f8fafc",
+                    activeforeground=ACCENT_BG if active else TEXT_FG,
+                    highlightbackground=ACCENT_BG if active else BORDER_FG,
+                    font=("Segoe UI", 9, "bold" if active else "normal"),
+                )
+            except (AttributeError, RuntimeError, TypeError):
+                pass
+
+    def _select_settings_tab(self, index: int):
+        try:
+            self.tabs.select(index)
+        except (AttributeError, RuntimeError, TypeError, tk.TclError):
+            return
+        self._paint_tab_navigation()
+
+    def _build_tab_navigation(self, parent):
+        nav = tk.Frame(parent, bg=CARD_BG, padx=4, pady=4, highlightthickness=1, highlightbackground=BORDER_FG)
+        try:
+            setattr(nav, "_infini_bg", CARD_BG)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        nav.pack(fill="x", pady=(0, 8))
+        items = [
+            ("▣", "Сервер и крафт"),
+            ("◉", "LLM"),
+            ("▦", "Multi-dev"),
+            ("▧", "Картинки"),
+            ("✦", "VFX и качество"),
+            ("⌘", "Трассировка"),
+        ]
+        self.tab_nav_buttons = []
+        for index, (icon, label) in enumerate(items):
+            nav.grid_columnconfigure(index, weight=1, uniform="settings-nav")
+            button = tk.Button(
+                nav,
+                text=f"{icon}  {label}",
+                command=lambda index=index: self._select_settings_tab(index),
+                bg=CARD_BG,
+                fg="#475569",
+                activebackground="#f8fafc",
+                activeforeground=TEXT_FG,
+                relief="flat",
+                bd=0,
+                highlightthickness=1,
+                highlightbackground=BORDER_FG,
+                highlightcolor=ACCENT_BG,
+                padx=8,
+                pady=9,
+                font=("Segoe UI", 9),
+                cursor="hand2",
+            )
+            button.grid(row=0, column=index, sticky="nsew", padx=(0 if index == 0 else 2, 0))
+            self.tab_nav_buttons.append(button)
+        self._paint_tab_navigation()
+        return nav
+
     def _card(self, parent, title: str | None = None, subtitle: str = "", icon: str = "", status: tuple[str, str] | None = None):
         try:
             outer = tk.Frame(parent, bg=CARD_BG, highlightthickness=1, highlightbackground=BORDER_FG, bd=0)
@@ -300,23 +373,23 @@ class SettingsGuiUiMixin:
             return ttk.Label(panel, text=str(text))
 
     def _build_ui(self):
-        shell = ttk.Frame(self, padding=(14, 12), style="Infini.TFrame")
+        shell = ttk.Frame(self, padding=(12, 10), style="Infini.TFrame")
         shell.pack(fill="both", expand=True)
 
-        header = tk.Frame(shell, bg=HEADER_BG, padx=18, pady=16, highlightthickness=1, highlightbackground="#102344")
+        header = tk.Frame(shell, bg=HEADER_BG, padx=16, pady=12, highlightthickness=1, highlightbackground="#102344")
         header._infini_bg = HEADER_BG
         header.pack(fill="x", pady=(0, 12))
         brand = tk.Frame(header, bg=HEADER_BG)
         brand._infini_bg = HEADER_BG
-        logo = tk.Label(brand, text="⚡", bg=HEADER_BG, fg="#38bdf8", font=("Segoe UI Symbol", 28, "bold"))
-        logo.pack(side="left", padx=(0, 14))
+        logo = tk.Label(brand, text="⚡", bg=HEADER_BG, fg="#38bdf8", font=("Segoe UI Symbol", 23, "bold"))
+        logo.pack(side="left", padx=(0, 12))
         header_text = tk.Frame(brand, bg=HEADER_BG)
         header_text._infini_bg = HEADER_BG
         header_text.pack(side="left", fill="x", expand=True)
-        tk.Label(header_text, text="InfiniCrafterLocal", bg=HEADER_BG, fg="#f8fafc", font=("Segoe UI", 21, "bold")).pack(anchor="w")
+        tk.Label(header_text, text="InfiniCrafterLocal", bg=HEADER_BG, fg="#f8fafc", font=("Segoe UI", 19, "bold")).pack(anchor="w")
         tk.Label(
             header_text,
-            text="Локальный генератор: LLM runtime, PNG, Radmin/LAN и debug-trace.",
+            text="Генератор предметов: LLM, PNG, LAN и трассировка.",
             bg=HEADER_BG,
             fg="#cbd5e1",
             font=("Segoe UI", 9),
@@ -327,10 +400,10 @@ class SettingsGuiUiMixin:
         actions._infini_bg = HEADER_BG
         actions.pack(side="right")
         for text, command, variant in [
-            ("💾  Save", self.save, "primary"),
-            ("▶  Start", self.start_server, "dark"),
-            ("■  Stop", self.stop_server, "danger"),
-            ("♥  Health", self.open_health, "success"),
+            ("💾  Сохранить", self.save, "primary"),
+            ("▶  Запустить", self.start_server, "dark"),
+            ("■  Остановить", self.stop_server, "danger"),
+            ("♥  Статус", self.open_health, "success"),
             ("⚙  config.env", self.open_config, "dark"),
         ]:
             btn = self._modern_button(actions, text, command, variant=variant)
@@ -339,22 +412,22 @@ class SettingsGuiUiMixin:
         # right-most config button is never clipped at the default window width.
         brand.pack(side="left", fill="x", expand=True)
 
-        preset_bar = tk.Frame(shell, bg=CARD_BG, padx=16, pady=12, highlightthickness=1, highlightbackground=BORDER_FG)
+        preset_bar = tk.Frame(shell, bg=CARD_BG, padx=14, pady=9, highlightthickness=1, highlightbackground=BORDER_FG)
         preset_bar._infini_bg = CARD_BG
         preset_bar.pack(fill="x", pady=(0, 12))
-        preset_label = tk.Label(preset_bar, text="Pipeline preset", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
+        preset_label = tk.Label(preset_bar, text="Профиль генерации", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
         preset_label.pack(side="left", padx=(0, 10))
         self.preset_var = tk.StringVar(value=self._pipeline_preset_from_config(self.data))
-        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=list(PRESETS), state="readonly", width=47)
+        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=list(PRESETS), state="readonly", width=36)
         preset_combo.pack(side="left", padx=6, ipady=2)
         preset_combo.bind("<<ComboboxSelected>>", lambda _e: self._show_preset_help(), add="+")
         self._attach_static_help(preset_combo, lambda: self._preset_help_text())
-        apply_btn = self._modern_button(preset_bar, "＋  Apply pipeline", self.apply_preset, variant="soft")
+        apply_btn = self._modern_button(preset_bar, "Применить", self.apply_preset, variant="soft")
         apply_btn.pack(side="left", padx=(10, 16))
         self._attach_static_help(apply_btn, "Применить выбранный pipeline preset. После применения GUI заблокирует поля, которые не участвуют в выбранной связке.")
-        guard_chip = self._chip(preset_bar, "runtime guarded", "blue")
+        guard_chip = self._chip(preset_bar, "контракт защищён", "blue")
         guard_chip.pack(side="right", padx=(8, 0))
-        validate_btn = self._modern_button(preset_bar, "📁  Проверить пути", self.validate_paths, variant="ghost")
+        validate_btn = self._modern_button(preset_bar, "📁  Проверить", self.validate_paths, variant="ghost")
         validate_btn.pack(side="right", padx=(8, 0))
         self._attach_static_help(validate_btn, "Проверить активные пути/ключи для текущего provider/backend. Неактивные поля не считаются ошибкой.")
         secrets_btn = ttk.Checkbutton(preset_bar, text="Показать ключи", variable=self.show_secrets, command=self._refresh_secret_entries)
@@ -368,31 +441,40 @@ class SettingsGuiUiMixin:
         preset_combo.pack(side="left", padx=6, ipady=2)
         apply_btn.pack(side="left", padx=(10, 16))
 
-        self.tabs = ttk.Notebook(shell)
-        self.tabs.pack(fill="both", expand=True, pady=(0, 8))
+        status_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=7, highlightthickness=1, highlightbackground=BORDER_FG)
+        try:
+            setattr(status_bar, "_infini_bg", CARD_BG)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        status_bar.pack(fill="x", side="bottom")
+        tk.Label(status_bar, text="●", bg=CARD_BG, fg=SUCCESS_BG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 6))
+        tk.Label(status_bar, text="Состояние", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
+        tk.Label(status_bar, textvariable=self.status_var, bg=CARD_BG, fg=MUTED_FG, font=("Segoe UI", 9), anchor="w", justify="left").pack(side="left", fill="x", expand=True)
+
+        self.tabs = ttk.Notebook(shell, style="Hidden.TNotebook")
         self.general_tab = ScrollFrame(self.tabs)
         self.llm_tab = ScrollFrame(self.tabs)
+        self.multidev_tab = ScrollFrame(self.tabs)
         self.image_tab = ScrollFrame(self.tabs)
         self.visual_tab = ScrollFrame(self.tabs)
         self.trace_tab = ttk.Frame(self.tabs, style="Infini.TFrame")
-        self.tabs.add(self.general_tab, text="▣  1. Сервер / крафт")
-        self.tabs.add(self.llm_tab, text="◉  2. LLM")
-        self.tabs.add(self.image_tab, text="▧  3. Картинки")
-        self.tabs.add(self.visual_tab, text="✦  4. VFX / качество")
-        self.tabs.add(self.trace_tab, text="⌘  5. Trace / pipeline")
+        self.tabs.add(self.general_tab, text="Сервер и крафт")
+        self.tabs.add(self.llm_tab, text="LLM")
+        self.tabs.add(self.multidev_tab, text="Multi-dev")
+        self.tabs.add(self.image_tab, text="Картинки")
+        self.tabs.add(self.visual_tab, text="VFX и качество")
+        self.tabs.add(self.trace_tab, text="Трассировка")
+        self._build_tab_navigation(shell)
+        self.tabs.pack(fill="both", expand=True, pady=(0, 8))
+        self.tabs.bind("<<NotebookTabChanged>>", lambda _e: self._paint_tab_navigation(), add="+")
+        self._paint_tab_navigation()
 
         self._build_general(self.general_tab.inner)
         self._build_llm(self.llm_tab.inner)
+        self._build_multidev(self.multidev_tab.inner)
         self._build_image(self.image_tab.inner)
         self._build_visual(self.visual_tab.inner)
         self._build_trace(self.trace_tab)
-
-        status_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=8, highlightthickness=1, highlightbackground=BORDER_FG)
-        status_bar._infini_bg = CARD_BG
-        status_bar.pack(fill="x")
-        tk.Label(status_bar, text="●", bg=CARD_BG, fg=SUCCESS_BG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 6))
-        tk.Label(status_bar, text="Готово", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
-        tk.Label(status_bar, textvariable=self.status_var, bg=CARD_BG, fg=MUTED_FG, font=("Segoe UI", 9), anchor="w", justify="left").pack(side="left", fill="x", expand=True)
 
     def check_row(self, parent, label, key, hint=None):
         bg = self._bg_of(parent, CARD_BG)
@@ -430,7 +512,7 @@ class SettingsGuiUiMixin:
             frame._infini_bg = bg
         except (AttributeError, RuntimeError, TypeError):
             pass
-        label_widget = ttk.Label(frame, text=label, width=26, style=label_style)
+        label_widget = ttk.Label(frame, text=label, width=24, style=label_style)
         label_widget.pack(side="left")
         var = self._var(key)
         if values:
@@ -440,7 +522,11 @@ class SettingsGuiUiMixin:
             widget = ttk.Entry(frame, textvariable=var, width=width, show="*" if secret and not self.show_secrets.get() else "")
             if secret:
                 self.secret_entries.append(widget)
-        widget.pack(side="left", fill="x", expand=True, ipady=2)
+        compact = width <= 20 and browse is None
+        if compact:
+            widget.pack(side="left", ipady=2)
+        else:
+            widget.pack(side="left", fill="x", expand=True, ipady=2)
         self._enable_edit_menu(widget)
         registered_widgets: list[tk.Widget] = [frame, label_widget, widget]
         if browse == "file":
@@ -478,7 +564,7 @@ class SettingsGuiUiMixin:
             frame._infini_bg = bg
         except (AttributeError, RuntimeError, TypeError):
             pass
-        label_widget = ttk.Label(frame, text=label, width=26, style=label_style)
+        label_widget = ttk.Label(frame, text=label, width=24, style=label_style)
         label_widget.pack(side="left", anchor="n")
         text = tk.Text(frame, width=70, height=height, wrap="word", undo=True, relief="solid", bd=1, highlightthickness=1, highlightbackground=BORDER_DARK_FG, font=("Segoe UI", 9))
         text.insert("1.0", self.data.get(key, DEFAULTS.get(key, "")))
@@ -557,7 +643,7 @@ class SettingsGuiUiMixin:
             "Сервер и поведение крафта",
             "Локальный HTTP helper для tModLoader craft request. 127.0.0.1 — только для себя; 0.0.0.0 — LAN/Radmin.",
             icon="▣",
-            status=("Ready", "green"),
+            status=("Готов", "green"),
         )
         self.row(server_card, "Host", "INFINI_HOST", hint="127.0.0.1 — только ты; 0.0.0.0 — принимать подключения из Radmin/LAN.")
         self.row(server_card, "Port", "INFINI_PORT", width=16)
@@ -630,19 +716,6 @@ class SettingsGuiUiMixin:
         self.row(parent, "Compat model", "INFINI_OPENAI_COMPAT_MODEL")
         self.row(parent, "LLM 1 API mode", "INFINI_LLM_API_MODE", values=["auto", "responses", "chat_completions"], hint="auto сначала пробует /responses и запоминает поддержку; при отказе тот же self-contained packet идёт через /chat/completions.")
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        ttk.Label(parent, text="Distributed item pool (optional)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
-        ttk.Label(parent, text="Один новый предмет закрепляется за одним profile на весь Planner → Visual → VFX; следующие предметы распределяются round-robin.", style="Hint.TLabel").pack(anchor="w", padx=14, pady=(0, 6))
-        self.row(parent, "Provider failure cooldown", "INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS", hint="При отказе текущий stage идёт на следующий profile, а сломанный временно исключается из новых item leases.")
-        for slot in (2, 3, 4):
-            prefix = f"INFINI_LLM_POOL_{slot}"
-            ttk.Label(parent, text=f"LLM {slot}", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=14, pady=(7, 0))
-            self.row(parent, f"LLM {slot} enabled", f"{prefix}_ENABLED", values=["0", "1"])
-            self.row(parent, f"LLM {slot} provider", f"{prefix}_PROVIDER", values=["local", "openrouter", "openai_compat"])
-            self.row(parent, f"LLM {slot} base URL", f"{prefix}_BASE_URL", hint="Можно оставить пустым для стандартного OpenRouter URL или основного LM Studio URL.")
-            self.row(parent, f"LLM {slot} API key", f"{prefix}_API_KEY", secret=True)
-            self.row(parent, f"LLM {slot} model", f"{prefix}_MODEL", hint="Пустая модель не активируется даже при enabled=1.")
-            self.row(parent, f"LLM {slot} API mode", f"{prefix}_API_MODE", values=["auto", "responses", "chat_completions"])
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         ttk.Label(parent, text="Fallback LLM (optional)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.row(parent, "Fallback provider", "INFINI_LLM_FALLBACK_PROVIDER", values=["", "local", "openrouter", "openai_compat"], hint="Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.")
         self.row(parent, "Fallback model", "INFINI_LLM_FALLBACK_MODEL", hint="Пусто = fallback выключен. Если основная модель умерла по бабкам/сети, сервер попробует эту модель.")
@@ -665,6 +738,49 @@ class SettingsGuiUiMixin:
         self.row(parent, "Reasoning token budget", "INFINI_LLM_REASONING_MAX_TOKENS", width=16, hint="Используется при mode=tokens; OpenRouter мапит это на max_tokens/thinking_budget там, где модель поддерживает.")
         self.row(parent, "Hide reasoning output", "INFINI_LLM_REASONING_EXCLUDE", values=["1", "0"], hint="1 = reasoning используется, но не возвращается в message.content; меньше ломает JSON-парсер.")
         self.row(parent, "Local prompt reasoning", "INFINI_LLM_LOCAL_REASONING_PROMPT", values=["1", "0"], hint="Для локалок без API reasoning: разрешить короткий внутренний чек в system prompt. Цепочку мыслей выводить всё равно запрещено.")
+
+    def _build_multidev(self, parent):
+        hero = self._card(
+            parent,
+            "Multi-dev крафт — 2–3 независимых окна",
+            "В игре: /multidevcraft 2, /multidevcraft 3 или /multidevcraft off. Каждое окно имеет свои A/B-слоты, requestId, прогресс и exact LLM profile.",
+            icon="▦",
+            status=("admin-команда", "amber"),
+        )
+        self._info_panel(
+            hero,
+            "Lane 1 → LLM 1, lane 2 → LLM 2, lane 3 → LLM 3. Multi-dev не прыгает на соседнюю модель: неактивный или пустой profile честно роняет только своё окно и возвращает его ингредиенты.",
+            tone="amber",
+        )
+        self.row(hero, "Параллельных окон", "INFINI_MULTIDEV_CONCURRENCY", width=16, values=["2", "3"], hint="Верхний предел LocalGenerator. Команда в игре может открыть 2 или 3 окна, но не больше этого значения.")
+        self.row(hero, "Cooldown после ошибки", "INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS", width=16, hint="Для обычного round-robin/failover. Exact multi-dev lanes за соседней моделью не прячутся.")
+
+        lane1 = self._card(
+            parent,
+            "Окно 1 · LLM 1",
+            "Основной provider/model на вкладке LLM. В multi-dev режиме первое окно закрепляется за llm_1.",
+            icon="①",
+            status=("основная", "blue"),
+        )
+        self._info_panel(lane1, "Настрой LLM provider, base URL/API key и model на вкладке 2. LLM.", tone="blue")
+
+        for slot in (2, 3, 4):
+            prefix = f"INFINI_LLM_POOL_{slot}"
+            if slot <= 3:
+                title = f"Окно {slot} · LLM {slot}"
+                subtitle = f"Отдельное игровое окно #{slot}; exact profile llm_{slot}, без model hop."
+                status = ("крафт-окно", "green")
+            else:
+                title = "LLM 4 · обычный pool reserve"
+                subtitle = "Не создаёт четвёртое окно; остаётся доступным обычному item-level round-robin/failover."
+                status = ("резерв", "neutral")
+            card = self._card(parent, title, subtitle, icon=str(slot), status=status)
+            self.row(card, "Включена", f"{prefix}_ENABLED", values=["0", "1"])
+            self.row(card, "Провайдер", f"{prefix}_PROVIDER", values=["local", "openrouter", "openai_compat"])
+            self.row(card, "Base URL", f"{prefix}_BASE_URL", hint="Можно оставить пустым для стандартного OpenRouter URL или основного LM Studio URL.")
+            self.row(card, "API key", f"{prefix}_API_KEY", secret=True)
+            self.row(card, "Модель", f"{prefix}_MODEL", hint="Для lane 2/3 пустая модель означает честный отказ этого окна и refund.")
+            self.row(card, "Режим API", f"{prefix}_API_MODE", values=["auto", "responses", "chat_completions"])
 
     def _build_zimage_guide(self, parent):
         box = ttk.LabelFrame(parent, text="FLUX.2 / Z-Image / stable-diffusion.cpp — краткий гайд", padding=(10, 8))
@@ -696,6 +812,7 @@ class SettingsGuiUiMixin:
         ttk.Label(parent, text="Image backend: кто рисует PNG", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
         self._build_zimage_guide(parent)
         self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "image_api", "off", "comfyui", "a1111"], hint="sdcpp = локальный FLUX.2/Z-Image через stable-diffusion.cpp; image_api = внешний API; off = без PNG.")
+        self.row(parent, "Shared image concurrency", "INFINI_IMAGE_MAX_CONCURRENCY", width=8, hint="Один общий GPU/sd-server: 1. Увеличивай только если backend действительно обслуживает параллельные image jobs без OOM/очереди внутри.")
         self.row(parent, "sd-server.exe", "INFINI_SDCPP_SERVER_EXE", browse="file")
         self.row(parent, "ROCm hybrid runtime", "INFINI_SDCPP_ROCM_COMPAT_ROOT", browse="dir", hint="Папка sdcpp-hybrid-gfx1030. ROCm/HIP/rocBLAS env применяется только к дочернему sd-server.exe.")
         self.row(parent, "Diffusion model", "INFINI_SDCPP_MODEL", browse="model", hint="FLUX.2 Klein или Z-Image *.gguf.")

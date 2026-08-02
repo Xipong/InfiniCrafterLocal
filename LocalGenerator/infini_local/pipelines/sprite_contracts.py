@@ -93,6 +93,17 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptFillWords": "the item body should span most of the canvas along its width or height while staying fully inside the frame",
             "promptPoseWords": "compose it as a clean Terraria-style item sprite",
         },
+        "equip_overlay": {
+            "targetFill": 0.78,
+            "minFill": 0.58,
+            "maxFill": 0.94,
+            "coreAlphaThreshold": SPRITE_ITEM_CORE_ALPHA_THRESHOLD,
+            "marginPx": 2,
+            "cropPadPx": 1,
+            "maxEdgeTouch": 0.08,
+            "promptFillWords": "the wearable layer should fit comfortably inside the canvas with transparent breathing room around its silhouette",
+            "promptPoseWords": "compose one centered wearable equipment overlay only, isolated from any player body or inventory card",
+        },
         "projectile": {
             "targetFill": PROJECTILE_ICON_TARGET_FILL,
             "minFill": 0.68,
