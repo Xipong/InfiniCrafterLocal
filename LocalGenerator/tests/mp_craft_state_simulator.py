@@ -46,6 +46,7 @@ class CraftItemRef:
 
 @dataclass
 class PlayerState:
+    client_token: str = ""
     mouse_slot_58: Slot = field(default_factory=Slot)
     station: list[Slot] = field(default_factory=lambda: [Slot(), Slot()])
     last_mouse_origin: str = ""
@@ -64,17 +65,46 @@ class CraftStateSimulator:
 
     def __init__(self) -> None:
         self._players: dict[int, PlayerState] = {}
-        self._committed: dict[str, str] = {}
-        self._cancelled: set[str] = set()
-        self._station_escrow_results: dict[tuple[int, str], tuple[bool, str]] = {}
-        self._station_escrow_result_order: list[tuple[int, str]] = []
+        self._player_tokens: dict[int, str] = {}
+        self._durable_station: dict[str, list[Slot]] = {}
+        self._craft_outcomes: dict[str, tuple[bool, str, str]] = {}
+        self._craft_leases: set[str] = set()
+        self._durable_client_pending: dict[str, str] = {}
+        self._station_escrow_results: dict[tuple[str, str], tuple[bool, str]] = {}
+        self._station_escrow_result_order: list[tuple[str, str]] = []
 
     def get_player(self, player_id: int) -> PlayerState:
-        return self._players.setdefault(player_id, PlayerState())
+        token = self._player_tokens.setdefault(player_id, f"client-{player_id}")
+        if player_id not in self._players:
+            player = PlayerState(client_token=token)
+            if token in self._durable_station:
+                player.station = copy.deepcopy(self._durable_station[token])
+            self._players[player_id] = player
+        return self._players[player_id]
 
-    @staticmethod
-    def _key(player_id: int, request_id: str) -> str:
-        return f"servercraft:{player_id}:{request_id}"
+    def connect_player(self, player_id: int, client_token: str) -> PlayerState:
+        self._player_tokens[player_id] = client_token
+        self._players.pop(player_id, None)
+        player = self.get_player(player_id)
+        request_id = self._durable_client_pending.get(client_token, "")
+        if request_id:
+            player.awaiting_server_commit = True
+            player.server_request_id = request_id
+        return player
+
+    def disconnect_player(self, player_id: int) -> None:
+        player = self.get_player(player_id)
+        self._durable_station[player.client_token] = copy.deepcopy(player.station)
+        if player.awaiting_server_commit and player.server_request_id:
+            self._durable_client_pending[player.client_token] = player.server_request_id
+        self._players.pop(player_id, None)
+        self._player_tokens.pop(player_id, None)
+
+    def _capture_station(self, player: PlayerState) -> None:
+        self._durable_station[player.client_token] = copy.deepcopy(player.station)
+
+    def _key(self, player_id: int, request_id: str) -> str:
+        return f"servercraft:{self.get_player(player_id).client_token}:{request_id}"
 
     @staticmethod
     def _matches(slot: Slot, item_ref: CraftItemRef) -> bool:
@@ -105,6 +135,7 @@ class CraftStateSimulator:
         player.mouse_slot_58.stack -= 1
         if player.mouse_slot_58.stack <= 0:
             player.mouse_slot_58.clear()
+        self._capture_station(player)
         return True, ""
 
     def handle_station_deposit(
@@ -114,7 +145,8 @@ class CraftStateSimulator:
         index: int,
         item_ref: CraftItemRef,
     ) -> tuple[bool, str]:
-        key = (player_id, operation_id)
+        player = self.get_player(player_id)
+        key = (player.client_token, operation_id)
         cached = self._station_escrow_results.get(key)
         if cached is not None:
             return cached
@@ -134,6 +166,7 @@ class CraftStateSimulator:
             return False, "mouse occupied"
         player.mouse_slot_58 = copy.deepcopy(player.station[index])
         player.station[index].clear()
+        self._capture_station(player)
         return True, ""
 
     def return_all_server_escrow(self, player_id: int) -> int:
@@ -145,6 +178,7 @@ class CraftStateSimulator:
             player.refunded_slots.append(slot.one())
             slot.clear()
             count += 1
+        self._capture_station(player)
         return count
 
     def begin_client_craft_request(self, player_id: int) -> str:
@@ -153,6 +187,7 @@ class CraftStateSimulator:
         player.awaiting_server_commit = True
         player.server_request_id = request_id
         player.revealed_item = None
+        self._durable_client_pending[player.client_token] = request_id
         return request_id
 
     def _take_server_escrow_input(self, player_id: int, index: int, item_ref: CraftItemRef) -> tuple[bool, Slot | None, str]:
@@ -174,29 +209,31 @@ class CraftStateSimulator:
         if not request_id:
             return False, "", "пустой requestId"
         key = self._key(player_id, request_id)
-        if key in self._committed:
-            return True, self._committed[key], "duplicate ack"
+        outcome = self._craft_outcomes.get(key)
+        if outcome is not None:
+            return outcome
         player = self.get_player(player_id)
+        if key in self._craft_leases:
+            if player.server_authoritative_active and player.server_request_id == request_id:
+                return True, "", "pending"
+            result = (False, "", "server craft interrupted; inputs remain in station")
+            self._craft_leases.remove(key)
+            self._craft_outcomes[key] = result
+            return result
         if player.server_has_pending:
             return False, "", "у игрока уже есть активный InfiniCraft"
-        if key in self._cancelled:
-            return False, "", "запрос уже отменён клиентом"
+        if not self._matches(player.station[0], a_ref):
+            return False, "", "сервер не подтвердил первый escrow-ингредиент"
+        if not self._matches(player.station[1], b_ref):
+            return False, "", "сервер не подтвердил второй escrow-ингредиент"
 
-        ok_a, item_a, error_a = self._take_server_escrow_input(player_id, 0, a_ref)
-        if not ok_a:
-            self.return_all_server_escrow(player_id)
-            return False, "", f"сервер не подтвердил первый escrow-ингредиент: {error_a}"
-        ok_b, item_b, error_b = self._take_server_escrow_input(player_id, 1, b_ref)
-        if not ok_b:
-            assert item_a is not None
-            player.refunded_slots.append(copy.deepcopy(item_a))
-            self.return_all_server_escrow(player_id)
-            return False, "", f"сервер не подтвердил второй escrow-ингредиент: {error_b}"
-
-        assert item_a is not None and item_b is not None
+        item_a = player.station[0].one()
+        item_b = player.station[1].one()
         player.active_refunds = [copy.deepcopy(item_a), copy.deepcopy(item_b)]
         player.server_has_pending = True
         player.server_authoritative_active = True
+        player.server_request_id = request_id
+        self._craft_leases.add(key)
         return True, "", "pending"
 
     def _refund_active_once(self, player: PlayerState) -> int:
@@ -210,15 +247,18 @@ class CraftStateSimulator:
     def handle_cancel_server_craft(self, player_id: int, request_id: str, reason: str = "") -> tuple[bool, str, str]:
         if not request_id:
             return True, "", ""
-        self._cancelled.add(self._key(player_id, request_id))
+        key = self._key(player_id, request_id)
         player = self.get_player(player_id)
         if player.server_authoritative_active and player.server_request_id == request_id:
-            self._refund_active_once(player)
+            result = (False, "", reason or "server craft cancelled; inputs remain in station")
+            self._craft_leases.discard(key)
+            self._craft_outcomes[key] = result
+            player.active_refunds.clear()
             player.server_authoritative_active = False
             player.server_has_pending = False
-            self.handle_craft_commit_result_client(player_id, request_id, False, "", reason or "server craft cancelled")
-            return False, "", reason or "server craft cancelled"
-        return False, "", "запрос отменён"
+            self.handle_craft_commit_result_client(player_id, request_id, *result)
+            return result
+        return False, "", "запрос не активен"
 
     def handle_craft_commit_result_client(
         self,
@@ -237,6 +277,7 @@ class CraftStateSimulator:
             player.last_craft_message = message or "InfiniCraft: сервер отклонил крафт"
         player.awaiting_server_commit = False
         player.server_request_id = ""
+        self._durable_client_pending.pop(player.client_token, None)
 
     def server_commit_craft_result(
         self,
@@ -245,18 +286,44 @@ class CraftStateSimulator:
         success: bool,
         item_name: str,
         message: str = "",
+        *,
+        deliver_to_client: bool = True,
     ) -> None:
         key = self._key(player_id, request_id)
-        if key in self._cancelled:
+        if key not in self._craft_leases:
             return
         player = self.get_player(player_id)
-        active = player.server_authoritative_active
+        result = (success, item_name or ("Generated Item" if success else ""), message)
+        self._craft_leases.remove(key)
+        self._craft_outcomes[key] = result
         if success:
-            self._committed[key] = item_name or "Generated Item"
-            player.active_refunds.clear()
-        elif active:
-            self._refund_active_once(player)
-        self.handle_craft_commit_result_client(player_id, request_id, success, item_name, message)
-        if active:
+            player.station[0].clear()
+            player.station[1].clear()
+            self._capture_station(player)
+        player.active_refunds.clear()
+        if deliver_to_client:
+            self.handle_craft_commit_result_client(player_id, request_id, *result)
+        player.server_authoritative_active = False
+        player.server_has_pending = False
+
+    def reconcile_pending_craft(
+        self,
+        player_id: int,
+        a_ref: CraftItemRef,
+        b_ref: CraftItemRef,
+    ) -> tuple[bool, str, str]:
+        player = self.get_player(player_id)
+        request_id = player.server_request_id
+        result = self.handle_request_server_craft(player_id, request_id, a_ref, b_ref)
+        if result[2] != "pending":
+            self.handle_craft_commit_result_client(player_id, request_id, *result)
+        return result
+
+    def restart_server(self) -> None:
+        for key in tuple(self._craft_leases):
+            self._craft_outcomes[key] = (False, "", "server restarted; inputs remain in station")
+        self._craft_leases.clear()
+        for player in self._players.values():
             player.server_authoritative_active = False
             player.server_has_pending = False
+            player.active_refunds.clear()

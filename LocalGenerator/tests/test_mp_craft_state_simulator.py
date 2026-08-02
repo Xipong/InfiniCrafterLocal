@@ -76,10 +76,11 @@ def _contract_check_success_consumes_station_once_and_reveals_once() -> None:
     ok, _, message = sim.handle_request_server_craft(0, rid, a_ref, b_ref)
     assert ok, message
     player = sim.get_player(0)
-    assert all(slot.is_air for slot in player.station)
+    assert [(slot.type, slot.stack) for slot in player.station] == [(75, 1), (43, 1)]
     assert len(player.active_refunds) == 2
     sim.server_commit_craft_result(0, rid, True, "Merged Blade")
     assert player.revealed_item == "Merged Blade"
+    assert all(slot.is_air for slot in player.station)
     assert player.active_refunds == []
     assert player.refunded_slots == []
 
@@ -91,9 +92,10 @@ def _contract_check_cancel_refunds_exact_escrow_once_and_late_commit_is_ignored(
     assert sim.handle_request_server_craft(0, rid, a_ref, b_ref)[0]
     sim.handle_cancel_server_craft(0, rid, "client_timeout")
     player = sim.get_player(0)
-    assert [(item.type, item.stack) for item in player.refunded_slots] == [(75, 1), (43, 1)]
+    assert player.refunded_slots == []
+    assert [(item.type, item.stack) for item in player.station] == [(75, 1), (43, 1)]
     sim.handle_cancel_server_craft(0, rid, "again")
-    assert len(player.refunded_slots) == 2
+    assert player.refunded_slots == []
     sim.server_commit_craft_result(0, rid, True, "Late Item")
     assert player.revealed_item != "Late Item"
 
@@ -128,6 +130,24 @@ def _contract_check_late_escrow_retry_replays_older_cached_result_without_mutati
     assert player.mouse_slot_58.stack == before_mouse_stack
 
 
+def _contract_check_disconnect_reconnect_replays_by_stable_client_token() -> None:
+    sim = CraftStateSimulator()
+    token = "stable-client-token"
+    sim.connect_player(0, token)
+    item_ref = CraftItemRef(75)
+    sim.set_mouse_item(0, _slot(75, 2), origin="inventory")
+    assert sim.handle_station_deposit(0, "op-disconnect", 0, item_ref)[0]
+    sim.disconnect_player(0)
+
+    player = sim.connect_player(7, token)
+    assert player.station[0].type == 75
+    before_station = [(slot.type, slot.stack) for slot in player.station]
+    before_mouse = (player.mouse_slot_58.type, player.mouse_slot_58.stack)
+    assert sim.handle_station_deposit(7, "op-disconnect", 0, item_ref)[0]
+    assert [(slot.type, slot.stack) for slot in player.station] == before_station
+    assert (player.mouse_slot_58.type, player.mouse_slot_58.stack) == before_mouse
+
+
 def _contract_check_dedupe_and_pending_gate_do_not_consume_again() -> None:
     sim = CraftStateSimulator()
     a_ref, b_ref = _deposit_pair(sim)
@@ -138,7 +158,43 @@ def _contract_check_dedupe_and_pending_gate_do_not_consume_again() -> None:
     assert not ok and "уже есть активный" in message
     sim.server_commit_craft_result(0, rid, True, "First Item")
     ok, name, message = sim.handle_request_server_craft(0, rid, a_ref, b_ref)
-    assert ok and name == "First Item" and message == "duplicate ack"
+    assert ok and name == "First Item" and message == ""
+
+
+def _contract_check_commit_ack_loss_reconnect_replays_without_parent_refund() -> None:
+    sim = CraftStateSimulator()
+    token = "stable-client-token"
+    sim.connect_player(0, token)
+    a_ref, b_ref = _deposit_pair(sim)
+    rid = sim.begin_client_craft_request(0)
+    assert sim.handle_request_server_craft(0, rid, a_ref, b_ref)[0]
+    sim.server_commit_craft_result(0, rid, True, "Durable Blade", deliver_to_client=False)
+    sim.disconnect_player(0)
+
+    player = sim.connect_player(7, token)
+    ok, name, _ = sim.reconcile_pending_craft(7, a_ref, b_ref)
+    assert ok and name == "Durable Blade"
+    assert player.refunded_slots == []
+    assert all(slot.is_air for slot in player.station)
+    assert not player.awaiting_server_commit
+
+
+def _contract_check_server_restart_replays_failure_with_inputs_still_in_station() -> None:
+    sim = CraftStateSimulator()
+    token = "stable-restart-token"
+    sim.connect_player(0, token)
+    a_ref, b_ref = _deposit_pair(sim)
+    rid = sim.begin_client_craft_request(0)
+    assert sim.handle_request_server_craft(0, rid, a_ref, b_ref)[0]
+    sim.restart_server()
+    sim.disconnect_player(0)
+
+    player = sim.connect_player(9, token)
+    ok, _, message = sim.reconcile_pending_craft(9, a_ref, b_ref)
+    assert not ok and "inputs remain in station" in message
+    assert [(item.type, item.stack) for item in player.station] == [(75, 1), (43, 1)]
+    assert player.refunded_slots == []
+    assert not player.awaiting_server_commit
 
 
 # One collected item; ordered checks preserve scenario-level tracebacks without pytest noise.
@@ -157,6 +213,9 @@ def test_mp_craft_state_simulator_module_contract(request):
             "_contract_check_cancel_refunds_exact_escrow_once_and_late_commit_is_ignored",
             "_contract_check_take_to_mouse_and_clear_return_exact_station_items",
             "_contract_check_late_escrow_retry_replays_older_cached_result_without_mutation",
+            "_contract_check_disconnect_reconnect_replays_by_stable_client_token",
             "_contract_check_dedupe_and_pending_gate_do_not_consume_again",
+            "_contract_check_commit_ack_loss_reconnect_replays_without_parent_refund",
+            "_contract_check_server_restart_replays_failure_with_inputs_still_in_station",
         ),
     )

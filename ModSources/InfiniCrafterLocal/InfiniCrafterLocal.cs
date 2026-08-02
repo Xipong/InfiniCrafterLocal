@@ -94,6 +94,16 @@ public sealed class InfiniCrafterLocalMod : Mod
             InfiniItemVfxRuntime.HandleUseEventPacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.SetMultiDevCraftMode)
+        {
+            InfiniCraftPlayer.HandleSetMultiDevCraftModePacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.NotifyGeneratedPlacement)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, whoAmI);
+            return;
+        }
     }
 
 
@@ -120,7 +130,6 @@ public sealed class InfiniCrafterLocalMod : Mod
 
     public override void Unload()
     {
-        InfiniCraftPlayer.ClearServerCommitCache();
         GeneratedHeldItemDrawLayer.ClearNetCaches();
         GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         InfiniItemVfxRuntime.ClearUseEventCaches();

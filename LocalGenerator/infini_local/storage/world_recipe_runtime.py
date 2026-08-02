@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 from typing import Any
 
 from infini_local.core.config_bootstrap import APP_VERSION, RECIPE_IDENTITY_VERSION, WORLD_RECIPES_DIR
@@ -110,8 +111,21 @@ def cache_put(key: str, a: dict[str, Any], b: dict[str, Any], data: dict[str, An
     write_world_recipe_cache(key, world_id, data, a, b, world_name)
 
 
-def recipe_key(a: dict[str, Any], b: dict[str, Any], world_id: Any, recipe_identity_version: str = RECIPE_IDENTITY_VERSION) -> str:
-    return _world_recipe_key(a, b, world_id, recipe_identity_version)
+def recipe_key(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    world_id: Any,
+    recipe_identity_version: str = RECIPE_IDENTITY_VERSION,
+    variant_id: str = "",
+) -> str:
+    base = _world_recipe_key(a, b, world_id, recipe_identity_version)
+    variant = str(variant_id or "").strip().lower()
+    if not variant:
+        return base
+    # Multi-dev lanes intentionally author independent world-local discoveries for
+    # the same A+B pair. Keep ordinary recipe identity byte-for-byte unchanged and
+    # derive a bounded variant key only when a lane explicitly names its LLM profile.
+    return hashlib.sha256(f"{base}\0multidev\0{variant}".encode("utf-8")).hexdigest()
 
 
 class WorldScopeMissing(RuntimeError):
