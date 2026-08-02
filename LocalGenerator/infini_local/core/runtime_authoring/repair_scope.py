@@ -624,6 +624,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         "repairStrategy": {"type": "string", "minLength": 1},
                         "llmRepairable": {"type": "boolean"},
                         "allowedBindingTransactions": copy.deepcopy(binding_transaction_array),
+                        "allowedExistingBindingIds": copy.deepcopy(id_array),
                         "requiredBindingUpdates": {
                             "type": "array",
                             "items": {
@@ -643,7 +644,8 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                     "required": [
                         "errorPath", "code", "message", "affectedIds",
                         "requiredOneOfCapabilities", "exactCapabilityParams",
-                        "allowedValues", "repairStrategy", "llmRepairable",
+                        "allowedValues", "allowedExistingBindingIds",
+                        "repairStrategy", "llmRepairable",
                     ],
                 },
             },
@@ -1004,6 +1006,42 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         create_call_targets.update(value for value in target_ids if value)
         create_call_fns.update(value for value in fns if value in CAPABILITY_REGISTRY)
 
+    def exact_error_identity(row: Mapping[str, Any]) -> tuple[str, str, tuple[str, ...]]:
+        return (
+            str(row.get("code") or row.get("kind") or ""),
+            str(row.get("path") or "$"),
+            tuple(sorted(
+                str(value) for value in _values(row.get("relatedIds"))
+                if str(value)
+            )),
+        )
+
+    item_entity_ids = {
+        str(row.get("id") or "")
+        for row in rows["entities"]
+        if row.get("kind") == "item_body" and str(row.get("id") or "")
+    }
+    planned_item_capabilities: set[str] = set()
+    for candidate_error in error_rows:
+        candidate_code = str(candidate_error.get("code") or candidate_error.get("kind") or "")
+        if candidate_code not in {"missing_capability_dependency", "missing_capability_group"}:
+            continue
+        candidate_targets = {
+            str(value) for value in _values(candidate_error.get("relatedIds"))
+            if str(value) in item_entity_ids
+        }
+        candidate_node = _node_from_path(str(candidate_error.get("path") or "$"), rows)
+        if candidate_node is not None and candidate_node[0] == "calls":
+            candidate_call = rows["calls"][candidate_node[1]]
+            candidate_target = str(candidate_call.get("target") or "")
+            if candidate_target in item_entity_ids:
+                candidate_targets.add(candidate_target)
+        for capability_name in _capability_names(_values(candidate_error.get("allowed"))):
+            if candidate_targets and _candidate_capability_viable(
+                capability_name, sorted(candidate_targets), rows,
+            ):
+                planned_item_capabilities.add(capability_name)
+
     for error in error_rows:
         path = str(error.get("path") or "$")
         code = str(error.get("code") or error.get("kind") or "")
@@ -1033,6 +1071,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "requiredOneOfCapabilities": sorted(required_caps),
             "exactCapabilityParams": exact_params,
             "allowedValues": copy.deepcopy(allowed),
+            "allowedExistingBindingIds": [],
             "repairStrategy": str((policy or {}).get("strategy") or ("patch_exact_schema_path" if code.startswith("shape_") else "unmapped_validator_error")),
             "llmRepairable": bool((policy or {}).get("llmRepairable", code.startswith("shape_"))),
         }
@@ -1313,6 +1352,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 if not any(
                                     str(binding.get("input") or "") in allowed_inputs
                                     and (not allowed_actions or action_kind(binding) in allowed_actions)
+                                    and binding_target_id(binding) == target_id
                                     and (required_contact is None or contact_damage(binding) is required_contact)
                                     for binding in rows["bindings"]
                                 ):
@@ -1360,6 +1400,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 )]
                 context["entities"].add(target_id)
                 requirement_row["allowedBindingTransactions"] = binding_alternative_overrides[binding_id]
+                requirement_row["allowedExistingBindingIds"] = [binding_id]
                 requirement_row["mustChooseExactlyOne"] = True
 
         elif code == "dual_use_placeable_input_contract":
@@ -1400,8 +1441,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             authorized_capabilities = {
                 capability_name
                 for candidate_error in error_rows
-                for capability_name in _capability_names(candidate_error.get("allowed") or [])
+                if exact_error_identity(candidate_error) == exact_error_identity(error)
+                for capability_name in _capability_names(_values(candidate_error.get("allowed")))
             }
+            authorized_capabilities.update(planned_item_capabilities)
             allowed_rows: list[dict[str, Any]] = []
             required_binding_updates: list[dict[str, Any]] = []
             existing_binding_choices: list[dict[str, Any]] = []
@@ -1668,6 +1711,11 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 create_binding_targets.add(binding_target_id(allowed_row))
                 context["entities"].add(binding_target_id(allowed_row))
             requirement_row["allowedBindingTransactions"] = binding_choice_rows
+            requirement_row["allowedExistingBindingIds"] = sorted(
+                str(choice.get("bindingId") or "")
+                for choice in existing_binding_choices
+                if str(choice.get("bindingId") or "")
+            )
             requirement_row["mustChooseExactlyOne"] = bool(binding_choice_rows)
             requirement_row["mustCreateExactlyOne"] = bool(allowed_rows) and not existing_choice_rows
             if required_binding_updates:
@@ -1770,6 +1818,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     for binding in rows["bindings"]
                     if str(binding.get("input") or "") in event_inputs
                     and action_kind(binding) in event_actions
+                    and binding_target_id(binding) in target_ids
                 ]
                 producer_present = any(
                     required_contact is None or contact_damage(binding) is required_contact
@@ -1809,6 +1858,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             copy.deepcopy(choice["allowed"][0])
                             for choice in existing_binding_choices
                         ]
+                        requirement_row["allowedExistingBindingIds"] = sorted(
+                            str(choice["bindingId"])
+                            for choice in existing_binding_choices
+                        )
                         requirement_row["mustChooseExactlyOne"] = True
                 elif not producer_present:
                     create_binding_targets.update(target_ids)
@@ -2586,23 +2639,47 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
             for row in _values(requirement.get("allowedBindingTransactions"))
             if isinstance(row, Mapping)
         }
+        allowed_existing_binding_ids = {
+            str(value) for value in _values(requirement.get("allowedExistingBindingIds"))
+            if str(value)
+        }
+        matching_transactions = [
+            row for row in patch_binding_rows
+            if serialized_binding_transaction(row) in allowed_new_transactions
+        ]
+        unauthorized_existing = [
+            row for row in matching_transactions
+            if str(row.get("id") or "") in existing["bindings"]
+            and str(row.get("id") or "") not in allowed_existing_binding_ids
+        ]
+        if unauthorized_existing:
+            errors.append(_scope_error(
+                f"$.repairRequirements[{requirement_index}].allowedExistingBindingIds",
+                "existing binding transaction is outside this requirement's existing binding choices",
+                actual={
+                    "bindingIds": sorted(str(row.get("id") or "") for row in unauthorized_existing),
+                },
+            ))
         must_create_exactly_one = bool(requirement.get("mustCreateExactlyOne"))
         if must_create_exactly_one and allowed_new_transactions:
-            selected = [
-                row for row in patch_binding_rows
+            selected_new = [
+                row for row in matching_transactions
                 if str(row.get("id") or "") not in existing["bindings"]
-                and serialized_binding_transaction(row) in allowed_new_transactions
             ]
-            if len(selected) != 1:
+            if len(matching_transactions) != 1 or len(selected_new) != 1:
                 errors.append(_scope_error(
                     f"$.repairRequirements[{requirement_index}].allowedBindingTransactions",
-                    "patch must create exactly one listed binding transaction",
-                    actual={"selectedCount": len(selected)},
+                    "patch must emit exactly one listed binding transaction and that transaction must be new",
+                    actual={
+                        "matchingCount": len(matching_transactions),
+                        "newCount": len(selected_new),
+                    },
                 ))
         elif bool(requirement.get("mustChooseExactlyOne")) and allowed_new_transactions:
             selected = [
-                row for row in patch_binding_rows
-                if serialized_binding_transaction(row) in allowed_new_transactions
+                row for row in matching_transactions
+                if str(row.get("id") or "") not in existing["bindings"]
+                or str(row.get("id") or "") in allowed_existing_binding_ids
             ]
             if len(selected) != 1:
                 errors.append(_scope_error(

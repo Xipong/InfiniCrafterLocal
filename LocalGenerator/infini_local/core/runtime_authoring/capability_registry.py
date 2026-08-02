@@ -7,6 +7,7 @@ from typing import Any, Final, Iterable, Mapping
 from infini_local.core.runtime_authoring.binding_use_policy import (
     action_kind,
     contact_damage as binding_contact_damage,
+    target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKEN_PATTERN,
@@ -1422,6 +1423,7 @@ def event_dependency_alternatives(event: str, kind: str) -> tuple[EventDependenc
 def event_alternative_is_present(
     alternative: EventDependencyAlternative,
     *,
+    target_id: str,
     target_calls: Iterable[Mapping[str, Any]],
     bindings: Iterable[Mapping[str, Any]],
 ) -> bool:
@@ -1445,6 +1447,7 @@ def event_alternative_is_present(
         return any(
             str(row.get("input") or "") in allowed_inputs
             and (not allowed_actions or action_kind(row) in allowed_actions)
+            and binding_target_id(row) == target_id
             and (
                 requirement.required_contact_damage is None
                 or binding_contact_damage(row) is requirement.required_contact_damage

@@ -277,7 +277,12 @@ def _event_available(
     alternatives = event_dependency_alternatives(event, kind)
 
     for alternative in alternatives:
-        if event_alternative_is_present(alternative, target_calls=target_calls, bindings=bindings):
+        if event_alternative_is_present(
+            alternative,
+            target_id=target_id,
+            target_calls=target_calls,
+            bindings=bindings,
+        ):
             return True, (), ""
     return False, event_dependency_descriptors(alternatives), f"{event} requires one exact declared producer alternative on {target_id}"
 

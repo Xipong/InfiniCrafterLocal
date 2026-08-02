@@ -133,10 +133,13 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
     )
     assert event_alternative_is_present(
         on_hit[0],
+        target_id="projectile",
         target_calls=[{"fn": "set_projectile_damage", "params": {"damage": 7}}],
         bindings=[],
     )
-    assert not event_alternative_is_present(on_hit[0], target_calls=[], bindings=[])
+    assert not event_alternative_is_present(
+        on_hit[0], target_id="projectile", target_calls=[], bindings=[],
+    )
 
     on_use = event_dependency_alternatives("on_use", "item_body")
     assert on_use == (
@@ -147,6 +150,7 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
     )
     assert event_alternative_is_present(
         on_use[0],
+        target_id="item",
         target_calls=[],
         bindings=[{
             "input": "primary_use",
@@ -159,6 +163,7 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
     )
     assert not event_alternative_is_present(
         on_use[0],
+        target_id="item",
         target_calls=[],
         bindings=[{
             "input": "primary_use",

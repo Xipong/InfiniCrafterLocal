@@ -1681,6 +1681,9 @@ def test_tool_dependency_repair_chooses_one_conflicting_existing_primary() -> No
             "primary_use", "use_item_body", "item", contact_damage=True,
         ),
     ]
+    assert requirement["allowedExistingBindingIds"] == [
+        duplicate["id"], original["id"],
+    ]
     alternatives = {
         row["bindingId"]: row["allowed"]
         for row in scope["bindingAlternatives"]
@@ -1735,6 +1738,116 @@ def test_tool_dependency_repair_chooses_one_conflicting_existing_primary() -> No
     ]
 
 
+def test_repair_scope_does_not_merge_capabilities_across_disjoint_error_identity() -> None:
+    current = build_capability_witness("configure_tool")
+    program = current["runtimeProgram"]
+    program["bindings"] = []
+    program["calls"] = [
+        row for row in program["calls"]
+        if row["fn"] != "configure_item_use"
+    ]
+    source_error = next(
+        row for row in validate_runtime_program(current)["errors"]
+        if row["code"] == "missing_binding_dependency"
+    )
+    foreign_error = {
+        **copy.deepcopy(source_error),
+        "allowed": ["configure_item_use"],
+        "relatedIds": ["foreign_call", "foreign_target"],
+    }
+
+    scope = build_runtime_repair_scope(current, [source_error, foreign_error])
+    requirement = scope["repairRequirements"][0]
+    assert requirement["allowedBindingTransactions"] == []
+
+
+def test_binding_choice_is_owned_by_requirement_specific_existing_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = build_capability_witness("configure_tool")
+    program = current["runtimeProgram"]
+    original = program["bindings"][0]
+    original["usePolicy"]["contactDamage"] = False
+    duplicate = copy.deepcopy(original)
+    duplicate["id"] = "duplicate_tool_primary"
+    unrelated = copy.deepcopy(original)
+    unrelated["id"] = "unrelated_mutable_binding"
+    unrelated["input"] = "equipped"
+    program["bindings"].extend([duplicate, unrelated])
+
+    report = validate_runtime_program(current)
+    scope = build_runtime_repair_scope(current, report["errors"])
+    requirement = next(
+        row for row in scope["repairRequirements"]
+        if row["code"] == "missing_binding_dependency"
+    )
+    assert requirement["allowedExistingBindingIds"] == [
+        duplicate["id"], original["id"],
+    ]
+    unrelated_alternatives = next(
+        row["allowed"] for row in scope["bindingAlternatives"]
+        if row["bindingId"] == unrelated["id"]
+    )
+    copied_transaction = copy.deepcopy(requirement["allowedBindingTransactions"][0])
+    assert copied_transaction in unrelated_alternatives
+
+    patch = _empty_gameplay_patch()
+    patch["bindingsUpsert"] = [{"id": unrelated["id"], **copied_transaction}]
+    monkeypatch.setattr(
+        repair_scope_stage, "validate_runtime_program",
+        lambda _preview: {"ok": True, "errors": []},
+    )
+    audit = validate_repair_patch_scope(current, patch, scope)
+    assert not audit["ok"]
+    assert any(
+        "outside this requirement's existing binding choices" in row["message"]
+        for row in audit["errors"]
+    )
+
+
+def test_create_only_binding_choice_rejects_additional_existing_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = build_capability_witness("configure_tool")
+    program = current["runtimeProgram"]
+    unrelated = copy.deepcopy(program["bindings"][0])
+    unrelated["id"] = "unrelated_mutable_binding"
+    unrelated["input"] = "equipped"
+    unrelated["usePolicy"]["contactDamage"] = False
+    program["bindings"] = [unrelated]
+
+    report = validate_runtime_program(current)
+    scope = build_runtime_repair_scope(current, report["errors"])
+    requirement = next(
+        row for row in scope["repairRequirements"]
+        if row["code"] == "missing_binding_dependency"
+    )
+    assert requirement["mustCreateExactlyOne"] is True
+    assert requirement["allowedExistingBindingIds"] == []
+    transaction = copy.deepcopy(requirement["allowedBindingTransactions"][0])
+    unrelated_alternatives = next(
+        row["allowed"] for row in scope["bindingAlternatives"]
+        if row["bindingId"] == unrelated["id"]
+    )
+    assert transaction in unrelated_alternatives
+
+    patch = _empty_gameplay_patch()
+    patch["bindingsUpsert"] = [
+        {"id": unrelated["id"], **copy.deepcopy(transaction)},
+        {"id": "created_tool_lane", **copy.deepcopy(transaction)},
+    ]
+    monkeypatch.setattr(
+        repair_scope_stage, "validate_runtime_program",
+        lambda _preview: {"ok": True, "errors": []},
+    )
+    audit = validate_repair_patch_scope(current, patch, scope)
+    assert not audit["ok"]
+    assert any(
+        "exactly one listed binding transaction" in row["message"]
+        for row in audit["errors"]
+    )
+
+
 def test_place_item_binding_does_not_produce_item_on_use_event() -> None:
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
@@ -1767,7 +1880,13 @@ def test_item_hit_event_requires_contact_binding_and_repair_updates_exact_policy
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     binding = program["bindings"][0]
+    binding["usePolicy"]["action"] = {
+        "kind": "use_item_body", "targetId": "item",
+    }
     binding["usePolicy"]["contactDamage"] = False
+    program["bindings"].append(_binding_row(
+        "projectile_hold", "hold", "spawn_entity", "workbench_blade",
+    ))
     event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
     event_call["target"] = "item"
     event_call["params"]["event"] = "on_hit"
@@ -1807,6 +1926,41 @@ def test_item_hit_event_requires_contact_binding_and_repair_updates_exact_policy
     assert (item_id, "on_crit") in pairs
 
 
+def test_item_hit_event_ignores_contact_binding_for_another_target() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    binding = program["bindings"][0]
+    binding["usePolicy"]["action"] = {
+        "kind": "use_item_body", "targetId": "item",
+    }
+    binding["usePolicy"]["contactDamage"] = False
+    program["bindings"].append(_binding_row(
+        "other_target_contact", "alternate_use", "spawn_entity", "workbench_blade",
+        contact_damage=True,
+    ))
+    event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["event"] = "on_hit"
+
+    report = validate_runtime_program(current)
+    assert [row["code"] for row in report["errors"]] == ["event_not_emitted"]
+    scope = build_runtime_repair_scope(current, report["errors"])
+    requirement = next(
+        row for row in scope["repairRequirements"]
+        if row["code"] == "event_not_emitted"
+    )
+    assert requirement["requiredBindingUpdates"] == [{
+        "bindingId": binding["id"],
+        "allowed": [{
+            "input": binding["input"],
+            "usePolicy": {
+                **copy.deepcopy(binding["usePolicy"]),
+                "contactDamage": True,
+            },
+        }],
+    }]
+
+
 def test_item_hit_event_does_not_require_optional_contact_geometry_call() -> None:
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
@@ -1819,6 +1973,14 @@ def test_item_hit_event_does_not_require_optional_contact_geometry_call() -> Non
             value for value in claim["backedBy"]
             if value != "item_contact"
         ]
+    binding = program["bindings"][0]
+    binding["usePolicy"]["action"] = {
+        "kind": "use_item_body", "targetId": "item",
+    }
+    binding["usePolicy"]["contactDamage"] = True
+    program["bindings"].append(_binding_row(
+        "projectile_hold", "hold", "spawn_entity", "workbench_blade",
+    ))
     event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
     event_call["target"] = "item"
     event_call["params"]["event"] = "on_hit"
@@ -1836,7 +1998,13 @@ def test_item_hit_event_repair_selects_exactly_one_existing_contact_lane() -> No
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     primary = program["bindings"][0]
+    primary["usePolicy"]["action"] = {
+        "kind": "use_item_body", "targetId": "item",
+    }
     primary["usePolicy"]["contactDamage"] = False
+    program["bindings"].append(_binding_row(
+        "projectile_hold", "hold", "spawn_entity", "workbench_blade",
+    ))
     alternate = _binding_row(
         "alternate_body", "alternate_use", "use_item_body", "item",
         contact_damage=False,
