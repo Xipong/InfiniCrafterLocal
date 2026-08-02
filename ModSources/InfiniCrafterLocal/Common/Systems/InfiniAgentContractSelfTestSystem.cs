@@ -43,7 +43,7 @@ public sealed class InfiniAgentContractSelfTestSystem : ModSystem
             Check(
                 "multi-entity-program-normalizes",
                 valid.RuntimeProgram.Entities.Length == 3
-                    && valid.RuntimeProgram.Bindings.Single().Target == "workbench_blade"
+                    && valid.RuntimeProgram.Bindings.Single().UsePolicy.Action.TargetId == "workbench_blade"
                     && valid.RuntimeProgram.TryGetEntity("nail") is not null,
                 $"entities={valid.RuntimeProgram.Entities.Length}, bindings={valid.RuntimeProgram.Bindings.Length}");
         }
@@ -71,8 +71,14 @@ public sealed class InfiniAgentContractSelfTestSystem : ModSystem
             {
                 Id = "second_primary",
                 Input = RuntimeInputKind.PrimaryUse,
-                Action = RuntimeBindingAction.SpawnEntity,
-                Target = "nail",
+                UsePolicy = new RuntimeBindingUsePolicySpec
+                {
+                    Action = new RuntimeBindingActionSpec
+                    {
+                        Kind = RuntimeBindingAction.SpawnEntity,
+                        TargetId = "nail",
+                    },
+                },
             },
         }).ToArray();
         Check(
@@ -227,8 +233,14 @@ public sealed class InfiniAgentContractSelfTestSystem : ModSystem
                     {
                         Id = "primary",
                         Input = RuntimeInputKind.PrimaryUse,
-                        Action = RuntimeBindingAction.SpawnEntity,
-                        Target = blade.Id,
+                        UsePolicy = new RuntimeBindingUsePolicySpec
+                        {
+                            Action = new RuntimeBindingActionSpec
+                            {
+                                Kind = RuntimeBindingAction.SpawnEntity,
+                                TargetId = blade.Id,
+                            },
+                        },
                     },
                 },
                 ItemUse = new RuntimeItemUseSpec

@@ -67,7 +67,16 @@ public sealed partial class GeneratedItemData
                     damage = new { entity.Damage.Enabled, entity.Damage.Damage, entity.Damage.DamageClass },
                     events = entity.Events.Select(action => new { action.Id, action.Event, action.Action, action.ActionCode, action.EntityId }),
                 }).ToArray(),
-                bindings = RuntimeProgram.Bindings.Select(binding => new { binding.Id, binding.Input, binding.Action, binding.Target }).ToArray(),
+                bindings = RuntimeProgram.Bindings.Select(binding => new
+                {
+                    binding.Id,
+                    binding.Input,
+                    binding.Role,
+                    action = binding.UsePolicy.Action.Kind,
+                    target = binding.UsePolicy.Action.TargetId,
+                    binding.UsePolicy.StackCost,
+                    binding.UsePolicy.ContactDamage,
+                }).ToArray(),
             },
             equipment = new { armor = isArmor, accessory = isAccessory },
         });

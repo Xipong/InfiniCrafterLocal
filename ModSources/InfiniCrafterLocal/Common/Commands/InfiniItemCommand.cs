@@ -72,7 +72,7 @@ public sealed class InfiniItemCommand : ModCommand
         foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
             sb.AppendLine($"    entity {entity.Id}: kind={entity.Kind} move={entity.Movement.Name}/{entity.Movement.Code} controller={entity.Controller.Name}/{entity.Controller.Code} events={entity.Events.Length}");
         foreach (RuntimeBindingSpec binding in data.RuntimeProgram.Bindings)
-            sb.AppendLine($"    binding {binding.Id}: {binding.Input} -> {binding.Action}({binding.Target})");
+            sb.AppendLine($"    binding {binding.Id}: {binding.Input} -> {binding.UsePolicy.Action.Kind}({binding.UsePolicy.Action.TargetId}), stackCost={binding.UsePolicy.StackCost}, contactDamage={binding.UsePolicy.ContactDamage}");
         if (data.Armor?.Enabled == true)
             sb.AppendLine($"    armor.defense={data.Armor.Defense}  slot={data.Armor.Slot}");
         if (data.Accessory?.Enabled == true)

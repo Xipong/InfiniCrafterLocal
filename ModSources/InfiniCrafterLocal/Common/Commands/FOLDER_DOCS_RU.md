@@ -7,3 +7,4 @@ Diagnostics and helper commands, not gameplay authority.
 - `InfiniDumpCommand.cs` — item/projectile runtime snapshots.
 - `InfiniDumpPictureCommand.cs` — texture/source/runtime dump bundles and HTML.
 - `InfiniCoreCommand.cs`, `InfiniItemCommand.cs`, `InfiniDummyCommand.cs` — helper/dev item commands.
+- `MultiDevCraftCommand.cs` — session-local `/multidevcraft [2|3|off]` unlock for 2–3 independent craft windows; grants no items and bypasses no validation.
