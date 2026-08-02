@@ -68,13 +68,14 @@ def check_runtime_contract() -> None:
     dto = read("Common/Models/RuntimeProgramSpec.cs")
     data = read("Common/Models/GeneratedItemData.cs") + read("Common/Models/GeneratedItemData.Model.cs")
     normalize = read("Common/Models/GeneratedItemData.Normalize.cs")
+    colors = read("Common/VFX/RuntimeColorPolicy.cs")
     limits = read("Common/InfiniRuntimeLimits.cs")
     vocabulary = read("Common/Models/TerrariaRuntimeVocabulary.cs")
     generator_client = read("Common/Services/GeneratorClient.cs")
     generated_item = read("Content/Items/GeneratedItem.cs")
     for needle in [
         'CurrentApiVersion = "infini.runtime-program.v5"',
-        'CurrentWireSchema = "infini.runtime-program.wire.v1"',
+        'CurrentWireSchema = "infini.runtime-program.wire.v3"',
         "public string PrimaryEntityId { get; set; }",
         "public string PrimaryOwner { get; set; }",
         "public string Role { get; set; }",
@@ -95,7 +96,7 @@ def check_runtime_contract() -> None:
     require(normalize, "RuntimeProgram.NormalizeAndValidate();", "GeneratedItemData.Normalize.cs")
     require(normalize, "ValidateBindingCapabilityProjection();", "GeneratedItemData.Normalize.cs")
     require(normalize, "apply_item_effects has no compiled item effect capability", "GeneratedItemData.Normalize.cs")
-    require(normalize, "place_item has no compiled configure_placeable result", "GeneratedItemData.Normalize.cs")
+    require(dto, "place_item requires an exact placement payload", "RuntimeProgramSpec.cs")
     require(normalize, "equip_passive has no compiled accessory/armor capability", "GeneratedItemData.Normalize.cs")
     require(limits, "MaxRuntimeEntities", "InfiniRuntimeLimits.cs")
     require(limits, "MaxRuntimeChildDepth", "InfiniRuntimeLimits.cs")
@@ -124,8 +125,14 @@ def check_runtime_contract() -> None:
     forbid(normalize, "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129).ToLowerInvariant();", "GeneratedItemData.Normalize.cs")
     require(dto, "DamageClass = RuntimeText.Safe(DamageClass, 129);", "RuntimeProgramSpec.cs")
     forbid(dto, "DamageClass = RuntimeText.Safe(DamageClass, 129).ToLowerInvariant();", "RuntimeProgramSpec.cs")
-    for loaded_guard in ["RarityLoader.RarityCount", "BuffLoader.BuffCount", "TileLoader.TileCount", "WallLoader.WallCount", "extra buff row cannot be null", "requires positive duration"]:
+    require(colors, "public static string NormalizeRequired", "RuntimeColorPolicy.cs")
+    forbid(normalize + dto, "RuntimeColorPolicy.Normalize(", "authoritative runtime color boundary")
+    require(normalize, "NormalizeRequiredHexColor", "GeneratedItemData.Normalize.cs")
+    forbid(normalize, "NormalizeHexColor(", "GeneratedItemData.Normalize.cs")
+    for loaded_guard in ["RarityLoader.RarityCount", "BuffLoader.BuffCount", "extra buff row cannot be null", "requires positive duration"]:
         require(normalize, loaded_guard, "GeneratedItemData.Normalize.cs")
+    for loaded_guard in ["TileLoader.TileCount", "WallLoader.WallCount"]:
+        require(dto, loaded_guard, "RuntimeProgramSpec.cs")
     require(dto, "BuffLoader.BuffCount", "RuntimeProgramSpec.cs")
     require(dto, "BuffId <= 0", "RuntimeProgramSpec.cs")
     require(generated_item, "buff.BuffCode > 0", "GeneratedItem.cs")
@@ -135,7 +142,7 @@ def check_runtime_contract() -> None:
     forbid(dto, 'public const string Passive = "passive"', "RuntimeProgramSpec.cs")
     require(normalize, "Gameplay.AmmoProjectileId >= ProjectileID.Count", "GeneratedItemData.Normalize.cs")
     apply = read("Common/Models/GeneratedItemData.Apply.cs")
-    for needle in ["item.potion = Gameplay.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
+    for needle in ["item.potion = enabled && Gameplay.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
         require(apply, needle, "GeneratedItemData.Apply.cs")
     forbid(apply, "item.potion = Gameplay.HealLife > 0", "GeneratedItemData.Apply.cs")
     require(apply, "RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner", "GeneratedItemData.Apply.cs")
@@ -148,7 +155,8 @@ def check_item_dispatch() -> None:
         "BindingForInput(RuntimeInputKind.AlternateUse)",
         "RuntimeProgramExecutor",
         "SpawnRuntimeEntity",
-        "Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner",
+        "BindingUsesItemBodyContact(binding)",
+        "UsePolicy.ContactDamage",
     ]:
         require(item, needle, "GeneratedItem v5 dispatch")
     for legacy in ["AttackSpec", "RuntimeFamily", "WeaponFamily", "AltUseMode", "perform_melee_attack", "shoot_projectile"]:
@@ -197,10 +205,11 @@ def check_projectile_dispatch() -> None:
         "_entityId.Length > 48",
         "Projectile.friendly = false",
         "HandleVfxEventSyncPacket",
-        "payload.Owner != whoAmI",
-        "FindGeneratedProjectile(whoAmI, payload.Identity)",
-        "HasExactVfxSlot(generated._data, generated._entity.Id, payload.EventName)",
-        "relay.Send(-1, whoAmI)",
+        "BroadcastAuthoritativeVfxEvent",
+        "Main.netMode != NetmodeID.MultiplayerClient",
+        "GeneratedItemRegistryService",
+        "InfiniVfxRuntime.OnDetachedEvent",
+        "packet.Send(-1, Projectile.owner)",
     ]:
         require(net, needle, "GeneratedProjectile.NetSync.cs")
     require(packet_ids, "SyncGeneratedProjectileVfxEvent", "InfiniNetPacketIds.cs")
@@ -212,6 +221,9 @@ def check_projectile_dispatch() -> None:
 def check_visual_vfx_contract() -> None:
     visual = read("Content/Projectiles/GeneratedProjectile.Visuals.cs")
     manifest = read("Common/Models/VfxManifestSpec.cs")
+    runtime_dto = read("Common/Models/RuntimeProgramSpec.cs")
+    renderer_registry = read("Common/VFX/VfxRendererRegistry.cs")
+    vocabulary = read("Common/VFX/VfxCanonicalVocabulary.cs")
     runtime = read("Common/VFX/InfiniVfxRuntime.cs")
     require(visual, "_entity!.Visual", "GeneratedProjectile.Visuals.cs")
     require(manifest, "JsonUnmappedMemberHandling.Disallow", "VfxManifestSpec.cs")
@@ -221,6 +233,19 @@ def check_visual_vfx_contract() -> None:
     require(runtime, "eventName", "InfiniVfxRuntime.cs")
     require(runtime, "InfiniVfxSlotEmissionKey", "InfiniVfxRuntime.cs")
     require(runtime, "slot.Id", "InfiniVfxRuntime.cs")
+    require(
+        runtime_dto,
+        'AssetMode is not ("baked_sprite" or "reuse_item_icon" or "runtime_geometry" or "no_asset")',
+        "RuntimeEntityVisualSpec",
+    )
+    require(manifest, 'Layer = ExactEnumText(Layer, "layer", "BeforeProjectiles", "AfterProjectiles");', "VfxManifestSpec.cs")
+    forbid(manifest, "private static string EnumText(", "VfxManifestSpec.cs")
+    for dead in [
+        "public string Curve", "public int Variant", "public string Importance",
+        "EstimateDrawCost(", "NormalizeKindName(", "NormalizeEventGroup(",
+        "public static string Curve(", "public static string Importance(",
+    ]:
+        forbid(manifest + renderer_registry + vocabulary, dead, "dead VFX contract")
     for legacy in ["RuntimeFamily", "WeaponFamily", "AttackSpec"]:
         forbid(visual + manifest + runtime, legacy, "entity/event VFX")
 

@@ -64,7 +64,6 @@ public sealed partial class GeneratedItemData
             WorldScoped = RecipeMeta?.WorldScoped ?? true,
             WorldId = SafeText(RecipeMeta?.WorldId ?? "", 32),
             Name = SafeText(Name, 80),
-            Tooltip = SafeText(Tooltip, 180),
             Category = SafeText(Category, 32),
             ParentA = SafeText(ParentA, 80),
             ParentB = SafeText(ParentB, 80),
@@ -72,7 +71,6 @@ public sealed partial class GeneratedItemData
         string json = JsonSerializer.Serialize(payload, Options);
         if (Utf8ByteCount(json) <= MaxPlayerSaveTagStringPayloadBytes)
             return json;
-        payload.Tooltip = "";
         payload.RecipeKey = "";
         payload.ParentA = "";
         payload.ParentB = "";
@@ -129,13 +127,12 @@ public sealed partial class GeneratedItemData
     }
 
     public static GeneratedItemData Placeholder()
-        => InertUnavailable("placeholder", "Generated item data is unavailable or invalid.", "corrupt_reference");
+        => InertUnavailable("placeholder", "corrupt_reference");
 
     private static GeneratedItemData ReferenceOnly(PlayerSaveReferencePayload payload)
     {
         GeneratedItemData data = InertUnavailable(
             string.IsNullOrWhiteSpace(payload.Id) ? "missing_reference" : SafeText(payload.Id, 64),
-            string.IsNullOrWhiteSpace(payload.Tooltip) ? "Waiting for generated-item hydration." : payload.Tooltip,
             "player_save_ref");
         data.RecipeKey = SafeText(payload.RecipeKey, 120);
         data.Name = string.IsNullOrWhiteSpace(payload.Name) ? "Generated Item" : SafeText(payload.Name, 80);
@@ -148,7 +145,7 @@ public sealed partial class GeneratedItemData
         return data;
     }
 
-    private static GeneratedItemData InertUnavailable(string id, string tooltip, string sourceMode)
+    private static GeneratedItemData InertUnavailable(string id, string sourceMode)
     {
         const string itemEntityId = "unavailable_item";
         return new GeneratedItemData
@@ -159,7 +156,6 @@ public sealed partial class GeneratedItemData
             Name = "Unavailable Generated Item",
             ParentA = "Unknown",
             ParentB = "Unknown",
-            Tooltip = tooltip,
             Category = "generic",
             SourceMode = sourceMode,
             Tags = new[] { "generated", "unavailable" },
@@ -229,7 +225,10 @@ public sealed partial class GeneratedItemData
             entity.Visual.Prompt = "";
             entity.Visual.Silhouette = "";
             entity.Visual.VisualIdentity = "";
+            entity.Visual.ImpactPrompt = "";
+            entity.Visual.ImpactNegativePrompt = "";
             entity.Visual.SpritePath = FileNameOnly(entity.Visual.SpritePath);
+            entity.Visual.ImpactSpritePath = FileNameOnly(entity.Visual.ImpactSpritePath);
         }
         clone.VfxManifest.Debug = new VfxDebugSpec();
         clone.VfxManifest.InspirationNames = Array.Empty<string>();
@@ -275,7 +274,6 @@ public sealed partial class GeneratedItemData
         [JsonPropertyName("worldScoped")] public bool WorldScoped { get; set; } = true;
         [JsonPropertyName("worldId")] public string WorldId { get; set; } = "";
         [JsonPropertyName("name")] public string Name { get; set; } = "Generated Item";
-        [JsonPropertyName("tooltip")] public string Tooltip { get; set; } = "";
         [JsonPropertyName("category")] public string Category { get; set; } = "generic";
         [JsonPropertyName("parentA")] public string ParentA { get; set; } = "";
         [JsonPropertyName("parentB")] public string ParentB { get; set; } = "";

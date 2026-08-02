@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Explicit opt-in deterministic low-level fixture.
+"""Explicit opt-in DEVELOPER-ONLY deterministic low-level fixture.
 
 This is not a production design fallback.  It exists so offline contract and
 HTTP smoke tests can exercise the same v5 entities/bindings/capabilities wire
@@ -32,7 +32,6 @@ def deterministic_low_level_plan(
     parent_b = _parent_name(b, "Parent B")
     return {
         "name": f"{parent_a}–{parent_b} Runtime Fixture"[:80],
-        "tooltip": "Developer-only low-level fixture: a held body strikes forward and emits bounded child shards on hit.",
         "category": "hybrid",
         "concept": {
             "literalSynthesis": f"The physical bodies of {parent_a} and {parent_b} remain visibly combined.",

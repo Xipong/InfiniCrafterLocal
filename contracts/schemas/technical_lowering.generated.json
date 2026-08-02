@@ -51,24 +51,12 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "enable_item_contact_damage",
+      "capability": "configure_item_contact_hitbox",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
       "outputs": [
-        "runtimeProgram.itemContact.enabled",
         "runtimeProgram.itemContact.hitboxScale",
         "runtimeProgram.itemContact.contactForgivenessPx"
-      ]
-    },
-    {
-      "addsDesignChoice": false,
-      "authoredDecisionsPreserved": true,
-      "capability": "configure_consumption",
-      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::ConsumeItem",
-      "outputs": [
-        "gameplay.consumable",
-        "gameplay.consumeChancePercent"
       ]
     },
     {
@@ -145,9 +133,9 @@
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
-        "gameplay.createTile",
-        "gameplay.createWall",
-        "gameplay.placeStyle"
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
       ]
     },
     {
@@ -225,7 +213,6 @@
         "armor.movementSpeed",
         "armor.genericDamage",
         "armor.genericCrit",
-        "armor.setBonusText",
         "armor.setBonusGenericDamage",
         "armor.setBonusMovementSpeed",
         "armor.setBonusLifeRegen"
@@ -756,7 +743,7 @@
       "id": "primary_entity_to_binding_role",
       "inputs": [
         "runtimeProgram.primaryEntityId",
-        "runtimeProgram.bindings[].target"
+        "runtimeProgram.bindings[].usePolicy.action.targetId"
       ],
       "outputs": [
         "runtimeProgram.bindings[].role"
@@ -843,11 +830,8 @@
         "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY",
-        "runtimeProgram.itemContact.enabled",
         "runtimeProgram.itemContact.hitboxScale",
         "runtimeProgram.itemContact.contactForgivenessPx",
-        "gameplay.consumable",
-        "gameplay.consumeChancePercent",
         "gameplay.ammoCategory",
         "gameplay.ammoProjectileId",
         "gameplay.ammoShootSpeedPxPerTick",
@@ -870,9 +854,6 @@
         "gameplay.axePower",
         "gameplay.hammerPower",
         "gameplay.miningSpeedScale",
-        "gameplay.createTile",
-        "gameplay.createWall",
-        "gameplay.placeStyle",
         "gameplay.useConditionMode",
         "gameplay.useConditionMinLife",
         "gameplay.useConditionMinMana",
@@ -905,7 +886,6 @@
         "armor.movementSpeed",
         "armor.genericDamage",
         "armor.genericCrit",
-        "armor.setBonusText",
         "armor.setBonusGenericDamage",
         "armor.setBonusMovementSpeed",
         "armor.setBonusLifeRegen"

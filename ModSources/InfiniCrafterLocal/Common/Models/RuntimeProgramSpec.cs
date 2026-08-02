@@ -18,7 +18,7 @@ namespace InfiniCrafterLocal.Common.Models;
 public sealed class RuntimeProgramSpec
 {
     public const string CurrentApiVersion = "infini.runtime-program.v5";
-    public const string CurrentWireSchema = "infini.runtime-program.wire.v1";
+    public const string CurrentWireSchema = "infini.runtime-program.wire.v3";
     public const string ItemBodyOwner = "item_body";
     public const string ProjectileOwner = "projectile";
 
@@ -90,14 +90,16 @@ public sealed class RuntimeProgramSpec
             binding.NormalizeAndValidate();
             if (!bindingIds.Add(binding.Id))
                 throw new InvalidDataException($"duplicate runtime binding id '{binding.Id}'");
-            if (!entityIds.Contains(binding.Target))
-                throw new InvalidDataException($"binding '{binding.Id}' targets unknown entity '{binding.Target}'");
+            string bindingTarget = binding.UsePolicy.Action.TargetId;
+            string bindingAction = binding.UsePolicy.Action.Kind;
+            if (!entityIds.Contains(bindingTarget))
+                throw new InvalidDataException($"binding '{binding.Id}' targets unknown entity '{bindingTarget}'");
             if (RuntimeBindingSpec.IsExclusiveInput(binding.Input) && !exclusiveInputs.Add(binding.Input))
                 throw new InvalidDataException($"input '{binding.Input}' has multiple exclusive owners");
-            RuntimeEntitySpec target = TryGetEntity(binding.Target)!;
-            if (!RuntimeBindingAction.IsAllowed(binding.Input, binding.Action))
-                throw new InvalidDataException($"binding '{binding.Id}' cannot run action '{binding.Action}' from input '{binding.Input}'");
-            if (binding.Action == RuntimeBindingAction.SpawnEntity)
+            RuntimeEntitySpec target = TryGetEntity(bindingTarget)!;
+            if (!RuntimeBindingAction.IsAllowed(binding.Input, bindingAction))
+                throw new InvalidDataException($"binding '{binding.Id}' cannot run action '{bindingAction}' from input '{binding.Input}'");
+            if (bindingAction == RuntimeBindingAction.SpawnEntity)
             {
                 if (!target.IsProjectileEntity)
                     throw new InvalidDataException($"binding '{binding.Id}' spawn_entity target must be a projectile entity");
@@ -106,16 +108,46 @@ public sealed class RuntimeProgramSpec
             }
             else if (target.Kind != RuntimeEntityKind.ItemBody)
             {
-                throw new InvalidDataException($"binding '{binding.Id}' action '{binding.Action}' requires item_body target");
+                throw new InvalidDataException($"binding '{binding.Id}' action '{bindingAction}' requires item_body target");
             }
-            string expectedRole = binding.Target == PrimaryEntityId ? RuntimeEntityRole.Primary : RuntimeEntityRole.Secondary;
+            string expectedRole = bindingTarget == PrimaryEntityId ? RuntimeEntityRole.Primary : RuntimeEntityRole.Secondary;
             if (binding.Role != expectedRole)
-                throw new InvalidDataException($"binding '{binding.Id}' role must be '{expectedRole}' for target '{binding.Target}'");
+                throw new InvalidDataException($"binding '{binding.Id}' role must be '{expectedRole}' for target '{bindingTarget}'");
+        }
+
+        bool hasPlaceUse = Bindings.Any(x =>
+            x is not null
+            && x.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse
+            && x.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem);
+        bool hasNonPlaceActiveUse = Bindings.Any(x =>
+            x is not null
+            && x.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse
+            && x.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem);
+        if (hasPlaceUse && hasNonPlaceActiveUse)
+        {
+            bool everyPlaceIsAlternate = Bindings.All(x =>
+                x is null
+                || x.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem
+                || x.Input == RuntimeInputKind.AlternateUse);
+            bool hasPrimaryNonPlace = Bindings.Any(x =>
+                x is not null
+                && x.Input == RuntimeInputKind.PrimaryUse
+                && x.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem);
+            if (!everyPlaceIsAlternate || !hasPrimaryNonPlace)
+                throw new InvalidDataException("hybrid placeable requires primary non-placement use and alternate placement");
+        }
+        else if (hasPlaceUse && Bindings.Any(x =>
+            x is not null
+            && x.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem
+            && x.Input != RuntimeInputKind.PrimaryUse))
+        {
+            throw new InvalidDataException("pure placeable requires primary placement");
         }
 
         ItemUse.Normalize();
         ItemContact.Normalize();
         bool hasActiveItemUse = Bindings.Any(x => x is not null && x.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse);
+        bool hasItemContactBinding = Bindings.Any(x => x?.UsePolicy.ContactDamage == true);
         if (hasActiveItemUse && !ItemUse.Configured)
             throw new InvalidDataException("active primary/alternate binding requires explicit configure_item_use");
 
@@ -126,7 +158,7 @@ public sealed class RuntimeProgramSpec
             graph[entity.Id] = new HashSet<string>(StringComparer.Ordinal);
             foreach (RuntimeEventActionSpec action in entity.Events)
             {
-                RuntimeEventKind.ValidateProducer(entity, action.Event, ItemContact.Enabled, hasActiveItemUse);
+                RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasActiveItemUse);
                 if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
                     RuntimeEntitySpec? child = TryGetEntity(action.EntityId);
@@ -318,29 +350,95 @@ public sealed class RuntimeBindingSpec
 {
     public string Id { get; set; } = "";
     public string Input { get; set; } = "";
-    public string Action { get; set; } = "";
     public string Role { get; set; } = "";
-    public string Target { get; set; } = "";
+    public RuntimeBindingUsePolicySpec UsePolicy { get; set; } = new();
 
     public void NormalizeAndValidate()
     {
         Id = RuntimeText.Id(Id);
         Input = (Input ?? "").Trim().ToLowerInvariant();
-        Action = (Action ?? "").Trim().ToLowerInvariant();
         Role = (Role ?? "").Trim().ToLowerInvariant();
-        Target = RuntimeText.Id(Target);
         if (!IsActiveInput(Input))
             throw new InvalidDataException($"unknown runtime input '{Input}'");
-        if (!RuntimeBindingAction.IsKnown(Action))
-            throw new InvalidDataException($"unknown runtime binding action '{Action}'");
         if (!RuntimeEntityRole.IsKnown(Role))
             throw new InvalidDataException($"unknown runtime binding role '{Role}'");
+        UsePolicy ??= new RuntimeBindingUsePolicySpec();
+        UsePolicy.NormalizeAndValidate(Input);
     }
 
     public static bool IsActiveInput(string? input)
         => input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse or RuntimeInputKind.Hold or RuntimeInputKind.Equipped;
     public static bool IsExclusiveInput(string? input)
         => input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse or RuntimeInputKind.Hold;
+}
+
+public sealed class RuntimeBindingUsePolicySpec
+{
+    public RuntimeBindingActionSpec Action { get; set; } = new();
+    public int StackCost { get; set; }
+    public bool ContactDamage { get; set; }
+
+    public void NormalizeAndValidate(string input)
+    {
+        Action ??= new RuntimeBindingActionSpec();
+        Action.NormalizeAndValidate();
+        if (StackCost is not (0 or 1))
+            throw new InvalidDataException("binding usePolicy.stackCost must be exactly 0 or 1");
+        if (Action.Kind == RuntimeBindingAction.PlaceItem)
+        {
+            if (StackCost != 1)
+                throw new InvalidDataException("place_item requires stackCost=1");
+            if (ContactDamage)
+                throw new InvalidDataException("place_item cannot deal contact damage");
+        }
+        if (input is not (RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse)
+            && (StackCost != 0 || ContactDamage))
+            throw new InvalidDataException("non-use binding requires stackCost=0 and contactDamage=false");
+    }
+}
+
+public sealed class RuntimeBindingActionSpec
+{
+    public string Kind { get; set; } = "";
+    public string TargetId { get; set; } = "";
+    public RuntimePlacementSpec? Placement { get; set; }
+
+    public void NormalizeAndValidate()
+    {
+        Kind = (Kind ?? "").Trim().ToLowerInvariant();
+        TargetId = RuntimeText.Id(TargetId);
+        if (!RuntimeBindingAction.IsKnown(Kind))
+            throw new InvalidDataException($"unknown runtime binding action '{Kind}'");
+        if (Kind == RuntimeBindingAction.PlaceItem)
+        {
+            if (Placement is null)
+                throw new InvalidDataException("place_item requires an exact placement payload");
+            Placement.NormalizeAndValidate();
+        }
+        else if (Placement is not null)
+        {
+            throw new InvalidDataException("only place_item may carry a placement payload");
+        }
+    }
+}
+
+public sealed class RuntimePlacementSpec
+{
+    public int TileId { get; set; } = -1;
+    public int WallId { get; set; } = -1;
+    public int PlaceStyle { get; set; }
+
+    public void NormalizeAndValidate()
+    {
+        if (TileId < -1 || TileId >= TileLoader.TileCount)
+            throw new InvalidDataException($"tile ID {TileId} is not loaded");
+        if (WallId < -1 || WallId >= WallLoader.WallCount)
+            throw new InvalidDataException($"wall ID {WallId} is not loaded");
+        if (TileId < 0 && WallId < 0)
+            throw new InvalidDataException("placement must enable a tile or wall");
+        if (PlaceStyle is < 0 or > 1000)
+            throw new InvalidDataException("placement style must be 0..1000");
+    }
 }
 
 public static class RuntimeEntityRole
@@ -442,11 +540,17 @@ public sealed class RuntimeEntityVisualSpec
     public string Prompt { get; set; } = "";
     public string Silhouette { get; set; } = "";
     public string VisualIdentity { get; set; } = "";
+    public string ImpactPrompt { get; set; } = "";
+    public string ImpactNegativePrompt { get; set; } = "";
     public float Scale { get; set; } = 1f;
     public string SpritePath { get; set; } = "";
     public string SpriteUrl { get; set; } = "";
     public string SpriteStatus { get; set; } = "";
     public float SpriteTechnicalScore { get; set; } = 0f;
+    public string ImpactSpritePath { get; set; } = "";
+    public string ImpactSpriteUrl { get; set; } = "";
+    public string ImpactSpriteStatus { get; set; } = "";
+    public float ImpactSpriteTechnicalScore { get; set; } = 0f;
 
     public void Normalize()
     {
@@ -455,14 +559,20 @@ public sealed class RuntimeEntityVisualSpec
         Prompt = RuntimeText.Safe(Prompt, 1400);
         Silhouette = RuntimeText.Safe(Silhouette, 700);
         VisualIdentity = RuntimeText.Safe(VisualIdentity, 700);
+        ImpactPrompt = RuntimeText.Safe(ImpactPrompt, 1400);
+        ImpactNegativePrompt = RuntimeText.Safe(ImpactNegativePrompt, 700);
         Scale = Math.Clamp(Scale <= 0f ? 1f : Scale, 0.25f, 4f);
         SpritePath = RuntimeText.Safe(SpritePath, 260);
         SpriteUrl = RuntimeText.Safe(SpriteUrl, 500);
         SpriteStatus = RuntimeText.Safe(SpriteStatus, 48).ToLowerInvariant();
         SpriteTechnicalScore = Math.Clamp(SpriteTechnicalScore, 0f, 1f);
+        ImpactSpritePath = RuntimeText.Safe(ImpactSpritePath, 260);
+        ImpactSpriteUrl = RuntimeText.Safe(ImpactSpriteUrl, 500);
+        ImpactSpriteStatus = RuntimeText.Safe(ImpactSpriteStatus, 48).ToLowerInvariant();
+        ImpactSpriteTechnicalScore = Math.Clamp(ImpactSpriteTechnicalScore, 0f, 1f);
         if (AssetMode == "baked_sprite" && (string.IsNullOrWhiteSpace(SpritePath) || SpriteStatus is "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
             throw new InvalidDataException("required baked runtime sprite is unavailable");
-        if (AssetMode is not ("" or "item_icon" or "baked_sprite" or "reuse_item_icon" or "runtime_geometry" or "no_asset"))
+        if (AssetMode is not ("baked_sprite" or "reuse_item_icon" or "runtime_geometry" or "no_asset"))
             throw new InvalidDataException($"unknown entity assetMode '{AssetMode}'");
     }
 }
@@ -690,7 +800,7 @@ public sealed class RuntimeLightSpec
     public void Normalize()
     {
         Strength = Math.Clamp(Strength, 0f, 1.5f);
-        Color = RuntimeColorPolicy.Normalize(Color, "white");
+        Color = RuntimeColorPolicy.NormalizeRequired(Color, allowEmpty: Strength <= 0f);
     }
 }
 
@@ -802,7 +912,6 @@ public sealed class RuntimeItemUseSpec
 
 public sealed class RuntimeItemContactSpec
 {
-    public bool Enabled { get; set; }
     public float HitboxScale { get; set; } = 1f;
     public int ContactForgivenessPx { get; set; }
     public void Normalize()

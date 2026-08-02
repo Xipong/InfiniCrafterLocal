@@ -59,7 +59,6 @@ def _params(fn: str) -> dict[str, Any]:
     special: dict[str, dict[str, Any]] = {
         "configure_item_stats": deepcopy(_ITEM_BASE_STATS),
         "configure_item_use": deepcopy(_ITEM_BASE_USE),
-        "configure_consumption": {"consumable": True, "consumeChancePercent": 100},
         "configure_vanilla_ammo_item": {"ammoCategory": "arrow", "projectileId": 1, "notAmmo": False},
         "restore_resources_on_use": {"healLife": 20, "healMana": 0, "potionSickness": False},
         "apply_generated_buff_on_use": {
@@ -97,6 +96,29 @@ def _call(call_id: str, fn: str, target: str, params: dict[str, Any] | None = No
     return {"id": call_id, "fn": fn, "target": target, "params": deepcopy(_params(fn) if params is None else params)}
 
 
+def _binding(
+    binding_id: str,
+    input_kind: str,
+    action_kind: str,
+    target: str,
+    *,
+    placement_call_id: str = "",
+    contact_damage: bool = False,
+) -> dict[str, Any]:
+    action: dict[str, Any] = {"kind": action_kind, "targetId": target}
+    if placement_call_id:
+        action["placementCallId"] = placement_call_id
+    return {
+        "id": binding_id,
+        "input": input_kind,
+        "usePolicy": {
+            "action": action,
+            "stackCost": 1 if action_kind == "place_item" else 0,
+            "contactDamage": contact_damage,
+        },
+    }
+
+
 def build_capability_witness(fn: str) -> dict[str, Any]:
     if fn not in CAPABILITY_REGISTRY:
         raise KeyError(fn)
@@ -119,11 +141,9 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             pass
         elif fn == "configure_item_use":
             calls.append(_call("witness_call", fn, "item"))
-            bindings.append({"id": "witness_binding", "input": "primary_use", "action": "use_item_body", "target": "item"})
+            bindings.append(_binding("witness_binding", "primary_use", "use_item_body", "item"))
         else:
             calls.append(_call("item_use", "configure_item_use", "item", _ITEM_BASE_USE))
-            if fn == "configure_vanilla_ammo_item":
-                calls.append(_call("ammo_consumption", "configure_consumption", "item", {"consumable": True, "consumeChancePercent": 100}))
             calls.append(_call("witness_call", fn, "item"))
             action = "use_item_body"
             input_kind = "primary_use"
@@ -131,7 +151,14 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 action = "place_item"
             elif fn in {"configure_accessory", "configure_armor"}:
                 action = "equip_passive"; input_kind = "equipped"
-            bindings.append({"id": "witness_binding", "input": input_kind, "action": action, "target": "item"})
+            bindings.append(_binding(
+                "witness_binding",
+                input_kind,
+                action,
+                "item",
+                placement_call_id="witness_call" if action == "place_item" else "",
+                contact_damage=fn in {"configure_item_contact_hitbox", "configure_tool"},
+            ))
     else:
         if not any(row["fn"] == "configure_item_use" for row in calls):
             item_use = deepcopy(_ITEM_BASE_USE)
@@ -149,7 +176,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 kind = "free_projectile"
         witness_target = "witness_entity"
         entities.append({"id": witness_target, "kind": kind})
-        bindings.append({"id": "witness_binding", "input": "primary_use", "action": "spawn_entity", "target": witness_target})
+        bindings.append(_binding("witness_binding", "primary_use", "spawn_entity", witness_target))
 
         base = {
             "configure_spawn": _SPAWN,
@@ -194,7 +221,6 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
 
     return {
         "name": f"Capability Witness {fn}",
-        "tooltip": f"Executable vertical-slice witness for {fn}.",
         "category": "generic",
         "concept": {
             "literalSynthesis": "A minimal literal test object.",
@@ -211,6 +237,15 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 "parentB": {"facts": ["test mechanism"], "runtimeRoles": ["literal mechanism"]},
             },
             "claims": [{"id": "witness_claim", "kind": "gameplay", "text": f"The runtime executes {fn}.", "backedBy": ["witness_call"]}],
+        },
+        "realization": {
+            "description": f"A minimal runtime witness executing {fn}.",
+            "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+            "backedByClaims": ["witness_claim"],
+            "intentTrace": {
+                "kept": ["Execute the selected public typed contract."],
+                "changed": [], "dropped": [], "added": [],
+            },
         },
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,

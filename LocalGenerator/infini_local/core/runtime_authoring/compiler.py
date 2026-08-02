@@ -4,12 +4,22 @@ import copy
 from dataclasses import dataclass
 from typing import Any, Mapping, MutableMapping
 
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    ACTIVE_USE_INPUTS,
+    PLACE_ITEM_ACTION,
+    action_kind,
+    contact_damage,
+    placement_call_id,
+    project_to_wire,
+    target_id as binding_target_id,
+)
 from infini_local.core.runtime_authoring.capability_registry import (
     CONTROLLER_OPCODE,
     EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
+    ENTITY_KIND_REGISTRY,
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
@@ -130,25 +140,11 @@ def _compile_item_call(
             "holdoutOffsetY": "holdoutOffsetY",
         })
         return
-    if fn == "enable_item_contact_damage":
-        contact = runtime.setdefault("itemContact", {"enabled": True})
-        ctx.write_derived(
-            call=call,
-            path="runtimeProgram.itemContact.enabled",
-            value=True,
-            target=contact,
-            key="enabled",
-            source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn",
-        )
+    if fn == "configure_item_contact_hitbox":
+        contact = runtime.setdefault("itemContact", {})
         project(contact, "runtimeProgram.itemContact", {
             "hitboxScale": "hitboxScale",
             "contactForgivenessPx": "contactForgivenessPx",
-        })
-        return
-    if fn == "configure_consumption":
-        project(gameplay, "gameplay", {
-            "consumable": "consumable",
-            "consumeChancePercent": "consumeChancePercent",
         })
         return
     if fn == "configure_vanilla_ammo_item":
@@ -202,9 +198,7 @@ def _compile_item_call(
             "miningSpeedScale": "miningSpeedScale",
         })
         return
-    if fn == "configure_placeable":
-        project(gameplay, "gameplay", {"tileId": "createTile", "wallId": "createWall", "placeStyle": "placeStyle"})
-        return
+
     if fn == "require_use_condition":
         project(gameplay, "gameplay", {"mode": "useConditionMode", "minLife": "useConditionMinLife", "minMana": "useConditionMinMana"})
         return
@@ -236,7 +230,7 @@ def _compile_item_call(
         project(armor, "armor", {
             "slot": "slot", "setKey": "setKey", "defense": "defense", "maxLife": "maxLife", "maxMana": "maxMana",
             "movementSpeed": "movementSpeed", "genericDamage": "genericDamage", "genericCrit": "genericCrit",
-            "setBonusText": "setBonusText", "setBonusGenericDamage": "setBonusGenericDamage",
+            "setBonusGenericDamage": "setBonusGenericDamage",
             "setBonusMovementSpeed": "setBonusMovementSpeed", "setBonusLifeRegen": "setBonusLifeRegen",
         })
         return
@@ -384,9 +378,18 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         return str(pair[1].get("id") or "")
 
     binding_sources.sort(key=binding_source_sort_key)
+    placement_calls_by_id = {
+        str(call["id"]): call
+        for call in calls
+        if str(call.get("fn") or "") == "configure_placeable"
+    }
     bindings: list[dict[str, Any]] = []
-    for source_index, binding in binding_sources:
-        binding["role"] = primary_binding_role(primary_entity_id, str(binding.get("target") or ""))
+    for source_index, authored_binding in binding_sources:
+        binding = project_to_wire(
+            authored_binding,
+            placement_calls_by_id=placement_calls_by_id,
+        )
+        binding["role"] = primary_binding_role(primary_entity_id, binding_target_id(authored_binding))
         final_index = len(bindings)
         bindings.append(binding)
         ctx.receipts.append(primary_binding_role_receipt(
@@ -394,6 +397,20 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             final_index=final_index,
             role=binding["role"],
         ))
+        if action_kind(authored_binding) == "place_item":
+            call = placement_calls_by_id[placement_call_id(authored_binding)]
+            source_call_index = int(call["_sourceIndex"])
+            raw_params = call.get("params")
+            params = raw_params if isinstance(raw_params, Mapping) else {}
+            for key, value in params.items():
+                ctx.receipts.append({
+                    "callId": str(call["id"]),
+                    "fn": "configure_placeable",
+                    "authoredPath": f"runtimeProgram.calls[{source_call_index}].params.{key}",
+                    "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
+                    "value": copy.deepcopy(value),
+                    "status": "delivered",
+                })
     entities: list[dict[str, Any]] = []
     entity_index_by_id: dict[str, int] = {}
     for source_index, source in enumerate(authored_entities):
@@ -443,6 +460,8 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         entity_index = entity_index_by_id[target]
         compiled_entity = entities[entity_index]
         fn = str(call.get("fn") or "")
+        if fn == "configure_placeable":
+            continue
         if target == item_entity_id and fn not in EVENT_ACTION_OPCODE:
             _compile_item_call(
                 ctx,
@@ -502,22 +521,54 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
 def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     runtime = _dict(data.get("runtimeProgram"))
     rows: list[dict[str, Any]] = []
+    item_entity_id = str(runtime.get("itemEntityId") or "")
+    if not item_entity_id:
+        item_entity_id = next((
+            str(entity.get("id") or "")
+            for entity in runtime.get("entities") or []
+            if isinstance(entity, Mapping) and str(entity.get("kind") or "") == "item_body"
+        ), "")
+    item_use_inputs = {
+        str(binding.get("input") or "")
+        for binding in runtime.get("bindings") or []
+        if isinstance(binding, Mapping)
+        and str(binding.get("input") or "") in ACTIVE_USE_INPUTS
+        and action_kind(binding) != PLACE_ITEM_ACTION
+    }
+    item_contact_enabled = any(
+        contact_damage(binding)
+        for binding in runtime.get("bindings") or []
+        if isinstance(binding, Mapping)
+        and str(binding.get("input") or "") in item_use_inputs
+    )
     for entity in runtime.get("entities") or []:
         if not isinstance(entity, Mapping):
             continue
         entity_id = str(entity.get("id") or "")
-        rows.append({"entityId": entity_id, "event": "on_spawn"})
-        if _dict(entity.get("damage")).get("enabled"):
+        entity_kind = str(entity.get("kind") or "")
+        kind_spec = ENTITY_KIND_REGISTRY.get(entity_kind)
+        for event_name in (kind_spec.base_events if kind_spec is not None else ()):
+            rows.append({"entityId": entity_id, "event": event_name})
+        if (entity_kind == "item_body" and item_contact_enabled) or (
+            entity_kind != "item_body" and _dict(entity.get("damage")).get("enabled")
+        ):
             rows.extend(({"entityId": entity_id, "event": "on_hit"}, {"entityId": entity_id, "event": "on_crit"}))
         if _dict(entity.get("collision")).get("tileCollide"):
             rows.append({"entityId": entity_id, "event": "on_tile_collision"})
-        rows.extend(({"entityId": entity_id, "event": "on_expire"}, {"entityId": entity_id, "event": "on_kill"}))
         for event in entity.get("events") or []:
             if isinstance(event, Mapping):
-                rows.append({"entityId": entity_id, "event": str(event.get("event") or "")})
+                event_name = str(event.get("event") or "")
+                if entity_kind == "item_body" and event_name in {"on_hit", "on_crit"} and not item_contact_enabled:
+                    continue
+                if entity_kind == "item_body" and event_name == "on_use" and not item_use_inputs:
+                    continue
+                rows.append({"entityId": entity_id, "event": event_name})
     for binding in runtime.get("bindings") or []:
-        if isinstance(binding, Mapping):
-            rows.append({"entityId": str(binding.get("target") or ""), "event": "on_use", "input": str(binding.get("input") or "")})
+        if not isinstance(binding, Mapping):
+            continue
+        input_name = str(binding.get("input") or "")
+        if input_name in item_use_inputs and item_entity_id:
+            rows.append({"entityId": item_entity_id, "event": "on_use", "input": input_name})
     unique: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in rows:
         key = (str(row.get("entityId") or ""), str(row.get("event") or ""), str(row.get("input") or ""))

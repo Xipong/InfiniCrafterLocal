@@ -4,6 +4,10 @@ from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Final, Iterable, Mapping
 
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    action_kind,
+    contact_damage as binding_contact_damage,
+)
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKEN_PATTERN,
     DAMAGE_CLASS_TOKENS,
@@ -14,8 +18,8 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v2"
-RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v1"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v4"
+RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
     "item_body",
@@ -95,6 +99,7 @@ class RequirementSpec:
     param: str = ""
     equals: Any = None
     any_of: tuple[str, ...] = ()
+    nonzero_params: tuple[str, ...] = ()
     message: str = ""
 
     def card(self) -> dict[str, Any]:
@@ -106,6 +111,8 @@ class RequirementSpec:
             out["equals"] = self.equals
         if self.any_of:
             out["anyOf"] = list(self.any_of)
+        if self.nonzero_params:
+            out["nonzeroParams"] = list(self.nonzero_params)
         if self.message:
             out["message"] = self.message
         return out
@@ -196,6 +203,8 @@ class EventCallRequirement:
 @dataclass(frozen=True, slots=True)
 class EventBindingRequirement:
     any_of_inputs: tuple[str, ...]
+    any_of_actions: tuple[str, ...] = ()
+    required_contact_damage: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,8 +221,18 @@ class EventDependencyAlternative:
         return cls(required_calls=(EventCallRequirement.create(capability, exact_params),))
 
     @classmethod
-    def any_binding_input(cls, inputs: Iterable[str]) -> EventDependencyAlternative:
-        return cls(required_bindings=(EventBindingRequirement(tuple(inputs)),))
+    def any_binding_input(
+        cls,
+        inputs: Iterable[str],
+        actions: Iterable[str] = (),
+        *,
+        contact_damage: bool | None = None,
+    ) -> EventDependencyAlternative:
+        return cls(required_bindings=(EventBindingRequirement(
+            tuple(inputs),
+            tuple(actions),
+            contact_damage,
+        ),))
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +242,9 @@ class EventKindSpec:
     producer_capabilities: tuple[str, ...]
     summary: str
     producer_binding_inputs: tuple[str, ...] = ()
+    producer_binding_actions: tuple[str, ...] = ()
+    producer_binding_kinds: tuple[str, ...] = ()
+    producer_binding_contact_damage: bool | None = None
     producer_exact_params: Mapping[str, Mapping[str, Any]] = field(
         default_factory=lambda: MappingProxyType({}),
         compare=False,
@@ -239,6 +261,9 @@ class EventKindSpec:
             "sources": list(self.source_kinds),
             "producedBy": list(self.producer_capabilities),
             "producedByBindingInputs": list(self.producer_binding_inputs),
+            "producedByBindingActions": list(self.producer_binding_actions),
+            "producedByBindingKinds": list(self.producer_binding_kinds),
+            "producerBindingContactDamage": self.producer_binding_contact_damage,
             "producerFreeKinds": producer_free_kinds,
             "producerExactParams": {
                 capability: dict(params)
@@ -553,8 +578,8 @@ _CAPS: list[CapabilitySpec] = [
         lowering=("gameplay.useStyle", "gameplay.autoReuse", "gameplay.useTurn", "gameplay.channelUse", "runtimeProgram.itemUse.*"),
     ),
     _cap(
-        "enable_item_contact_damage",
-        "Enable the authored item body's vanilla contact hitbox.",
+        "configure_item_contact_hitbox",
+        "Configure geometry for item-body contact that is enabled by a binding usePolicy; omitting this call keeps Terraria's unscaled hitbox.",
         "item_combat",
         ("item_body",),
         {
@@ -564,24 +589,8 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UseItemHitbox/OnHitNPC",
         wire=("runtimeProgram.itemContact.*",),
-        provenance="existing swing/item-hitbox executor extracted from melee root",
+        provenance="exact geometry for binding-owned item-body contact",
         repair_group="item_contact",
-    ),
-    _cap(
-        "configure_consumption",
-        "Set exact stack-consumption behaviour. This does not mark the item as ammunition.",
-        "item",
-        ("item_body",),
-        {
-            "consumable": _p("boolean", "Consume stack on use"),
-            "consumeChancePercent": _p("integer", "Chance of stack consumption", minimum=0, maximum=100, units="percent"),
-        },
-        py=_COMPILER_OWNER,
-        cs="GeneratedItem.cs::ConsumeItem",
-        wire=("gameplay.consumable", "gameplay.consumeChancePercent"),
-        provenance="existing consumption_behavior separated from Terraria ammo identity",
-        repair_group="consumption",
-        lowering=("gameplay.consumable", "gameplay.consumeChancePercent"),
     ),
     _cap(
         "configure_vanilla_ammo_item",
@@ -600,14 +609,6 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing ammo_behavior split into direct Terraria Item.ammo and Item.shoot fields",
         repair_group="ammo_item",
         lowering=("gameplay.ammoCategory", "gameplay.ammoProjectileId", "gameplay.ammoShootSpeedPxPerTick", "gameplay.notAmmo"),
-        requirements=(RequirementSpec(
-            kind="capability_param",
-            capability="configure_consumption",
-            target="same_target",
-            param="consumable",
-            equals=True,
-            message="A vanilla ammo item must also be an explicitly consumable stack.",
-        ),),
     ),
     _cap(
         "restore_resources_on_use",
@@ -668,7 +669,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_tool",
-        "Set exact pick/axe/hammer powers and mining speed.",
+        "Set exact pick/axe/hammer powers and mining speed. Requires explicit item-use configuration and one executable primary_use binding so Terraria can execute mining.",
         "item_tool",
         ("item_body",),
         {
@@ -695,11 +696,11 @@ _CAPS: list[CapabilitySpec] = [
             "placeStyle": _p("integer", "Placement style", minimum=0, maximum=255),
         },
         py=_COMPILER_OWNER,
-        cs="GeneratedItemData.Apply.cs::ApplyToItem",
-        wire=("gameplay.createTile", "gameplay.createWall", "gameplay.placeStyle"),
-        provenance="existing placeable_behavior",
+        cs="RuntimeProgramSpec.cs::RuntimeBindingActionSpec",
+        wire=("runtimeProgram.bindings[].usePolicy.action.placement.*",),
+        provenance="placement payload referenced by one exact binding transaction",
         repair_group="placeable",
-        lowering=("gameplay.createTile", "gameplay.createWall", "gameplay.placeStyle"),
+        lowering=("runtimeProgram.bindings[].usePolicy.action.placement.*",),
     ),
     _cap(
         "require_use_condition",
@@ -793,7 +794,6 @@ _CAPS: list[CapabilitySpec] = [
             "movementSpeed": _p("number", "Movement speed modifier", minimum=-0.9, maximum=3),
             "genericDamage": _p("number", "Generic damage additive modifier", minimum=-0.9, maximum=3),
             "genericCrit": _p("number", "Generic critical chance points", minimum=-100, maximum=100),
-            "setBonusText": _p("string", "Player-facing set bonus text", required=False),
             "setBonusGenericDamage": _p("number", "Set bonus generic damage", required=False, minimum=-0.9, maximum=3),
             "setBonusMovementSpeed": _p("number", "Set bonus movement speed", required=False, minimum=-0.9, maximum=3),
             "setBonusLifeRegen": _p("integer", "Set bonus life regen", required=False, minimum=-100, maximum=200),
@@ -1304,8 +1304,7 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
     ),
     "place_item": BindingActionSpec(
         "place_item", ("item_body",), ("primary_use", "alternate_use"),
-        "Use the explicitly configured tile/wall placement result.",
-        ("configure_placeable",),
+        "Execute the one placement payload referenced by this binding action.",
     ),
     "equip_passive": BindingActionSpec(
         "equip_passive", ("item_body",), ("equipped",),
@@ -1328,6 +1327,8 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         (),
         "Emitted when an active item-body use binding succeeds.",
         producer_binding_inputs=("primary_use", "alternate_use"),
+        producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
+        producer_binding_kinds=("item_body",),
     ),
     "on_spawn": EventKindSpec(
         "on_spawn", PROJECTILE_ENTITY_KIND_ORDER, (),
@@ -1335,13 +1336,21 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "on_hit": EventKindSpec(
         "on_hit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
-        ("enable_item_contact_damage", "set_projectile_damage"),
+        ("configure_item_contact_hitbox", "set_projectile_damage"),
         "Emitted after explicit contact/projectile damage hits an NPC.",
+        producer_binding_inputs=("primary_use", "alternate_use"),
+        producer_binding_actions=("spawn_entity", "use_item_body"),
+        producer_binding_kinds=("item_body",),
+        producer_binding_contact_damage=True,
     ),
     "on_crit": EventKindSpec(
         "on_crit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
-        ("enable_item_contact_damage", "set_projectile_damage"),
+        ("configure_item_contact_hitbox", "set_projectile_damage"),
         "Emitted after an explicitly damaging hit is critical.",
+        producer_binding_inputs=("primary_use", "alternate_use"),
+        producer_binding_actions=("spawn_entity", "use_item_body"),
+        producer_binding_kinds=("item_body",),
+        producer_binding_contact_damage=True,
     ),
     "on_tile_collision": EventKindSpec(
         "on_tile_collision",
@@ -1382,8 +1391,15 @@ def event_dependency_alternatives(event: str, kind: str) -> tuple[EventDependenc
     kind_spec = ENTITY_KIND_REGISTRY.get(kind)
     if event_spec is None or kind_spec is None or kind not in event_spec.source_kinds:
         return ()
-    if event_spec.producer_binding_inputs:
-        return (EventDependencyAlternative.any_binding_input(event_spec.producer_binding_inputs),)
+    binding_requirement = (
+        EventBindingRequirement(
+            event_spec.producer_binding_inputs,
+            event_spec.producer_binding_actions,
+            event_spec.producer_binding_contact_damage,
+        )
+        if event_spec.producer_binding_inputs and kind in event_spec.producer_binding_kinds
+        else None
+    )
     if event in kind_spec.base_events:
         return (EventDependencyAlternative(),)
     alternatives: list[EventDependencyAlternative] = []
@@ -1391,10 +1407,15 @@ def event_dependency_alternatives(event: str, kind: str) -> tuple[EventDependenc
         capability = CAPABILITY_REGISTRY.get(capability_name)
         if capability is None or kind not in capability.target_kinds:
             continue
-        alternatives.append(EventDependencyAlternative.required_call(
-            capability_name,
-            event_spec.producer_exact_params.get(capability_name),
+        alternatives.append(EventDependencyAlternative(
+            required_calls=(EventCallRequirement.create(
+                capability_name,
+                event_spec.producer_exact_params.get(capability_name),
+            ),),
+            required_bindings=((binding_requirement,) if binding_requirement is not None else ()),
         ))
+    if not alternatives and binding_requirement is not None:
+        alternatives.append(EventDependencyAlternative(required_bindings=(binding_requirement,)))
     return tuple(alternatives)
 
 
@@ -1420,7 +1441,16 @@ def event_alternative_is_present(
 
     def binding_present(requirement: EventBindingRequirement) -> bool:
         allowed_inputs = set(requirement.any_of_inputs)
-        return any(str(row.get("input") or "") in allowed_inputs for row in binding_rows)
+        allowed_actions = set(requirement.any_of_actions)
+        return any(
+            str(row.get("input") or "") in allowed_inputs
+            and (not allowed_actions or action_kind(row) in allowed_actions)
+            and (
+                requirement.required_contact_damage is None
+                or binding_contact_damage(row) is requirement.required_contact_damage
+            )
+            for row in binding_rows
+        )
 
     return (
         all(call_present(requirement) for requirement in alternative.required_calls)
@@ -1440,7 +1470,12 @@ def event_dependency_descriptors(
             ) + ")"
             allowed.append(requirement.capability + suffix)
         for requirement in alternative.required_bindings:
-            allowed.append("binding input one of: " + ",".join(requirement.any_of_inputs))
+            descriptor = "binding input one of: " + ",".join(requirement.any_of_inputs)
+            if requirement.any_of_actions:
+                descriptor += "; action one of: " + ",".join(requirement.any_of_actions)
+            if requirement.required_contact_damage is not None:
+                descriptor += "; contactDamage=" + str(requirement.required_contact_damage).lower()
+            allowed.append(descriptor)
     return tuple(allowed)
 
 
@@ -1468,8 +1503,7 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
             "runtimeProgram.itemUse.channel", "runtimeProgram.itemUse.handPose", "runtimeProgram.itemUse.releaseTiming",
             "runtimeProgram.itemUse.holdoutOffsetX", "runtimeProgram.itemUse.holdoutOffsetY",
         ),
-        "enable_item_contact_damage": ("runtimeProgram.itemContact.enabled", "runtimeProgram.itemContact.hitboxScale", "runtimeProgram.itemContact.contactForgivenessPx"),
-        "configure_consumption": ("gameplay.consumable", "gameplay.consumeChancePercent"),
+        "configure_item_contact_hitbox": ("runtimeProgram.itemContact.hitboxScale", "runtimeProgram.itemContact.contactForgivenessPx"),
         "configure_vanilla_ammo_item": ("gameplay.ammoCategory", "gameplay.ammoProjectileId", "gameplay.ammoShootSpeedPxPerTick", "gameplay.notAmmo"),
         "restore_resources_on_use": ("gameplay.healLife", "gameplay.healMana", "gameplay.potion"),
         "apply_vanilla_buff_on_use": ("gameplay.extraBuffs[].buffCode", "gameplay.extraBuffs[].buffTime"),
@@ -1479,12 +1513,12 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
             "gameplay.generatedBuff.jumpBoost", "gameplay.generatedBuff.manaRegen", "gameplay.generatedBuff.lifeRegen",
         ),
         "configure_tool": ("gameplay.pickPower", "gameplay.axePower", "gameplay.hammerPower", "gameplay.miningSpeedScale"),
-        "configure_placeable": ("gameplay.createTile", "gameplay.createWall", "gameplay.placeStyle"),
+        "configure_placeable": ("runtimeProgram.bindings[].usePolicy.action.placement.tileId", "runtimeProgram.bindings[].usePolicy.action.placement.wallId", "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"),
         "require_use_condition": ("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
         "add_hold_light": ("gameplay.holdLightStrength", "gameplay.holdLightColorName"),
         "move_player_on_use": ("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
         "configure_accessory": tuple(["accessory.enabled", *[f"accessory.{name}" for name in ("defense", "maxLife", "maxMana", "lifeRegen", "manaRegen", "movementSpeed", "genericDamage", "genericCrit", "endurance", "minionSlots", "sentrySlots", "lightStrength", "lightColorName")]]),
-        "configure_armor": tuple(["armor.enabled", *[f"armor.{name}" for name in ("slot", "setKey", "defense", "maxLife", "maxMana", "movementSpeed", "genericDamage", "genericCrit", "setBonusText", "setBonusGenericDamage", "setBonusMovementSpeed", "setBonusLifeRegen")]]),
+        "configure_armor": tuple(["armor.enabled", *[f"armor.{name}" for name in ("slot", "setKey", "defense", "maxLife", "maxMana", "movementSpeed", "genericDamage", "genericCrit", "setBonusGenericDamage", "setBonusMovementSpeed", "setBonusLifeRegen")]]),
     }
     if cap.name in item_paths:
         return item_paths[cap.name]
@@ -1524,8 +1558,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
 
 def _component_slot(cap: CapabilitySpec) -> str:
     direct = {
-        "configure_item_stats": "item_stats", "configure_item_use": "item_use", "enable_item_contact_damage": "item_contact",
-        "configure_consumption": "consumption", "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
+        "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
+        "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
         "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "configure_spawn": "spawn",
@@ -1547,8 +1581,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
     item = {
         "configure_item_stats": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "configure_item_use": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
-        "enable_item_contact_damage": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
-        "configure_consumption": "Content/Items/GeneratedItem.cs::ConsumeItem",
+        "configure_item_contact_hitbox": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
         "configure_vanilla_ammo_item": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "restore_resources_on_use": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "apply_vanilla_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
@@ -1596,15 +1629,6 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
-    if cap.name == "configure_vanilla_ammo_item":
-        return (RequirementSpec(
-            "item_capability_param",
-            capability="configure_consumption",
-            target="item_body",
-            param="consumable",
-            equals=True,
-            message="vanilla ammo item requires configure_consumption(consumable=true)",
-        ),)
     if cap.name == "spawn_over_target":
         return (RequirementSpec("capability_present", capability="configure_spawn", message="spawn_over_target extends the same entity's explicit spawn component"),)
     if cap.name in {"channel_beam", "charge_then_release"}:
@@ -1613,7 +1637,40 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             rows.append(RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement")), message="released projectile needs an explicit post-release movement"))
         return tuple(rows)
     if cap.name == "configure_placeable":
-        return (RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),)
+        return (
+            RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),
+            RequirementSpec(
+                kind="binding_action_reference",
+                target="item_body",
+                any_of=("place_item",),
+                message="configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+            ),
+        )
+    if cap.name == "configure_tool":
+        return (
+            RequirementSpec(
+                kind="capability_present",
+                capability="configure_item_use",
+                target="item_body",
+                message="A configured tool requires explicit item-use configuration; no use behavior is inferred.",
+            ),
+            RequirementSpec(
+                kind="binding_tuple_present",
+                target="any_entity",
+                any_of=("primary_use|use_item_body|contactDamage=true", "primary_use|spawn_entity"),
+                message="A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
+            ),
+        )
+    if cap.name == "configure_accessory":
+        return (RequirementSpec(
+            kind="at_least_one_param_nonzero",
+            nonzero_params=(
+                "defense", "maxLife", "maxMana", "lifeRegen", "manaRegen",
+                "movementSpeed", "genericDamage", "genericCrit", "endurance",
+                "minionSlots", "sentrySlots", "lightStrength",
+            ),
+            message="An accessory call must author at least one non-zero executable effect or be removed.",
+        ),)
     if cap.name == "require_use_condition":
         return (RequirementSpec("conditional_param", param="mode", any_of=("life_above:minLife", "mana_above:minMana"), message="threshold modes require their threshold parameter"),)
     if cap.name == "apply_generated_buff_on_use":
@@ -1672,7 +1729,7 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
             "placeStyle": "terraria_place_style", "bounceCount": "bounce_count", "pierce": "penetration_count",
             "extraUpdates": "extra_ai_updates", "segments": "collision_segment_count", "count": "spawn_or_target_count",
             "maxHeal": "life_points", "minionSlots": "minion_slots", "sentrySlots": "sentry_slots",
-            "genericCrit": "percentage_points", "setBonusText": "display_text",
+            "genericCrit": "percentage_points",
             "acceleration": "pixels_per_tick_squared", "strength": "effect_strength",
         }
         semantic_type = semantic_by_name.get(name, "unitless_scalar" if spec.kind in {"integer", "number"} else "bounded_text")
@@ -1695,7 +1752,7 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
             "charge_then_release": "owns_position_until_release",
             "target_and_fire": "owns_stationary_position",
         }[cap.name]
-    if cap.name in {"enable_item_contact_damage", "set_projectile_damage"}:
+    if cap.name in {"configure_item_contact_hitbox", "set_projectile_damage"}:
         emitted = ("on_hit", "on_crit")
     elif cap.name == "charge_then_release":
         emitted = ("on_release", "channel_complete")
@@ -1838,9 +1895,13 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             }),
         },
         "bindingTarget": (
-            "bindings[].target is the exact entity acted on. The selected action's targets list "
+            "bindings[].usePolicy.action.targetId is the exact entity acted on. The selected action's targets list "
             "is the entity-kind allowlist; spawn_entity targets the entity created, while "
-            "use_item_body targets the item body being used."
+            "use_item_body targets the item body being used. Only place_item additionally requires "
+            "bindings[].usePolicy.action.placementCallId; every other action must omit that key. "
+            "usePolicy.contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
+            "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
+            "It does not select primaryEntityId or projectile held ownership; place_item/hold/equipped require false."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",

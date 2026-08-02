@@ -347,7 +347,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "enable_item_contact_damage",
+      "capability": "configure_item_contact_hitbox",
       "componentSlot": "item_contact",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
@@ -360,7 +360,6 @@
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
-        "runtimeProgram.itemContact.enabled",
         "runtimeProgram.itemContact.hitboxScale",
         "runtimeProgram.itemContact.contactForgivenessPx"
       ],
@@ -390,62 +389,8 @@
       },
       "positionOwnership": "none",
       "promptVisibility": true,
-      "provenance": "existing swing/item-hitbox executor extracted from melee root",
-      "purpose": "Enable the authored item body's vanilla contact hitbox.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "status": "refactored",
-      "targetKinds": [
-        "item_body"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.itemContact.enabled"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "configure_consumption",
-      "componentSlot": "consumption",
-      "conflicts": [],
-      "csharpOwner": "Content/Items/GeneratedItem.cs::ConsumeItem",
-      "decision": "expose",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "gameplay.consumable",
-        "gameplay.consumeChancePercent"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_request_server_execute",
-      "parameters": {
-        "consumable": {
-          "enum": [],
-          "kind": "boolean",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
-        "consumeChancePercent": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 100,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "percent"
-        }
-      },
-      "positionOwnership": "none",
-      "promptVisibility": true,
-      "provenance": "existing consumption_behavior separated from Terraria ammo identity",
-      "purpose": "Set exact stack-consumption behaviour. This does not mark the item as ammunition.",
+      "provenance": "exact geometry for binding-owned item-body contact",
+      "purpose": "Configure geometry for item-body contact that is enabled by a binding usePolicy; omitting this call keeps Terraria's unscaled hitbox.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -462,9 +407,7 @@
       "conflicts": [],
       "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
-      "dependencies": [
-        "configure_consumption"
-      ],
+      "dependencies": [],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "",
@@ -539,16 +482,7 @@
       "provenance": "existing ammo_behavior split into direct Terraria Item.ammo and Item.shoot fields",
       "purpose": "Mark this generated item as one exact vanilla ammo category and projectile. Sets Item.ammo and Item.shoot; it does not configure a weapon to consume ammo.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "configure_consumption",
-          "equals": true,
-          "kind": "item_capability_param",
-          "message": "vanilla ammo item requires configure_consumption(consumable=true)",
-          "param": "consumable",
-          "target": "item_body"
-        }
-      ],
+      "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -825,7 +759,9 @@
       "conflicts": [],
       "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
-      "dependencies": [],
+      "dependencies": [
+        "configure_item_use"
+      ],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "",
@@ -882,9 +818,25 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "existing tool_capability",
-      "purpose": "Set exact pick/axe/hammer powers and mining speed.",
+      "purpose": "Set exact pick/axe/hammer powers and mining speed. Requires explicit item-use configuration and one executable primary_use binding so Terraria can execute mining.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "capability": "configure_item_use",
+          "kind": "capability_present",
+          "message": "A configured tool requires explicit item-use configuration; no use behavior is inferred.",
+          "target": "item_body"
+        },
+        {
+          "anyOf": [
+            "primary_use|use_item_body|contactDamage=true",
+            "primary_use|spawn_entity"
+          ],
+          "kind": "binding_tuple_present",
+          "message": "A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
+          "target": "any_entity"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -904,9 +856,9 @@
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
-        "gameplay.createTile",
-        "gameplay.createWall",
-        "gameplay.placeStyle"
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -944,7 +896,7 @@
       },
       "positionOwnership": "none",
       "promptVisibility": true,
-      "provenance": "existing placeable_behavior",
+      "provenance": "placement payload referenced by one exact binding transaction",
       "purpose": "Set one concrete tile/wall placement result.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
@@ -954,6 +906,14 @@
           "message": "at least one of tileId/wallId must be enabled",
           "param": "tileId|wallId",
           "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "kind": "binding_action_reference",
+          "message": "configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+          "target": "item_body"
         }
       ],
       "safetyLimits": "bounded by runtime program limits",
@@ -1362,7 +1322,27 @@
       "provenance": "existing accessory_effect",
       "purpose": "Apply exact passive player stat modifiers while equipped as an accessory.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "kind": "at_least_one_param_nonzero",
+          "message": "An accessory call must author at least one non-zero executable effect or be removed.",
+          "nonzeroParams": [
+            "defense",
+            "maxLife",
+            "maxMana",
+            "lifeRegen",
+            "manaRegen",
+            "movementSpeed",
+            "genericDamage",
+            "genericCrit",
+            "endurance",
+            "minionSlots",
+            "sentrySlots",
+            "lightStrength"
+          ],
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1393,7 +1373,6 @@
         "armor.movementSpeed",
         "armor.genericDamage",
         "armor.genericCrit",
-        "armor.setBonusText",
         "armor.setBonusGenericDamage",
         "armor.setBonusMovementSpeed",
         "armor.setBonusLifeRegen"
@@ -1489,16 +1468,6 @@
           "reference": null,
           "required": false,
           "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "setBonusText": {
-          "enum": [],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "display_text",
           "units": ""
         },
         "setKey": {

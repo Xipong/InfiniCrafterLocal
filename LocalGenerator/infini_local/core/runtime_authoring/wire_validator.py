@@ -3,6 +3,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    ACTIVE_USE_INPUTS,
+    action,
+    action_kind,
+    contact_damage,
+    placeable_input_contract,
+    stack_cost,
+    target_id as binding_target_id,
+)
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     ENTITY_KINDS,
@@ -29,7 +38,11 @@ _FORBIDDEN_ROUTER_KEYS = {
 _RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
 _ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events"})
-_VISUAL_KEYS = frozenset({"role", "assetMode", "prompt", "silhouette", "visualIdentity", "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore"})
+_VISUAL_KEYS = frozenset({
+    "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
+    "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
+    "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore",
+})
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget"})
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
 _DAMAGE_KEYS = frozenset({"enabled", "damageClass", "damage", "knockback", "ownerHitCheck"})
@@ -49,9 +62,12 @@ _EVENT_KEYS = frozenset({
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
 })
-_BINDING_KEYS = frozenset({"id", "input", "action", "role", "target"})
+_BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
+_USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage"})
+_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement"})
+_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle"})
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
-_ITEM_CONTACT_KEYS = frozenset({"enabled", "hitboxScale", "contactForgivenessPx"})
+_ITEM_CONTACT_KEYS = frozenset({"hitboxScale", "contactForgivenessPx"})
 
 
 def _reject_unknown(mapping: Mapping[str, Any], allowed: frozenset[str], path: str, errors: list[dict[str, Any]]) -> None:
@@ -270,10 +286,21 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             continue
         binding_path = f"$.runtimeProgram.bindings[{index}]"
         _reject_unknown(binding, _BINDING_KEYS, binding_path, errors)
+        policy = binding.get("usePolicy")
+        if not isinstance(policy, Mapping):
+            errors.append({"path": f"{binding_path}.usePolicy", "code": "required_object", "message": "Binding usePolicy transaction is required."})
+            policy = {}
+        else:
+            _reject_unknown(policy, _USE_POLICY_KEYS, f"{binding_path}.usePolicy", errors)
+        action_row = action(binding)
+        if not action_row:
+            errors.append({"path": f"{binding_path}.usePolicy.action", "code": "required_object", "message": "Binding action transaction is required."})
+        else:
+            _reject_unknown(action_row, _BINDING_ACTION_KEYS, f"{binding_path}.usePolicy.action", errors)
         input_name = str(binding.get("input") or "")
-        action_name = str(binding.get("action") or "")
+        action_name = action_kind(binding)
         role = str(binding.get("role") or "")
-        target = str(binding.get("target") or "")
+        target = binding_target_id(binding)
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
         if input_spec is None:
@@ -284,24 +311,67 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if input_spec is not None and input_spec.exclusive:
                 exclusive_inputs.add(input_name)
         if action_spec is None:
-            errors.append({"path": f"{binding_path}.action", "code": "unknown_binding_action", "message": f"Unknown binding action {action_name!r}."})
+            errors.append({"path": f"{binding_path}.usePolicy.action.kind", "code": "unknown_binding_action", "message": f"Unknown binding action {action_name!r}."})
         elif input_spec is not None and action_name not in input_spec.allowed_actions:
-            errors.append({"path": f"{binding_path}.action", "code": "binding_action_mismatch", "message": f"Action {action_name!r} is not allowed for input {input_name!r}."})
+            errors.append({"path": f"{binding_path}.usePolicy.action.kind", "code": "binding_action_mismatch", "message": f"Action {action_name!r} is not allowed for input {input_name!r}."})
         target_kind = entity_kind_by_id.get(target)
         if target_kind is None:
-            errors.append({"path": f"{binding_path}.target", "code": "missing_entity_reference", "message": f"Unknown binding target {target!r}."})
+            errors.append({"path": f"{binding_path}.usePolicy.action.targetId", "code": "missing_entity_reference", "message": f"Unknown binding target {target!r}."})
         elif action_spec is not None and target_kind not in action_spec.target_kinds:
-            errors.append({"path": f"{binding_path}.target", "code": "binding_target_kind", "message": f"Action {action_name!r} cannot target entity kind {target_kind!r}."})
+            errors.append({"path": f"{binding_path}.usePolicy.action.targetId", "code": "binding_target_kind", "message": f"Action {action_name!r} cannot target entity kind {target_kind!r}."})
         expected_role = "primary" if target == primary_entity_id else "secondary"
         if role != expected_role:
             errors.append({"path": f"{binding_path}.role", "code": "binding_primary_role_mismatch", "message": f"Binding target {target!r} requires explicit role {expected_role!r}."})
+        cost = stack_cost(binding)
+        if cost not in {0, 1}:
+            errors.append({"path": f"{binding_path}.usePolicy.stackCost", "code": "invalid_stack_cost", "message": "stackCost must be exactly 0 or 1."})
+        contact_value = policy.get("contactDamage")
+        if not isinstance(contact_value, bool):
+            errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "required_boolean", "message": "contactDamage must be a boolean."})
+        placement = action_row.get("placement")
+        if action_name == "place_item":
+            if cost != 1:
+                errors.append({"path": f"{binding_path}.usePolicy.stackCost", "code": "place_item_without_stack_cost", "message": "place_item requires stackCost=1."})
+            if contact_damage(binding):
+                errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "binding_action_mismatch", "message": "place_item cannot deal item-body contact damage."})
+            if isinstance(placement, Mapping):
+                _reject_unknown(placement, _PLACEMENT_KEYS, f"{binding_path}.usePolicy.action.placement", errors)
+                tile_id = placement.get("tileId")
+                wall_id = placement.get("wallId")
+                if not isinstance(tile_id, int) or isinstance(tile_id, bool) or not isinstance(wall_id, int) or isinstance(wall_id, bool):
+                    errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "invalid_placement_payload", "message": "Placement requires exact integer tileId and wallId."})
+                elif tile_id < 0 and wall_id < 0:
+                    errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "empty_component", "message": "Placement must enable a tile or wall."})
+            else:
+                errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "required_object", "message": "place_item requires its lowered placement payload."})
+        elif placement is not None:
+            errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "binding_action_mismatch", "message": "Only place_item may carry placement payload."})
+        if input_name not in ACTIVE_USE_INPUTS and (cost != 0 or contact_damage(binding)):
+            errors.append({"path": f"{binding_path}.usePolicy", "code": "binding_action_mismatch", "message": "Non-use inputs require stackCost=0 and contactDamage=false."})
 
     active_use = any(isinstance(row, Mapping) and str(row.get("input") or "") in {"primary_use", "alternate_use"} for row in bindings)
     item_use = item_use_raw if isinstance(item_use_raw, Mapping) else {}
     if active_use and item_use.get("configured") is not True:
         errors.append({"path": "$.runtimeProgram.itemUse.configured", "code": "missing_item_use_capability", "message": "Active primary/alternate binding requires explicit configure_item_use."})
 
-    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), Mapping) else {}
+    gameplay_raw = data.get("gameplay")
+    gameplay: Mapping[str, Any] = gameplay_raw if isinstance(gameplay_raw, Mapping) else {}
+    retired_use_policy_fields = {
+        "consumable",
+        "consumeChancePercent",
+        "primaryUseConsumeChancePercent",
+        "alternateUseConsumeChancePercent",
+        "createTile",
+        "createWall",
+        "placeStyle",
+    }.intersection(gameplay)
+    for field in sorted(retired_use_policy_fields):
+        errors.append({
+            "path": f"$.gameplay.{field}",
+            "code": "retired_global_use_policy_field",
+            "message": f"Global use-policy field {field!r} is not accepted by wire v3; each binding owns one complete usePolicy transaction.",
+        })
+
     accessory = data.get("accessory") if isinstance(data.get("accessory"), Mapping) else {}
     armor = data.get("armor") if isinstance(data.get("armor"), Mapping) else {}
     generated_buff = gameplay.get("generatedBuff") if isinstance(gameplay.get("generatedBuff"), Mapping) else {}
@@ -317,18 +387,25 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         or has_generated_buff
         or bool(str(gameplay.get("mobilityMode") or ""))
     )
-    has_placeable = int(gameplay.get("createTile", -1)) >= 0 or int(gameplay.get("createWall", -1)) >= 0
     has_equipment = accessory.get("enabled") is True or armor.get("enabled") is True
     for index, binding in enumerate(bindings):
         if not isinstance(binding, Mapping):
             continue
-        action_name = str(binding.get("action") or "")
+        action_name = action_kind(binding)
         if action_name == "apply_item_effects" and not has_use_effect:
-            errors.append({"path": f"$.runtimeProgram.bindings[{index}].action", "code": "binding_dependency", "message": "apply_item_effects has no compiled item effect capability."})
-        elif action_name == "place_item" and not has_placeable:
-            errors.append({"path": f"$.runtimeProgram.bindings[{index}].action", "code": "binding_dependency", "message": "place_item has no compiled configure_placeable result."})
+            errors.append({"path": f"$.runtimeProgram.bindings[{index}].usePolicy.action", "code": "binding_dependency", "message": "apply_item_effects has no compiled item effect capability."})
         elif action_name == "equip_passive" and not has_equipment:
-            errors.append({"path": f"$.runtimeProgram.bindings[{index}].action", "code": "binding_dependency", "message": "equip_passive has no compiled accessory/armor capability."})
+            errors.append({"path": f"$.runtimeProgram.bindings[{index}].usePolicy.action", "code": "binding_dependency", "message": "equip_passive has no compiled accessory/armor capability."})
+
+    placeable_roles_valid, placeable_role_message = placeable_input_contract(
+        row for row in bindings if isinstance(row, Mapping)
+    )
+    if not placeable_roles_valid:
+        errors.append({
+            "path": "$.runtimeProgram.bindings",
+            "code": "dual_use_placeable_input_contract",
+            "message": placeable_role_message,
+        })
 
     errors.extend(_walk_forbidden({"runtimeProgram": runtime}))
     contract_raw = data.get("runtimeContract")

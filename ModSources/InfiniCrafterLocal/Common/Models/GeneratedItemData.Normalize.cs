@@ -33,12 +33,12 @@ public sealed partial class GeneratedItemData
             .Take(maxItems)
             .ToArray();
 
-    private static string NormalizeHexColor(string? value, string fallback = "#ffffff")
+    private static string NormalizeRequiredHexColor(string? value, string label)
     {
-        string text = (value ?? "").Trim();
+        string text = (value ?? "").Trim().ToLowerInvariant();
         if (text.Length == 7 && text[0] == '#' && text.Skip(1).All(Uri.IsHexDigit))
-            return text.ToLowerInvariant();
-        return fallback;
+            return text;
+        throw new InvalidDataException($"{label} must be a #RRGGBB color");
     }
 
     public void Normalize()
@@ -51,10 +51,11 @@ public sealed partial class GeneratedItemData
 
         Id = SafeText(Id, 64);
         RecipeKey = SafeText(RecipeKey, 120);
-        Name = string.IsNullOrWhiteSpace(Name) ? "Generated Item" : SafeText(Name, 80);
+        Name = SafeText(Name, 80);
+        if (string.IsNullOrWhiteSpace(Name))
+            throw new InvalidDataException("name must be non-blank");
         ParentA = SafeText(ParentA, 80);
         ParentB = SafeText(ParentB, 80);
-        Tooltip = SafeText(Tooltip, 500);
         MergeMode = SafeText(MergeMode, 32);
         Category = SafeText(Category, 32).ToLowerInvariant();
         SourceMode = SafeText(SourceMode, 32).ToLowerInvariant();
@@ -101,16 +102,14 @@ public sealed partial class GeneratedItemData
             || (Gameplay.ExtraBuffs?.Length ?? 0) > 0
             || Gameplay.GeneratedBuff?.HasAnyEffect == true
             || !string.IsNullOrWhiteSpace(Gameplay.MobilityMode);
-        bool hasExplicitPlaceable = Gameplay.CreateTile >= 0 || Gameplay.CreateWall >= 0;
         bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
 
         foreach (RuntimeBindingSpec binding in RuntimeProgram.Bindings)
         {
-            if (binding.Action == RuntimeBindingAction.ApplyItemEffects && !hasExplicitUseEffects)
+            string action = binding.UsePolicy.Action.Kind;
+            if (action == RuntimeBindingAction.ApplyItemEffects && !hasExplicitUseEffects)
                 throw new InvalidDataException($"binding '{binding.Id}' apply_item_effects has no compiled item effect capability");
-            if (binding.Action == RuntimeBindingAction.PlaceItem && !hasExplicitPlaceable)
-                throw new InvalidDataException($"binding '{binding.Id}' place_item has no compiled configure_placeable result");
-            if (binding.Action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
+            if (action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
                 throw new InvalidDataException($"binding '{binding.Id}' equip_passive has no compiled accessory/armor capability");
         }
     }
@@ -153,9 +152,7 @@ public sealed partial class GeneratedItemData
             && (Gameplay.AmmoProjectileId <= ProjectileID.None || Gameplay.AmmoProjectileId >= ProjectileID.Count))
             throw new InvalidDataException($"ammo projectile ID {Gameplay.AmmoProjectileId} is not a vanilla ProjectileID");
         Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);
-        if (Gameplay.AmmoCategory.Length > 0 && !Gameplay.Consumable)
-            throw new InvalidDataException("configure_vanilla_ammo_item requires consumable=true");
-        Gameplay.ConsumeChancePercent = ClampInt(Gameplay.ConsumeChancePercent, 0, 100);
+
         Gameplay.Width = ClampInt(Gameplay.Width, 8, 256);
         Gameplay.Height = ClampInt(Gameplay.Height, 8, 256);
         Gameplay.ItemScale = ClampFloat(Gameplay.ItemScale, 0.25f, 4f);
@@ -190,11 +187,7 @@ public sealed partial class GeneratedItemData
         Gameplay.PickPower = ClampInt(Gameplay.PickPower, 0, 1000);
         Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);
         Gameplay.HammerPower = ClampInt(Gameplay.HammerPower, 0, 1000);
-        if (Gameplay.CreateTile < -1 || Gameplay.CreateTile >= TileLoader.TileCount)
-            throw new InvalidDataException($"tile ID {Gameplay.CreateTile} is not loaded");
-        if (Gameplay.CreateWall < -1 || Gameplay.CreateWall >= WallLoader.WallCount)
-            throw new InvalidDataException($"wall ID {Gameplay.CreateWall} is not loaded");
-        Gameplay.PlaceStyle = ClampInt(Gameplay.PlaceStyle, 0, 1000);
+
         Gameplay.MobilityMode = SafeText(Gameplay.MobilityMode, 32).ToLowerInvariant();
         if (Gameplay.MobilityMode is not ("" or "recall_home" or "blink_to_cursor"))
             throw new InvalidDataException($"Unsupported move_player_on_use mode '{Gameplay.MobilityMode}'");
@@ -202,7 +195,7 @@ public sealed partial class GeneratedItemData
         Gameplay.MobilityCooldownTicks = ClampInt(Gameplay.MobilityCooldownTicks, 0, 36000);
         Gameplay.MiningSpeedScale = ClampFloat(Gameplay.MiningSpeedScale, 0.1f, 4f);
         Gameplay.HoldLightStrength = ClampFloat(Gameplay.HoldLightStrength, 0f, 1.5f);
-        Gameplay.HoldLightColorName = RuntimeColorPolicy.Normalize(Gameplay.HoldLightColorName, "white");
+        Gameplay.HoldLightColorName = RuntimeColorPolicy.NormalizeRequired(Gameplay.HoldLightColorName, allowEmpty: Gameplay.HoldLightStrength <= 0f);
         Gameplay.UseConditionMode = SafeText(Gameplay.UseConditionMode, 32).ToLowerInvariant();
         if (Gameplay.UseConditionMode is not ("" or "none" or "grounded" or "not_wet" or "life_above" or "mana_above"))
             throw new InvalidDataException($"Unsupported use condition '{Gameplay.UseConditionMode}'");
@@ -224,7 +217,7 @@ public sealed partial class GeneratedItemData
         Accessory.MinionSlots = ClampInt(Accessory.MinionSlots, 0, 20);
         Accessory.SentrySlots = ClampInt(Accessory.SentrySlots, 0, 10);
         Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
-        Accessory.LightColorName = RuntimeColorPolicy.Normalize(Accessory.LightColorName, "white");
+        Accessory.LightColorName = RuntimeColorPolicy.NormalizeRequired(Accessory.LightColorName, allowEmpty: Accessory.LightStrength <= 0f);
 
         Armor.Slot = SafeText(Armor.Slot, 16).ToLowerInvariant();
         if (Armor.Enabled && Armor.Slot is not ("head" or "body" or "legs"))
@@ -238,7 +231,6 @@ public sealed partial class GeneratedItemData
         Armor.MovementSpeed = ClampFloat(Armor.MovementSpeed, -0.5f, 2f);
         Armor.GenericDamage = ClampFloat(Armor.GenericDamage, -0.9f, 3f);
         Armor.GenericCrit = ClampFloat(Armor.GenericCrit, -100f, 100f);
-        Armor.SetBonusText = SafeText(Armor.SetBonusText, 240);
         Armor.SetBonusGenericDamage = ClampFloat(Armor.SetBonusGenericDamage, -0.9f, 3f);
         Armor.SetBonusMovementSpeed = ClampFloat(Armor.SetBonusMovementSpeed, -0.5f, 2f);
         Armor.SetBonusLifeRegen = ClampInt(Armor.SetBonusLifeRegen, -120, 120);
@@ -264,8 +256,8 @@ public sealed partial class GeneratedItemData
         Visual.WorldScale = ClampFloat(Visual.WorldScale, 0.25f, 4f);
         Visual.DrawOffsetX = ClampInt(Visual.DrawOffsetX, -256, 256);
         Visual.DrawOffsetY = ClampInt(Visual.DrawOffsetY, -256, 256);
-        Visual.DominantColorHex = NormalizeHexColor(Visual.DominantColorHex);
-        Visual.AccentColorHex = NormalizeHexColor(Visual.AccentColorHex, Visual.DominantColorHex);
+        Visual.DominantColorHex = NormalizeRequiredHexColor(Visual.DominantColorHex, "visual.dominantColorHex");
+        Visual.AccentColorHex = NormalizeRequiredHexColor(Visual.AccentColorHex, "visual.accentColorHex");
         Visual.SpriteTechnicalScore = ClampFloat(Visual.SpriteTechnicalScore, 0f, 1f);
         Visual.EquipOverlayScore = ClampFloat(Visual.EquipOverlayScore, 0f, 1f);
         bool inertReference = SourceMode is "player_save_ref" or "corrupt_reference";
@@ -290,13 +282,18 @@ public sealed partial class GeneratedItemData
             if (entity is null)
                 throw new InvalidDataException($"VFX slot '{slot.Id}' references unknown entity '{slot.EntityId}'");
             bool emitted = slot.Event == RuntimeEventKind.OnSpawn
-                || RuntimeProgram.Bindings.Any(x => x.Target == entity.Id && slot.Event == RuntimeEventKind.OnUse)
+                || RuntimeProgram.Bindings.Any(x => x.UsePolicy.Action.TargetId == entity.Id && slot.Event == RuntimeEventKind.OnUse)
                 || entity.Events.Any(x => x.Event == slot.Event)
                 || (entity.Damage.Enabled && slot.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
                 || (entity.Collision.TileCollide && slot.Event == RuntimeEventKind.OnTileCollision)
                 || slot.Event is RuntimeEventKind.OnExpire or RuntimeEventKind.OnKill;
             if (!emitted)
                 throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}'");
+            if (slot.TextureRole == "impact"
+                && SourceMode is not ("developer_fixture" or "test_fixture")
+                && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
+                    || entity.Visual.ImpactSpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+                throw new InvalidDataException($"VFX slot '{slot.Id}' requires an authored impact PNG for '{entity.Id}'");
         }
     }
 }

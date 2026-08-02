@@ -23,7 +23,7 @@ def test_machine_readable_registry_is_complete_and_runtime_grounded() -> None:
     report = capability_library_audit()
     assert report["score"] == report["scoreMax"], report["issues"]
     assert report["ok"], report["issues"]
-    assert report["metrics"]["capabilities"] == 52
+    assert report["metrics"]["capabilities"] == 51
     assert report["metrics"]["boundedNumericParameters"] == report["metrics"]["numericParameters"]
     assert report["metrics"]["verticalSliceCount"] == len(CAPABILITY_REGISTRY)
     assert report["metrics"]["typedEntityReferences"] == 2
