@@ -1900,7 +1900,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         required_calls.append({
                             "fn": call_requirement.capability,
                             "targetId": event_target_id,
-                            "targetKind": event_target_kind,
                             "exactParams": [
                                 {"param": name, "value": copy.deepcopy(value)}
                                 for name, value in call_requirement.exact_params
@@ -2014,7 +2013,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     event_alternative_rows.append({
                         "callId": node_id,
                         "targetId": event_target_id,
-                        "currentEvent": event_name,
                         "allowed": allowed_event_alternatives,
                         "mustChooseOneCompleteAlternative": True,
                     })

@@ -2412,6 +2412,7 @@ def test_gameplay_scope_can_fix_existing_dependency_parameter() -> None:
     report = validate_runtime_program(current)
     assert any(row["code"] == "event_not_emitted" for row in report["errors"])
     scope = build_runtime_repair_scope(current, report["errors"])
+    assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     assert "workbench_blade_collision" in scope["mutable"]["callIds"]
     fixed = copy.deepcopy(collision)
     fixed["params"]["tileCollide"] = True
