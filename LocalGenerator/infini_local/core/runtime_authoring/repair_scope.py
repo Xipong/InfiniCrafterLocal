@@ -528,6 +528,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                                             "type": "object",
                                             "additionalProperties": False,
                                             "properties": {
+                                                "targetId": {"type": "string", "minLength": 1},
                                                 "anyOfInputs": {
                                                     "type": "array",
                                                     "minItems": 1,
@@ -543,7 +544,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                                                     "oneOf": [{"type": "boolean"}, {"type": "null"}],
                                                 },
                                             },
-                                            "required": ["anyOfInputs", "anyOfActions", "requiredContactDamage"],
+                                            "required": ["targetId", "anyOfInputs", "anyOfActions", "requiredContactDamage"],
                                         },
                                     },
                                 },
@@ -958,7 +959,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     create_binding_inputs: set[str] = set()
     create_binding_actions: set[str] = set()
     create_binding_alternatives: list[dict[str, str]] = []
-    create_binding_contact_requirements: set[tuple[str, str, str, bool]] = set()
+
+    binding_creation_requests: list[
+        tuple[str, tuple[str, ...], tuple[str, ...], bool | None, str]
+    ] = []
     create_call_targets: set[str] = set()
     create_call_target_kinds: set[str] = set()
     create_call_fns: set[str] = set()
@@ -1028,6 +1032,26 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         next(iter(item_entity_ids))
         if len(item_entity_ids) == 1 else ""
     )
+
+    def request_binding_creation(
+        *,
+        target_id: str,
+        inputs: Iterable[str],
+        actions: Iterable[str],
+        required_contact: bool | None = None,
+        owner_item_target_id: str = "",
+    ) -> None:
+        normalized_inputs = tuple(sorted({str(value) for value in inputs if str(value)}))
+        normalized_actions = tuple(sorted({str(value) for value in actions if str(value)}))
+        if not target_id or not normalized_inputs or not normalized_actions:
+            return
+        binding_creation_requests.append((
+            target_id,
+            normalized_inputs,
+            normalized_actions,
+            required_contact,
+            owner_item_target_id,
+        ))
     planned_item_capabilities_by_target: dict[str, set[str]] = {}
     for candidate_error in error_rows:
         candidate_code = str(candidate_error.get("code") or candidate_error.get("kind") or "")
@@ -1146,6 +1170,11 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         create_binding_inputs.add(input_name)
                     if action_name in BINDING_ACTION_REGISTRY:
                         create_binding_actions.add(action_name)
+                    request_binding_creation(
+                        target_id=target,
+                        inputs=(input_name,),
+                        actions=(action_name,),
+                    )
                 elif node_namespace == "calls":
                     target = str(node_row.get("target") or "")
                     fn = str(node_row.get("fn") or "")
@@ -1349,6 +1378,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 continue
                             required_bindings = [
                                 {
+                                    "targetId": target_id,
                                     "anyOfInputs": list(requirement.any_of_inputs),
                                     "anyOfActions": list(requirement.any_of_actions),
                                     "requiredContactDamage": requirement.required_contact_damage,
@@ -1375,6 +1405,25 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                             input_spec = INPUT_KIND_REGISTRY.get(input_name)
                                             if input_spec is not None:
                                                 create_binding_actions.update(input_spec.allowed_actions)
+                                    requested_actions = (
+                                        allowed_actions
+                                        if allowed_actions
+                                        else {
+                                            action_name
+                                            for input_name in allowed_inputs
+                                            for action_name in INPUT_KIND_REGISTRY[input_name].allowed_actions
+                                        }
+                                    )
+                                    request_binding_creation(
+                                        target_id=target_id,
+                                        inputs=allowed_inputs,
+                                        actions=requested_actions,
+                                        required_contact=required_contact,
+                                        owner_item_target_id=(
+                                            target_id if target_kind == "item_body"
+                                            else sole_item_entity_id
+                                        ),
+                                    )
                             allowed_alternatives.append({
                                 "event": event,
                                 "requiredCalls": required_calls,
@@ -1519,7 +1568,9 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             str(row.get("input") or "") for row in rows["bindings"]
                         }
                         candidate_inputs: tuple[str, ...]
-                        if "primary_use" in occupied and "alternate_use" not in occupied:
+                        if "place_item" not in capability_requirement.any_of:
+                            candidate_inputs = ()
+                        elif "primary_use" in occupied and "alternate_use" not in occupied:
                             candidate_inputs = ("alternate_use",)
                         elif not occupied.intersection({"primary_use", "alternate_use"}):
                             candidate_inputs = ("primary_use",)
@@ -1704,19 +1755,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 )
                             )
                         )
-                        for allowed_row in allowed_rows:
-                            for input_name, required_action, required_contact in required_patterns:
-                                if (
-                                    required_contact is not None
-                                    and allowed_row["input"] == input_name
-                                    and action_kind(allowed_row) == required_action
-                                ):
-                                    create_binding_contact_requirements.add((
-                                        input_name,
-                                        required_action,
-                                        binding_target_id(allowed_row),
-                                        required_contact,
-                                    ))
+
             if primary_relocation is not None and any(
                 str(row.get("input") or "") == "primary_use" for row in allowed_rows
             ):
@@ -1778,9 +1817,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 and _binding_delete_preserves_reachability(rows, node_id)
             ):
                 mark("bindings", node_id, can_delete=True)
-            target_ids = [row_id for row_id in related if namespace_by_id.get(row_id) == "entities"]
-            if not target_ids and node_namespace == "calls":
-                target_ids = [str(node_row.get("target") or "")]
+            if code == "event_not_emitted" and node_namespace == "calls":
+                exact_event_target = str(node_row.get("target") or "")
+                target_ids = [exact_event_target] if exact_event_target else []
+            else:
+                target_ids = [row_id for row_id in related if namespace_by_id.get(row_id) == "entities"]
+                if not target_ids and node_namespace == "calls":
+                    target_ids = [str(node_row.get("target") or "")]
             fns = _capability_names(allowed)
             fns = {
                 name for name in fns
@@ -1827,97 +1870,200 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 grant("calls", call_id, f"params.{match.group(2)}")
             if not existing_candidates:
                 allow_new_call(target_ids, fns)
-            if code == "event_not_emitted" and any("binding" in str(value) or "primary_use" in str(value) for value in allowed):
-                binding_descriptors = [str(value) for value in allowed if "binding input one of:" in str(value)]
-                event_inputs = {
-                    input_name
-                    for descriptor in binding_descriptors
-                    for input_name in descriptor.split("binding input one of:", 1)[1].split(";", 1)[0].strip().split(",")
-                    if input_name in INPUT_KIND_REGISTRY
-                } or {"primary_use", "alternate_use"}
-                event_actions = {
-                    action_name
-                    for descriptor in binding_descriptors
-                    for action_name in (
-                        descriptor.split("action one of:", 1)[1].split(";", 1)[0].strip().split(",")
-                        if "action one of:" in descriptor else ()
-                    )
-                    if action_name in BINDING_ACTION_REGISTRY
-                }
-                if not event_actions:
-                    event_actions = {
-                        action_name
-                        for input_name in event_inputs
-                        for action_name in INPUT_KIND_REGISTRY[input_name].allowed_actions
-                    }
-                required_contacts = {
-                    match.group(1) == "true"
-                    for descriptor in binding_descriptors
-                    for match in [re.search(r"contactDamage=(true|false)", descriptor)]
-                    if match is not None
-                }
-                required_contact = next(iter(required_contacts)) if len(required_contacts) == 1 else None
-                matching_bindings = [
-                    binding
-                    for binding in rows["bindings"]
-                    if str(binding.get("input") or "") in event_inputs
-                    and action_kind(binding) in event_actions
-                    and binding_target_id(binding) in target_ids
-                ]
-                producer_present = any(
-                    required_contact is None or contact_damage(binding) is required_contact
-                    for binding in matching_bindings
+            if code == "event_not_emitted" and node_namespace == "calls" and target_ids:
+                event_target_id = target_ids[0]
+                event_target_kind = str(row_by_id.get(event_target_id, {}).get("kind") or "")
+                event_name = str((node_row.get("params") or {}).get("event") or "")
+                structured_alternatives = event_dependency_alternatives(
+                    event_name,
+                    event_target_kind,
                 )
-                mismatched_bindings = [
-                    binding
-                    for binding in matching_bindings
-                    if required_contact is not None and contact_damage(binding) is not required_contact
-                ]
-                if not producer_present and mismatched_bindings:
-                    assert required_contact is not None
-                    existing_binding_choices: list[dict[str, Any]] = []
-                    for binding in mismatched_bindings:
-                        binding_id = str(binding.get("id") or "")
-                        fixed = transaction(
-                            input_name=str(binding.get("input") or ""),
-                            action_name=action_kind(binding),
-                            target=binding_target_id(binding),
-                            stack_cost_value=stack_cost(binding),
-                            contact_damage_value=required_contact,
-                            placement_call=placement_call_id(binding),
-                        )
-                        mark("bindings", binding_id)
-                        grant("bindings", binding_id, "usePolicy")
-                        binding_alternative_overrides[binding_id] = [fixed]
-                        context["bindings"].add(binding_id)
-                        existing_binding_choices.append({
-                            "bindingId": binding_id,
-                            "allowed": [copy.deepcopy(fixed)],
+                allowed_event_alternatives: list[dict[str, Any]] = []
+                event_create_choices: list[dict[str, Any]] = []
+                event_existing_choices: list[dict[str, Any]] = []
+                binding_change_required_by_alternative: list[bool] = []
+                for dependency in structured_alternatives:
+                    alternative_viable = True
+                    required_calls: list[dict[str, Any]] = []
+                    required_bindings: list[dict[str, Any]] = []
+                    pending_create_choices: list[dict[str, Any]] = []
+                    pending_existing_choices: list[dict[str, Any]] = []
+                    missing_binding_count = 0
+                    for call_requirement in dependency.required_calls:
+                        if not _candidate_capability_viable(
+                            call_requirement.capability,
+                            (event_target_id,),
+                            rows,
+                        ):
+                            alternative_viable = False
+                            break
+                        required_calls.append({
+                            "fn": call_requirement.capability,
+                            "targetId": event_target_id,
+                            "targetKind": event_target_kind,
+                            "exactParams": [
+                                {"param": name, "value": copy.deepcopy(value)}
+                                for name, value in call_requirement.exact_params
+                            ],
                         })
-                    if len(existing_binding_choices) == 1:
-                        requirement_row["requiredBindingUpdates"] = existing_binding_choices
+                    if not alternative_viable:
+                        continue
+                    for binding_requirement in dependency.required_bindings:
+                        allowed_inputs = set(binding_requirement.any_of_inputs)
+                        allowed_actions = set(binding_requirement.any_of_actions)
+                        if not allowed_actions:
+                            allowed_actions = {
+                                action_name
+                                for input_name in allowed_inputs
+                                for action_name in INPUT_KIND_REGISTRY[input_name].allowed_actions
+                            }
+                        required_contact = binding_requirement.required_contact_damage
+                        required_bindings.append({
+                            "targetId": event_target_id,
+                            "anyOfInputs": sorted(allowed_inputs),
+                            "anyOfActions": sorted(allowed_actions),
+                            "requiredContactDamage": required_contact,
+                        })
+                        exact_binding_present = any(
+                            binding_target_id(binding) == event_target_id
+                            and str(binding.get("input") or "") in allowed_inputs
+                            and action_kind(binding) in allowed_actions
+                            and (
+                                required_contact is None
+                                or contact_damage(binding) is required_contact
+                            )
+                            for binding in rows["bindings"]
+                        )
+                        if exact_binding_present:
+                            continue
+                        missing_binding_count += 1
+                        if required_contact is not None:
+                            for binding in rows["bindings"]:
+                                if (
+                                    binding_target_id(binding) != event_target_id
+                                    or str(binding.get("input") or "") not in allowed_inputs
+                                    or action_kind(binding) not in allowed_actions
+                                    or contact_damage(binding) is required_contact
+                                ):
+                                    continue
+                                binding_id = str(binding.get("id") or "")
+                                fixed = transaction(
+                                    input_name=str(binding.get("input") or ""),
+                                    action_name=action_kind(binding),
+                                    target=event_target_id,
+                                    stack_cost_value=stack_cost(binding),
+                                    contact_damage_value=required_contact,
+                                    placement_call=placement_call_id(binding),
+                                )
+                                pending_existing_choices.append({
+                                    "bindingId": binding_id,
+                                    "allowed": [fixed],
+                                })
+                        owner_item_target = (
+                            event_target_id
+                            if event_target_kind == "item_body"
+                            else sole_item_entity_id
+                        )
+                        projected_rows = (
+                            _binding_creation_alternatives(
+                                rows,
+                                owner_item_target_id=owner_item_target,
+                                required_inputs=allowed_inputs,
+                                additional_item_capabilities=planned_item_capabilities_by_target.get(
+                                    owner_item_target, set()
+                                ),
+                            )
+                            if owner_item_target else []
+                        )
+                        pending_create_choices.extend(
+                            projected_row
+                            for projected_row in projected_rows
+                            if not pending_existing_choices
+                            and binding_target_id(projected_row) == event_target_id
+                            and action_kind(projected_row) in allowed_actions
+                            and not (
+                                INPUT_KIND_REGISTRY[str(projected_row.get("input") or "")].exclusive
+                                and any(
+                                    str(existing.get("input") or "")
+                                    == str(projected_row.get("input") or "")
+                                    for existing in rows["bindings"]
+                                )
+                            )
+                            and (
+                                required_contact is None
+                                or contact_damage(projected_row) is required_contact
+                            )
+                        )
+                        if not pending_existing_choices and not pending_create_choices:
+                            alternative_viable = False
+                            break
+                    if not alternative_viable:
+                        continue
+                    allowed_event_alternatives.append({
+                        "event": event_name,
+                        "requiredCalls": required_calls,
+                        "requiredBindings": required_bindings,
+                    })
+                    event_create_choices.extend(pending_create_choices)
+                    event_existing_choices.extend(pending_existing_choices)
+                    binding_change_required_by_alternative.append(
+                        bool(required_bindings)
+                        and missing_binding_count == len(required_bindings)
+                    )
+                if allowed_event_alternatives:
+                    event_alternative_rows.append({
+                        "callId": node_id,
+                        "targetId": event_target_id,
+                        "currentEvent": event_name,
+                        "allowed": allowed_event_alternatives,
+                        "mustChooseOneCompleteAlternative": True,
+                    })
+                event_create_choices = list({
+                    repr(row): row for row in event_create_choices
+                }.values())
+                event_existing_choices = list({
+                    str(row["bindingId"]): row for row in event_existing_choices
+                }.values())
+                for choice in event_existing_choices:
+                    binding_id = str(choice["bindingId"])
+                    fixed = copy.deepcopy(choice["allowed"][0])
+                    mark("bindings", binding_id)
+                    grant("bindings", binding_id, "usePolicy")
+                    binding_alternative_overrides.setdefault(binding_id, []).append(fixed)
+                    context["bindings"].add(binding_id)
+                create_binding_alternatives.extend(event_create_choices)
+                for choice in event_create_choices:
+                    create_binding_targets.add(binding_target_id(choice))
+                    create_binding_inputs.add(str(choice.get("input") or ""))
+                    create_binding_actions.add(action_kind(choice))
+                all_binding_choices = [
+                    copy.deepcopy(row) for row in event_create_choices
+                ] + [
+                    copy.deepcopy(choice["allowed"][0])
+                    for choice in event_existing_choices
+                ]
+                if all_binding_choices:
+                    binding_change_is_mandatory = (
+                        binding_change_required_by_alternative
+                        and all(binding_change_required_by_alternative)
+                    )
+                    if (
+                        binding_change_is_mandatory
+                        and len(event_existing_choices) == 1
+                        and not event_create_choices
+                    ):
+                        requirement_row["requiredBindingUpdates"] = event_existing_choices
                         requirement_row["mustApplyAll"] = True
                     else:
-                        requirement_row["allowedBindingTransactions"] = [
-                            copy.deepcopy(choice["allowed"][0])
-                            for choice in existing_binding_choices
-                        ]
+                        requirement_row["allowedBindingTransactions"] = all_binding_choices
                         requirement_row["allowedExistingBindingIds"] = sorted(
                             str(choice["bindingId"])
-                            for choice in existing_binding_choices
+                            for choice in event_existing_choices
                         )
+                    if binding_change_is_mandatory and not requirement_row.get("mustApplyAll"):
                         requirement_row["mustChooseExactlyOne"] = True
-                elif not producer_present:
-                    create_binding_targets.update(target_ids)
-                    create_binding_inputs.update(event_inputs)
-                    create_binding_actions.update(event_actions)
-                    if required_contact is not None:
-                        create_binding_contact_requirements.update(
-                            (input_name, action_name, target_id, required_contact)
-                            for input_name in event_inputs
-                            for action_name in event_actions
-                            for target_id in target_ids
-                        )
+                        if not event_existing_choices:
+                            requirement_row["mustCreateExactlyOne"] = True
         elif code == "unreachable_entity":
             affected = [row_id for row_id in related if namespace_by_id.get(row_id) == "entities"]
             for row_id in affected:
@@ -1929,6 +2075,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     create_binding_targets.add(row_id)
                     create_binding_inputs.update({"primary_use", "alternate_use"})
                     create_binding_actions.add("spawn_entity")
+                    request_binding_creation(
+                        target_id=row_id,
+                        inputs=("primary_use", "alternate_use"),
+                        actions=("spawn_entity",),
+                        owner_item_target_id=sole_item_entity_id,
+                    )
                 else:
                     required_reference_entities.add(row_id)
                     create_call_targets.update(str(row.get("id") or "") for row in rows["entities"] if str(row.get("id") or "") != row_id)
@@ -2014,21 +2166,39 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     requested_binding_targets = set(create_binding_targets)
     requested_binding_inputs = set(create_binding_inputs)
     requested_binding_actions = set(create_binding_actions)
-    if (
-        requested_binding_targets
-        and requested_binding_inputs
-        and requested_binding_actions
-        and len(item_entity_ids) == 1
-    ):
-        sole_item_target_id = next(iter(item_entity_ids))
-        create_binding_alternatives.extend(_binding_creation_alternatives(
+    for (
+        requested_target,
+        requested_inputs_for_target,
+        requested_actions_for_target,
+        requested_contact,
+        declared_owner_item_target,
+    ) in binding_creation_requests:
+        target_kind = str(row_by_id.get(requested_target, {}).get("kind") or "")
+        owner_item_target = (
+            declared_owner_item_target
+            or (requested_target if target_kind == "item_body" else sole_item_entity_id)
+        )
+        if not owner_item_target:
+            continue
+        projected_rows = _binding_creation_alternatives(
             rows,
-            owner_item_target_id=sole_item_target_id,
-            required_inputs=requested_binding_inputs,
+            owner_item_target_id=owner_item_target,
+            required_inputs=requested_inputs_for_target,
             additional_item_capabilities=planned_item_capabilities_by_target.get(
-                sole_item_target_id, set()
+                owner_item_target, set()
             ),
-        ))
+        )
+        for projected_row in projected_rows:
+            if (
+                binding_target_id(projected_row) != requested_target
+                or action_kind(projected_row) not in requested_actions_for_target
+                or (
+                    requested_contact is not None
+                    and contact_damage(projected_row) is not requested_contact
+                )
+            ):
+                continue
+            create_binding_alternatives.append(projected_row)
     create_binding_alternatives = sorted(
         {
             repr(row): row
@@ -2036,20 +2206,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if binding_target_id(row) in requested_binding_targets
             and (not requested_binding_inputs or row.get("input") in requested_binding_inputs)
             and (not requested_binding_actions or action_kind(row) in requested_binding_actions)
-            and (
-                not any(
-                    constrained_input == str(row.get("input") or "")
-                    and constrained_action == action_kind(row)
-                    and constrained_target == binding_target_id(row)
-                    for constrained_input, constrained_action, constrained_target, _ in create_binding_contact_requirements
-                )
-                or (
-                    str(row.get("input") or ""),
-                    action_kind(row),
-                    binding_target_id(row),
-                    contact_damage(row),
-                ) in create_binding_contact_requirements
-            )
         }.values(),
         key=repr,
     )
@@ -2996,8 +3152,20 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 for requirement in alternative.get("requiredBindings") or []:
                     if not isinstance(requirement, Mapping):
                         return False
+                    required_target = str(requirement.get("targetId") or "")
                     allowed_inputs = {str(value) for value in requirement.get("anyOfInputs") or []}
-                    if not any(str(binding.get("input") or "") in allowed_inputs for binding in preview_bindings):
+                    allowed_actions = {str(value) for value in requirement.get("anyOfActions") or []}
+                    required_contact = requirement.get("requiredContactDamage")
+                    if not any(
+                        binding_target_id(binding) == required_target
+                        and str(binding.get("input") or "") in allowed_inputs
+                        and (not allowed_actions or action_kind(binding) in allowed_actions)
+                        and (
+                            required_contact is None
+                            or contact_damage(binding) is required_contact
+                        )
+                        for binding in preview_bindings
+                    ):
                         return False
                 return True
 

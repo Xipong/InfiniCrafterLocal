@@ -1869,9 +1869,14 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "targetId": {
+                        "minLength": 1,
+                        "type": "string"
                       }
                     },
                     "required": [
+                      "targetId",
                       "anyOfInputs",
                       "anyOfActions",
                       "requiredContactDamage"

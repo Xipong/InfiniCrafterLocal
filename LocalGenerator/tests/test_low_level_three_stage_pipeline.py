@@ -18,6 +18,7 @@ import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
+    ENTITY_KIND_REGISTRY,
     apply_repair_patch,
     build_runtime_repair_scope,
     compile_runtime_program,
@@ -32,7 +33,11 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
     VALIDATION_ERROR_CODES,
 )
-from infini_local.core.runtime_authoring.capability_registry import RequirementSpec
+from infini_local.core.runtime_authoring.capability_registry import (
+    EventBindingRequirement,
+    EventDependencyAlternative,
+    RequirementSpec,
+)
 from infini_local.core.vfx_manifest import (
     VFX_DIRECTOR_SCHEMA,
     VFX_REPAIR_PATCH_SCHEMA,
@@ -1905,6 +1910,121 @@ def test_binding_tuple_requirement_rejects_foreign_existing_projectile_target(
     assert requirement["allowedBindingTransactions"] == []
     assert requirement["allowedExistingBindingIds"] == []
     assert "requiredBindingUpdates" not in requirement
+
+
+def test_binding_action_reference_rejects_non_place_action_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_registry = dict(CAPABILITY_REGISTRY)
+    local_registry["configure_placeable"] = replace(
+        CAPABILITY_REGISTRY["configure_placeable"],
+        requirements=(RequirementSpec(
+            kind="binding_action_reference",
+            target="item_body",
+            any_of=("spawn_entity",),
+            message="Synthetic non-place action-reference contract.",
+        ),),
+    )
+    monkeypatch.setattr(repair_scope_stage, "CAPABILITY_REGISTRY", local_registry)
+
+    current = build_capability_witness("configure_placeable")
+    current["runtimeProgram"]["bindings"] = []
+    call_index = next(
+        index for index, row in enumerate(current["runtimeProgram"]["calls"])
+        if row["fn"] == "configure_placeable"
+    )
+    scope = build_runtime_repair_scope(current, [{
+        "path": f"$.runtimeProgram.calls[{call_index}]",
+        "code": "missing_binding_dependency",
+        "message": "Synthetic non-place action-reference contract.",
+        "allowed": ["spawn_entity"],
+        "relatedIds": ["witness_call", "item"],
+    }])
+    requirement = scope["repairRequirements"][0]
+    assert requirement["allowedBindingTransactions"] == []
+
+
+def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    item = next(row for row in program["entities"] if row["kind"] == "item_body")
+    other_item = copy.deepcopy(item)
+    other_item["id"] = "other_item"
+    program["entities"].append(other_item)
+    binding = program["bindings"][0]
+    binding["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "other_item"}
+    binding["usePolicy"]["contactDamage"] = False
+    event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["event"] = "on_use"
+    call_index = program["calls"].index(event_call)
+    scope = build_runtime_repair_scope(current, [{
+        "path": f"$.runtimeProgram.calls[{call_index}].params.event",
+        "code": "event_not_emitted",
+        "message": "Synthetic exact event target contract.",
+        "allowed": [
+            "binding input one of: primary_use,alternate_use; "
+            "action one of: spawn_entity,use_item_body,apply_item_effects",
+        ],
+        "relatedIds": ["item", "other_item"],
+    }])
+    requirement = scope["repairRequirements"][0]
+    assert requirement["allowedBindingTransactions"]
+    assert {
+        row["usePolicy"]["action"]["targetId"]
+        for row in requirement["allowedBindingTransactions"]
+    } == {"item"}
+
+
+def test_event_repair_preserves_complete_binding_alternatives_without_cross_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        repair_scope_stage,
+        "event_dependency_alternatives",
+        lambda _event, _kind: (
+            EventDependencyAlternative(required_bindings=(EventBindingRequirement(
+                ("primary_use",), ("use_item_body",), False,
+            ),)),
+            EventDependencyAlternative(required_bindings=(EventBindingRequirement(
+                ("alternate_use",), ("apply_item_effects",), False,
+            ),)),
+        ),
+    )
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    program["bindings"] = []
+    restore = build_capability_witness("restore_resources_on_use")["runtimeProgram"]["calls"]
+    program["calls"].append(copy.deepcopy(next(
+        row for row in restore if row["fn"] == "restore_resources_on_use"
+    )))
+    event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["event"] = "on_use"
+    call_index = program["calls"].index(event_call)
+    scope = build_runtime_repair_scope(current, [{
+        "path": f"$.runtimeProgram.calls[{call_index}].params.event",
+        "code": "event_not_emitted",
+        "message": "Synthetic complete event-alternative contract.",
+        "allowed": [
+            "binding input one of: primary_use; action one of: use_item_body; contactDamage=false",
+            "binding input one of: alternate_use; action one of: apply_item_effects; contactDamage=false",
+        ],
+        "relatedIds": ["item"],
+    }])
+    requirement = scope["repairRequirements"][0]
+    actual = {
+        (
+            row["input"],
+            row["usePolicy"]["action"]["kind"],
+            row["usePolicy"]["contactDamage"],
+        )
+        for row in requirement["allowedBindingTransactions"]
+    }
+    assert actual == {
+        ("primary_use", "use_item_body", False),
+        ("alternate_use", "apply_item_effects", False),
+    }
 
 
 def test_binding_choice_is_owned_by_requirement_specific_existing_ids(
