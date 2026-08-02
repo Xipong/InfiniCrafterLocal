@@ -3,7 +3,8 @@
     "obsidian_pickaxe": {
       "expectedInitialCodes": [
         "binding_dependency",
-        "duplicate_exclusive_input"
+        "duplicate_exclusive_input",
+        "missing_binding_dependency"
       ],
       "initialAuthor": {
         "category": "hybrid",
@@ -31,8 +32,7 @@
               "backedBy": [
                 "b_alternate_use",
                 "b_consumption",
-                "c_placeable",
-                "c_consumption"
+                "c_placeable"
               ],
               "id": "claim_placement",
               "kind": "physical",
@@ -68,22 +68,41 @@
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
             {
-              "action": "use_item_body",
               "id": "b_primary_use",
               "input": "primary_use",
-              "target": "molten_obsidian_pickaxe_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "use_item_body",
+                  "targetId": "molten_obsidian_pickaxe_body"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             },
             {
-              "action": "place_item",
               "id": "b_alternate_use",
               "input": "alternate_use",
-              "target": "molten_obsidian_pickaxe_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "place_item",
+                  "targetId": "molten_obsidian_pickaxe_body",
+                  "placementCallId": "c_placeable"
+                },
+                "stackCost": 1,
+                "contactDamage": false
+              }
             },
             {
-              "action": "apply_item_effects",
               "id": "b_consumption",
               "input": "alternate_use",
-              "target": "molten_obsidian_pickaxe_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "apply_item_effects",
+                  "targetId": "molten_obsidian_pickaxe_body"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             }
           ],
           "calls": [
@@ -144,15 +163,6 @@
                 "wallId": -1
               },
               "target": "molten_obsidian_pickaxe_body"
-            },
-            {
-              "fn": "configure_consumption",
-              "id": "c_consumption",
-              "params": {
-                "consumable": true,
-                "consumeChancePercent": 100
-              },
-              "target": "molten_obsidian_pickaxe_body"
             }
           ],
           "entities": [
@@ -162,9 +172,24 @@
             }
           ],
           "primaryEntityId": "molten_obsidian_pickaxe_body",
-          "schema": "infini.runtime-program.authoring.v2"
+          "schema": "infini.runtime-program.authoring.v4"
         },
-        "tooltip": "Способна добывать твердые породы и расходует обсидиан как ресурс"
+        "realization": {
+          "description": "Инструмент для шахтерских работ с возможностью установки обсидиана через альтернативное использование",
+          "playerExperience": "Игрок может эффективно добывать блоки и одновременно устанавливать обсидиан вторым действием",
+          "backedByClaims": [
+            "claim_mining",
+            "claim_placement"
+          ],
+          "intentTrace": {
+            "kept": [
+              "Соединение литой кирки и обсидиана как расходуемого строительного материала"
+            ],
+            "changed": [],
+            "dropped": [],
+            "added": []
+          }
+        }
       },
       "repairPatch": {
         "bindingIdsDelete": [
@@ -173,16 +198,29 @@
         "bindingIndicesDelete": [],
         "bindingsUpsert": [
           {
-            "action": "use_item_body",
             "id": "b_primary_use",
             "input": "primary_use",
-            "target": "molten_obsidian_pickaxe_body"
+            "usePolicy": {
+              "action": {
+                "kind": "use_item_body",
+                "targetId": "molten_obsidian_pickaxe_body"
+              },
+              "stackCost": 0,
+              "contactDamage": true
+            }
           },
           {
-            "action": "place_item",
             "id": "b_alternate_use",
             "input": "alternate_use",
-            "target": "molten_obsidian_pickaxe_body"
+            "usePolicy": {
+              "action": {
+                "kind": "place_item",
+                "targetId": "molten_obsidian_pickaxe_body",
+                "placementCallId": "c_placeable"
+              },
+              "stackCost": 1,
+              "contactDamage": false
+            }
           }
         ],
         "callIdsDelete": [],
@@ -245,15 +283,6 @@
               "wallId": -1
             },
             "target": "molten_obsidian_pickaxe_body"
-          },
-          {
-            "fn": "configure_consumption",
-            "id": "c_consumption",
-            "params": {
-              "consumable": true,
-              "consumeChancePercent": 100
-            },
-            "target": "molten_obsidian_pickaxe_body"
           }
         ],
         "claimIdsDelete": [],
@@ -272,8 +301,7 @@
           {
             "backedBy": [
               "b_alternate_use",
-              "c_placeable",
-              "c_consumption"
+              "c_placeable"
             ],
             "id": "claim_placement",
             "kind": "physical",
@@ -289,6 +317,25 @@
             "keepBindingId": "b_alternate_use"
           }
         ],
+        "realizationReplacement": {
+          "description": "Основное использование добывает блоки и наносит 12 контактного урона телом кирки. Альтернативное использование размещает обсидиан; размещенный предмет возвращается при разрушении тайла.",
+          "playerExperience": "Игрок добывает блоки и бьет основной кнопкой, а альтернативной размещает возвращаемый обсидиановый тайл.",
+          "backedByClaims": [
+            "claim_mining",
+            "claim_placement"
+          ],
+          "intentTrace": {
+            "kept": [
+              "Кирка сохраняет силу копания и контактный удар.",
+              "Обсидиан размещается отдельным альтернативным действием."
+            ],
+            "changed": [],
+            "dropped": [],
+            "added": [
+              "Уточнен гарантированный возврат generated item после разрушения размещенного тайла."
+            ]
+          }
+        },
         "metadataPatch": {},
         "note": "Resolved mixed entity roles by setting all bindings and calls to primary, removed conflicting b_consumption binding to resolve duplicate exclusive input and missing capability dependency.",
         "primaryEntitySelection": null
@@ -296,7 +343,11 @@
     },
     "ropebound_spear": {
       "expectedInitialCodes": [
-        "duplicate_exclusive_input"
+        "dual_use_placeable_input_contract",
+        "duplicate_exclusive_input",
+        "place_item_without_stack_cost",
+        "shape_const",
+        "shape_one_of"
       ],
       "initialAuthor": {
         "category": "hybrid",
@@ -362,22 +413,41 @@
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
             {
-              "action": "use_item_body",
               "id": "bind_primary",
               "input": "primary_use",
-              "target": "item_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "use_item_body",
+                  "targetId": "item_body"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             },
             {
-              "action": "spawn_entity",
               "id": "bind_spawn_spear",
               "input": "primary_use",
-              "target": "spear_proj"
+              "usePolicy": {
+                "action": {
+                  "kind": "spawn_entity",
+                  "targetId": "spear_proj"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             },
             {
-              "action": "place_item",
               "id": "bind_place_rope",
               "input": "primary_use",
-              "target": "item_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "place_item",
+                  "targetId": "item_body",
+                  "placementCallId": "call_placeable"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             }
           ],
           "calls": [
@@ -506,84 +576,71 @@
             }
           ],
           "primaryEntityId": "item_body",
-          "schema": "infini.runtime-program.authoring.v2"
+          "schema": "infini.runtime-program.authoring.v4"
         },
-        "tooltip": "Выпад копьем с установкой веревки"
+        "realization": {
+          "description": "Основное использование выполняет колющий удар копья с выдвижным хитбоксом и одновременно размещает плитку веревки.",
+          "playerExperience": "Игрок наносит колющий удар оружием, которое также устанавливает веревку в точке использования.",
+          "backedByClaims": [
+            "claim_stats",
+            "claim_thrust",
+            "claim_place"
+          ],
+          "intentTrace": {
+            "kept": [
+              "Сохраняет физику и спрайты Копья и Веревки, объединяя колющий удар с размещением плитки веревки."
+            ],
+            "changed": [],
+            "dropped": [],
+            "added": []
+          }
+        }
       },
       "repairPatch": {
         "bindingIdsDelete": [],
         "bindingIndicesDelete": [],
         "bindingsUpsert": [
           {
-            "action": "use_item_body",
             "id": "bind_primary",
             "input": "primary_use",
-            "target": "item_body"
+            "usePolicy": {
+              "action": {
+                "kind": "use_item_body",
+                "targetId": "item_body"
+              },
+              "stackCost": 0,
+              "contactDamage": false
+            }
           },
           {
-            "action": "spawn_entity",
             "id": "bind_spawn_spear",
-            "input": "alternate_use",
-            "target": "spear_proj"
+            "input": "primary_use",
+            "usePolicy": {
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "spear_proj"
+              },
+              "stackCost": 0,
+              "contactDamage": false
+            }
           },
           {
-            "action": "place_item",
             "id": "bind_place_rope",
-            "input": "primary_use",
-            "target": "item_body"
+            "input": "alternate_use",
+            "usePolicy": {
+              "action": {
+                "kind": "place_item",
+                "targetId": "item_body",
+                "placementCallId": "call_placeable"
+              },
+              "stackCost": 1,
+              "contactDamage": false
+            }
           }
         ],
         "callIdsDelete": [],
         "callIndicesDelete": [],
-        "callsUpsert": [
-          {
-            "fn": "configure_item_stats",
-            "id": "call_stats",
-            "params": {
-              "craftYield": 1,
-              "damage": 16,
-              "damageClass": "melee",
-              "heightPx": 21,
-              "knockback": 6.5,
-              "manaCost": 0,
-              "maxStack": 1,
-              "rarity": 0,
-              "scale": 1.2,
-              "useAnimationTicks": 31,
-              "useTimeTicks": 31,
-              "valueCopper": 500,
-              "widthPx": 21
-            },
-            "target": "item_body"
-          },
-          {
-            "fn": "configure_item_use",
-            "id": "call_use",
-            "params": {
-              "autoReuse": false,
-              "channel": false,
-              "disableMeleeHitbox": true,
-              "handPose": "forward",
-              "hideUseGraphic": true,
-              "holdoutOffsetX": 0,
-              "holdoutOffsetY": 0,
-              "releaseTiming": "",
-              "useStyle": "thrust",
-              "useTurn": true
-            },
-            "target": "item_body"
-          },
-          {
-            "fn": "configure_placeable",
-            "id": "call_placeable",
-            "params": {
-              "placeStyle": 0,
-              "tileId": 213,
-              "wallId": -1
-            },
-            "target": "item_body"
-          }
-        ],
+        "callsUpsert": [],
         "claimIdsDelete": [],
         "claimIndicesDelete": [],
         "claimsUpsert": [],
@@ -593,11 +650,33 @@
         "exclusiveInputSelections": [
           {
             "input": "primary_use",
-            "keepBindingId": "bind_primary"
+            "keepBindingId": "bind_spawn_spear"
           }
         ],
+        "realizationReplacement": {
+          "description": "Основное использование создает выдвижной колющий projectile копья. Альтернативное использование размещает веревку; размещенный предмет возвращается при разрушении тайла.",
+          "playerExperience": "Основной кнопкой игрок выполняет колющий удар, а альтернативной отдельно размещает возвращаемую веревку.",
+          "backedByClaims": [
+            "claim_stats",
+            "claim_thrust",
+            "claim_place"
+          ],
+          "intentTrace": {
+            "kept": [
+              "Копье сохраняет выдвижной колющий projectile.",
+              "Веревка сохраняет размещение тайла."
+            ],
+            "changed": [
+              "Одновременные удар и placement на одном primary input заменены на primary attack и отдельный alternate placement."
+            ],
+            "dropped": [],
+            "added": [
+              "Уточнен гарантированный возврат generated item после разрушения размещенного тайла."
+            ]
+          }
+        },
         "metadataPatch": {},
-        "note": "Repair mixed entity roles by setting all affected rows targeting item_body to primary, and resolve exclusive input conflict by moving bind_spawn_spear to alternate_use.",
+        "note": "Keep the authored spear projectile on primary_use, move exact rope placement to alternate_use, and author input-scoped stack cost.",
         "primaryEntitySelection": null
       }
     }
@@ -615,7 +694,9 @@
         "b_primary_use": [
           "action",
           "input",
-          "target"
+          "target",
+          "usePolicy",
+          "usePolicy.action.targetId"
         ],
         "b_spawn_arrow": [
           "input"
@@ -691,16 +772,28 @@
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
             {
-              "action": "spawn_entity",
               "id": "b_primary_use",
               "input": "primary_use",
-              "target": "wooden_bow_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "spawn_entity",
+                  "targetId": "wooden_bow_body"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             },
             {
-              "action": "spawn_entity",
               "id": "b_spawn_arrow",
               "input": "primary_use",
-              "target": "jesters_arrow_proj"
+              "usePolicy": {
+                "action": {
+                  "kind": "spawn_entity",
+                  "targetId": "jesters_arrow_proj"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             }
           ],
           "calls": [
@@ -825,9 +918,24 @@
             }
           ],
           "primaryEntityId": "wooden_bow_body",
-          "schema": "infini.runtime-program.authoring.v2"
+          "schema": "infini.runtime-program.authoring.v4"
         },
-        "tooltip": "Выпускает стрелы Джестера из деревянного лука"
+        "realization": {
+          "description": "Стрельба бесплатными снарядами при использовании лука",
+          "playerExperience": "Атака на расстоянии пробивающими снарядами с помощью лука",
+          "backedByClaims": [
+            "cl_item_stats",
+            "cl_projectile_behavior"
+          ],
+          "intentTrace": {
+            "kept": [
+              "Сочетание деревянного лука и стрелы Джестера без потери их исходной физики"
+            ],
+            "changed": [],
+            "dropped": [],
+            "added": []
+          }
+        }
       }
     },
     "silt_extractinator": {
@@ -836,8 +944,11 @@
         "extractinator_helper"
       ],
       "expectedInitialCodes": [
+        "dual_use_placeable_input_contract",
         "duplicate_exclusive_input",
         "inert_stationary_entity",
+        "place_item_without_stack_cost",
+        "shape_const",
         "shape_one_of",
         "shape_pattern"
       ],
@@ -897,16 +1008,29 @@
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
             {
-              "action": "place_item",
               "id": "b_primary_use",
               "input": "primary_use",
-              "target": "item_body"
+              "usePolicy": {
+                "action": {
+                  "kind": "place_item",
+                  "targetId": "item_body",
+                  "placementCallId": "c_placeable"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             },
             {
-              "action": "spawn_entity",
               "id": "b_spawn_helper",
               "input": "primary_use",
-              "target": "extractinator_helper"
+              "usePolicy": {
+                "action": {
+                  "kind": "spawn_entity",
+                  "targetId": "extractinator_helper"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              }
             }
           ],
           "calls": [
@@ -944,15 +1068,6 @@
                 "releaseTiming": "immediate",
                 "useStyle": "swing",
                 "useTurn": true
-              },
-              "target": "item_body"
-            },
-            {
-              "fn": "configure_consumption",
-              "id": "c_consumption",
-              "params": {
-                "consumable": true,
-                "consumeChancePercent": 100
               },
               "target": "item_body"
             },
@@ -1024,10 +1139,26 @@
             }
           ],
           "primaryEntityId": "item_body",
-          "schema": "infini.runtime-program.authoring.v2"
+          "schema": "infini.runtime-program.authoring.v4"
         },
-        "tooltip": "Places Extractinator and Silt Block via literal synthesis"
-      }
+        "realization": {
+          "description": "Primary use places the item as a tile, while spawning a stationary helper block nearby.",
+          "playerExperience": "Deploys a literal extractinator and silt block structure upon use.",
+          "backedByClaims": [
+            "claim_placeable",
+            "claim_spawn_helper"
+          ],
+          "intentTrace": {
+            "kept": [
+              "Combines Extractinator and SiltBlock into a placeable item body that drops an extractinator-themed helper."
+            ],
+            "changed": [],
+            "dropped": [],
+            "added": []
+          }
+        }
+      },
+      "expectedAdditionalBlockerCapabilities": []
     }
   },
   "schema": "infini.live20-repair-boundary-replay.v1",
@@ -1048,10 +1179,11 @@
           {
             "assetMode": "baked_sprite",
             "entityId": "item_body",
-            "prompt": "A 32x32 pixel art item combining a wooden sword with a miniature wooden workbench affixed to the blade. Terraria inventory icon style, clean outlines, wood grain texture.",
+            "prompt": "A detailed pixel art item combining a wooden sword and a small wooden workbench attached near the blade. Brown wood planks, rustic texture, Terraria style weapon sprite on transparent background.",
             "scale": 1.0,
-            "silhouette": "Distinct wooden sword blade and hilt with an integrated workbench structure near the base of the blade.",
-            "visualIdentity": "Handcrafted wooden tool combining sword and workbench features, brown pixel art palette."
+            "silhouette": "A wooden sword shape with a miniature wooden workbench block merged securely onto the lower blade section.",
+            "visualIdentity": "Rustic wooden texture, warm brown tones, pixel art style.",
+            "visualProjectRef": "item"
           }
         ],
         "item": {
@@ -1104,5 +1236,6 @@
         "schema": "infini.visual-kit-repair-patch.runtime-entities.v1"
       }
     }
-  }
+  },
+  "translatedContract": "infini.runtime-program.authoring.v4/usePolicy"
 }

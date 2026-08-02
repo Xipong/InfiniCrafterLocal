@@ -1,52 +1,80 @@
 from __future__ import annotations
 
-import json
+import copy
 from typing import Any, Mapping
 
-from infini_local.pipelines.result_identity_policy import normalize_category
-from infini_local.pipelines.visual_prompt_contracts import compact_visual_words
+from infini_local.core.item_identity_tools import generated_data_of, name_of
 
 
-def generated_parent_summary_from_data(data: dict[str, Any]) -> dict[str, Any]:
-    concept = data.get("concept") if isinstance(data.get("concept"), dict) else {}
-    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
-    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), dict) else {}
-    runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
-    effects: list[str] = []
-    kinds: list[str] = []
-    for entity in runtime.get("entities") or []:
-        if not isinstance(entity, Mapping):
-            continue
-        kind = str(entity.get("kind") or "")
-        if kind and kind != "item_body":
-            kinds.append(kind)
-        movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
-        controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
-        for value in (movement.get("name"), controller.get("name")):
-            text = str(value or "").strip()
-            if text and text != "none":
-                effects.append(text[:64])
-        for event in entity.get("events") or []:
-            if isinstance(event, Mapping):
-                effects.append(f"{event.get('event')}:{event.get('action')}"[:64])
-    generated_buff = gameplay.get("generatedBuff") if isinstance(gameplay.get("generatedBuff"), dict) else {}
-    if generated_buff and int(generated_buff.get("durationTicks") or 0) > 0:
-        effects.append("generated item buff")
+def _rows(value: Any) -> list[dict[str, Any]]:
+    return [dict(row) for row in value if isinstance(row, Mapping)] if isinstance(value, list) else []
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def generated_parent_summary_from_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Return exact recursive context from the final accepted runtime truth.
+
+    The summary never reinterprets mechanics. It exposes the same Author's late
+    realization plus final claims that still cite live runtime ids.
+    """
+    result_id = str(data.get("id") or "").strip()
+    if not result_id:
+        raise ValueError("generatedParentSummary requires the accepted top-level generated id")
+    runtime = _mapping(data.get("runtimeProgram"))
+    contract = _mapping(data.get("runtimeContract"))
+    realization = _mapping(data.get("realization"))
+    claims = _rows(contract.get("claims"))
+    cited_claim_ids = {
+        str(value) for value in realization.get("backedByClaims") or [] if str(value)
+    }
+    notable_effects = [
+        str(claim.get("text") or "").strip()
+        for claim in claims
+        if str(claim.get("id") or "") in cited_claim_ids
+        and str(claim.get("text") or "").strip()
+    ]
+    parent_synthesis = _mapping(contract.get("parentSynthesis"))
     return {
-        "name": str(data.get("name") or "")[:80],
-        "fantasy": compact_visual_words(concept.get("literalSynthesis") or data.get("tooltip") or data.get("name"), 180),
-        "category": normalize_category(data.get("category") or gameplay.get("kind") or "generic"),
-        "damageClass": str(gameplay.get("damageClass") or "generic")[:32],
-        "runtime": "+".join(sorted(set(kinds)))[:32] if kinds else "item_body_only",
-        "visualIdentity": compact_visual_words(visual.get("imagePrompt") or concept.get("literalSynthesis") or data.get("name"), 180),
-        "notableEffects": list(dict.fromkeys(effects))[:8],
+        "schema": "infini.generated-parent-summary.v2",
+        "name": str(data.get("name") or "Generated Item"),
+        "identity": "generated:" + result_id,
+        "description": str(realization.get("description") or "").strip(),
+        "playerExperience": str(realization.get("playerExperience") or "").strip(),
+        "notableEffects": notable_effects[:12],
+        "backedByClaims": sorted(cited_claim_ids),
+        "parentComposition": str(parent_synthesis.get("composition") or "").strip(),
+        "runtimePrimaryEntityId": str(runtime.get("primaryEntityId") or runtime.get("itemEntityId") or ""),
+        "runtimeEntityIds": [str(row.get("id") or "") for row in _rows(runtime.get("entities")) if str(row.get("id") or "")],
     }
 
 
 def attach_generated_parent_summary(data: dict[str, Any]) -> dict[str, Any]:
     data["generatedParentSummary"] = generated_parent_summary_from_data(data)
-    data.setdefault("debug", {})["generatedParentSummary"] = json.dumps(data["generatedParentSummary"], ensure_ascii=False)
     return data
 
 
-__all__ = ["generated_parent_summary_from_data", "attach_generated_parent_summary"]
+def generated_parent_summary_of(item: Mapping[str, Any]) -> dict[str, Any]:
+    generated = generated_data_of(dict(item))
+    summary = generated.get("generatedParentSummary")
+    if isinstance(summary, Mapping):
+        return copy.deepcopy(dict(summary))
+    direct = item.get("generatedParentSummary")
+    if isinstance(direct, Mapping):
+        return copy.deepcopy(dict(direct))
+    return {}
+
+
+def generated_parent_name(item: Mapping[str, Any]) -> str:
+    summary = generated_parent_summary_of(item)
+    return str(summary.get("name") or name_of(dict(item))).strip()
+
+
+__all__ = [
+    "attach_generated_parent_summary",
+    "generated_parent_name",
+    "generated_parent_summary_from_data",
+    "generated_parent_summary_of",
+]

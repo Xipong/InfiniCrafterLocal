@@ -16,6 +16,12 @@ from infini_local.core.env_utils import env_int
 # and freeze the local service. Set INFINI_COMBINE_CONCURRENCY>1 only for a real worker queue.
 COMBINE_CONCURRENCY = env_int("INFINI_COMBINE_CONCURRENCY", 1, lo=1, hi=8)
 COMBINE_SEMAPHORE = threading.BoundedSemaphore(COMBINE_CONCURRENCY)
+MULTIDEV_CONCURRENCY = env_int("INFINI_MULTIDEV_CONCURRENCY", 3, lo=2, hi=3)
+MULTIDEV_SEMAPHORE = threading.BoundedSemaphore(MULTIDEV_CONCURRENCY)
+MULTIDEV_PROFILE_SEMAPHORES = {
+    profile_id: threading.BoundedSemaphore(1)
+    for profile_id in ("llm_1", "llm_2", "llm_3")
+}
 COMBINE_BUSY_WAIT_SECONDS = env_int("INFINI_COMBINE_BUSY_WAIT_SECONDS", 0, lo=0, hi=600)
 
 JsonSender = Callable[[Any], None]
@@ -134,15 +140,59 @@ def handle_combine_request(
             "recipeKey": cache_key,
         })
         return
-    acquired = COMBINE_SEMAPHORE.acquire(blocking=False)
+    multi_dev = bool(payload.get("multiDevCraft"))
+    semaphore = MULTIDEV_SEMAPHORE if multi_dev else COMBINE_SEMAPHORE
+    concurrency = MULTIDEV_CONCURRENCY if multi_dev else COMBINE_CONCURRENCY
+    profile_id = str(payload.get("llmProfileId") or "").strip().lower() if multi_dev else ""
+    profile_semaphore = MULTIDEV_PROFILE_SEMAPHORES.get(profile_id) if multi_dev else None
+    profile_acquired = False
+    if multi_dev:
+        if profile_semaphore is None:
+            json_status(422, {
+                "ok": False,
+                "status": "invalid_multidev_profile",
+                "error": "invalid_multidev_profile",
+                "message": "Multi-dev craft requires exact llmProfileId llm_1, llm_2, or llm_3.",
+                "playerMessage": "Multi-dev LLM profile is invalid. Items were returned.",
+                "version": app_version,
+                "httpStatus": 422,
+                "retryable": False,
+                "cacheRecoveryAllowed": False,
+                "multiDevCraft": True,
+            })
+            return
+        profile_acquired = profile_semaphore.acquire(blocking=False)
+        if not profile_acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
+            profile_acquired = profile_semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
+        if not profile_acquired:
+            json_status(409, {
+                "ok": False,
+                "status": "multidev_profile_busy",
+                "error": "multidev_profile_busy",
+                "message": f"Multi-dev profile {profile_id} is already generating an item.",
+                "playerMessage": f"{profile_id} is already busy. Items were returned; use another lane or retry.",
+                "version": app_version,
+                "httpStatus": 409,
+                "retryable": True,
+                "cacheRecoveryAllowed": False,
+                "combineConcurrency": concurrency,
+                "multiDevCraft": True,
+                "llmProfileId": profile_id,
+                "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
+            })
+            return
+    acquired = semaphore.acquire(blocking=False)
     if not acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
         trace_event("step", "HTTP:/combine", "generator busy; waiting for active craft/cache", {
             "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
-            "combineConcurrency": COMBINE_CONCURRENCY,
+            "combineConcurrency": concurrency,
+            "multiDevCraft": multi_dev,
             "combineBusyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
         })
-        acquired = COMBINE_SEMAPHORE.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
+        acquired = semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
     if not acquired:
+        if profile_acquired and profile_semaphore is not None:
+            profile_semaphore.release()
         json_status(409, {
             "ok": False,
             "status": "generator_busy",
@@ -153,7 +203,8 @@ def handle_combine_request(
             "httpStatus": 409,
             "retryable": True,
             "cacheRecoveryAllowed": False,
-            "combineConcurrency": COMBINE_CONCURRENCY,
+            "combineConcurrency": concurrency,
+            "multiDevCraft": multi_dev,
             "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
         })
         return
@@ -178,7 +229,9 @@ def handle_combine_request(
             pass
         raise
     finally:
-        COMBINE_SEMAPHORE.release()
+        semaphore.release()
+        if profile_acquired and profile_semaphore is not None:
+            profile_semaphore.release()
     if _response_json_error(
         data,
         source="fresh",

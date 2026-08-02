@@ -4,6 +4,10 @@ import json
 import re
 from typing import Any
 
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    action_kind as binding_action_kind,
+    target_id as binding_target_id,
+)
 from infini_local.core.item_identity_tools import (
     dict_get_ci,
     fingerprint_of,
@@ -78,11 +82,14 @@ def _generated_runtime_primary_projectile(generated: dict[str, Any]) -> dict[str
     by_id = {str(row.get("id") or ""): row for row in entities}
     input_rank = {"primary_use": 0, "alternate_use": 1, "hold": 2}
     bindings = sorted(
-        [row for row in runtime.get("bindings") or [] if isinstance(row, dict) and str(row.get("action") or "") == "spawn_entity"],
+        [
+            row for row in runtime.get("bindings") or []
+            if isinstance(row, dict) and binding_action_kind(row) == "spawn_entity"
+        ],
         key=lambda row: input_rank.get(str(row.get("input") or ""), 99),
     )
     for binding in bindings:
-        entity = by_id.get(str(binding.get("target") or ""))
+        entity = by_id.get(binding_target_id(binding))
         if isinstance(entity, dict) and str(entity.get("kind") or "") != "item_body":
             return entity
     return next((row for row in entities if str(row.get("kind") or "") != "item_body"), {})
@@ -843,7 +850,7 @@ def _placeable_consumption_semantics_for_llm(item: dict[str, Any], item_raw: dic
     return {
         "consumptionSemantics": "consumed_when_placed_as_tile_or_wall",
         "note": "The raw consumable flag here means the source stack is spent when placed; it does not automatically mean potion, ammo, thrown stack, or consumable weapon.",
-        "creativePermission": "A consumable result is still allowed when mergeLogic/sourceReading intentionally authors that behavior.",
+        "creativePermission": "A consumable result is still allowed when the explicit concept and runtimeProgram intentionally author that behavior.",
     }
 
 

@@ -31,19 +31,26 @@ from infini_local.core.runtime_authoring import (
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
 )
+from infini_local.core.vfx_manifest import MalformedVfxDirectorOutput
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_AUTHOR_SYSTEM_RULE,
     PRIMARY_REPAIR_SYSTEM_RULE,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
+    author_item_prompt_shape_card,
     author_item_repair_prompt_shape_card,
     project_provider_author_item_to_local,
     project_provider_nullable_optionals_to_local,
     strict_author_item_repair_report,
 )
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+from infini_local.pipelines.llm_authoring_prompt import (
+    build_llm_author_payload,
+    realization_execution_truth_for_llm,
+)
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.llm_transport import (
     active_llm_provider,
+    apply_minimum_reasoning_effort,
     apply_llm_common_options,
     llm_chat_json,
     llm_json_response_format,
@@ -61,9 +68,11 @@ _AUTHOR_SYSTEM = (
     "missing movement, attachment, delivery, lifecycle, input, targeting, or child behaviour. Do not classify "
     "the item as sword/bow/staff/sentry for runtime. Preserve literal parent objects when useful: a workbench "
     "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Every gameplay "
-    "claim must cite existing entity/binding/call ids. Use only catalog capabilities. Check every reference, "
+    "claim must cite existing entity/binding/call ids. After runtimeProgram and runtimeContract, author realization as the final "
+    "description/player experience of that executable program; cite only existing claim ids and explicitly record kept, changed, dropped "
+    "or added intent. Never promise mechanics absent from the program/claims. Use only catalog capabilities. Check every reference, "
     "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
-    f"{PRIMARY_AUTHOR_SYSTEM_RULE} Group bindings by input and reject the draft if an exclusive input has more than one row. configure_item_use never requires a companion use_item_body binding. "
+    f"{PRIMARY_AUTHOR_SYSTEM_RULE} Group bindings by input and reject the draft if an exclusive input has more than one row. Every binding is one complete usePolicy transaction; configure_item_use never chooses or requires a companion action binding. Catalog membership is not a recommendation. "
     "Return JSON only; no markdown or reasoning."
 )
 
@@ -145,7 +154,77 @@ def build_initial_author_request(
             auto_preference="json_schema",
         ),
     }
-    return apply_llm_common_options(request, model_name=selected_model), user_content, system
+    request = apply_llm_common_options(request, model_name=selected_model)
+    request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
+    return request, user_content, system
+
+
+def _repair_malformed_author_json(
+    *,
+    malformed_raw_text: str,
+    parse_error: BaseException,
+    original_recipe_context: str,
+    model_name: str,
+) -> tuple[dict[str, Any], str]:
+    """Spend the one Gameplay Repair call on syntax-only Author recovery."""
+
+    repair_context = {
+        "schema": "infini.gameplay-author-format-repair.v1",
+        "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
+        "rules": [
+            "Preserve every recoverable authored value, id, capability, parameter, binding transaction, claim, concept, and realization from malformedRawText.",
+            "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
+            "Use originalRecipeContext only to disambiguate damaged syntax; never introduce a choice absent from malformedRawText.",
+            "Return exactly one strict full Author JSON object with no markdown or prose.",
+        ],
+        "parseError": f"{type(parse_error).__name__}: {parse_error}",
+        "malformedRawText": malformed_raw_text,
+        "originalRecipeContext": json.loads(original_recipe_context),
+        "requiredJsonShape": author_item_prompt_shape_card(),
+    }
+    user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
+    system = (
+        "You are the single conditional Gameplay Format Repair for InfiniCrafterLocal. "
+        "Repair only JSON syntax/container damage in malformedRawText. Preserve the Author's exact recoverable design and executable choices; "
+        "do not reauthor or complete missing gameplay. Return strict full Author JSON only."
+    )
+    messages = [
+        stage_chat_message("system", "author_repair_contract", system + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("user", "author_repair_context", user_content),
+    ]
+    request = apply_llm_common_options({
+        "model": model_name,
+        "messages": messages,
+        "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
+        "response_format": llm_json_response_format(
+            "infini_low_level_runtime_author_format_repair",
+            schema=author_item_provider_response_schema(),
+            strict=True,
+            auto_preference="json_schema",
+        ),
+    }, model_name=model_name)
+    request = apply_minimum_reasoning_effort(request, model_name=model_name, minimum="medium")
+    trace_event(
+        "prompt", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair request",
+        {"provider": active_llm_provider(), "model": model_name, "malformedChars": len(malformed_raw_text)},
+        prompt=messages,
+    )
+    try:
+        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+        content = str(raw["choices"][0]["message"]["content"])
+        trace_event(
+            "response", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair response",
+            {"model": model_name, "chars": len(content), "transport": raw.get("_debug", {})},
+            response=content,
+        )
+        parsed = parse_first_valid_llm_json(content)
+        if not isinstance(parsed, Mapping):
+            raise PlannerUnavailable("Gameplay Author format Repair returned non-object JSON")
+        return _prepare_parsed_author_item(parsed), content
+    except PlannerUnavailable:
+        raise
+    except Exception as exc:
+        raise PlannerUnavailable(f"Gameplay Author format Repair failed: {exc!r}") from exc
 
 
 def try_llm_plan(
@@ -187,11 +266,22 @@ def try_llm_plan(
             {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": raw.get("_debug", {})},
             response=content,
         )
-        parsed = parse_first_valid_llm_json(content)
-        if not isinstance(parsed, dict):
-            raise PlannerUnavailable("Gameplay Author returned non-object JSON")
-        item = _prepare_parsed_author_item(parsed)
-        item.setdefault("id", "g_" + stable_hash(key, content, length=16))
+        format_repaired = False
+        format_repair_content = ""
+        try:
+            parsed = parse_first_valid_llm_json(content)
+            if not isinstance(parsed, dict):
+                raise TypeError("Gameplay Author returned non-object JSON")
+            item = _prepare_parsed_author_item(parsed)
+        except (ValueError, TypeError, json.JSONDecodeError) as parse_error:
+            item, format_repair_content = _repair_malformed_author_json(
+                malformed_raw_text=str(content),
+                parse_error=parse_error,
+                original_recipe_context=user_content,
+                model_name=model_name,
+            )
+            format_repaired = True
+        item.setdefault("id", "g_" + stable_hash(key, format_repair_content or content, length=16))
         item.setdefault("recipeKey", key)
         item.setdefault("schemaVersion", 5)
         item.setdefault("parentA", name_of(a))
@@ -207,8 +297,16 @@ def try_llm_plan(
             "llmRawOutput": str(content)[:12000],
             "llmHistoryStored": ATTRIBUTED_PLANNER_HISTORY_KIND,
         })
-        _stage_accounting(item)["gameplayAuthorCalls"] = 1
-        item["_llmHistory"] = attributed_planner_history(system, user_content, str(content))
+        if format_repaired:
+            debug["gameplayFormatRepairRawOutput"] = format_repair_content[:12000]
+        accounting = _stage_accounting(item)
+        accounting["gameplayAuthorCalls"] = 1
+        accounting["gameplayRepairCalls"] = 1 if format_repaired else 0
+        item["_llmHistory"] = attributed_planner_history(
+            system,
+            user_content,
+            format_repair_content or str(content),
+        )
         return item
     except PlannerUnavailable:
         raise
@@ -251,10 +349,13 @@ def build_gameplay_repair_dossier(
     deterministic errors without rewriting frozen context.
     """
 
+    _ = (ca, cb)
     exact_errors = _repair_error_rows(failure_report)
     scope = build_runtime_repair_scope(current, exact_errors)
     fragments = runtime_repair_fragments(current, scope)
     blocker_plan = scope.get("blockerPlan") if isinstance(scope.get("blockerPlan"), Mapping) else {}
+    raw_runtime_contract = current.get("runtimeContract")
+    runtime_contract: Mapping[str, Any] = raw_runtime_contract if isinstance(raw_runtime_contract, Mapping) else {}
 
     def cards(names: Any) -> list[dict[str, Any]]:
         return [
@@ -271,12 +372,15 @@ def build_gameplay_repair_dossier(
             "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from brokenFragments, changing only permitted fields; never omit unchanged required fields.",
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
+            "For each exact repairScope.deletable.callPropertyKeys entry that must be removed, emit the matching callPropertyKeysDelete {callId,key}; a note claiming removal does not mutate the program.",
             "Use create permissions only for the exact blocker or its declared support dependency.",
             "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
-            "immutableProgramIndex.entities[*].id is the exact entity-id allowlist for every target and entity-reference value in this patch; copy ids from it and never invent or carry an id from another item.",
+            "immutableProgramIndex.entities[*].id is the exact allowlist for every target and entity-reference value that points to an existing entity in this patch; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call may instead target an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and do not invent any other target.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
+            "Always return realizationReplacement after considering the patch. It must be a literal post-repair execution report, obey runtimeExecutionTruth, describe only the actually repaired program, reconcile intentTrace kept/changed/dropped, and cite only final claim ids; it is never deterministically synthesized.",
             f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
+            "For each repairRequirements row with requiredBindingUpdates, emit every listed existing binding exactly once using one of its complete allowed transactions, and create exactly one allowedBindingTransactions row when mustCreateExactlyOne is true; mustApplyAll means these updates are one coupled repair, not alternatives.",
             "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
             "For each repairScope.eventAlternatives row, choose one complete alternative: author its exact event plus every listed required call/binding in the same patch, and emit no support from unselected alternatives. The engine never chooses or inserts an event producer for you.",
         ],
@@ -285,21 +389,22 @@ def build_gameplay_repair_dossier(
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         },
         "parents": {
-            "a": {"name": name_of(dict(a)), "canonical": copy.deepcopy(dict(ca))},
-            "b": {"name": name_of(dict(b)), "canonical": copy.deepcopy(dict(cb))},
+            "a": {"packet": raw_parent_card_for_llm(dict(a))},
+            "b": {"packet": raw_parent_card_for_llm(dict(b))},
         },
         "acceptedItemContext": {
             "name": current.get("name"),
-            "tooltip": current.get("tooltip"),
             "category": current.get("category"),
             "concept": copy.deepcopy(current.get("concept") or {}),
-            "parentSynthesis": copy.deepcopy((current.get("runtimeContract") or {}).get("parentSynthesis") or {}),
+            "parentSynthesis": copy.deepcopy(runtime_contract.get("parentSynthesis") or {}),
+            "claims": copy.deepcopy(runtime_contract.get("claims") or []),
+            "realization": copy.deepcopy(current.get("realization") or {}),
         },
         "exactValidationErrors": exact_errors,
         "failureStage": str(failure_report.get("stage") or "runtime_program_validation"),
         "repairScope": scope,
+        "runtimeExecutionTruth": realization_execution_truth_for_llm(),
         "requiredJsonShape": author_item_repair_prompt_shape_card(),
-        "blockerPlan": copy.deepcopy(blocker_plan),
         "brokenFragments": fragments["broken"],
         "brokenFragmentsByIndex": fragments["brokenByIndex"],
         "validDependencyFragments": fragments["dependencyContext"],
@@ -342,9 +447,9 @@ def repair_author_item_after_failure(
         )
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
-        "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and blockerPlan; never repair the whole item. "
+        "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and repairScope.blockerPlan; never repair the whole item. "
         f"{PRIMARY_REPAIR_SYSTEM_RULE} For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
-        "Every target or entity-reference id in the patch must be copied from immutableProgramIndex.entities[*].id; never invent or carry an id from another item. "
+        "Every target or entity-reference id that points to an existing entity must be copied from immutableProgramIndex.entities[*].id; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call target may instead use an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and never invent any other target. "
         "For every bindingId in repairScope.bindingAlternatives, copy one complete input/action/target tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. "
         "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
@@ -392,6 +497,8 @@ def repair_author_item_after_failure(
         )
         parsed = parse_first_valid_llm_json(content)
         patch = project_provider_nullable_optionals_to_local(parsed)
+        if not isinstance(patch, Mapping) or not isinstance(patch.get("realizationReplacement"), Mapping):
+            raise PlannerUnavailable("Gameplay Repair must return a non-null realizationReplacement")
         report = strict_author_item_repair_report(patch)
         if not report.get("ok"):
             raise PlannerUnavailable("Gameplay Repair patch shape rejected: " + bounded_json_dumps(report, max_chars=6000))
@@ -431,7 +538,7 @@ def call_llm_vfx_director(
     temperature: float,
     timeout: int,
     messages: list[dict[str, str]] | None = None,
-) -> dict[str, Any] | None:
+) -> dict[str, Any] | MalformedVfxDirectorOutput | None:
     """Transport-only helper used by the finite VFX Director stage."""
     if not USE_LLM:
         return None
@@ -456,7 +563,10 @@ def call_llm_vfx_director(
     request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
     raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
     content = raw["choices"][0]["message"]["content"]
-    parsed = parse_first_valid_llm_json(content)
+    try:
+        parsed = parse_first_valid_llm_json(content)
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        return MalformedVfxDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
     return parsed if isinstance(parsed, dict) else None
 
 

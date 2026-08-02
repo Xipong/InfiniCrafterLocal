@@ -158,6 +158,15 @@ def _quarantine_cached_recipe(*, world_id: str, recipe_key_value: str, reason: s
         trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {"recipeKey": recipe_key_value, "worldId": world_id, "reason": reason, "error": repr(exc)})
 
 
+def _multi_dev_profile_id(payload: dict[str, Any]) -> str:
+    if not bool(payload.get("multiDevCraft")):
+        return ""
+    profile_id = str(payload.get("llmProfileId") or "").strip().lower()
+    if profile_id not in {"llm_1", "llm_2", "llm_3"}:
+        raise ValueError("multiDevCraft requires exact llmProfileId llm_1, llm_2, or llm_3")
+    return profile_id
+
+
 def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     """Read only the exact world-scoped v5 recipe; no migration or fallback."""
     a = payload.get("itemA") or {}
@@ -165,7 +174,8 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     world_id = normalize_world_id_from_payload(payload)
     world_name = str(payload.get("worldName") or "").strip()
     identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
-    key = recipe_key(a, b, world_id, identity_version)
+    profile_id = _multi_dev_profile_id(payload)
+    key = recipe_key(a, b, world_id, identity_version, profile_id)
     cached = cache_get(key, world_id, world_name)
     if not isinstance(cached, dict):
         return key, None
@@ -218,6 +228,12 @@ def compile_and_validate_authored_runtime(
         return domain_pass(data, "02")
     except (PlannerUnavailable, ValueError, TypeError, RuntimeError, AssertionError) as exc:
         report = _failure_report(authored, exc, "gameplay_validation_or_compile")
+    accounting = ((authored.get("debug") or {}).get("llmStageAccounting") or {})
+    if int(accounting.get("gameplayRepairCalls", 0) or 0) >= 1:
+        raise PlannerUnavailable(
+            "Gameplay format Repair output failed validation and the single gameplay repair budget already consumed: "
+            + json.dumps(report["errors"][:12], ensure_ascii=False)
+        )
     repaired = run_stage(
         "02r_conditional_gameplay_repair",
         repair_author_item_after_failure,
@@ -244,7 +260,8 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     world_id = normalize_world_id_from_payload(payload)
     world_name = str(payload.get("worldName") or "").strip()
     identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
-    key = recipe_key(a, b, world_id, identity_version)
+    profile_id = _multi_dev_profile_id(payload)
+    key = recipe_key(a, b, world_id, identity_version, profile_id)
 
     cached = cache_get(key, world_id, world_name)
     if isinstance(cached, dict):
@@ -258,7 +275,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     data: dict[str, Any] | None = None
     lease = token = None
     if USE_LLM:
-        lease, token = begin_llm_item_lease(key)
+        lease, token = begin_llm_item_lease(key, preferred_profile_id=profile_id)
 
     def step(label: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         started = time.time()
@@ -309,6 +326,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         debug.update({
             "cacheScope": "world",
             "recipeIdentityVersion": identity_version,
+            "multiDevProfileId": profile_id,
             "worldId": world_id,
             "worldRecipesDir": str(world_recipe_dir(world_id)),
             "pipelineProfile": VISUAL_PIPELINE_PROFILE,
