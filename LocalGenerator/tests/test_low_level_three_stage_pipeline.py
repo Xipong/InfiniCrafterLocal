@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+from dataclasses import replace
 from pathlib import Path
 from collections.abc import Callable
 from typing import Any
@@ -31,6 +32,7 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
     VALIDATION_ERROR_CODES,
 )
+from infini_local.core.runtime_authoring.capability_registry import RequirementSpec
 from infini_local.core.vfx_manifest import (
     VFX_DIRECTOR_SCHEMA,
     VFX_REPAIR_PATCH_SCHEMA,
@@ -1796,6 +1798,47 @@ def test_planned_item_capability_support_is_scoped_to_its_owner_target() -> None
     requirement = scope["repairRequirements"][1]
     assert requirement["affectedIds"] == ["other_tool"]
     assert requirement["allowedBindingTransactions"] == []
+
+
+def test_binding_input_requirement_only_projects_its_exact_owner_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_registry = dict(CAPABILITY_REGISTRY)
+    local_registry["configure_tool"] = replace(
+        CAPABILITY_REGISTRY["configure_tool"],
+        requirements=(RequirementSpec(
+            kind="binding_input_present",
+            target="item_body",
+            any_of=("primary_use",),
+            message="Synthetic exact-owner binding-input contract.",
+        ),),
+    )
+    monkeypatch.setattr(repair_scope_stage, "CAPABILITY_REGISTRY", local_registry)
+
+    current = build_capability_witness("configure_tool")
+    program = current["runtimeProgram"]
+    program["bindings"] = []
+    item = next(row for row in program["entities"] if row["kind"] == "item_body")
+    other_item = copy.deepcopy(item)
+    other_item["id"] = "other_item"
+    program["entities"].append(other_item)
+    tool_call_index = next(
+        index for index, row in enumerate(program["calls"])
+        if row["fn"] == "configure_tool"
+    )
+    scope = build_runtime_repair_scope(current, [{
+        "path": f"$.runtimeProgram.calls[{tool_call_index}]",
+        "code": "missing_binding_dependency",
+        "message": "Synthetic exact-owner binding-input contract.",
+        "allowed": ["binding(input=primary_use)"],
+        "relatedIds": ["witness_call", "item"],
+    }])
+    requirement = scope["repairRequirements"][0]
+    assert requirement["allowedBindingTransactions"]
+    assert {
+        row["usePolicy"]["action"]["targetId"]
+        for row in requirement["allowedBindingTransactions"]
+    } == {"item"}
 
 
 def test_binding_choice_is_owned_by_requirement_specific_existing_ids(

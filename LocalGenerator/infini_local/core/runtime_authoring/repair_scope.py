@@ -1518,12 +1518,20 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 placement_call=node_id,
                             ))
                     elif capability_requirement.kind == "binding_input_present":
-                        allowed_rows.extend(_binding_creation_alternatives(
-                            rows,
-                            owner_item_target_id=owner_item_target_id,
-                            required_inputs=capability_requirement.any_of,
-                            additional_item_capabilities=authorized_capabilities,
-                        ))
+                        required_target = (
+                            owner_item_target_id
+                            if capability_requirement.target == "item_body"
+                            else str(node_row.get("target") or "")
+                        )
+                        allowed_rows.extend(
+                            row for row in _binding_creation_alternatives(
+                                rows,
+                                owner_item_target_id=owner_item_target_id,
+                                required_inputs=capability_requirement.any_of,
+                                additional_item_capabilities=authorized_capabilities,
+                            )
+                            if binding_target_id(row) == required_target
+                        )
                     elif capability_requirement.kind == "binding_action_present":
                         existing_primary = next((
                             row for row in rows["bindings"]
