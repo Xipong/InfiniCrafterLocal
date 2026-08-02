@@ -10,59 +10,194 @@
     },
     "entities": {
       "items": {
-        "additionalProperties": false,
-        "properties": {
-          "assetMode": {
-            "enum": [
-              "baked_sprite",
-              "no_asset",
-              "reuse_item_icon",
-              "runtime_geometry"
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "assetMode": {
+                "const": "baked_sprite"
+              },
+              "entityId": {
+                "enum": [
+                  "item",
+                  "workbench_blade",
+                  "nail"
+                ],
+                "type": "string"
+              },
+              "prompt": {
+                "maxLength": 1400,
+                "minLength": 1,
+                "type": "string"
+              },
+              "scale": {
+                "maximum": 4.0,
+                "minimum": 0.25,
+                "type": "number"
+              },
+              "silhouette": {
+                "maxLength": 700,
+                "minLength": 1,
+                "type": "string"
+              },
+              "visualIdentity": {
+                "maxLength": 700,
+                "minLength": 1,
+                "type": "string"
+              },
+              "visualProjectRef": {
+                "enum": [
+                  "item",
+                  "entity"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "entityId",
+              "assetMode",
+              "visualProjectRef",
+              "prompt",
+              "silhouette",
+              "visualIdentity",
+              "scale"
             ],
-            "type": "string"
+            "type": "object"
           },
-          "entityId": {
-            "enum": [
-              "item",
-              "workbench_blade",
-              "nail"
+          {
+            "additionalProperties": false,
+            "properties": {
+              "assetMode": {
+                "const": "reuse_item_icon"
+              },
+              "entityId": {
+                "enum": [
+                  "item",
+                  "workbench_blade",
+                  "nail"
+                ],
+                "type": "string"
+              },
+              "scale": {
+                "maximum": 4.0,
+                "minimum": 0.25,
+                "type": "number"
+              },
+              "visualProjectRef": {
+                "const": "item"
+              }
+            },
+            "required": [
+              "entityId",
+              "assetMode",
+              "visualProjectRef",
+              "scale"
             ],
-            "type": "string"
+            "type": "object"
           },
-          "prompt": {
-            "maxLength": 1400,
-            "minLength": 1,
-            "type": "string"
+          {
+            "additionalProperties": false,
+            "properties": {
+              "assetMode": {
+                "const": "runtime_geometry"
+              },
+              "entityId": {
+                "enum": [
+                  "item",
+                  "workbench_blade",
+                  "nail"
+                ],
+                "type": "string"
+              },
+              "scale": {
+                "maximum": 4.0,
+                "minimum": 0.25,
+                "type": "number"
+              },
+              "visualProjectRef": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "entityId",
+              "assetMode",
+              "visualProjectRef",
+              "scale"
+            ],
+            "type": "object"
           },
-          "scale": {
-            "maximum": 4.0,
-            "minimum": 0.25,
-            "type": "number"
-          },
-          "silhouette": {
-            "maxLength": 700,
-            "minLength": 1,
-            "type": "string"
-          },
-          "visualIdentity": {
-            "maxLength": 700,
-            "minLength": 1,
-            "type": "string"
+          {
+            "additionalProperties": false,
+            "properties": {
+              "assetMode": {
+                "const": "no_asset"
+              },
+              "entityId": {
+                "enum": [
+                  "item",
+                  "workbench_blade",
+                  "nail"
+                ],
+                "type": "string"
+              },
+              "scale": {
+                "maximum": 4.0,
+                "minimum": 0.25,
+                "type": "number"
+              },
+              "visualProjectRef": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "entityId",
+              "assetMode",
+              "visualProjectRef",
+              "scale"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "entityId",
-          "assetMode",
-          "prompt",
-          "silhouette",
-          "visualIdentity",
-          "scale"
-        ],
-        "type": "object"
+        ]
       },
       "maxItems": 3,
       "minItems": 3,
       "type": "array"
+    },
+    "equipOverlay": {
+      "additionalProperties": false,
+      "properties": {
+        "preferredCanvasSize": {
+          "enum": [
+            32,
+            48,
+            64,
+            96
+          ],
+          "type": "integer"
+        },
+        "prompt": {
+          "maxLength": 1400,
+          "minLength": 1,
+          "type": "string"
+        },
+        "silhouette": {
+          "maxLength": 700,
+          "minLength": 1,
+          "type": "string"
+        },
+        "visualIdentity": {
+          "maxLength": 700,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt",
+        "silhouette",
+        "visualIdentity",
+        "preferredCanvasSize"
+      ],
+      "type": "object"
     },
     "item": {
       "additionalProperties": false,

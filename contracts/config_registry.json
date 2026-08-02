@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 114,
+  "documentedFieldCount": 116,
   "entries": [
     {
       "declarations": [
@@ -1558,6 +1558,30 @@
         {
           "default": 1,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "maximum": 4,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 1,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": 4,
+      "minimum": 1,
+      "name": "INFINI_IMAGE_MAX_CONCURRENCY",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 1,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2563,6 +2587,13 @@
           "maximum": 0.8,
           "minimum": 0.0,
           "type": "number"
+        },
+        {
+          "default": 0.12,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "maximum": 0.8,
+          "minimum": 0.0,
+          "type": "number"
         }
       ],
       "default": 0.12,
@@ -2694,6 +2725,13 @@
         },
         {
           "default": 95,
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        },
+        {
+          "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
           "maximum": null,
           "minimum": null,
@@ -2809,6 +2847,30 @@
       ],
       "secret": false,
       "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 3,
+          "file": "LocalGenerator/infini_local/services/combine_endpoint.py",
+          "maximum": 3,
+          "minimum": 2,
+          "type": "integer"
+        }
+      ],
+      "default": 3,
+      "documented": true,
+      "example": "3",
+      "gui": true,
+      "maximum": 3,
+      "minimum": 2,
+      "name": "INFINI_MULTIDEV_CONCURRENCY",
+      "owners": [
+        "LocalGenerator/infini_local/services/combine_endpoint.py"
+      ],
+      "secret": false,
+      "type": "integer",
       "visibility": "gui"
     },
     {
@@ -5050,78 +5112,6 @@
     {
       "declarations": [
         {
-          "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": false,
-      "documented": false,
-      "example": null,
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": false,
-      "documented": false,
-      "example": null,
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VISUAL_GENERATE_IMPACT_IMAGES",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
           "default": 240,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
           "maximum": null,
@@ -5401,15 +5391,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 222,
-  "fingerprint": "6717d4d03f499e6640f790b67bcc9a237a355b16083967cc9490afe3318d7109",
+  "fieldCount": 221,
+  "fingerprint": "e35aa614cd6a41c9e63c2de81b1620248f72d5da673921abab5f82428148de34",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 119,
+  "guiFieldCount": 118,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

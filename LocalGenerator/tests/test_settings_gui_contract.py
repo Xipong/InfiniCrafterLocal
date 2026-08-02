@@ -285,6 +285,34 @@ def _check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy
     assert "структурированный HTTP payload" in GUI_SOURCE
 
 
+def _check_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real() -> None:
+    root = GUI_PATH.parents[2]
+    pipeline_config = (GUI_PATH.parents[1] / "pipelines" / "pipeline_visual_config.py").read_text(encoding="utf-8")
+    image_gui = (GUI_PATH.parent / "settings_gui_ui.py").read_text(encoding="utf-8")
+    image_args = (GUI_PATH.parent / "settings_gui_image_args.py").read_text(encoding="utf-8")
+    config_env_path = GUI_PATH.parents[2] / "config.env"
+    config_env = config_env_path.read_text(encoding="utf-8") if config_env_path.exists() else ""
+    config_example = (GUI_PATH.parents[2] / "config.example.env").read_text(encoding="utf-8")
+    registry = (root.parent / "contracts" / "config_registry.json").read_text(encoding="utf-8")
+    dead = (
+        "INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES",
+        "INFINI_VISUAL_GENERATE_IMPACT_IMAGES",
+        "INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES",
+    )
+    all_surfaces = "\n".join((GUI_SOURCE, image_gui, image_args, pipeline_config, config_env, config_example, registry))
+    assert all(key not in all_surfaces for key in dead)
+
+    gate = "INFINI_IMAGE_MAX_CONCURRENCY"
+    assert gate in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS[gate] == "1"
+    assert f'"Shared image concurrency", "{gate}"' in image_gui
+    assert gate in pipeline_config
+    if config_env_path.exists():
+        assert f"{gate}=1" in config_env
+    assert f"{gate}=1" in config_example
+    assert gate in registry
+
+
 # Coarse test bundle: the checks below used to be separate pytest items.
 # Keeping them as helper checks cuts collection/runtime noise while preserving
 # the same assertions inside one scenario-level contract per file.
@@ -310,7 +338,8 @@ def _run_coarse_contracts(tmp_path):
     '_check_gui_exposes_critical_delivery_and_busy_wait_controls',
     '_check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount',
     '_check_gui_env_file_io_lives_in_settings_env',
-    '_check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy'
+    '_check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy',
+    '_check_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real'
     ]:
         _fn = globals()[_name]
         _sig = _inspect.signature(_fn)

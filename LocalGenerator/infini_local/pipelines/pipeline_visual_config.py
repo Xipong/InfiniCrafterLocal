@@ -142,11 +142,10 @@ IMAGE_API_SIZE = env_first(("INFINI_IMAGE_API_SIZE", "INFINI_OPENAI_COMPAT_IMAGE
 IMAGE_API_TIMEOUT = env_int("INFINI_IMAGE_API_TIMEOUT", env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240, lo=1, hi=3600), lo=1, hi=3600)
 IMAGE_API_EXTRA_HEADERS_JSON = env_str("INFINI_IMAGE_API_EXTRA_HEADERS_JSON", "")
 GENERATE_VARIANTS = env_int("INFINI_IMAGE_VARIANTS", 1)
+IMAGE_MAX_CONCURRENCY = env_int("INFINI_IMAGE_MAX_CONCURRENCY", 1, lo=1, hi=4)
+IMAGE_GENERATION_GATE = sdcpp_service.ImageRequestGate(IMAGE_MAX_CONCURRENCY)
 # Visual asset generation mode. "item" = inventory icon only; "full" = item + projectile + impact briefs.
 VISUAL_ASSET_MODE = env_str("INFINI_VISUAL_ASSET_MODE", "full").lower()
-VISUAL_GENERATE_CHILD_FIELD_IMAGES = env_bool("INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES", False)
-VISUAL_GENERATE_IMPACT_IMAGES = env_bool("INFINI_VISUAL_GENERATE_IMPACT_IMAGES", False)
-VISUAL_GENERATE_PROJECTILE_IMAGES = env_bool("INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES", True)
 # v0.3.9: merged author-first visual pipeline. Planner writes the toy, visual-director
 # builds a role-separated asset pack, generator produces item/projectile/impact/child/field PNGs.
 VISUAL_DIRECTOR_LLM = env_bool("INFINI_VISUAL_DIRECTOR_LLM", True)
@@ -290,10 +289,9 @@ __all__ = [
     "IMAGE_API_TIMEOUT",
     "IMAGE_API_EXTRA_HEADERS_JSON",
     "GENERATE_VARIANTS",
+    "IMAGE_MAX_CONCURRENCY",
+    "IMAGE_GENERATION_GATE",
     "VISUAL_ASSET_MODE",
-    "VISUAL_GENERATE_CHILD_FIELD_IMAGES",
-    "VISUAL_GENERATE_IMPACT_IMAGES",
-    "VISUAL_GENERATE_PROJECTILE_IMAGES",
     "VISUAL_DIRECTOR_LLM",
     "VISUAL_PIPELINE_PROFILE",
     "contract_versions_payload",

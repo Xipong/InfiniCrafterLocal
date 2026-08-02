@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+from contextlib import contextmanager
 import os
 import signal
 import subprocess
@@ -9,6 +10,28 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+
+
+class ImageRequestGate:
+    """Bound all image-backend calls that share one GPU/server.
+
+    Multi-dev craft lanes may run their LLM stages in parallel, but they must not
+    submit an unbounded burst to the same diffusion process. This gate owns only
+    backend request admission; model semantics and asset-role selection stay in
+    the visual pipeline.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = max(1, int(capacity))
+        self._semaphore = threading.BoundedSemaphore(self.capacity)
+
+    @contextmanager
+    def slot(self):
+        self._semaphore.acquire()
+        try:
+            yield
+        finally:
+            self._semaphore.release()
 
 
 @dataclass

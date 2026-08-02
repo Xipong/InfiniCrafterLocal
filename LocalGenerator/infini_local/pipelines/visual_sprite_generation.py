@@ -14,6 +14,7 @@ from infini_local.pipelines.pipeline_visual_config import (
     GENERATE_VARIANTS,
     IMAGE_BACKEND,
     IMAGE_BACKEND_CONFIG_ERROR,
+    IMAGE_GENERATION_GATE,
     SPRITE_RETRIES,
     VISUAL_ALLOW_PROCEDURAL_FALLBACK,
     VISUAL_ASSET_MODE,
@@ -41,7 +42,7 @@ from infini_local.pipelines.sprite_postprocess import (
 )
 from infini_local.pipelines.visual_asset_manifest import write_visual_manifest
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
-from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
+from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
 from infini_local.pipelines.visual_soul import attach_visual_soul_from_sprite
 
 
@@ -94,40 +95,41 @@ def _generate_backend_variants(
     config_error = _backend_configuration_error()
     if config_error:
         raise ImageBackendConfigurationError(config_error)
-    if IMAGE_BACKEND == "a1111":
-        return generate_a1111(prompt, negative, asset_id, canvas)
-    if IMAGE_BACKEND == "comfyui":
-        return generate_comfyui(prompt, negative, asset_id)
-    if IMAGE_BACKEND == "sdcpp":
-        return generate_sdcpp(prompt, negative, asset_id, canvas)
-    if IMAGE_BACKEND == "image_api":
-        return generate_image_api(prompt, negative, asset_id, canvas)
-    if IMAGE_BACKEND == "procedural":
-        if role == "item":
+    with IMAGE_GENERATION_GATE.slot():
+        if IMAGE_BACKEND == "a1111":
+            return generate_a1111(prompt, negative, asset_id, canvas)
+        if IMAGE_BACKEND == "comfyui":
+            return generate_comfyui(prompt, negative, asset_id)
+        if IMAGE_BACKEND == "sdcpp":
+            return generate_sdcpp(prompt, negative, asset_id, canvas)
+        if IMAGE_BACKEND == "image_api":
+            return generate_image_api(prompt, negative, asset_id, canvas)
+        if IMAGE_BACKEND == "procedural":
+            if role == "item":
+                return [
+                    visual_asset_pipeline.generate_procedural_sprite(
+                        data,
+                        variant=i,
+                        sprite_dir=SPRITE_DIR,
+                        image_cls=Image,
+                        image_draw_cls=ImageDraw,
+                    )
+                    for i in range(max(1, GENERATE_VARIANTS))
+                ]
             return [
-                visual_asset_pipeline.generate_procedural_sprite(
+                visual_asset_pipeline.generate_procedural_asset(
                     data,
-                    variant=i,
+                    role,
+                    variant=0,
+                    canvas_size=canvas,
                     sprite_dir=SPRITE_DIR,
                     image_cls=Image,
                     image_draw_cls=ImageDraw,
                 )
-                for i in range(max(1, GENERATE_VARIANTS))
             ]
-        return [
-            visual_asset_pipeline.generate_procedural_asset(
-                data,
-                role,
-                variant=0,
-                canvas_size=canvas,
-                sprite_dir=SPRITE_DIR,
-                image_cls=Image,
-                image_draw_cls=ImageDraw,
-            )
-        ]
-    if IMAGE_BACKEND == "off":
-        return []
-    raise ImageBackendConfigurationError(f"unsupported image backend: {IMAGE_BACKEND}")
+        if IMAGE_BACKEND == "off":
+            return []
+        raise ImageBackendConfigurationError(f"unsupported image backend: {IMAGE_BACKEND}")
 
 
 def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
@@ -150,7 +152,7 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
         return data
     canvas = int(visual.get("preferredCanvasSize") or 32)
     topology, part_count_min, part_count_max = _authored_sprite_topology(data, "item")
-    negative = str(visual.get("negativePrompt") or asset_negative_prompt("item"))
+    negative = str(visual.get("negativePrompt") or "")
     asset_id = str(data.get("id") or "sprite")
     attempts: list[dict[str, Any]] = []
     max_attempts = max(1, int(SPRITE_RETRIES) + 1)
@@ -342,8 +344,9 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     v0.3.9: no fake best-of-N judging by default. We generate one image, run local
     alpha/crop/fit validation, and retry only when the PNG is technically broken.
     """
-    base_prompt = normalize_asset_prompt(data, role, prompt, canvas)
-    negative = negative or asset_negative_prompt(role)
+    contract_role = "impact" if role.startswith("impact_") else role
+    base_prompt = normalize_asset_prompt(data, contract_role, prompt, canvas)
+    negative = str(negative or "")
     data.setdefault("debug", {})[f"{role}FinalPrompt"] = truncate_prompt_at_boundary(base_prompt, 1800)
     data.setdefault("debug", {})[f"{role}AuthoringPolicy"] = "ai_primary_non_procedural"
     if IMAGE_BACKEND == "off":
@@ -362,7 +365,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     topology, part_count_min, part_count_max = _authored_sprite_topology(data, role)
     for attempt in range(max_attempts):
         attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
-        attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, role, attempt, canvas)
+        attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, contract_role, attempt, canvas)
         data.setdefault("debug", {})[f"{role}FinalPrompt"] = attempt_prompt
         data["debug"][f"{role}FinalPromptAttempt"] = attempt
         trace_event("prompt", f"IMAGE:{role}", f"{IMAGE_BACKEND} {role} prompt attempt {attempt}", {
@@ -376,26 +379,26 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
                 negative=negative,
                 asset_id=attempt_id,
                 canvas=canvas,
-                role=role,
+                role=contract_role,
             )
             variants = [p for p in variants if p and Path(p).exists()]
             if not variants:
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
                 continue
-            best, score = pick_best_sprite(variants, role, canvas)
+            best, score = pick_best_sprite(variants, contract_role, canvas)
             final_path = postprocess_sprite(
-                best, attempt_id, canvas, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                best, attempt_id, canvas, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
             )
             validation = validate_processed_sprite(
-                final_path, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                final_path, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
             )
             refit_path = ""
             refit_validation: dict[str, Any] | None = None
             if not validation.get("ok") and not sprite_validation_fatal(validation):
-                refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, role, validation)
+                refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, contract_role, validation)
                 if refit_path:
                     refit_validation = validate_processed_sprite(
-                        refit_path, role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                        refit_path, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
                     )
                     if refit_validation.get("ok"):
                         data.setdefault("debug", {})[f"{role}SpriteRefit"] = json.dumps({
@@ -505,10 +508,82 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
 
     plan = build_visual_asset_plan(data)
     by_id = {str(row.get("id") or ""): row for row in _runtime_entities(data)}
-    director_negative = str((data.get("visualKit") or {}).get("negativePrompt") or "").strip() if isinstance(data.get("visualKit"), dict) else ""
+    raw_kit = data.get("visualKit")
+    visual_kit: dict[str, Any] = raw_kit if isinstance(raw_kit, dict) else {}
+    raw_item_kit = visual_kit.get("item")
+    item_kit: dict[str, Any] = raw_item_kit if isinstance(raw_item_kit, dict) else {}
+    director_negative = str(item_kit.get("negativePrompt") or "").strip()
 
     for slot in plan:
         if not isinstance(slot, dict):
+            continue
+        role = str(slot.get("role") or "")
+        if role == "equip_overlay":
+            prompt = str(slot.get("prompt") or visual.get("equipOverlayPrompt") or "")
+            canvas = int(slot.get("canvas") or 48)
+            path, url, score, status = generate_visual_asset(
+                data,
+                "equip_overlay",
+                prompt,
+                director_negative,
+                str(slot.get("assetId") or f"{data.get('id')}_equip_overlay"),
+                canvas,
+            )
+            final_prompt = str(data.get("debug", {}).get("equip_overlayFinalPrompt") or "")
+            if final_prompt:
+                slot["prompt"] = final_prompt
+                visual["equipOverlayPrompt"] = final_prompt
+            usable = bool(path) and status not in {"failed", "prompt_only", "placeholder", "backend_config_error"}
+            visual.update({
+                "equipOverlayStatus": status,
+                "equipOverlayPath": path if usable else "",
+                "equipOverlayUrl": url if usable else "",
+                "equipOverlayTechnicalScore": score if usable else 0.0,
+            })
+            slot.update({
+                "status": status,
+                "path": path if usable else "",
+                "url": url if usable else "",
+                "technicalScore": score if usable else 0.0,
+            })
+            continue
+        if role.startswith("impact:"):
+            entity_id = str(slot.get("entityId") or "")
+            entity = by_id.get(entity_id)
+            if not isinstance(entity, dict):
+                slot.update({"status": "invalid_missing_entity", "path": "", "url": "", "technicalScore": 0.0})
+                continue
+            entity_visual = entity.setdefault("visual", {})
+            prompt = str(slot.get("prompt") or "")
+            negative = str(slot.get("negativePrompt") or "")
+            canvas = int(slot.get("canvas") or 32)
+            backend_role = "impact_" + entity_id
+            path, url, score, status = generate_visual_asset(
+                data,
+                backend_role,
+                prompt,
+                negative,
+                str(slot.get("assetId") or f"{data.get('id')}_{entity_id}_impact"),
+                canvas,
+            )
+            final_prompt = str(data.get("debug", {}).get(f"{backend_role}FinalPrompt") or "")
+            entity_visual["impactPrompt"] = final_prompt or prompt
+            entity_visual["impactNegativePrompt"] = negative
+            if final_prompt:
+                slot["prompt"] = final_prompt
+            usable = bool(path) and status not in {"failed", "prompt_only", "placeholder", "backend_config_error"}
+            entity_visual.update({
+                "impactSpriteStatus": status,
+                "impactSpritePath": path if usable else "",
+                "impactSpriteUrl": url if usable else "",
+                "impactSpriteTechnicalScore": score if usable else 0.0,
+            })
+            slot.update({
+                "status": status,
+                "path": path if usable else "",
+                "url": url if usable else "",
+                "technicalScore": score if usable else 0.0,
+            })
             continue
         entity_id = str(slot.get("entityId") or "")
         entity = by_id.get(entity_id)
@@ -517,7 +592,6 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             continue
         entity_visual = entity.setdefault("visual", {})
         mode = str(slot.get("assetMode") or "").strip().lower()
-        role = str(slot.get("role") or "")
         if entity.get("kind") == "item_body":
             slot.update({"status": item_status, "path": item_path, "url": item_url, "technicalScore": item_score})
             entity_visual.update({"assetMode": "baked_sprite", "spriteStatus": item_status, "spritePath": item_path, "spriteUrl": item_url, "spriteTechnicalScore": item_score})
@@ -546,7 +620,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             data,
             backend_role,
             prompt,
-            director_negative or asset_negative_prompt("projectile"),
+            director_negative,
             str(slot.get("assetId") or f"{data.get('id')}_{entity_id}"),
             canvas,
         )

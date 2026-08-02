@@ -58,9 +58,17 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
 
 
 def role_contract_prompt_clause(role: str, canvas: int) -> str:
-    subject = "inventory item" if role == "item" else str(role).removeprefix("entity:").replace("_", " ")
+    if role == "item":
+        subject = "inventory item"
+        placement = "single centered inventory sprite"
+    elif role == "equip_overlay":
+        subject = "wearable equipment overlay"
+        placement = "single centered wearable layer, isolated from any player body or inventory card"
+    else:
+        subject = str(role).removeprefix("entity:").replace("_", " ")
+        placement = f"single centered {subject} sprite"
     return (
-        f"single centered {subject} sprite, {int(canvas)}x{int(canvas)} pixel-art canvas, crisp hard pixels, "
+        f"{placement}, {int(canvas)}x{int(canvas)} pixel-art canvas, crisp hard pixels, "
         f"solid {chroma_name()} key background, no scene, no text, no extra entities"
     )
 

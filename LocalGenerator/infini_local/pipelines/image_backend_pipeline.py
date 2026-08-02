@@ -115,7 +115,6 @@ from infini_local.pipelines.llm_transport import (
 )
 
 from infini_local.pipelines.visual_prompt_contracts import (
-    asset_negative_prompt,
     image_backend_is_zimage,
     zimage_positive_only_enabled,
 )
@@ -180,7 +179,7 @@ def comfyui_mapping(prompt: str, negative: str, sprite_id: str, seed: int | None
         pos = (COMFYUI_TRIGGER + ", " + pos).strip(", ")
     return {
         "{{PROMPT}}": pos,
-        "{{NEGATIVE_PROMPT}}": negative or asset_negative_prompt("item"),
+        "{{NEGATIVE_PROMPT}}": str(negative or ""),
         "{{SPRITE_ID}}": safe_file_part(sprite_id, "sprite", 96),
         "{{WIDTH}}": int(COMFYUI_WIDTH),
         "{{HEIGHT}}": int(COMFYUI_HEIGHT),
@@ -378,7 +377,7 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
         for path in paths:
             url = SDCPP_SERVER_URL + (path if path.startswith("/") else "/" + path)
             for style in styles:
-                payload = sdcpp_server_payload(prompt, negative or asset_negative_prompt("item"), width, height, seed, style)
+                payload = sdcpp_server_payload(prompt, str(negative or ""), width, height, seed, style)
                 trace_event("step", "SDCPP:txt2img", "trying sd.cpp txt2img endpoint", {
                     "spriteId": sprite_id, "url": url, "style": style, "seed": seed, "width": width, "height": height,
                     "payloadKeys": sorted(payload.keys()),
@@ -573,7 +572,7 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
     batch_size = min(batch_size, variants)
     out: list[str] = []
     prompt = append_a1111_lora(prompt)
-    negative = negative or asset_negative_prompt("item")
+    negative = str(negative or "")
     remaining = variants
     request_i = 0
     while remaining > 0:

@@ -349,7 +349,7 @@ def zimage_text_policy_sentence(data: dict[str, Any]) -> str:
     no letters; if the authored prompt includes quoted text, keep it exactly.
     """
     chunks: list[str] = []
-    for key in ("name", "tooltip"):
+    for key in ("name",):
         chunks.append(str(data.get(key) or ""))
     visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
     for key in ("imagePrompt", "projectileImagePrompt", "impactImagePrompt", "childImagePrompt", "fieldImagePrompt"):

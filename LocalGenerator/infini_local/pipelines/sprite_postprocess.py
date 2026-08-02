@@ -94,7 +94,7 @@ def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> 
                 core_fill = float(s.get("core_fill") or 0.0)
                 effect_fill = float(s.get("effect_fill") or 0.0)
                 cx, cy = s.get("core_center_norm") or (0.5, 0.5)
-                center_penalty = abs(cx - 0.5) + abs(cy - 0.5) if role == "item" else 0.0
+                center_penalty = abs(cx - 0.5) + abs(cy - 0.5) if role in {"item", "equip_overlay"} else 0.0
                 edge_ratio = edge_touch_ratio(img.getchannel("A"))
                 fill_penalty = abs(core_fill - target_fill) * 2.1
                 effect_penalty = max(0.0, effect_fill - 0.98) * 1.2
@@ -372,9 +372,9 @@ def prepare_sprite_master(img: Any, sprite_id: str, target_size: int, role: str 
     y = (master_size - new_h) // 2
     master.alpha_composite(resized, (x, y))
 
-    # Inventory icons benefit from centering; projectile/VFX composition may have
+    # Inventory and equipment overlays benefit from centering; projectile/VFX composition may have
     # authored directional or multipart placement and must not be re-authored here.
-    if role == "item":
+    if role in {"item", "equip_overlay"}:
         recentered = sprite_bbox_stats(master, role, master_size)
         core_bbox_canvas = recentered.get("core_bbox")
         if core_bbox_canvas is not None:
@@ -397,7 +397,7 @@ def bake_sprite_from_master(master: Any, target_size: int, role: str = "item") -
         img = master
     # Final game PNG wants stable opaque/transparent pixels; do it after resizing, not before.
     img = cleanup_alpha(img)
-    if role == "item":
+    if role in {"item", "equip_overlay"}:
         img = denoise_alpha_singletons(img)
     img = palette_cleanup(img, role)
     img = cleanup_alpha(img)
@@ -541,7 +541,7 @@ def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
     x = (final_size - new_w) // 2
     y = (final_size - new_h) // 2
     canvas.alpha_composite(resized, (x, y))
-    if role == "item":
+    if role in {"item", "equip_overlay"}:
         recentered = sprite_bbox_stats(canvas, role, final_size)
         core_bbox_canvas = recentered.get("core_bbox")
         if core_bbox_canvas is not None:
@@ -850,10 +850,10 @@ def postprocess_sprite(
         bg_removed = cleanup_alpha(bg_removed)
         # Layer 3 removes AI-drawn white/pink poster cards inside the requested key.
         # This keeps retry pressure low and prevents opaque square sprites from reaching the game.
-        if role == "item":
+        if role in {"item", "equip_overlay"}:
             bg_removed = remove_nested_poster_card_background(bg_removed, role)
         bg_removed = cleanup_alpha(bg_removed)
-        if role == "item":
+        if role in {"item", "equip_overlay"}:
             bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
         save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres")
