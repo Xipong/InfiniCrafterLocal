@@ -472,7 +472,10 @@ public sealed class GeneratedItemRegistryService : IDisposable
             return;
         byte[] compressed = CompressDefinition(raw);
         string transportHash = Convert.ToHexString(SHA256.HashData(raw)).ToLowerInvariant();
+        string[] assetRoster = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
         GeneratedAssetWireDescriptor[] descriptors = InfiniCrafterLocalMod.AssetSync.BuildServerAssetDescriptors(data);
+        if (assetRoster.Length > 0 && descriptors.Length != assetRoster.Length)
+            return;
         int chunkCount = Math.Max(1, (compressed.Length + GeneratedAssetSyncService.ChunkPayloadBytes - 1) / GeneratedAssetSyncService.ChunkPayloadBytes);
         for (int index = 0; index < chunkCount; index++)
         {
@@ -495,8 +498,8 @@ public sealed class GeneratedItemRegistryService : IDisposable
                     packet.Write(compressed.Length);
                     packet.Write((ushort)capturedIndex);
                     packet.Write((ushort)chunkCount);
-                    packet.Write((byte)Math.Min(descriptors.Length, 16));
-                    foreach (GeneratedAssetWireDescriptor descriptor in descriptors.Take(16))
+                    packet.Write((byte)Math.Min(descriptors.Length, GeneratedAssetSyncService.MaxAssetFiles));
+                    foreach (GeneratedAssetWireDescriptor descriptor in descriptors.Take(GeneratedAssetSyncService.MaxAssetFiles))
                     {
                         packet.Write(descriptor.FileName);
                         packet.Write(descriptor.Length);
@@ -518,7 +521,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
         ushort chunkIndex = reader.ReadUInt16();
         ushort chunkCount = reader.ReadUInt16();
         byte descriptorCount = reader.ReadByte();
-        if (descriptorCount > 16) return;
+        if (descriptorCount > GeneratedAssetSyncService.MaxAssetFiles) return;
         var descriptors = new List<GeneratedAssetWireDescriptor>(descriptorCount);
         for (int i = 0; i < descriptorCount; i++)
         {
@@ -720,11 +723,11 @@ public sealed class GeneratedItemRegistryService : IDisposable
             using JsonDocument doc = JsonDocument.Parse(json);
             JsonElement root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("RecipeMeta", out JsonElement recipeMeta)
+                || !root.TryGetProperty("recipeMeta", out JsonElement recipeMeta)
                 || recipeMeta.ValueKind != JsonValueKind.Object
-                || !recipeMeta.TryGetProperty("WorldScoped", out JsonElement worldScoped)
+                || !recipeMeta.TryGetProperty("worldScoped", out JsonElement worldScoped)
                 || worldScoped.ValueKind != JsonValueKind.True
-                || !recipeMeta.TryGetProperty("WorldId", out JsonElement worldId)
+                || !recipeMeta.TryGetProperty("worldId", out JsonElement worldId)
                 || worldId.ValueKind != JsonValueKind.String)
                 return false;
             return string.Equals(worldId.GetString()?.Trim(), expected, StringComparison.Ordinal);

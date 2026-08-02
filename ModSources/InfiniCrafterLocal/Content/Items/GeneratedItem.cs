@@ -4,14 +4,13 @@ using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.Systems;
 using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -23,7 +22,7 @@ namespace InfiniCrafterLocal.Content.Items;
 /// <summary>
 /// One proxy ModItem for many generated instances. Runtime behaviour is selected
 /// exclusively by the accepted RuntimeProgramSpec binding/entity/component/event
-/// graph. Display name, tooltip, category and parent prose never route gameplay.
+/// graph. Display name, category and parent prose never route gameplay.
 /// </summary>
 public partial class GeneratedItem : ModItem
 {
@@ -171,48 +170,53 @@ public partial class GeneratedItem : ModItem
             && string.Equals(Data.Id, other.Data.Id, StringComparison.Ordinal)
             && string.Equals(Data.RecipeKey, other.Data.RecipeKey, StringComparison.Ordinal);
 
-    public override void ModifyTooltips(List<TooltipLine> tooltips)
-    {
-        EnsureRuntimeHydration();
-        GeneratedItemData data = PresentationData();
-        tooltips.Add(new TooltipLine(Mod, "InfiniParents", $"Forged from {data.ParentA} + {data.ParentB}") { OverrideColor = Color.MediumPurple });
-        if (!string.IsNullOrWhiteSpace(data.Tooltip))
-            tooltips.Add(new TooltipLine(Mod, "InfiniGeneratedTooltip", data.Tooltip));
-        RuntimeProgramSpec program = data.RuntimeProgram;
-        string inputs = string.Join(", ", program.Bindings.Select(x => x.Input));
-        tooltips.Add(new TooltipLine(Mod, "InfiniRuntimeProgram", $"Low-level runtime: {program.Entities.Length} entities, {program.Bindings.Length} bindings{(inputs.Length > 0 ? $" [{inputs}]" : "")}") { OverrideColor = Color.Orange });
-        if (program.ItemContact.Enabled)
-            tooltips.Add(new TooltipLine(Mod, "InfiniContact", $"Item contact hitbox: ×{program.ItemContact.HitboxScale:0.00}, +{program.ItemContact.ContactForgivenessPx}px") { OverrideColor = Color.SandyBrown });
-        if (data.Accessory.Enabled)
-            tooltips.Add(new TooltipLine(Mod, "InfiniAccessory", AccessorySummary(data.Accessory)) { OverrideColor = Color.LightGreen });
-        if (data.Armor.Enabled)
-            tooltips.Add(new TooltipLine(Mod, "InfiniArmor", ArmorSummary(data.Armor)) { OverrideColor = Color.LightSkyBlue });
-        if (data.VfxManifest.HasSlots)
-            tooltips.Add(new TooltipLine(Mod, "InfiniVfx", $"VFX: {data.VfxManifest.Slots.Length} exact entity/event slots") { OverrideColor = Color.MediumAquamarine });
-    }
-
-    private static string AccessorySummary(AccessorySpec a)
-    {
-        var values = new List<string>();
-        if (a.Defense != 0) values.Add($"+{a.Defense} def");
-        if (a.MaxLife != 0) values.Add($"+{a.MaxLife} life");
-        if (a.MaxMana != 0) values.Add($"+{a.MaxMana} mana");
-        if (a.GenericDamage != 0) values.Add($"+{a.GenericDamage * 100f:0}% dmg");
-        if (a.MovementSpeed != 0) values.Add($"+{a.MovementSpeed * 100f:0}% move");
-        return values.Count == 0 ? "Accessory" : "Accessory: " + string.Join(", ", values);
-    }
-
-    private static string ArmorSummary(ArmorSpec a)
-    {
-        var values = new List<string>();
-        if (a.Defense != 0) values.Add($"{a.Defense} def");
-        if (a.MaxLife != 0) values.Add($"+{a.MaxLife} life");
-        if (a.GenericDamage != 0) values.Add($"+{a.GenericDamage * 100f:0}% dmg");
-        return $"Armor ({a.Slot})" + (values.Count == 0 ? "" : ": " + string.Join(", ", values));
-    }
-
     private RuntimeBindingSpec? ActiveUseBinding(Player player)
         => Data.RuntimeProgram.BindingForInput(player.altFunctionUse == 2 ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse);
+
+    private bool BindingUsesItemBodyContact(RuntimeBindingSpec? binding)
+        => binding?.UsePolicy.ContactDamage == true;
+
+    private bool BaseNoMeleeFor(RuntimeBindingSpec binding)
+        => Data.RuntimeProgram.ItemUse.DisableMeleeHitbox
+            || !BindingUsesItemBodyContact(binding)
+            || Data.Gameplay.AmmoCategory.Length > 0;
+
+    private void ApplyActiveUseProjection(RuntimeBindingSpec binding)
+    {
+        RuntimeBindingActionSpec action = binding.UsePolicy.Action;
+        bool placing = action.Kind == RuntimeBindingAction.PlaceItem;
+        RuntimePlacementSpec? placement = action.Placement;
+        Item.createTile = placing ? placement!.TileId : -1;
+        Item.createWall = placing ? placement!.WallId : -1;
+        Item.placeStyle = placing ? placement!.PlaceStyle : 0;
+        Item.useTurn = placing || Data.Gameplay.UseTurn;
+        Item.noMelee = placing || BaseNoMeleeFor(binding);
+        // Item.consumable is shared by two vanilla systems: direct-use consumption
+        // (gated by our ConsumeItem override) and PickAmmo ammo consumption (gated by
+        // CanConsumeAmmo). An ammo item must stay consumable so a weapon can spend it;
+        // direct use is still governed by the binding stackCost via ConsumeItem.
+        Item.consumable = binding.UsePolicy.StackCost == 1
+            || Data.Gameplay.AmmoCategory.Length > 0;
+        Item.damage = placing ? 0 : Math.Max(0, Data.Gameplay.Damage);
+        // manaCost is the authored item-use cost for every active use binding.
+        Item.mana = Math.Max(0, Data.Gameplay.ManaCost);
+        bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
+        Data.ApplyUseEffectFields(Item, applyingItemEffects);
+        bool spawning = action.Kind == RuntimeBindingAction.SpawnEntity;
+        Item.shoot = spawning ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
+        Item.shootSpeed = spawning
+            ? Data.RuntimeProgram.TryGetEntity(action.TargetId)?.Spawn.SpeedPxPerTick ?? 0f
+            : 0f;
+    }
+
+    /// <summary>
+    /// Consumes the one-shot receipt written by <see cref="GeneratedPlacementLedgerTile.PlaceInWorld"/>.
+    /// Vanilla runs item consumption and tile placement in separate phases of the same
+    /// use, so this deliberately does not assume an ordering: it only confirms that a
+    /// placement by this player was actually accepted by Terraria.
+    /// </summary>
+    private static bool ConsumeAcceptedPlacementReceipt(Player player)
+        => global::InfiniCrafterLocal.Common.Systems.GeneratedPlacementLedgerSystem.TryConsumePlacementReceipt(player);
 
     public override bool AltFunctionUse(Player player)
         => Data?.RuntimeProgram?.BindingForInput(RuntimeInputKind.AlternateUse) is not null;
@@ -233,6 +237,9 @@ public partial class GeneratedItem : ModItem
     public override bool CanUseItem(Player player)
     {
         EnsureRuntimeHydration(player);
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (binding is null) return false;
+        ApplyActiveUseProjection(binding);
         string blocked = UseBlockedReason(player, Data.Gameplay);
         if (!string.IsNullOrWhiteSpace(blocked))
         {
@@ -243,11 +250,9 @@ public partial class GeneratedItem : ModItem
             }
             return false;
         }
-        RuntimeBindingSpec? binding = ActiveUseBinding(player);
-        if (binding is null) return false;
-        if (binding.Action == RuntimeBindingAction.SpawnEntity)
+        if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
         {
-            RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.Target);
+            RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
             if (entity?.IsOwnerAttached == true)
             {
                 foreach (Projectile projectile in Main.ActiveProjectiles)
@@ -255,14 +260,33 @@ public partial class GeneratedItem : ModItem
                         return false;
             }
         }
+        if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
+        {
+            RuntimePlacementSpec? placement = binding.UsePolicy.Action.Placement;
+            if (placement is null || !GeneratedPlacementLedgerSystem.AuthorizePlacement(player, Data, placement))
+                return false;
+        }
         _itemEventBudget = new ItemEventBudgetState(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return true;
     }
 
     public override bool ConsumeItem(Player player)
     {
-        int chance = Math.Clamp(Data?.Gameplay?.ConsumeChancePercent ?? 100, 0, 100);
-        return chance >= 100 || (chance > 0 && Main.rand.Next(100) < chance);
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (binding is null)
+            return false;
+        // This hook owns direct-use stack consumption only. Item.consumable can also be
+        // true because the item is ammunition (vanilla PickAmmo requires that), so the
+        // binding stackCost stays the single owner of whether a direct use spends a stack.
+        // A placement binding additionally requires proof that Terraria actually placed
+        // the authored tile/wall: vanilla reaches consumption even when placement produced
+        // nothing, so charging on intent alone would silently destroy the item.
+        if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
+        {
+            GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player);
+            return binding.UsePolicy.StackCost == 1 && ConsumeAcceptedPlacementReceipt(player);
+        }
+        return binding.UsePolicy.StackCost == 1;
     }
 
     public override bool? UseItem(Player player)
@@ -271,10 +295,17 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding is null) return false;
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
-        if (binding.Action == RuntimeBindingAction.ApplyItemEffects)
+        if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects)
             ApplyItemEffects(player);
-        RunItemEvent(player, itemEntity, RuntimeEventKind.OnUse, null, 0);
-        InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnUse);
+        if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
+            GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player);
+        // Placement is not an authored use effect. on_use events and their VFX belong to
+        // the attack/consume policy, so a tile placement must not fire them.
+        if (binding.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem)
+        {
+            RunItemEvent(player, itemEntity, RuntimeEventKind.OnUse, null, 0);
+            InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnUse);
+        }
         return true;
     }
 
@@ -304,9 +335,9 @@ public partial class GeneratedItem : ModItem
             player.pickSpeed /= Math.Clamp(gp.MiningSpeedScale, 0.1f, 4f);
 
         RuntimeBindingSpec? hold = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Hold);
-        if (hold?.Action == RuntimeBindingAction.SpawnEntity && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
+        if (hold?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player))
         {
-            RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(hold.Target);
+            RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(hold.UsePolicy.Action.TargetId);
             bool exists = false;
             if (entity is not null)
             {
@@ -404,9 +435,9 @@ public partial class GeneratedItem : ModItem
     public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
     {
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
-        if (binding?.Action != RuntimeBindingAction.SpawnEntity) return false;
+        if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.SpawnEntity) return false;
         if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)) return false;
-        GeneratedProjectile.SpawnRuntimeEntity(Data, binding.Target, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        GeneratedProjectile.SpawnRuntimeEntity(Data, binding.UsePolicy.Action.TargetId, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return false;
     }
 
@@ -419,7 +450,8 @@ public partial class GeneratedItem : ModItem
     public override void UseItemHitbox(Player player, ref Rectangle hitbox, ref bool noHitbox)
     {
         RuntimeItemContactSpec contact = Data.RuntimeProgram.ItemContact;
-        if (Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner || !contact.Enabled)
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (!BindingUsesItemBodyContact(binding))
         {
             noHitbox = true;
             return;
@@ -432,8 +464,8 @@ public partial class GeneratedItem : ModItem
 
     public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
     {
-        if (Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner
-            || !Data.RuntimeProgram.ItemContact.Enabled) return;
+        RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (!BindingUsesItemBodyContact(binding)) return;
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
         RunItemEvent(player, itemEntity, RuntimeEventKind.OnHit, target, damageDone);
         if (hit.Crit) RunItemEvent(player, itemEntity, RuntimeEventKind.OnCrit, target, damageDone);
@@ -445,7 +477,7 @@ public partial class GeneratedItem : ModItem
     {
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
-        if (binding?.Action != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
+        if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
         ApplyEquipmentEffects(player, Data.Accessory);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId);
     }
@@ -454,7 +486,7 @@ public partial class GeneratedItem : ModItem
     {
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
-        if (binding?.Action != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
+        if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
         ApplyEquipmentEffects(player, Data.Armor);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId);
     }
@@ -520,7 +552,6 @@ public partial class GeneratedItem : ModItem
     {
         ArmorSpec a = Data.Armor;
         if (!a.Enabled || a.Slot != "head") return;
-        player.setBonus = a.SetBonusText;
         player.GetDamage(DamageClass.Generic) += a.SetBonusGenericDamage;
         player.GetDamage(DamageClass.Melee) += a.SetBonusMeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.SetBonusRangedDamage;

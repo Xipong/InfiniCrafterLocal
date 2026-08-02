@@ -1,7 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Content.Projectiles;
 using System;
-using System.Linq;
+
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -54,22 +54,23 @@ public sealed partial class GeneratedItemData
         item.useTurn = Gameplay.UseTurn;
         item.channel = RuntimeProgram.ItemUse.Channel;
         item.noUseGraphic = RuntimeProgram.ItemUse.HideUseGraphic;
+        RuntimeBindingSpec? primaryUse = RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse);
+        bool primaryContactDamage = primaryUse?.UsePolicy.ContactDamage == true;
         item.noMelee = RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner
             || RuntimeProgram.ItemUse.DisableMeleeHitbox
-            || !RuntimeProgram.ItemContact.Enabled;
+            || !primaryContactDamage;
         item.mana = Math.Max(0, Gameplay.ManaCost);
-        item.consumable = Gameplay.Consumable;
-        item.healLife = Math.Max(0, Gameplay.HealLife);
-        item.healMana = Math.Max(0, Gameplay.HealMana);
-        item.potion = Gameplay.Potion;
-        item.buffType = Gameplay.BuffCode;
-        item.buffTime = Gameplay.BuffTime;
+        // Ammo items must remain consumable for vanilla PickAmmo; direct-use stack
+        // consumption is separately gated by GeneratedItem.ConsumeItem/usePolicy.
+        item.consumable = primaryUse?.UsePolicy.StackCost == 1
+            || Gameplay.AmmoCategory.Length > 0;
+        ApplyUseEffectFields(item, enabled: true);
         item.pick = Math.Max(0, Gameplay.PickPower);
         item.axe = Math.Max(0, Gameplay.AxePower);
         item.hammer = Math.Max(0, Gameplay.HammerPower);
-        item.createTile = Gameplay.CreateTile;
-        item.createWall = Gameplay.CreateWall;
-        item.placeStyle = Math.Max(0, Gameplay.PlaceStyle);
+        item.createTile = NoPlacementType;
+        item.createWall = NoPlacementType;
+        item.placeStyle = 0;
         item.accessory = isAccessory;
 
         // The low-level binding is the only reason to install the generated
@@ -77,11 +78,11 @@ public sealed partial class GeneratedItemData
         // sword, bow, staff, sentry, furniture, or none of those.
         RuntimeBindingSpec? primary = RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse);
         RuntimeBindingSpec? alternate = RuntimeProgram.BindingForInput(RuntimeInputKind.AlternateUse);
-        bool spawnsRuntimeEntity = primary?.Action == RuntimeBindingAction.SpawnEntity
-            || alternate?.Action == RuntimeBindingAction.SpawnEntity;
+        bool spawnsRuntimeEntity = primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
+            || alternate?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity;
         item.shoot = spawnsRuntimeEntity ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
-        RuntimeEntitySpec? primaryEntity = primary?.Action == RuntimeBindingAction.SpawnEntity
-            ? RuntimeProgram.TryGetEntity(primary.Target)
+        RuntimeEntitySpec? primaryEntity = primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
+            ? RuntimeProgram.TryGetEntity(primary.UsePolicy.Action.TargetId)
             : null;
         item.shootSpeed = primaryEntity?.Spawn.SpeedPxPerTick ?? 0f;
 
@@ -98,29 +99,35 @@ public sealed partial class GeneratedItemData
             item.noMelee = true;
         }
 
-        bool placeable = item.createTile > NoPlacementType || item.createWall > NoPlacementType;
-        if (placeable && RuntimeProgram.Bindings.Any(x => x.Action == RuntimeBindingAction.PlaceItem))
-        {
-            // These are tModLoader plumbing obligations of the explicitly
-            // authored place_item binding, not an inferred gameplay design.
-            item.useTurn = true;
-            item.noMelee = true;
-        }
 
+        bool hasActiveUse = primary is not null || alternate is not null;
         if (isArmor)
         {
             item.defense = Math.Max(0, Armor.Defense);
-            ConfigureNonUsableEquipmentItem(item);
+            item.maxStack = 1;
+            if (!hasActiveUse)
+                ConfigureNonUsableEquipmentItem(item);
         }
         else if (isAccessory)
         {
             item.defense = Math.Max(0, Accessory.Defense);
-            ConfigureNonUsableEquipmentItem(item);
+            item.maxStack = 1;
+            if (!hasActiveUse)
+                ConfigureNonUsableEquipmentItem(item);
         }
 
         // Sound is supplied by exact entity/event VFX slots. There is no
         // category/family-derived fallback sound at this gameplay boundary.
         item.UseSound = null;
+    }
+
+    internal void ApplyUseEffectFields(Item item, bool enabled)
+    {
+        item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 0;
+        item.healMana = enabled ? Math.Max(0, Gameplay.HealMana) : 0;
+        item.potion = enabled && Gameplay.Potion;
+        item.buffType = enabled ? Math.Max(0, Gameplay.BuffCode) : 0;
+        item.buffTime = enabled ? Math.Max(0, Gameplay.BuffTime) : 0;
     }
 
     private static void ConfigureNonUsableEquipmentItem(Item item)

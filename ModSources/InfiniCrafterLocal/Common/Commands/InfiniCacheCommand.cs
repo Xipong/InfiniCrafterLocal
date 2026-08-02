@@ -160,8 +160,12 @@ public sealed class InfiniCacheCommand : ModCommand
         if (!string.IsNullOrWhiteSpace(data.Visual?.SpritePath)) yield return data.Visual.SpritePath;
         if (!string.IsNullOrWhiteSpace(data.Visual?.EquipOverlayPath)) yield return data.Visual.EquipOverlayPath;
         foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
+        {
             if (!string.IsNullOrWhiteSpace(entity?.Visual?.SpritePath))
                 yield return entity.Visual.SpritePath;
+            if (!string.IsNullOrWhiteSpace(entity?.Visual?.ImpactSpritePath))
+                yield return entity.Visual.ImpactSpritePath;
+        }
     }
 
     private static string FormatBytes(long bytes)
