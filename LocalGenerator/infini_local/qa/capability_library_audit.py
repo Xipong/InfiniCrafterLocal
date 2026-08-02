@@ -37,6 +37,10 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "capability_group_present",
     "item_capability_param",
     "at_least_one_param_nonnegative",
+    "at_least_one_param_nonzero",
+    "binding_input_present",
+    "binding_tuple_present",
+    "binding_action_reference",
     "conditional_param",
     "non_neutral_param",
     "event_available",
@@ -173,7 +177,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
         "spawn_over_target": ("RuntimeOverTargetSpec", ""),
         "emit_light_while_active": ("RuntimeLightSpec", ""),
-        "enable_item_contact_damage": ("RuntimeItemContactSpec", ""),
+        "configure_item_contact_hitbox": ("RuntimeItemContactSpec", ""),
     }
     rows: list[dict[str, Any]] = []
     for cap in CAPABILITY_REGISTRY.values():
@@ -275,6 +279,38 @@ def capability_library_audit() -> dict[str, Any]:
             for name in requirement.any_of:
                 if requirement.kind == "capability_group_present" and name not in capability_names:
                     error("unknown_requirement_group_member", f"{base}.requirements", name)
+            if requirement.kind == "at_least_one_param_nonzero":
+                if not requirement.nonzero_params:
+                    error("empty_nonzero_requirement", f"{base}.requirements", requirement.kind)
+                for name in requirement.nonzero_params:
+                    if name not in cap.params:
+                        error("unknown_nonzero_requirement_param", f"{base}.requirements", name)
+            if requirement.kind == "binding_input_present":
+                if not requirement.any_of:
+                    error("empty_binding_input_requirement", f"{base}.requirements", requirement.kind)
+                for input_name in requirement.any_of:
+                    if input_name not in INPUT_KIND_REGISTRY:
+                        error("unknown_requirement_input", f"{base}.requirements", input_name)
+            if requirement.kind == "binding_action_reference":
+                if not requirement.any_of:
+                    error("empty_binding_action_requirement", f"{base}.requirements", requirement.kind)
+                for action_name in requirement.any_of:
+                    if action_name not in BINDING_ACTION_REGISTRY:
+                        error("unknown_requirement_action", f"{base}.requirements", action_name)
+            if requirement.kind == "binding_tuple_present":
+                if not requirement.any_of:
+                    error("empty_binding_tuple_requirement", f"{base}.requirements", requirement.kind)
+                for tuple_value in requirement.any_of:
+                    parts = tuple_value.split("|")
+                    valid_policy = len(parts) == 2 or (
+                        len(parts) == 3 and parts[2] in {"contactDamage=true", "contactDamage=false"}
+                    )
+                    if (
+                        not valid_policy
+                        or parts[0] not in INPUT_KIND_REGISTRY
+                        or parts[1] not in BINDING_ACTION_REGISTRY
+                    ):
+                        error("invalid_requirement_binding_tuple", f"{base}.requirements", tuple_value)
         for event in (*cap.allowed_events, *cap.emitted_events):
             if event not in EVENT_KIND_REGISTRY:
                 error("unknown_event", f"{base}.events", event)

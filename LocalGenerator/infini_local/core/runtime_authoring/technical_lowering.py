@@ -46,7 +46,7 @@ def primary_binding_role_receipt(
         "lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID,
         "authoredPaths": [
             PRIMARY_ENTITY_AUTHOR_PATH,
-            f"runtimeProgram.bindings[{source_index}].target",
+            f"runtimeProgram.bindings[{source_index}].usePolicy.action.targetId",
         ],
         "finalPath": f"runtimeProgram.bindings[{final_index}].role",
         "value": role,
@@ -91,7 +91,7 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": PRIMARY_BINDING_ROLE_LOWERER_ID,
-        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].target"],
+        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].usePolicy.action.targetId"],
         "outputs": ["runtimeProgram.bindings[].role"],
         "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
         "preserves": ["primary entity identity", "binding identity", "binding target", "input", "action"],

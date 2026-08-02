@@ -23,20 +23,84 @@ from infini_local.pipelines.llm_authoring_prompt import (
     planner_prompt_usability_report,
 )
 from infini_local.pipelines.author_item_contract import (
+    author_item_provider_response_schema,
     author_item_prompt_shape_card,
     author_item_repair_prompt_shape_card,
     author_item_repair_response_schema,
+    author_item_response_schema,
 )
+from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.parent_context_pipeline import _generated_runtime_primary_projectile
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
 
 def _codes(report: dict) -> set[str]:
     return {str(row.get("code")) for row in report.get("errors") or []}
 
 
+def test_generated_parent_projectile_projection_follows_canonical_primary_binding() -> None:
+    generated = {
+        "runtimeProgram": {
+            "entities": [
+                {"id": "body", "kind": "item_body"},
+                {"id": "support_first", "kind": "projectile"},
+                {"id": "authored_primary", "kind": "projectile"},
+            ],
+            "bindings": [{
+                "id": "primary",
+                "input": "primary_use",
+                "usePolicy": {
+                    "action": {"kind": "spawn_entity", "targetId": "authored_primary"},
+                    "stackCost": 0,
+                    "contactDamage": False,
+                },
+            }],
+        },
+    }
+    projected = _generated_runtime_primary_projectile(generated)
+    assert projected["id"] == "authored_primary"
+
+
+def test_generated_parent_summary_uses_late_realization_and_accepted_claims() -> None:
+    authored = build_runtime_fixture("workbench_blade")
+    authored["id"] = "generated_summary_fixture"
+    authored["concept"]["coreMechanic"] = "EARLY CONCEPT MUST NOT LEAK"
+    authored["realization"].update({
+        "description": "Late accepted blade realization.",
+        "playerExperience": "Late accepted player experience.",
+    })
+    cited_ids = set(authored["realization"]["backedByClaims"])
+    summary = generated_parent_summary_from_data(authored)
+    assert summary["identity"] == "generated:generated_summary_fixture"
+    assert summary["description"] == "Late accepted blade realization."
+    assert summary["playerExperience"] == "Late accepted player experience."
+    assert "EARLY CONCEPT MUST NOT LEAK" not in json.dumps(summary)
+    assert summary["notableEffects"] == [
+        row["text"] for row in authored["runtimeContract"]["claims"]
+        if row["id"] in cited_ids
+    ]
+
+    authored["generatedParentSummary"] = summary
+    delivered = sanitize_recipe_for_delivery(authored)
+    delivered_summary = delivered["generatedParentSummary"]
+    assert delivered_summary["description"] == "Late accepted blade realization."
+    assert delivered_summary["playerExperience"] == "Late accepted player experience."
+    assert delivered_summary["backedByClaims"] == summary["backedByClaims"]
+    recursive = raw_parent_card_for_llm({"name": authored["name"], "generatedData": delivered})
+    recursive_summary = recursive["raw"]["generatedParent"]["summary"]
+    assert recursive_summary["description"] == "Late accepted blade realization."
+    assert recursive_summary["playerExperience"] == "Late accepted player experience."
+    assert recursive_summary["backedByClaims"] == summary["backedByClaims"]
+    assert recursive_summary["schema"] == "infini.generated-parent-summary.v2"
+    assert recursive_summary["identity"] == summary["identity"]
+    assert "fantasy" not in recursive_summary
+
+
 def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     names = set(CAPABILITY_REGISTRY)
-    assert len(names) == 52
+    assert len(names) == 51
     assert {row["fn"] for row in compact_capability_catalog()} == names
     assert len(capability_provider_union()) == len(names)
     heal_capability = CAPABILITY_REGISTRY["heal_owner_on_event"]
@@ -45,9 +109,9 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     parent_b = {"name": "Blade", "id": "b", "damage": 18, "useTime": 24, "tags": ["metal"]}
     payload = build_llm_author_payload(parent_a, parent_b, parent_a, parent_b, "a+b")
     invariants = payload["runtimeProgramInvariants"]
-    assert invariants["primaryEntitySelection"]["authoredField"] == "runtimeProgram.primaryEntityId"
-    assert invariants["primaryEntitySelection"]["exactlyOnePrimaryEntity"] is True
-    assert "do not carry role" in invariants["primaryEntitySelection"]["preEmissionCheck"]
+    assert invariants["primaryEntityOwnership"]["authoredField"] == "runtimeProgram.primaryEntityId"
+    assert invariants["primaryEntityOwnership"]["exactlyOnePrimaryEntity"] is True
+    assert "do not carry role" in invariants["primaryEntityOwnership"]["preEmissionCheck"]
     assert invariants["exclusiveInputs"]["inputs"] == sorted(
         name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
     )
@@ -64,6 +128,15 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     assert "never emit role in Author bindings or calls" in self_check
     assert "parent sentinel none is forbidden" in self_check
     assert "every damageClass" in self_check
+    truth = invariants["realizationExecutionTruth"]
+    assert "realization.intentTrace" in truth["authority"]
+    assert "runtimeContract.intentTrace" not in truth["authority"]
+    assert "does not emit item_body.on_use" in truth["placementUse"]
+    assert "natural lifetime expiry" in truth["terminationEvents"]
+    assert "whole generated item" in truth["stackCost"]
+    assert "returned" in truth["placementEscrow"]
+    assert "target_and_fire" in truth["entityTopology"]
+    assert "free_projectile" in truth["entityTopology"]
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
     assert report["ok"] is True
     assert PLANNER_PROMPT_LIMIT_CHARS == 96_000
@@ -87,6 +160,16 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
 
 def test_author_prompt_shape_card_matches_root_object_cardinality_without_provider_schema() -> None:
     card = author_item_prompt_shape_card()
+    expected_model_order = ["name", "category", "concept", "runtimeProgram", "runtimeContract", "realization"]
+    assert card["root"] == expected_model_order
+    assert list(author_item_response_schema()["properties"]) == expected_model_order
+
+    exported = json.loads(
+        (Path(__file__).resolve().parents[2] / "contracts/schemas/author_item_response.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    assert list(exported["properties"]) == expected_model_order
+    assert list(author_item_provider_response_schema()["properties"]) == expected_model_order
     assert isinstance(card["concept"], dict)
     assert set(card["concept"]) == {
         "literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience",
@@ -99,22 +182,135 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert isinstance(contract["parentSynthesis"]["parentB"]["facts"], list)
     assert isinstance(contract["claims"], list)
     assert isinstance(contract["claims"][0]["backedBy"], list)
+    assert set(card["realization"]) == {
+        "description", "playerExperience", "backedByClaims", "intentTrace",
+    }
+    assert set(card["realization"]["intentTrace"]) == {"kept", "changed", "dropped", "added"}
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
-    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v2"
+    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v4"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
-    assert "role" not in card["runtimeProgram"]["bindings"][0]
+    author_binding = card["runtimeProgram"]["bindings"][0]
+    assert set(author_binding) == {"id", "input", "usePolicy"}
+    assert set(author_binding["usePolicy"]) == {"action", "stackCost", "contactDamage"}
+    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId"}
+    assert "role" not in author_binding
     assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
+    prompt_payload = build_llm_author_payload({}, {}, {}, {}, "binding-card")
+    binding_guide = prompt_payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
+    assert "bindings[].usePolicy.action.targetId" in binding_guide
+    assert "bindings[].target" not in binding_guide
 
     repair_card = author_item_repair_prompt_shape_card()
     repair_schema = author_item_repair_response_schema()
+    repair_binding = repair_card["bindingsUpsert"][0]
+    assert set(repair_binding) == {"id", "input", "usePolicy"}
+    assert repair_binding["usePolicy"] == author_binding["usePolicy"]
     assert set(repair_card) == set(repair_schema["properties"])
     assert all(isinstance(repair_card[key], list) for key in (
         "entitiesUpsert", "entityIdsDelete", "bindingsUpsert", "bindingIdsDelete",
         "callsUpsert", "callIdsDelete", "claimsUpsert", "claimIdsDelete",
     ))
     assert isinstance(repair_card["metadataPatch"], dict)
+    assert isinstance(repair_card["realizationReplacement"], dict)
     assert isinstance(repair_card["note"], str)
+
+
+def test_author_context_contains_only_source_backed_parent_packets_and_numeric_balance() -> None:
+    parent = {
+        "name": "GlowingMushroom",
+        "internalName": "GlowingMushroom",
+        "sourceMod": "Terraria",
+        "damage": 0,
+        "useTime": 20,
+        "rare": 3,
+        "value": 1000,
+        "tags": ["wings", "accessory"],
+    }
+    generated_parent = copy.deepcopy(parent)
+    generated_parent["generatedData"] = {"recipeMeta": {"generationDepth": 9}}
+    payload = build_llm_author_payload(generated_parent, parent, {"headNoun": "wings"}, {"headNoun": "ore"}, "facts-only")
+    encoded_parents = json.dumps(payload["parents"], ensure_ascii=False).casefold()
+    assert "canonical" not in encoded_parents
+    assert "headnoun" not in encoded_parents
+    assert '"tags"' not in encoded_parents
+    assert "primarycategory" not in encoded_parents
+    corridor = payload["balanceCorridor"]
+    assert corridor["authority"] == "source_numeric_facts_only"
+    assert corridor["parentProgressionFacts"] == [{
+        "parent": "A",
+        "path": "generatedData.recipeMeta.generationDepth",
+        "value": 9,
+    }]
+    assert "stage" not in corridor
+    assert "parentNumericTiers" not in corridor
+    assert "recipeCoherence" not in corridor
+    assert "knowledgeTiers" not in corridor
+
+    ammo_parent = {
+        "name": "Raw Ammo Parent",
+        "useAmmo": 1,
+        "ammoRaw": {
+            "ammoId": 1,
+            "projectileRaw": {
+                "ownerHitCheck": True,
+                "tileCollide": False,
+                "timeLeft": 60,
+                "width": 12,
+                "height": 12,
+                "setsRaw": {
+                    "classifier": "weapon",
+                    "canonical": {"headNoun": "sword", "hardTags": ["sword"]},
+                    "tags": ["sword"],
+                    "primaryCategory": "combat",
+                },
+            },
+        },
+    }
+    ammo_payload = build_llm_author_payload(ammo_parent, parent, {}, {}, "nested-ammo-facts-only")
+    encoded_ammo = json.dumps(ammo_payload["parents"], ensure_ascii=False)
+    assert "behaviorDigest" not in encoded_ammo
+    assert "mechanicalHint" not in encoded_ammo
+    assert '"semantics"' not in encoded_ammo
+    assert '"canonical"' not in encoded_ammo
+    assert '"tags"' not in encoded_ammo
+    assert '"headNoun"' not in encoded_ammo
+    assert '"primaryCategory"' not in encoded_ammo
+    assert '"classifier"' not in encoded_ammo
+
+
+def test_generated_parent_packet_never_synthesizes_a_primary_projectile() -> None:
+    generated = {
+        "id": "g_parent",
+        "name": "Generated Parent",
+        "generatedData": {
+            "runtimeProgram": {
+                "apiVersion": "infini.runtime-program.v5",
+                "schema": "infini.runtime-program.wire.v3",
+                "itemEntityId": "item",
+                "entities": [
+                    {"id": "item", "kind": "item_body"},
+                    {"id": "ornament", "kind": "free_projectile", "spawn": {"speedPxPerTick": 1}},
+                    {"id": "actual", "kind": "free_projectile", "spawn": {"speedPxPerTick": 20}},
+                ],
+                "bindings": [{
+                    "input": "primary_use",
+                    "usePolicy": {
+                        "action": {"kind": "spawn_entity", "targetId": "actual"},
+                        "stackCost": 0,
+                        "contactDamage": False,
+                    },
+                }],
+            },
+        },
+    }
+    card = raw_parent_card_for_llm(generated)
+    assert "directProjectile" not in card["raw"]
+    assert "effectiveProjectile" not in card["raw"]
+    assert "semantics" not in card
+    runtime = card["raw"]["generatedParent"]["runtimeProgram"]
+    assert [row["id"] for row in runtime["entities"]] == ["item", "ornament", "actual"]
+    assert runtime["bindings"][0]["usePolicy"]["action"]["targetId"] == "actual"
 
 
 def test_all_non_archetypal_fixtures_compile_to_strict_wire() -> None:
@@ -130,8 +326,24 @@ def test_all_non_archetypal_fixtures_compile_to_strict_wire() -> None:
         encoded = json.dumps(compiled, ensure_ascii=False)
         assert "runtimeFamily" not in encoded
         assert "weaponFamily" not in encoded
-        assert compiled["runtimeProgram"]["schema"] == "infini.runtime-program.wire.v1"
+        assert compiled["runtimeProgram"]["schema"] == "infini.runtime-program.wire.v3"
         assert "calls" not in compiled["runtimeProgram"]
+
+
+def test_final_wire_accepts_runtime_entity_impact_visual_fields_declared_by_csharp() -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    visual = compiled["runtimeProgram"]["entities"][0]["visual"]
+    visual.update({
+        "impactPrompt": "literal wooden impact",
+        "impactNegativePrompt": "text, watermark",
+        "impactSpritePath": "impact_wood.png",
+        "impactSpriteUrl": "/get_asset?file=impact_wood.png",
+        "impactSpriteStatus": "ready",
+        "impactSpriteTechnicalScore": 0.93,
+    })
+
+    report = validate_runtime_wire(compiled)
+    assert report["ok"], report["errors"]
 
 
 def test_wrong_target_kind_duplicate_input_missing_reference_and_unknown_capability_fail_closed() -> None:
@@ -140,11 +352,14 @@ def test_wrong_target_kind_duplicate_input_missing_reference_and_unknown_capabil
     assert "wrong_target_kind" in _codes(validate_runtime_program(wrong))
 
     duplicate = build_runtime_fixture("workbench_blade")
-    duplicate["runtimeProgram"]["bindings"].append({"id": "duplicate_primary", "input": "primary_use", "action": "spawn_entity", "role": "secondary", "target": "nail"})
+    duplicate_binding = copy.deepcopy(duplicate["runtimeProgram"]["bindings"][0])
+    duplicate_binding["id"] = "duplicate_primary"
+    duplicate_binding["usePolicy"]["action"]["targetId"] = "nail"
+    duplicate["runtimeProgram"]["bindings"].append(duplicate_binding)
     assert "duplicate_exclusive_input" in _codes(validate_runtime_program(duplicate))
 
     missing = build_runtime_fixture("workbench_blade")
-    next(row for row in missing["runtimeProgram"]["bindings"] if row["id"] == "primary_workbench")["target"] = "absent"
+    next(row for row in missing["runtimeProgram"]["bindings"] if row["id"] == "primary_workbench")["usePolicy"]["action"]["targetId"] = "absent"
     assert "missing_entity_reference" in _codes(validate_runtime_program(missing))
 
     unknown = build_runtime_fixture("workbench_blade")
@@ -267,7 +482,7 @@ def test_explicit_primary_entity_projects_to_wire_and_gates_csharp_item_and_held
         wire_binding = reordered_wire["runtimeProgram"]["bindings"][final_index]
         expected_role = (
             "primary"
-            if source_binding["target"] == reordered["runtimeProgram"]["primaryEntityId"]
+            if source_binding["usePolicy"]["action"]["targetId"] == reordered["runtimeProgram"]["primaryEntityId"]
             else "secondary"
         )
         assert wire_binding["id"] == source_binding["id"]
@@ -290,11 +505,111 @@ def test_explicit_primary_entity_projects_to_wire_and_gates_csharp_item_and_held
     projectile_source = (mod / "Content" / "Projectiles" / "GeneratedProjectile.cs").read_text("utf-8")
     executor_source = (mod / "Content" / "Projectiles" / "GeneratedProjectile.Executors.cs").read_text("utf-8")
     assert "RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner" in apply_source
-    assert "Data.RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner" in item_source
+    assert "BindingUsesItemBodyContact(binding)" in item_source
+    assert "UsePolicy.ContactDamage" in item_source
     assert "_data?.RuntimeProgram.PrimaryOwner == RuntimeProgramSpec.ProjectileOwner" in projectile_source
     assert "PrimaryEntityId" in projectile_source
     assert "owner.heldProj = Projectile.whoAmI;" in projectile_source
     assert "owner.heldProj = Projectile.whoAmI;" not in executor_source
+
+
+def test_body_contact_and_projectile_are_independent_lanes_without_held_owner_inference() -> None:
+    star_sword = build_runtime_fixture("workbench_blade")
+    star_binding = star_sword["runtimeProgram"]["bindings"][0]
+    assert star_binding["usePolicy"]["action"]["kind"] == "spawn_entity"
+    star_binding["usePolicy"]["contactDamage"] = True
+
+    report = validate_runtime_program(star_sword)
+    assert report["ok"], report
+    star_wire = compile_runtime_program(star_sword)
+    runtime = star_wire["runtimeProgram"]
+    assert runtime["primaryEntityId"] == runtime["itemEntityId"] == "item"
+    assert runtime["primaryOwner"] == "item_body"
+    assert runtime["bindings"][0]["role"] == "secondary"
+    assert runtime["bindings"][0]["usePolicy"] == {
+        "action": {"kind": "spawn_entity", "targetId": "workbench_blade"},
+        "stackCost": 0,
+        "contactDamage": True,
+    }
+
+    tool_with_shard = copy.deepcopy(star_sword)
+    tool_with_shard["runtimeProgram"]["calls"].append({
+        "id": "tool_heads",
+        "fn": "configure_tool",
+        "target": "item",
+        "params": {
+            "pickPower": 35,
+            "axePower": 0,
+            "hammerPower": 20,
+            "miningSpeedScale": 0.9,
+        },
+    })
+    tool_report = validate_runtime_program(tool_with_shard)
+    assert tool_report["ok"], tool_report
+
+    flail_wire = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    flail_binding = flail_wire["runtimeProgram"]["bindings"][0]
+    assert flail_wire["runtimeProgram"]["primaryOwner"] == "projectile"
+    assert flail_binding["usePolicy"]["contactDamage"] is False
+    assert flail_binding["role"] == "primary"
+
+    mod = Path(__file__).resolve().parents[2] / "ModSources" / "InfiniCrafterLocal"
+    item_source = (mod / "Content" / "Items" / "GeneratedItem.cs").read_text("utf-8")
+    contact_method = item_source.split("private bool BindingUsesItemBodyContact", 1)[1].split(
+        "private bool BaseNoMeleeFor", 1
+    )[0]
+    assert "UsePolicy.ContactDamage == true" in contact_method
+    assert "Action.Kind" not in contact_method
+    assert "TargetId" not in contact_method
+
+    runtime_spec = (mod / "Common" / "Models" / "RuntimeProgramSpec.cs").read_text("utf-8")
+    assert "contactDamage=true requires use_item_body" not in runtime_spec
+
+    invalid_place = build_runtime_fixture("fishing_platform_tool")
+    invalid_place["runtimeProgram"]["bindings"][1]["usePolicy"]["contactDamage"] = True
+    assert not validate_runtime_program(invalid_place)["ok"]
+
+    invalid_hold = copy.deepcopy(star_sword)
+    invalid_hold["runtimeProgram"]["bindings"][0]["input"] = "hold"
+    assert not validate_runtime_program(invalid_hold)["ok"]
+
+
+def test_active_equipment_keeps_authored_use_projection_in_csharp_defaults() -> None:
+    mod = Path(__file__).resolve().parents[2] / "ModSources" / "InfiniCrafterLocal"
+    apply_source = (mod / "Common" / "Models" / "GeneratedItemData.Apply.cs").read_text("utf-8")
+    assert "bool hasActiveUse = primary is not null || alternate is not null;" in apply_source
+    assert apply_source.count("if (!hasActiveUse)") == 2
+    assert apply_source.count("item.maxStack = 1;") >= 2
+    assert "Gameplay.Category" not in apply_source
+
+
+def test_hidden_item_body_without_contact_requires_exact_spawn_target_ownership() -> None:
+    hidden_projectile_form = build_runtime_fixture("door_on_chain")
+    program = hidden_projectile_form["runtimeProgram"]
+    item_id = next(row["id"] for row in program["entities"] if row["kind"] == "item_body")
+    spawn_target = program["bindings"][0]["usePolicy"]["action"]["targetId"]
+    item_use = next(
+        row for row in program["calls"]
+        if row["fn"] == "configure_item_use" and row["target"] == item_id
+    )
+    item_use["params"]["hideUseGraphic"] = True
+    program["primaryEntityId"] = item_id
+
+    report = validate_runtime_program(hidden_projectile_form)
+    error = next(
+        row for row in report["errors"]
+        if row["code"] == "hidden_item_primary_requires_spawn_target"
+    )
+    assert error["path"] == "$.runtimeProgram.primaryEntityId"
+    assert error["allowed"] == [spawn_target]
+
+    scope = build_runtime_repair_scope(hidden_projectile_form, [error])
+    transaction = scope["repairTransactions"]["primaryEntitySelection"]
+    assert transaction["candidateEntityIds"] == [spawn_target]
+    assert transaction["mustSelectExactlyOne"] is True
+
+    program["primaryEntityId"] = spawn_target
+    assert validate_runtime_program(hidden_projectile_form)["ok"]
 
 
 def test_active_source_has_no_old_compiler_or_parallel_schema() -> None:
@@ -387,7 +702,7 @@ def test_csharp_runtime_preserves_authored_tick_units_and_enforces_spawn_chokepo
     )[0]
     assert "foreach (VfxSlotSpec slot in manifest.Slots)" in on_event
     assert "TryMarkSlotEmission(projectile, entityId, eventName, slot" in on_event
-    assert "EmitSlot(center, projectile.velocity, slot" in on_event
+    assert "EmitSlot(data, entityId, center, projectile.velocity, slot" in on_event
     run_event = events.split("private void RunRuntimeEvent", 1)[1].split(
         "private void RunPeriodicActions", 1
     )[0]

@@ -6,7 +6,6 @@ import re
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
-    BINDING_ACTION_REGISTRY,
     ENTITY_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
@@ -56,20 +55,76 @@ def entity_schema() -> dict[str, Any]:
     }
 
 
-def binding_schema() -> dict[str, Any]:
+def _binding_action_schema(action_name: str) -> dict[str, Any]:
+    properties: dict[str, Any] = {
+        "kind": {"const": action_name},
+        "targetId": {
+            **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+            "x-infini-reference": {
+                "namespace": "entity",
+                "targetKinds": list(ENTITY_KIND_REGISTRY),
+                "allowSelf": True,
+                "graphEdge": False,
+            },
+        },
+    }
+    required = ["kind", "targetId"]
+    if action_name == "place_item":
+        properties["placementCallId"] = {
+            **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+            "x-infini-reference": {
+                "namespace": "call",
+                "capabilities": ["configure_placeable"],
+                "allowSelf": False,
+                "graphEdge": False,
+            },
+        }
+        required.append("placementCallId")
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": required,
+    }
+
+
+def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]:
+    active_use = input_name in {"primary_use", "alternate_use"}
+    may_contact = active_use and action_name != "place_item"
     return {
         "type": "object",
         "additionalProperties": False,
         "properties": {
             "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "input": {"type": "string", "enum": list(INPUT_KIND_REGISTRY)},
-            "action": {"type": "string", "enum": list(BINDING_ACTION_REGISTRY)},
-            "target": {
-                **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-                "x-infini-reference": {"namespace": "entity", "targetKinds": list(ENTITY_KIND_REGISTRY), "allowSelf": True, "graphEdge": False},
+            "input": {"const": input_name},
+            "usePolicy": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "action": _binding_action_schema(action_name),
+                    "stackCost": (
+                        {"const": 1}
+                        if action_name == "place_item"
+                        else ({"type": "integer", "enum": [0, 1]} if active_use else {"const": 0})
+                    ),
+                    "contactDamage": (
+                        {"type": "boolean"} if may_contact else {"const": False}
+                    ),
+                },
+                "required": ["action", "stackCost", "contactDamage"],
             },
         },
-        "required": ["id", "input", "action", "target"],
+        "required": ["id", "input", "usePolicy"],
+    }
+
+
+def binding_schema() -> dict[str, Any]:
+    return {
+        "oneOf": [
+            _binding_variant_schema(input_name, action_name)
+            for input_name, input_spec in INPUT_KIND_REGISTRY.items()
+            for action_name in input_spec.allowed_actions
+        ],
     }
 
 
@@ -173,6 +228,40 @@ def runtime_contract_schema() -> dict[str, Any]:
     }
 
 
+def realization_schema() -> dict[str, Any]:
+    trace_list = {
+        "type": "array",
+        "items": _strict_string(min_len=1, max_len=240),
+        "maxItems": 12,
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "description": _strict_string(min_len=1, max_len=700),
+            "playerExperience": _strict_string(min_len=1, max_len=500),
+            "backedByClaims": {
+                "type": "array",
+                "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+                "minItems": 1,
+                "maxItems": 24,
+            },
+            "intentTrace": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "kept": copy.deepcopy(trace_list),
+                    "changed": copy.deepcopy(trace_list),
+                    "dropped": copy.deepcopy(trace_list),
+                    "added": copy.deepcopy(trace_list),
+                },
+                "required": ["kept", "changed", "dropped", "added"],
+            },
+        },
+        "required": ["description", "playerExperience", "backedByClaims", "intentTrace"],
+    }
+
+
 def author_item_response_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -180,7 +269,6 @@ def author_item_response_schema() -> dict[str, Any]:
         "additionalProperties": False,
         "properties": {
             "name": _strict_string(min_len=1, max_len=80),
-            "tooltip": _strict_string(min_len=1, max_len=360),
             "category": {
                 "type": "string",
                 "enum": ["combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"],
@@ -198,10 +286,13 @@ def author_item_response_schema() -> dict[str, Any]:
                 },
                 "required": ["literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience"],
             },
-            "runtimeContract": runtime_contract_schema(),
             "runtimeProgram": runtime_program_author_schema(),
+            "runtimeContract": runtime_contract_schema(),
+            # Deliberately last: this is the same Author's post-program account
+            # of what the accepted executable draft actually realizes.
+            "realization": realization_schema(),
         },
-        "required": ["name", "tooltip", "category", "concept", "runtimeContract", "runtimeProgram"],
+        "required": ["name", "category", "concept", "runtimeProgram", "runtimeContract", "realization"],
     }
 
 
@@ -221,6 +312,19 @@ def author_item_repair_schema() -> dict[str, Any]:
             "callIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 48},
             "callIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 47}, "maxItems": 48},
             "callParamKeysDelete": {
+                "type": "array",
+                "maxItems": 48,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "callId": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+                        "key": _strict_string(min_len=1, max_len=64),
+                    },
+                    "required": ["callId", "key"],
+                },
+            },
+            "callPropertyKeysDelete": {
                 "type": "array",
                 "maxItems": 48,
                 "items": {
@@ -260,12 +364,12 @@ def author_item_repair_schema() -> dict[str, Any]:
                 "additionalProperties": False,
                 "properties": {
                     "name": _strict_string(min_len=1, max_len=80),
-                    "tooltip": _strict_string(min_len=1, max_len=360),
                     "category": {"type": "string", "enum": ["combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"]},
                     "concept": author_item_response_schema()["properties"]["concept"],
                     "parentSynthesis": runtime_contract_schema()["properties"]["parentSynthesis"],
                 },
             },
+            "realizationReplacement": realization_schema(),
             "note": _strict_string(min_len=1, max_len=500),
         },
         "required": [
@@ -467,6 +571,13 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         for row in program.get("calls") or []
         if isinstance(row, dict) and str(row.get("id") or "")
     }
+    for deletion in patch.get("callPropertyKeysDelete") or []:
+        if not isinstance(deletion, Mapping):
+            continue
+        call = calls_by_id.get(str(deletion.get("callId") or ""))
+        key = str(deletion.get("key") or "")
+        if call is not None and key:
+            call.pop(key, None)
     for deletion in patch.get("callParamKeysDelete") or []:
         if not isinstance(deletion, Mapping):
             continue
@@ -523,11 +634,13 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
 
     metadata = patch.get("metadataPatch")
     if isinstance(metadata, Mapping):
-        for key in ("name", "tooltip", "category", "concept"):
+        for key in ("name", "category", "concept"):
             if key in metadata:
                 out[key] = copy.deepcopy(metadata[key])
         if "parentSynthesis" in metadata:
             contract["parentSynthesis"] = copy.deepcopy(metadata["parentSynthesis"])
+    if "realizationReplacement" in patch:
+        out["realization"] = copy.deepcopy(patch["realizationReplacement"])
     return out
 
 
@@ -546,6 +659,7 @@ __all__ = [
     "claim_schema",
     "entity_schema",
     "runtime_contract_schema",
+    "realization_schema",
     "runtime_program_author_schema",
     "primary_entity_repair_transaction",
     "strict_author_shape_report",

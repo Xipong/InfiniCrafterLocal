@@ -14,23 +14,23 @@
     "verticalSlices": true
   },
   "metrics": {
-    "capabilities": 52,
+    "capabilities": 51,
     "entityKinds": 7,
     "inputs": 4,
     "bindingActions": 5,
     "events": 10,
-    "parameters": 185,
-    "numericParameters": 143,
-    "boundedNumericParameters": 143,
-    "semanticParameters": 185,
+    "parameters": 183,
+    "numericParameters": 142,
+    "boundedNumericParameters": 142,
+    "semanticParameters": 183,
     "typedEntityReferences": 2,
-    "requirements": 15,
-    "bindingDependencyEdges": 9,
+    "requirements": 18,
+    "bindingDependencyEdges": 8,
     "spawnBudgetCapabilities": 1,
     "stationaryMeaningfulCapabilities": 10,
-    "exactWirePaths": 257,
-    "globalTechnicalLowerers": 3,
-    "globalTechnicalLowererOutputs": 100,
+    "exactWirePaths": 254,
+    "globalTechnicalLowerers": 5,
+    "globalTechnicalLowererOutputs": 97,
     "exclusiveGroups": {
       "movement": [
         "move_accelerate",
@@ -61,20 +61,20 @@
       ]
     },
     "authorityDistribution": {
-      "owner_request_server_execute": 12,
+      "owner_request_server_execute": 10,
       "server_execute": 4,
-      "owner_execute_sync": 34,
+      "owner_execute_sync": 35,
       "client_visual_only": 2
     },
     "rangeParityRows": 79,
-    "verticalSliceCount": 52
+    "verticalSliceCount": 51
   },
   "issues": [],
   "errorCount": 0,
   "warningCount": 0,
   "rangeParity": [
     {
-      "capability": "enable_item_contact_damage",
+      "capability": "configure_item_contact_hitbox",
       "param": "hitboxScale",
       "csharpClass": "RuntimeItemContactSpec",
       "authorBounds": [
@@ -88,7 +88,7 @@
       "preserved": true
     },
     {
-      "capability": "enable_item_contact_damage",
+      "capability": "configure_item_contact_hitbox",
       "param": "contactForgivenessPx",
       "csharpClass": "RuntimeItemContactSpec",
       "authorBounds": [

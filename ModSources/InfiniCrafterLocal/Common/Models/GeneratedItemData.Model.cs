@@ -26,7 +26,6 @@ public sealed partial class GeneratedItemData
     public string Name { get; set; } = "Generated Item";
     public string ParentA { get; set; } = "Unknown";
     public string ParentB { get; set; } = "Unknown";
-    public string Tooltip { get; set; } = "A locally generated item.";
     public string MergeMode { get; set; } = "literal"; // literal, lexicalized_literal, functional, abstract
     public string Category { get; set; } = "generic";
     public string SourceMode { get; set; } = "generated"; // generated, vanilla_match, fallback
@@ -149,23 +148,46 @@ public sealed class ParentItemCardSpec
 
 public sealed class GeneratedParentSummarySpec
 {
+    public const string CurrentSchema = "infini.generated-parent-summary.v2";
+
+    public string Schema { get; set; } = CurrentSchema;
     public string Name { get; set; } = "";
-    public string Fantasy { get; set; } = "";
-    public string Category { get; set; } = "generic";
-    public string DamageClass { get; set; } = "generic";
-    public string Runtime { get; set; } = "none";
-    public string VisualIdentity { get; set; } = "";
+    public string Identity { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string PlayerExperience { get; set; } = "";
     public string[] NotableEffects { get; set; } = Array.Empty<string>();
+    public string[] BackedByClaims { get; set; } = Array.Empty<string>();
+    public string ParentComposition { get; set; } = "";
+    public string RuntimePrimaryEntityId { get; set; } = "";
+    public string[] RuntimeEntityIds { get; set; } = Array.Empty<string>();
+
+    private static string Bounded(string? value, int maxLength)
+    {
+        string text = (value ?? "").Trim();
+        return text.Length <= maxLength ? text : text[..maxLength];
+    }
+
+    private static string[] BoundedArray(string[]? values, int maxItems, int maxLength)
+        => (values ?? Array.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => Bounded(x, maxLength))
+            .Take(maxItems)
+            .ToArray();
 
     public void Normalize()
     {
-        Name = string.IsNullOrWhiteSpace(Name) ? "" : Name.Trim()[..Math.Min(Name.Trim().Length, 80)];
-        Fantasy = string.IsNullOrWhiteSpace(Fantasy) ? "" : Fantasy.Trim()[..Math.Min(Fantasy.Trim().Length, 180)];
-        Category = string.IsNullOrWhiteSpace(Category) ? "generic" : Category.Trim()[..Math.Min(Category.Trim().Length, 32)];
-        DamageClass = string.IsNullOrWhiteSpace(DamageClass) ? "generic" : DamageClass.Trim()[..Math.Min(DamageClass.Trim().Length, 32)];
-        Runtime = string.IsNullOrWhiteSpace(Runtime) ? "none" : Runtime.Trim()[..Math.Min(Runtime.Trim().Length, 32)];
-        VisualIdentity = string.IsNullOrWhiteSpace(VisualIdentity) ? "" : VisualIdentity.Trim()[..Math.Min(VisualIdentity.Trim().Length, 180)];
-        NotableEffects = (NotableEffects ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()[..Math.Min(x.Trim().Length, 64)]).Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToArray();
+        Schema = Bounded(Schema, 64);
+        if (!string.Equals(Schema, CurrentSchema, StringComparison.Ordinal))
+            throw new InvalidDataException($"Unsupported generated parent summary schema '{Schema}'");
+        Name = Bounded(Name, 80);
+        Identity = Bounded(Identity, 180);
+        Description = Bounded(Description, 700);
+        PlayerExperience = Bounded(PlayerExperience, 500);
+        NotableEffects = BoundedArray(NotableEffects, 12, 280);
+        BackedByClaims = BoundedArray(BackedByClaims, 24, 48);
+        ParentComposition = Bounded(ParentComposition, 500);
+        RuntimePrimaryEntityId = Bounded(RuntimePrimaryEntityId, 48);
+        RuntimeEntityIds = BoundedArray(RuntimeEntityIds, 24, 48);
     }
 }
 
@@ -195,7 +217,7 @@ public sealed class GeneratedBuffSpec
         DurationTicks = Math.Min(21600, Math.Max(0, DurationTicks));
         MiningSpeedMultiplier = MathF.Min(4f, MathF.Max(0.25f, MiningSpeedMultiplier <= 0f ? 1f : MiningSpeedMultiplier));
         EmitLightStrength = MathF.Min(1.5f, MathF.Max(0f, EmitLightStrength));
-        LightColorName = RuntimeColorPolicy.Normalize(LightColorName);
+        LightColorName = RuntimeColorPolicy.NormalizeRequired(LightColorName, allowEmpty: EmitLightStrength <= 0f);
         OreSenseRadiusTiles = Math.Min(60, Math.Max(0, OreSenseRadiusTiles));
         MovementSpeed = MathF.Min(2f, MathF.Max(-0.5f, MovementSpeed));
         JumpBoost = MathF.Min(8f, MathF.Max(0f, JumpBoost));
@@ -221,7 +243,6 @@ public sealed class GameplaySpec
     public int HoldoutOffsetY { get; set; } = 0;
     public string HandPose { get; set; } = "";
     public string ReleaseTiming { get; set; } = "";
-    public bool Consumable { get; set; } = false;
     public int ManaCost { get; set; } = 0;
     public int Rarity { get; set; } = ItemRarityID.White;
     public int Value { get; set; } = 100;
@@ -234,7 +255,7 @@ public sealed class GameplaySpec
     public int AmmoProjectileId { get; set; } = ProjectileID.None;
     public float AmmoShootSpeedPxPerTick { get; set; } = 0f;
     public bool NotAmmo { get; set; } = false;
-    public int ConsumeChancePercent { get; set; } = 100;
+
     public int Width { get; set; } = 24;
     public int Height { get; set; } = 24;
     public float ItemScale { get; set; } = 1f;
@@ -249,9 +270,7 @@ public sealed class GameplaySpec
     public int PickPower { get; set; } = 0;
     public int AxePower { get; set; } = 0;
     public int HammerPower { get; set; } = 0;
-    public int CreateTile { get; set; } = -1;
-    public int CreateWall { get; set; } = -1;
-    public int PlaceStyle { get; set; } = 0;
+
     public string MobilityMode { get; set; } = "";
     public int MobilityRangeTiles { get; set; } = 0;
     public int MobilityCooldownTicks { get; set; } = 0;
@@ -351,7 +370,6 @@ public sealed class ArmorSpec
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
 
-    public string SetBonusText { get; set; } = "";
     public float SetBonusGenericDamage { get; set; } = 0f;
     public float SetBonusMeleeDamage { get; set; } = 0f;
     public float SetBonusRangedDamage { get; set; } = 0f;
@@ -416,5 +434,4 @@ public sealed class VisualSpec
     public float VisualSoulPulse { get; set; } = 0f;
     public float VisualSoulCoverage { get; set; } = 0f;
     public float VisualSoulEdgeDensity { get; set; } = 0f;
-    public string VisualSoulTooltip { get; set; } = "";
 }

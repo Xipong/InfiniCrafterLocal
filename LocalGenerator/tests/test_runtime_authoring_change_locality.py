@@ -140,7 +140,34 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
 
     on_use = event_dependency_alternatives("on_use", "item_body")
     assert on_use == (
-        EventDependencyAlternative.any_binding_input(("primary_use", "alternate_use")),
+        EventDependencyAlternative.any_binding_input(
+            ("primary_use", "alternate_use"),
+            ("spawn_entity", "use_item_body", "apply_item_effects"),
+        ),
+    )
+    assert event_alternative_is_present(
+        on_use[0],
+        target_calls=[],
+        bindings=[{
+            "input": "primary_use",
+            "usePolicy": {
+                "action": {"kind": "use_item_body", "targetId": "item"},
+                "stackCost": 0,
+                "contactDamage": True,
+            },
+        }],
+    )
+    assert not event_alternative_is_present(
+        on_use[0],
+        target_calls=[],
+        bindings=[{
+            "input": "primary_use",
+            "usePolicy": {
+                "action": {"kind": "place_item", "targetId": "item", "placementCallId": "place"},
+                "stackCost": 1,
+                "contactDamage": False,
+            },
+        }],
     )
     assert EVENT_KIND_REGISTRY["on_use"].prompt_card()["producerFreeKinds"] == []
     assert "free_projectile" in EVENT_KIND_REGISTRY["on_spawn"].prompt_card()["producerFreeKinds"]
