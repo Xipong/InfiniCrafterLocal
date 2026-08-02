@@ -44,8 +44,8 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v4` / `
 |---|---|---|---|---|
 | on_use | — | primary_use, alternate_use | — | — |
 | on_spawn | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_hit | configure_item_contact_hitbox, set_projectile_damage | primary_use, alternate_use | — | — |
-| on_crit | configure_item_contact_hitbox, set_projectile_damage | primary_use, alternate_use | — | — |
+| on_hit | set_projectile_damage | primary_use, alternate_use | — | — |
+| on_crit | set_projectile_damage | primary_use, alternate_use | — | — |
 | on_tile_collision | set_projectile_collision | — | — | set_projectile_collision(tileCollide=True) |
 | on_expire | set_projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
 | on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |

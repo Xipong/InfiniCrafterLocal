@@ -1726,6 +1726,79 @@ def test_item_hit_event_requires_contact_binding_and_repair_updates_exact_policy
     assert (item_id, "on_crit") in pairs
 
 
+def test_item_hit_event_does_not_require_optional_contact_geometry_call() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    program["calls"] = [
+        row for row in program["calls"]
+        if row["fn"] != "configure_item_contact_hitbox"
+    ]
+    for claim in current["runtimeContract"]["claims"]:
+        claim["backedBy"] = [
+            value for value in claim["backedBy"]
+            if value != "item_contact"
+        ]
+    event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["event"] = "on_hit"
+
+    report = validate_runtime_program(current)
+    assert report["ok"], report
+    compiled = compile_runtime_program(current)
+    item_id = compiled["runtimeProgram"]["itemEntityId"]
+    pairs = {(row["entityId"], row["event"]) for row in runtime_event_inventory(compiled)}
+    assert (item_id, "on_hit") in pairs
+    assert (item_id, "on_crit") in pairs
+
+
+def test_item_hit_event_repair_selects_exactly_one_existing_contact_lane() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    primary = program["bindings"][0]
+    primary["usePolicy"]["contactDamage"] = False
+    alternate = _binding_row(
+        "alternate_body", "alternate_use", "use_item_body", "item",
+        contact_damage=False,
+    )
+    program["bindings"].append(alternate)
+    event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["event"] = "on_hit"
+
+    report = validate_runtime_program(current)
+    assert [row["code"] for row in report["errors"]] == ["event_not_emitted"]
+    scope = build_runtime_repair_scope(current, report["errors"])
+    requirement = next(
+        row for row in scope["repairRequirements"]
+        if row["code"] == "event_not_emitted"
+    )
+    assert "requiredBindingUpdates" not in requirement
+    assert requirement["mustChooseExactlyOne"] is True
+    assert not requirement.get("mustCreateExactlyOne", False)
+    assert not requirement.get("mustApplyAll", False)
+    assert len(requirement["allowedBindingTransactions"]) == 2
+
+    fixed_primary = copy.deepcopy(primary)
+    fixed_primary["usePolicy"]["contactDamage"] = True
+    fixed_alternate = copy.deepcopy(alternate)
+    fixed_alternate["usePolicy"]["contactDamage"] = True
+
+    double_patch = _empty_gameplay_patch()
+    double_patch["bindingsUpsert"] = [fixed_primary, fixed_alternate]
+    _, double_audit = filter_repair_patch_scope(current, double_patch, scope)
+    assert not double_audit["ok"]
+    assert any(
+        "exactly one listed existing-binding transaction" in row["message"]
+        for row in double_audit["errors"]
+    )
+
+    single_patch = _empty_gameplay_patch()
+    single_patch["bindingsUpsert"] = [fixed_alternate]
+    filtered, single_audit = filter_repair_patch_scope(current, single_patch, scope)
+    assert single_audit["ok"], single_audit
+    assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
+
+
 def test_binding_dependency_repair_can_delete_the_exact_unwanted_binding() -> None:
     current = build_capability_witness("configure_accessory")
     current["runtimeProgram"]["calls"] = [

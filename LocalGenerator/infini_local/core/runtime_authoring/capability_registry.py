@@ -1336,7 +1336,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "on_hit": EventKindSpec(
         "on_hit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
-        ("configure_item_contact_hitbox", "set_projectile_damage"),
+        ("set_projectile_damage",),
         "Emitted after explicit contact/projectile damage hits an NPC.",
         producer_binding_inputs=("primary_use", "alternate_use"),
         producer_binding_actions=("spawn_entity", "use_item_body"),
@@ -1345,7 +1345,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "on_crit": EventKindSpec(
         "on_crit", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
-        ("configure_item_contact_hitbox", "set_projectile_damage"),
+        ("set_projectile_damage",),
         "Emitted after an explicitly damaging hit is critical.",
         producer_binding_inputs=("primary_use", "alternate_use"),
         producer_binding_actions=("spawn_entity", "use_item_body"),

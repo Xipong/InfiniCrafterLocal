@@ -1767,6 +1767,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 ]
                 if not producer_present and mismatched_bindings:
                     assert required_contact is not None
+                    existing_binding_choices: list[dict[str, Any]] = []
                     for binding in mismatched_bindings:
                         binding_id = str(binding.get("id") or "")
                         fixed = transaction(
@@ -1781,11 +1782,19 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         grant("bindings", binding_id, "usePolicy")
                         binding_alternative_overrides[binding_id] = [fixed]
                         context["bindings"].add(binding_id)
-                        requirement_row.setdefault("requiredBindingUpdates", []).append({
+                        existing_binding_choices.append({
                             "bindingId": binding_id,
                             "allowed": [copy.deepcopy(fixed)],
                         })
+                    if len(existing_binding_choices) == 1:
+                        requirement_row["requiredBindingUpdates"] = existing_binding_choices
                         requirement_row["mustApplyAll"] = True
+                    else:
+                        requirement_row["allowedBindingTransactions"] = [
+                            copy.deepcopy(choice["allowed"][0])
+                            for choice in existing_binding_choices
+                        ]
+                        requirement_row["mustChooseExactlyOne"] = True
                 elif not producer_present:
                     create_binding_targets.update(target_ids)
                     create_binding_inputs.update(event_inputs)
@@ -2562,7 +2571,8 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
             for row in _values(requirement.get("allowedBindingTransactions"))
             if isinstance(row, Mapping)
         }
-        if bool(requirement.get("mustCreateExactlyOne")) and allowed_new_transactions:
+        must_create_exactly_one = bool(requirement.get("mustCreateExactlyOne"))
+        if must_create_exactly_one and allowed_new_transactions:
             selected = [
                 row for row in patch_binding_rows
                 if str(row.get("id") or "") not in existing["bindings"]
@@ -2572,6 +2582,18 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 errors.append(_scope_error(
                     f"$.repairRequirements[{requirement_index}].allowedBindingTransactions",
                     "patch must create exactly one listed binding transaction",
+                    actual={"selectedCount": len(selected)},
+                ))
+        elif bool(requirement.get("mustChooseExactlyOne")) and allowed_new_transactions:
+            selected = [
+                row for row in patch_binding_rows
+                if str(row.get("id") or "") in existing["bindings"]
+                and serialized_binding_transaction(row) in allowed_new_transactions
+            ]
+            if len(selected) != 1:
+                errors.append(_scope_error(
+                    f"$.repairRequirements[{requirement_index}].allowedBindingTransactions",
+                    "patch must emit exactly one listed existing-binding transaction",
                     actual={"selectedCount": len(selected)},
                 ))
 
