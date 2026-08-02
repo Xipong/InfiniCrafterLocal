@@ -337,24 +337,34 @@ def _available_profile_index(profiles: list[dict[str, Any]], start_index: int) -
     return start_index % len(profiles)
 
 
-def begin_llm_item_lease(recipe_key: str) -> tuple[LlmItemLease, Any]:
+def begin_llm_item_lease(recipe_key: str, *, preferred_profile_id: str = "") -> tuple[LlmItemLease, Any]:
     global _LLM_POOL_CURSOR, _LLM_LEASE_SEQUENCE
     profiles = configured_llm_pool()
+    preferred = str(preferred_profile_id or "").strip().lower()
     with _LLM_POOL_LOCK:
-        selected_index = _available_profile_index(profiles, _LLM_POOL_CURSOR % len(profiles))
+        if preferred:
+            selected_index = next(
+                (index for index, context in enumerate(profiles) if _profile_id(context).lower() == preferred),
+                -1,
+            )
+            if selected_index < 0:
+                raise RuntimeError(f"Configured LLM profile {preferred!r} is unavailable for multi-dev lane")
+        else:
+            selected_index = _available_profile_index(profiles, _LLM_POOL_CURSOR % len(profiles))
+            _LLM_POOL_CURSOR = (selected_index + 1) % len(profiles)
         selected = dict(profiles[selected_index])
-        _LLM_POOL_CURSOR = (selected_index + 1) % len(profiles)
         _LLM_LEASE_SEQUENCE += 1
         sequence = _LLM_LEASE_SEQUENCE
     profile_id = str(selected.get("profile_id") or selected.get("label") or "llm_1")
+    pinned_profiles = (dict(selected),) if preferred else tuple(dict(profile) for profile in profiles)
     lease = LlmItemLease(
         recipe_key=str(recipe_key or ""),
         lease_id=f"{profile_id}:{sequence}",
         profile_id=profile_id,
         context=selected,
-        pool_size=len(profiles),
-        profiles=tuple(dict(profile) for profile in profiles),
-        legacy_fallback_allowed=len(profiles) == 1,
+        pool_size=len(pinned_profiles),
+        profiles=pinned_profiles,
+        legacy_fallback_allowed=not preferred and len(profiles) == 1,
     )
     token = _CURRENT_LLM_ITEM_LEASE.set(lease)
     log_event("info", "LLM item lease acquired", lease.snapshot())
@@ -627,9 +637,17 @@ def llm_reasoning_payload(model_name: str = "", context: dict[str, Any] | None =
 
 def _is_google_openai_compat_reasoning_model(model_name: str, context: dict[str, Any] | None = None) -> bool:
     lowered = str(model_name or "").lower()
+    try:
+        parsed_base_url = urlsplit(llm_base_url(context))
+        hostname = str(parsed_base_url.hostname or "").lower()
+        _ = parsed_base_url.port  # Validate malformed and out-of-range explicit ports.
+        if parsed_base_url.username is not None or parsed_base_url.password is not None:
+            hostname = ""
+    except ValueError:
+        hostname = ""
     return (
         active_llm_provider(context) == "openai_compat"
-        and "generativelanguage.googleapis.com" in llm_base_url(context).lower()
+        and hostname == "generativelanguage.googleapis.com"
         and ("gemini" in lowered or "gemma" in lowered)
     )
 
@@ -680,6 +698,33 @@ def _remap_reasoning_for_context(payload: dict[str, Any], *, model_name: str, co
         payload["reasoning"] = reasoning
 
 
+def _apply_google_high_reasoning_completion_headroom(
+    payload: dict[str, Any],
+    *,
+    model_name: str,
+    context: dict[str, Any],
+) -> None:
+    """Translate Infini's answer budget to Google's reasoning-inclusive cap.
+
+    Infini stage ``max_tokens`` values are budgets for the emitted JSON answer.
+    Google's OpenAI-compatible Gemini endpoint counts hidden reasoning tokens
+    against that same provider field.  At high effort, reserve one additional
+    answer budget for hidden reasoning so it cannot truncate the JSON while
+    leaving the logical stage budget unchanged.
+    """
+    if not _is_google_openai_compat_reasoning_model(model_name, context):
+        return
+    if str(payload.get("reasoning_effort") or "").strip().lower() != "high":
+        return
+    try:
+        answer_budget = int(payload.get("max_tokens") or 0)
+    except (TypeError, ValueError):
+        return
+    if answer_budget <= 0:
+        return
+    payload["max_tokens"] = min(64000, answer_budget * 2)
+
+
 def llm_reasoning_system_suffix(model_name: str = "") -> str:
     """Tiny prompt-only reasoning hint for local models.
 
@@ -713,6 +758,51 @@ def apply_llm_common_options(req: dict[str, Any], *, model_name: str, default_ma
                 req["reasoning_effort"] = _google_reasoning_effort(reasoning)
             else:
                 req["reasoning"] = reasoning
+    return req
+
+
+_REASONING_EFFORT_RANK = {
+    "none": 0,
+    "minimal": 1,
+    "low": 2,
+    "medium": 3,
+    "high": 4,
+    "xhigh": 5,
+}
+
+
+def apply_minimum_reasoning_effort(
+    req: dict[str, Any],
+    *,
+    model_name: str,
+    minimum: str = "medium",
+) -> dict[str, Any]:
+    """Apply a stage-local reasoning floor without lowering a stronger user choice."""
+    floor = str(minimum or "").strip().lower()
+    if floor not in _REASONING_EFFORT_RANK:
+        raise ValueError(f"unsupported minimum reasoning effort: {minimum!r}")
+    intent_raw = req.get(_REASONING_INTENT_KEY)
+    intent: dict[str, Any] = intent_raw if isinstance(intent_raw, dict) else {}
+    explicit_raw = req.get("reasoning")
+    explicit: dict[str, Any] = explicit_raw if isinstance(explicit_raw, dict) else {}
+    current = str(
+        req.get("reasoning_effort")
+        or explicit.get("effort")
+        or intent.get("effort")
+        or ""
+    ).strip().lower()
+    selected = current if _REASONING_EFFORT_RANK.get(current, -1) >= _REASONING_EFFORT_RANK[floor] else floor
+    reasoning = {"effort": selected, "exclude": bool(LLM_REASONING_EXCLUDE)}
+    req[_REASONING_INTENT_KEY] = dict(reasoning)
+    if active_llm_provider() == "local":
+        req.pop("reasoning", None)
+        req.pop("reasoning_effort", None)
+    elif _is_google_openai_compat_reasoning_model(model_name):
+        req.pop("reasoning", None)
+        req["reasoning_effort"] = _google_reasoning_effort(reasoning)
+    else:
+        req.pop("reasoning_effort", None)
+        req["reasoning"] = reasoning
     return req
 
 def http_get_json(url: str, timeout: int = 5, headers: dict[str, str] | None = None) -> dict[str, Any]:
@@ -946,6 +1036,11 @@ def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> di
     model_name = model_override or resolve_llm_model(context)
     out["model"] = model_name
     _remap_reasoning_for_context(out, model_name=model_name, context=context)
+    _apply_google_high_reasoning_completion_headroom(
+        out,
+        model_name=model_name,
+        context=context,
+    )
     return out
 
 
