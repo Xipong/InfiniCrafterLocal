@@ -1024,6 +1024,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         for row in rows["entities"]
         if row.get("kind") == "item_body" and str(row.get("id") or "")
     }
+    sole_item_entity_id = (
+        next(iter(item_entity_ids))
+        if len(item_entity_ids) == 1 else ""
+    )
     planned_item_capabilities_by_target: dict[str, set[str]] = {}
     for candidate_error in error_rows:
         candidate_code = str(candidate_error.get("code") or candidate_error.get("kind") or "")
@@ -1444,7 +1448,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
         elif code == "missing_binding_dependency" and node_namespace == "calls" and node_id:
             capability = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
-            owner_item_target_id = str(node_row.get("target") or "")
+            node_target_id = str(node_row.get("target") or "")
+            owner_item_target_id = sole_item_entity_id
             authorized_capabilities = {
                 capability_name
                 for candidate_error in error_rows
@@ -1457,6 +1462,17 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             allowed_rows: list[dict[str, Any]] = []
             required_binding_updates: list[dict[str, Any]] = []
             existing_binding_choices: list[dict[str, Any]] = []
+
+            def requirement_target_id(
+                requirement_target: str,
+                *,
+                tuple_any_entity: bool = False,
+            ) -> str:
+                if requirement_target == "item_body":
+                    return sole_item_entity_id
+                if tuple_any_entity and requirement_target == "any_entity":
+                    return ""
+                return node_target_id
 
             def primary_relocation_to_alternate() -> tuple[str, dict[str, Any]] | None:
                 existing_primary = next((
@@ -1498,6 +1514,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if capability is not None:
                 for capability_requirement in capability.requirements:
                     if capability_requirement.kind == "binding_action_reference":
+                        required_target = requirement_target_id(capability_requirement.target)
                         occupied = {
                             str(row.get("input") or "") for row in rows["bindings"]
                         }
@@ -1509,20 +1526,18 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         else:
                             candidate_inputs = ()
                         for input_name in candidate_inputs:
+                            if not required_target:
+                                continue
                             allowed_rows.append(transaction(
                                 input_name=input_name,
                                 action_name="place_item",
-                                target=str(node_row.get("target") or ""),
+                                target=required_target,
                                 stack_cost_value=1,
                                 contact_damage_value=False,
                                 placement_call=node_id,
                             ))
                     elif capability_requirement.kind == "binding_input_present":
-                        required_target = (
-                            owner_item_target_id
-                            if capability_requirement.target == "item_body"
-                            else str(node_row.get("target") or "")
-                        )
+                        required_target = requirement_target_id(capability_requirement.target)
                         allowed_rows.extend(
                             row for row in _binding_creation_alternatives(
                                 rows,
@@ -1554,11 +1569,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 required_inputs = ("primary_use",)
                         elif existing_primary is None and existing_alternate is None:
                             required_inputs = ("primary_use",)
-                        required_target = (
-                            str(node_row.get("target") or "")
-                            if capability_requirement.target == "item_body"
-                            else ""
-                        )
+                        required_target = requirement_target_id(capability_requirement.target)
                         allowed_rows.extend(
                             row for row in _binding_creation_alternatives(
                                 rows,
@@ -1567,7 +1578,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 additional_item_capabilities=authorized_capabilities,
                             )
                             if action_kind(row) in capability_requirement.any_of
-                            and (not required_target or binding_target_id(row) == required_target)
+                            and bool(required_target)
+                            and binding_target_id(row) == required_target
                         )
                     elif capability_requirement.kind == "binding_tuple_present":
                         required_patterns: list[tuple[str, str, bool | None]] = []
@@ -1584,16 +1596,22 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 else:
                                     continue
                             required_patterns.append((parts[0], parts[1], required_contact))
-                        required_target = (
-                            str(node_row.get("target") or "")
-                            if capability_requirement.target == "item_body"
-                            else ""
+                        target_is_any_entity = capability_requirement.target == "any_entity"
+                        required_target = requirement_target_id(
+                            capability_requirement.target,
+                            tuple_any_entity=True,
                         )
 
                         repaired_policy_pairs: set[tuple[str, str]] = set()
                         for existing in rows["bindings"]:
                             existing_pair = (str(existing.get("input") or ""), action_kind(existing))
-                            if required_target and binding_target_id(existing) != required_target:
+                            if (
+                                not target_is_any_entity
+                                and (
+                                    not required_target
+                                    or binding_target_id(existing) != required_target
+                                )
+                            ):
                                 continue
                             required_contact = next((
                                 contact
@@ -1678,7 +1696,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 and (required_contact is None or contact_damage(row) is required_contact)
                                 for input_name, required_action, required_contact in required_patterns
                             )
-                            and (not required_target or binding_target_id(row) == required_target)
+                            and (
+                                target_is_any_entity
+                                or (
+                                    bool(required_target)
+                                    and binding_target_id(row) == required_target
+                                )
+                            )
                         )
                         for allowed_row in allowed_rows:
                             for input_name, required_action, required_contact in required_patterns:

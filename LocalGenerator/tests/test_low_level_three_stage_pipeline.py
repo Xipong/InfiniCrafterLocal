@@ -1800,7 +1800,7 @@ def test_planned_item_capability_support_is_scoped_to_its_owner_target() -> None
     assert requirement["allowedBindingTransactions"] == []
 
 
-def test_binding_input_requirement_only_projects_its_exact_owner_target(
+def test_binding_input_requirement_fails_closed_for_ambiguous_item_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     local_registry = dict(CAPABILITY_REGISTRY)
@@ -1834,11 +1834,77 @@ def test_binding_input_requirement_only_projects_its_exact_owner_target(
         "relatedIds": ["witness_call", "item"],
     }])
     requirement = scope["repairRequirements"][0]
-    assert requirement["allowedBindingTransactions"]
-    assert {
-        row["usePolicy"]["action"]["targetId"]
-        for row in requirement["allowedBindingTransactions"]
-    } == {"item"}
+    assert requirement["allowedBindingTransactions"] == []
+    assert requirement["allowedExistingBindingIds"] == []
+
+
+def test_binding_action_requirement_rejects_foreign_projectile_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_registry = dict(CAPABILITY_REGISTRY)
+    local_registry["configure_item_stats"] = replace(
+        CAPABILITY_REGISTRY["configure_item_stats"],
+        requirements=(RequirementSpec(
+            kind="binding_action_present",
+            target="same_target",
+            any_of=("spawn_entity",),
+            message="Synthetic exact-target binding-action contract.",
+        ),),
+    )
+    monkeypatch.setattr(repair_scope_stage, "CAPABILITY_REGISTRY", local_registry)
+
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    program["bindings"] = []
+    call_index = next(
+        index for index, row in enumerate(program["calls"])
+        if row["fn"] == "configure_item_stats"
+    )
+    scope = build_runtime_repair_scope(current, [{
+        "path": f"$.runtimeProgram.calls[{call_index}]",
+        "code": "missing_binding_dependency",
+        "message": "Synthetic exact-target binding-action contract.",
+        "allowed": ["spawn_entity"],
+        "relatedIds": ["item_stats", "item"],
+    }])
+    requirement = scope["repairRequirements"][0]
+    assert requirement["allowedBindingTransactions"] == []
+    assert requirement["allowedExistingBindingIds"] == []
+
+
+def test_binding_tuple_requirement_rejects_foreign_existing_projectile_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_registry = dict(CAPABILITY_REGISTRY)
+    local_registry["configure_item_stats"] = replace(
+        CAPABILITY_REGISTRY["configure_item_stats"],
+        requirements=(RequirementSpec(
+            kind="binding_tuple_present",
+            target="same_target",
+            any_of=("primary_use|spawn_entity|contactDamage=true",),
+            message="Synthetic exact-target binding-tuple contract.",
+        ),),
+    )
+    monkeypatch.setattr(repair_scope_stage, "CAPABILITY_REGISTRY", local_registry)
+
+    current = build_runtime_fixture("workbench_blade")
+    program = current["runtimeProgram"]
+    program["bindings"][0]["usePolicy"]["contactDamage"] = False
+    call_index = next(
+        index for index, row in enumerate(program["calls"])
+        if row["fn"] == "configure_item_stats"
+    )
+    scope = build_runtime_repair_scope(current, [{
+        "path": f"$.runtimeProgram.calls[{call_index}]",
+        "code": "missing_binding_dependency",
+        "message": "Synthetic exact-target binding-tuple contract.",
+        "allowed": ["primary_use|spawn_entity|contactDamage=true"],
+        "relatedIds": ["item_stats", "item"],
+    }])
+    requirement = scope["repairRequirements"][0]
+    assert requirement["allowedBindingTransactions"] == []
+    assert requirement["allowedExistingBindingIds"] == []
+    assert "requiredBindingUpdates" not in requirement
 
 
 def test_binding_choice_is_owned_by_requirement_specific_existing_ids(
