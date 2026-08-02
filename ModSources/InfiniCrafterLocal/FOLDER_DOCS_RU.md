@@ -17,7 +17,7 @@
 
 ## Правила
 
-- Не выводить gameplay из name/tooltip/category/tags.
+- Authored/generated tooltip output запрещён; gameplay не выводится из name/category/tags.
 - Не добавлять sensible defaults по типу оружия.
 - Unknown version/kind/opcode/reference/action/input — fail closed.
 - Owner/server authority и spawn budgets обязательны.

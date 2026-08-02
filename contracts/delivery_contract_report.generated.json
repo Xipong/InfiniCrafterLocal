@@ -40,7 +40,7 @@
     },
     {
       "authorErrors": [],
-      "bindings": 1,
+      "bindings": 2,
       "deliveryErrors": [],
       "entities": 1,
       "fixture": "fishing_platform_tool",
@@ -67,14 +67,14 @@
     },
     {
       "authorErrors": [],
-      "bindings": 2,
+      "bindings": 3,
       "deliveryErrors": [],
-      "entities": 2,
+      "entities": 1,
       "fixture": "equipment_tool_combat",
       "ok": true,
       "wireErrors": []
     }
   ],
   "schema": "infini.low-level-delivery-proof.v1",
-  "wireSchema": "infini.runtime-program.wire.v1"
+  "wireSchema": "infini.runtime-program.wire.v2"
 }

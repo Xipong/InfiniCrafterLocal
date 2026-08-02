@@ -237,7 +237,6 @@ class ServerUtilityRoutes:
         dummy = {
             "id": test_id,
             "name": "Z-Image Doctor Blade",
-            "tooltip": "Doctor probe sprite asset",
             "concept": {"fantasy": "a crystal slime blade with starlight circuitry"},
             "visual": {"palette": ["cyan", "white", "violet"], "preferredCanvasSize": 32, "requiredAnchors": ["crystal blade", "slime edge", "star circuit"]},
             "runtimeProgram": {"entities": [{"id": "item", "kind": "item_body", "visualRole": "inventory_item"}, {"id": "doctor_entity", "kind": "free_projectile", "visualRole": "projectile"}]},
@@ -353,7 +352,6 @@ class ServerUtilityRoutes:
         dummy = {
             "id": test_id,
             "name": q.get("name", ["Debug Pixel Sprite"])[0],
-            "tooltip": "Debug generated sprite asset",
             "concept": {"fantasy": q.get("fantasy", ["a tiny magic sword made of slime and starlight"])[0]},
             "visual": {"palette": ["cyan", "white", "violet"], "preferredCanvasSize": 32, "requiredAnchors": ["magic sword", "slime", "starlight"]},
             "runtimeProgram": {"entities": [{"id": "item", "kind": "item_body", "visualRole": "inventory_item"}, {"id": "debug_entity", "kind": "free_projectile", "visualRole": "projectile"}]},

@@ -12,7 +12,6 @@ Mods: {
 
 			GeneratedItem: {
 				DisplayName: Сгенерированный предмет
-				Tooltip: Предмет на основе JSON-спеки
 			}
 		}
 
@@ -84,27 +83,22 @@ Mods: {
 Items: {
 	GeneratedBodyArmor: {
 		// DisplayName: Generated Body Armor
-		// Tooltip: ""
 	}
 
 	GeneratedHeadArmor: {
 		// DisplayName: Generated Head Armor
-		// Tooltip: ""
 	}
 
 	GeneratedItem: {
 		// DisplayName: Generated Item
-		// Tooltip: ""
 	}
 
 	GeneratedLegsArmor: {
 		// DisplayName: Generated Legs Armor
-		// Tooltip: ""
 	}
 
 	InfiniCore: {
 		// DisplayName: Infini Core
-		// Tooltip: ""
 	}
 }
 

@@ -22,8 +22,8 @@ Gameplay/Visual/VFX Repair вызываются только после факт
 ## Контракты
 
 - runtime API: `infini.runtime-program.v5`;
-- Author schema: `infini.runtime-program.authoring.v1`;
-- wire schema: `infini.runtime-program.wire.v1`;
+- Author schema: `infini.runtime-program.authoring.v4`;
+- wire schema: `infini.runtime-program.wire.v3`;
 - Visual: entity-based visual kit/asset manifest;
 - VFX: exact runtime entity/event slots.
 
@@ -42,6 +42,10 @@ Gameplay/Visual/VFX Repair вызываются только после факт
 - `wire_validator.py` — strict final-wire rejection неизвестных полей.
 
 Schema, prompt catalog, machine manifest, docs inventory и audit проецируются из registry.
+
+## Multi-dev craft (operational, not Author surface)
+
+`/multidevcraft 2` или `3` сессионно разблокирует два/три независимых station lane с отдельными A/B escrow, request id, task, progress и refund. Lane 1/2/3 жёстко пинятся к `llm_1`/`llm_2`/`llm_3`; pinned lease не делает profile/model fallback. Обычный однооконный craft сохраняет прежний round-robin/failover contract. MP-клиент передаёт только lane + compact parent refs, а host/server валидирует lane unlock, изымает exact station escrow и один коммитит GeneratedItemData. Profile id добавляется только в world recipe cache identity multi-dev lane и не меняет item wire/schema.
 
 ## Explicit primary ownership
 

@@ -1,5 +1,5 @@
 {
-  "capabilityCount": 52,
+  "capabilityCount": 51,
   "capabilityLibraryAudit": {
     "criteria": {
       "compositionMetadata": true,
@@ -16,17 +16,17 @@
     "metrics": {
       "authorityDistribution": {
         "client_visual_only": 2,
-        "owner_execute_sync": 34,
-        "owner_request_server_execute": 12,
+        "owner_execute_sync": 35,
+        "owner_request_server_execute": 10,
         "server_execute": 4
       },
       "bindingActions": 5,
-      "bindingDependencyEdges": 9,
-      "boundedNumericParameters": 143,
-      "capabilities": 52,
+      "bindingDependencyEdges": 8,
+      "boundedNumericParameters": 142,
+      "capabilities": 51,
       "entityKinds": 7,
       "events": 10,
-      "exactWirePaths": 257,
+      "exactWirePaths": 254,
       "exclusiveGroups": {
         "controller": [
           "channel_beam",
@@ -56,18 +56,18 @@
           "move_yoyo_hover"
         ]
       },
-      "globalTechnicalLowererOutputs": 100,
-      "globalTechnicalLowerers": 3,
+      "globalTechnicalLowererOutputs": 97,
+      "globalTechnicalLowerers": 5,
       "inputs": 4,
-      "numericParameters": 143,
-      "parameters": 185,
+      "numericParameters": 142,
+      "parameters": 183,
       "rangeParityRows": 79,
-      "requirements": 15,
-      "semanticParameters": 185,
+      "requirements": 18,
+      "semanticParameters": 183,
       "spawnBudgetCapabilities": 1,
       "stationaryMeaningfulCapabilities": 10,
       "typedEntityReferences": 2,
-      "verticalSliceCount": 52
+      "verticalSliceCount": 51
     },
     "ok": true,
     "rangeParity": [
@@ -76,7 +76,7 @@
           0.5,
           2.0
         ],
-        "capability": "enable_item_contact_damage",
+        "capability": "configure_item_contact_hitbox",
         "csharpBounds": [
           0.5,
           2.0
@@ -90,7 +90,7 @@
           0.0,
           64.0
         ],
-        "capability": "enable_item_contact_damage",
+        "capability": "configure_item_contact_hitbox",
         "csharpBounds": [
           0.0,
           64.0

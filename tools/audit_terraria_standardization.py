@@ -56,6 +56,7 @@ def report() -> dict[str, Any]:
     parent_constants = read("LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py")
     generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs")
     generated_item = read("ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs")
+    program_schema = read("LocalGenerator/infini_local/core/runtime_authoring/program_schema.py")
 
     for token, owner in DAMAGE_CLASS_TMODLOADER_NAMES.items():
         check(f"damage_class:{token}", f'"{token}" => {owner}' in vocabulary, f"{token} must map exactly to {owner}")
@@ -76,21 +77,26 @@ def report() -> dict[str, Any]:
     check("canonical_parent_use_and_ammo_names", "CanonicalItemUseStyleToken" in vocabulary and "CanonicalAmmoCategoryToken" in vocabulary and all(x in generator_client for x in ("useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken", "ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken", "potion =", "notAmmo =")), "parent facts must carry exact canonical tModLoader names and independent potion/notAmmo flags")
     check("single_equipped_input", "passive" not in INPUT_KINDS and INPUT_KINDS == ("primary_use", "alternate_use", "hold", "equipped"), "Author API must expose one canonical equipped input")
 
-    consumption = CAPABILITY_REGISTRY.get("configure_consumption")
     ammo = CAPABILITY_REGISTRY.get("configure_vanilla_ammo_item")
-    check("consumption_is_not_ammo", consumption is not None and tuple(consumption.params) == ("consumable", "consumeChancePercent"), "configure_consumption must not own Item.ammo")
+    check(
+        "consumption_is_binding_scoped",
+        "configure_consumption" not in CAPABILITY_REGISTRY
+        and '"stackCost"' in program_schema
+        and "public int StackCost { get; set; }" in dto,
+        "stack cost must have one owner in binding.usePolicy and no capability/global shadow owner",
+    )
     check("ammo_item_is_explicit", ammo is not None and tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedPxPerTick", "notAmmo"), "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo")
-    check("ammo_item_dependency", bool(ammo and any(r.capability == "configure_consumption" and r.param == "consumable" and r.equals is True for r in ammo.requirements)), "ammo item must require explicit consumable=true")
+    check("ammo_item_consumption_independent", bool(ammo and not any(r.capability == "configure_consumption" for r in ammo.requirements)), "ammo stack handling must remain independent from direct-use input costs")
     check("ammo_projection_direct", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory" in apply and "item.shoot = Gameplay.AmmoProjectileId" in apply and "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick" in apply and "item.notAmmo = Gameplay.NotAmmo" in apply, "ammo fields must project directly without category-derived projectile or runtime-entity speed leakage")
     check("ammo_shoot_speed_range_parity", ammo is not None and ammo.params["shootSpeedPxPerTick"].minimum == -20 and ammo.params["shootSpeedPxPerTick"].maximum == 80 and "Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);" in normalize, "ammo Item.shootSpeed contribution must preserve the exact Author range at the C# boundary")
     check("vanilla_projectile_id_guard", "Gameplay.AmmoProjectileId >= ProjectileID.Count" in normalize and VANILLA_PROJECTILE_TYPE_ID_MAX == 1021, "vanilla ammo projectile must be authored in stable 1..1021 and validated against ProjectileID.Count")
     check("no_plural_gameplay_ammo_alias", '"arrows"' not in apply + vocabulary and '"bullets"' not in apply + vocabulary, "plural ammo aliases are not canonical gameplay tokens")
     restore = CAPABILITY_REGISTRY.get("restore_resources_on_use")
-    check("potion_flag_is_authored", restore is not None and tuple(restore.params) == ("healLife", "healMana", "potionSickness") and "item.potion = Gameplay.Potion;" in apply and "item.potion = Gameplay.HealLife > 0" not in apply, "Item.potion must be authored, not inferred from healing")
-    check("generated_parent_preserves_exact_item_semantics", all(x in parent_cards for x in ('"potion"', '"ammoCategory"', '"ammoProjectileId"', '"ammoShootSpeedPxPerTick"', '"notAmmo"')), "generated parents must preserve exact ammo/potion facts for the next Author")
+    check("potion_flag_is_authored", restore is not None and tuple(restore.params) == ("healLife", "healMana", "potionSickness") and "item.potion = enabled && Gameplay.Potion;" in apply and "item.potion = Gameplay.HealLife > 0" not in apply, "Item.potion must be authored, binding-scoped, and not inferred from healing")
+    check("generated_parent_preserves_exact_item_semantics", all(x in parent_cards for x in ('"potion"', '"usePolicy"', '"ammoCategory"', '"ammoProjectileId"', '"ammoShootSpeedPxPerTick"', '"notAmmo"')) and 'row.get("action")' not in parent_cards and 'row.get("target")' not in parent_cards, "generated parents must preserve exact binding usePolicy/ammo/potion facts for the next Author")
     check("loaded_rarity_guard", "RarityLoader.RarityCount" in normalize and "ClampInt(Gameplay.Rarity" not in normalize, "rarity must be an actually loaded ID, not silently clamped")
     check("loaded_buff_guards", "BuffLoader.BuffCount" in normalize and "BuffLoader.BuffCount" in dto and "extra buff row cannot be null" in normalize and "requires positive duration" in normalize and "buff.BuffCode > 0" in generated_item, "buff IDs and durations must fail closed against the loaded content registry")
-    check("loaded_tile_wall_guards", "TileLoader.TileCount" in normalize and "WallLoader.WallCount" in normalize and "ClampInt(Gameplay.CreateTile" not in normalize and "ClampInt(Gameplay.CreateWall" not in normalize, "tile/wall IDs must be validated against loaded tModLoader content")
+    check("loaded_tile_wall_guards", "TileLoader.TileCount" in dto and "WallLoader.WallCount" in dto and "ClampInt(Gameplay.CreateTile" not in normalize and "ClampInt(Gameplay.CreateWall" not in normalize, "tile/wall IDs must be validated against loaded tModLoader content")
     tool = CAPABILITY_REGISTRY.get("configure_tool")
     stats = CAPABILITY_REGISTRY.get("configure_item_stats")
     check("axe_internal_unit_parity", bool(tool and tool.params["axePower"].maximum == 100 and "Item.axe" in tool.params["axePower"].description and "multiplied by 5" in tool.params["axePower"].description and "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize), "axePower must use exact Item.axe internal units and match the C# bound")

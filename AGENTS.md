@@ -4,6 +4,17 @@
 
 Gameplay Author непосредственно составляет bounded `runtimeProgram` из низкоуровневых capabilities. Код не классифицирует предмет по оружейному архетипу и не достраивает композицию поведения. Lowering разрешён только для семантически без потерь технического дублирования движка. Baseline успешного craft — Gameplay Author, Visual Director, VFX Director; Repair условен для каждой стадии. Repair всегда leaf-local и frozen-first: передавай только invalid fragments, exact missing dependencies и валидный read-only context; применяй только `fieldPermissions`/create-policy, а любые попытки изменить уже валидные значения игнорируй с audit вместо отмены полезного исправления.
 
+## Четыре класса преобразований
+
+Перед добавлением любого compiler/runtime преобразования явно отнеси его ровно к одному классу:
+
+1. **Fallback — запрещён.** Владелец-модель не передал поле, передал невалидное значение или не выбрал вариант, а код молча выбирает содержательную механику, target, текст, цвет, visual/VFX mode либо prompt и продолжает как GREEN. Пустой `allowedTuples` не раскрывается в декартово произведение; invalid enum не заменяется «разумным» enum; backend не дописывает отсутствующий authored prompt.
+2. **Fix — только осознанный и доказуемый.** Код восстанавливает единственное технически возможное поле из уже полного model-authored описания и engine invariant, не выбирая между несколькими содержательными вариантами. Fix обязан иметь узкую предпосылку, audit/receipt с причиной `fix:*`, negative path и regression. Он не имеет права создавать отсутствующий дизайн целиком. Разрешённый пример: для `item_body` всегда нужен отдельный сгенерированный inventory PNG, поэтому его `assetMode` не является творческим выбором модели и технически обязан быть `baked_sprite`. Если Visual Director передал непустые `prompt`, `silhouette` и `visualIdentity`, но пропустил только `assetMode`, engine может явно дописать `baked_sprite`. Если отсутствует хотя бы одно из описаний внешности — Visual Repair/RED. Другие `assetMode` допустимы только для non-item entities.
+3. **Normalization — разрешена только по объявленному wire-контракту.** Case/whitespace canonicalization, bounded clamp, transport truncation/dedupe и аналогичная форма допустимы там, где варианты контрактно эквивалентны или projection явно lossy. Normalization не должна выбирать механику или менять свободный authored смысл; иначе это Fallback. Clamp/trim должен оставаться видимым в receipt/audit, если меняет authoritative wire.
+4. **Alias Lowering — разрешён.** Модель явно выбирает зарегистрированный alias, а canonical lowerer детерминированно и без потерь раскрывает его в низкоуровневый runtime wire. Один alias всегда даёт одну и ту же проекцию; запрещены prose/name/category routing, contextual guesses и defaults. Общие params можно сворачивать только при literal identity по установленному repetition threshold.
+
+Если класс нельзя назвать однозначно — не менять production code до отдельного решения. `Fix`, `Normalization` и `Alias Lowering` не переименовывают в fallback и наоборот: для каждого действуют собственные owner, audit и тесты.
+
 ## Перед изменением runtime
 
 Прочитай:
