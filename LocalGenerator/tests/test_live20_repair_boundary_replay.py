@@ -29,19 +29,32 @@ def _codes(report: dict[str, Any]) -> set[str]:
     return {str(row.get("code") or "") for row in report.get("errors") or []}
 
 
+def _assert_no_tooltip_field(value: Any, path: str = "$") -> None:
+    if isinstance(value, dict):
+        assert "tooltip" not in value, f"forbidden tooltip field at {path}"
+        for key, child in value.items():
+            _assert_no_tooltip_field(child, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _assert_no_tooltip_field(child, f"{path}[{index}]")
+
+
 def test_captured_live20_repair_boundaries_close_offline() -> None:
     fixture = _fixture()
     assert fixture["schema"] == "infini.live20-repair-boundary-replay.v1"
     assert fixture["sourceHead"] == "e73db62bde4bfa0254d79444faa4374efe9d15b3"
+    _assert_no_tooltip_field(fixture)
 
     for case, replay in fixture["gameplayApplyCases"].items():
         initial = replay["initialAuthor"]
         report = validate_runtime_program(initial)
         assert _codes(report) == set(replay["expectedInitialCodes"]), case
         scope = build_runtime_repair_scope(initial, report["errors"])
+        assert replay["repairPatch"]["realizationReplacement"] is not None, case
         filtered, audit = filter_repair_patch_scope(initial, replay["repairPatch"], scope)
         assert audit["ok"], {"case": case, "audit": audit}
         repaired = apply_repair_patch(initial, filtered)
+        assert repaired["realization"] == replay["repairPatch"]["realizationReplacement"], case
         final = validate_runtime_program(repaired)
         assert final["ok"], {"case": case, "errors": final["errors"]}
 
@@ -76,9 +89,12 @@ def test_captured_live20_repair_boundaries_close_offline() -> None:
             assert create_calls["allowed"] is True, case
             assert create_calls["allowedTargetIds"] == replay["expectedCreateCallTargetIds"]
             assert set(create_calls["allowedFns"]) == set(source_error["allowed"])
+            expected_blockers = set(source_error["allowed"]).union(
+                replay.get("expectedAdditionalBlockerCapabilities", [])
+            )
             assert {
                 row["fn"] for row in dossier["blockerCapabilities"]
-            } == set(source_error["allowed"])
+            } == expected_blockers
 
     for case, replay in fixture["visualApplyCases"].items():
         raw = replay["visualRaw"]

@@ -189,9 +189,15 @@ public sealed class GeneratorClient
         public string ParentB { get; set; } = "Unknown";
         public Item RefundA { get; set; } = new();
         public Item RefundB { get; set; } = new();
+        // Request-local failure state: concurrent multi-dev lanes must never read
+        // another lane's shared LastRecipeFailure snapshot.
+        public bool FailureIsFatal { get; set; }
+        public int FailureStatusCode { get; set; }
+        public string FailureMessage { get; set; } = "";
+        public string FailurePlayerMessage { get; set; } = "";
     }
 
-    public PreparedGenerationRequest Prepare(Item a, Item b, Player player)
+    public PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false)
     {
         var refundA = a.Clone();
         refundA.stack = 1;
@@ -210,7 +216,9 @@ public sealed class GeneratorClient
             worldName = Main.worldName,
             modVersion = InfiniCrafterLocalMod.ModVersion,
             multiplayer = Main.netMode != NetmodeID.SinglePlayer,
-            craftInputPolicy = "base_item_stats_ignore_prefixes"
+            craftInputPolicy = "base_item_stats_ignore_prefixes",
+            multiDevCraft,
+            llmProfileId = multiDevCraft ? (llmProfileId ?? "").Trim().ToLowerInvariant() : ""
         }, WireJsonOptions);
 
         return new PreparedGenerationRequest
@@ -229,6 +237,10 @@ public sealed class GeneratorClient
         LastRecipeFailureMessage = "";
         LastRecipeFailurePlayerMessage = "";
         LastRecipeFailureStatusCode = 0;
+        request.FailureIsFatal = false;
+        request.FailureStatusCode = 0;
+        request.FailureMessage = "";
+        request.FailurePlayerMessage = "";
 
         if (LocalHttpQuietFailure.ShouldSkip(EndpointGuardKey))
             return null;
@@ -260,6 +272,10 @@ public sealed class GeneratorClient
                 LastRecipeFailureStatusCode = result.StatusCode;
                 LastRecipeFailureMessage = result.Message;
                 LastRecipeFailurePlayerMessage = result.PlayerMessage;
+                request.FailureIsFatal = true;
+                request.FailureStatusCode = result.StatusCode;
+                request.FailureMessage = result.Message;
+                request.FailurePlayerMessage = result.PlayerMessage;
                 return null;
             }
 
@@ -458,6 +474,16 @@ public sealed class GeneratorClient
     private static object ToWireItem(Item item, Player? player = null)
     {
         GeneratedItemData? existing = item.ModItem is GeneratedItem generated ? generated.Data : null;
+        if (GeneratedItemData.IsPlayerSaveReferenceOnly(existing))
+        {
+            string generatedParentId = existing!.Id;
+            var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+            if (registry is null
+                || !registry.TryGet(generatedParentId, out GeneratedItemData canonical)
+                || !GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+                throw new InvalidOperationException($"Generated parent '{generatedParentId}' is not hydrated for the current world");
+            existing = canonical;
+        }
         Item craftItem = CraftIdentityItem(item, existing);
         int originalPrefix = SafePrefix(item);
         bool prefixIgnored = originalPrefix != InfiniTerrariaSentinels.NoPrefix;

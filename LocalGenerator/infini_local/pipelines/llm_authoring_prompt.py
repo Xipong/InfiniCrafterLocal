@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 from typing import Any
 
@@ -25,7 +24,6 @@ from infini_local.pipelines.author_item_contract import (
     primary_entity_self_check,
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
-from infini_local.pipelines.item_power_knowledge import tags_of
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 
@@ -36,31 +34,6 @@ COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "movement/controllers, damage, collision, lifecycle and event links from the catalog."
 )
 VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(CAPABILITY_REGISTRY))
-
-
-def normalize_llm_attack_shape(obj: dict[str, Any]) -> dict[str, Any]:
-    return obj
-
-
-def normalize_behavior_toy_fields(obj: dict[str, Any]) -> dict[str, Any]:
-    return obj
-
-
-def normalize_runtime_authoring_fields(data: dict[str, Any]) -> dict[str, Any]:
-    return data
-
-
-def runtime_value(data: dict[str, Any], fn: str, field: str, fallback: Any = None) -> Any:
-    program = data.get("runtimeProgram")
-    if not isinstance(program, dict):
-        return fallback
-    calls = program.get("calls")
-    if not isinstance(calls, list):
-        return fallback
-    for call in calls:
-        if isinstance(call, dict) and call.get("fn") == fn and isinstance(call.get("params"), dict) and field in call["params"]:
-            return call["params"][field]
-    return fallback
 
 
 def terraria_tick_guide_for_llm() -> dict[str, Any]:
@@ -84,16 +57,17 @@ def planner_priority_header_for_llm() -> list[str]:
     return [
         "Return one complete bounded runtimeProgram in this single response; no tool loop and no second design pass.",
         "Directly compose low-level entities, bindings, capabilities and event links. Never classify the item into sword/bow/staff/sentry for execution.",
-        "category is UI/equipment metadata only. Names, tooltip, tags and parent prose never select gameplay behaviour.",
+        "category is UI/equipment metadata only. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; use source-backed parent facts only to author explicit runtimeProgram mechanics.",
         "Every movement, attachment/entity kind, damage path, input binding, lifecycle, targeting and child action must be explicit.",
-        "Use only capabilities present in capabilityCatalog. Do not promise gameplay that has no call/binding backing.",
+        "Use only capabilities present in capabilityCatalog. Catalog membership is not a recommendation; select only mechanics belonging to your authored design. Do not promise gameplay that has no call/binding backing.",
         "Parent useAmmo/ammo-candidate facts are read-only Terraria context. No ammo-consuming weapon capability exists yet: author explicit projectile entities and never claim vanilla PickAmmo/stack consumption unless a future catalog capability provides the full pipeline.",
         "Preserve literal parent physics where useful: a workbench may remain a literal workbench attached to a blade. Do not replace it with a vague wooden theme.",
         "Do not add a mandatory weird twist. Novelty comes from the authored composition itself, not an unrelated gimmick.",
-        "Multiple independent actions are legal: primary held action plus alternate deployed action, equipment/tool/placeable plus combat, fields plus child projectiles.",
+        "Multiple independent actions are legal when they belong to the authored composition; do not add an unrelated action merely because the catalog exposes it.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, calls and claims.",
         "Exactly one item_body is required. All other entities need explicit spawn, lifetime, hitbox, collision and, where moving, movement/controller calls.",
         "Primary/alternate inputs are exclusive. Sequence extra behaviour through supported events rather than competing bindings.",
+
         "Before answering, verify references, target kinds, exclusive components, event cycles, child depth/count and claim backing.",
     ]
 
@@ -117,76 +91,34 @@ def engine_runtime_capability_contract_for_llm(
     b: dict[str, Any],
     envelope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    del a, b
+    del a, b, envelope
     return {
         "principle": "The author composes the item. Deterministic code only type-checks, bounds, compiles and executes explicit choices.",
         "catalog": sharp_engine_fn_catalog_for_llm(),
         "technicalNotes": concise_terraria_tick_guide_for_llm(),
         "claimRule": "Every gameplay claim in runtimeContract.claims.backedBy cites one or more existing call/binding ids.",
         "literalSynthesisRule": "Keep concrete parent objects/parts literal when the concept uses them; do not code-normalize furniture into a material theme.",
-        # Keep the one recipe-specific field after the invariant catalog so
-        # provider prefix caches can reuse the exact contract prefill.
-        "balanceCorridor": copy.deepcopy(envelope or {}),
     }
 
 
-def authored_num(src: dict[str, Any], key: str, fallback: float, lo: float, hi: float) -> float:
-    try:
-        return max(lo, min(hi, float(src.get(key, fallback))))
-    except (TypeError, ValueError):
-        return fallback
-
-
-def authored_int(src: dict[str, Any], key: str, fallback: int, lo: int, hi: int) -> int:
-    return int(round(authored_num(src, key, fallback, lo, hi)))
-
-
-def authored_str(src: dict[str, Any], key: str, fallback: str = "") -> str:
-    value = src.get(key, fallback)
-    return str(value) if value is not None else fallback
-
-
-def authored_weapon_damage(*args: Any, **kwargs: Any) -> int:
-    # Kept as a neutral numeric helper for callers outside the authoring contract;
-    # it never selects a runtime class or component.
-    for value in args:
-        if isinstance(value, dict) and "damage" in value:
-            try:
-                return max(0, int(value["damage"]))
-            except (TypeError, ValueError):
-                pass
-    return max(0, int(kwargs.get("fallback", 0) or 0))
-
-
-def llm_category_without_router(
-    data: dict[str, Any], requested_kind: Any, tags: set[str], a: dict[str, Any], b: dict[str, Any], key: str | None
-) -> tuple[str, dict[str, Any]]:
-    del data, tags, a, b, key
-    allowed = {"combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"}
-    requested = str(requested_kind or "generic").strip().lower()
-    selected = requested if requested in allowed else "generic"
-    return selected, {"source": "authored_ui_category", "gameplayRouter": False}
-
-
 def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    stage = stat_profile_for(a, b, tags_of(a) | tags_of(b))
+    stage = stat_profile_for(a, b)
     envelope = stage.get("balanceEnvelope") if isinstance(stage.get("balanceEnvelope"), dict) else {}
     return {
-        "stage": stage.get("name"),
+        "authority": stage.get("authority"),
         "powerBudget": stage.get("powerBudget"),
         "parentDamage": stage.get("sourceDamage"),
+        "parentUseTimeTicks": stage.get("sourceFastestUseTime"),
+        "parentProgressionFacts": stage.get("sourceNumericProgressionFacts"),
         "suggestedDamage": stage.get("derivedDamage"),
-        "rarity": stage.get("rarity"),
-        "valueCopper": stage.get("value"),
-        "suggestedUseTimeTicks": stage.get("useTime"),
         "broadEnvelope": envelope,
-        "rule": "These are broad balance bounds, not a weapon archetype and not permission for code to rewrite the design.",
+        "rule": "These are broad source-numeric balance bounds, not a semantic classifier, weapon archetype, or permission for code to rewrite the design.",
     }
 
 
 def runtime_program_invariants_for_llm() -> dict[str, Any]:
     return {
-        "primaryEntitySelection": primary_entity_llm_invariant(),
+        "primaryEntityOwnership": primary_entity_llm_invariant(),
         "exclusiveInputs": {
             "maxBindingsPerInput": 1,
             "inputs": sorted(
@@ -194,6 +126,11 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
             ),
             "authoringProcedure": "Choose one action root per exclusive input. Never author separate use_item_body and spawn_entity binding rows with the same input; sequence additional behavior through a supported event or another input.",
             "configureItemUseRule": "configure_item_use supplies item-use parameters for whichever single action root you choose. It does not require a use_item_body binding. Presence of item_body also does not require use_item_body.",
+        },
+        "bindingUseTransactions": {
+            "singleOwner": "Every binding owns one complete usePolicy containing action, stackCost and contactDamage. No call or global field may shadow those decisions.",
+            "bodyDamageLane": "contactDamage is the independent item-body hitbox lane for an active use. A projectile-spawn action + contactDamage=true deliberately executes both item contact and projectile spawn in the same usePolicy; do not add a second binding. contactDamage never selects primaryEntityId or heldProj ownership, and must be false for placement actions and non-use inputs.",
+            "catalogNeutrality": "An available action is not a design suggestion. Omit actions that do not belong to the authored composition.",
         },
         "damageClass": {
             "builtInTokens": list(DAMAGE_CLASS_TOKENS),
@@ -205,15 +142,33 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
             "exactCardMatch": True,
             "sourceSentinelRule": "Do not copy Terraria sentinel -1 into a runtime param whose capability card minimum is 0; use an allowed value or omit the unnecessary capability.",
         },
+        "realizationExecutionTruth": realization_execution_truth_for_llm(),
+    }
+
+
+def realization_execution_truth_for_llm() -> dict[str, str]:
+    return {
+        "authority": "realization.description, realization.playerExperience, realization.intentTrace and cited claims are the final post-authoring report of the emitted runtimeProgram, not a repetition of the early concept. Walk every input, entity, event and terminal path before writing them; keep a promise only when that exact topology executes it.",
+        "placementUse": "The placement binding action performs the authored placement transaction and does not emit item_body.on_use; contactDamage must be false. If the result must both attack/use its body and place, author those as separate supported inputs. Never describe them as simultaneous on one placement binding.",
+        "terminationEvents": "on_expire means natural lifetime expiry only. on_kill is the terminal event for collision death, penetration exhaustion and natural expiry. on_tile_collision means each collision. A bounce-capable projectile with an effect only on on_expire does not guarantee that effect after its final collision; describe the exact event or wire the desired terminal path.",
+        "entityTopology": "A stationary_projectile without target_and_fire plus an explicitly referenced shot entity is a stationary contact entity, not a firing turret/sentry. Each use of free_projectile creates another independent projectile; do not claim a singleton minion/companion, minion-slot behavior or a per-owner cap unless the emitted topology explicitly provides that bound.",
+        "activeEquipment": "equipped is passive only. Any raised/used/placed/heal action requires a primary_use or alternate_use binding and must be described as requiring the item to be actively used rather than merely worn.",
+        "stackCost": "For a non-placement active use, stackCost=1 consumes one whole generated item. There is no hidden charge counter; do not call whole-item consumption a charge unless an explicit supported state mechanic exists.",
+        "placementEscrow": "For a successful placement binding, the committed generated item is held by the world-persistent placement ledger and returned as that same generated item when the placed tile is destroyed. Describe it as placed/recoverable, not permanently consumed; it remains unavailable while placed.",
+
+        "intentTrace": "intentTrace.kept lists only parent promises literally executed by the final topology. Move unsupported early promises to changed or dropped and state the concrete executable replacement; never preserve a label such as turret, sentry, minion, companion, explosion or simultaneous attack when only a weaker topology was emitted.",
     }
 
 
 def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
+    # Legacy deterministic/debug callers still provide ca/cb, but inferred
+    # canonical/category/tag/head-noun data is never model-facing.
+    _ = (ca, cb)
     corridor = _balance_corridor(a, b)
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
-        "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(a, b, corridor),
+        "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(a, b),
         "requiredJsonShape": author_item_prompt_shape_card(),
         "runtimeContractSchema": RUNTIME_CONTRACT_SCHEMA,
         "selfCheck": [
@@ -223,10 +178,12 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
             "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName; parent sentinel none is forbidden and the Author must choose the exact canonical token",
             "every call params object exactly matches its capability card; no below-minimum source sentinel such as -1 is copied",
             "for every selected call, every required param and every exact requires row is satisfied on the required target",
+            "every binding has one structurally complete usePolicy transaction; contactDamage is an independent item-body lane and may coexist with spawn_entity on the same active-use binding without changing primaryEntityId/held ownership",
             "every spawned entity has explicit spawn/lifetime/hitbox/collision",
             "moving entities have exactly one movement/controller",
             "event graph is acyclic and within depth/count limits",
             "every gameplay claim is backed by calls/bindings",
+            "rewrite realization and intentTrace as the literal post-authoring execution report using runtimeProgramInvariants.realizationExecutionTruth; never echo an unsupported early promise",
             "no family/archetype/semantic default is requested",
             "no unsupported vanilla useAmmo/PickAmmo behaviour is claimed",
         ],
@@ -235,8 +192,8 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         # removing any Author capability.
         "recipeKey": key,
         "parents": {
-            "A": {"packet": raw_parent_card_for_llm(a), "canonical": copy.deepcopy(ca)},
-            "B": {"packet": raw_parent_card_for_llm(b), "canonical": copy.deepcopy(cb)},
+            "A": {"packet": raw_parent_card_for_llm(a)},
+            "B": {"packet": raw_parent_card_for_llm(b)},
         },
         "balanceCorridor": corridor,
     }
@@ -281,20 +238,11 @@ __all__ = [
     "PLANNER_PROMPT_LIMIT_CHARS",
     "PLANNER_PROMPT_MIN_HEADROOM_CHARS",
     "VISIBLE_ENGINE_FUNCTIONS",
-    "authored_int",
-    "authored_num",
-    "authored_str",
-    "authored_weapon_damage",
     "build_llm_author_payload",
     "concise_terraria_tick_guide_for_llm",
     "engine_runtime_capability_contract_for_llm",
-    "llm_category_without_router",
-    "normalize_behavior_toy_fields",
-    "normalize_llm_attack_shape",
-    "normalize_runtime_authoring_fields",
     "planner_priority_header_for_llm",
     "planner_prompt_usability_report",
-    "runtime_value",
     "sharp_engine_fn_catalog_for_llm",
     "terraria_tick_guide_for_llm",
 ]

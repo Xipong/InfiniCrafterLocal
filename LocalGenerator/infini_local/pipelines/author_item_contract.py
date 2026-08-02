@@ -35,7 +35,11 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "authoredField": PRIMARY_ENTITY_AUTHOR_PATH,
         "primaryRule": (
             f"Choose exactly one id from runtimeProgram.entities and emit it once as {PRIMARY_ENTITY_AUTHOR_PATH}. "
-            "Primary means executable ownership, not importance."
+            "This selects lifecycle/held ownership, not the strongest or most important damage lane. Default to the unique item_body. "
+            "A spawned or high-damage projectile stays secondary while the item graphic or item-body contact represents the use. "
+            "When every active binding instead spawns the same entity, contactDamage is false, and configure_item_use hides the item "
+            "graphic, that exact spawn target must own lifecycle/held representation. Otherwise select another entity only when the "
+            "authored design explicitly moves lifecycle/held representation there."
         ),
         "preEmissionCheck": (
             f"Reject your draft unless {PRIMARY_ENTITY_FIELD} exactly equals one emitted entity id. "
@@ -46,20 +50,44 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
 
 def primary_entity_self_check() -> str:
     return (
-        f"set {PRIMARY_ENTITY_AUTHOR_PATH} to exactly one existing entity id and never emit role in Author "
-        "bindings or calls; Lowery materializes wire roles from exact target equality"
+        f"set {PRIMARY_ENTITY_AUTHOR_PATH} to the unique item_body by default; select the sole active-use spawn target instead when "
+        "contactDamage is false and configure_item_use hides the item graphic; otherwise choose another exact existing entity only "
+        "for explicitly authored lifecycle/held-representation ownership; never infer ownership from damage or mere spawning, never "
+        "emit role in Author bindings or calls, and let Lowery materialize wire roles by exact target equality"
     )
-
 
 def author_item_response_schema() -> dict[str, Any]:
     return copy.deepcopy(_author_schema())
 
 
+def _binding_prompt_shape_card() -> dict[str, Any]:
+    """One model-visible binding shape shared by Author and Repair cards."""
+
+    return {
+        "id": "stable_binding_id",
+        "input": "primary_use|alternate_use|hold|equipped",
+        "usePolicy": {
+            "action": {
+                "kind": "catalog action",
+                "targetId": "exact existing entity id",
+                "placementCallId": "include only for place_item; otherwise omit",
+            },
+            "stackCost": "exact integer 0 or 1 allowed by the selected input/action",
+            "contactDamage": (
+                "boolean body-hitbox lane for this active use; independent from action/target, so "
+                "spawn_entity + true means item-body contact and projectile spawn on the same use; "
+                "must be false for place_item, hold, and equipped"
+            ),
+        },
+    }
+
+
 def author_item_prompt_shape_card() -> dict[str, Any]:
     return {
-        "root": ["name", "tooltip", "category", "concept", "runtimeContract", "runtimeProgram"],
+        # This order is model-facing: early intent, executable mechanics,
+        # evidence claims, then the same Author's account of the realized result.
+        "root": ["name", "category", "concept", "runtimeProgram", "runtimeContract", "realization"],
         "name": "non-empty string",
-        "tooltip": "non-empty string",
         "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "concept": {
             "literalSynthesis": "non-empty string",
@@ -73,7 +101,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "schema": RUNTIME_PROGRAM_SCHEMA,
             PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
-            "bindings": [{"id": "stable_id", "input": "primary_use|alternate_use|hold|equipped", "action": "catalog action", "target": "entity_id"}],
+            "bindings": [_binding_prompt_shape_card()],
             "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
         },
         "runtimeContract": {
@@ -89,6 +117,17 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "text": "non-empty claim",
                 "backedBy": ["existing call or binding id"],
             }],
+        },
+        "realization": {
+            "description": "final result description derived after runtimeProgram and claims",
+            "playerExperience": "what the final executable program lets the player experience",
+            "backedByClaims": ["existing runtimeContract claim id"],
+            "intentTrace": {
+                "kept": ["early intent preserved by the executable program"],
+                "changed": [],
+                "dropped": [],
+                "added": [],
+            },
         },
         "forbidden": [
             "weapon archetype selector",
@@ -140,12 +179,7 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
             placeholders[key] = [{"id": "stable_entity_id", "kind": "catalog entity kind"}]
             continue
         if key == "bindingsUpsert":
-            placeholders[key] = [{
-                "id": "stable_binding_id",
-                "input": "primary_use|alternate_use|hold|equipped",
-                "action": "catalog action",
-                "target": "existing entity id",
-            }]
+            placeholders[key] = [_binding_prompt_shape_card()]
             continue
         if key == "callsUpsert":
             placeholders[key] = [{
@@ -168,6 +202,9 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
                 "text": "non-empty claim",
                 "backedBy": ["existing binding or call id"],
             }]
+            continue
+        if key == "realizationReplacement":
+            placeholders[key] = copy.deepcopy(author_item_prompt_shape_card()["realization"])
             continue
         if key == PRIMARY_ENTITY_SELECTION_FIELD:
             placeholders[key] = f"entity_id chosen from repairScope.repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.candidateEntityIds, or null"

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from infini_local.pipelines.parent_context_pipeline import (
     _compact_keep,
     _compact_raw_value,
     _dedupe_projectile_profile,
-    _fishing_bait_semantics_for_llm,
-    _placeable_consumption_semantics_for_llm,
-    _projectile_semantics_for_llm,
     _raw_section_dict,
     compact_ammo_profile,
     compact_item_raw_for_llm,
@@ -26,20 +24,35 @@ from infini_local.pipelines.parent_context_pipeline import (
 # profile extraction so parent_context_pipeline.py can stay below the large-file cap
 # while keeping the card itself in this single owner module.
 
+_FORBIDDEN_DERIVED_PACKET_KEYS = frozenset({
+    "behaviorDigest", "mechanicalHint", "semantics",
+    "canonical", "tags", "headNoun", "primaryCategory", "classifier", "class",
+    "hardTags", "softTags", "shapeAnchors", "visualAnchors", "modifiers",
+})
+
+
+def _strip_derived_packet_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_derived_packet_fields(item)
+            for key, item in value.items()
+            if key not in _FORBIDDEN_DERIVED_PACKET_KEYS
+        }
+    if isinstance(value, list):
+        return [_strip_derived_packet_fields(item) for item in value]
+    return value
+
 def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     """Compact parent card for the LLM.
 
-    The raw section keeps factual item/projectile fields.  A tiny semantics section may
-    clarify Terraria flag meaning when a raw flag is commonly overloaded (for example,
-    placeable consumable stacks). It is explanatory context, not a hidden router.
+    The packet contains raw source fields or exact accepted generated runtime facts.
+    It never adds code-derived semantics, behavior digests, categories or tags.
     """
     item_raw = compact_item_raw_for_llm(item)
     cross_mod_identity = {
         "sourceMod": str(item_field(item, "sourceMod", "Terraria")),
         "fullName": str(item_field(item, "fullName", "")),
         "shootProjectileFullName": str(item_field(item, "shootProjectileFullName", "")),
-        "createTile": item.get("createTile"),
-        "createWall": item.get("createWall"),
     }
     cross_mod_identity = {k: v for k, v in cross_mod_identity.items() if _compact_keep(v)}
     card: dict[str, Any] = {
@@ -50,29 +63,24 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     }
     if cross_mod_identity:
         card["raw"]["crossModIdentity"] = cross_mod_identity
-    semantics = _placeable_consumption_semantics_for_llm(item, item_raw)
-    if semantics:
-        card["semantics"] = semantics
-    fishing_semantics = _fishing_bait_semantics_for_llm(item, item_raw)
-    if fishing_semantics:
-        sem = card.setdefault("semantics", {})
-        if isinstance(sem, dict):
-            sem["fishingBaitSemantics"] = fishing_semantics
     vanilla_flags = compact_vanilla_flags_for_llm(item)
     if vanilla_flags:
         card["raw"]["vanillaFlags"] = vanilla_flags
-    direct = compact_projectile_profile(projectile_profile_of(item))
-    effective = compact_projectile_profile(effective_projectile_profile_of(item))
-    ammo = compact_ammo_profile(item)
+    gd = generated_data_of(item)
+    direct: dict[str, Any] = {}
+    effective: dict[str, Any] = {}
+    ammo: dict[str, Any] = {}
+    if not gd:
+        direct = compact_projectile_profile(projectile_profile_of(item))
+        effective = compact_projectile_profile(effective_projectile_profile_of(item))
+        direct.pop("behaviorDigest", None)
+        effective.pop("behaviorDigest", None)
+        ammo = compact_ammo_profile(item)
     if direct:
         card["raw"]["directProjectile"] = direct
     if effective:
         card["raw"]["effectiveProjectile"] = effective
-    projectile_semantics = _projectile_semantics_for_llm(effective if effective and "sameAs" not in effective else direct)
-    if projectile_semantics:
-        sem = card.setdefault("semantics", {})
-        if isinstance(sem, dict):
-            sem["projectileSemantics"] = projectile_semantics
+
     if ammo:
         # v0.4.49: do not feed fallback/player-inventory ammo examples to the LLM.
         # They are useful debug context, but small models confuse them with parent identity.
@@ -95,7 +103,6 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     runtime_probe = _raw_section_dict(item, "runtimeProbeRaw")
     if runtime_probe:
         card["raw"]["runtimeProbe"] = _compact_raw_value(runtime_probe)
-    gd = generated_data_of(item)
     if isinstance(gd, dict) and gd:
         gameplay_raw = dict_get_ci(gd, "gameplay", {})
         runtime_raw = dict_get_ci(gd, "runtimeProgram", {})
@@ -133,8 +140,8 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
         generated_parent = {
             "gameplay": {key: gameplay.get(key) for key in (
                 "kind", "damageClass", "damage", "knockback", "useTime", "useAnimation", "useStyleName",
-                "autoReuse", "useTurn", "manaCost", "healLife", "healMana", "potion", "maxStack", "consumable",
-                "ammoCategory", "ammoProjectileId", "ammoShootSpeedPxPerTick", "notAmmo", "pickPower", "axePower", "hammerPower", "createTile", "createWall", "craftYield", "rarity", "value",
+                "autoReuse", "useTurn", "manaCost", "healLife", "healMana", "potion", "maxStack",
+                "ammoCategory", "ammoProjectileId", "ammoShootSpeedPxPerTick", "notAmmo", "pickPower", "axePower", "hammerPower", "craftYield", "rarity", "value",
             ) if key in gameplay},
             "runtimeProgram": {
                 "apiVersion": runtime.get("apiVersion"),
@@ -142,17 +149,21 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
                 "itemEntityId": runtime.get("itemEntityId"),
                 "entities": entities,
                 "bindings": [
-                    {"input": row.get("input"), "action": row.get("action"), "target": row.get("target")}
+                    {
+                        "input": row.get("input"),
+                        "usePolicy": copy.deepcopy(row.get("usePolicy")),
+                    }
                     for row in runtime.get("bindings") or [] if isinstance(row, dict)
                 ],
             },
         }
         if summary:
-            generated_parent["summary"] = {key: summary.get(key) for key in (
-                "name", "fantasy", "category", "damageClass", "runtime", "visualIdentity", "notableEffects",
+            generated_parent["summary"] = {key: copy.deepcopy(summary.get(key)) for key in (
+                "schema", "name", "identity", "description", "playerExperience", "notableEffects", "backedByClaims",
+                "parentComposition", "runtimePrimaryEntityId", "runtimeEntityIds",
             ) if _compact_keep(summary.get(key))}
         card["raw"]["generatedParent"] = generated_parent
     # Do not send section bookkeeping or token-byte metadata to the LLM; the raw object keys are enough.
-    return {k: v for k, v in card.items() if _compact_keep(v)}
+    return _strip_derived_packet_fields({k: v for k, v in card.items() if _compact_keep(v)})
 
 __all__ = ["raw_parent_card_for_llm"]

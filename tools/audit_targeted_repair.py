@@ -55,7 +55,7 @@ def _case(name: str, mutate: Callable[[dict[str, Any]], None]) -> dict[str, Any]
         CANONICAL_B,
         failure_report={"stage": "runtime_program_validation", "errors": validation["errors"]},
     )
-    plan = dossier["blockerPlan"]
+    plan = dossier["repairScope"]["blockerPlan"]
     broken = dossier["brokenFragments"]
     dependency = dossier["validDependencyFragments"]
     card_names = {
