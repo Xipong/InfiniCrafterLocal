@@ -895,6 +895,7 @@ def _binding_repair_alternatives(
 def _binding_creation_alternatives(
     rows: Mapping[str, list[dict[str, Any]]],
     *,
+    owner_item_target_id: str,
     required_inputs: Iterable[str],
     additional_item_capabilities: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
@@ -905,11 +906,13 @@ def _binding_creation_alternatives(
         for row in rows.get("entities", [])
         if str(row.get("id") or "")
     }
-    item_ids = {entity_id for entity_id, kind in entity_kind_by_id.items() if kind == "item_body"}
+    if entity_kind_by_id.get(owner_item_target_id) != "item_body":
+        return []
     item_capabilities = {
         str(row.get("fn") or "")
         for row in rows.get("calls", [])
-        if str(row.get("target") or "") in item_ids and str(row.get("fn") or "")
+        if str(row.get("target") or "") == owner_item_target_id
+        and str(row.get("fn") or "")
     }
     item_capabilities.update(str(name) for name in additional_item_capabilities if str(name))
 
@@ -1021,7 +1024,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         for row in rows["entities"]
         if row.get("kind") == "item_body" and str(row.get("id") or "")
     }
-    planned_item_capabilities: set[str] = set()
+    planned_item_capabilities_by_target: dict[str, set[str]] = {}
     for candidate_error in error_rows:
         candidate_code = str(candidate_error.get("code") or candidate_error.get("kind") or "")
         if candidate_code not in {"missing_capability_dependency", "missing_capability_group"}:
@@ -1036,11 +1039,14 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             candidate_target = str(candidate_call.get("target") or "")
             if candidate_target in item_entity_ids:
                 candidate_targets.add(candidate_target)
-        for capability_name in _capability_names(_values(candidate_error.get("allowed"))):
-            if candidate_targets and _candidate_capability_viable(
-                capability_name, sorted(candidate_targets), rows,
-            ):
-                planned_item_capabilities.add(capability_name)
+        for candidate_target in sorted(candidate_targets):
+            for capability_name in _capability_names(_values(candidate_error.get("allowed"))):
+                if _candidate_capability_viable(
+                    capability_name, [candidate_target], rows,
+                ):
+                    planned_item_capabilities_by_target.setdefault(
+                        candidate_target, set()
+                    ).add(capability_name)
 
     for error in error_rows:
         path = str(error.get("path") or "$")
@@ -1438,13 +1444,16 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
         elif code == "missing_binding_dependency" and node_namespace == "calls" and node_id:
             capability = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
+            owner_item_target_id = str(node_row.get("target") or "")
             authorized_capabilities = {
                 capability_name
                 for candidate_error in error_rows
                 if exact_error_identity(candidate_error) == exact_error_identity(error)
                 for capability_name in _capability_names(_values(candidate_error.get("allowed")))
             }
-            authorized_capabilities.update(planned_item_capabilities)
+            authorized_capabilities.update(
+                planned_item_capabilities_by_target.get(owner_item_target_id, set())
+            )
             allowed_rows: list[dict[str, Any]] = []
             required_binding_updates: list[dict[str, Any]] = []
             existing_binding_choices: list[dict[str, Any]] = []
@@ -1511,6 +1520,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     elif capability_requirement.kind == "binding_input_present":
                         allowed_rows.extend(_binding_creation_alternatives(
                             rows,
+                            owner_item_target_id=owner_item_target_id,
                             required_inputs=capability_requirement.any_of,
                             additional_item_capabilities=authorized_capabilities,
                         ))
@@ -1544,6 +1554,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         allowed_rows.extend(
                             row for row in _binding_creation_alternatives(
                                 rows,
+                                owner_item_target_id=owner_item_target_id,
                                 required_inputs=required_inputs,
                                 additional_item_capabilities=authorized_capabilities,
                             )
@@ -1649,6 +1660,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         allowed_rows.extend(
                             row for row in _binding_creation_alternatives(
                                 rows,
+                                owner_item_target_id=owner_item_target_id,
                                 required_inputs=tuple(sorted({pattern[0] for pattern in required_patterns})),
                                 additional_item_capabilities=authorized_capabilities,
                             )
@@ -1970,11 +1982,20 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     requested_binding_targets = set(create_binding_targets)
     requested_binding_inputs = set(create_binding_inputs)
     requested_binding_actions = set(create_binding_actions)
-    if requested_binding_targets and requested_binding_inputs and requested_binding_actions:
+    if (
+        requested_binding_targets
+        and requested_binding_inputs
+        and requested_binding_actions
+        and len(item_entity_ids) == 1
+    ):
+        sole_item_target_id = next(iter(item_entity_ids))
         create_binding_alternatives.extend(_binding_creation_alternatives(
             rows,
+            owner_item_target_id=sole_item_target_id,
             required_inputs=requested_binding_inputs,
-            additional_item_capabilities=create_call_fns,
+            additional_item_capabilities=planned_item_capabilities_by_target.get(
+                sole_item_target_id, set()
+            ),
         ))
     create_binding_alternatives = sorted(
         {

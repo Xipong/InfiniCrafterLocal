@@ -1761,6 +1761,43 @@ def test_repair_scope_does_not_merge_capabilities_across_disjoint_error_identity
     assert requirement["allowedBindingTransactions"] == []
 
 
+def test_planned_item_capability_support_is_scoped_to_its_owner_target() -> None:
+    current = build_capability_witness("configure_tool")
+    program = current["runtimeProgram"]
+    program["bindings"] = []
+    program["calls"] = [
+        row for row in program["calls"]
+        if row["fn"] != "configure_item_use"
+    ]
+    item = next(row for row in program["entities"] if row["kind"] == "item_body")
+    other_item = copy.deepcopy(item)
+    other_item["id"] = "other_item"
+    program["entities"].append(other_item)
+    tool_call = next(row for row in program["calls"] if row["fn"] == "configure_tool")
+    other_tool_call = copy.deepcopy(tool_call)
+    other_tool_call["id"] = "other_tool"
+    other_tool_call["target"] = "other_item"
+    program["calls"].append(other_tool_call)
+
+    errors = validate_runtime_program(current)["errors"]
+    item_capability_error = next(
+        row for row in errors
+        if row["code"] == "missing_capability_dependency"
+        and row.get("relatedIds") == ["item"]
+    )
+    other_binding_error = next(
+        row for row in errors
+        if row["code"] == "missing_binding_dependency"
+        and "other_tool" in row.get("relatedIds", [])
+    )
+    scope = build_runtime_repair_scope(
+        current, [item_capability_error, other_binding_error]
+    )
+    requirement = scope["repairRequirements"][1]
+    assert requirement["affectedIds"] == ["other_tool"]
+    assert requirement["allowedBindingTransactions"] == []
+
+
 def test_binding_choice_is_owned_by_requirement_specific_existing_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
