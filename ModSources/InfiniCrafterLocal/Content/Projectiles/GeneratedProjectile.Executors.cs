@@ -56,7 +56,7 @@ public sealed partial class GeneratedProjectile
             float s = _entity.Light.Strength;
             Lighting.AddLight(Projectile.Center, c.R / 255f * s, c.G / 255f * s, c.B / 255f * s);
         }
-        InfiniVfxRuntime.OnTick(Projectile, _entity.Id, _data.VfxManifest, ref _vfxState);
+        InfiniVfxRuntime.OnTick(Projectile, _data, _entity.Id, _data.VfxManifest, ref _vfxState);
 
         if (_entity.Movement.Code is not (14 or 16 or 17 or 18) && Projectile.velocity.LengthSquared() > 0.01f)
             Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;

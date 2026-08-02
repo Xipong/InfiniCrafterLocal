@@ -14,9 +14,9 @@ public sealed partial class GeneratedProjectile
     public override bool PreDraw(ref Color lightColor)
     {
         if (!TryHydrate() || _data is null || _entity is null) return false;
-        InfiniVfxRuntime.Draw(Projectile, _entity.Id, _data.VfxManifest, ref _vfxState, lightColor, InfiniVfxDrawPass.UnderProjectile);
+        InfiniVfxRuntime.Draw(Projectile, _data, _entity.Id, _data.VfxManifest, ref _vfxState, lightColor, InfiniVfxDrawPass.UnderProjectile);
         DrawAuthoredEntityVisual(lightColor);
-        InfiniVfxRuntime.Draw(Projectile, _entity.Id, _data.VfxManifest, ref _vfxState, lightColor, InfiniVfxDrawPass.OverProjectile);
+        InfiniVfxRuntime.Draw(Projectile, _data, _entity.Id, _data.VfxManifest, ref _vfxState, lightColor, InfiniVfxDrawPass.OverProjectile);
         return false;
     }
 
