@@ -29,7 +29,19 @@ def render()->dict[Path,str]:
       "capability_inventory.generated.json":{"schema":"infini.low-level-capability-inventory.v1","capabilities":capability_inventory_rows()},
       "technical_lowering.generated.json":technical_lowering_manifest(),
     }
-    return {OUT/k:json.dumps(v,ensure_ascii=False,indent=2,sort_keys=True)+"\n" for k,v in payloads.items()}
+    rows: dict[Path, str] = {}
+    for filename, payload in payloads.items():
+        # Author root/property order is a model-facing autoregressive contract.
+        # Keep the legacy stable sorted serialization for every other artifact
+        # so this change does not create unrelated formatting churn.
+        preserve_model_order = filename == "author_item_response.schema.json"
+        rows[OUT / filename] = json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=not preserve_model_order,
+        ) + "\n"
+    return rows
 
 def main()->int:
     ap=argparse.ArgumentParser(); ap.add_argument("--check",action="store_true"); a=ap.parse_args(); rows=render(); bad=[]

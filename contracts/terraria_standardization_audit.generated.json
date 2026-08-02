@@ -4,7 +4,7 @@
   "score": 87,
   "scoreMax": 87,
   "metrics": {
-    "capabilities": 52,
+    "capabilities": 51,
     "canonicalDamageClasses": 10,
     "canonicalUseStyles": 13,
     "canonicalAmmoCategories": 15,
@@ -252,9 +252,9 @@
       "detail": "Author API must expose one canonical equipped input"
     },
     {
-      "name": "consumption_is_not_ammo",
+      "name": "consumption_is_binding_scoped",
       "ok": true,
-      "detail": "configure_consumption must not own Item.ammo"
+      "detail": "stack cost must have one owner in binding.usePolicy and no capability/global shadow owner"
     },
     {
       "name": "ammo_item_is_explicit",
@@ -262,9 +262,9 @@
       "detail": "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo"
     },
     {
-      "name": "ammo_item_dependency",
+      "name": "ammo_item_consumption_independent",
       "ok": true,
-      "detail": "ammo item must require explicit consumable=true"
+      "detail": "ammo stack handling must remain independent from direct-use input costs"
     },
     {
       "name": "ammo_projection_direct",
@@ -289,12 +289,12 @@
     {
       "name": "potion_flag_is_authored",
       "ok": true,
-      "detail": "Item.potion must be authored, not inferred from healing"
+      "detail": "Item.potion must be authored, binding-scoped, and not inferred from healing"
     },
     {
       "name": "generated_parent_preserves_exact_item_semantics",
       "ok": true,
-      "detail": "generated parents must preserve exact ammo/potion facts for the next Author"
+      "detail": "generated parents must preserve exact binding usePolicy/ammo/potion facts for the next Author"
     },
     {
       "name": "loaded_rarity_guard",

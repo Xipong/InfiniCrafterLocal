@@ -18,7 +18,7 @@
 
 ### Ammo semantics
 
-`configure_consumption` больше не притворяется ammo API. Отдельная `configure_vanilla_ammo_item` явно задаёт:
+`configure_vanilla_ammo_item` явно задаёт:
 
 - `Item.ammo` через canonical `AmmoID` category;
 - `Item.shoot` через authored vanilla `ProjectileID` в точном диапазоне stable `1..1021`;

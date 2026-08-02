@@ -25,20 +25,14 @@ def test_author_vocabulary_is_finite_and_alias_free() -> None:
     assert "rogue" not in DAMAGE_CLASS_TOKENS
 
 
-def test_consumption_and_ammo_are_distinct_terraria_capabilities() -> None:
-    consumption = CAPABILITY_REGISTRY["configure_consumption"]
+def test_binding_use_policy_and_ammo_are_distinct_terraria_owners() -> None:
     ammo = CAPABILITY_REGISTRY["configure_vanilla_ammo_item"]
-    assert tuple(consumption.params) == ("consumable", "consumeChancePercent")
+    assert "configure_consumption" not in CAPABILITY_REGISTRY
     assert tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedPxPerTick", "notAmmo")
     assert ammo.params["ammoCategory"].enum == VANILLA_AMMO_CATEGORY_TOKENS
     assert ammo.params["shootSpeedPxPerTick"].minimum == -20
     assert ammo.params["shootSpeedPxPerTick"].maximum == 80
-    assert any(
-        row.capability == "configure_consumption"
-        and row.param == "consumable"
-        and row.equals is True
-        for row in ammo.requirements
-    )
+    assert not ammo.requirements
 
 
 def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -> None:
@@ -69,7 +63,7 @@ def test_healing_does_not_infer_potion_sickness() -> None:
     restore = CAPABILITY_REGISTRY["restore_resources_on_use"]
     assert tuple(restore.params) == ("healLife", "healMana", "potionSickness")
     apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
-    assert "item.potion = Gameplay.Potion;" in apply
+    assert "item.potion = enabled && Gameplay.Potion;" in apply
     assert "item.potion = Gameplay.HealLife > 0" not in apply
 
 
@@ -85,7 +79,6 @@ def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
                 "healLife": 25,
                 "healMana": 0,
                 "potion": False,
-                "consumable": True,
                 "ammoCategory": "nail_friendly",
                 "ammoProjectileId": 310,
                 "ammoShootSpeedPxPerTick": 5.5,
@@ -93,20 +86,60 @@ def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
             },
             "runtimeProgram": {
                 "apiVersion": "infini.runtime-program.v5",
-                "schema": "infini.runtime-program.wire.v1",
+                "schema": "infini.runtime-program.wire.v3",
                 "itemEntityId": "item",
                 "entities": [{"id": "item", "kind": "item_body"}],
-                "bindings": [],
+                "bindings": [{
+                    "id": "primary",
+                    "input": "primary_use",
+                    "role": "primary",
+                    "usePolicy": {
+                        "action": {"kind": "use_item_body", "targetId": "item"},
+                        "stackCost": 1,
+                        "contactDamage": False,
+                    },
+                }],
             },
         },
     }
     card = raw_parent_card_for_llm(item)
     gameplay = card["raw"]["generatedParent"]["gameplay"]
     assert gameplay["potion"] is False
+    assert "primaryUseConsumeChancePercent" not in gameplay
+    assert "alternateUseConsumeChancePercent" not in gameplay
     assert gameplay["ammoCategory"] == "nail_friendly"
     assert gameplay["ammoProjectileId"] == 310
     assert gameplay["ammoShootSpeedPxPerTick"] == 5.5
     assert gameplay["notAmmo"] is True
+    bindings = card["raw"]["generatedParent"]["runtimeProgram"]["bindings"]
+    assert bindings == [{
+        "input": "primary_use",
+        "usePolicy": {
+            "action": {"kind": "use_item_body", "targetId": "item"},
+            "stackCost": 1,
+            "contactDamage": False,
+        },
+    }]
+
+
+def test_cross_mod_identity_does_not_duplicate_placeable_runtime_facts() -> None:
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+    card = raw_parent_card_for_llm({
+        "name": "Glowing Mushroom",
+        "internalName": "GlowingMushroom",
+        "sourceMod": "Terraria",
+        "fullName": "Terraria/GlowingMushroom",
+        "createTile": 190,
+        "createWall": -1,
+        "consumable": True,
+    })
+    raw = card["raw"]
+    assert raw["item"]["createTile"] == 190
+    assert raw["vanillaFlags"]["createTile"] == 190
+    assert "createTile" not in raw["crossModIdentity"]
+    assert "createWall" not in raw["crossModIdentity"]
+    assert "semantics" not in card
 
 
 def test_exact_modded_damage_class_uses_tmodloader_full_name() -> None:
@@ -142,12 +175,12 @@ def test_loaded_content_ids_fail_closed_at_csharp_boundary() -> None:
     for required in (
         "RarityLoader.RarityCount",
         "BuffLoader.BuffCount",
-        "TileLoader.TileCount",
-        "WallLoader.WallCount",
         "extra buff row cannot be null",
         "requires positive duration",
     ):
         assert required in normalize
+    assert "TileLoader.TileCount" in dto
+    assert "WallLoader.WallCount" in dto
     assert "BuffLoader.BuffCount" in dto
     assert "BuffId <= 0" in dto
     assert "buff.BuffCode > 0" in item

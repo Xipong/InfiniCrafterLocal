@@ -5,28 +5,49 @@
 
 ## Author response
 
-Gameplay Author возвращает metadata, concept, claim-backed `runtimeContract` и `runtimeProgram` схемы `infini.runtime-program.authoring.v1`.
+Gameplay Author возвращает metadata, concept, claim-backed `runtimeContract` и `runtimeProgram` схемы `infini.runtime-program.authoring.v4`.
 
 `runtimeProgram` содержит:
 
 - `apiVersion` и `schema`;
-- `primaryEntityId` — один точный существующий authored entity id;
+- `primaryEntityId` — один точный существующий authored entity id, владелец lifecycle/held representation;
 - `entities[]` — явные ids и low-level kinds;
-- `bindings[]` — явные `input + action + target`;
+- `bindings[]` — явные `input + usePolicy`, где атомарный `usePolicy` содержит `action`, `stackCost`, `contactDamage`;
 - `calls[]` — явные `fn + target + params`.
 
-Author bindings/calls **не содержат `role`**. Код не определяет primary entity по input, capability, kind, имени, tooltip или category. После валидации compiler только материализует wire role из exact equality:
+Author bindings/calls **не содержат `role`**. Код не определяет primary entity по input, capability, kind, имени, tooltip, category, урону или факту spawn. По умолчанию held/lifecycle owner — единственный `item_body`; projectile выбирается только когда Author явно переносит в него lifecycle/held representation. После валидации compiler только материализует wire role из exact equality:
 
 ```text
-binding.target == runtimeProgram.primaryEntityId -> primary
-otherwise                                      -> secondary
+binding.usePolicy.action.targetId == runtimeProgram.primaryEntityId -> primary
+otherwise                                                           -> secondary
 ```
 
 Это mandatory technical projection уже authored identity, а не выбор механики и не authoring compression.
 
+## One root, независимые use lanes
+
+Один exclusive input имеет один root binding, но это не означает «одну главную атаку». `usePolicy.contactDamage` — независимая item-body lane; `usePolicy.action` — независимый root effect. Поэтому canonical Starfury-like tuple выражается одной транзакцией:
+
+```json
+{
+  "input": "primary_use",
+  "usePolicy": {
+    "action": {"kind": "spawn_entity", "targetId": "falling_star"},
+    "stackCost": 0,
+    "contactDamage": true
+  }
+}
+```
+
+При `primaryEntityId=item_body` этот use одновременно сохраняет Terraria item hitbox и создаёт projectile; projectile не получает `heldProj` и ownership из-за урона. Если же все active bindings спавнят одну и ту же entity, `contactDamage=false`, а `configure_item_use.hideUseGraphic=true`, item-body вообще не представляет use и exact spawn target обязан стать lifecycle/held owner. Projectile-owned flail/yoyo/whip/holdout также может быть выбран явно; `place_item`, `hold` и `equipped` не могут включать contact damage, потому что соответствующие consumers его не исполняют.
+
+Это engine invariant, а не classifier: никаких решений по имени, tooltip, weapon/tool category или progression. Необычные vanilla/modded предметы используются как edge-case corpus; допустимость определяется только явным lifecycle/use tuple и реальными consumers.
+
+Проверяемые источники поведения: [Starfury — Official Terraria Wiki](https://terraria.wiki.gg/wiki/Starfury), [Flails — Official Terraria Wiki](https://terraria.wiki.gg/wiki/Flails). API/runtime authority остаются за текущим tModLoader source и текущими Python/C# consumers; executable fixtures: `workbench_blade` (body + projectile) и `door_on_chain` (projectile-owned flail).
+
 ## Composition
 
-Bindings связывают конкретный input с конкретным action/target. Calls прикрепляют одну capability к одной entity. Cross-entity behavior использует typed references. Movement, controller, damage, input, lifecycle, targeting и event actions остаются независимыми решениями модели; whole-weapon macro отсутствует.
+Bindings связывают конкретный input с одним атомарным `usePolicy`. Calls прикрепляют одну capability к одной entity. Cross-entity behavior использует typed references. Movement, controller, damage, input, lifecycle, targeting, body contact и event actions остаются независимыми решениями модели; whole-weapon macro отсутствует.
 
 Event producer alternatives выводятся только из `EVENT_KIND_REGISTRY` и `ENTITY_KIND_REGISTRY.base_events`. Author или Repair выбирает один полный вариант и явно пишет необходимые call/binding; код не вставляет producer автоматически.
 
