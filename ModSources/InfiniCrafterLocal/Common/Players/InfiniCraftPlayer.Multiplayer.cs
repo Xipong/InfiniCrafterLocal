@@ -3,6 +3,7 @@ using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Config;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.Systems;
 using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 using System;
@@ -70,16 +71,7 @@ public sealed partial class InfiniCraftPlayer
         _serverCraftWaitTicks = 0;
         _task = null;
 
-        try
-        {
-            var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-            packet.Write(PacketRequestServerCraft);
-            packet.Write(requestId);
-            WriteCraftItemRef(packet, a);
-            WriteCraftItemRef(packet, b);
-            packet.Send();
-        }
-        catch
+        if (!SendServerCraftRequest(requestId, 0, a, b))
         {
             ClearCraft();
             return false;
@@ -114,14 +106,60 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
+    private void ResendPendingRemoteCrafts()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient)
+            return;
+        if (_awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
+            SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB);
+        foreach (MultiDevCraftJob? job in _multiDevJobs)
+        {
+            if (job is not null && job.AwaitingServerCommit && HasCraftRequestId(job.RequestId))
+                SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+        }
+    }
+
+    private void RestoreRemoteCraftMirror(int laneIndex, GeneratorClient.PreparedGenerationRequest? request)
+    {
+        if (laneIndex is < 0 or > 2 || request is null)
+            return;
+        int first = laneIndex * 2;
+        InputSlot(first) = request.RefundA?.Clone() ?? NewAirItem();
+        InputSlot(first + 1) = request.RefundB?.Clone() ?? NewAirItem();
+        if (!InputSlot(first).IsAir) InputSlot(first).stack = 1;
+        if (!InputSlot(first + 1).IsAir) InputSlot(first + 1).stack = 1;
+    }
+
+    private void ClearRemoteCraftMirror(int laneIndex)
+    {
+        if (laneIndex is < 0 or > 2)
+            return;
+        InputSlot(laneIndex * 2).TurnToAir();
+        InputSlot(laneIndex * 2 + 1).TurnToAir();
+    }
+
+    private bool HasActiveServerCraftRequest(string requestId)
+    {
+        if (IsServerAuthoritativeCraft && string.Equals(_serverRequestId, requestId, StringComparison.Ordinal))
+            return true;
+        return _multiDevJobs.Any(job => job is not null
+            && !job.AwaitingServerCommit
+            && string.Equals(job.RequestId, requestId, StringComparison.Ordinal));
+    }
+
     private bool SendStationEscrowRequest(StationEscrowAction action, int index, Item item)
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient || HasPendingCraft || HasPendingStationEscrowOperation)
+        if (Main.netMode != NetmodeID.MultiplayerClient || HasPendingStationEscrowOperation)
             return false;
-        if (action != StationEscrowAction.ReturnAll && index is < 0 or > 1)
+        if (action == StationEscrowAction.ReturnAll ? HasAnyCraftLanePending : IsCraftLanePending(index / 2))
+            return false;
+        if (action != StationEscrowAction.ReturnAll && index is < 0 or > 5)
             return false;
 
         string operationId = Guid.NewGuid().ToString("N");
+        if (GeneratedStationEscrowStateSystem.NormalizeClientId(_stationEscrowClientId).Length == 0)
+            _stationEscrowClientId = Guid.NewGuid().ToString("N");
+        _stationEscrowUsesRemoteAuthority = true;
         _pendingStationEscrowOperationId = operationId;
         _pendingStationEscrowAction = (byte)action;
         _pendingStationEscrowIndex = index;
@@ -146,7 +184,7 @@ public sealed partial class InfiniCraftPlayer
 
     private bool ResendPendingStationEscrowRequest()
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient || !HasPendingStationEscrowOperation || HasPendingCraft)
+        if (Main.netMode != NetmodeID.MultiplayerClient || !HasPendingStationEscrowOperation || IsCraftLanePending(_pendingStationEscrowIndex / 2))
             return false;
         return FlushPendingStationEscrowRequest();
     }
@@ -159,6 +197,7 @@ public sealed partial class InfiniCraftPlayer
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketRequestStationEscrow);
+            packet.Write(_stationEscrowClientId);
             packet.Write(_pendingStationEscrowOperationId);
             packet.Write(_pendingStationEscrowAction);
             packet.Write((sbyte)_pendingStationEscrowIndex);
@@ -193,7 +232,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void RestoreRejectedLocalDeposit(int index)
     {
-        if (index is < 0 or > 1)
+        if (index is < 0 or > 5)
             return;
 
         Item restored;
@@ -274,52 +313,6 @@ public sealed partial class InfiniCraftPlayer
         _pendingStationEscrowWaitTicks = 0;
     }
 
-    private void ClearStationEscrowResultCache()
-    {
-        _stationEscrowResultCache.Clear();
-        _stationEscrowResultOrder.Clear();
-    }
-
-    private void RememberStationEscrowResult(string operationId, StationEscrowAction action, int index, bool success, string message)
-    {
-        string key = operationId ?? "";
-        if (string.IsNullOrWhiteSpace(key))
-            return;
-        if (!_stationEscrowResultCache.ContainsKey(key))
-            _stationEscrowResultOrder.Enqueue(key);
-        _stationEscrowResultCache[key] = new StationEscrowResultCacheEntry(
-            (byte)action,
-            index,
-            success,
-            message ?? "");
-        while (_stationEscrowResultOrder.Count > MaxStationEscrowResultCacheEntries)
-        {
-            string expired = _stationEscrowResultOrder.Dequeue();
-            _stationEscrowResultCache.Remove(expired);
-        }
-    }
-
-    private bool TryReplayStationEscrowResult(
-        string operationId,
-        out StationEscrowAction action,
-        out int index,
-        out bool success,
-        out string message)
-    {
-        action = 0;
-        index = -1;
-        success = false;
-        message = "";
-        if (string.IsNullOrWhiteSpace(operationId)
-            || !_stationEscrowResultCache.TryGetValue(operationId, out StationEscrowResultCacheEntry? cached)
-            || cached is null)
-            return false;
-        action = (StationEscrowAction)cached.Action;
-        index = cached.Index;
-        success = cached.Success;
-        message = cached.Message ?? "";
-        return true;
-    }
 
     private void ApplyStationEscrowResult(string operationId, StationEscrowAction action, int index, bool success, string message)
     {
@@ -337,7 +330,7 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
 
-        if (action == StationEscrowAction.TakeToMouse && index is >= 0 and <= 1)
+        if (action == StationEscrowAction.TakeToMouse && index is >= 0 and <= 5)
         {
             ref Item slot = ref InputSlot(index);
             Main.mouseItem = slot.Clone();
@@ -345,15 +338,22 @@ public sealed partial class InfiniCraftPlayer
             if (Player.inventory.Length > 58)
                 Player.inventory[58] = Main.mouseItem.Clone();
         }
-        else if (action == StationEscrowAction.ReturnOne && index is >= 0 and <= 1)
+        else if (action == StationEscrowAction.ReturnOne && index is >= 0 and <= 5)
         {
             ref Item slot = ref InputSlot(index);
+            RefundOne(slot);
             slot.TurnToAir();
         }
         else if (action == StationEscrowAction.ReturnAll)
         {
-            InputA.TurnToAir();
-            InputB.TurnToAir();
+            for (int slotIndex = 0; slotIndex < 6; slotIndex++)
+            {
+                ref Item slot = ref InputSlot(slotIndex);
+                if (slot is null || slot.IsAir)
+                    continue;
+                RefundOne(slot);
+                slot.TurnToAir();
+            }
         }
         ClearPendingStationEscrowOperation();
     }
@@ -372,6 +372,7 @@ public sealed partial class InfiniCraftPlayer
 
     public static void HandleStationEscrowRequestPacket(System.IO.BinaryReader reader, int whoAmI)
     {
+        string clientId = reader.ReadString();
         string operationId = reader.ReadString();
         StationEscrowAction action = (StationEscrowAction)reader.ReadByte();
         int index = reader.ReadSByte();
@@ -392,16 +393,40 @@ public sealed partial class InfiniCraftPlayer
         }
 
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        if (modPlayer.TryReplayStationEscrowResult(operationId, out StationEscrowAction replayAction, out int replayIndex, out bool replaySuccess, out string replayMessage))
+        clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
+        if (clientId.Length == 0)
         {
-            LogServerCraftTransaction(whoAmI, "station", "escrow_replay", $"op={operationId} action={(byte)replayAction} success={replaySuccess}");
-            SendStationEscrowResult(whoAmI, operationId, replayAction, replayIndex, replaySuccess, replayMessage);
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "некорректный escrow clientId");
+            return;
+        }
+        modPlayer._stationEscrowClientId = clientId;
+        modPlayer._stationEscrowUsesRemoteAuthority = true;
+        if (!GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "server escrow owner capacity исчерпана");
+            return;
+        }
+        if (GeneratedStationEscrowStateSystem.TryReplay(clientId, operationId, out GeneratedStationEscrowStateSystem.ReplayOutcome replay))
+        {
+            var replayAction = (StationEscrowAction)replay.Action;
+            LogServerCraftTransaction(whoAmI, "station", "escrow_replay", $"op={operationId} action={replay.Action} success={replay.Success}");
+            SendStationEscrowResult(whoAmI, operationId, replayAction, replay.Index, replay.Success, replay.Message);
+            return;
+        }
+        if (!GeneratedStationEscrowStateSystem.CanAcceptNewOperation(clientId, operationId))
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "server escrow outcome journal заполнен");
             return;
         }
 
-        if (modPlayer.HasPendingCraft)
+        if (action != StationEscrowAction.ReturnAll && !modPlayer.IsCraftLaneVisible(index / 2))
         {
-            SendStationEscrowResult(whoAmI, operationId, action, index, false, "крафт уже запущен");
+            FinishStationEscrowRequest(whoAmI, clientId, operationId, action, index, false, "multi-dev окно не разблокировано", modPlayer);
+            return;
+        }
+        if (action == StationEscrowAction.ReturnAll ? modPlayer.HasAnyCraftLanePending : modPlayer.IsCraftLanePending(index / 2))
+        {
+            FinishStationEscrowRequest(whoAmI, clientId, operationId, action, index, false, "это окно крафта уже запущено", modPlayer);
             return;
         }
 
@@ -426,8 +451,28 @@ public sealed partial class InfiniCraftPlayer
                 error = "неизвестное escrow-действие";
                 break;
         }
-        modPlayer.RememberStationEscrowResult(operationId, action, index, success, success ? "" : error);
-        SendStationEscrowResult(whoAmI, operationId, action, index, success, success ? "" : error);
+        FinishStationEscrowRequest(whoAmI, clientId, operationId, action, index, success, success ? "" : error, modPlayer);
+    }
+
+    private static void FinishStationEscrowRequest(
+        int whoAmI,
+        string clientId,
+        string operationId,
+        StationEscrowAction action,
+        int index,
+        bool success,
+        string message,
+        InfiniCraftPlayer modPlayer)
+    {
+        GeneratedStationEscrowStateSystem.CaptureOwnerState(clientId, modPlayer);
+        GeneratedStationEscrowStateSystem.RememberOutcome(
+            clientId,
+            operationId,
+            (byte)action,
+            index,
+            success,
+            message ?? "");
+        SendStationEscrowResult(whoAmI, operationId, action, index, success, message ?? "");
     }
 
 
@@ -655,33 +700,58 @@ public sealed partial class InfiniCraftPlayer
     {
         if (!IsServerAuthoritativeCraft)
             return;
+        if (!CompleteServerCraftTransaction(_serverRequestId, 0, success, itemName, message))
+            return;
+        SendCraftCommitResult(Player.whoAmI, _serverRequestId, success, itemName ?? "", message ?? "");
+    }
+
+    private bool CompleteServerCraftTransaction(
+        string requestId,
+        int laneIndex,
+        bool success,
+        string itemName,
+        string message)
+    {
+        if (Main.netMode != NetmodeID.Server || !HasCraftRequestId(requestId))
+            return false;
+        string outcomeName = success && string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName ?? "";
+        string outcomeMessage = message ?? "";
+        if (!GeneratedStationEscrowStateSystem.CompleteCraft(
+                _stationEscrowClientId,
+                requestId,
+                success,
+                outcomeName,
+                outcomeMessage))
+            return false;
         if (success)
-            RememberServerCraftCommit(ServerCraftKey(Player.whoAmI, _serverRequestId), string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName);
+            ClearServerStationEscrowLane(laneIndex);
         LogServerCraftTransaction(
             Player.whoAmI,
-            _serverRequestId,
-            success ? "committed" : "refunded",
-            success ? $"item={SafeCraftLogValue(itemName, 80)}" : $"reason={SafeCraftLogValue(message, 120)}");
-        SendCraftCommitResult(Player.whoAmI, _serverRequestId, success, itemName ?? "", message ?? "");
+            requestId,
+            success ? "committed" : "failed",
+            success ? $"item={SafeCraftLogValue(outcomeName, 80)}" : $"reason={SafeCraftLogValue(outcomeMessage, 120)}");
+        return true;
     }
 
 
     public void HandleCraftCommitResult(string requestId, bool success, string itemName, string message)
     {
+        if (TryHandleExtraCraftCommit(requestId, success, itemName, message))
+            return;
         if (!_awaitingServerCommit || !string.Equals(_serverRequestId, requestId, StringComparison.Ordinal))
             return;
 
         if (success)
         {
+            ClearRemoteCraftMirror(0);
             CombatText.NewText(Player.Hitbox, Color.Cyan, $"Discovered: {(string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName)}");
             ClearCraft();
             return;
         }
 
-        // In multiplayer the server is authoritative for ingredient ownership.
-        // Do not refund the client's transient UI escrow here: if the host rejected
-        // before taking real slots, its inventory state will resync; if it already
-        // took slots, it refunds server-side. Local refund here would reopen dup paths.
+        // The world-owned failed transaction keeps the exact inputs in the station.
+        // Restore only the client's mirror; never create inventory refund clones.
+        RestoreRemoteCraftMirror(0, _request);
         CombatText.NewText(Player.Hitbox, Color.OrangeRed, string.IsNullOrWhiteSpace(message)
             ? "InfiniCraft: сервер отклонил крафт"
             : $"InfiniCraft: {message}");
@@ -715,26 +785,17 @@ public sealed partial class InfiniCraftPlayer
         if (whoAmI < 0 || whoAmI >= Main.maxPlayers)
             return;
 
+        string clientId = reader.ReadString();
         string requestId = reader.ReadString();
+        int laneIndex = Math.Clamp((int)reader.ReadByte(), 0, 2);
         CraftItemRef aRef = ReadCraftItemRef(reader);
         CraftItemRef bRef = ReadCraftItemRef(reader);
-        LogServerCraftTransaction(whoAmI, requestId, "received", $"aType={aRef.Type} bType={bRef.Type}");
+        LogServerCraftTransaction(whoAmI, requestId, "received", $"lane={laneIndex} aType={aRef.Type} bType={bRef.Type}");
         if (string.IsNullOrWhiteSpace(requestId))
         {
             LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=empty_request_id");
             SendCraftCommitResult(whoAmI, requestId, false, "", "пустой requestId");
             return;
-        }
-
-        string dedupeKey = "servercraft:" + whoAmI + ":" + requestId;
-        lock (ServerCommittedCraftRequestsLock)
-        {
-            if (ServerCommittedCraftRequests.TryGetValue(dedupeKey, out string? knownName))
-            {
-                LogServerCraftTransaction(whoAmI, requestId, "committed", "result=duplicate_ack");
-                SendCraftCommitResult(whoAmI, requestId, true, knownName ?? "", "duplicate ack");
-                return;
-            }
         }
 
         Player player = Main.player[whoAmI];
@@ -746,54 +807,90 @@ public sealed partial class InfiniCraftPlayer
         }
 
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        if (modPlayer.HasPendingCraft)
+        clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
+        if (clientId.Length == 0 || !GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
         {
-            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=already_pending");
-            SendCraftCommitResult(whoAmI, requestId, false, "", "у игрока уже есть активный InfiniCraft");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "server escrow state недоступен");
             return;
         }
-        if (IsServerCraftCancelled(whoAmI, requestId))
+        modPlayer._stationEscrowClientId = clientId;
+        modPlayer._stationEscrowUsesRemoteAuthority = true;
+        if (GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out GeneratedStationEscrowStateSystem.CraftReplayOutcome replay))
         {
-            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=already_cancelled");
-            SendCraftCommitResult(whoAmI, requestId, false, "", "запрос уже отменён клиентом");
+            LogServerCraftTransaction(whoAmI, requestId, "replayed", $"success={replay.Success}");
+            SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
+            return;
+        }
+        if (GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId))
+        {
+            if (modPlayer.HasActiveServerCraftRequest(requestId))
+                return;
+            const string interrupted = "server craft interrupted; inputs remain in station";
+            GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", interrupted);
+            SendCraftCommitResult(whoAmI, requestId, false, "", interrupted);
+            return;
+        }
+        if (!modPlayer.IsCraftLaneVisible(laneIndex))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"reason=lane_locked lane={laneIndex}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "это multi-dev окно не разблокировано командой /multidevcraft");
+            return;
+        }
+        if (modPlayer.IsCraftLanePending(laneIndex))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"reason=lane_pending lane={laneIndex}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "в этом окне уже есть активный InfiniCraft");
             return;
         }
 
-        if (!modPlayer.TryTakeServerEscrowInput(0, aRef, out Item itemA, out string errorA))
+        int firstInputIndex = laneIndex * 2;
+        if (!modPlayer.TrySnapshotServerEscrowInput(firstInputIndex, aRef, out Item itemA, out string errorA))
         {
-            modPlayer.TryReturnAllServerEscrowToInventory(out _);
-            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=a source=stationA reason={SafeCraftLogValue(errorA, 120)}");
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=a lane={laneIndex} reason={SafeCraftLogValue(errorA, 120)}");
             SendCraftCommitResult(whoAmI, requestId, false, "", "сервер не подтвердил первый escrow-ингредиент: " + errorA);
             return;
         }
-        if (!modPlayer.TryTakeServerEscrowInput(1, bRef, out Item itemB, out string errorB))
+        if (!modPlayer.TrySnapshotServerEscrowInput(firstInputIndex + 1, bRef, out Item itemB, out string errorB))
         {
-            modPlayer.RefundOne(itemA);
-            modPlayer.TryReturnAllServerEscrowToInventory(out _);
-            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=b source=stationB aRefunded=true reason={SafeCraftLogValue(errorB, 120)}");
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=b lane={laneIndex} reason={SafeCraftLogValue(errorB, 120)}");
             SendCraftCommitResult(whoAmI, requestId, false, "", "сервер не подтвердил второй escrow-ингредиент: " + errorB);
             return;
         }
-        LogServerCraftTransaction(whoAmI, requestId, "reserved", $"aSlot=stationA bSlot=stationB aType={itemA.type} bType={itemB.type}");
+        if (!GeneratedStationEscrowStateSystem.TryBeginCraft(clientId, requestId, laneIndex))
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "server craft transaction journal недоступен");
+            return;
+        }
+        LogServerCraftTransaction(
+            whoAmI,
+            requestId,
+            "reserved",
+            $"lane={laneIndex} aInput={firstInputIndex} bInput={firstInputIndex + 1} aType={itemA.type} bType={itemB.type}");
 
         GeneratorClient.PreparedGenerationRequest request;
         try
         {
-            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(itemA, itemB, player);
+            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(
+                itemA,
+                itemB,
+                player,
+                modPlayer.MultiDevCraftEnabled ? $"llm_{laneIndex + 1}" : "",
+                multiDevCraft: modPlayer.MultiDevCraftEnabled);
         }
         catch (Exception ex)
         {
-            modPlayer.RefundOne(itemA);
-            modPlayer.RefundOne(itemB);
-            LogServerCraftTransaction(whoAmI, requestId, "refunded", $"reason=prepare_failed detail={SafeCraftLogValue(ex.Message, 120)}");
+            GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", "prepare failed; inputs remain in station");
+            LogServerCraftTransaction(whoAmI, requestId, "failed", $"reason=prepare_failed detail={SafeCraftLogValue(ex.Message, 120)}");
             SendCraftCommitResult(whoAmI, requestId, false, "", "хост не подготовил запрос: " + ex.Message);
             return;
         }
-        if (!modPlayer.BeginServerAuthoritativeCraft(request, $"{request.ParentA} + {request.ParentB}", requestId))
+        bool began = laneIndex == 0
+            ? modPlayer.BeginServerAuthoritativeCraft(request, $"{request.ParentA} + {request.ParentB}", requestId)
+            : modPlayer.BeginExtraCraftLane(request, $"{request.ParentA} + {request.ParentB}", requestId, laneIndex, serverAuthoritative: true);
+        if (!began)
         {
-            modPlayer.RefundOne(itemA);
-            modPlayer.RefundOne(itemB);
-            LogServerCraftTransaction(whoAmI, requestId, "refunded", "reason=begin_failed");
+            GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", "begin failed; inputs remain in station");
+            LogServerCraftTransaction(whoAmI, requestId, "failed", "reason=begin_failed");
             SendCraftCommitResult(whoAmI, requestId, false, "", "хост не начал server-authoritative craft");
             return;
         }
@@ -812,14 +909,13 @@ public sealed partial class InfiniCraftPlayer
         if (!HasCraftRequestId(requestId))
             return;
 
-        MarkServerCraftCancelled(whoAmI, requestId);
         Player player = Main.player[whoAmI];
         if (player is null || !player.active)
             return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
         if (modPlayer.IsServerAuthoritativeCraft && string.Equals(modPlayer._serverRequestId, requestId, StringComparison.Ordinal))
             modPlayer.CancelActiveServerAuthoritativeCraft("client cancelled/timeout");
-        else
+        else if (!modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout"))
             SendCraftCommitResult(whoAmI, requestId, false, "", "запрос отменён");
     }
 
@@ -842,13 +938,9 @@ public sealed partial class InfiniCraftPlayer
     {
         if (!IsServerAuthoritativeCraft)
             return;
-        RefundIngredients();
-        SendServerAuthoritativeResultIfNeeded(false, "", string.IsNullOrWhiteSpace(reason) ? "server craft cancelled" : reason);
+        SendServerAuthoritativeResultIfNeeded(false, "", string.IsNullOrWhiteSpace(reason) ? "server craft cancelled; inputs remain in station" : reason);
         ClearCraft();
     }
-
-    private static string ServerCraftKey(int playerId, string requestId)
-        => "servercraft:" + playerId + ":" + NormalizeCraftRequestId(requestId);
 
     private static string SafeCraftLogValue(string? value, int maxLength)
     {
@@ -871,40 +963,6 @@ public sealed partial class InfiniCraftPlayer
                 $"[InfiniCraftTx] player={playerId} request={rid} phase={safePhase} {safeDetails}");
         }
         catch { }
-    }
-
-    private static void RememberServerCraftCommit(string key, string itemName)
-    {
-        lock (ServerCommittedCraftRequestsLock)
-        {
-            if (!ServerCommittedCraftRequests.ContainsKey(key))
-                ServerCommittedCraftRequestOrder.Enqueue(key);
-            ServerCommittedCraftRequests[key] = itemName;
-            while (ServerCommittedCraftRequestOrder.Count > MaxServerCraftRequestCacheEntries)
-                ServerCommittedCraftRequests.Remove(ServerCommittedCraftRequestOrder.Dequeue());
-        }
-    }
-
-    private static void MarkServerCraftCancelled(int playerId, string requestId)
-    {
-        if (!HasCraftRequestId(requestId))
-            return;
-        lock (ServerCommittedCraftRequestsLock)
-        {
-            string key = ServerCraftKey(playerId, requestId);
-            if (ServerCancelledCraftRequests.Add(key))
-                ServerCancelledCraftRequestOrder.Enqueue(key);
-            while (ServerCancelledCraftRequestOrder.Count > MaxServerCraftRequestCacheEntries)
-                ServerCancelledCraftRequests.Remove(ServerCancelledCraftRequestOrder.Dequeue());
-        }
-    }
-
-    private static bool IsServerCraftCancelled(int playerId, string requestId)
-    {
-        if (!HasCraftRequestId(requestId))
-            return false;
-        lock (ServerCommittedCraftRequestsLock)
-            return ServerCancelledCraftRequests.Contains(ServerCraftKey(playerId, requestId));
     }
 
     private readonly struct CraftItemRef
@@ -968,7 +1026,7 @@ public sealed partial class InfiniCraftPlayer
     private bool TryDepositServerMouseItem(int index, CraftItemRef itemRef, out string error)
     {
         error = "";
-        if (Main.netMode != NetmodeID.Server || index is < 0 or > 1 || Player.inventory.Length <= 58)
+        if (Main.netMode != NetmodeID.Server || index is < 0 or > 5 || Player.inventory.Length <= 58)
         {
             error = "некорректный server escrow deposit";
             return false;
@@ -1003,6 +1061,7 @@ public sealed partial class InfiniCraftPlayer
         if (source.stack <= 0)
             source.TurnToAir();
         SyncServerMouseSlot();
+        CaptureCurrentServerStationEscrowState();
         LogServerCraftTransaction(Player.whoAmI, "station", "escrow_deposited", $"input={index} type={target.type} mouseSlot=58");
         return true;
     }
@@ -1010,7 +1069,7 @@ public sealed partial class InfiniCraftPlayer
     private bool TryTakeServerEscrowToMouse(int index, out string error)
     {
         error = "";
-        if (Main.netMode != NetmodeID.Server || index is < 0 or > 1 || Player.inventory.Length <= 58)
+        if (Main.netMode != NetmodeID.Server || index is < 0 or > 5 || Player.inventory.Length <= 58)
         {
             error = "некорректный server escrow withdraw";
             return false;
@@ -1029,13 +1088,14 @@ public sealed partial class InfiniCraftPlayer
         Player.inventory[58] = slot.Clone();
         slot.TurnToAir();
         SyncServerMouseSlot();
+        CaptureCurrentServerStationEscrowState();
         return true;
     }
 
     private bool TryReturnServerEscrowToInventory(int index, out string error)
     {
         error = "";
-        if (Main.netMode != NetmodeID.Server || index is < 0 or > 1)
+        if (Main.netMode != NetmodeID.Server || index is < 0 or > 5)
         {
             error = "некорректный server escrow return";
             return false;
@@ -1046,40 +1106,59 @@ public sealed partial class InfiniCraftPlayer
             error = "escrow-слот пуст";
             return false;
         }
-        Item refund = slot.Clone();
         slot.TurnToAir();
-        RefundOne(refund);
+        CaptureCurrentServerStationEscrowState();
         return true;
+    }
+
+    private bool TryReturnServerEscrowLaneToInventory(int laneIndex, out string error)
+    {
+        error = "";
+        if (laneIndex is < 0 or > 2)
+        {
+            error = "некорректное окно escrow";
+            return false;
+        }
+        bool returned = false;
+        for (int index = laneIndex * 2; index < laneIndex * 2 + 2; index++)
+        {
+            ref Item slot = ref InputSlot(index);
+            if (slot is null || slot.IsAir)
+                continue;
+            Item refund = slot.Clone();
+            slot.TurnToAir();
+            RefundOne(refund);
+            returned = true;
+        }
+        if (!returned)
+            error = "escrow окна уже пуст";
+        CaptureCurrentServerStationEscrowState();
+        return returned;
     }
 
     private bool TryReturnAllServerEscrowToInventory(out string error)
     {
         error = "";
         bool returned = false;
-        if (HasInputA)
+        for (int index = 0; index < 6; index++)
         {
-            Item refund = InputA.Clone();
-            InputA.TurnToAir();
-            RefundOne(refund);
-            returned = true;
-        }
-        if (HasInputB)
-        {
-            Item refund = InputB.Clone();
-            InputB.TurnToAir();
-            RefundOne(refund);
+            ref Item slot = ref InputSlot(index);
+            if (slot is null || slot.IsAir)
+                continue;
+            slot.TurnToAir();
             returned = true;
         }
         if (!returned)
             error = "server escrow уже пуст";
+        CaptureCurrentServerStationEscrowState();
         return returned;
     }
 
-    private bool TryTakeServerEscrowInput(int index, CraftItemRef itemRef, out Item ingredient, out string error)
+    private bool TrySnapshotServerEscrowInput(int index, CraftItemRef itemRef, out Item ingredient, out string error)
     {
         ingredient = NewAirItem();
         error = "";
-        if (index is < 0 or > 1)
+        if (index is < 0 or > 5)
         {
             error = "некорректный escrow index";
             return false;
@@ -1102,8 +1181,16 @@ public sealed partial class InfiniCraftPlayer
         }
         ingredient = slot.Clone();
         ingredient.stack = 1;
-        slot.TurnToAir();
         return true;
+    }
+
+    private void ClearServerStationEscrowLane(int laneIndex)
+    {
+        if (laneIndex is < 0 or > 2)
+            return;
+        InputSlot(laneIndex * 2).TurnToAir();
+        InputSlot(laneIndex * 2 + 1).TurnToAir();
+        CaptureCurrentServerStationEscrowState();
     }
 
     private void SyncServerMouseSlot()
@@ -1112,6 +1199,12 @@ public sealed partial class InfiniCraftPlayer
             return;
         Player.inventory[58].NetStateChanged();
         NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Player.whoAmI, 58);
+    }
+
+    private void CaptureCurrentServerStationEscrowState()
+    {
+        if (Main.netMode == NetmodeID.Server)
+            GeneratedStationEscrowStateSystem.CaptureOwnerState(_stationEscrowClientId, this);
     }
 
     private static bool GeneratedIdentityMatches(Item slot, string generatedId, out bool generatedMismatch)
@@ -1130,30 +1223,6 @@ public sealed partial class InfiniCraftPlayer
         bool ok = string.Equals(actual, expected, StringComparison.Ordinal);
         generatedMismatch = !ok;
         return ok;
-    }
-
-    public static void ClearServerCommitCache()
-    {
-        lock (ServerCommittedCraftRequestsLock)
-        {
-            ServerCommittedCraftRequests.Clear();
-            ServerCancelledCraftRequests.Clear();
-            ServerCommittedCraftRequestOrder.Clear();
-            ServerCancelledCraftRequestOrder.Clear();
-        }
-
-        // Also drop per-player escrow replay caches on unload/world teardown.
-        try
-        {
-            for (int i = 0; i < Main.maxPlayers; i++)
-            {
-                Player player = Main.player[i];
-                if (player is null || !player.active)
-                    continue;
-                player.GetModPlayer<InfiniCraftPlayer>().ClearStationEscrowResultCache();
-            }
-        }
-        catch { }
     }
 
     private static void SendStationEscrowResult(int toClient, string operationId, StationEscrowAction action, int index, bool success, string message)
@@ -1215,6 +1284,14 @@ public sealed partial class InfiniCraftPlayer
             }
 
             StampHostAssetSyncMetadata(data);
+            string[] assetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
+            if (assetFiles.Length > 0
+                && (global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync is null
+                    || !global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync.HasCompleteServerAssetRoster(data)))
+            {
+                error = "generated asset roster не помещается или не полностью доступен для MP transport";
+                return false;
+            }
 
             bool asArmorProxy = global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.CanRepresent(data);
             int itemType = asArmorProxy

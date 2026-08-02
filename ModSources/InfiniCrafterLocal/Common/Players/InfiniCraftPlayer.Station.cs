@@ -32,7 +32,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryPutMouseItemIntoInput(int index)
     {
-        if (HasPendingCraft || HasPendingStationEscrowOperation || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
+        if (IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
             return false;
 
         ref Item target = ref InputSlot(index);
@@ -74,7 +74,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryTakeInputToMouse(int index)
     {
-        if (HasPendingCraft || HasPendingStationEscrowOperation || Main.mouseItem is null || !Main.mouseItem.IsAir)
+        if (IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || !Main.mouseItem.IsAir)
             return false;
 
         ref Item slot = ref InputSlot(index);
@@ -91,7 +91,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryClearInputToInventory(int index)
     {
-        if (HasPendingCraft || HasPendingStationEscrowOperation)
+        if (IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation)
             return false;
         ref Item slot = ref InputSlot(index);
         if (slot is null || slot.IsAir)
@@ -105,19 +105,23 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryClearAllInputsToInventory()
     {
-        if (HasPendingCraft || HasPendingStationEscrowOperation)
+        if (HasAnyCraftLanePending || HasPendingStationEscrowOperation)
             return false;
         if (Main.netMode == NetmodeID.MultiplayerClient)
             return HasAnyInput && SendStationEscrowRequest(StationEscrowAction.ReturnAll, -1, NewAirItem());
         bool changed = false;
-        if (TryClearInputToInventory(0)) changed = true;
-        if (TryClearInputToInventory(1)) changed = true;
+        for (int index = 0; index < 6; index++)
+            if (TryClearInputToInventory(index)) changed = true;
         return changed;
     }
 
-    public bool TryStartCraftFromStation()
+    public bool TryStartCraftFromStation() => TryStartCraftFromStation(0);
+
+    public bool TryStartCraftFromStation(int laneIndex)
     {
-        if (!CanStartStationCraft)
+        if (laneIndex is 1 or 2)
+            return TryStartExtraCraftLane(laneIndex);
+        if (!CanStartStationCraftLane(0))
             return false;
 
         Item a = InputA.Clone();
@@ -142,7 +146,12 @@ public sealed partial class InfiniCraftPlayer
         GeneratorClient.PreparedGenerationRequest request;
         try
         {
-            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(a, b, Player);
+            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(
+                a,
+                b,
+                Player,
+                MultiDevCraftEnabled ? "llm_1" : "",
+                multiDevCraft: MultiDevCraftEnabled);
         }
         catch
         {
@@ -160,10 +169,37 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
+    public ref Item StationInput(int index) => ref InputSlot(index);
+
     private ref Item InputSlot(int index)
     {
         if (index == 0) return ref InputA;
-        return ref InputB;
+        if (index == 1) return ref InputB;
+        if (index == 2) return ref InputC;
+        if (index == 3) return ref InputD;
+        if (index == 4) return ref InputE;
+        if (index == 5) return ref InputF;
+        throw new ArgumentOutOfRangeException(nameof(index));
+    }
+
+    internal Item[] SnapshotServerStationEscrowSlots()
+    {
+        var slots = new Item[6];
+        for (int index = 0; index < slots.Length; index++)
+            slots[index] = InputSlot(index)?.Clone() ?? NewAirItem();
+        return slots;
+    }
+
+    internal void RestoreServerStationEscrowSlots(IReadOnlyList<Item> slots)
+    {
+        if (slots is null || slots.Count != 6)
+            return;
+        for (int index = 0; index < 6; index++)
+        {
+            ref Item target = ref InputSlot(index);
+            Item source = slots[index];
+            target = source is null || source.IsAir ? NewAirItem() : source.Clone();
+        }
     }
 
 
@@ -175,15 +211,13 @@ public sealed partial class InfiniCraftPlayer
                 SendStationEscrowRequest(StationEscrowAction.ReturnAll, -1, NewAirItem());
             return;
         }
-        if (HasInputA)
+        for (int index = 0; index < 6; index++)
         {
-            RefundOne(InputA);
-            InputA.TurnToAir();
-        }
-        if (HasInputB)
-        {
-            RefundOne(InputB);
-            InputB.TurnToAir();
+            ref Item slot = ref InputSlot(index);
+            if (slot is null || slot.IsAir)
+                continue;
+            RefundOne(slot);
+            slot.TurnToAir();
         }
     }
 

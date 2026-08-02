@@ -35,14 +35,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     // Bounded client resend cadence for a single outstanding station escrow op.
     // Retries keep the same operationId so the server can replay without re-applying.
     public const int StationEscrowRetryIntervalTicks = 90;
-    private const int MaxStationEscrowResultCacheEntries = 64;
 
-    private const int MaxServerCraftRequestCacheEntries = 2048;
-    private static readonly Dictionary<string, string> ServerCommittedCraftRequests = new(StringComparer.Ordinal);
-    private static readonly HashSet<string> ServerCancelledCraftRequests = new(StringComparer.Ordinal);
-    private static readonly Queue<string> ServerCommittedCraftRequestOrder = new();
-    private static readonly Queue<string> ServerCancelledCraftRequestOrder = new();
-    private static readonly object ServerCommittedCraftRequestsLock = new();
     private static bool _inventoryPrefetchConfigWarningLogged;
 
     private GeneratorClient.PreparedGenerationRequest? _request;
@@ -61,21 +54,16 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private string _serverRequestId = "";
     private string _label = "";
     private string _pendingStationEscrowOperationId = "";
+    private string _stationEscrowClientId = "";
+    private bool _stationEscrowUsesRemoteAuthority;
     private byte _pendingStationEscrowAction;
     private int _pendingStationEscrowIndex = -1;
     private Item? _pendingStationEscrowItem;
     private int _pendingStationEscrowWaitTicks;
-    // Server: bounded outcomes for delayed/reordered retries, not only the most
-    // recent operation. A late op1 arriving after op2 must never apply twice.
-    private sealed record StationEscrowResultCacheEntry(
-        byte Action,
-        int Index,
-        bool Success,
-        string Message);
-    private readonly Dictionary<string, StationEscrowResultCacheEntry> _stationEscrowResultCache = new(StringComparer.Ordinal);
-    private readonly Queue<string> _stationEscrowResultOrder = new();
+
     private readonly List<Item> _deferredExitRefunds = new();
     private bool _pendingRefundSavedForWorldExit;
+    private bool _pendingRemoteCraftSavedForWorldExit;
     private float _craftSoundVolumeSnapshot = -1f;
     private float _craftMusicVolumeSnapshot = -1f;
     private float _craftAmbientVolumeSnapshot = -1f;
@@ -109,9 +97,9 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public bool HasPendingCraft => _request is not null || _task is not null || _awaitingServerCommit;
     public bool HasInputA => InputA is not null && !InputA.IsAir;
     public bool HasInputB => InputB is not null && !InputB.IsAir;
-    public bool HasAnyInput => HasInputA || HasInputB;
+    public bool HasAnyInput => HasInputA || HasInputB || HasInputAt(2) || HasInputAt(3) || HasInputAt(4) || HasInputAt(5);
     public bool HasPendingStationEscrowOperation => !string.IsNullOrWhiteSpace(_pendingStationEscrowOperationId);
-    public bool HasStationState => HasPendingCraft || HasPendingStationEscrowOperation || HasAnyInput;
+    public bool HasStationState => HasAnyCraftLanePending || HasPendingStationEscrowOperation || HasAnyInput;
     public bool CanStartStationCraft => !HasPendingCraft && !HasPendingStationEscrowOperation && HasInputA && HasInputB;
     public int TicksLeft => Math.Max(0, _ticksLeft);
     public int ElapsedTicks => Math.Clamp(_elapsedTicks, 0, CraftDurationTicks);

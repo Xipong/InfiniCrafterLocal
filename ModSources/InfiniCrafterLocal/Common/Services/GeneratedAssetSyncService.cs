@@ -53,6 +53,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     public const int HttpDownloadConcurrency = 4;
     public const int MaxAssetBytes = 8 * 1024 * 1024;
     public const int MaxAssetBundleBytes = 16 * 1024 * 1024;
+    public const int MaxAssetFiles = 32;
 
     private const byte AssetTransportVersion = 2;
     private const byte AssetBundlePayloadVersion = 1;
@@ -303,8 +304,10 @@ public sealed class GeneratedAssetSyncService : IDisposable
         GeneratedAssetWireDescriptor[] result = descriptors
             .GroupBy(x => x.FileName, StringComparer.OrdinalIgnoreCase)
             .Select(x => x.First())
-            .Take(16)
+            .Take(MaxAssetFiles + 1)
             .ToArray();
+        if (result.Length > MaxAssetFiles || result.Sum(x => (long)x.Length) > MaxAssetBundleBytes)
+            result = Array.Empty<GeneratedAssetWireDescriptor>();
         if (!string.IsNullOrWhiteSpace(itemId))
         {
             lock (_lock)
@@ -316,6 +319,16 @@ public sealed class GeneratedAssetSyncService : IDisposable
             }
         }
         return result;
+    }
+
+    internal bool HasCompleteServerAssetRoster(GeneratedItemData data)
+    {
+        string[] files = AssetFilesFromData(data).ToArray();
+        if (files.Length == 0)
+            return true;
+        GeneratedAssetWireDescriptor[] descriptors = BuildServerAssetDescriptors(data);
+        return descriptors.Length == files.Length
+            && descriptors.Sum(x => (long)x.Length) <= MaxAssetBundleBytes;
     }
 
     internal void EnqueueTransferPacket(int toClient, string key, bool highPriority, Action<ModPacket> write)
@@ -475,7 +488,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         {
             return;
         }
-        if (version != AssetTransportVersion || string.IsNullOrWhiteSpace(itemId) || itemId.Length > 96 || count <= 0 || count > 16)
+        if (version != AssetTransportVersion || string.IsNullOrWhiteSpace(itemId) || itemId.Length > 96 || count <= 0 || count > MaxAssetFiles)
             return;
 
         var requested = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -660,7 +673,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
             using var reader = new BinaryReader(stream);
             byte version = reader.ReadByte();
             byte count = reader.ReadByte();
-            if (version != AssetBundlePayloadVersion || count <= 0 || count > 16)
+            if (version != AssetBundlePayloadVersion || count <= 0 || count > MaxAssetFiles)
                 return false;
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < count; i++)
@@ -693,7 +706,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     {
         var group = new List<VerifiedServerAsset>();
         int estimatedBytes = 2;
-        foreach (VerifiedServerAsset asset in assets.Take(16))
+        foreach (VerifiedServerAsset asset in assets.Take(MaxAssetFiles))
         {
             int entryBytes = asset.Bytes.Length + asset.Descriptor.FileName.Length * 2 + asset.Descriptor.Sha256.Length + 16;
             if (group.Count > 0 && estimatedBytes + entryBytes > MaxAssetBundleBytes)
@@ -762,7 +775,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private void SendAssetRequest(string itemId, IEnumerable<string> files)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient) return;
-        string[] safe = files.Select(SanitizeFileName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Take(16).ToArray();
+        string[] safe = files.Select(SanitizeFileName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxAssetFiles).ToArray();
         if (safe.Length == 0) return;
         ModPacket packet = InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(InfiniNetPacketIds.RequestGeneratedAsset);
@@ -1018,7 +1031,10 @@ public sealed class GeneratedAssetSyncService : IDisposable
         yield return data.Visual?.EquipOverlayPath ?? "";
         foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
             if (entity?.Visual is not null)
+            {
                 yield return entity.Visual.SpritePath ?? "";
+                yield return entity.Visual.ImpactSpritePath ?? "";
+            }
     }
 
     public static IEnumerable<string> AssetFilesFromData(GeneratedItemData data)
@@ -1030,7 +1046,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
             if (!string.IsNullOrWhiteSpace(file) && file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 seen.Add(file);
         }
-        return seen.Take(16).ToArray();
+        if (seen.Count > MaxAssetFiles)
+            throw new InvalidDataException($"generated asset roster exceeds {MaxAssetFiles} files");
+        return seen.ToArray();
     }
 
     public static string FileNameFromPath(string? path)

@@ -27,11 +27,12 @@ VISUAL_DELIVERY_FIELDS = frozenset({
     "preservationScore", "requiredAnchors", "semanticReviewStatus", "spritePath", "spriteRawPath",
     "spriteStatus", "spriteTechnicalScore", "spriteUrl", "style", "visualSoulArchetype",
     "visualSoulCoverage", "visualSoulEdgeDensity", "visualSoulGlow", "visualSoulPulse",
-    "visualSoulSignature", "visualSoulTooltip", "worldScale",
+    "visualSoulSignature", "worldScale",
 })
 
 GENERATED_PARENT_SUMMARY_DELIVERY_FIELDS = frozenset({
-    "category", "damageClass", "fantasy", "name", "notableEffects", "runtime", "visualIdentity",
+    "schema", "name", "identity", "description", "playerExperience", "notableEffects", "backedByClaims",
+    "parentComposition", "runtimePrimaryEntityId", "runtimeEntityIds",
 })
 
 PARENT_ITEM_CARD_DELIVERY_FIELDS = frozenset({

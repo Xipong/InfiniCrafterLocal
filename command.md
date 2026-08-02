@@ -6,6 +6,7 @@
 
 ```text
 /infinicore
+/multidevcraft [2|3|off]
 /infinidummy [count]
 /getinfini
 /infiniitem [trace [held|<1-58>]]
@@ -28,6 +29,7 @@ Main.SavePath = C:\Users\Cosmi\OneDrive\Документы\My Games\Terraria\tMo
 | Команда | Что делает | Куда попадает результат |
 |---|---|---|
 | `/infinicore` | Выдаёт один InfiniCore | В inventory игрока через Terraria quick-spawn; отдельных файлов нет |
+| `/multidevcraft [2|3|off]` | Сессионно включает 2–3 независимых окна dev-craft или возвращает одно обычное окно | Только состояние текущего игрока; предметы и файлы не создаёт |
 | `/infinidummy [count]` | Выдаёт 1–99 Target Dummy | В inventory игрока через Terraria quick-spawn; отдельных файлов нет |
 | `/getinfini` | Повторно запрашивает generated registry и недостающие assets | Definitions: `<Main.SavePath>\InfiniCrafterLocal\generated_items\<id>.json`; PNG/JSON assets: `<Main.SavePath>\InfiniCrafterLocal\asset_cache\`; retry state хранится в памяти |
 | `/infiniitem ...` | Показывает authored/applied значения выбранного generated-предмета | Только сообщения в игровом чате; ничего не записывает |
@@ -48,6 +50,21 @@ Main.SavePath = C:\Users\Cosmi\OneDrive\Документы\My Games\Terraria\tMo
 ```
 
 Выдаёт один `InfiniCore`. После этого открой инвентарь, чтобы использовать панель InfiniCraft station.
+
+## `/multidevcraft`
+
+```text
+/multidevcraft [2|3|off]
+```
+
+Сессионно разблокирует несколько независимых окон InfiniCraft для параллельного dev-craft:
+
+- `/multidevcraft 2` — два окна, жёстко закреплённые за `llm_1` и `llm_2`;
+- `/multidevcraft 3` — три окна, закреплённые за `llm_1`, `llm_2` и `llm_3`;
+- `/multidevcraft off` — выключает multi-dev и возвращает одно обычное окно;
+- без аргумента команда циклически переключает `1 → 2 → 3 → 1` окно.
+
+Каждое окно независимо хранит свои два входных предмета, request/progress и refund state. Команда не выдаёт предметы, не обходит validation и не отключает server-authoritative commit/refund. Скрыть занятое окно нельзя: сначала заверши его крафт или забери предметы. Профили `llm_2` и `llm_3` настраиваются во вкладке Multi-dev GUI.
 
 ## `/infinidummy`
 

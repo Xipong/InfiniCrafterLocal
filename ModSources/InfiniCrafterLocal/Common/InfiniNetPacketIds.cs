@@ -22,4 +22,6 @@ public static class InfiniNetPacketIds
     public const byte RequestGeneratedAsset = 16;
     public const byte GeneratedAssetChunk = 17;
     public const byte SyncGeneratedItemVfxEvent = 18;
+    public const byte NotifyGeneratedPlacement = 19;
+    public const byte SetMultiDevCraftMode = 20;
 }

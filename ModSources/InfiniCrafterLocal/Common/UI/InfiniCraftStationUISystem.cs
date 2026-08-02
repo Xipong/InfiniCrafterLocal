@@ -52,115 +52,131 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         if (!hasCore && !craftPlayer.HasStationState)
             return;
 
-        const int width = 392;
-        const int height = 190;
-
+        int laneCount = craftPlayer.MultiDevWindowCount;
+        const int width = 430;
+        const int headerHeight = 44;
+        const int laneHeight = 112;
+        const int footerHeight = 30;
+        int height = headerHeight + laneCount * laneHeight + footerHeight;
         int x = Math.Clamp(Main.screenWidth - width - 28, 24, Math.Max(24, Main.screenWidth - width - 24));
-        int y = Math.Clamp(216, 110, Math.Max(110, Main.screenHeight - height - 24));
-
+        int y = Math.Clamp(150, 80, Math.Max(80, Main.screenHeight - height - 24));
         var panel = new Rectangle(x, y, width, height);
-        var slotA = new Rectangle(panel.X + 18, panel.Y + 48, SlotSize, SlotSize);
-        var slotB = new Rectangle(panel.X + 82, panel.Y + 48, SlotSize, SlotSize);
-        var button = new Rectangle(panel.X + 150, panel.Y + 53, 86, 38);
-        var clearButton = new Rectangle(panel.X + 252, panel.Y + 53, 116, 38);
-        var barBack = new Rectangle(panel.X + 16, panel.Y + 152, panel.Width - 32, 16);
+        var clearButton = new Rectangle(panel.Right - 116, panel.Y + 8, 98, 28);
 
-        HandleMouse(craftPlayer, slotA, slotB, button, clearButton);
+        var slotA = new Rectangle[laneCount];
+        var slotB = new Rectangle[laneCount];
+        var craftButtons = new Rectangle[laneCount];
+        for (int lane = 0; lane < laneCount; lane++)
+        {
+            int rowY = panel.Y + headerHeight + lane * laneHeight;
+            slotA[lane] = new Rectangle(panel.X + 16, rowY + 24, SlotSize, SlotSize);
+            slotB[lane] = new Rectangle(panel.X + 78, rowY + 24, SlotSize, SlotSize);
+            craftButtons[lane] = new Rectangle(panel.X + 144, rowY + 31, 78, 36);
+        }
 
+        HandleMouse(craftPlayer, slotA, slotB, craftButtons, clearButton);
         DrawPanel(spriteBatch, panel);
-        Utils.DrawBorderString(spriteBatch, "InfiniCraft station", new Vector2(panel.X + 14, panel.Y + 10), Color.Cyan, 0.92f);
-        string subtitle = craftPlayer.HasPendingCraft ? Truncate(craftPlayer.CraftLabel, 42) : "Place two items, then stabilize";
-        Utils.DrawBorderString(spriteBatch, subtitle, new Vector2(panel.X + 14, panel.Y + 30), Color.Silver, 0.70f);
+        Utils.DrawBorderString(spriteBatch, "InfiniCraft station", new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan, 0.92f);
+        Utils.DrawBorderString(
+            spriteBatch,
+            laneCount > 1 ? $"MULTI-DEV ×{laneCount}" : "use /multidevcraft 2 or 3",
+            new Vector2(panel.X + 170, panel.Y + 13),
+            laneCount > 1 ? Color.LightGreen : Color.Gray,
+            0.62f);
+        DrawButton(spriteBatch, clearButton, !craftPlayer.HasAnyCraftLanePending && craftPlayer.HasAnyInput, "Clear all");
 
-        DrawInputSlot(spriteBatch, slotA, ref craftPlayer.InputA, "A");
-        DrawInputSlot(spriteBatch, slotB, ref craftPlayer.InputB, "B");
-        DrawInputName(spriteBatch, slotA, craftPlayer.InputA, Color.LightSkyBlue);
-        DrawInputName(spriteBatch, slotB, craftPlayer.InputB, Color.LightPink);
+        for (int lane = 0; lane < laneCount; lane++)
+        {
+            int rowY = panel.Y + headerHeight + lane * laneHeight;
+            if (lane > 0)
+                DrawRect(spriteBatch, new Rectangle(panel.X + 12, rowY, panel.Width - 24, 1), new Color(75, 105, 135, 150));
+            Color laneColor = lane switch { 0 => Color.LightSkyBlue, 1 => Color.LightGreen, _ => Color.Violet };
+            Utils.DrawBorderString(spriteBatch, $"Window {lane + 1} · LLM {lane + 1}", new Vector2(panel.X + 14, rowY + 3), laneColor, 0.66f);
 
-        DrawButton(spriteBatch, button, craftPlayer.CanStartStationCraft && !craftPlayer.HasPendingCraft, craftPlayer.HasPendingCraft ? "Busy" : "Craft");
-        DrawButton(spriteBatch, clearButton, !craftPlayer.HasPendingCraft && craftPlayer.HasAnyInput, "Clear inputs");
+            ref Item first = ref craftPlayer.StationInput(lane * 2);
+            ref Item second = ref craftPlayer.StationInput(lane * 2 + 1);
+            DrawInputSlot(spriteBatch, slotA[lane], ref first, "A");
+            DrawInputSlot(spriteBatch, slotB[lane], ref second, "B");
+            DrawInputName(spriteBatch, slotA[lane], first, Color.LightSkyBlue);
+            DrawInputName(spriteBatch, slotB[lane], second, Color.LightPink);
 
-        string modeHint;
-        if (!craftPlayer.HasPendingCraft && craftPlayer.HasAnyInput)
-            modeHint = "RMB slot clears · Clear returns inputs";
-        else if (!craftPlayer.HasPendingCraft)
-            modeHint = Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient
-                ? "MP: host generates, assets auto-download"
-                : "Place two items manually";
-        else
-            modeHint = "Generated assets are prefetched while inventory is open";
-        Utils.DrawBorderString(spriteBatch, modeHint, new Vector2(panel.X + 150, panel.Y + 102), Color.Gray, 0.60f);
-        string inputStatus = craftPlayer.CanStartStationCraft ? "A+B valid · manual craft only" : craftPlayer.HasAnyInput ? "Need second input" : "Manual A/B inputs";
-        Utils.DrawBorderString(spriteBatch, inputStatus, new Vector2(panel.X + 150, panel.Y + 119), craftPlayer.CanStartStationCraft ? Color.LightGreen : Color.Silver, 0.58f);
+            bool pending = craftPlayer.IsCraftLanePending(lane);
+            DrawButton(spriteBatch, craftButtons[lane], craftPlayer.CanStartStationCraftLane(lane), pending ? "Busy" : "Craft");
+            string label = pending ? Truncate(craftPlayer.CraftLaneLabel(lane), 31) : "Independent A+B pair";
+            Utils.DrawBorderString(spriteBatch, label, new Vector2(panel.X + 235, rowY + 29), Color.Silver, 0.60f);
+            Utils.DrawBorderString(spriteBatch, craftPlayer.CraftLaneStatus(lane), new Vector2(panel.X + 235, rowY + 50), pending ? Color.Orange : Color.LightGray, 0.59f);
 
-        DrawRect(spriteBatch, new Rectangle(barBack.X - 1, barBack.Y - 1, barBack.Width + 2, barBack.Height + 2), new Color(90, 105, 135, 180));
-        DrawRect(spriteBatch, barBack, new Color(18, 20, 28, 230));
+            var bar = new Rectangle(panel.X + 144, rowY + 78, panel.Width - 160, 12);
+            DrawRect(spriteBatch, bar, new Color(18, 20, 28, 230));
+            int fill = (int)Math.Round(bar.Width * MathHelper.Clamp(craftPlayer.CraftLaneProgress(lane), 0f, 1f));
+            if (fill > 0)
+                DrawGradient(spriteBatch, new Rectangle(bar.X, bar.Y, fill, bar.Height), new Color(40, 190, 220, 235), laneColor * 0.9f);
+        }
 
-        float progress = MathHelper.Clamp(craftPlayer.CraftProgress, 0f, 1f);
-        int fillWidth = (int)Math.Round(barBack.Width * progress);
-        if (fillWidth > 0)
-            DrawGradient(spriteBatch, new Rectangle(barBack.X, barBack.Y, fillWidth, barBack.Height), new Color(40, 190, 220, 235), new Color(160, 90, 255, 235));
-
-        string status = craftPlayer.HasPendingCraft
-            ? craftPlayer.IsWaitingForRetry
-                ? $"Генератор занят/дописывает — проверка #{craftPlayer.GenerationAttempt + 1} через {craftPlayer.RetrySecondsLeft}с"
-                : craftPlayer.IsWaitingForModel ? "Стабилизация завершена — ждём модель" : $"Стабилизация: {Math.Ceiling(craftPlayer.TicksLeft / 60f)}с"
-            : craftPlayer.CanStartStationCraft ? "Готово к стабилизации" : "Ожидаются два входных предмета";
-        Utils.DrawBorderString(spriteBatch, status, new Vector2(panel.X + 14, panel.Y + 170), craftPlayer.IsWaitingForRetry || craftPlayer.IsWaitingForModel ? Color.Orange : Color.LightSkyBlue, 0.66f);
-
-        var mouse = new Point(Main.mouseX, Main.mouseY);
-        if (panel.Contains(mouse))
+        string footer = laneCount > 1
+            ? "Each window spends its own ingredients · exact llm_1/2/3 · RMB clears slot"
+            : "Admin unlock: /multidevcraft 2 or /multidevcraft 3";
+        Utils.DrawBorderString(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, 0.56f);
+        if (panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
     }
 
-    private static void HandleMouse(InfiniCraftPlayer craftPlayer, Rectangle slotA, Rectangle slotB, Rectangle button, Rectangle clearButton)
+    private static void HandleMouse(
+        InfiniCraftPlayer craftPlayer,
+        Rectangle[] slotA,
+        Rectangle[] slotB,
+        Rectangle[] craftButtons,
+        Rectangle clearButton)
     {
         var mouse = new Point(Main.mouseX, Main.mouseY);
-
         if (Main.mouseRight && Main.mouseRightRelease)
         {
-            if (slotA.Contains(mouse))
+            for (int lane = 0; lane < slotA.Length; lane++)
             {
-                craftPlayer.TryClearInputToInventory(0);
-                Main.mouseRightRelease = false;
-                return;
-            }
-            if (slotB.Contains(mouse))
-            {
-                craftPlayer.TryClearInputToInventory(1);
-                Main.mouseRightRelease = false;
-                return;
+                if (slotA[lane].Contains(mouse) && craftPlayer.TryClearInputToInventory(lane * 2))
+                {
+                    Main.mouseRightRelease = false;
+                    return;
+                }
+                if (slotB[lane].Contains(mouse) && craftPlayer.TryClearInputToInventory(lane * 2 + 1))
+                {
+                    Main.mouseRightRelease = false;
+                    return;
+                }
             }
         }
-
         if (!Main.mouseLeft || !Main.mouseLeftRelease)
             return;
 
-        if (slotA.Contains(mouse))
+        for (int lane = 0; lane < slotA.Length; lane++)
         {
-            if (!craftPlayer.TryTakeInputToMouse(0)) craftPlayer.TryPutMouseItemIntoInput(0);
-            Main.mouseLeftRelease = false;
-            return;
-        }
-        if (slotB.Contains(mouse))
-        {
-            if (!craftPlayer.TryTakeInputToMouse(1)) craftPlayer.TryPutMouseItemIntoInput(1);
-            Main.mouseLeftRelease = false;
-            return;
+            if (slotA[lane].Contains(mouse))
+            {
+                if (!craftPlayer.TryTakeInputToMouse(lane * 2)) craftPlayer.TryPutMouseItemIntoInput(lane * 2);
+                Main.mouseLeftRelease = false;
+                return;
+            }
+            if (slotB[lane].Contains(mouse))
+            {
+                if (!craftPlayer.TryTakeInputToMouse(lane * 2 + 1)) craftPlayer.TryPutMouseItemIntoInput(lane * 2 + 1);
+                Main.mouseLeftRelease = false;
+                return;
+            }
+            if (craftButtons[lane].Contains(mouse))
+            {
+                if (!craftPlayer.TryStartCraftFromStation(lane))
+                    CombatText.NewText(Main.LocalPlayer.Hitbox, Color.OrangeRed, craftPlayer.IsCraftLanePending(lane) ? "This craft window is busy" : "Need two input items");
+                Main.mouseLeftRelease = false;
+                return;
+            }
         }
         if (clearButton.Contains(mouse))
         {
             craftPlayer.TryClearAllInputsToInventory();
             Main.mouseLeftRelease = false;
-            return;
-        }
-        if (button.Contains(mouse))
-        {
-            if (!craftPlayer.TryStartCraftFromStation())
-                CombatText.NewText(Main.LocalPlayer.Hitbox, Color.OrangeRed, craftPlayer.HasPendingCraft ? "InfiniCraft already running" : "Need two input items");
-            Main.mouseLeftRelease = false;
         }
     }
+
 
 
     private static void DrawInputSlot(SpriteBatch spriteBatch, Rectangle rect, ref Item item, string label)

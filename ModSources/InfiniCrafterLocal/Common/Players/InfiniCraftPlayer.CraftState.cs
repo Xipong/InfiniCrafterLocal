@@ -36,17 +36,21 @@ public sealed partial class InfiniCraftPlayer
     {
         InputA = NewAirItem();
         InputB = NewAirItem();
+        InitializeMultiDevCraftState();
+        _stationEscrowClientId = Guid.NewGuid().ToString("N");
+        _stationEscrowUsesRemoteAuthority = false;
         ClearPendingStationEscrowOperation();
-        ClearStationEscrowResultCache();
     }
 
     public override void OnEnterWorld()
     {
         if (InputA is null) InputA = NewAirItem();
         if (InputB is null) InputB = NewAirItem();
-        // Drop any half-open client escrow transaction after world/join transitions.
-        // Server A/B remains authoritative for true station ownership.
-        ClearPendingStationEscrowOperation();
+        // A half-open remote escrow operation is durable and must resend the same
+        // operationId after reconnect. Clearing it here loses the exact optimistic unit.
+        _pendingStationEscrowWaitTicks = 0;
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+            ResendPendingRemoteCrafts();
         // Late-join catch-up: make sure this client has the generated-item registry
         // before it sees someone else use an already-crafted item.
         global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
@@ -59,20 +63,56 @@ public sealed partial class InfiniCraftPlayer
     public override void SaveData(TagCompound tag)
     {
         _pendingRefundSavedForWorldExit = false;
+        _pendingRemoteCraftSavedForWorldExit = false;
         try
         {
+            if (string.IsNullOrWhiteSpace(_stationEscrowClientId))
+                _stationEscrowClientId = Guid.NewGuid().ToString("N");
+            tag["infiniStationEscrowClientId"] = _stationEscrowClientId;
+            tag["infiniStationEscrowRemoteAuthority"] = _stationEscrowUsesRemoteAuthority;
+            if (_stationEscrowUsesRemoteAuthority)
+            {
+                var mirror = new List<TagCompound>();
+                for (int index = 0; index < 6; index++)
+                {
+                    ref Item slot = ref InputSlot(index);
+                    if (slot is null || slot.IsAir || slot.stack <= 0)
+                        continue;
+                    mirror.Add(new TagCompound { ["index"] = index, ["item"] = ItemIO.Save(slot) });
+                }
+                tag["infiniStationEscrowMirror"] = mirror;
+            }
+            if (HasPendingStationEscrowOperation)
+            {
+                var pending = new TagCompound
+                {
+                    ["operationId"] = _pendingStationEscrowOperationId,
+                    ["action"] = (int)_pendingStationEscrowAction,
+                    ["index"] = _pendingStationEscrowIndex,
+                };
+                if (_pendingStationEscrowItem is not null && !_pendingStationEscrowItem.IsAir)
+                    pending["item"] = ItemIO.Save(_pendingStationEscrowItem);
+                tag["infiniPendingStationEscrow"] = pending;
+            }
+            List<TagCompound> remoteCrafts = SavePendingRemoteCrafts();
+            if (remoteCrafts.Count > 0)
+            {
+                tag["infiniPendingRemoteCrafts"] = remoteCrafts;
+                _pendingRemoteCraftSavedForWorldExit = true;
+            }
             var refunds = PendingRefundTagsForSave();
-            if (refunds.Count <= 0)
-                return;
-
-            tag["infiniPendingCraftRefunds"] = refunds;
-            tag["infiniPendingCraftLabel"] = CraftLabel;
-            _pendingRefundSavedForWorldExit = true;
+            if (refunds.Count > 0)
+            {
+                tag["infiniPendingCraftRefunds"] = refunds;
+                tag["infiniPendingCraftLabel"] = CraftLabel;
+                _pendingRefundSavedForWorldExit = true;
+            }
         }
         catch
         {
             // Never let the station refund backup corrupt/brick the player file.
             _pendingRefundSavedForWorldExit = false;
+            _pendingRemoteCraftSavedForWorldExit = false;
         }
     }
 
@@ -81,9 +121,44 @@ public sealed partial class InfiniCraftPlayer
         _deferredExitRefunds.Clear();
         try
         {
-            if (!tag.ContainsKey("infiniPendingCraftRefunds"))
-                return;
-
+            string clientId = tag.ContainsKey("infiniStationEscrowClientId")
+                ? tag.GetString("infiniStationEscrowClientId")
+                : "";
+            _stationEscrowClientId = Common.Systems.GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
+            if (_stationEscrowClientId.Length == 0)
+                _stationEscrowClientId = Guid.NewGuid().ToString("N");
+            _stationEscrowUsesRemoteAuthority = tag.ContainsKey("infiniStationEscrowRemoteAuthority")
+                && tag.GetBool("infiniStationEscrowRemoteAuthority");
+            if (_stationEscrowUsesRemoteAuthority && tag.ContainsKey("infiniStationEscrowMirror"))
+            {
+                foreach (TagCompound row in tag.GetList<TagCompound>("infiniStationEscrowMirror"))
+                {
+                    int index = row.GetInt("index");
+                    if (index is < 0 or > 5 || !row.ContainsKey("item"))
+                        continue;
+                    Item item = ItemIO.Load(row.GetCompound("item"));
+                    if (item is not null && !item.IsAir && item.stack > 0)
+                        InputSlot(index) = item.Clone();
+                }
+            }
+            if (tag.ContainsKey("infiniPendingStationEscrow"))
+            {
+                TagCompound pending = tag.GetCompound("infiniPendingStationEscrow");
+                string operationId = (pending.GetString("operationId") ?? "").Trim().ToLowerInvariant();
+                int action = pending.GetInt("action");
+                int index = pending.GetInt("index");
+                if (operationId.Length == 32 && operationId.All(Uri.IsHexDigit) && action is >= 1 and <= 4 && index is >= -1 and <= 5)
+                {
+                    _pendingStationEscrowOperationId = operationId;
+                    _pendingStationEscrowAction = (byte)action;
+                    _pendingStationEscrowIndex = index;
+                    _pendingStationEscrowWaitTicks = 0;
+                    _pendingStationEscrowItem = pending.ContainsKey("item") ? ItemIO.Load(pending.GetCompound("item")) : null;
+                    _stationEscrowUsesRemoteAuthority = true;
+                }
+            }
+            if (tag.ContainsKey("infiniPendingRemoteCrafts"))
+                RestorePendingRemoteCrafts(tag.GetList<TagCompound>("infiniPendingRemoteCrafts"));
             foreach (var itemTag in tag.GetList<TagCompound>("infiniPendingCraftRefunds"))
             {
                 try
@@ -104,19 +179,115 @@ public sealed partial class InfiniCraftPlayer
         }
     }
 
+    private List<TagCompound> SavePendingRemoteCrafts()
+    {
+        var pending = new List<TagCompound>();
+        if (_stationEscrowUsesRemoteAuthority && _awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
+            AddPendingRemoteCraftTag(pending, 0, _serverRequestId, _request);
+        AddMultiDevPendingRemoteCrafts(pending);
+        return pending;
+    }
+
+    private static void AddPendingRemoteCraftTag(
+        List<TagCompound> pending,
+        int laneIndex,
+        string requestId,
+        GeneratorClient.PreparedGenerationRequest request)
+    {
+        if (pending is null || request is null || laneIndex is < 0 or > 2 || !HasCraftRequestId(requestId))
+            return;
+        Item a = request.RefundA?.Clone() ?? NewAirItem();
+        Item b = request.RefundB?.Clone() ?? NewAirItem();
+        if (a.IsAir || b.IsAir)
+            return;
+        a.stack = 1;
+        b.stack = 1;
+        pending.Add(new TagCompound
+        {
+            ["laneIndex"] = laneIndex,
+            ["requestId"] = NormalizeCraftRequestId(requestId),
+            ["parentA"] = request.ParentA ?? "",
+            ["parentB"] = request.ParentB ?? "",
+            ["itemA"] = ItemIO.Save(a),
+            ["itemB"] = ItemIO.Save(b),
+        });
+    }
+
+    private void RestorePendingRemoteCrafts(IList<TagCompound> pending)
+    {
+        if (pending is null)
+            return;
+        foreach (TagCompound row in pending.Take(3))
+        {
+            int laneIndex = row.GetInt("laneIndex");
+            string requestId = NormalizeCraftRequestId(row.GetString("requestId")).ToLowerInvariant();
+            if (laneIndex is < 0 or > 2 || requestId.Length != 32 || !requestId.All(Uri.IsHexDigit)
+                || !row.ContainsKey("itemA") || !row.ContainsKey("itemB"))
+                continue;
+            Item a;
+            Item b;
+            try
+            {
+                a = ItemIO.Load(row.GetCompound("itemA"));
+                b = ItemIO.Load(row.GetCompound("itemB"));
+            }
+            catch
+            {
+                continue;
+            }
+            if (a is null || b is null || a.IsAir || b.IsAir || !InfiniCore.IsValidIngredient(a) || !InfiniCore.IsValidIngredient(b))
+                continue;
+            a.stack = 1;
+            b.stack = 1;
+            var request = new GeneratorClient.PreparedGenerationRequest
+            {
+                PayloadJson = "{}",
+                ParentA = row.GetString("parentA") ?? "",
+                ParentB = row.GetString("parentB") ?? "",
+                RefundA = a.Clone(),
+                RefundB = b.Clone(),
+            };
+            int first = laneIndex * 2;
+            InputSlot(first) = a.Clone();
+            InputSlot(first + 1) = b.Clone();
+            if (laneIndex == 0)
+            {
+                if (HasPendingCraft)
+                    continue;
+                _request = request;
+                _serverRequestId = requestId;
+                _label = $"{request.ParentA} + {request.ParentB}";
+                _awaitingServerCommit = true;
+                _serverCraftWaitTicks = StationEscrowRetryIntervalTicks - 1;
+                _task = null;
+            }
+            else
+            {
+                RestoreMultiDevPendingRemoteCraft(laneIndex, requestId, request);
+            }
+            _stationEscrowUsesRemoteAuthority = true;
+        }
+    }
+
     private List<TagCompound> PendingRefundTagsForSave()
     {
         var refunds = new List<TagCompound>();
 
-        if (HasPendingCraft && _request is not null)
+        bool remoteMainPending = _stationEscrowUsesRemoteAuthority && _awaitingServerCommit;
+        if (HasPendingCraft && _request is not null && !remoteMainPending)
         {
             AddRefundTag(refunds, _request.RefundA);
             AddRefundTag(refunds, _request.RefundB);
-            return refunds;
         }
+        AddMultiDevPendingRefunds(refunds, includeRemoteAwaiting: !_stationEscrowUsesRemoteAuthority);
 
-        if (HasInputA) AddRefundTag(refunds, InputA);
-        if (HasInputB) AddRefundTag(refunds, InputB);
+        if (!_stationEscrowUsesRemoteAuthority)
+        {
+            if (HasInputA) AddRefundTag(refunds, InputA);
+            if (HasInputB) AddRefundTag(refunds, InputB);
+            for (int index = 2; index < 6; index++)
+                if (HasInputAt(index)) AddRefundTag(refunds, InputSlot(index));
+        }
         return refunds;
     }
 
@@ -226,6 +397,7 @@ public sealed partial class InfiniCraftPlayer
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
         TickPendingStationEscrow();
+        TickMultiDevCrafts();
         GeneratedHeldItemDrawLayer.MaybeBroadcastLocalHeldItem(Player, ref _heldItemPresentationSyncTick, ref _heldItemPresentationSyncKey);
 
         if (Main.netMode != NetmodeID.Server && !Main.playerInventory && !HasPendingCraft && HasAnyInput)
@@ -242,12 +414,10 @@ public sealed partial class InfiniCraftPlayer
             _ticksLeft = Math.Max(0, CraftDurationTicks - _elapsedTicks);
             if (_serverCraftWaitTicks == 2 * 60)
                 CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, "InfiniCraft: хост генерирует предмет");
-            if (_serverCraftWaitTicks >= RemoteServerCraftTimeoutTicks)
-            {
-                SendRemoteServerCraftCancel("client_timeout");
-                CombatText.NewText(Player.Hitbox, Color.OrangeRed, "InfiniCraft: хост не завершил генерацию — запрос отменён");
-                ClearCraft();
-            }
+            if (_serverCraftWaitTicks % StationEscrowRetryIntervalTicks == 0)
+                ResendPendingRemoteCrafts();
+            if (_serverCraftWaitTicks == RemoteServerCraftTimeoutTicks)
+                CombatText.NewText(Player.Hitbox, Color.Orange, "InfiniCraft: связь с хостом задерживается — ожидаем подтверждение без повторного списания");
             return;
         }
 
@@ -316,15 +486,15 @@ public sealed partial class InfiniCraftPlayer
         if (data is null)
         {
             var generator = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator;
-            if (generator?.LastRecipeFailureIsFatal == true)
+            if (_request?.FailureIsFatal == true)
             {
-                string detail = generator.LastRecipeFailureStatusCode > 0
-                    ? $"HTTP {generator.LastRecipeFailureStatusCode}"
+                string detail = _request.FailureStatusCode > 0
+                    ? $"HTTP {_request.FailureStatusCode}"
                     : "ошибка рецепта";
-                if (!string.IsNullOrWhiteSpace(generator.LastRecipeFailureMessage))
-                    detail += $": {generator.LastRecipeFailureMessage}";
-                string playerMessage = !string.IsNullOrWhiteSpace(generator.LastRecipeFailurePlayerMessage)
-                    ? generator.LastRecipeFailurePlayerMessage
+                if (!string.IsNullOrWhiteSpace(_request.FailureMessage))
+                    detail += $": {_request.FailureMessage}";
+                string playerMessage = !string.IsNullOrWhiteSpace(_request.FailurePlayerMessage)
+                    ? _request.FailurePlayerMessage
                     : "InfiniCraft: рецепт не прошёл проверку — предметы возвращены; попробуй скрафтить заново";
                 FailCraft(playerMessage, detail);
                 return;
@@ -353,7 +523,6 @@ public sealed partial class InfiniCraftPlayer
     {
         if (IsServerAuthoritativeCraft)
         {
-            RefundIngredients();
             SendServerAuthoritativeResultIfNeeded(false, "", remoteMessage);
             ClearCraft();
             return;
@@ -376,14 +545,6 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
 
-        if (IsServerAuthoritativeCraft && IsServerCraftCancelled(Player.whoAmI, _serverRequestId))
-        {
-            RefundIngredients();
-            SendServerAuthoritativeResultIfNeeded(false, "", "server craft request was cancelled");
-            ClearCraft();
-            return;
-        }
-
         if (SpawnGeneratedItemServerSide(Player, data, out string error))
         {
             SendServerAuthoritativeResultIfNeeded(true, data.Name, "ok");
@@ -401,7 +562,7 @@ public sealed partial class InfiniCraftPlayer
         // World exit/unload must not eat station inputs or in-flight craft ingredients.
         // If SaveData already persisted a refund bundle, do not also put the same items
         // into inventory here; they will be restored by LoadData/OnEnterWorld.
-        if (!_pendingRefundSavedForWorldExit)
+        if (!_pendingRefundSavedForWorldExit && !_pendingRemoteCraftSavedForWorldExit)
         {
             if (_awaitingServerCommit)
                 SendRemoteServerCraftCancel("client_world_exit");
@@ -412,6 +573,7 @@ public sealed partial class InfiniCraftPlayer
                 ReturnStationInputs();
         }
 
+        AbortMultiDevCraftsForWorldExit(refundLocally: !_pendingRefundSavedForWorldExit && !_pendingRemoteCraftSavedForWorldExit);
         ClearCraft();
     }
 
@@ -574,6 +736,7 @@ public sealed partial class InfiniCraftPlayer
         _serverRequestId = "";
         _label = "";
         _pendingRefundSavedForWorldExit = false;
+        _pendingRemoteCraftSavedForWorldExit = false;
     }
 
 }

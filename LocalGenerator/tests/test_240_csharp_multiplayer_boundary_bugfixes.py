@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -82,7 +81,7 @@ def _contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authore
     assert "ShouldRunNpcGameplay()" in chain
 
 
-def _contract_check_projectile_vfx_event_relay_is_owner_validated_exact_and_slot_preserving() -> None:
+def _contract_check_projectile_vfx_event_relay_is_server_authored_exact_and_lifetime_independent() -> None:
     root = _text("InfiniCrafterLocal.cs")
     packet_ids = _text("Common/InfiniNetPacketIds.cs")
     net_sync = _text("Content/Projectiles/GeneratedProjectile.NetSync.cs")
@@ -92,31 +91,36 @@ def _contract_check_projectile_vfx_event_relay_is_owner_validated_exact_and_slot
 
     assert "SyncGeneratedProjectileVfxEvent = 9" in packet_ids
     assert "GeneratedProjectile.HandleVfxEventSyncPacket(reader, whoAmI)" in root
-    assert "payload.Owner != whoAmI" in handler
-    assert "FindGeneratedProjectile(whoAmI, payload.Identity)" in handler
-    assert "HasExactVfxSlot(generated._data, generated._entity.Id, payload.EventName)" in handler
-    assert "MaxRuntimeRangeTiles" in handler
-    assert "(whoAmI, payload.Identity, payload.EventName)" in handler
-    assert "last == now" in handler
-    assert "relay.Send(-1, whoAmI)" in handler
-    assert "InfiniVfxRuntime.OnEvent" in handler
+    assert "Main.netMode != NetmodeID.MultiplayerClient" in handler
+    assert "GeneratedItemRegistryService" in handler
+    assert "HasExactVfxSlot(data, entity.Id, payload.EventName)" in handler
+    assert "InfiniVfxRuntime.OnDetachedEvent" in handler
+    assert "remote?._data" not in handler
+    assert "BroadcastAuthoritativeVfxEvent" in net_sync
+    assert "packet.Send(-1, Projectile.owner)" in net_sync
+    assert "SourceToken" in net_sync
     assert "EmitAndSyncVfxEvent" in events
     assert "foreach (RuntimeEventActionSpec action" in events
     assert "EmitAndSyncVfxEvent(RuntimeEventKind.OnRelease" in executors
     assert "EmitAndSyncVfxEvent(RuntimeEventKind.ChannelComplete" in executors
 
 
-def _contract_check_server_craft_dedupe_and_cancel_caches_are_bounded() -> None:
-    player = _text("Common/Players/InfiniCraftPlayer.cs")
+def _contract_check_server_craft_replay_is_world_persistent_and_stable_client_scoped() -> None:
     multiplayer = _text("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
+    world = _text("Common/Systems/GeneratedStationEscrowStateSystem.cs")
 
-    assert "MaxServerCraftRequestCacheEntries" in player
-    assert "ServerCommittedCraftRequestOrder" in player
-    assert "ServerCancelledCraftRequestOrder" in player
-    assert "RememberServerCraftCommit" in multiplayer
-    assert "MarkServerCraftCancelled" in multiplayer
-    assert re.search(r"while \(ServerCommittedCraftRequestOrder\.Count > MaxServerCraftRequestCacheEntries\)", multiplayer)
-    assert re.search(r"while \(ServerCancelledCraftRequestOrder\.Count > MaxServerCraftRequestCacheEntries\)", multiplayer)
+    for token in (
+        "CraftTransactionsSaveKey",
+        "TryReplayCraft",
+        "IsCraftPending",
+        "TryBeginCraft",
+        "CompleteCraft",
+        "GetList<TagCompound>(CraftTransactionsSaveKey).Take(MaxCraftTransactions)",
+    ):
+        assert token in world
+    assert "servercraft:" not in multiplayer
+    assert "ServerCommittedCraftRequests" not in multiplayer
+    assert "ServerCancelledCraftRequests" not in multiplayer
 
 
 def _contract_check_generated_utility_sync_consumes_payload_before_every_reject() -> None:
@@ -141,11 +145,14 @@ def _contract_check_server_craft_transactions_log_reservation_commit_and_refund_
     assert '"received"' in request
     assert '"reserve_rejected"' in request
     assert '"reserved"' in request
-    assert "aSlot=stationA" in request
-    assert "bSlot=stationB" in request
-    assert "TryTakeServerEscrowInput(0, aRef" in request
-    assert "TryTakeServerEscrowInput(1, bRef" in request
-    assert 'success ? "committed" : "refunded"' in result
+    assert "int firstInputIndex = laneIndex * 2" in request
+    assert "aInput={firstInputIndex}" in request
+    assert "bInput={firstInputIndex + 1}" in request
+    assert "TrySnapshotServerEscrowInput(firstInputIndex, aRef" in request
+    assert "TrySnapshotServerEscrowInput(firstInputIndex + 1, bRef" in request
+    assert "GeneratedStationEscrowStateSystem.TryBeginCraft" in request
+    assert 'success ? "committed" : "failed"' in result
+    assert "if (success)\n            ClearServerStationEscrowLane(laneIndex);" in result
 
 
 # One collected item per contract module; individual checks keep source order and tracebacks.
@@ -160,8 +167,8 @@ def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
             '_contract_check_registry_bounds_only_hydration_request_state_not_authoritative_definitions',
             '_contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed',
             '_contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authored',
-            '_contract_check_projectile_vfx_event_relay_is_owner_validated_exact_and_slot_preserving',
-            '_contract_check_server_craft_dedupe_and_cancel_caches_are_bounded',
+            '_contract_check_projectile_vfx_event_relay_is_server_authored_exact_and_lifetime_independent',
+            '_contract_check_server_craft_replay_is_world_persistent_and_stable_client_scoped',
             '_contract_check_generated_utility_sync_consumes_payload_before_every_reject',
             '_contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots',
         ),
