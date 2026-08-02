@@ -5,6 +5,8 @@ import struct
 from typing import Any
 import zlib
 
+from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+
 
 def write_no_image_fixture_png(path: Path, *, size: int = 32) -> Path:
     """Write a deterministic technical PNG without calling an image backend."""
@@ -57,35 +59,61 @@ def hydrate_no_image_fixture_assets(data: dict[str, Any], fixture_path: Path) ->
     })
     raw_program = data.get("runtimeProgram")
     program: dict[str, Any] = raw_program if isinstance(raw_program, dict) else {}
+    asset_plan = build_visual_asset_plan(data)
+    required_impact_entity_ids = {
+        str(slot.get("entityId") or "")
+        for slot in asset_plan
+        if str(slot.get("role") or "").startswith("impact:")
+    }
+    equipment_overlay_required = any(
+        str(slot.get("role") or "") == "equip_overlay"
+        for slot in asset_plan
+    )
     attack = data.setdefault("attack", {})
     for entity in program.get("entities") or []:
-        if not isinstance(entity, dict) or entity.get("kind") == "item_body":
+        if not isinstance(entity, dict):
             continue
         entity_visual = entity.setdefault("visual", {})
-        mode = str(entity_visual.get("assetMode") or "")
-        if mode == "baked_sprite":
+        if entity.get("kind") != "item_body":
+            mode = str(entity_visual.get("assetMode") or "")
+            if mode == "baked_sprite":
+                entity_visual.update({
+                    "spriteStatus": "qa_no_image_fixture",
+                    "spritePath": fixture,
+                    "spriteUrl": "",
+                })
+            elif mode == "reuse_item_icon":
+                entity_visual.update({
+                    "spriteStatus": "reused_item_icon",
+                    "spritePath": fixture,
+                    "spriteUrl": "",
+                })
+            elif mode in {"runtime_geometry", "no_asset"}:
+                entity_visual.update({
+                    "spriteStatus": "not_required",
+                    "spritePath": "",
+                    "spriteUrl": "",
+                })
+            role = str(entity.get("visualRole") or "")
+            if role in {"projectile", "impact", "child", "field"}:
+                attack[f"{role}SpriteStatus"] = str(entity_visual.get("spriteStatus") or "")
+                attack[f"{role}SpritePath"] = str(entity_visual.get("spritePath") or "")
+                attack[f"{role}SpriteUrl"] = ""
+        if str(entity.get("id") or "") in required_impact_entity_ids:
             entity_visual.update({
-                "spriteStatus": "qa_no_image_fixture",
-                "spritePath": fixture,
-                "spriteUrl": "",
+                "impactSpriteStatus": "qa_no_image_fixture",
+                "impactSpritePath": fixture,
+                "impactSpriteUrl": "",
+                "impactSpriteTechnicalScore": 1.0,
             })
-        elif mode == "reuse_item_icon":
-            entity_visual.update({
-                "spriteStatus": "reused_item_icon",
-                "spritePath": fixture,
-                "spriteUrl": "",
-            })
-        elif mode in {"runtime_geometry", "no_asset"}:
-            entity_visual.update({
-                "spriteStatus": "not_required",
-                "spritePath": "",
-                "spriteUrl": "",
-            })
-        role = str(entity.get("visualRole") or "")
-        if role in {"projectile", "impact", "child", "field"}:
-            attack[f"{role}SpriteStatus"] = str(entity_visual.get("spriteStatus") or "")
-            attack[f"{role}SpritePath"] = str(entity_visual.get("spritePath") or "")
-            attack[f"{role}SpriteUrl"] = ""
+    if equipment_overlay_required:
+        visual.update({
+            "equipOverlayStatus": "qa_no_image_fixture",
+            "equipOverlayPath": fixture,
+            "equipOverlayUrl": "",
+            "equipOverlayTechnicalScore": 1.0,
+            "equipOverlayScore": 1.0,
+        })
     data.setdefault("debug", {})["noImageQaFixturePath"] = fixture
     return data
 

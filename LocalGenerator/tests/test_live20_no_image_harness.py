@@ -49,3 +49,42 @@ def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path:
     assert non_item[0]["visual"]["spriteStatus"] == "qa_no_image_fixture"
     assert non_item[1]["visual"]["spriteStatus"] == "reused_item_icon"
     assert hydrated["debug"]["noImageQaFixturePath"] == str(fixture_path.resolve())
+
+
+def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path: Path) -> None:
+    fixture_path = write_no_image_fixture_png(tmp_path / "qa-impact-fixture.png")
+    data = build_runtime_fixture("workbench_blade")
+    data["accessory"] = {"enabled": True}
+    entities = data["runtimeProgram"]["entities"]
+    required = entities[1]
+    unrelated = entities[2]
+    required.setdefault("visual", {})["impactSpriteStatus"] = "pending"
+    unrelated.setdefault("visual", {})["impactSpriteStatus"] = "pending"
+    data["vfxManifest"] = {
+        "slots": [{
+            "entityId": required["id"],
+            "rendererKind": "impactSprite",
+            "textureRole": "impact",
+        }],
+    }
+
+    hydrated = hydrate_no_image_fixture_assets(data, fixture_path)
+    required_visual = required["visual"]
+    assert required_visual["impactSpriteStatus"] == "qa_no_image_fixture"
+    assert required_visual["impactSpritePath"] == str(fixture_path.resolve())
+    assert required_visual["impactSpriteUrl"] == ""
+    assert required_visual["impactSpriteTechnicalScore"] == 1.0
+    assert unrelated["visual"]["impactSpriteStatus"] == "pending"
+    assert "impactSpritePath" not in unrelated["visual"]
+    visual = hydrated["visual"]
+    assert visual["equipOverlayStatus"] == "qa_no_image_fixture"
+    assert visual["equipOverlayPath"] == str(fixture_path.resolve())
+    assert visual["equipOverlayUrl"] == ""
+    assert visual["equipOverlayTechnicalScore"] == 1.0
+    assert visual["equipOverlayScore"] == 1.0
+    problem_codes = {
+        str(problem.get("code") or "")
+        for problem in visual_delivery_report(hydrated, check_backend_config=False)["problems"]
+    }
+    assert "required_equipment_overlay_missing" not in problem_codes
+    assert "required_impact_sprite_missing" not in problem_codes
