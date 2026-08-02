@@ -64,9 +64,9 @@ jobs:
         run: python tools/check_planner_prompt_usability.py
       - name: Strict archive hygiene
         run: |
-          find . -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -prune -exec rm -rf {} +
-          rm -rf LocalGenerator/cache
-          python tools/check_project_hygiene.py --strict-archive
+          archive_root="$(mktemp -d)"
+          git archive --format=tar HEAD | tar -xf - -C "$archive_root"
+          python "$archive_root/tools/check_project_hygiene.py" --strict-archive
 
   tml-build:
     name: Windows tModLoader/dotnet build smoke
