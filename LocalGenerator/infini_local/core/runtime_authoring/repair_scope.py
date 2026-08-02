@@ -1404,6 +1404,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             }
             allowed_rows: list[dict[str, Any]] = []
             required_binding_updates: list[dict[str, Any]] = []
+            existing_binding_choices: list[dict[str, Any]] = []
 
             def primary_relocation_to_alternate() -> tuple[str, dict[str, Any]] | None:
                 existing_primary = next((
@@ -1555,7 +1556,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             binding_alternative_overrides[binding_id] = [fixed]
                             context["bindings"].add(binding_id)
                             context["entities"].add(binding_target_id(existing))
-                            required_binding_updates.append({
+                            existing_binding_choices.append({
                                 "bindingId": binding_id,
                                 "allowed": [copy.deepcopy(fixed)],
                             })
@@ -1646,15 +1647,29 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 {repr(row): row for row in allowed_rows}.values(),
                 key=repr,
             )
+            if len(existing_binding_choices) == 1 and not allowed_rows:
+                required_binding_updates.extend(existing_binding_choices)
+                existing_binding_choices = []
+            existing_choice_rows = sorted(
+                {
+                    repr(choice["allowed"][0]): copy.deepcopy(choice["allowed"][0])
+                    for choice in existing_binding_choices
+                }.values(),
+                key=repr,
+            )
+            binding_choice_rows = sorted(
+                {repr(row): row for row in [*allowed_rows, *existing_choice_rows]}.values(),
+                key=repr,
+            )
             create_binding_alternatives.extend(allowed_rows)
             for allowed_row in allowed_rows:
                 create_binding_inputs.add(allowed_row["input"])
                 create_binding_actions.add(action_kind(allowed_row))
                 create_binding_targets.add(binding_target_id(allowed_row))
                 context["entities"].add(binding_target_id(allowed_row))
-            requirement_row["allowedBindingTransactions"] = allowed_rows
-            requirement_row["mustChooseExactlyOne"] = bool(allowed_rows)
-            requirement_row["mustCreateExactlyOne"] = bool(allowed_rows)
+            requirement_row["allowedBindingTransactions"] = binding_choice_rows
+            requirement_row["mustChooseExactlyOne"] = bool(binding_choice_rows)
+            requirement_row["mustCreateExactlyOne"] = bool(allowed_rows) and not existing_choice_rows
             if required_binding_updates:
                 requirement_row["requiredBindingUpdates"] = required_binding_updates
                 requirement_row["mustApplyAll"] = True
@@ -2587,13 +2602,12 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
         elif bool(requirement.get("mustChooseExactlyOne")) and allowed_new_transactions:
             selected = [
                 row for row in patch_binding_rows
-                if str(row.get("id") or "") in existing["bindings"]
-                and serialized_binding_transaction(row) in allowed_new_transactions
+                if serialized_binding_transaction(row) in allowed_new_transactions
             ]
             if len(selected) != 1:
                 errors.append(_scope_error(
                     f"$.repairRequirements[{requirement_index}].allowedBindingTransactions",
-                    "patch must emit exactly one listed existing-binding transaction",
+                    "patch must emit exactly one listed binding transaction",
                     actual={"selectedCount": len(selected)},
                 ))
 

@@ -1654,6 +1654,87 @@ def test_tool_requires_primary_use_and_repair_exposes_all_executable_registry_ch
     assert validate_runtime_program(projected_tool)["ok"]
 
 
+def test_tool_dependency_repair_chooses_one_conflicting_existing_primary() -> None:
+    current = build_capability_witness("configure_tool")
+    original = current["runtimeProgram"]["bindings"][0]
+    original["usePolicy"]["contactDamage"] = False
+    duplicate = copy.deepcopy(original)
+    duplicate["id"] = "duplicate_tool_primary"
+    current["runtimeProgram"]["bindings"].append(duplicate)
+
+    report = validate_runtime_program(current)
+    assert [row["code"] for row in report["errors"]] == [
+        "duplicate_exclusive_input",
+        "missing_binding_dependency",
+    ]
+    scope = build_runtime_repair_scope(current, report["errors"])
+    requirement = next(
+        row for row in scope["repairRequirements"]
+        if row["code"] == "missing_binding_dependency"
+    )
+    assert "requiredBindingUpdates" not in requirement
+    assert not requirement.get("mustApplyAll", False)
+    assert requirement["mustChooseExactlyOne"] is True
+    assert not requirement.get("mustCreateExactlyOne", False)
+    assert requirement["allowedBindingTransactions"] == [
+        _binding_transaction(
+            "primary_use", "use_item_body", "item", contact_damage=True,
+        ),
+    ]
+    alternatives = {
+        row["bindingId"]: row["allowed"]
+        for row in scope["bindingAlternatives"]
+    }
+    assert set(alternatives) == {original["id"], duplicate["id"]}
+    assert scope["repairTransactions"]["exclusiveInputSelections"] == [{
+        "input": "primary_use",
+        "candidateBindingIds": [duplicate["id"], original["id"]],
+        "mustKeepExactlyOne": True,
+    }]
+
+    fixed_original = copy.deepcopy(original)
+    fixed_original["usePolicy"]["contactDamage"] = True
+    fixed_duplicate = copy.deepcopy(duplicate)
+    fixed_duplicate["usePolicy"]["contactDamage"] = True
+
+    double_patch = _empty_gameplay_patch()
+    double_patch["bindingsUpsert"] = [fixed_original, fixed_duplicate]
+    double_patch["exclusiveInputSelections"] = [{
+        "input": "primary_use", "keepBindingId": original["id"],
+    }]
+    _, double_audit = filter_repair_patch_scope(current, double_patch, scope)
+    assert not double_audit["ok"]
+    assert any(
+        "exactly one listed binding transaction" in row["message"]
+        for row in double_audit["errors"]
+    )
+
+    mismatched_patch = _empty_gameplay_patch()
+    mismatched_patch["bindingsUpsert"] = [fixed_original]
+    mismatched_patch["exclusiveInputSelections"] = [{
+        "input": "primary_use", "keepBindingId": duplicate["id"],
+    }]
+    _, mismatched_audit = filter_repair_patch_scope(
+        current, mismatched_patch, scope,
+    )
+    assert not mismatched_audit["ok"]
+
+    aligned_patch = _empty_gameplay_patch()
+    aligned_patch["bindingsUpsert"] = [fixed_original]
+    aligned_patch["exclusiveInputSelections"] = [{
+        "input": "primary_use", "keepBindingId": original["id"],
+    }]
+    filtered, aligned_audit = filter_repair_patch_scope(
+        current, aligned_patch, scope,
+    )
+    assert aligned_audit["ok"], aligned_audit
+    repaired = apply_repair_patch(current, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    assert [row["id"] for row in repaired["runtimeProgram"]["bindings"]] == [
+        original["id"],
+    ]
+
+
 def test_place_item_binding_does_not_produce_item_on_use_event() -> None:
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
@@ -1788,7 +1869,7 @@ def test_item_hit_event_repair_selects_exactly_one_existing_contact_lane() -> No
     _, double_audit = filter_repair_patch_scope(current, double_patch, scope)
     assert not double_audit["ok"]
     assert any(
-        "exactly one listed existing-binding transaction" in row["message"]
+        "exactly one listed binding transaction" in row["message"]
         for row in double_audit["errors"]
     )
 
