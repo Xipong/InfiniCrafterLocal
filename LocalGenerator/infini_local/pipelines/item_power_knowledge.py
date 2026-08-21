@@ -53,11 +53,6 @@ def _env_float(name: str, default: float, lo: float = 0.0, hi: float = 1.0) -> f
 
 
 
-# 0.0 = almost vanilla/logical, 1.0 = more surprise. The random is deterministic per recipe key.
-CATEGORY_CREATIVITY = _env_float("INFINI_CATEGORY_CREATIVITY", 0.38)
-# 1 = category is sampled before the LLM and then enforced; 0 = LLM may override within allowed categories.
-CATEGORY_ENFORCE_SAMPLED = env_bool("INFINI_CATEGORY_ENFORCE_SAMPLED", False)
-CATEGORY_SALT = env_str("INFINI_CATEGORY_SALT", "default")
 RECURSIVE_POWER_GROWTH = _env_float("INFINI_RECURSIVE_POWER_GROWTH", 0.035, 0.0, 0.5)
 UNIVERSAL_RECIPE_MODE = env_bool("INFINI_UNIVERSAL_RECIPE_MODE", True)
 KNOWLEDGE_ENABLED = env_bool("INFINI_KNOWLEDGE_ENABLED", True)
@@ -284,35 +279,6 @@ def generation_depth(item: dict[str, Any]) -> int:
             except Exception:
                 pass
     return 1
-
-
-def recipe_coherence(tags: set[str], a: dict[str, Any], b: dict[str, Any]) -> str:
-    # This is deliberately broad: every pair is valid, but the corridor changes.
-    if generation_depth(a) > 0 or generation_depth(b) > 0:
-        return "recursive"
-    hard = tags & HARD_TAGS
-    if len(hard) >= 3:
-        return "strong"
-    if len(hard) >= 1 or max(int(a.get("damage") or 0), int(b.get("damage") or 0)) > 0:
-        return "weak"
-    return "nonsense"
-
-
-def recipe_meta(a: dict[str, Any], b: dict[str, Any], tags: set[str], policy: dict[str, Any] | None = None) -> dict[str, Any]:
-    depths = [generation_depth(a), generation_depth(b)]
-    coherence = recipe_coherence(tags, a, b)
-    return {
-        "universalRecipe": True,
-        "generationDepth": max(depths) + 1,
-        "parentGeneratedDepths": depths,
-        "recipeCoherence": coherence,
-        "chaosBudget": round(min(1.0, CATEGORY_CREATIVITY + 0.07 * max(depths) + (0.12 if coherence in {"weak", "nonsense"} else 0.0)), 3),
-        "noveltyBudget": round(min(1.0, 0.18 + 0.08 * max(depths) + (0.18 if coherence == "recursive" else 0.0)), 3),
-        "parentIdentities": [item_identity(a), item_identity(b)],
-        "parentCategories": [parent_primary_category(a), parent_primary_category(b)],
-        "sampledLane": (policy or {}).get("lane", ""),
-        "sampledCategory": (policy or {}).get("selected", ""),
-    }
 
 
 def is_material_parent(item: dict[str, Any]) -> bool:
@@ -755,9 +721,6 @@ def item_knowledge_power(data: dict[str, Any]) -> float:
         return 0.0
 
 __all__ = [
-    "CATEGORY_CREATIVITY",
-    "CATEGORY_ENFORCE_SAMPLED",
-    "CATEGORY_SALT",
     "RECURSIVE_POWER_GROWTH",
     "UNIVERSAL_RECIPE_MODE",
     "KNOWLEDGE_ENABLED",
@@ -771,8 +734,6 @@ __all__ = [
     "is_simple_low_tier_melee_weapon",
     "mechanic_signal_power",
     "generation_depth",
-    "recipe_coherence",
-    "recipe_meta",
     "is_material_parent",
     "material_catalyst_pressure",
     "pair_catalyst_pressure",

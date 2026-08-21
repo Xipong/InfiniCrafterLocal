@@ -4,41 +4,8 @@ import re
 
 from infini_local.core.env_utils import env_bool, env_int, env_str
 
-# AGENT MAP: pipeline-local palette and LLM prompt contract constants used by
+# AGENT MAP: pipeline-local LLM prompt contract constants used by
 # split combine/parent-context modules. Executor vocabulary/opcodes live in core.
-
-PALETTES = {
-    "wood": ["brown", "tan", "dark_brown"],
-    "wire": ["dark_gray", "yellow"],
-    "electric": ["yellow", "cyan", "white"],
-    "star": ["gold", "white", "blue"],
-    "daybloom": ["yellow", "green", "white"],
-    "flower": ["green", "yellow", "pink"],
-    "slime": ["green", "cyan"],
-    "shadow": ["purple", "black"],
-    "fire": ["orange", "red", "yellow"],
-    "ice": ["cyan", "white", "blue"],
-    "technology": ["dark_gray", "cyan", "blue"],
-    "accessory": ["silver", "gold", "blue"],
-    "boots": ["brown", "silver", "blue"],
-    "wings": ["white", "blue", "gold"],
-    "shield": ["gray", "silver", "dark_gray"],
-    "emblem": ["gold", "red", "white"],
-    "charm": ["gold", "purple", "cyan"],
-    "tool": ["brown", "gray", "silver"],
-    "axe": ["brown", "steel", "green"],
-    "drill": ["gray", "yellow", "blue"],
-    "ammo": ["gray", "brass", "red"],
-    "armor": ["gray", "silver", "blue"],
-    "dirt": ["brown", "tan", "dark_brown"],
-    "earth": ["brown", "green", "tan"],
-    "stone": ["gray", "dark_gray", "white"],
-    "sand": ["tan", "yellow", "white"],
-    "block": ["gray", "brown", "tan"],
-    "material": ["gray", "tan", "white"],
-    "coin": ["gold", "silver", "copper"],
-}
-
 
 BAD_NAME_PATTERNS = [
     re.compile(r"^\s*infini(?:\s|$|[-_])", re.I),
@@ -135,7 +102,6 @@ STAGE_PROFILES = [
 
 
 __all__ = [
-    "PALETTES",
     "BAD_NAME_PATTERNS",
 
     "LLM_RAW_TOKEN_MODE",

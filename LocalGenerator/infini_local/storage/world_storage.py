@@ -40,9 +40,9 @@ PARENT_ITEM_CARD_DELIVERY_FIELDS = frozenset({
 })
 
 RECIPE_META_DELIVERY_FIELDS = frozenset({
-    "assetBaseUrl", "assetFiles", "assetTransport", "chaosBudget", "generationDepth", "noveltyBudget",
-    "parentCategories", "parentGeneratedDepths", "parentIdentities", "recipeCoherence", "sampledCategory",
-    "sampledLane", "universalRecipe", "worldId", "worldScoped",
+    "assetBaseUrl", "assetFiles", "assetTransport", "generationDepth",
+    "parentCategories", "parentGeneratedDepths", "parentIdentities",
+    "worldId", "worldScoped",
 })
 
 VFX_QUALITY_BUDGET_DELIVERY_FIELDS = frozenset({
@@ -56,12 +56,24 @@ VFX_DEBUG_DELIVERY_FIELDS = frozenset({
 
 _STORAGE_LOCKS_GUARD = threading.Lock()
 _STORAGE_LOCKS: dict[str, threading.RLock] = {}
+# Per-recipe locks are a map keyed by file path; cap it so a very large world
+# cannot grow the generator process without bound.  Beyond the cap, callers
+# fall back to the shared global lock: a throughput trade-off only, never a
+# correctness one.
+_MAX_STORAGE_LOCKS = 4096
+_GLOBAL_STORAGE_LOCK = threading.RLock()
 
 
 def _storage_lock(path: Path) -> threading.RLock:
     key = str(path.resolve())
     with _STORAGE_LOCKS_GUARD:
-        return _STORAGE_LOCKS.setdefault(key, threading.RLock())
+        lock = _STORAGE_LOCKS.get(key)
+        if lock is not None:
+            return lock
+        if len(_STORAGE_LOCKS) >= _MAX_STORAGE_LOCKS:
+            return _GLOBAL_STORAGE_LOCK
+        _STORAGE_LOCKS[key] = threading.RLock()
+        return _STORAGE_LOCKS[key]
 
 
 def _fsync_parent_directory(path: Path) -> None:
