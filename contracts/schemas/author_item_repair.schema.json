@@ -4964,7 +4964,7 @@
               "properties": {
                 "facts": {
                   "items": {
-                    "maxLength": 120,
+                    "maxLength": 240,
                     "minLength": 1,
                     "type": "string"
                   },
@@ -4994,7 +4994,7 @@
               "properties": {
                 "facts": {
                   "items": {
-                    "maxLength": 120,
+                    "maxLength": 240,
                     "minLength": 1,
                     "type": "string"
                   },

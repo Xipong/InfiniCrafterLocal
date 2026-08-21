@@ -4817,7 +4817,7 @@
                   "items": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 120
+                    "maxLength": 240
                   },
                   "minItems": 1,
                   "maxItems": 8
@@ -4847,7 +4847,7 @@
                   "items": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 120
+                    "maxLength": 240
                   },
                   "minItems": 1,
                   "maxItems": 8
