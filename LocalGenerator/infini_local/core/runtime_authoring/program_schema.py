@@ -189,7 +189,7 @@ def runtime_contract_schema() -> dict[str, Any]:
         "properties": {
             "facts": {
                 "type": "array",
-                "items": _strict_string(min_len=1, max_len=120),
+                "items": _strict_string(min_len=1, max_len=240),
                 "minItems": 1,
                 "maxItems": 8,
             },
