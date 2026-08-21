@@ -306,7 +306,10 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("09_visual_delivery_gate", assert_visual_delivery_ready, data)
         data = step("10_generated_parent_summary", attach_generated_parent_summary, data)
         data = step("11_final_normalize", final_normalize, data)
-        data = step("12_final_runtime_wire_gate", validate_final_runtime_promise_boundary, data) and data
+        # validate_final_runtime_promise_boundary returns a report dict (or
+        # raises); it never returns the payload, so do not rebind `data` here.
+        step("12_final_runtime_wire_gate", validate_final_runtime_promise_boundary, data)
+        assert data is not None  # stage 11 always yields a payload dict
         vfx_report = _vfx_manifest_report(data)
         if not vfx_report["ok"]:
             raise PlannerUnavailable("final VFX wire rejected: " + json.dumps(vfx_report["errors"][:12], ensure_ascii=False))

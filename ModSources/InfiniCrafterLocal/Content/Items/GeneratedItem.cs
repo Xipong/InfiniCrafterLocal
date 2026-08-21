@@ -539,19 +539,19 @@ public partial class GeneratedItem : ModItem
     public override bool IsArmorSet(Item head, Item body, Item legs)
     {
         ArmorSpec armor = Data.Armor;
-        if (!armor.Enabled || armor.Slot != "head" || string.IsNullOrWhiteSpace(armor.SetKey)) return false;
+        if (!armor.Enabled || !string.Equals(armor.Slot, "head", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(armor.SetKey)) return false;
         return IsSetPiece(head, "head", armor.SetKey) && IsSetPiece(body, "body", armor.SetKey) && IsSetPiece(legs, "legs", armor.SetKey);
     }
 
     private static bool IsSetPiece(Item item, string slot, string setKey)
         => item?.ModItem is GeneratedItem generated && generated.Data.Armor.Enabled
-            && string.Equals(generated.Data.Armor.Slot, slot, StringComparison.Ordinal)
+            && string.Equals(generated.Data.Armor.Slot, slot, StringComparison.OrdinalIgnoreCase)
             && string.Equals(generated.Data.Armor.SetKey, setKey, StringComparison.Ordinal);
 
     public override void UpdateArmorSet(Player player)
     {
         ArmorSpec a = Data.Armor;
-        if (!a.Enabled || a.Slot != "head") return;
+        if (!a.Enabled || !string.Equals(a.Slot, "head", StringComparison.OrdinalIgnoreCase)) return;
         player.GetDamage(DamageClass.Generic) += a.SetBonusGenericDamage;
         player.GetDamage(DamageClass.Melee) += a.SetBonusMeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.SetBonusRangedDamage;

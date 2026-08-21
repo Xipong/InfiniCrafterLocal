@@ -63,6 +63,15 @@ Schema, prompt catalog, machine manifest, docs inventory и audit проецир
 
 C# не читает name/tooltip/tags/category для выбора gameplay. Неизвестные version, fields, kinds, opcodes, action/input pairs и references отклоняются.
 
+## Result identity: категория и имя принадлежат Author
+
+Категория (`category`) и имя результата — authored значения от Gameplay Author, как и вся механика. Deterministic code не сэмплирует, не «давит сигналами» и не подменяет их:
+
+- `normalize_category` только сверяет authored категорию с конечным словарём `ALLOWED_CATEGORIES` (fallback `generic`);
+- `bad_result_name` в `final_normalize` — финальный sanity gate: невалидное имя Author'а = отказ крафта с возвратом ингредиентов, а не шаблонная подмена;
+- hint-теги (`category_policy.py`) — read-only debug/validator-контекст родителей; при runtime authoring они не впрыскиваются в authored result tags;
+- исторический category sampling/coercion (`category_policy()`, `coerce_category_by_policy`, lane-сэмплинг) и детерминированный генератор имён удалены как скрытый семантический маршрутизатор. Не восстанавливать.
+
 ## Bounded composition
 
 Текущая программа ограничена: 12 entities, 8 bindings, 48 calls, child depth 3, bounded event spawn/rate/lifetime. На entity допускается один movement slot и один controller slot. Это конечный безопасный component runtime, не ECS/VM общего назначения.

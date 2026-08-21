@@ -91,20 +91,18 @@ def _top_level_constant_owners(root: Path, names: set[str]) -> dict[str, list[st
 
 
 def test_visual_identity_tables_have_one_canonical_owner() -> None:
-    """Naming/palette policy must not silently fork across pipeline modules."""
+    """Naming policy must not silently fork across pipeline modules."""
 
     root = Path(__file__).resolve().parents[1]
-    owners = _top_level_constant_owners(root, {"PALETTES", "BAD_NAME_PATTERNS"})
+    owners = _top_level_constant_owners(root, {"BAD_NAME_PATTERNS"})
     expected = "infini_local/pipelines/pipeline_runtime_constants.py"
     assert owners == {
         "BAD_NAME_PATTERNS": [expected],
-        "PALETTES": [expected],
     }
 
     from infini_local.pipelines import pipeline_runtime_constants
     from infini_local.pipelines import result_identity_policy
 
-    assert result_identity_policy.PALETTES is pipeline_runtime_constants.PALETTES
     assert (
         result_identity_policy.BAD_NAME_PATTERNS
         is pipeline_runtime_constants.BAD_NAME_PATTERNS

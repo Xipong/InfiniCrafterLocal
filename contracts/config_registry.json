@@ -488,94 +488,6 @@
     {
       "declarations": [
         {
-          "default": 0.38,
-          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "number"
-        }
-      ],
-      "default": 0.38,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_CATEGORY_CREATIVITY",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
-      ],
-      "secret": false,
-      "type": "number",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        },
-        {
-          "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": false,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_CATEGORY_ENFORCE_SAMPLED",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-        "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": "default",
-          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        },
-        {
-          "default": "default",
-          "file": "LocalGenerator/infini_local/pipelines/result_identity_policy.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "default",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_CATEGORY_SALT",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-        "LocalGenerator/infini_local/pipelines/result_identity_policy.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": 0.72,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
           "maximum": null,
@@ -5391,8 +5303,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 221,
-  "fingerprint": "e35aa614cd6a41c9e63c2de81b1620248f72d5da673921abab5f82428148de34",
+  "fieldCount": 218,
+  "fingerprint": "4d4f4bc53515c6fdc7768e7dfd17a65fa12db7c4f43bb472af499dc91f7b0cb9",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

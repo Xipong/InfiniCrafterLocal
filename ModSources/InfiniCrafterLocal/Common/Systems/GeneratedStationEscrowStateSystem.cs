@@ -227,7 +227,7 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
     internal static bool TryBeginCraft(string clientId, string requestId, int laneIndex)
     {
         string key = OutcomeKey(clientId, requestId);
-        if (key.Length == 0 || laneIndex is < 0 or > 2 || CraftTransactions.ContainsKey(key) || CraftTransactions.Count >= MaxOutcomes)
+        if (key.Length == 0 || laneIndex is < 0 or > 2 || CraftTransactions.ContainsKey(key) || CraftTransactions.Count >= MaxCraftTransactions)
             return false;
         CraftTransactions[key] = new CraftTransactionState { LaneIndex = laneIndex, Pending = true };
         return true;
