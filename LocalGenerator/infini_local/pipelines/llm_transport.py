@@ -93,12 +93,19 @@ def _estimated_wire_tokens(serialized_bytes: bytes) -> int:
     )
 
 
-def _reserve_remote_rate_slot(url: str, payload: dict[str, Any], serialized_bytes: bytes) -> None:
+def _reserve_remote_rate_slot(
+    url: str,
+    payload: dict[str, Any],
+    serialized_bytes: bytes,
+    *,
+    max_wait_seconds: float | None = None,
+) -> None:
     key = _remote_rate_key(url, payload)
     if not key:
         return
     tokens = _estimated_wire_tokens(serialized_bytes)
     minimum_interval = _model_min_interval_seconds(payload.get("model"))
+    deadline = None if max_wait_seconds is None else time.monotonic() + max(0.0, max_wait_seconds)
     while True:
         with _LLM_RATE_LOCK:
             now = time.monotonic()
@@ -124,6 +131,13 @@ def _reserve_remote_rate_slot(url: str, payload: dict[str, Any], serialized_byte
                     events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
                 )
             if wait_seconds <= 0.0:
+                events.append((now, tokens))
+                state["lastRequest"] = now
+                return
+            # Respect the caller's deadline: once it is exhausted, send anyway.
+            # The provider-side limiter remains the hard authority; this only
+            # prevents an unobservable multi-minute stall inside our own code.
+            if deadline is not None and now + wait_seconds > deadline:
                 events.append((now, tokens))
                 state["lastRequest"] = now
                 return
@@ -849,7 +863,13 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
     except Exception as e:
         log_event("warn", "could not auto-resolve LLM model", {"provider": provider, "error": repr(e), "url": llm_models_url(ctx), "label": ctx.get("label")})
     if provider == "openrouter":
-        return configured if configured.lower() not in {"auto", "default"} else "~openai/gpt-latest"
+        # No invented fallback slug: "~openai/gpt-latest" does not exist on
+        # OpenRouter, so sending it would fail every call with an opaque
+        # provider error.  Return the configured value verbatim; when the
+        # user truly left model=auto and /models is unreachable, the empty
+        # string surfaces as a clear configuration failure instead of a
+        # per-request provider 404.
+        return configured if configured.lower() not in {"auto", "default"} else ""
     return configured or "local-model"
 
 LLM_STAGE_KEY = "_infini_stage"
@@ -889,7 +909,11 @@ def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def http_json(url: str, payload: dict[str, Any], timeout: int = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    _reserve_remote_rate_slot(url, payload, data)
+    # The caller's timeout owns the whole call: waiting in the rate limiter for
+    # longer than the request itself may take would hang crafts with no
+    # transport error to diagnose.  The limiter clamps its sleep to the deadline
+    # and lets the request through; the provider still enforces its own limits.
+    _reserve_remote_rate_slot(url, payload, data, max_wait_seconds=float(max(1, int(timeout))))
     merged = {"Content-Type": "application/json"}
     if headers:
         merged.update(headers)

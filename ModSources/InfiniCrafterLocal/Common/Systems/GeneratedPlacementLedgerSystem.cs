@@ -38,9 +38,19 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     private const int MaxCells = 32768;
     private const int MaxCellsPerGroup = 256;
     private const int AuthorizationRadiusTiles = 16;
+    // Commit detection only needs the immediate neighborhood of the announced
+    // target.  A wide scan would absorb same-type tiles another player placed
+    // nearby into this group, so keep the committed-cell window tight.
+    private const int CommitScanRadiusTiles = 3;
     private const int AuthorizationLifetimeTicks = 30;
     private const int PlacementReceiptLifetimeTicks = 8;
     private const int MaxPendingAttemptsPerTick = 8;
+    // A pending return whose spawn keeps failing deterministically (e.g. a
+    // definition that no longer deserializes after an update) must never block
+    // the queue head forever: every later record would starve and the placed
+    // items behind it would be lost.  After this many failed ticks the record
+    // is quarantined (dropped with a log) so the queue keeps draining.
+    private const int MaxPendingReturnAttempts = 60;
 
     private sealed class PlacementGroup
     {
@@ -57,6 +67,10 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         public string DefinitionJson { get; init; } = "";
         public int X { get; init; }
         public int Y { get; init; }
+        // Failed spawn attempts (runtime ticks).  Not persisted: a fresh load
+        // grants a fresh budget, which is safe because the record itself is
+        // durable and each tick re-attempts before quarantining.
+        public int FailedAttempts { get; set; }
     }
 
     private sealed class PlacementAuthorization
@@ -211,6 +225,10 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 cells.Add(key);
             }
             if (groupId.Length > 0 && generatedItemId.Length > 0 && cells.Count > 0)
+                // Client-side mirror groups intentionally carry no DefinitionJson:
+                // returns are server-only (TryQueueReturn exits early on clients),
+                // so the definition is never needed here.  Do not start reading
+                // Groups[...].DefinitionJson on a client without extending NetSend.
                 Groups[groupId] = new PlacementGroup
                 {
                     GroupId = groupId,
@@ -242,8 +260,30 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             return;
         int attempts = Math.Min(MaxPendingAttemptsPerTick, PendingReturns.Count);
         for (int index = attempts - 1; index >= 0; index--)
-            if (TrySpawnPendingReturn(PendingReturns[index]))
+        {
+            PendingReturnRecord pending = PendingReturns[index];
+            if (TrySpawnPendingReturn(pending))
+            {
                 PendingReturns.RemoveAt(index);
+                continue;
+            }
+            pending.FailedAttempts++;
+            if (pending.FailedAttempts < MaxPendingReturnAttempts)
+                continue;
+            // Deterministically broken record (unparseable definition, missing
+            // id, full item slots, ...).  Quarantine it so it cannot starve the
+            // rest of the queue; the placed item is lost but the world log keeps
+            // the reason.  Rotating the record to the back would just hide the
+            // same failure behind every other record forever.
+            PendingReturns.RemoveAt(index);
+            try
+            {
+                global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger?.Warn(
+                    $"[GeneratedPlacementLedger] pending return quarantined after {pending.FailedAttempts} failed attempts: "
+                    + $"item='{pending.GeneratedItemId}' at ({pending.X}, {pending.Y})");
+            }
+            catch { }
+        }
     }
 
     internal static bool AuthorizePlacement(Player player, GeneratedItemData data, RuntimePlacementSpec placement)
@@ -362,8 +402,12 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             return new List<GeneratedPlacementKey>();
         }
 
+        // Scan only the immediate neighborhood of the announced target.  The
+        // wide authorization snapshot exists to prove "something appeared", but
+        // committing cells from the full radius would absorb same-type tiles a
+        // different player placed nearby during the 30-tick window.
         var changed = new HashSet<long>();
-        ForEachAuthorizationCell(authorization.TargetX, authorization.TargetY, (x, y) =>
+        ForEachAuthorizationCell(authorization.TargetX, authorization.TargetY, CommitScanRadiusTiles, (x, y) =>
         {
             Tile cell = Main.tile[x, y];
             long packed = Pack(x, y);
@@ -372,11 +416,17 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         });
         if (changed.Count == 0)
             return new List<GeneratedPlacementKey>();
-        long seed = changed.OrderBy(value =>
-        {
-            Unpack(value, out int x, out int y);
-            return Math.Abs(x - authorization.TargetX) + Math.Abs(y - authorization.TargetY);
-        }).First();
+        // Deterministic seed: closest to the target, ties broken by coordinates.
+        // HashSet order must never influence which connected component commits,
+        // otherwise server and client ledgers diverge.
+        long seed = changed
+            .OrderBy(value =>
+            {
+                Unpack(value, out int ux, out int uy);
+                return (Math.Abs((long)ux - authorization.TargetX) + Math.Abs((long)uy - authorization.TargetY)) * 1_000_000L
+                    + ((long)(uint)ux << 20) + (uint)uy;
+            })
+            .First();
         var component = new List<GeneratedPlacementKey>();
         var queue = new Queue<long>();
         queue.Enqueue(seed);
@@ -435,11 +485,14 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     }
 
     private static void ForEachAuthorizationCell(int targetX, int targetY, Action<int, int> action)
+        => ForEachAuthorizationCell(targetX, targetY, AuthorizationRadiusTiles, action);
+
+    private static void ForEachAuthorizationCell(int targetX, int targetY, int radiusTiles, Action<int, int> action)
     {
-        int minX = Math.Max(1, targetX - AuthorizationRadiusTiles);
-        int maxX = Math.Min(Main.maxTilesX - 2, targetX + AuthorizationRadiusTiles);
-        int minY = Math.Max(1, targetY - AuthorizationRadiusTiles);
-        int maxY = Math.Min(Main.maxTilesY - 2, targetY + AuthorizationRadiusTiles);
+        int minX = Math.Max(1, targetX - radiusTiles);
+        int maxX = Math.Min(Main.maxTilesX - 2, targetX + radiusTiles);
+        int minY = Math.Max(1, targetY - radiusTiles);
+        int maxY = Math.Min(Main.maxTilesY - 2, targetY + radiusTiles);
         for (int x = minX; x <= maxX; x++)
             for (int y = minY; y <= maxY; y++)
                 action(x, y);
@@ -515,15 +568,6 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         int itemType = asArmorProxy
             ? GeneratedArmorItemTypes.ItemTypeFor(data)
             : ModContent.ItemType<GeneratedItem>();
-        var prepared = new Item();
-        prepared.SetDefaults(itemType);
-        if (prepared.ModItem is not GeneratedItem generated)
-            return false;
-        generated.SetData(data);
-        if (!string.Equals(generated.Data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
-            return false;
-        prepared.stack = 1;
-
         int index = Item.NewItem(
             WorldGen.GetItemSource_FromTileBreak(pending.X, pending.Y),
             pending.X * 16,
@@ -535,9 +579,16 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             noBroadcast: true);
         if (index < 0 || index >= Main.maxItems)
             return false;
-        Main.item[index] = prepared;
-        Main.item[index].position = new Microsoft.Xna.Framework.Vector2(pending.X * 16f, pending.Y * 16f);
-        Main.item[index].active = true;
+        // Configure the instance NewItem actually created.  Overwriting
+        // Main.item[index] with a separately defaulted instance would leave a
+        // stale whoAmI and skip vanilla spawn initialization.
+        Item spawned = Main.item[index];
+        if (spawned.ModItem is not GeneratedItem generated)
+            return false;
+        generated.SetData(data);
+        if (!string.Equals(generated.Data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
+            return false;
+        spawned.stack = 1;
         if (Main.netMode == NetmodeID.Server)
         {
             try { NetMessage.SendData(MessageID.SyncItem, -1, -1, null, index); }
