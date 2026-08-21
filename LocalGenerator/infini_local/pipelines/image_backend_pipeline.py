@@ -360,8 +360,10 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
                 "available": len(catalog) if isinstance(catalog, list) else None,
             })
         except Exception as exc:
-            log_event("warn", "stable-diffusion.cpp LoRA cache refresh failed", {"spriteId": sprite_id, "error": repr(exc)})
-            return []
+            # The refresh is advisory: the LoRA tag still travels inside the txt2img
+            # payload, and the server is already verified alive. A transient catalog
+            # failure must not cancel the whole generation attempt.
+            log_event("warn", "stable-diffusion.cpp LoRA cache refresh failed; continuing with txt2img", {"spriteId": sprite_id, "error": repr(exc)})
     out: list[str] = []
     variants = max(1, int(GENERATE_VARIANTS))
     width = SDCPP_WIDTH
@@ -370,7 +372,12 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
     paths = SDCPP_SERVER_TXT2IMG_PATHS or ["/sdapi/v1/txt2img"]
     styles = [SDCPP_SERVER_PAYLOAD_STYLE] if SDCPP_SERVER_PAYLOAD_STYLE != "auto" else ["a1111", "sdcpp", "openai"]
     for i in range(variants):
-        seed = SDCPP_SEED if SDCPP_SEED >= 0 else random.randint(1, 2**31 - 1)
+        # A fixed configured seed pins attempt 0; further variants must still differ,
+        # otherwise best-of-N degenerates into N identical images.
+        if SDCPP_SEED >= 0:
+            seed = SDCPP_SEED + i
+        else:
+            seed = random.randint(1, 2**31 - 1)
         out_path = SPRITE_DIR / f"{safe_file_part(sprite_id, 'sprite')}_raw_sdcpp_server_{i}.png"
         ok = False
         last_err = ""

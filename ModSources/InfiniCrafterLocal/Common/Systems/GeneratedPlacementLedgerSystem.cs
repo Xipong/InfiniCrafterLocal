@@ -45,12 +45,6 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     private const int AuthorizationLifetimeTicks = 30;
     private const int PlacementReceiptLifetimeTicks = 8;
     private const int MaxPendingAttemptsPerTick = 8;
-    // A pending return whose spawn keeps failing deterministically (e.g. a
-    // definition that no longer deserializes after an update) must never block
-    // the queue head forever: every later record would starve and the placed
-    // items behind it would be lost.  After this many failed ticks the record
-    // is quarantined (dropped with a log) so the queue keeps draining.
-    private const int MaxPendingReturnAttempts = 60;
 
     private sealed class PlacementGroup
     {
@@ -262,19 +256,28 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         for (int index = attempts - 1; index >= 0; index--)
         {
             PendingReturnRecord pending = PendingReturns[index];
-            if (TrySpawnPendingReturn(pending))
+            PendingSpawnOutcome outcome = TrySpawnPendingReturn(pending);
+            if (outcome == PendingSpawnOutcome.Spawned)
             {
                 PendingReturns.RemoveAt(index);
                 continue;
             }
-            pending.FailedAttempts++;
-            if (pending.FailedAttempts < MaxPendingReturnAttempts)
+            if (outcome == PendingSpawnOutcome.TransientFailure)
+            {
+                // Ordinary world pressure (full item slots) is not a broken record.
+                // Rotate to the back so one full inventory cannot starve the queue,
+                // and never quarantine a durable return: the placed generated item
+                // must come back. The record retries on a later update forever.
+                pending.FailedAttempts++;
+                if (index == PendingReturns.Count - 1)
+                    continue;
+                PendingReturns.RemoveAt(index);
+                PendingReturns.Add(pending);
                 continue;
-            // Deterministically broken record (unparseable definition, missing
-            // id, full item slots, ...).  Quarantine it so it cannot starve the
-            // rest of the queue; the placed item is lost but the world log keeps
-            // the reason.  Rotating the record to the back would just hide the
-            // same failure behind every other record forever.
+            }
+            // Deterministically broken record (unparseable definition, missing id).
+            // Quarantine it so it cannot starve the rest of the queue; the placed
+            // item is lost but the world log keeps the reason.
             PendingReturns.RemoveAt(index);
             try
             {
@@ -287,6 +290,14 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     }
 
     internal static bool AuthorizePlacement(Player player, GeneratedItemData data, RuntimePlacementSpec placement)
+        => AuthorizePlacement(player, data, placement, Player.tileTargetX, Player.tileTargetY);
+
+    internal static bool AuthorizePlacement(
+        Player player,
+        GeneratedItemData data,
+        RuntimePlacementSpec placement,
+        int targetX,
+        int targetY)
     {
         if (player is null || data is null || placement is null || player.whoAmI < 0 || player.whoAmI >= Main.maxPlayers)
             return false;
@@ -302,8 +313,6 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
 
         var layer = tile ? GeneratedPlacementLayer.Tile : GeneratedPlacementLayer.Wall;
         int expectedType = tile ? placement.TileId : placement.WallId;
-        int targetX = Player.tileTargetX;
-        int targetY = Player.tileTargetY;
         if (!WorldGen.InWorld(targetX, targetY, AuthorizationRadiusTiles) || !WithinPlacementReach(player, targetX, targetY))
             return false;
         try
@@ -402,29 +411,53 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             return new List<GeneratedPlacementKey>();
         }
 
-        // Scan only the immediate neighborhood of the announced target.  The
-        // wide authorization snapshot exists to prove "something appeared", but
-        // committing cells from the full radius would absorb same-type tiles a
-        // different player placed nearby during the 30-tick window.
+        // Scan the placed object's actual footprint.  The wide authorization
+        // snapshot exists to prove "something appeared", but committing cells
+        // from the full radius would absorb same-type tiles a different player
+        // placed nearby during the 30-tick window.  The footprint comes from
+        // TileObjectData when the tile type declares one (multi-tile objects are
+        // larger than any fixed neighborhood window); otherwise it falls back to
+        // the immediate 7x7 neighborhood.
         var changed = new HashSet<long>();
-        ForEachAuthorizationCell(authorization.TargetX, authorization.TargetY, CommitScanRadiusTiles, (x, y) =>
+        int scanMinX = Math.Max(1, authorization.TargetX - CommitScanRadiusTiles);
+        int scanMaxX = Math.Min(Main.maxTilesX - 2, authorization.TargetX + CommitScanRadiusTiles);
+        int scanMinY = Math.Max(1, authorization.TargetY - CommitScanRadiusTiles);
+        int scanMaxY = Math.Min(Main.maxTilesY - 2, authorization.TargetY + CommitScanRadiusTiles);
+        var objectData = Terraria.ObjectData.TileObjectData.GetTileData(authorization.ExpectedType, 0);
+        if (objectData is not null)
         {
-            Tile cell = Main.tile[x, y];
-            long packed = Pack(x, y);
-            if (cell.HasTile && cell.TileType == authorization.ExpectedType && !authorization.BeforeExpectedTiles.Contains(packed))
-                changed.Add(packed);
-        });
+            // The announced target may be any cell of the object; cover every
+            // origin candidate that could place ExpectedType overlapping target.
+            scanMinX = Math.Max(1, scanMinX - objectData.Width + 1);
+            scanMaxX = Math.Min(Main.maxTilesX - 2, scanMaxX + objectData.Width - 1);
+            scanMinY = Math.Max(1, scanMinY - objectData.Height + 1);
+            scanMaxY = Math.Min(Main.maxTilesY - 2, scanMaxY + objectData.Height - 1);
+        }
+        for (int x = scanMinX; x <= scanMaxX; x++)
+        {
+            for (int y = scanMinY; y <= scanMaxY; y++)
+            {
+                Tile cell = Main.tile[x, y];
+                long packed = Pack(x, y);
+                if (cell.HasTile && cell.TileType == authorization.ExpectedType && !authorization.BeforeExpectedTiles.Contains(packed))
+                    changed.Add(packed);
+            }
+        }
         if (changed.Count == 0)
             return new List<GeneratedPlacementKey>();
         // Deterministic seed: closest to the target, ties broken by coordinates.
         // HashSet order must never influence which connected component commits,
-        // otherwise server and client ledgers diverge.
+        // otherwise server and client ledgers diverge.  Distance and coordinates
+        // are separate tuple keys: a packed-coordinate term inside one integer
+        // would outweigh the distance weight (a 1-tile coordinate change moves
+        // the packed term by 2^20 while the distance penalty is only 10^6).
         long seed = changed
             .OrderBy(value =>
             {
                 Unpack(value, out int ux, out int uy);
-                return (Math.Abs((long)ux - authorization.TargetX) + Math.Abs((long)uy - authorization.TargetY)) * 1_000_000L
-                    + ((long)(uint)ux << 20) + (uint)uy;
+                return (Math.Abs((long)ux - authorization.TargetX) + Math.Abs((long)uy - authorization.TargetY),
+                    (long)(uint)ux,
+                    (long)(uint)uy);
             })
             .First();
         var component = new List<GeneratedPlacementKey>();
@@ -475,7 +508,42 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             || whoAmI >= Main.maxPlayers
             || !Main.player[whoAmI].active)
             return;
-        TryCommitAuthorizedPlacement(Main.player[whoAmI], layer, x, y);
+        Player player = Main.player[whoAmI];
+        if (TryCommitAuthorizedPlacement(player, layer, x, y))
+            return;
+        // Dedicated server: the authorization lives in the client's process, so the
+        // first notification arrives without server-local state. Establish it from
+        // the server's own view of the player's held item - the packet never carries
+        // the item identity, the server derives everything it accepts.
+        TryAuthorizePlacementFromHeldItem(player, layer, x, y);
+        TryCommitAuthorizedPlacement(player, layer, x, y);
+    }
+
+    private static void TryAuthorizePlacementFromHeldItem(Player player, GeneratedPlacementLayer layer, int x, int y)
+    {
+        if (player.HeldItem?.ModItem is not GeneratedItem held || held.Data is null)
+            return;
+        GeneratedItemData data = held.Data;
+        bool isTile = layer == GeneratedPlacementLayer.Tile;
+        Tile cell = Main.tile[x, y];
+        int observedType = isTile ? cell.TileType : cell.WallType;
+        if (observedType < 0)
+            return;
+        foreach (RuntimeBindingSpec binding in data.RuntimeProgram.Bindings)
+        {
+            if (binding.UsePolicy?.Action?.Kind != RuntimeBindingAction.PlaceItem)
+                continue;
+            RuntimePlacementSpec? placement = binding.UsePolicy.Action.Placement;
+            if (placement is null)
+                continue;
+            int authoredType = isTile ? placement.TileId : placement.WallId;
+            if (authoredType != observedType)
+                continue;
+            if (!AuthorizePlacement(player, data, placement, x, y))
+                return;
+            // One placement authorization per player; the first matching binding wins.
+            return;
+        }
     }
 
     private static bool WithinPlacementReach(Player player, int x, int y)
@@ -541,18 +609,27 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             Y = y,
         };
         PendingReturns.Add(pending);
-        if (TrySpawnPendingReturn(pending))
+        if (TrySpawnPendingReturn(pending) == PendingSpawnOutcome.Spawned)
             PendingReturns.Remove(pending);
         return true;
     }
 
-    private static bool TrySpawnPendingReturn(PendingReturnRecord pending)
+    private enum PendingSpawnOutcome
     {
-        try { return TrySpawnPendingReturnCore(pending); }
-        catch { return false; }
+        Spawned,
+        // Slot allocation or world-state pressure: retry later, never quarantine.
+        TransientFailure,
+        // Deterministically broken record (bad definition, id mismatch, wrong mod item).
+        PermanentFailure,
     }
 
-    private static bool TrySpawnPendingReturnCore(PendingReturnRecord pending)
+    private static PendingSpawnOutcome TrySpawnPendingReturn(PendingReturnRecord pending)
+    {
+        try { return TrySpawnPendingReturnCore(pending); }
+        catch { return PendingSpawnOutcome.TransientFailure; }
+    }
+
+    private static PendingSpawnOutcome TrySpawnPendingReturnCore(PendingReturnRecord pending)
     {
         GeneratedItemData? data = null;
         GeneratedItemRegistryService? registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
@@ -562,7 +639,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             data = canonical;
         data ??= GeneratedItemData.FromJson(pending.DefinitionJson);
         if (data is null || !string.Equals(data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
-            return false;
+            return PendingSpawnOutcome.PermanentFailure;
 
         bool asArmorProxy = GeneratedArmorItemTypes.CanRepresent(data);
         int itemType = asArmorProxy
@@ -578,23 +655,23 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             1,
             noBroadcast: true);
         if (index < 0 || index >= Main.maxItems)
-            return false;
+            return PendingSpawnOutcome.TransientFailure;
         // Configure the instance NewItem actually created.  Overwriting
         // Main.item[index] with a separately defaulted instance would leave a
         // stale whoAmI and skip vanilla spawn initialization.
         Item spawned = Main.item[index];
         if (spawned.ModItem is not GeneratedItem generated)
-            return false;
+            return PendingSpawnOutcome.PermanentFailure;
         generated.SetData(data);
         if (!string.Equals(generated.Data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
-            return false;
+            return PendingSpawnOutcome.PermanentFailure;
         spawned.stack = 1;
         if (Main.netMode == NetmodeID.Server)
         {
             try { NetMessage.SendData(MessageID.SyncItem, -1, -1, null, index); }
             catch { }
         }
-        return true;
+        return PendingSpawnOutcome.Spawned;
     }
 }
 

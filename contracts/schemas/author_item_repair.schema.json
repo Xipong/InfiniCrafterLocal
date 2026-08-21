@@ -4962,6 +4962,7 @@
             },
             "parentA": {
               "additionalProperties": false,
+              "minProperties": 1,
               "properties": {
                 "facts": {
                   "items": {
@@ -4984,14 +4985,11 @@
                   "type": "array"
                 }
               },
-              "required": [
-                "facts",
-                "runtimeRoles"
-              ],
               "type": "object"
             },
             "parentB": {
               "additionalProperties": false,
+              "minProperties": 1,
               "properties": {
                 "facts": {
                   "items": {
@@ -5014,10 +5012,6 @@
                   "type": "array"
                 }
               },
-              "required": [
-                "facts",
-                "runtimeRoles"
-              ],
               "type": "object"
             }
           },

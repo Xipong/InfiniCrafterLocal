@@ -370,10 +370,27 @@ def author_item_repair_schema() -> dict[str, Any]:
                     # Omitted parts stay frozen: filter_repair_patch_scope merges the
                     # candidate over the current contract before applying, so a
                     # partial candidate becomes a complete merged subtree.
+                    # Nested parent-side objects are partial for the same reason:
+                    # a leaf-only patch such as {"parentA": {"facts": [...]}} must
+                    # not be forced to re-emit the already-valid runtimeRoles.
                     "parentSynthesis": {
                         "type": "object",
                         "additionalProperties": False,
-                        "properties": runtime_contract_schema()["properties"]["parentSynthesis"]["properties"],
+                        "properties": {
+                            "composition": _strict_string(min_len=1, max_len=500),
+                            "parentA": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": runtime_contract_schema()["properties"]["parentSynthesis"]["properties"]["parentA"]["properties"],
+                                "minProperties": 1,
+                            },
+                            "parentB": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": runtime_contract_schema()["properties"]["parentSynthesis"]["properties"]["parentB"]["properties"],
+                                "minProperties": 1,
+                            },
+                        },
                         "minProperties": 1,
                     },
                 },

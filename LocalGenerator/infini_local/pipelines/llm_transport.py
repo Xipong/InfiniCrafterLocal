@@ -107,6 +107,8 @@ def _reserve_remote_rate_slot(
     minimum_interval = _model_min_interval_seconds(payload.get("model"))
     deadline = None if max_wait_seconds is None else time.monotonic() + max(0.0, max_wait_seconds)
     while True:
+        blocked_wait = 0.0
+        wait_seconds = 0.0
         with _LLM_RATE_LOCK:
             now = time.monotonic()
             state = _LLM_RATE_STATE.setdefault(
@@ -119,11 +121,12 @@ def _reserve_remote_rate_slot(
                 if float(at) > now - _LLM_RATE_WINDOW_SECONDS
             ]
             state["events"] = events
-            wait_seconds = max(
+            blocked_wait = max(0.0, float(state.get("blockedUntil") or 0.0) - now)
+            pacing_wait = max(
                 0.0,
-                float(state.get("blockedUntil") or 0.0) - now,
                 float(state.get("lastRequest", -1.0e30)) + minimum_interval - now,
             )
+            wait_seconds = max(blocked_wait, pacing_wait)
             used_tokens = sum(count for _, count in events)
             if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW:
                 wait_seconds = max(
@@ -134,13 +137,38 @@ def _reserve_remote_rate_slot(
                 events.append((now, tokens))
                 state["lastRequest"] = now
                 return
-            # Respect the caller's deadline: once it is exhausted, send anyway.
-            # The provider-side limiter remains the hard authority; this only
-            # prevents an unobservable multi-minute stall inside our own code.
-            if deadline is not None and now + wait_seconds > deadline:
-                events.append((now, tokens))
+            # A provider-enforced 429 cooldown (blockedUntil) is never bypassed:
+            # sending anyway guarantees another 429 and burns the attempt.  When
+            # that cooldown outlives the caller's deadline, sleep to the deadline
+            # and fail locally with an honest bounded timeout instead.  No rate
+            # event is recorded: no request is actually sent.
+            blocked_timeout = (
+                blocked_wait >= wait_seconds
+                and deadline is not None
+                and now + wait_seconds > deadline
+            )
+            # Own pacing only: respect the caller's deadline; once it is
+            # exhausted, send anyway.  The provider-side limiter remains the
+            # hard authority; this only prevents an unobservable multi-minute
+            # stall inside our own code.
+            pacing_deadline_bypass = (
+                blocked_wait < wait_seconds
+                and deadline is not None
+                and now + wait_seconds > deadline
+            )
+        if blocked_timeout:
+            time.sleep(max(0.0, (deadline or time.monotonic()) - time.monotonic()))
+            raise TimeoutError(
+                "remote LLM provider cooldown outlasts the request timeout; "
+                "request not sent (provider-enforced backoff)"
+            )
+        if pacing_deadline_bypass:
+            with _LLM_RATE_LOCK:
+                now = time.monotonic()
+                state = _LLM_RATE_STATE.setdefault(key, {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0})
+                state.setdefault("events", []).append((now, tokens))
                 state["lastRequest"] = now
-                return
+            return
         time.sleep(wait_seconds)
 
 

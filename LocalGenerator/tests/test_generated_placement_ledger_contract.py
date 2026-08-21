@@ -113,7 +113,7 @@ def test_ledger_persists_exact_definition_and_retries_failed_delivery() -> None:
     queue = ledger.split("internal static bool TryQueueReturn(")[1].split("private static bool TrySpawnPendingReturn")[0]
     assert "Placements.Remove" in queue
     assert "PendingReturns" in queue
-    spawn = ledger.split("private static bool TrySpawnPendingReturnCore")[1].split("public sealed class")[0]
+    spawn = ledger.split("private enum PendingSpawnOutcome")[1].split("public sealed class")[0]
     assert "ItemID." not in spawn
     assert "GeneratedItemRegistryService" in spawn
     assert "GeneratedItemData.FromJson" in spawn
@@ -141,7 +141,9 @@ def test_multiplayer_placement_reaches_the_server_ledger() -> None:
 
 def test_capacity_is_reserved_for_all_concurrent_authorizations_before_world_mutation() -> None:
     ledger = _read("Common/Systems/GeneratedPlacementLedgerSystem.cs")
-    authorize = ledger.split("internal static bool AuthorizePlacement(")[1].split("internal static bool TryCommitAuthorizedPlacement")[0]
+    authorize = ledger.split(
+        "internal static bool AuthorizePlacement(\n        Player player,\n        GeneratedItemData data,\n        RuntimePlacementSpec placement,\n        int targetX,\n        int targetY)"
+    )[1].split("internal static bool TryCommitAuthorizedPlacement")[0]
     assert "PendingAuthorizations.Count" in authorize
     assert "MaxCellsPerGroup" in authorize
     assert "MaxGroups" in authorize
