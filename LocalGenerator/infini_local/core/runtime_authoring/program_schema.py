@@ -366,7 +366,16 @@ def author_item_repair_schema() -> dict[str, Any]:
                     "name": _strict_string(min_len=1, max_len=80),
                     "category": {"type": "string", "enum": ["combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"]},
                     "concept": author_item_response_schema()["properties"]["concept"],
-                    "parentSynthesis": runtime_contract_schema()["properties"]["parentSynthesis"],
+                    # Repair returns only the parentSynthesis parts it is fixing.
+                    # Omitted parts stay frozen: filter_repair_patch_scope merges the
+                    # candidate over the current contract before applying, so a
+                    # partial candidate becomes a complete merged subtree.
+                    "parentSynthesis": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": runtime_contract_schema()["properties"]["parentSynthesis"]["properties"],
+                        "minProperties": 1,
+                    },
                 },
             },
             "realizationReplacement": realization_schema(),

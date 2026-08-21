@@ -44,7 +44,6 @@ BAD_NAME_PATTERNS = [
     re.compile(r"^\s*infini(?:\s|$|[-_])", re.I),
     re.compile(r"^\s*generated(?:\s|$|[-_])", re.I),
     re.compile(r"^\s*combined(?:\s|$|[-_])", re.I),
-    re.compile(r"\bhybrid\b", re.I),
 ]
 
 
