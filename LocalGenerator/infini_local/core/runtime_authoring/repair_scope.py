@@ -2509,6 +2509,28 @@ def _metadata_permission_paths(scope: Mapping[str, Any], field: str) -> tuple[st
             paths.add(path[len(prefix) + 1:])
     return tuple(sorted(paths))
 
+
+def _metadata_deletion_paths(scope: Mapping[str, Any], field: str) -> tuple[str, ...]:
+    """Exact metadata subtrees the validator declared invalid additional properties.
+
+    Only ``shape_additional_property`` authorizes deletion: the key itself is
+    outside the strict schema, so a repair response that omits it must drop the
+    broken key instead of preserving an unrepresentable value. Deletion is never
+    granted for any other validator code.
+    """
+
+    prefix = f"$.{field}" if field != "parentSynthesis" else "$.runtimeContract.parentSynthesis"
+    paths: set[str] = set()
+    for requirement in scope.get("repairRequirements") or []:
+        if not isinstance(requirement, Mapping):
+            continue
+        if str(requirement.get("code") or "") != "shape_additional_property":
+            continue
+        path = str(requirement.get("errorPath") or "")
+        if path.startswith(prefix + "."):
+            paths.add(path[len(prefix) + 1:])
+    return tuple(sorted(paths))
+
 def filter_repair_patch_scope(
     current: Mapping[str, Any],
     patch: Mapping[str, Any],
@@ -2720,6 +2742,7 @@ def filter_repair_patch_scope(
             continue
         preserved = contract.get("parentSynthesis") if field == "parentSynthesis" else current.get(field)
         permissions = _metadata_permission_paths(scope, field)
+        deletions = _metadata_deletion_paths(scope, field)
         if isinstance(preserved, Mapping) and isinstance(candidate, Mapping):
             merged, field_ignored, field_accepted = merge_frozen_subtree(
                 preserved,
@@ -2727,6 +2750,7 @@ def filter_repair_patch_scope(
                 mutable_paths=permissions,
                 audit_path=path,
                 allow_additions=False,
+                delete_paths=deletions,
             )
             ignored.extend(field_ignored)
             accepted.extend(field_accepted)

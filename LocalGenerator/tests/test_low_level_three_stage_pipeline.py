@@ -16,6 +16,7 @@ import infini_local.pipelines.visual_generation_pipeline as visual_stage
 import infini_local.core.runtime_authoring.repair_scope as repair_scope_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
@@ -1066,6 +1067,57 @@ def test_uncombined_identity_opens_only_model_authored_name_metadata() -> None:
     repaired = apply_repair_patch(current, filtered)
     assert repaired["name"] == "Workbench Blade"
     assert "tooltip" not in repaired
+
+
+def test_metadata_repair_deletion_is_limited_to_invalid_additional_properties() -> None:
+    original = {"literalSynthesis": "s", "author": "gemini"}
+    candidate = {"literalSynthesis": "s"}
+
+    # Without delete authorization the frozen merge preserves the extra key.
+    kept, _, _ = merge_frozen_subtree(
+        original, candidate, mutable_paths=("literalSynthesis",), audit_path="$",
+        allow_additions=False,
+    )
+    assert kept["author"] == "gemini"
+
+    # With exact delete authorization the omitted key drops.
+    dropped, _, accepted = merge_frozen_subtree(
+        original, candidate, mutable_paths=("literalSynthesis",), audit_path="$",
+        allow_additions=False, delete_paths=("author",),
+    )
+    assert "author" not in dropped
+    assert "$.author" in accepted
+
+    # A candidate that still carries the key keeps normal frozen-merge behaviour.
+    rewrite, _, _ = merge_frozen_subtree(
+        original, {"literalSynthesis": "s", "author": "gpt"}, mutable_paths=("literalSynthesis",),
+        audit_path="$", allow_additions=False, delete_paths=("author",),
+    )
+    assert rewrite["author"] == "gemini"
+
+
+def test_metadata_repair_drops_invalid_additional_property() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["concept"]["author"] = "gemini-3.5-flash-lite"
+    error = {
+        "path": "$.concept.author",
+        "code": "shape_additional_property",
+        "message": "Strict schema violation: {'path': '$.concept.author', 'kind': 'additional_property'}",
+    }
+    scope = build_runtime_repair_scope(current, [error])
+    assert scope["nonRepairableErrors"] == []
+    assert scope["metadataFields"] == ["concept"]
+
+    # The model returns the concept WITHOUT the invalid key; the merge must drop it.
+    patch = _empty_gameplay_patch()
+    candidate_concept = copy.deepcopy(current["concept"])
+    candidate_concept.pop("author")
+    patch["metadataPatch"] = {"concept": candidate_concept}
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(current, filtered)
+    assert "author" not in repaired["concept"]
+    assert repaired["concept"]["literalSynthesis"] == current["concept"]["literalSynthesis"]
 
 
 def test_uncombined_identity_closes_through_same_author_repair_stage(monkeypatch: pytest.MonkeyPatch) -> None:

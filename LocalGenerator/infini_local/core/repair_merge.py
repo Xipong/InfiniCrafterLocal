@@ -56,6 +56,7 @@ def merge_frozen_subtree(
     mutable_paths: Iterable[Any],
     audit_path: str,
     allow_additions: bool = True,
+    delete_paths: Iterable[Any] = (),
 ) -> tuple[Any, list[dict[str, Any]], list[str]]:
     """Merge ``candidate`` into ``original`` without rewriting valid values.
 
@@ -64,9 +65,15 @@ def merge_frozen_subtree(
     those paths stay frozen. ``allow_additions`` exists only for callers whose
     deterministic scope explicitly permits arbitrary completion; Gameplay,
     Visual and VFX Repair pass ``False`` and accept only exact missing paths.
+    ``delete_paths`` are dot-separated paths relative to the node root whose
+    existing keys are deterministically invalid (exact validator error paths):
+    when ``candidate`` omits such a key, the merged result drops it instead of
+    preserving the broken value. Keys still present in ``candidate`` keep the
+    normal frozen-merge behaviour so an unauthorized rewrite stays ignored.
     """
 
     permissions = _normalize_paths(mutable_paths)
+    deletions = _normalize_paths(delete_paths)
     ignored: list[dict[str, Any]] = []
     accepted: list[str] = []
 
@@ -109,6 +116,11 @@ def merge_frozen_subtree(
                     accepted.append(child_abs)
                 else:
                     ignored.append(_ignored_row(child_abs, value, previous, "frozen_valid_value"))
+            for key in list(out.keys()):
+                child_rel = f"{relative}.{key}" if relative else str(key)
+                if key not in new and _leaf_allowed(child_rel, deletions):
+                    del out[key]
+                    accepted.append(f"{absolute}.{key}")
             return out
 
         if _leaf_allowed(relative, permissions):
