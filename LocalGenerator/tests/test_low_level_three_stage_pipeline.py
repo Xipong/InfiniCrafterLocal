@@ -1120,6 +1120,34 @@ def test_metadata_repair_drops_invalid_additional_property() -> None:
     assert repaired["concept"]["literalSynthesis"] == current["concept"]["literalSynthesis"]
 
 
+def test_metadata_repair_accepts_partial_parent_synthesis_and_freezes_the_rest() -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["runtimeContract"]["parentSynthesis"]["parentA"]["facts"] = [
+        f"fact {index}" for index in range(13)
+    ]
+    scope = build_runtime_repair_scope(current, [{
+        "path": "$.runtimeContract.parentSynthesis.parentA.facts",
+        "code": "shape_max_items",
+        "message": "facts array exceeds 8 items",
+    }])
+    assert scope["nonRepairableErrors"] == []
+
+    # The model returns only the broken part; composition/parentB stay frozen.
+    patch = _empty_gameplay_patch()
+    patch["metadataPatch"] = {"parentSynthesis": {"parentA": {
+        "facts": ["literal workbench"],
+        "runtimeRoles": current["runtimeContract"]["parentSynthesis"]["parentA"]["runtimeRoles"],
+    }}}
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(current, filtered)
+    synthesis = repaired["runtimeContract"]["parentSynthesis"]
+    assert sorted(synthesis) == ["composition", "parentA", "parentB"]
+    assert synthesis["parentA"]["facts"] == ["literal workbench"]
+    assert synthesis["composition"] == current["runtimeContract"]["parentSynthesis"]["composition"]
+    assert synthesis["parentB"] == current["runtimeContract"]["parentSynthesis"]["parentB"]
+
+
 def test_uncombined_identity_closes_through_same_author_repair_stage(monkeypatch: pytest.MonkeyPatch) -> None:
     current = build_runtime_fixture("workbench_blade")
     current["name"] = "Workbench"

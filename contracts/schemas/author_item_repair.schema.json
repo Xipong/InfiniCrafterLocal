@@ -4953,6 +4953,7 @@
         },
         "parentSynthesis": {
           "additionalProperties": false,
+          "minProperties": 1,
           "properties": {
             "composition": {
               "maxLength": 500,
@@ -5020,11 +5021,6 @@
               "type": "object"
             }
           },
-          "required": [
-            "composition",
-            "parentA",
-            "parentB"
-          ],
           "type": "object"
         }
       },
