@@ -154,9 +154,19 @@ def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
 
 
 def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False) -> dict[str, Any]:
+    # itemPatch is partial: Repair returns only the visual fields it is fixing.
+    # Omitted fields stay frozen - the deterministic merge completes the patch from
+    # the previous kit before applying, mirroring the gameplay parentSynthesis rule.
+    full_item = _visual_item_schema()
+    partial_item = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": full_item["properties"],
+        "minProperties": 1,
+    }
     properties: dict[str, Any] = {
         "schema": {"const": VISUAL_REPAIR_PATCH_SCHEMA},
-        "itemPatch": {"anyOf": [_visual_item_schema(), {"type": "null"}]},
+        "itemPatch": {"anyOf": [partial_item, {"type": "null"}]},
         "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids), "maxItems": len(entity_ids)},
         "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
         "entityIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
@@ -354,7 +364,19 @@ def _build_visual_repair_scope(
             whole_response = True
         if path.startswith("$.item"):
             item_mutable = True
-            item_paths.add("" if path == "$.item" else path.removeprefix("$.item."))
+            relative_item_path = "" if path == "$.item" else path.removeprefix("$.item.")
+            item_paths.add(relative_item_path)
+            # visualProjectRef=item rows mirror the item visual project verbatim.
+            # A permission on a mirrored item field deterministically extends to the
+            # same field in those entity rows, otherwise Repair could not fix one
+            # broken copy without re-emitting frozen context it must not touch.
+            if relative_item_path:
+                for row_index, row in enumerate(rows):
+                    if not isinstance(row, Mapping):
+                        continue
+                    entity_id = str(row.get("entityId") or "")
+                    if entity_id in entity_ids and str(row.get("visualProjectRef") or "") == "item":
+                        grant_entity(entity_id, relative_item_path)
         if equipment_overlay_required and path.startswith("$.equipOverlay"):
             overlay_mutable = True
             overlay_paths.add("" if path == "$.equipOverlay" else path.removeprefix("$.equipOverlay."))

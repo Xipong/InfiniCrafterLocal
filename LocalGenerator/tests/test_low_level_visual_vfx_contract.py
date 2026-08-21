@@ -179,6 +179,72 @@ def test_visual_repair_deletes_exact_unknown_item_property() -> None:
     assert kit is not None, validation_errors
 
 
+def test_visual_repair_accepts_partial_item_patch_and_freezes_valid_fields() -> None:
+    item = {
+        "prompt": "broken prompt",
+        "negativePrompt": "placeholder",
+        "silhouette": "broad blade",
+        "visualIdentity": "carpentry sword",
+        "palette": ["brown"],
+        "preferredCanvasSize": 32,
+        "inventoryScale": 1.0,
+        "worldScale": 1.0,
+    }
+    previous = {
+        "schema": "infini.visual-kit.runtime-entities.v1",
+        "item": item,
+        "entities": [{
+            "entityId": "item",
+            "assetMode": "baked_sprite",
+            "visualProjectRef": "item",
+            "prompt": "broken prompt",
+            "silhouette": "broad blade",
+            "visualIdentity": "carpentry sword",
+            "scale": 1.0,
+        }],
+        "animationPlan": "static inventory sprite",
+    }
+    errors = [
+        {
+            "path": "$.item.prompt",
+            "code": "schema_min_length",
+            "message": "prompt is empty or invalid",
+        },
+    ]
+    scope = _build_visual_repair_scope(previous, errors, ["item"], "item")
+    # The model returns ONLY the broken field; everything else stays frozen.
+    patch = {
+        "schema": VISUAL_REPAIR_PATCH_SCHEMA,
+        "itemPatch": {"prompt": "wooden blade with a literal workbench guard"},
+        "entitiesUpsert": [{
+            "entityId": "item",
+            "assetMode": "baked_sprite",
+            "visualProjectRef": "item",
+            "prompt": "wooden blade with a literal workbench guard",
+            "silhouette": "broad blade",
+            "visualIdentity": "carpentry sword",
+            "scale": 1.0,
+        }],
+        "entityIdsDelete": [],
+        "entityIndicesDelete": [],
+        "animationPlan": None,
+        "note": "repair the prompt in both visual project copies",
+    }
+    repaired, audit = _apply_visual_repair_patch(
+        previous,
+        patch,
+        scope,
+        ["item"],
+        return_audit=True,
+    )
+    assert audit["ok"], audit
+    assert repaired["item"]["prompt"] == "wooden blade with a literal workbench guard"
+    assert repaired["item"]["silhouette"] == item["silhouette"]
+    assert repaired["item"]["palette"] == ["brown"]
+    kit, validation_errors = _validate_kit(repaired, ["item"], "item")
+    assert kit is not None, validation_errors
+
+
 def test_visual_repair_atomically_replaces_one_unknown_row_with_one_missing_entity() -> None:
     entity_ids = ["item_body", "whip_projectile", "spore_particle"]
 

@@ -237,6 +237,7 @@
       "anyOf": [
         {
           "additionalProperties": false,
+          "minProperties": 1,
           "properties": {
             "inventoryScale": {
               "maximum": 4.0,
@@ -289,16 +290,6 @@
               "type": "number"
             }
           },
-          "required": [
-            "prompt",
-            "negativePrompt",
-            "silhouette",
-            "visualIdentity",
-            "palette",
-            "preferredCanvasSize",
-            "inventoryScale",
-            "worldScale"
-          ],
           "type": "object"
         },
         {
