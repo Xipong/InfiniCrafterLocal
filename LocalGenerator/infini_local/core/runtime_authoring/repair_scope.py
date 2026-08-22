@@ -89,6 +89,7 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "missing_realization_claim": {"strategy": "replace_realization_from_final_claims", "llmRepairable": True, "allowNodeDelete": False},
     "missing_required_component": {"strategy": "synthesize_exact_required_component", "llmRepairable": True, "allowNodeDelete": False},
     "place_item_without_stack_cost": {"strategy": "replace_complete_use_transaction", "llmRepairable": True, "allowNodeDelete": False},
+    "hybrid_placeable_max_stack": {"strategy": "patch_exact_item_param", "llmRepairable": True, "allowNodeDelete": False},
     "invalid_primary_entity_reference": {"strategy": "choose_exact_existing_primary_entity", "llmRepairable": True, "allowNodeDelete": False},
     "self_reference_forbidden": {"strategy": "patch_exact_reference", "llmRepairable": True, "allowNodeDelete": False},
     "unknown_capability": {"strategy": "replace_or_delete_unknown_call", "llmRepairable": True, "allowNodeDelete": True},
@@ -1211,6 +1212,11 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     param_name = param_match.group(1)
                     if code == "shape_additional_property":
                         deletable_call_param_keys.add((node_id, param_name))
+                    if code == "hybrid_placeable_max_stack" and param_name == "maxStack":
+                        # The durable-hybrid invariant authorizes exactly this leaf so
+                        # Repair can set configure_item_stats.maxStack to 1.
+                        grant(node_namespace, node_id, f"params.{param_name}")
+                        context[node_namespace].add(node_id)
                     cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
                     if param_name == "event":
                         call_event_change_ids.add(node_id)

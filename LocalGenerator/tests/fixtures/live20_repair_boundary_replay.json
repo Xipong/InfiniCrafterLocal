@@ -4,6 +4,7 @@
       "expectedInitialCodes": [
         "binding_dependency",
         "duplicate_exclusive_input",
+        "hybrid_placeable_max_stack",
         "missing_binding_dependency"
       ],
       "initialAuthor": {
@@ -236,7 +237,7 @@
               "heightPx": 24,
               "knockback": 2,
               "manaCost": 0,
-              "maxStack": 9999,
+              "maxStack": 1,
               "rarity": 3,
               "scale": 1,
               "useAnimationTicks": 22,
@@ -946,6 +947,7 @@
       "expectedInitialCodes": [
         "dual_use_placeable_input_contract",
         "duplicate_exclusive_input",
+        "hybrid_placeable_max_stack",
         "inert_stationary_entity",
         "place_item_without_stack_cost",
         "shape_const",

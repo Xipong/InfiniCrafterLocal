@@ -71,6 +71,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "missing_realization_claim",
     "missing_required_component",
     "place_item_without_stack_cost",
+    "hybrid_placeable_max_stack",
     "invalid_primary_entity_reference",
     "self_reference_forbidden",
     "unknown_capability",
@@ -719,6 +720,30 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 ("1",),
                 (str(binding.get("id") or ""),),
             ))
+        reusable_active_uses = [
+            row for row in bindings
+            if str(row.get("input") or "") in {"primary_use", "alternate_use"}
+            and action_kind(row) in {"spawn_entity", "use_item_body"}
+            and stack_cost(row) == 0
+        ]
+        if reusable_active_uses:
+            # Durable hybrid: the item is both a reusable tool/weapon and a placeable.
+            # Its inventory stack must stay at one physical unit - placement escrows the
+            # whole item and breaking the tile returns it. A larger stack would let one
+            # alternate click lock an arbitrary number of weapon instances in the world.
+            for call in calls:
+                if str(call.get("fn") or "") != "configure_item_stats":
+                    continue
+                params = call.get("params") if isinstance(call.get("params"), Mapping) else {}
+                max_stack = params.get("maxStack")
+                if max_stack != 1:
+                    issues.append(ValidationIssue(
+                        f"$.runtimeProgram.calls[{calls.index(call)}].params.maxStack",
+                        "hybrid_placeable_max_stack",
+                        "A durable placeable hybrid must hold exactly one unit: set configure_item_stats maxStack to 1.",
+                        ("1",),
+                        (str(call.get("id") or ""),),
+                    ))
         referenced_call_id = placement_call_id(binding)
         referenced_call = calls_by_id.get(referenced_call_id)
         if (
