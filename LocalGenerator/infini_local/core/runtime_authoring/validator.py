@@ -779,7 +779,6 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             issues.append(ValidationIssue(f"$.runtimeContract.claims[{index}].backedBy", "missing_claim_backing", f"Claim '{claim.get('id')}' references missing ids: {', '.join(missing)}.", tuple(sorted(backing_ids)), tuple(missing)))
         if claim.get("kind") == "gameplay" and not any(value in calls_by_id or value in bindings_by_id for value in backed):
             issues.append(ValidationIssue(f"$.runtimeContract.claims[{index}].backedBy", "gameplay_claim_without_execution", f"Gameplay claim '{claim.get('id')}' needs call/binding backing.", tuple(sorted(set(calls_by_id) | set(bindings_by_id)))))
-
     realization_raw = document.get("realization")
     realization: Mapping[str, Any] = realization_raw if isinstance(realization_raw, Mapping) else {}
     backed_claims_raw = realization.get("backedByClaims")

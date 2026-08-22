@@ -408,6 +408,54 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         })
 
     errors.extend(_walk_forbidden({"runtimeProgram": runtime}))
+
+    # Promise-delivery parity on the compiled wire: a gameplay claim that promises
+    # an executable engine behavior must exist in the delivered surface.  Claim
+    # text is scanned only for capability vocabulary that maps 1:1 onto a
+    # compiled executor surface - this validates promise-vs-execution consistency,
+    # not item identity or art direction.
+    contract_for_parity = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), Mapping) else {}
+    promise_rules = (
+        (("blink", "teleport", "recall"), "mobilityMode"),
+        (("minion", "sentry", "turret", "companion"), None),  # None = any entity targeting component
+        (("explode", "explosion", "detonat"), "damage_area_on_event"),
+        (("poison", "burning", "curse", "frostburn"), "apply_status_on_event"),
+    )
+    gameplay_parity = data.get("gameplay") if isinstance(data.get("gameplay"), Mapping) else {}
+    entity_rows = [row for row in entities if isinstance(row, Mapping)]
+    claims_parity = contract_for_parity.get("claims") if isinstance(contract_for_parity.get("claims"), list) else []
+    for index, claim in enumerate(claims_parity):
+        if str(claim.get("kind") or "") != "gameplay":
+            continue
+        claim_text = str(claim.get("text") or "").lower()
+        for tokens, required_surface in promise_rules:
+            if not any(token in claim_text for token in tokens):
+                continue
+            if required_surface is None:
+                if any(isinstance(entity.get("targeting"), Mapping) and entity["targeting"] for entity in entity_rows):
+                    continue
+            elif required_surface == "mobilityMode":
+                if gameplay_parity.get("mobilityMode"):
+                    continue
+            else:
+                wired_actions = {
+                    str(event.get("action") or "")
+                    for entity in entity_rows
+                    for event in (entity.get("events") or [])
+                    if isinstance(event, Mapping)
+                }
+                if required_surface in wired_actions:
+                    continue
+            errors.append({
+                "path": f"$.runtimeContract.claims[{index}]",
+                "code": "unbacked_promise_capability",
+                "message": (
+                    f"Claim '{claim.get('id')}' promises {tokens[0]} but the compiled wire "
+                    f"delivers no {required_surface} surface. Wire the matching executor or drop the promise."
+                ),
+            })
+            break
+
     contract_raw = data.get("runtimeContract")
     contract = contract_raw if isinstance(contract_raw, Mapping) else {}
     receipts_raw = contract.get("finalWireReceipts")

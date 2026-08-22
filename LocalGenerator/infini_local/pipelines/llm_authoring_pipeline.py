@@ -454,6 +454,7 @@ def repair_author_item_after_failure(
         "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
+
         "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
         "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."
