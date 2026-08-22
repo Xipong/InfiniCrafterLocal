@@ -414,6 +414,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     # text is scanned only for capability vocabulary that maps 1:1 onto a
     # compiled executor surface - this validates promise-vs-execution consistency,
     # not item identity or art direction.
+    parity_warnings: list[dict[str, Any]] = []
     contract_for_parity = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), Mapping) else {}
     promise_rules = (
         (("blink", "teleport", "recall"), "mobilityMode"),
@@ -446,12 +447,12 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 }
                 if required_surface in wired_actions:
                     continue
-            errors.append({
+            parity_warnings.append({
                 "path": f"$.runtimeContract.claims[{index}]",
                 "code": "unbacked_promise_capability",
                 "message": (
                     f"Claim '{claim.get('id')}' promises {tokens[0]} but the compiled wire "
-                    f"delivers no {required_surface} surface. Wire the matching executor or drop the promise."
+                    f"delivers no {required_surface} surface."
                 ),
             })
             break
@@ -480,6 +481,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             "receipts": len(receipts),
         },
         "technicalLowering": lowering,
+        "promiseParityWarnings": parity_warnings,
     }
 
 

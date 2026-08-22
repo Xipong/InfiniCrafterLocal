@@ -43,18 +43,26 @@ def _wire(claims: list[dict], *, gameplay: dict | None = None, targeting: bool =
     return data
 
 
-def test_mobility_promise_requires_delivered_mobility_mode() -> None:
+def test_parity_drift_is_reported_as_warning_not_error() -> None:
     wire = _wire([{
         "id": "claim_blink", "kind": "gameplay",
         "text": "Blinks the player toward the cursor on use.",
         "backedBy": [],
     }])
     report = validate_runtime_wire(wire)
-    codes = {row.get("code") for row in report.get("errors", [])}
-    assert "unbacked_promise_capability" in codes, codes
+    # Anchoring drift must NOT fail delivery - claims are intent/debug, not a player contract.
+    parity_errors = [
+        row for row in report.get("errors", [])
+        if row.get("code") == "unbacked_promise_capability"
+    ]
+    assert parity_errors == [], parity_errors
+    assert len(report["promiseParityWarnings"]) == 1
+    warning = report["promiseParityWarnings"][0]
+    assert warning["code"] == "unbacked_promise_capability"
+    assert "mobilityMode" in warning["message"]
 
 
-def test_mobility_promise_with_delivered_mode_passes() -> None:
+def test_aligned_promise_produces_no_warning() -> None:
     wire = _wire(
         [{
             "id": "claim_blink", "kind": "gameplay",
@@ -64,31 +72,30 @@ def test_mobility_promise_with_delivered_mode_passes() -> None:
         gameplay={"mobilityMode": "blink_to_cursor"},
     )
     report = validate_runtime_wire(wire)
-    parity = [row for row in report.get("errors", []) if row.get("code") == "unbacked_promise_capability"]
-    assert parity == [], parity
+    assert report["promiseParityWarnings"] == []
 
 
-def test_minion_promise_requires_targeting_component() -> None:
+def test_targeting_parity_warning_and_alignment() -> None:
     claims = [{"id": "c1", "kind": "gameplay", "text": "Summons a loyal minion companion.", "backedBy": []}]
-    without = validate_runtime_wire(_wire(claims))
-    assert any(row.get("code") == "unbacked_promise_capability" for row in without.get("errors", []))
-    with_targeting = validate_runtime_wire(_wire(claims, targeting=True))
-    assert not any(row.get("code") == "unbacked_promise_capability" for row in with_targeting.get("errors", []))
+    drifted = validate_runtime_wire(_wire(claims))
+    assert len(drifted["promiseParityWarnings"]) == 1
+    aligned = validate_runtime_wire(_wire(claims, targeting=True))
+    assert aligned["promiseParityWarnings"] == []
 
 
-def test_explosion_promise_requires_damage_area_event() -> None:
+def test_event_surface_parity_warning_and_alignment() -> None:
     wire = _wire([{"id": "c1", "kind": "gameplay", "text": "The vial explodes on impact.", "backedBy": []}])
-    report = validate_runtime_wire(wire)
-    assert any(row.get("code") == "unbacked_promise_capability" for row in report.get("errors", []))
+    drifted = validate_runtime_wire(wire)
+    assert len(drifted["promiseParityWarnings"]) == 1
     wire["runtimeProgram"]["entities"][0]["events"] = [{
         "id": "ev1", "event": "on_expire", "action": "damage_area_on_event",
         "actionCode": 3, "radiusPx": 120, "damageMultiplier": 1.5,
     }]
-    report_ok = validate_runtime_wire(wire)
-    assert not any(row.get("code") == "unbacked_promise_capability" for row in report_ok.get("errors", []))
+    aligned = validate_runtime_wire(wire)
+    assert aligned["promiseParityWarnings"] == []
 
 
 def test_non_gameplay_claims_are_not_scanned() -> None:
     wire = _wire([{"id": "c1", "kind": "physical", "text": "Blinks with reflected light.", "backedBy": []}])
     report = validate_runtime_wire(wire)
-    assert not any(row.get("code") == "unbacked_promise_capability" for row in report.get("errors", []))
+    assert report["promiseParityWarnings"] == []
