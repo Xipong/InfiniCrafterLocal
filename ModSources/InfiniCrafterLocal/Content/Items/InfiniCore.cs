@@ -27,6 +27,9 @@ public sealed class InfiniCore : ModItem
 
     public override bool CanRightClick() => true;
 
+    // tML right-click consumption does not consult Item.consumable.
+    public override bool ConsumeItem(Player player) => false;
+
     public override void RightClick(Player player)
     {
         // InfiniCore is now a station key, not an auto-consume button.

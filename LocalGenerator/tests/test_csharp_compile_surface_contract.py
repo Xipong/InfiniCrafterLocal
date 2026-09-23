@@ -112,36 +112,11 @@ def _check_tml_build_log_parser_handles_tml_client_log_prefixes_and_dedupes():
     assert summary["errors"][0]["line"] == 593
     assert "OtherMod" not in str(summary)
 
-# Coarse test bundle: the checks below used to be separate pytest items.
-# Keeping them as helper checks cuts collection/runtime noise while preserving
-# the same assertions inside one scenario-level contract per file.
-def _run_coarse_contracts(tmp_path):
-    import inspect as _inspect
-    import pytest as _pytest
 
-    for _name in [
-    '_check_static_csharp_compile_surface_scanner_passes',
-    '_check_optional_real_tml_build_helper_is_present_and_skips_without_target',
-    '_check_tml_build_helper_discovers_windows_dotnet_exe_when_linux_dotnet_missing',
-    '_check_tml_build_helper_converts_wsl_external_deps_for_windows_dotnet',
-    '_check_tml_build_helper_converts_wsl_project_for_windows_dotnet',
-    '_check_tml_build_log_parser_extracts_roslyn_errors_and_warnings',
-    '_check_tml_build_log_parser_handles_tml_client_log_prefixes_and_dedupes'
-    ]:
-        _fn = globals()[_name]
-        _sig = _inspect.signature(_fn)
-        _kwargs = {}
-        if "tmp_path" in _sig.parameters:
-            _case_dir = tmp_path / _name
-            _case_dir.mkdir(parents=True, exist_ok=True)
-            _kwargs["tmp_path"] = _case_dir
-        if "monkeypatch" in _sig.parameters:
-            with _pytest.MonkeyPatch.context() as _mp:
-                _kwargs["monkeypatch"] = _mp
-                _fn(**_kwargs)
-        else:
-            _fn(**_kwargs)
+# One collected item per contract module: the checks above keep source order and
+# their own tracebacks. The shared runner discovers them by prefix, so a new check
+# cannot be silently left out of a hand-maintained dispatch list.
+def test_csharp_compile_surface_contract_coarse_contract(request):
+    from contract_checks import run_contract_checks
 
-
-def test_csharp_compile_surface_contract_coarse_contract(tmp_path):
-    _run_coarse_contracts(tmp_path)
+    run_contract_checks(globals(), request, prefix="_check_")

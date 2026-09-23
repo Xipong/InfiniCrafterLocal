@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.config_bootstrap import CACHE_DIR
-from infini_local.core.env_utils import env_bool, env_int
+from infini_local.core.env_utils import env_bool, env_int, env_str
 from infini_local.storage import trace_tools
 
 
@@ -21,6 +21,26 @@ TRACE_EVENTS_TAIL = max(20, min(500, env_int("INFINI_TRACE_EVENTS_TAIL", 120)))
 TRACE_FILE = CACHE_DIR / "pipeline_trace.ndjson"
 PROMPT_TRACE_FILE = CACHE_DIR / "prompt_trace.ndjson"
 
+# events.ndjson stays the complete record.  These levels are additionally mirrored
+# to the server console so a failing craft is visible while it happens: the window
+# used to show only the startup banner, which made silent failures look like the
+# generator doing nothing.  "off" restores the previous file-only behaviour.
+_ECHO_LEVEL_ORDER = ("debug", "info", "warn", "error")
+
+
+def _configured_echo_levels() -> tuple[str, ...]:
+    threshold = str(env_str("INFINI_CONSOLE_EVENT_LEVEL", "warn") or "warn").strip().lower()
+    # Silence is opt-in: an unset, empty or unrecognized value keeps the
+    # recommended warn+error echo rather than hiding failures by accident.
+    if threshold in {"off", "none", "silent"}:
+        return ()
+    if threshold not in _ECHO_LEVEL_ORDER:
+        threshold = "warn"
+    return _ECHO_LEVEL_ORDER[_ECHO_LEVEL_ORDER.index(threshold):]
+
+
+CONSOLE_EVENT_LEVELS = _configured_echo_levels()
+
 
 def initialize_trace_storage() -> dict[str, bool]:
     """Repair corrupt trailing records before the HTTP server starts accepting work."""
@@ -36,7 +56,7 @@ def _json_slim(obj: Any, max_chars: int = 40000) -> Any:
 
 
 def log_event(level: str, message: str, payload: Any = None) -> None:
-    trace_tools.log_event(CACHE_DIR, level, message, payload)
+    trace_tools.log_event(CACHE_DIR, level, message, payload, echo_levels=CONSOLE_EVENT_LEVELS)
 
 
 def _trace_clip(value: Any, max_chars: int | None = None) -> str:

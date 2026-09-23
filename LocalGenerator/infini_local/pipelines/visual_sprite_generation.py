@@ -21,6 +21,7 @@ from infini_local.pipelines.pipeline_visual_config import (
     VISUAL_STRICT_AI_AUTHORSHIP,
 )
 from infini_local.services import visual_asset_pipeline
+from infini_local.services.codex_auth import CodexError
 from infini_local.services.visual_asset_pipeline import sprite_status_from_raw_path, truncate_prompt_at_boundary
 from infini_local.storage.trace_runtime import (
     log_event,
@@ -30,6 +31,7 @@ from infini_local.pipelines.image_backend_pipeline import (
     generate_a1111,
     generate_comfyui,
     generate_image_api,
+    generate_openai_codex,
     generate_sdcpp,
 )
 from infini_local.pipelines.sprite_postprocess import (
@@ -102,6 +104,8 @@ def _generate_backend_variants(
             return generate_comfyui(prompt, negative, asset_id)
         if IMAGE_BACKEND == "sdcpp":
             return generate_sdcpp(prompt, negative, asset_id, canvas)
+        if IMAGE_BACKEND == "openai_codex":
+            return generate_openai_codex(prompt, negative, asset_id, canvas)
         if IMAGE_BACKEND == "image_api":
             return generate_image_api(prompt, negative, asset_id, canvas)
         if IMAGE_BACKEND == "procedural":
@@ -253,10 +257,12 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
             data.setdefault("debug", {})["spriteError"] = repr(e)
             trace_event("error", "IMAGE:item", "sprite generation attempt failed", {"assetId": asset_id, "attempt": attempt, "backend": IMAGE_BACKEND}, error=repr(e))
             log_event("warn", "sprite generation failed", {"attempt": attempt, "error": repr(e), "trace": traceback.format_exc()})
+            if isinstance(e, CodexError):
+                break  # Auth/quota/transport failures are not a prompt-quality retry.
     data.setdefault("debug", {})["itemSpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
     if last_path:
         data.setdefault("debug", {})["itemSpriteInvalidGeneratedDiscarded"] = str(Path(last_path).resolve())
-    if VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
+    if IMAGE_BACKEND != "openai_codex" and VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
         try:
             fallback = visual_asset_pipeline.generate_procedural_asset(data, "item", variant=0, canvas_size=canvas, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)
             final = postprocess_sprite(
@@ -447,6 +453,8 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             data.setdefault("debug", {})[f"{role}SpriteError"] = repr(e)
             trace_event("error", f"IMAGE:{role}", "sprite generation attempt failed", {"assetId": asset_id, "attempt": attempt, "backend": IMAGE_BACKEND}, error=repr(e))
             log_event("warn", f"{role} sprite generation attempt failed", {"attempt": attempt, "error": repr(e), "trace": traceback.format_exc()})
+            if isinstance(e, CodexError):
+                break  # Auth/quota/transport failures are not a prompt-quality retry.
     data.setdefault("debug", {})[f"{role}SpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
     if last_path:
         data.setdefault("debug", {})[f"{role}InvalidGeneratedDiscarded"] = str(Path(last_path).resolve())
@@ -474,7 +482,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             except Exception:
                 pass
             return str(Path(last_path).resolve()), f"/sprite/{Path(last_path).name}", round(last_score, 3), "generated_warn_invalid"
-    if VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
+    if IMAGE_BACKEND != "openai_codex" and VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
         try:
             fallback = visual_asset_pipeline.generate_procedural_asset(data, role, variant=0, canvas_size=canvas, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)
             final = postprocess_sprite(

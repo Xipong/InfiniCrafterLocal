@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 116,
+  "documentedFieldCount": 121,
   "entries": [
     {
       "declarations": [
@@ -560,6 +560,102 @@
     {
       "declarations": [
         {
+          "default": "gpt-image-2",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "gpt-image-2",
+      "documented": true,
+      "example": "gpt-image-2",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CODEX_IMAGE_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "medium",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "medium",
+      "documented": true,
+      "example": "medium",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CODEX_IMAGE_QUALITY",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "1024x1024",
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "1024x1024",
+      "documented": true,
+      "example": "1024x1024",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CODEX_IMAGE_SIZE",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 240,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 240,
+      "documented": true,
+      "example": "240",
+      "gui": true,
+      "maximum": 3600,
+      "minimum": 1,
+      "name": "INFINI_CODEX_IMAGE_TIMEOUT",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
           "default": 0,
           "file": "LocalGenerator/infini_local/services/combine_endpoint.py",
           "maximum": 600,
@@ -1044,6 +1140,30 @@
       "secret": false,
       "type": "string",
       "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
+          "default": "warn",
+          "file": "LocalGenerator/infini_local/storage/trace_runtime.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "warn",
+      "documented": true,
+      "example": "warn",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CONSOLE_EVENT_LEVEL",
+      "owners": [
+        "LocalGenerator/infini_local/storage/trace_runtime.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
     },
     {
       "declarations": [],
@@ -3448,7 +3568,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp\\models\\Flux 2 4B\\Qwen3-4B-UD-Q5_K_XL.gguf",
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\models\\Flux 2 4B\\Qwen 3\\Qwen3-4B-UD-Q5_K_XL.gguf",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3568,7 +3688,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp\\models\\Flux 2 4B\\flux-2-klein-4b-Q8_0.gguf",
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\models\\Flux 2 4B\\flux-2-klein-4b-Q8_0.gguf",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3592,7 +3712,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030",
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3736,7 +3856,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030\\sd-server.exe",
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\sd-server.exe",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -4088,7 +4208,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp\\models\\Flux 2 4B\\ae.safetensors",
+      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\models\\Flux 2 4B\\ae.safetensors",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -5303,15 +5423,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 218,
-  "fingerprint": "4d4f4bc53515c6fdc7768e7dfd17a65fa12db7c4f43bb472af499dc91f7b0cb9",
+  "fieldCount": 223,
+  "fingerprint": "8995a0c75d1abec1f2229322ec2f38afdb4dfe3469dee01a6839ff6f09d4500a",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 118,
+  "guiFieldCount": 123,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

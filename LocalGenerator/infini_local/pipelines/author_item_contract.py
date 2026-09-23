@@ -4,7 +4,6 @@ import copy
 from typing import Any, Mapping
 
 from infini_local.core.runtime_authoring import (
-    RUNTIME_CONTRACT_SCHEMA,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     apply_repair_patch,
@@ -84,9 +83,9 @@ def _binding_prompt_shape_card() -> dict[str, Any]:
 
 def author_item_prompt_shape_card() -> dict[str, Any]:
     return {
-        # This order is model-facing: early intent, executable mechanics,
-        # evidence claims, then the same Author's account of the realized result.
-        "root": ["name", "category", "concept", "runtimeProgram", "runtimeContract", "realization"],
+        # This order is model-facing: non-binding intent, executable mechanics,
+        # then the same Author's account and self-evaluation of the result.
+        "root": ["name", "category", "concept", "runtimeProgram", "realization"],
         "name": "non-empty string",
         "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "concept": {
@@ -95,6 +94,10 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "parentAContribution": "non-empty string",
             "parentBContribution": "non-empty string",
             "playerExperience": "non-empty string",
+            "plannedPlayerActions": [{
+                "input": "primary_use|alternate_use|hold|equipped|passive_or_event",
+                "intent": "non-binding initial player-facing intent",
+            }],
         },
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
@@ -104,29 +107,33 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "bindings": [_binding_prompt_shape_card()],
             "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
         },
-        "runtimeContract": {
-            "schema": RUNTIME_CONTRACT_SCHEMA,
-            "parentSynthesis": {
-                "composition": "non-empty string",
-                "parentA": {"facts": ["source-backed fact"], "runtimeRoles": ["authored runtime role"]},
-                "parentB": {"facts": ["source-backed fact"], "runtimeRoles": ["authored runtime role"]},
-            },
-            "claims": [{
-                "id": "stable_claim_id",
-                "kind": "gameplay|physical|parent_synthesis",
-                "text": "non-empty claim",
-                "backedBy": ["existing call or binding id"],
-            }],
-        },
         "realization": {
-            "description": "final result description derived after runtimeProgram and claims",
+            "description": "final result description derived after runtimeProgram",
             "playerExperience": "what the final executable program lets the player experience",
-            "backedByClaims": ["existing runtimeContract claim id"],
-            "intentTrace": {
-                "kept": ["early intent preserved by the executable program"],
-                "changed": [],
-                "dropped": [],
-                "added": [],
+            "selfEvaluation": {
+                "planVsProgram": {
+                    "verdict": "aligned|changed|uncertain",
+                    "summary": "independent comparison of the initial design draft with the executable program",
+                    "actionChecks": [{
+                        "plannedIntent": "one exact plannedPlayerActions intent, or 'no corresponding initial action' for an added lane",
+                        "implementedBehavior": "what runtimeProgram actually implements for it",
+                        "runtimeRefs": ["existing entity, binding, or call id"],
+                        "result": "aligned|changed|dropped|added|uncertain",
+                        "intentionality": "intentional|accidental|uncertain",
+                        "reason": "why this action is aligned, changed, dropped, added, or uncertain",
+                    }],
+                },
+                "programVsReport": {
+                    "verdict": "aligned|mismatch|uncertain",
+                    "summary": "independent comparison of runtimeProgram with description/playerExperience",
+                    "behaviorChecks": [{
+                        "runtimeRefs": ["existing entity, binding, or call id"],
+                        "programBehavior": "one literal executable behavior lane",
+                        "reportedBehavior": "what description/playerExperience says about that lane",
+                        "result": "aligned|mismatch|omitted|uncertain",
+                        "reason": "why this lane is aligned, mismatched, omitted, or uncertain",
+                    }],
+                },
             },
         },
         "forbidden": [
@@ -193,14 +200,6 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
             placeholders[key] = [{
                 "callId": "exact call id from repairScope.deletable.callParamKeys",
                 "key": "exact invalid parameter key from repairScope.deletable.callParamKeys",
-            }]
-            continue
-        if key == "claimsUpsert":
-            placeholders[key] = [{
-                "id": "stable_claim_id",
-                "kind": "gameplay|physical|parent_synthesis",
-                "text": "non-empty claim",
-                "backedBy": ["existing binding or call id"],
             }]
             continue
         if key == "realizationReplacement":

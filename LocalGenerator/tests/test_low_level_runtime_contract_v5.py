@@ -63,7 +63,7 @@ def test_generated_parent_projectile_projection_follows_canonical_primary_bindin
     assert projected["id"] == "authored_primary"
 
 
-def test_generated_parent_summary_uses_late_realization_and_accepted_claims() -> None:
+def test_generated_parent_summary_uses_late_report_and_behavior_checks() -> None:
     authored = build_runtime_fixture("workbench_blade")
     authored["id"] = "generated_summary_fixture"
     authored["concept"]["coreMechanic"] = "EARLY CONCEPT MUST NOT LEAK"
@@ -71,28 +71,49 @@ def test_generated_parent_summary_uses_late_realization_and_accepted_claims() ->
         "description": "Late accepted blade realization.",
         "playerExperience": "Late accepted player experience.",
     })
-    cited_ids = set(authored["realization"]["backedByClaims"])
+    authored["realization"]["selfEvaluation"]["programVsReport"] = {
+        "verdict": "aligned",
+        "summary": "The report covers both executable lanes.",
+        "behaviorChecks": [
+            {
+                "runtimeRefs": ["primary_workbench"],
+                "programBehavior": "Primary use launches the authored workbench projectile.",
+                "reportedBehavior": "Primary use launches the authored workbench projectile.",
+                "result": "aligned",
+                "reason": "The final report names the exact primary lane.",
+            },
+            {
+                "runtimeRefs": ["shed_nails"],
+                "programBehavior": "A hit releases five nails.",
+                "reportedBehavior": "A hit releases ten nails.",
+                "result": "mismatch",
+                "reason": "The final report overstates the exact event count.",
+            },
+        ],
+    }
     summary = generated_parent_summary_from_data(authored)
     assert summary["identity"] == "generated:generated_summary_fixture"
     assert summary["description"] == "Late accepted blade realization."
     assert summary["playerExperience"] == "Late accepted player experience."
     assert "EARLY CONCEPT MUST NOT LEAK" not in json.dumps(summary)
     assert summary["notableEffects"] == [
-        row["text"] for row in authored["runtimeContract"]["claims"]
-        if row["id"] in cited_ids
+        "Primary use launches the authored workbench projectile.",
+        "A hit releases five nails.",
     ]
+    assert "ten nails" not in json.dumps(summary)
+    assert "backedByClaims" not in summary
+    assert "parentComposition" not in summary
 
     authored["generatedParentSummary"] = summary
     delivered = sanitize_recipe_for_delivery(authored)
     delivered_summary = delivered["generatedParentSummary"]
     assert delivered_summary["description"] == "Late accepted blade realization."
     assert delivered_summary["playerExperience"] == "Late accepted player experience."
-    assert delivered_summary["backedByClaims"] == summary["backedByClaims"]
     recursive = raw_parent_card_for_llm({"name": authored["name"], "generatedData": delivered})
     recursive_summary = recursive["raw"]["generatedParent"]["summary"]
     assert recursive_summary["description"] == "Late accepted blade realization."
     assert recursive_summary["playerExperience"] == "Late accepted player experience."
-    assert recursive_summary["backedByClaims"] == summary["backedByClaims"]
+    assert recursive_summary["notableEffects"] == summary["notableEffects"]
     assert recursive_summary["schema"] == "infini.generated-parent-summary.v2"
     assert recursive_summary["identity"] == summary["identity"]
     assert "fantasy" not in recursive_summary
@@ -129,8 +150,8 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     assert "parent sentinel none is forbidden" in self_check
     assert "every damageClass" in self_check
     truth = invariants["realizationExecutionTruth"]
-    assert "realization.intentTrace" in truth["authority"]
-    assert "runtimeContract.intentTrace" not in truth["authority"]
+    assert "realization.selfEvaluation" in truth["authority"]
+    assert "runtimeContract.selfEvaluation" not in truth["authority"]
     assert "does not emit item_body.on_use" in truth["placementUse"]
     assert "natural lifetime expiry" in truth["terminationEvents"]
     assert "whole generated item" in truth["stackCost"]
@@ -160,7 +181,7 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
 
 def test_author_prompt_shape_card_matches_root_object_cardinality_without_provider_schema() -> None:
     card = author_item_prompt_shape_card()
-    expected_model_order = ["name", "category", "concept", "runtimeProgram", "runtimeContract", "realization"]
+    expected_model_order = ["name", "category", "concept", "runtimeProgram", "realization"]
     assert card["root"] == expected_model_order
     assert list(author_item_response_schema()["properties"]) == expected_model_order
 
@@ -172,20 +193,25 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert list(author_item_provider_response_schema()["properties"]) == expected_model_order
     assert isinstance(card["concept"], dict)
     assert set(card["concept"]) == {
-        "literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience",
+        "literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution",
+        "playerExperience", "plannedPlayerActions",
     }
-    contract = card["runtimeContract"]
-    assert contract["schema"] == "infini.runtime-contract.low-level.v1"
-    assert isinstance(contract["parentSynthesis"], dict)
-    assert isinstance(contract["parentSynthesis"]["parentA"]["facts"], list)
-    assert isinstance(contract["parentSynthesis"]["parentA"]["runtimeRoles"], list)
-    assert isinstance(contract["parentSynthesis"]["parentB"]["facts"], list)
-    assert isinstance(contract["claims"], list)
-    assert isinstance(contract["claims"][0]["backedBy"], list)
+    planned_action = card["concept"]["plannedPlayerActions"][0]
+    assert set(planned_action) == {"input", "intent"}
+    assert "runtimeContract" not in card
     assert set(card["realization"]) == {
-        "description", "playerExperience", "backedByClaims", "intentTrace",
+        "description", "playerExperience", "selfEvaluation",
     }
-    assert set(card["realization"]["intentTrace"]) == {"kept", "changed", "dropped", "added"}
+    evaluation = card["realization"]["selfEvaluation"]
+    assert set(evaluation) == {"planVsProgram", "programVsReport"}
+    assert set(evaluation["planVsProgram"]) == {"verdict", "summary", "actionChecks"}
+    assert set(evaluation["programVsReport"]) == {"verdict", "summary", "behaviorChecks"}
+    assert set(evaluation["planVsProgram"]["actionChecks"][0]) == {
+        "plannedIntent", "implementedBehavior", "runtimeRefs", "result", "intentionality", "reason",
+    }
+    assert set(evaluation["programVsReport"]["behaviorChecks"][0]) == {
+        "runtimeRefs", "programBehavior", "reportedBehavior", "result", "reason",
+    }
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
     assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v4"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
@@ -209,11 +235,78 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert set(repair_card) == set(repair_schema["properties"])
     assert all(isinstance(repair_card[key], list) for key in (
         "entitiesUpsert", "entityIdsDelete", "bindingsUpsert", "bindingIdsDelete",
-        "callsUpsert", "callIdsDelete", "claimsUpsert", "claimIdsDelete",
+        "callsUpsert", "callIdsDelete",
     ))
+    assert "claimsUpsert" not in repair_card
+    assert "claimIdsDelete" not in repair_card
     assert isinstance(repair_card["metadataPatch"], dict)
     assert isinstance(repair_card["realizationReplacement"], dict)
     assert isinstance(repair_card["note"], str)
+
+
+def test_gameplay_author_stages_are_plain_and_one_pass() -> None:
+    payload = build_llm_author_payload({}, {}, {}, {}, "one-pass-stage-guide")
+    stages = payload["gameplayAuthoringStages"]
+    assert [row["name"] for row in stages] == [
+        "initial_design_draft",
+        "executable_gameplay_program",
+        "final_gameplay_report",
+        "same_pass_self_evaluation",
+    ]
+    assert [row["field"] for row in stages] == [
+        "concept",
+        "runtimeProgram",
+        "realization.description + realization.playerExperience",
+        "realization.selfEvaluation",
+    ]
+    encoded = json.dumps(stages, ensure_ascii=False).casefold()
+    assert "non-binding" in encoded
+    assert "never rejects the craft" in encoded
+    assert "only executable gameplay authority" in encoded
+    assert "program_evidence_claims" not in encoded
+    assert "same model response" in encoded
+
+
+def test_concept_drift_and_report_mismatch_are_diagnostic_not_rejection() -> None:
+    authored = build_runtime_fixture("workbench_blade")
+    authored["concept"]["plannedPlayerActions"] = [{
+        "input": "primary_use",
+        "intent": "Teleport the player, although the executable draft later chooses a melee swing.",
+    }]
+    authored["realization"]["selfEvaluation"] = {
+        "planVsProgram": {
+            "verdict": "changed",
+            "summary": "The initial teleport sketch became a melee swing.",
+            "actionChecks": [{
+                "plannedIntent": "Teleport on primary use.",
+                "implementedBehavior": "Primary use swings the item body.",
+                "runtimeRefs": ["primary_workbench"],
+                "result": "changed",
+                "intentionality": "intentional",
+                "reason": "The executable program selected the supported melee composition.",
+            }],
+        },
+        "programVsReport": {
+            "verdict": "mismatch",
+            "summary": "The report intentionally demonstrates a detectable mismatch.",
+            "behaviorChecks": [{
+                "runtimeRefs": ["primary_workbench"],
+                "programBehavior": "Primary use swings the item body.",
+                "reportedBehavior": "Primary use teleports the player.",
+                "result": "mismatch",
+                "reason": "Diagnostic mismatch; it is not a semantic craft gate.",
+            }],
+        },
+    }
+    report = validate_runtime_program(authored)
+    assert report["ok"] is True, report
+
+
+def test_planned_player_actions_are_requested_but_never_a_craft_gate() -> None:
+    authored = build_runtime_fixture("workbench_blade")
+    authored["concept"].pop("plannedPlayerActions")
+    report = validate_runtime_program(authored)
+    assert report["ok"] is True, report
 
 
 def test_author_context_contains_only_source_backed_parent_packets_and_numeric_balance() -> None:
@@ -319,9 +412,15 @@ def test_all_non_archetypal_fixtures_compile_to_strict_wire() -> None:
         "fishing_platform_tool", "shield_and_disc", "held_and_deployed", "equipment_tool_combat",
     ):
         authored = build_runtime_fixture(name)
+        assert "runtimeContract" not in authored
+        assert "backedByClaims" not in authored["realization"]
         assert validate_runtime_program(authored)["ok"], name
         compiled = compile_runtime_program(authored)
+        assert set(compiled["runtimeContract"]) == {
+            "compiledSchema", "runtimeApiVersion", "finalWireReceipts", "validation", "technicalLoweringAudit",
+        }
         wire = validate_runtime_wire(compiled)
+        assert "promiseParityWarnings" not in wire
         assert wire["ok"], (name, wire["errors"])
         encoded = json.dumps(compiled, ensure_ascii=False)
         assert "runtimeFamily" not in encoded

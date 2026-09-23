@@ -57,7 +57,7 @@ REPLAY_HARNESS_CONTRACT_VERSION = "generation_case_replay_audit_v0.4.226"
 ALT_FORK_CHERRYPICK_CONTRACT_VERSION = "best_of_alt_config_signals_trace_replay_v0.4.226"
 
 RUNTIME_CONTRACT_SCHEMA_VERSION = "infini.runtime-contract.v3"
-RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION = "structural_final_wire_receipts_v0.4.241"
+RUNTIME_TECHNICAL_PROVENANCE_CONTRACT_VERSION = "structural_final_wire_receipts_v0.4.241"
 RECIPE_HEALTH_SCHEMA_VERSION = "infini.recipe-health.v1"
 CONTRACT_STAMP_SCHEMA_VERSION = "infini.contract-stamp.v1"
 
@@ -144,6 +144,6 @@ def build_contract_versions(
         "altForkCherrypickContract": ALT_FORK_CHERRYPICK_CONTRACT_VERSION,
 
         "runtimeContractSchema": RUNTIME_CONTRACT_SCHEMA_VERSION,
-        "runtimePromiseTruthContract": RUNTIME_PROMISE_TRUTH_CONTRACT_VERSION,
+        "runtimeTechnicalProvenanceContract": RUNTIME_TECHNICAL_PROVENANCE_CONTRACT_VERSION,
         "recipeHealthSchema": RECIPE_HEALTH_SCHEMA_VERSION,
     }

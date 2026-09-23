@@ -82,7 +82,6 @@ public static class InfiniVfxRuntime
         state.LastGameUpdate = Main.GameUpdateCount;
         state.Tick++;
         state.ParticlesThisTick = 0;
-        state.DrawCallsThisFrame = 0;
         if (state.SourceKey.Length == 0) state.SourceKey = Guid.NewGuid().ToString("N");
         state.Push(projectile.Center);
     }
@@ -207,8 +206,9 @@ public static class InfiniVfxRuntime
         Color color = PresentationColor(manifest, Color.White);
         if (kind == InfiniVfxRendererKind.LightCue)
         {
-            float strength = Math.Clamp(slot.Scale * 0.22f, 0.04f, 1.2f);
-            Lighting.AddLight(center, color.ToVector3() * strength);
+            float strength = Math.Clamp(slot.Scale * 0.22f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
+            if (strength > 0f)
+                Lighting.AddLight(center, color.ToVector3() * strength);
             return;
         }
         if (kind == InfiniVfxRendererKind.SoundCue)
@@ -236,6 +236,7 @@ public static class InfiniVfxRuntime
         int count = kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ChildMotes
             ? Math.Clamp(2 + (int)MathF.Round(slot.Density * 8f), 2, 10)
             : 1;
+        count = InfiniVfxClientOptions.ScaleParticleCount(count);
         for (int i = 0; i < count; i++)
         {
             bool accepted = detachedParticleBudget
@@ -279,7 +280,7 @@ public static class InfiniVfxRuntime
 
     private static bool SpendDraw(VfxManifestSpec manifest, ref InfiniVfxState state, int cost)
     {
-        if (state.DrawCallsThisFrame + cost > manifest.Budget.MaxDrawCalls) return false;
+        if (state.DrawCallsThisFrame + cost > InfiniVfxClientOptions.EffectiveDrawBudget(manifest.Budget.MaxDrawCalls)) return false;
         state.DrawCallsThisFrame += cost; return true;
     }
 

@@ -48,6 +48,11 @@ from infini_local.storage.trace_runtime import log_event
 
 _RESOLVED_LLM_MODELS: dict[str, str] = {}
 _RESPONSES_CAPABILITY: dict[str, bool] = {}
+# Per-run memory of whether a profile accepts strict provider-side json_schema.
+# Discovered from the provider's own rejection, never configured: once a profile
+# has refused the schema, later stages in the same run stop paying for a request
+# that is already known to be rejected.
+_STRICT_SCHEMA_CAPABILITY: dict[str, bool] = {}
 _PROFILE_COOLDOWN_UNTIL: dict[str, float] = {}
 _LLM_POOL_LOCK = threading.Lock()
 _LLM_POOL_CURSOR = 0
@@ -432,12 +437,13 @@ def current_llm_item_lease() -> LlmItemLease | None:
 
 
 def _reset_llm_pool_runtime_for_tests() -> None:
-    global _LLM_POOL_CURSOR, _LLM_LEASE_SEQUENCE, _RESOLVED_LLM_MODELS, _RESPONSES_CAPABILITY, _PROFILE_COOLDOWN_UNTIL
+    global _LLM_POOL_CURSOR, _LLM_LEASE_SEQUENCE, _RESOLVED_LLM_MODELS, _RESPONSES_CAPABILITY, _PROFILE_COOLDOWN_UNTIL, _STRICT_SCHEMA_CAPABILITY
     with _LLM_POOL_LOCK:
         _LLM_POOL_CURSOR = 0
         _LLM_LEASE_SEQUENCE = 0
     _RESOLVED_LLM_MODELS = {}
     _RESPONSES_CAPABILITY = {}
+    _STRICT_SCHEMA_CAPABILITY = {}
     _PROFILE_COOLDOWN_UNTIL = {}
     with _LLM_RATE_LOCK:
         _LLM_RATE_STATE.clear()
@@ -1079,6 +1085,59 @@ def _is_budget_or_auth_failure(exc: Exception) -> bool:
 _RESPONSES_CHAT_COMPATIBILITY_STATUSES = frozenset({400, 404, 405, 415, 422, 501})
 
 
+def request_shape_rejection_diagnosis(
+    exc: Exception,
+    payload: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Explain a provider request-shape rejection in terms of the user's own transport settings.
+
+    Diagnostics only: it never selects a format, never retries and never mutates
+    the payload.  A provider that rejects the request shape (typically HTTP 400)
+    tells the user nothing actionable, so name the exact configuration that
+    produced the rejected wire and the exact configuration known to be accepted.
+    The transport's own per-run recovery is reported separately, by the caller
+    that performs it.
+    """
+    if not isinstance(exc, urlerror.HTTPError) or exc.code != 400:
+        return None
+    request = payload if isinstance(payload, dict) else {}
+    response_format = request.get("response_format")
+    response_mode = (
+        str(response_format.get("type") or "") if isinstance(response_format, dict) else ""
+    )
+    if response_mode != "json_schema":
+        return None
+    schema_root = response_format.get("json_schema") if isinstance(response_format, dict) else None
+    schema = schema_root.get("schema") if isinstance(schema_root, dict) else None
+    schema_chars = len(json.dumps(schema, ensure_ascii=False, default=str)) if schema is not None else 0
+    api_mode = _normalized_api_mode((context or {}).get("api_mode"))
+    return {
+        "code": "provider_rejected_request_shape",
+        "status": exc.code,
+        "providerBody": str(getattr(exc, "_infini_body", ""))[:600],
+        "provider": active_llm_provider(context),
+        "model": str((context or {}).get("model") or ""),
+        "baseUrl": str((context or {}).get("base_url") or ""),
+        "configuredResponseFormat": LLM_RESPONSE_FORMAT_MODE,
+        "sentResponseFormat": response_mode,
+        "configuredApiMode": api_mode,
+        "schemaChars": schema_chars,
+        "knownWorkingResponseFormat": "json_object",
+        "knownWorkingApiMode": "chat_completions",
+        "hint": (
+            "Провайдер отклонил форму запроса, а не содержание промпта: модель ещё не получила задание. "
+            f"Отправлен response_format={response_mode} (INFINI_LLM_RESPONSE_FORMAT={LLM_RESPONSE_FORMAT_MODE}), "
+            f"схема {schema_chars} символов, INFINI_LLM_API_MODE={api_mode}. "
+            "Большая strict JSON Schema не принимается частью OpenAI-compatible провайдеров, в том числе "
+            "Google Gemini: у них недокументированный лимит сложности схемы. "
+            "Рабочая комбинация — INFINI_LLM_RESPONSE_FORMAT=json_object и INFINI_LLM_API_MODE=chat_completions; "
+            "укажи её в настройках, чтобы не платить лишним отклонённым запросом каждый запуск. "
+            "config.env код не меняет сам."
+        ),
+    }
+
+
 def _responses_chat_fallback_allowed(exc: Exception) -> bool:
     return isinstance(exc, urlerror.HTTPError) and exc.code in _RESPONSES_CHAT_COMPATIBILITY_STATUSES
 
@@ -1307,9 +1366,88 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
     return result
 
 
+def _json_object_response_format() -> dict[str, Any]:
+    return {"type": "json_object"}
+
+
+def _payload_without_strict_schema(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the same request with strict provider-side schema relaxed to json_object.
+
+    Only the response envelope changes.  Messages, model, sampling and reasoning
+    are copied unchanged, so the authored prompt — which already carries
+    requiredJsonShape and the runtime invariants — stays byte-identical.
+    """
+    relaxed = dict(payload)
+    relaxed["response_format"] = _json_object_response_format()
+    return relaxed
+
+
+def _strict_schema_rejected(exc: Exception, payload: dict[str, Any]) -> bool:
+    """True when the provider rejected this request's strict schema envelope."""
+    if not isinstance(exc, urlerror.HTTPError) or exc.code != 400:
+        return False
+    response_format = payload.get("response_format")
+    return isinstance(response_format, dict) and str(response_format.get("type") or "") == "json_schema"
+
+
 def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
     ensure_llm_auth_configured(context)
-    candidate = _payload_for_context(_clean_llm_payload(payload), context)
+    prepared = _clean_llm_payload(payload)
+    capability_key = _llm_context_key(context)
+    schema_downgraded = False
+    # A profile that already refused the strict schema in this run must not be
+    # asked again: the rejection is a property of the provider, not of the stage.
+    if (
+        _STRICT_SCHEMA_CAPABILITY.get(capability_key) is False
+        and isinstance(prepared.get("response_format"), dict)
+        and str((prepared.get("response_format") or {}).get("type") or "") == "json_schema"
+    ):
+        prepared = _payload_without_strict_schema(prepared)
+        schema_downgraded = True
+    try:
+        return _llm_chat_json_exact_context(
+            prepared, timeout, context, schema_downgraded=schema_downgraded
+        )
+    except urlerror.HTTPError as error:
+        if schema_downgraded or not _strict_schema_rejected(error, prepared):
+            raise
+        diagnosis = getattr(error, "_infini_shape_diagnosis", None)
+        _STRICT_SCHEMA_CAPABILITY[capability_key] = False
+        # The preceding diagnosis event already carries the full explanation, so
+        # this one stays a short "what changed" line: three paragraphs of identical
+        # prose in the server window would bury the fact that the craft recovered.
+        log_event("warn", "LLM strict json_schema rejected; retrying same stage with json_object for this run", {
+            "stage": _llm_replay_stage_from_payload(payload),
+            "profileId": context.get("profile_id"),
+            "provider": active_llm_provider(context),
+            "model": str(context.get("model") or ""),
+            "status": error.code,
+            "repairedFor": "this run only; config.env is not modified",
+            "was": "json_schema",
+            "now": "json_object",
+            "schemaChars": (diagnosis or {}).get("schemaChars"),
+            "configuredResponseFormat": LLM_RESPONSE_FORMAT_MODE,
+            "detail": (
+                "Провайдер отклонил strict JSON Schema (HTTP 400) — форму запроса, а не промпт. "
+                "На этот прогон транспорт сам перешёл на response_format=json_object, и тот же самый "
+                "промпт проходит: форму ответа задаёт requiredJsonShape, а проверяют локальный "
+                "валидатор и компилятор. Чтобы не платить лишним запросом каждый запуск, поставь "
+                "INFINI_LLM_RESPONSE_FORMAT=json_object в настройках; config.env код не меняет."
+            ),
+        })
+        return _llm_chat_json_exact_context(
+            _payload_without_strict_schema(prepared), timeout, context, schema_downgraded=True
+        )
+
+
+def _llm_chat_json_exact_context(
+    payload: dict[str, Any],
+    timeout: int,
+    context: dict[str, Any],
+    *,
+    schema_downgraded: bool = False,
+) -> dict[str, Any]:
+    candidate = _payload_for_context(payload, context)
     url = llm_chat_completions_url(context)
     try:
         result = http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
@@ -1320,16 +1458,21 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context
             raise RuntimeError("LLM provider returned an invalid Chat Completions envelope")
         debug_raw = result.get("_debug")
         debug: dict[str, Any] = debug_raw if isinstance(debug_raw, dict) else {}
+        response_format = candidate.get("response_format")
         result["_debug"] = {
             **debug,
             "requestMode": "exact",
             "provider": active_llm_provider(context),
-            "responseFormatRequested": bool(candidate.get("response_format")),
-            "responseFormatUsed": bool(candidate.get("response_format")),
+            "responseFormatRequested": bool(response_format),
+            "responseFormatUsed": bool(response_format),
+            "responseFormatType": str(response_format.get("type") or "") if isinstance(response_format, dict) else "",
             "reasoningRequested": bool(candidate.get("reasoning") or candidate.get("reasoning_effort")),
             "reasoningUsed": bool(candidate.get("reasoning") or candidate.get("reasoning_effort")),
             "reasoningEffort": candidate.get("reasoning_effort"),
         }
+        if schema_downgraded:
+            result["_debug"]["strictSchemaDowngraded"] = True
+            result = _with_transport_retry_debug(result, ["json_schema_to_json_object_fallback"])
         return result
     except urlerror.HTTPError as error:
         body = ""
@@ -1344,6 +1487,13 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context
             log_event("warn", "OpenRouter auth failed", {"provider": provider, "status": error.code, "body": body, "hint": message, "label": context.get("label")})
             raise RuntimeError(message) from error
         log_event("warn", "LLM HTTP error", {"provider": provider, "status": error.code, "body": body, "label": context.get("label")})
+        diagnosis = request_shape_rejection_diagnosis(error, candidate, context)
+        if diagnosis is not None:
+            setattr(error, "_infini_shape_diagnosis", diagnosis)
+            log_event("warn", "LLM provider rejected the configured request shape", {
+                **diagnosis,
+                "label": context.get("label"),
+            })
         raise
 
 def _is_profile_failover_failure(error: Exception) -> bool:
@@ -1664,4 +1814,4 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         raise
 
 
-__all__ = ['LLM_STAGE_KEY', 'LLM_STAGES', '_normalized_llm_stage', 'with_llm_stage', '_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']
+__all__ = ['LLM_STAGE_KEY', 'LLM_STAGES', '_normalized_llm_stage', 'with_llm_stage', '_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', 'request_shape_rejection_diagnosis', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']

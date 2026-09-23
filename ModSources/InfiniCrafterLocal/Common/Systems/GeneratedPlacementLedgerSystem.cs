@@ -138,7 +138,9 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 int layerValue = cell.GetInt("layer");
                 int x = cell.GetInt("x");
                 int y = cell.GetInt("y");
-                if (!Enum.IsDefined(typeof(GeneratedPlacementLayer), layerValue) || !WorldGen.InWorld(x, y, 1))
+                if (layerValue is < byte.MinValue or > byte.MaxValue
+                    || !Enum.IsDefined((GeneratedPlacementLayer)layerValue)
+                    || !WorldGen.InWorld(x, y, 1))
                     continue;
                 var key = new GeneratedPlacementKey((GeneratedPlacementLayer)layerValue, x, y);
                 if (Placements.Count >= MaxCells || Placements.ContainsKey(key))

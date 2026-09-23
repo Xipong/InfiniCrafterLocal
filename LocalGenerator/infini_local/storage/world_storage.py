@@ -31,8 +31,8 @@ VISUAL_DELIVERY_FIELDS = frozenset({
 })
 
 GENERATED_PARENT_SUMMARY_DELIVERY_FIELDS = frozenset({
-    "schema", "name", "identity", "description", "playerExperience", "notableEffects", "backedByClaims",
-    "parentComposition", "runtimePrimaryEntityId", "runtimeEntityIds",
+    "schema", "name", "identity", "description", "playerExperience", "notableEffects",
+    "runtimePrimaryEntityId", "runtimeEntityIds",
 })
 
 PARENT_ITEM_CARD_DELIVERY_FIELDS = frozenset({
@@ -442,29 +442,37 @@ def read_world_recipe_cache(
     recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
     with _storage_lock(recipe_path):
         data = read_json_file(recipe_path)
-        if not data:
-            # A syntactically broken/empty cache file otherwise survives forever and is
-            # reparsed on every craft. Preserve it under invalid/ for diagnosis, then let
-            # the caller regenerate from the original parents.
+        invalid_fields = [
+            field for field in ("debug", "recipeMeta")
+            if data and field in data and not isinstance(data[field], dict)
+        ]
+        if not data or invalid_fields:
+            # Unreadable JSON and malformed metadata must not poison every cache
+            # lookup. Preserve the original bytes for diagnosis, never repair them.
             if recipe_path.exists():
+                details: dict[str, Any] = {"sourcePath": str(recipe_path)}
+                if invalid_fields:
+                    details["invalidFields"] = invalid_fields
                 try:
                     quarantine_world_recipe_cache(
                         world_recipes_dir,
                         world_id=world_id,
                         recipe_key_value=recipe_key_value,
-                        reason="json_unreadable_or_empty",
-                        details={"sourcePath": str(recipe_path)},
+                        reason="invalid_cache_metadata" if invalid_fields else "json_unreadable_or_empty",
+                        details=details,
                     )
                 except (OSError, ValueError, TypeError):
                     pass
             return None
         data.pop("_llmHistory", None)
-        data.setdefault("debug", {})["cacheHit"] = "world_file"
-        data.setdefault("debug", {})["cacheScope"] = "world"
-        data.setdefault("debug", {}).setdefault("recipeIdentityVersion", recipe_identity_version)
-        data.setdefault("recipeMeta", {})["worldScoped"] = True
-        data.setdefault("recipeMeta", {})["worldId"] = str(world_id)
-        data.setdefault("recipeMeta", {})["storage"] = "world_recipe_file_authority"
+        debug = data.setdefault("debug", {})
+        debug.update({"cacheHit": "world_file", "cacheScope": "world"})
+        debug.setdefault("recipeIdentityVersion", recipe_identity_version)
+        data.setdefault("recipeMeta", {}).update({
+            "worldScoped": True,
+            "worldId": str(world_id),
+            "storage": "world_recipe_file_authority",
+        })
         return sanitize_recipe_for_delivery(data)
 
 
@@ -474,7 +482,8 @@ def read_world_recipe_cache(
 def is_deliverable_recipe_payload(data: Any) -> bool:
     if not isinstance(data, dict) or not str(data.get("name") or "").strip():
         return False
-    if int(data.get("schemaVersion") or 0) != 5:
+    schema_version = data.get("schemaVersion")
+    if type(schema_version) is not int or schema_version != 5:
         return False
     if str(data.get("runtimeApiVersion") or "") != RUNTIME_PROGRAM_API_VERSION:
         return False

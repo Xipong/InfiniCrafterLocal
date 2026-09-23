@@ -10,7 +10,6 @@ without reviving the removed weapon-root architecture.
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
-    RUNTIME_CONTRACT_SCHEMA,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
 )
@@ -40,38 +39,73 @@ def deterministic_low_level_plan(
             "parentBContribution": f"{parent_b} supplies the emitted fragments.",
             "playerExperience": "A direct short-range strike followed by a small directional fragment burst.",
         },
-        "runtimeContract": {
-            "schema": RUNTIME_CONTRACT_SCHEMA,
-            "parentSynthesis": {
-                "composition": f"Literal {parent_a} body carrying visible {parent_b} fragments.",
-                "parentA": {"facts": [parent_a], "runtimeRoles": ["held body"]},
-                "parentB": {"facts": [parent_b], "runtimeRoles": ["child fragments"]},
+        "realization": {
+            "description": f"Literal {parent_a} body carrying visible {parent_b} fragments; the held body performs a bounded forward/retract strike.",
+            "playerExperience": "A direct short-range strike followed by a small directional fragment burst.",
+            "selfEvaluation": {
+                "planVsProgram": {
+                    "verdict": "aligned",
+                    "summary": "The deterministic draft's single use action and fragment burst are represented by explicit bindings and calls.",
+                    "actionChecks": [
+                        {
+                            "plannedIntent": "Primary use performs a bounded owner-attached strike.",
+                            "implementedBehavior": "The primary_use binding spawns the held body with an explicit forward/retract motion component.",
+                            "runtimeRefs": ["bind_primary", "call_move_held"],
+                            "result": "aligned",
+                            "intentionality": "intentional",
+                            "reason": "The deterministic fixture authors the binding and motion call directly.",
+                        },
+                        {
+                            "plannedIntent": "A hit emits three child projectiles.",
+                            "implementedBehavior": "An on_hit event call spawns three explicit child shard projectiles.",
+                            "runtimeRefs": ["call_spawn_shards", "call_spawn_child"],
+                            "result": "aligned",
+                            "intentionality": "intentional",
+                            "reason": "The deterministic fixture authors the event spawn and child lifecycle calls directly.",
+                        },
+                    ],
+                },
+                "programVsReport": {
+                    "verdict": "aligned",
+                    "summary": "The report describes exactly the authored entities, inputs, calls, and events.",
+                    "behaviorChecks": [
+                        {
+                            "runtimeRefs": ["call_damage_held", "call_move_held"],
+                            "programBehavior": "The held body deals melee damage during a bounded forward/retract motion.",
+                            "reportedBehavior": "A direct short-range strike from the held body.",
+                            "result": "aligned",
+                            "reason": "The report restates the cited damage and movement components.",
+                        },
+                        {
+                            "runtimeRefs": ["call_spawn_shards"],
+                            "programBehavior": "Each hit emits three child shards via one typed event call.",
+                            "reportedBehavior": "A small directional fragment burst on hit.",
+                            "result": "aligned",
+                            "reason": "The report names the exact emitted fragment behavior.",
+                        },
+                    ],
+                },
             },
-            "claims": [
-                {
-                    "id": "claim_primary_strike",
-                    "kind": "gameplay",
-                    "text": "Primary use performs a bounded owner-attached strike.",
-                    "backedBy": ["bind_primary", "call_move_held", "call_damage_held"],
-                },
-                {
-                    "id": "claim_child_burst",
-                    "kind": "gameplay",
-                    "text": "A hit emits three child projectiles.",
-                    "backedBy": ["call_spawn_shards"],
-                },
-            ],
         },
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_PROGRAM_SCHEMA,
+            "primaryEntityId": "held_body",
             "entities": [
                 {"id": "item", "kind": "item_body"},
                 {"id": "held_body", "kind": "owner_attached_projectile"},
                 {"id": "child_shard", "kind": "child_projectile"},
             ],
             "bindings": [
-                {"id": "bind_primary", "input": "primary_use", "action": "spawn_entity", "target": "held_body"},
+                {
+                    "id": "bind_primary",
+                    "input": "primary_use",
+                    "usePolicy": {
+                        "action": {"kind": "spawn_entity", "targetId": "held_body"},
+                        "stackCost": 0,
+                        "contactDamage": False,
+                    },
+                },
             ],
             "calls": [
                 {

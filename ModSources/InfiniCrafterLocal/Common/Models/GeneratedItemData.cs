@@ -91,6 +91,8 @@ public sealed partial class GeneratedItemData
             PlayerSaveReferencePayload? payload = JsonSerializer.Deserialize<PlayerSaveReferencePayload>(json, Options);
             if (payload is null || !string.Equals(payload.InfiniSaveKind, PlayerSaveReferenceKind, StringComparison.Ordinal))
                 throw new InvalidDataException("Only v5 generatedItemRef saves are accepted; full/legacy item JSON is not migrated");
+            if (payload.Version != CurrentSchemaVersion)
+                throw new InvalidDataException($"Unsupported saved reference version '{payload.Version}'");
             if (!string.Equals(payload.RuntimeApiVersion, RuntimeProgramSpec.CurrentApiVersion, StringComparison.Ordinal))
                 throw new InvalidDataException($"Unsupported saved runtime API '{payload.RuntimeApiVersion}'");
             return ReferenceOnly(payload);
@@ -266,11 +268,11 @@ public sealed partial class GeneratedItemData
 
     private sealed class PlayerSaveReferencePayload
     {
-        [JsonPropertyName("infiniSaveKind")] public string InfiniSaveKind { get; set; } = PlayerSaveReferenceKind;
-        [JsonPropertyName("version")] public int Version { get; set; } = 5;
+        [JsonRequired, JsonPropertyName("infiniSaveKind")] public string InfiniSaveKind { get; set; } = PlayerSaveReferenceKind;
+        [JsonRequired, JsonPropertyName("version")] public int Version { get; set; } = CurrentSchemaVersion;
         [JsonPropertyName("id")] public string Id { get; set; } = "";
         [JsonPropertyName("recipeKey")] public string RecipeKey { get; set; } = "";
-        [JsonPropertyName("runtimeApiVersion")] public string RuntimeApiVersion { get; set; } = RuntimeProgramSpec.CurrentApiVersion;
+        [JsonRequired, JsonPropertyName("runtimeApiVersion")] public string RuntimeApiVersion { get; set; } = RuntimeProgramSpec.CurrentApiVersion;
         [JsonPropertyName("worldScoped")] public bool WorldScoped { get; set; } = true;
         [JsonPropertyName("worldId")] public string WorldId { get; set; } = "";
         [JsonPropertyName("name")] public string Name { get; set; } = "Generated Item";

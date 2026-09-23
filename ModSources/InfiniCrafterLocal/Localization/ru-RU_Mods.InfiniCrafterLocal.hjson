@@ -10,9 +10,7 @@ Mods: {
 					'''
 			}
 
-			GeneratedItem: {
-				DisplayName: Сгенерированный предмет
-			}
+			GeneratedItem.DisplayName: Сгенерированный предмет
 		}
 
 		Projectiles.GeneratedProjectile.DisplayName: Сгенерированный снаряд
@@ -102,9 +100,7 @@ Items: {
 	}
 }
 
-Projectiles: {
-	// GeneratedProjectile.DisplayName: Generated Projectile
-}
+// Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
 Configs: {
 	InfiniGameplayQolConfig: {

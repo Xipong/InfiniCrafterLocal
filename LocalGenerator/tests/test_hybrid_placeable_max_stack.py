@@ -77,7 +77,6 @@ def test_repair_scope_authorizes_exact_max_stack_leaf() -> None:
         "bindingsUpsert": [], "bindingIdsDelete": [], "bindingIndicesDelete": [],
         "callsUpsert": [], "callIdsDelete": [], "callIndicesDelete": [],
         "callParamKeysDelete": [], "callPropertyKeysDelete": [],
-        "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": "cap durable hybrid to a single unit",
     }
     filtered, audit = filter_repair_patch_scope(

@@ -183,18 +183,64 @@ def json_slim(obj: Any, max_chars: int = 40000) -> Any:
     return {"_truncated": True, "jsonPrefix": text[:max_chars]}
 
 
-def log_event(cache_dir: Path, level: str, message: str, payload: Any = None) -> None:
-    """Append human-readable diagnostics to cache/events.ndjson."""
+def log_event(
+    cache_dir: Path,
+    level: str,
+    message: str,
+    payload: Any = None,
+    *,
+    echo_levels: tuple[str, ...] = (),
+    echo_payload_keys: tuple[str, ...] = ("hint", "status", "provider", "stage", "was", "now"),
+) -> None:
+    """Append human-readable diagnostics to cache/events.ndjson.
+
+    The file stays the complete record.  ``echo_levels`` additionally mirrors the
+    listed levels to stdout so an operator watching the server window sees a
+    failure when it happens instead of discovering it in the log afterwards.
+    The echo is a strict subset of what is written, never a second source of truth.
+    """
+    normalized_level = str(level)
     try:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
         event = {
             "createdAt": time.time(),
-            "level": str(level),
+            "level": normalized_level,
             "message": str(message),
             "payload": payload,
         }
         append_ndjson(cache_dir / "events.ndjson", event)
+    except Exception:
+        pass
+    if echo_levels and normalized_level in echo_levels:
+        _echo_event(normalized_level, str(message), payload, echo_payload_keys)
+
+
+def _echo_event(
+    level: str,
+    message: str,
+    payload: Any,
+    payload_keys: tuple[str, ...],
+) -> None:
+    """Print one compact console line for an already-recorded event."""
+    try:
+        stamp = time.strftime("%H:%M:%S")
+        details: list[str] = []
+        if isinstance(payload, dict):
+            for key in payload_keys:
+                if key not in payload:
+                    continue
+                value = payload.get(key)
+                if value is None or value == "":
+                    continue
+                text = str(value)
+                # Hints are full sentences; everything else stays a short token.
+                limit = 300 if key == "hint" else 80
+                if len(text) > limit:
+                    text = text[: limit - 1] + "…"
+                details.append(f"{key}={text}")
+        suffix = ("  " + " ".join(details)) if details else ""
+        print(f"[{stamp}] {level.upper()}: {message}{suffix}", flush=True)
     except Exception:
         pass
 

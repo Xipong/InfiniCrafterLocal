@@ -368,6 +368,7 @@ public partial class GeneratedItem : ModItem
             if ((Main.GameUpdateCount + (ulong)action.Id.GetHashCode()) % (ulong)period != 0) continue;
             QueueOrExecuteItemAction(
                 player,
+                entity,
                 action,
                 null,
                 player.Center,
@@ -385,6 +386,7 @@ public partial class GeneratedItem : ModItem
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(eventName))
             QueueOrExecuteItemAction(
                 player,
+                entity,
                 action,
                 target,
                 position,
@@ -396,6 +398,7 @@ public partial class GeneratedItem : ModItem
 
     private void QueueOrExecuteItemAction(
         Player player,
+        RuntimeEntitySpec entity,
         RuntimeEventActionSpec action,
         NPC? target,
         Vector2 position,
@@ -408,6 +411,7 @@ public partial class GeneratedItem : ModItem
         {
             RuntimeDelayedActionScheduler.TrySchedule(
                 Data,
+                entity,
                 action,
                 player,
                 position,
@@ -420,6 +424,7 @@ public partial class GeneratedItem : ModItem
         }
         RuntimeProgramExecutor.ExecuteAction(
             Data,
+            entity,
             action,
             player,
             source,
@@ -493,7 +498,7 @@ public partial class GeneratedItem : ModItem
 
     private static void ApplyEquipmentEffects(Player player, AccessorySpec a)
     {
-        player.statDefense += a.Defense;
+        // Terraria already applies Item.defense in Player.GrantArmorBenefits.
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
         player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
         player.moveSpeed += a.MovementSpeed; player.maxRunSpeed += a.MaxRunSpeed; player.jumpSpeedBoost += a.JumpSpeed;

@@ -14,57 +14,23 @@
           "literalSynthesis": "Соединение литой кирки и обсидиана как расходуемого строительного материала",
           "parentAContribution": "Предоставляет базовую механику кирки, скорость и шахтерские характеристики",
           "parentBContribution": "Предоставляет обсидиан для размещения в мире в качестве тайла",
-          "playerExperience": "Игрок может эффективно добывать блоки и одновременно устанавливать обсидиан вторым действием"
+          "playerExperience": "Игрок может эффективно добывать блоки и одновременно устанавливать обсидиан вторым действием",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned use_item_body behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned place_item behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned apply_item_effects behavior."
+            }
+          ]
         },
         "name": "Обсидиановая литая кирка",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "b_primary_use",
-                "c_stats",
-                "c_tool"
-              ],
-              "id": "claim_mining",
-              "kind": "gameplay",
-              "text": "Предмет функционирует как кирка с силой копания 100 и наносит 12 урона в ближнем бою"
-            },
-            {
-              "backedBy": [
-                "b_alternate_use",
-                "b_consumption",
-                "c_placeable"
-              ],
-              "id": "claim_placement",
-              "kind": "physical",
-              "text": "Альтернативное использование размещает обсидиан как тайл с расходом из стопки"
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "Объединение параметров Литой кирки и Обсидиана в единый предмет с функцией шахтерского инструмента и размещаемого блока",
-            "parentA": {
-              "facts": [
-                "Terraria/MoltenPickaxe",
-                "pickPower: 100",
-                "damage: 12"
-              ],
-              "runtimeRoles": [
-                "item_body"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "Terraria/Obsidian",
-                "createTile: 56",
-                "consumable: true"
-              ],
-              "runtimeRoles": [
-                "item_body"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -178,17 +144,76 @@
         "realization": {
           "description": "Инструмент для шахтерских работ с возможностью установки обсидиана через альтернативное использование",
           "playerExperience": "Игрок может эффективно добывать блоки и одновременно устанавливать обсидиан вторым действием",
-          "backedByClaims": [
-            "claim_mining",
-            "claim_placement"
-          ],
-          "intentTrace": {
-            "kept": [
-              "Соединение литой кирки и обсидиана как расходуемого строительного материала"
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned use_item_body behavior.",
+                  "implementedBehavior": "The executable program implements use_item_body.",
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "b_alternate_use"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned apply_item_effects behavior.",
+                  "implementedBehavior": "The executable program implements apply_item_effects.",
+                  "runtimeRefs": [
+                    "b_consumption"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Инструмент для шахтерских работ с возможностью установки обсидиана через альтернативное использование",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "b_alternate_use"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Инструмент для шахтерских работ с возможностью установки обсидиана через альтернативное использование",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "b_consumption"
+                  ],
+                  "programBehavior": "The executable program implements apply_item_effects.",
+                  "reportedBehavior": "Инструмент для шахтерских работ с возможностью установки обсидиана через альтернативное использование",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -286,29 +311,6 @@
             "target": "molten_obsidian_pickaxe_body"
           }
         ],
-        "claimIdsDelete": [],
-        "claimIndicesDelete": [],
-        "claimsUpsert": [
-          {
-            "backedBy": [
-              "b_primary_use",
-              "c_stats",
-              "c_tool"
-            ],
-            "id": "claim_mining",
-            "kind": "gameplay",
-            "text": "Предмет функционирует как кирка с силой копания 100 и наносит 12 урона в ближнем бою"
-          },
-          {
-            "backedBy": [
-              "b_alternate_use",
-              "c_placeable"
-            ],
-            "id": "claim_placement",
-            "kind": "physical",
-            "text": "Альтернативное использование размещает обсидиан как тайл с расходом из стопки"
-          }
-        ],
         "entitiesUpsert": [],
         "entityIdsDelete": [],
         "entityIndicesDelete": [],
@@ -321,20 +323,56 @@
         "realizationReplacement": {
           "description": "Основное использование добывает блоки и наносит 12 контактного урона телом кирки. Альтернативное использование размещает обсидиан; размещенный предмет возвращается при разрушении тайла.",
           "playerExperience": "Игрок добывает блоки и бьет основной кнопкой, а альтернативной размещает возвращаемый обсидиановый тайл.",
-          "backedByClaims": [
-            "claim_mining",
-            "claim_placement"
-          ],
-          "intentTrace": {
-            "kept": [
-              "Кирка сохраняет силу копания и контактный удар.",
-              "Обсидиан размещается отдельным альтернативным действием."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": [
-              "Уточнен гарантированный возврат generated item после разрушения размещенного тайла."
-            ]
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "changed",
+              "summary": "Repair re-evaluated the initial draft against the repaired executable program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Уточнен гарантированный возврат generated item после разрушения размещенного тайла.",
+                  "implementedBehavior": "See the repaired executable runtime program and final gameplay report.",
+                  "runtimeRefs": [
+                    "molten_obsidian_pickaxe_body"
+                  ],
+                  "intentionality": "uncertain",
+                  "reason": "Translated historical Repair fixture trace.",
+                  "result": "changed"
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The replacement report is expected to describe the repaired executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Основное использование добывает блоки и наносит 12 контактного урона телом кирки. Альтернативное использование размещает обсидиан; размещенный предмет возвращается при разрушении тайла.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "b_alternate_use"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Основное использование добывает блоки и наносит 12 контактного урона телом кирки. Альтернативное использование размещает обсидиан; размещенный предмет возвращается при разрушении тайла.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "b_consumption"
+                  ],
+                  "programBehavior": "The executable program implements apply_item_effects.",
+                  "reportedBehavior": "Основное использование добывает блоки и наносит 12 контактного урона телом кирки. Альтернативное использование размещает обсидиан; размещенный предмет возвращается при разрушении тайла.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "metadataPatch": {},
@@ -357,59 +395,23 @@
           "literalSynthesis": "Сохраняет физику и спрайты Копья и Веревки, объединяя колющий удар с размещением плитки веревки.",
           "parentAContribution": "Предоставляет механику колющего оружия, спрайт и форму копья.",
           "parentBContribution": "Предоставляет свойство размещения плитки веревки.",
-          "playerExperience": "Игрок наносит колющий удар оружием, которое также устанавливает веревку в точке использования."
+          "playerExperience": "Игрок наносит колющий удар оружием, которое также устанавливает веревку в точке использования.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned use_item_body behavior."
+            },
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned place_item behavior."
+            }
+          ]
         },
         "name": "Веревочное Копье",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "call_stats"
-              ],
-              "id": "claim_stats",
-              "kind": "gameplay",
-              "text": "Предмет наносит 16 урона ближнего боя с отталкиванием 6.5."
-            },
-            {
-              "backedBy": [
-                "call_movement"
-              ],
-              "id": "claim_thrust",
-              "kind": "physical",
-              "text": "Проектиль копья движется вперед и возвращается обратно за время анимации."
-            },
-            {
-              "backedBy": [
-                "call_placeable",
-                "bind_place_rope"
-              ],
-              "id": "claim_place",
-              "kind": "gameplay",
-              "text": "При использовании предмет размещает плитку веревки в мире."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "Копье и веревка совмещены в единый предмет, выполняющий колющий удар с одновременным размещением веревочного блока.",
-            "parentA": {
-              "facts": [
-                "Terraria/Spear damage 8, knockback 6.5, useStyle 5, shoot 49"
-              ],
-              "runtimeRoles": [
-                "item_body",
-                "owner_attached_projectile"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "Terraria/Rope createTile 213, consumable true"
-              ],
-              "runtimeRoles": [
-                "placeable"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -582,18 +584,76 @@
         "realization": {
           "description": "Основное использование выполняет колющий удар копья с выдвижным хитбоксом и одновременно размещает плитку веревки.",
           "playerExperience": "Игрок наносит колющий удар оружием, которое также устанавливает веревку в точке использования.",
-          "backedByClaims": [
-            "claim_stats",
-            "claim_thrust",
-            "claim_place"
-          ],
-          "intentTrace": {
-            "kept": [
-              "Сохраняет физику и спрайты Копья и Веревки, объединяя колющий удар с размещением плитки веревки."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned use_item_body behavior.",
+                  "implementedBehavior": "The executable program implements use_item_body.",
+                  "runtimeRefs": [
+                    "bind_primary"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "bind_spawn_spear"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "bind_place_rope"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "bind_primary"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Основное использование выполняет колющий удар копья с выдвижным хитбоксом и одновременно размещает плитку веревки.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "bind_spawn_spear"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Основное использование выполняет колющий удар копья с выдвижным хитбоксом и одновременно размещает плитку веревки.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "bind_place_rope"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Основное использование выполняет колющий удар копья с выдвижным хитбоксом и одновременно размещает плитку веревки.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -642,9 +702,6 @@
         "callIdsDelete": [],
         "callIndicesDelete": [],
         "callsUpsert": [],
-        "claimIdsDelete": [],
-        "claimIndicesDelete": [],
-        "claimsUpsert": [],
         "entitiesUpsert": [],
         "entityIdsDelete": [],
         "entityIndicesDelete": [],
@@ -657,23 +714,66 @@
         "realizationReplacement": {
           "description": "Основное использование создает выдвижной колющий projectile копья. Альтернативное использование размещает веревку; размещенный предмет возвращается при разрушении тайла.",
           "playerExperience": "Основной кнопкой игрок выполняет колющий удар, а альтернативной отдельно размещает возвращаемую веревку.",
-          "backedByClaims": [
-            "claim_stats",
-            "claim_thrust",
-            "claim_place"
-          ],
-          "intentTrace": {
-            "kept": [
-              "Копье сохраняет выдвижной колющий projectile.",
-              "Веревка сохраняет размещение тайла."
-            ],
-            "changed": [
-              "Одновременные удар и placement на одном primary input заменены на primary attack и отдельный alternate placement."
-            ],
-            "dropped": [],
-            "added": [
-              "Уточнен гарантированный возврат generated item после разрушения размещенного тайла."
-            ]
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "changed",
+              "summary": "Repair re-evaluated the initial draft against the repaired executable program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Одновременные удар и placement на одном primary input заменены на primary attack и отдельный alternate placement.",
+                  "implementedBehavior": "See the repaired executable runtime program and final gameplay report.",
+                  "runtimeRefs": [
+                    "item_body"
+                  ],
+                  "intentionality": "uncertain",
+                  "reason": "Translated historical Repair fixture trace.",
+                  "result": "changed"
+                },
+                {
+                  "plannedIntent": "Уточнен гарантированный возврат generated item после разрушения размещенного тайла.",
+                  "implementedBehavior": "See the repaired executable runtime program and final gameplay report.",
+                  "runtimeRefs": [
+                    "item_body"
+                  ],
+                  "intentionality": "uncertain",
+                  "reason": "Translated historical Repair fixture trace.",
+                  "result": "changed"
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The replacement report is expected to describe the repaired executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "bind_primary"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Основное использование создает выдвижной колющий projectile копья. Альтернативное использование размещает веревку; размещенный предмет возвращается при разрушении тайла.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "bind_spawn_spear"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Основное использование создает выдвижной колющий projectile копья. Альтернативное использование размещает веревку; размещенный предмет возвращается при разрушении тайла.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "bind_place_rope"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Основное использование создает выдвижной колющий projectile копья. Альтернативное использование размещает веревку; размещенный предмет возвращается при разрушении тайла.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "metadataPatch": {},
@@ -714,61 +814,19 @@
           "literalSynthesis": "Сочетание деревянного лука и стрелы Джестера без потери их исходной физики",
           "parentAContribution": "Предоставляет базовую структуру деревянного лука и тайминги использования",
           "parentBContribution": "Предоставляет свойства снаряда стрелы Джестера (бесконечное пробивание и свет)",
-          "playerExperience": "Атака на расстоянии пробивающими снарядами с помощью лука"
+          "playerExperience": "Атака на расстоянии пробивающими снарядами с помощью лука",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Деревянный лук со стрелами Джестера",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "c_item_stats",
-                "c_item_use"
-              ],
-              "id": "cl_item_stats",
-              "kind": "gameplay",
-              "text": "Предмет имеет настроенные характеристики урона и скорости использования"
-            },
-            {
-              "backedBy": [
-                "c_spawn_cfg",
-                "c_proj_dmg",
-                "c_proj_life",
-                "c_proj_hitbox",
-                "c_proj_col",
-                "c_proj_mov",
-                "c_proj_light",
-                "b_spawn_arrow"
-              ],
-              "id": "cl_projectile_behavior",
-              "kind": "physical",
-              "text": "Снаряд выпускается со свечением, бесконечным пробиванием и прямым движением"
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "Соединение деревянного лука как базы для стрельбы и стрелы Джестера как источника снарядов",
-            "parentA": {
-              "facts": [
-                "Terraria/WoodenBow",
-                "damage 4",
-                "ranged class"
-              ],
-              "runtimeRoles": [
-                "item_body"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "Terraria/JestersArrow",
-                "damage 10",
-                "infinite penetration"
-              ],
-              "runtimeRoles": [
-                "free_projectile"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -924,17 +982,57 @@
         "realization": {
           "description": "Стрельба бесплатными снарядами при использовании лука",
           "playerExperience": "Атака на расстоянии пробивающими снарядами с помощью лука",
-          "backedByClaims": [
-            "cl_item_stats",
-            "cl_projectile_behavior"
-          ],
-          "intentTrace": {
-            "kept": [
-              "Сочетание деревянного лука и стрелы Джестера без потери их исходной физики"
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "b_spawn_arrow"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Стрельба бесплатными снарядами при использовании лука",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "b_spawn_arrow"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Стрельба бесплатными снарядами при использовании лука",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       }
@@ -961,51 +1059,19 @@
           "literalSynthesis": "Combines Extractinator and SiltBlock into a placeable item body that drops an extractinator-themed helper.",
           "parentAContribution": "Provides Extractinator base type and placement stats.",
           "parentBContribution": "Provides SiltBlock base stacking and tile creation.",
-          "playerExperience": "Deploys a literal extractinator and silt block structure upon use."
+          "playerExperience": "Deploys a literal extractinator and silt block structure upon use.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned place_item behavior."
+            },
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Обогатительный Ил",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "b_primary_use",
-                "c_placeable"
-              ],
-              "id": "claim_placeable",
-              "kind": "physical",
-              "text": "Places tile 219 on primary use."
-            },
-            {
-              "backedBy": [
-                "b_spawn_helper",
-                "c_helper_spawn"
-              ],
-              "id": "claim_spawn_helper",
-              "kind": "gameplay",
-              "text": "Spawns a stationary extractinator helper near cursor."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "Combines Extractinator and SiltBlock into a placeable tile item that spawns a stationary extractinator helper.",
-            "parentA": {
-              "facts": [
-                "Extractinator placeable tile 219"
-              ],
-              "runtimeRoles": [
-                "item_body placeable configuration"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "SiltBlock consumable block item"
-              ],
-              "runtimeRoles": [
-                "consumption and stacking source"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -1146,17 +1212,57 @@
         "realization": {
           "description": "Primary use places the item as a tile, while spawning a stationary helper block nearby.",
           "playerExperience": "Deploys a literal extractinator and silt block structure upon use.",
-          "backedByClaims": [
-            "claim_placeable",
-            "claim_spawn_helper"
-          ],
-          "intentTrace": {
-            "kept": [
-              "Combines Extractinator and SiltBlock into a placeable item body that drops an extractinator-themed helper."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "b_spawn_helper"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "b_primary_use"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Primary use places the item as a tile, while spawning a stationary helper block nearby.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "b_spawn_helper"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use places the item as a tile, while spawning a stationary helper block nearby.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },

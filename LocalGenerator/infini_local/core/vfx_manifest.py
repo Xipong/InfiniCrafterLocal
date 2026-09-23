@@ -320,6 +320,15 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
 def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, parent_b: Mapping[str, Any] | None) -> dict[str, Any]:
     realization_raw = data.get("realization")
     realization: Mapping[str, Any] = realization_raw if isinstance(realization_raw, Mapping) else {}
+    self_evaluation_raw = realization.get("selfEvaluation")
+    self_evaluation: Mapping[str, Any] = self_evaluation_raw if isinstance(self_evaluation_raw, Mapping) else {}
+    program_vs_report_raw = self_evaluation.get("programVsReport")
+    program_vs_report: Mapping[str, Any] = program_vs_report_raw if isinstance(program_vs_report_raw, Mapping) else {}
+    behavior_checks = [
+        copy.deepcopy(dict(row))
+        for row in program_vs_report.get("behaviorChecks") or []
+        if isinstance(row, Mapping)
+    ]
 
     def parent_packet(parent: Mapping[str, Any] | None) -> dict[str, Any]:
         source: Mapping[str, Any] = parent if isinstance(parent, Mapping) else {}
@@ -341,6 +350,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "id": str(data.get("id") or ""), "name": str(data.get("name") or ""),
             "description": str(realization.get("description") or ""),
             "playerExperience": str(realization.get("playerExperience") or ""),
+            "behaviorChecks": behavior_checks,
         },
         "parents": [parent_packet(parent_a), parent_packet(parent_b)],
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),

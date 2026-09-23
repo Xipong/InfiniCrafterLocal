@@ -110,7 +110,7 @@ public sealed partial class GeneratedItemData
         }
         else if (isAccessory)
         {
-            item.defense = Math.Max(0, Accessory.Defense);
+            item.defense = Accessory.Defense;
             item.maxStack = 1;
             if (!hasActiveUse)
                 ConfigureNonUsableEquipmentItem(item);
@@ -119,6 +119,7 @@ public sealed partial class GeneratedItemData
         // Sound is supplied by exact entity/event VFX slots. There is no
         // category/family-derived fallback sound at this gameplay boundary.
         item.UseSound = null;
+        StampAppliedTrace(item);
     }
 
     internal void ApplyUseEffectFields(Item item, bool enabled)

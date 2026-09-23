@@ -26,7 +26,7 @@ IMAGE_BACKEND_ALIASES = {
     "none": "off",
     "disabled": "off",
 }
-SUPPORTED_IMAGE_BACKENDS = frozenset({"off", "sdcpp", "a1111", "comfyui", "image_api", "procedural"})
+SUPPORTED_IMAGE_BACKENDS = frozenset({"off", "sdcpp", "a1111", "comfyui", "image_api", "openai_codex", "procedural"})
 IMAGE_BACKEND_RAW = env_str("INFINI_IMAGE_BACKEND", "sdcpp").strip().lower()
 IMAGE_BACKEND = IMAGE_BACKEND_ALIASES.get(IMAGE_BACKEND_RAW, IMAGE_BACKEND_RAW)
 IMAGE_BACKEND_CONFIG_ERROR = "" if IMAGE_BACKEND in SUPPORTED_IMAGE_BACKENDS else f"unsupported image backend: {IMAGE_BACKEND_RAW or '<empty>'}"
@@ -141,6 +141,10 @@ IMAGE_API_PATH = env_str("INFINI_IMAGE_API_PATH", "/images/generations")
 IMAGE_API_SIZE = env_first(("INFINI_IMAGE_API_SIZE", "INFINI_OPENAI_COMPAT_IMAGE_SIZE"), "512x512")
 IMAGE_API_TIMEOUT = env_int("INFINI_IMAGE_API_TIMEOUT", env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240, lo=1, hi=3600), lo=1, hi=3600)
 IMAGE_API_EXTRA_HEADERS_JSON = env_str("INFINI_IMAGE_API_EXTRA_HEADERS_JSON", "")
+CODEX_IMAGE_MODEL = env_str("INFINI_CODEX_IMAGE_MODEL", "gpt-image-2")
+CODEX_IMAGE_QUALITY = env_str("INFINI_CODEX_IMAGE_QUALITY", "medium")
+CODEX_IMAGE_SIZE = env_str("INFINI_CODEX_IMAGE_SIZE", "1024x1024")
+CODEX_IMAGE_TIMEOUT = env_int("INFINI_CODEX_IMAGE_TIMEOUT", 240, lo=1, hi=3600)
 GENERATE_VARIANTS = env_int("INFINI_IMAGE_VARIANTS", 1)
 IMAGE_MAX_CONCURRENCY = env_int("INFINI_IMAGE_MAX_CONCURRENCY", 1, lo=1, hi=4)
 IMAGE_GENERATION_GATE = sdcpp_service.ImageRequestGate(IMAGE_MAX_CONCURRENCY)

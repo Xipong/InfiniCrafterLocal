@@ -20,6 +20,7 @@ internal static class RuntimeProgramExecutor
 {
     public static void ExecuteAction(
         GeneratedItemData data,
+        RuntimeEntitySpec sourceEntity,
         RuntimeEventActionSpec action,
         Player owner,
         IEntitySource source,
@@ -40,10 +41,10 @@ internal static class RuntimeProgramExecutor
                     directTarget.AddBuff(action.BuffId, action.DurationTicks);
                 break;
             case RuntimeEventActionCode.DamageArea:
-                DamageArea(data, action, owner, eventPosition, directTarget);
+                DamageArea(data, sourceEntity, action, owner, eventPosition, directTarget);
                 break;
             case RuntimeEventActionCode.ChainDamage:
-                ChainDamage(data, action, owner, eventPosition, directTarget);
+                ChainDamage(data, sourceEntity, action, owner, eventPosition, directTarget);
                 break;
             case RuntimeEventActionCode.Pull:
                 Pull(action, owner, eventPosition, directTarget);
@@ -92,11 +93,20 @@ internal static class RuntimeProgramExecutor
         remainingSpawnBudget = Math.Max(0, remainingSpawnBudget - spawned);
     }
 
-    private static void DamageArea(GeneratedItemData data, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
+    // Item stats are projected into Gameplay; projectile stats belong to the exact
+    // event-owning entity. Neither live projectile damage nor damageDone is the
+    // authored base specified by damage_area_on_event / chain_damage_on_event.
+    private static (int Damage, string DamageClass) AuthoredEventDamage(GeneratedItemData data, RuntimeEntitySpec sourceEntity)
+        => sourceEntity.Kind == RuntimeEntityKind.ItemBody
+            ? (data.Gameplay.Damage, data.Gameplay.DamageClass)
+            : (sourceEntity.Damage.Damage, sourceEntity.Damage.DamageClass);
+
+    private static void DamageArea(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
     {
         if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay() || action.RadiusPx <= 0)
             return;
-        int baseDamage = Math.Max(1, data.Gameplay.Damage);
+        var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
+        baseDamage = Math.Max(1, baseDamage);
         int damage = Math.Max(1, (int)MathF.Round(baseDamage * Math.Max(0.05f, action.DamageMultiplier)));
         int count = 0;
         foreach (NPC npc in Main.ActiveNPCs)
@@ -104,18 +114,19 @@ internal static class RuntimeProgramExecutor
             if (!npc.CanBeChasedBy() || npc == directTarget || Vector2.DistanceSquared(npc.Center, center) > action.RadiusPx * action.RadiusPx)
                 continue;
             int hitDirection = npc.Center.X >= owner.Center.X ? 1 : -1;
-            owner.ApplyDamageToNPC(npc, damage, 0f, hitDirection, false, TerrariaRuntimeVocabulary.ResolveDamageClass(data.Gameplay.DamageClass), false);
+            owner.ApplyDamageToNPC(npc, damage, 0f, hitDirection, false, TerrariaRuntimeVocabulary.ResolveDamageClass(damageClass), false);
             if (++count >= 16)
                 break;
         }
     }
 
-    private static void ChainDamage(GeneratedItemData data, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
+    private static void ChainDamage(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
     {
         if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay())
             return;
         float range = Math.Max(16f, action.RangeTiles * 16f);
-        int damage = Math.Max(1, (int)MathF.Round(Math.Max(1, data.Gameplay.Damage) * Math.Max(0.05f, action.DamageMultiplier)));
+        var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
+        int damage = Math.Max(1, (int)MathF.Round(Math.Max(1, baseDamage) * Math.Max(0.05f, action.DamageMultiplier)));
         var candidates = new List<NPC>();
         foreach (NPC npc in Main.ActiveNPCs)
         {
@@ -129,7 +140,7 @@ internal static class RuntimeProgramExecutor
         {
             NPC npc = candidates[i];
             int hitDirection = npc.Center.X >= owner.Center.X ? 1 : -1;
-            owner.ApplyDamageToNPC(npc, damage, 0f, hitDirection, false, TerrariaRuntimeVocabulary.ResolveDamageClass(data.Gameplay.DamageClass), false);
+            owner.ApplyDamageToNPC(npc, damage, 0f, hitDirection, false, TerrariaRuntimeVocabulary.ResolveDamageClass(damageClass), false);
         }
     }
 
@@ -137,9 +148,10 @@ internal static class RuntimeProgramExecutor
     {
         float strength = Math.Clamp(action.Strength, 0f, 4f);
         float radius = Math.Max(16f, action.RadiusTiles * 16f);
-        if (action.Mode == "owner_to_target" && directTarget is { active: true } && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
+        if (action.Mode == "owner_to_target")
         {
-            owner.velocity += (directTarget.Center - owner.Center).SafeNormalize(Vector2.Zero) * strength;
+            if (directTarget is { active: true } && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
+                owner.velocity += (directTarget.Center - owner.Center).SafeNormalize(Vector2.Zero) * strength;
             return;
         }
         if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay())

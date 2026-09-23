@@ -152,11 +152,11 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
 
         for (int accessoryIndex = 0; accessoryIndex < 7; accessoryIndex++)
         {
-            if (player.hideVisibleAccessory is { Length: > 0 }
-                && accessoryIndex < player.hideVisibleAccessory.Length
-                && player.hideVisibleAccessory[accessoryIndex])
-                continue;
             int normalIndex = accessoryIndex + 3;
+            if (player.hideVisibleAccessory is { Length: > 0 }
+                && normalIndex < player.hideVisibleAccessory.Length
+                && player.hideVisibleAccessory[normalIndex])
+                continue;
             int vanityIndex = accessoryIndex + 13;
             int sourceIndex = vanityIndex < player.armor.Length && !player.armor[vanityIndex].IsAir
                 ? vanityIndex

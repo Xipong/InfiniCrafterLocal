@@ -526,4 +526,5 @@ def test_240_python_runtime_bugfixes_module_contract(request):
             '_contract_check_sdcpp_spawn_failure_closes_log_handle',
             '_contract_check_parallel_sdcpp_ensure_spawns_only_one_process',
         ),
+        require_all=True,
     )

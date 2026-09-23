@@ -60,3 +60,10 @@ settings.local.json
 artifacts/
 .hermes/
 .agent/current_state.json
+
+# OAuth sessions must never enter source archives or Git
+.infinicrafter/
+.codex/
+codex-auth.json
+codex-auth.lock
+.codex-auth-*

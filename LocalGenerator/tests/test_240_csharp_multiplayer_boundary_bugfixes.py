@@ -172,4 +172,5 @@ def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
             '_contract_check_generated_utility_sync_consumes_payload_before_every_reject',
             '_contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots',
         ),
+        require_all=True,
     )

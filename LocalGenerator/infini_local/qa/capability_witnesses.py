@@ -9,7 +9,6 @@ from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
     EVENT_CAPABILITIES,
     MOVEMENT_CAPABILITIES,
-    RUNTIME_CONTRACT_SCHEMA,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     compile_runtime_program,
@@ -228,23 +227,38 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             "parentAContribution": "test body",
             "parentBContribution": "test mechanism",
             "playerExperience": "The selected capability runs without inferred archetype behaviour.",
-        },
-        "runtimeContract": {
-            "schema": RUNTIME_CONTRACT_SCHEMA,
-            "parentSynthesis": {
-                "composition": "Minimal vertical-slice witness.",
-                "parentA": {"facts": ["test body"], "runtimeRoles": ["literal body"]},
-                "parentB": {"facts": ["test mechanism"], "runtimeRoles": ["literal mechanism"]},
-            },
-            "claims": [{"id": "witness_claim", "kind": "gameplay", "text": f"The runtime executes {fn}.", "backedBy": ["witness_call"]}],
+            "plannedPlayerActions": [{
+                "input": str(bindings[0]["input"]) if bindings else "passive_or_event",
+                "intent": f"Execute {fn} through its public typed contract.",
+            }],
         },
         "realization": {
             "description": f"A minimal runtime witness executing {fn}.",
             "playerExperience": "The selected capability runs without inferred archetype behaviour.",
-            "backedByClaims": ["witness_claim"],
-            "intentTrace": {
-                "kept": ["Execute the selected public typed contract."],
-                "changed": [], "dropped": [], "added": [],
+            "selfEvaluation": {
+                "planVsProgram": {
+                    "verdict": "aligned",
+                    "summary": "The witness draft selects the same public capability emitted by the program.",
+                    "actionChecks": [{
+                        "plannedIntent": f"Execute {fn} through its public typed contract.",
+                        "implementedBehavior": f"The runtime program contains the {fn} capability call.",
+                        "runtimeRefs": ["witness_call"],
+                        "result": "aligned",
+                        "intentionality": "intentional",
+                        "reason": "The witness directly emits the selected public capability.",
+                    }],
+                },
+                "programVsReport": {
+                    "verdict": "aligned",
+                    "summary": "The witness report names the exact emitted capability.",
+                    "behaviorChecks": [{
+                        "runtimeRefs": ["witness_call"],
+                        "programBehavior": f"The runtime executes {fn}.",
+                        "reportedBehavior": f"The report says that the runtime executes {fn}.",
+                        "result": "aligned",
+                        "reason": "The report names the exact cited capability.",
+                    }],
+                },
             },
         },
         "runtimeProgram": {

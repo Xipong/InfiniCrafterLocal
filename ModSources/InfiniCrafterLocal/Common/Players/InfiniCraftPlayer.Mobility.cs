@@ -115,18 +115,22 @@ public sealed partial class InfiniCraftPlayer
             if (active.Ticks <= 0)
                 continue;
             _generatedBuffTicks = Math.Max(_generatedBuffTicks, active.Ticks);
-            _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier * active.MiningSpeedMultiplier, 0.25f, 4f);
+            _generatedMiningSpeedMultiplier *= active.MiningSpeedMultiplier;
             if (active.EmitLightStrength >= _generatedLightStrength)
             {
                 _generatedLightStrength = active.EmitLightStrength;
                 _generatedLightColorName = active.LightColorName;
             }
             _generatedOreSenseRadiusTiles = Math.Max(_generatedOreSenseRadiusTiles, active.OreSenseRadiusTiles);
-            _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed + active.MovementSpeed, -0.5f, 2f);
+            _generatedMovementSpeed += active.MovementSpeed;
             _generatedJumpBoost = Math.Clamp(_generatedJumpBoost + active.JumpBoost, 0f, 8f);
             _generatedManaRegen = Math.Clamp(_generatedManaRegen + active.ManaRegen, 0, 120);
             _generatedLifeRegen = Math.Clamp(_generatedLifeRegen + active.LifeRegen, 0, 120);
         }
+        // Bound totals, not intermediate sums/products: speed-up and slow-down
+        // contributions must not depend on the order effects were received.
+        _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
+        _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.5f, 2f);
     }
 
     private void ResetGeneratedUtilityBuffAggregate()
@@ -275,7 +279,7 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = "Missing authored blink range";
             return false;
         }
-        int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 80);
+        int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 120);
         Vector2 delta = target - Player.Center;
         float max = rangeTiles * 16f;
         if (delta.Length() > max)

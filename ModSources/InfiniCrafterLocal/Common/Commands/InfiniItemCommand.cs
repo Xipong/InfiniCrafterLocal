@@ -81,11 +81,11 @@ public sealed class InfiniItemCommand : ModCommand
             sb.AppendLine($"    acc.moveSpeed={data.Accessory.MovementSpeed}  endurance={data.Accessory.Endurance}  aggro={data.Accessory.Aggro}");
         }
 
-        // Applied trace: what C# ApplyToItem set on the live Item after Normalize/clamp.
+        // Last successful projection of this definition; not later prefix/global/player changes.
         string? applied = data.LastAppliedTrace;
-        sb.AppendLine("  [applied]");
+        sb.AppendLine("  [last ApplyToItem snapshot; before later hooks/prefix]");
         if (string.IsNullOrEmpty(applied))
-            sb.AppendLine("    (ApplyToItem has not run for this item instance yet)");
+            sb.AppendLine("    (No ApplyToItem snapshot on this definition; clones/load may not have been applied yet)");
         else
             sb.AppendLine("    " + applied);
 

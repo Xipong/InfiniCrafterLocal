@@ -335,7 +335,10 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
                 bool remoteHeldMissing = player.HeldItem is null || player.HeldItem.IsAir || player.HeldItem.ModItem is not GeneratedItem;
                 bool firstUseGrace = now - payload.ReceivedTick <= 30;
                 if (!remoteHeldMissing && !firstUseGrace)
+                {
+                    payload = null;
                     return false;
+                }
             }
         }
         return payload is not null;

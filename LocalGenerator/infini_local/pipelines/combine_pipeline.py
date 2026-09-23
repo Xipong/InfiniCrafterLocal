@@ -39,7 +39,7 @@ from infini_local.pipelines.llm_authoring_pipeline import (
     call_llm_vfx_director,
     repair_author_item_after_failure,
     try_llm_plan,
-    validate_final_runtime_promise_boundary,
+    validate_final_runtime_wire_boundary,
 )
 from infini_local.pipelines.llm_transport import begin_llm_item_lease, end_llm_item_lease
 from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFILE, contract_versions_payload
@@ -220,7 +220,7 @@ def compile_and_validate_authored_runtime(
         item = run_stage(prefix + "_strict_runtime_program", strict_validate_authored_item, item, a, b)
         item = run_stage(prefix + "_parent_power_context", apply_item_knowledge, item, a, b, ca, cb)
         item = run_stage(prefix + "_compile_runtime_program", attach_gameplay_and_runtime_program, item, a, b, ca, cb)
-        run_stage(prefix + "_wire_boundary", validate_final_runtime_promise_boundary, item)
+        run_stage(prefix + "_wire_boundary", validate_final_runtime_wire_boundary, item)
         return item
 
     authored = copy.deepcopy(data)
@@ -306,9 +306,9 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         data = step("09_visual_delivery_gate", assert_visual_delivery_ready, data)
         data = step("10_generated_parent_summary", attach_generated_parent_summary, data)
         data = step("11_final_normalize", final_normalize, data)
-        # validate_final_runtime_promise_boundary returns a report dict (or
+        # validate_final_runtime_wire_boundary returns a report dict (or
         # raises); it never returns the payload, so do not rebind `data` here.
-        step("12_final_runtime_wire_gate", validate_final_runtime_promise_boundary, data)
+        step("12_final_runtime_wire_gate", validate_final_runtime_wire_boundary, data)
         assert data is not None  # stage 11 always yields a payload dict
         vfx_report = _vfx_manifest_report(data)
         if not vfx_report["ok"]:

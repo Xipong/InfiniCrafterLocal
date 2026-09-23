@@ -50,12 +50,14 @@ def test_generated_parent_summary_csharp_dto_matches_v2_delivery_surface() -> No
     for token in (
         'CurrentSchema = "infini.generated-parent-summary.v2"',
         "public string Schema", "public string Identity", "public string Description",
-        "public string PlayerExperience", "public string[] BackedByClaims",
-        "public string ParentComposition", "public string RuntimePrimaryEntityId",
-        "public string[] RuntimeEntityIds",
+        "public string PlayerExperience", "public string[] NotableEffects",
+        "public string RuntimePrimaryEntityId", "public string[] RuntimeEntityIds",
     ):
         assert token in summary
-    for retired in ("Fantasy", "Category", "DamageClass", "Runtime {", "VisualIdentity"):
+    for retired in (
+        "Fantasy", "Category", "DamageClass", "Runtime {", "VisualIdentity",
+        "BackedByClaims", "ParentComposition",
+    ):
         assert retired not in summary
 
     registry = _read("Common/Services/GeneratedItemRegistryService.cs")

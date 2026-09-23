@@ -67,10 +67,10 @@ _AUTHOR_SYSTEM = (
     "bounds, compiles, and executes your explicit choices; it does not infer a weapon archetype or complete "
     "missing movement, attachment, delivery, lifecycle, input, targeting, or child behaviour. Do not classify "
     "the item as sword/bow/staff/sentry for runtime. Preserve literal parent objects when useful: a workbench "
-    "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Every gameplay "
-    "claim must cite existing entity/binding/call ids. After runtimeProgram and runtimeContract, author realization as the final "
-    "description/player experience of that executable program; cite only existing claim ids and explicitly record kept, changed, dropped "
-    "or added intent. Never promise mechanics absent from the program/claims. Use only catalog capabilities. Check every reference, "
+    "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Treat concept as the "
+    "non-binding initial_design_draft: it anchors the attempt but never becomes runtime authority and later drift from it does not reject a craft. "
+    "runtimeProgram is the executable_gameplay_program and the only gameplay authority. After runtimeProgram, author realization as the final_gameplay_report of that executable program. "
+    "Write realization.selfEvaluation last as the same_pass_self_evaluation: independently compare concept.plannedPlayerActions with runtimeProgram in planVsProgram.actionChecks, then compare every executable runtime lane with description/playerExperience in programVsReport.behaviorChecks. Every check must cite exact runtime ids, including aligned checks. Never describe mechanics absent from the program. Use only catalog capabilities. Check every reference, "
     "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
     f"{PRIMARY_AUTHOR_SYSTEM_RULE} Group bindings by input and reject the draft if an exclusive input has more than one row. Every binding is one complete usePolicy transaction; configure_item_use never chooses or requires a companion action binding. Catalog membership is not a recommendation. "
     "Return JSON only; no markdown or reasoning."
@@ -100,23 +100,8 @@ def _prepare_parsed_author_item(parsed: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(canonical)
 
 
-def planner_runtime_promise_gate(plan: dict[str, Any]) -> dict[str, Any]:
-    report = validate_runtime_program(plan)
-    if not report.get("ok"):
-        raise PlannerUnavailable(
-            "Gameplay Author runtime program rejected: "
-            + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report.get("errors", [])[:12]),
-            author_repair_targets=copy.deepcopy(report.get("errors") or []),
-        )
-    return report
-
-
-def final_runtime_promise_report(data: dict[str, Any]) -> dict[str, Any]:
-    return validate_runtime_wire(data)
-
-
-def validate_final_runtime_promise_boundary(data: dict[str, Any]) -> dict[str, Any]:
-    report = final_runtime_promise_report(data)
+def validate_final_runtime_wire_boundary(data: dict[str, Any]) -> dict[str, Any]:
+    report = validate_runtime_wire(data)
     debug = data.setdefault("debug", {})
     debug["finalRuntimeProgramWireGate"] = bounded_json_dumps(report, max_chars=12000)
     if not report.get("ok"):
@@ -172,7 +157,7 @@ def _repair_malformed_author_json(
         "schema": "infini.gameplay-author-format-repair.v1",
         "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
         "rules": [
-            "Preserve every recoverable authored value, id, capability, parameter, binding transaction, claim, concept, and realization from malformedRawText.",
+            "Preserve every recoverable authored value, id, capability, parameter, binding transaction, concept, and realization from malformedRawText.",
             "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
             "Use originalRecipeContext only to disambiguate damaged syntax; never introduce a choice absent from malformedRawText.",
             "Return exactly one strict full Author JSON object with no markdown or prose.",
@@ -311,7 +296,17 @@ def try_llm_plan(
     except PlannerUnavailable:
         raise
     except Exception as exc:
-        trace_event("error", "LLM:gameplay_author", "Gameplay Author transport/parse failure", {"model": model_name}, error=repr(exc))
+        diagnosis = getattr(exc, "_infini_shape_diagnosis", None)
+        trace_event(
+            "error", "LLM:gameplay_author", "Gameplay Author transport/parse failure",
+            {"model": model_name, **({"requestShapeRejection": diagnosis} if isinstance(diagnosis, dict) else {})},
+            error=repr(exc),
+        )
+        if isinstance(diagnosis, dict):
+            # Surface the actionable configuration mismatch instead of a bare provider 400.
+            raise PlannerUnavailable(
+                f"Gameplay Author failed: {exc!r} | {diagnosis.get('hint') or ''}"
+            ) from exc
         raise PlannerUnavailable(f"Gameplay Author failed: {exc!r}") from exc
 
 
@@ -354,8 +349,6 @@ def build_gameplay_repair_dossier(
     scope = build_runtime_repair_scope(current, exact_errors)
     fragments = runtime_repair_fragments(current, scope)
     blocker_plan = scope.get("blockerPlan") if isinstance(scope.get("blockerPlan"), Mapping) else {}
-    raw_runtime_contract = current.get("runtimeContract")
-    runtime_contract: Mapping[str, Any] = raw_runtime_contract if isinstance(raw_runtime_contract, Mapping) else {}
 
     def cards(names: Any) -> list[dict[str, Any]]:
         return [
@@ -377,8 +370,8 @@ def build_gameplay_repair_dossier(
             "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
             "immutableProgramIndex.entities[*].id is the exact allowlist for every target and entity-reference value that points to an existing entity in this patch; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call may instead target an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and do not invent any other target.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
-            "Resolve every exact error and re-check references, target kinds, inputs, cycles, claims, and budgets.",
-            "Always return realizationReplacement after considering the patch. It must be a literal post-repair execution report, obey runtimeExecutionTruth, describe only the actually repaired program, reconcile intentTrace kept/changed/dropped, and cite only final claim ids; it is never deterministically synthesized.",
+            "Resolve every exact error and re-check references, target kinds, inputs, cycles, and budgets.",
+            "Always return realizationReplacement after considering the patch. It must be a literal post-repair execution report, obey runtimeExecutionTruth, describe only the actually repaired program, and rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport from the final patch result; it is never deterministically synthesized.",
             f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
             "For each repairRequirements row with requiredBindingUpdates, emit every listed existing binding exactly once using one of its complete allowed transactions; mustApplyAll means these updates are one coupled repair, not alternatives. When mustCreateExactlyOne is true, emit exactly one allowedBindingTransactions row and it must have a new id. When mustChooseExactlyOne is true without mustCreateExactlyOne, emit exactly one complete allowedBindingTransactions choice: an existing id is eligible only when it appears in that row's allowedExistingBindingIds and its complete tuple is projected by bindingAlternatives; a new id is eligible only when repairScope.create.bindings permits it. Global mutability never authorizes an id for another requirement; never update every listed lane.",
             "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
@@ -395,9 +388,6 @@ def build_gameplay_repair_dossier(
         "acceptedItemContext": {
             "name": current.get("name"),
             "category": current.get("category"),
-            "concept": copy.deepcopy(current.get("concept") or {}),
-            "parentSynthesis": copy.deepcopy(runtime_contract.get("parentSynthesis") or {}),
-            "claims": copy.deepcopy(runtime_contract.get("claims") or []),
             "realization": copy.deepcopy(current.get("realization") or {}),
         },
         "exactValidationErrors": exact_errors,
@@ -576,9 +566,7 @@ __all__ = [
     "build_gameplay_repair_dossier",
     "build_initial_author_request",
     "call_llm_vfx_director",
-    "final_runtime_promise_report",
-    "planner_runtime_promise_gate",
     "repair_author_item_after_failure",
     "try_llm_plan",
-    "validate_final_runtime_promise_boundary",
+    "validate_final_runtime_wire_boundary",
 ]

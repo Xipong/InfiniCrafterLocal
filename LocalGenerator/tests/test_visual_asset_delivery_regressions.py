@@ -272,6 +272,25 @@ def test_visual_delivery_rejects_corrupt_and_truncated_png(monkeypatch, tmp_path
     assert truncated_report["slots"][0]["completePng"] is False
 
 
+def test_visual_delivery_rejects_non_png_sprite_files(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", True)
+    for name in ("sprite.txt", "sprite.json", "sprite"):
+        path = tmp_path / name
+        path.write_bytes(b"not an image")
+        report = visual_delivery_gate.visual_delivery_report(
+            _delivery_data(path), check_backend_config=False
+        )
+        assert report["ok"] is False, name
+        assert report["slots"][0]["completePng"] is False, name
+        assert report["slots"][0]["usable"] is False, name
+
+    # An intact PNG with the supported extension must still be delivered.
+    valid = write_no_image_fixture_png(tmp_path / "valid.PNG")
+    assert visual_delivery_gate.visual_delivery_report(
+        _delivery_data(valid), check_backend_config=False
+    )["ok"] is True
+
+
 def test_image_request_gate_bounds_parallel_backend_ownership() -> None:
     gate = ImageRequestGate(1)
     active = 0

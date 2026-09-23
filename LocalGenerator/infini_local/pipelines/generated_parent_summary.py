@@ -18,25 +18,26 @@ def generated_parent_summary_from_data(data: Mapping[str, Any]) -> dict[str, Any
     """Return exact recursive context from the final accepted runtime truth.
 
     The summary never reinterprets mechanics. It exposes the same Author's late
-    realization plus final claims that still cite live runtime ids.
+    realization verbatim plus notable effects taken from that realization's own
+    program-vs-report self-evaluation. Aligned rows prefer the reported wording;
+    mismatched, omitted, or uncertain rows prefer the executable-program account
+    so a diagnosed prose error is not propagated recursively. No model-authored
+    claims or claim ids are involved.
     """
     result_id = str(data.get("id") or "").strip()
     if not result_id:
         raise ValueError("generatedParentSummary requires the accepted top-level generated id")
     runtime = _mapping(data.get("runtimeProgram"))
-    contract = _mapping(data.get("runtimeContract"))
     realization = _mapping(data.get("realization"))
-    claims = _rows(contract.get("claims"))
-    cited_claim_ids = {
-        str(value) for value in realization.get("backedByClaims") or [] if str(value)
-    }
-    notable_effects = [
-        str(claim.get("text") or "").strip()
-        for claim in claims
-        if str(claim.get("id") or "") in cited_claim_ids
-        and str(claim.get("text") or "").strip()
-    ]
-    parent_synthesis = _mapping(contract.get("parentSynthesis"))
+    program_vs_report = _mapping(_mapping(realization.get("selfEvaluation")).get("programVsReport"))
+    notable_effects: list[str] = []
+    for check in _rows(program_vs_report.get("behaviorChecks")):
+        result = str(check.get("result") or "").strip()
+        reported = str(check.get("reportedBehavior") or "").strip()
+        programmed = str(check.get("programBehavior") or "").strip()
+        text = (reported or programmed) if result == "aligned" else (programmed or reported)
+        if text and text not in notable_effects:
+            notable_effects.append(text)
     return {
         "schema": "infini.generated-parent-summary.v2",
         "name": str(data.get("name") or "Generated Item"),
@@ -44,8 +45,6 @@ def generated_parent_summary_from_data(data: Mapping[str, Any]) -> dict[str, Any
         "description": str(realization.get("description") or "").strip(),
         "playerExperience": str(realization.get("playerExperience") or "").strip(),
         "notableEffects": notable_effects[:12],
-        "backedByClaims": sorted(cited_claim_ids),
-        "parentComposition": str(parent_synthesis.get("composition") or "").strip(),
         "runtimePrimaryEntityId": str(runtime.get("primaryEntityId") or runtime.get("itemEntityId") or ""),
         "runtimeEntityIds": [str(row.get("id") or "") for row in _rows(runtime.get("entities")) if str(row.get("id") or "")],
     }

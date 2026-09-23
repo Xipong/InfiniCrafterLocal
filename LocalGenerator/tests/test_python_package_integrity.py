@@ -84,4 +84,5 @@ def test_python_package_integrity_module_contract(request):
             '_contract_check_module_exports_are_static_not_globals_driven',
             '_contract_check_declared_module_exports_exist_at_runtime',
         ),
+        require_all=True,
     )

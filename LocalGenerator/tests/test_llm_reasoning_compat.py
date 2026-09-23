@@ -180,4 +180,5 @@ def test_llm_reasoning_compat_module_contract(request):
             '_contract_check_google_high_reasoning_preserves_answer_budget_with_http_headroom',
             '_contract_check_author_reasoning_floor_is_medium_and_preserves_high',
         ),
+        require_all=True,
     )

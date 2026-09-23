@@ -38,6 +38,12 @@ public sealed partial class GeneratedProjectile
 
         if (!_spawnEventRan)
         {
+            // Waiting suppresses movement, not the authored launch. Replay its
+            // exact speed and synced initial direction only at first activation;
+            // later hydration must not reset an already moving projectile.
+            if (_age == 0 && _entity.Spawn.OverTarget.DelayTicks > 0
+                && !_entity.IsStationary && _entity.Spawn.Aim != "none")
+                Projectile.velocity = _initialDirection * _entity.Spawn.SpeedPxPerTick;
             _spawnEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnSpawn, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnSpawn, Projectile.Center);
@@ -61,7 +67,9 @@ public sealed partial class GeneratedProjectile
         if (_entity.Movement.Code is not (14 or 16 or 17 or 18) && Projectile.velocity.LengthSquared() > 0.01f)
             Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;
 
-        if (Projectile.timeLeft <= 2 && !_expireEventRan)
+        // Terraria decrements timeLeft after AI; 2 is still a live update and
+        // is also the keep-alive value used by held/channelled controllers.
+        if (Projectile.timeLeft <= 1 && !_expireEventRan)
         {
             _expireEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);

@@ -691,4 +691,5 @@ def test_240_http_boundary_bugfixes_module_contract(request):
             '_contract_check_asset_response_is_streamed_and_server_bounded',
             '_contract_check_promise_truth_exhaustion_is_invalid_output_not_backend_outage',
         ),
+        require_all=True,
     )

@@ -58,4 +58,5 @@ def test_runtime_sprite_cache_vanilla_qol_contract_module_contract(request):
             '_contract_check_runtime_sprite_cache_uses_vanilla_like_soft_limits',
             '_contract_check_runtime_sprite_cache_has_in_game_ru_en_config_labels',
         ),
+        require_all=True,
     )

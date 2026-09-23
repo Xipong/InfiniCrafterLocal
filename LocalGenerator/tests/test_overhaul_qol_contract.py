@@ -57,4 +57,5 @@ def test_overhaul_qol_contract_module_contract(request):
             '_contract_check_station_keeps_manual_clear_qol_without_quickfill_or_swap',
             '_contract_check_inventory_asset_prefetch_is_bounded_and_optional',
         ),
+        require_all=True,
     )

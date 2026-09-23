@@ -697,6 +697,13 @@ class SettingsGuiUiMixin:
         self.row(trace_card, "Trace prompts", "INFINI_TRACE_PROMPTS", values=["1", "0"], hint="1 = сохранять LLM/image prompts и ответы в cache/prompt_trace.ndjson. Это debug, не gameplay state.")
         self.row(trace_card, "Trace prompt chars", "INFINI_TRACE_MAX_PROMPT_CHARS", width=16)
         self.row(trace_card, "Trace events tail", "INFINI_TRACE_EVENTS_TAIL", width=16)
+        self.row(
+            trace_card,
+            "Console events",
+            "INFINI_CONSOLE_EVENT_LEVEL",
+            values=["warn", "error", "info", "debug", "off"],
+            hint="Что дублировать в окно сервера. cache/events.ndjson пишется полностью всегда; это эхо, чтобы упавший крафт и смена транспорта были видны сразу. off — окно молчит, как раньше.",
+        )
 
     def _build_llm(self, parent):
         ttk.Label(parent, text="LLM: кто пишет контракт предмета", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
@@ -811,7 +818,7 @@ class SettingsGuiUiMixin:
     def _build_image(self, parent):
         ttk.Label(parent, text="Image backend: кто рисует PNG", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
         self._build_zimage_guide(parent)
-        self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "image_api", "off", "comfyui", "a1111"], hint="sdcpp = локальный FLUX.2/Z-Image через stable-diffusion.cpp; image_api = внешний API; off = без PNG.")
+        self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "openai_codex", "image_api", "off", "comfyui", "a1111"], hint="openai_codex = ChatGPT/Codex OAuth по подписке; sdcpp = локальная модель; image_api = отдельный API; off = без PNG.")
         self.row(parent, "Shared image concurrency", "INFINI_IMAGE_MAX_CONCURRENCY", width=8, hint="Один общий GPU/sd-server: 1. Увеличивай только если backend действительно обслуживает параллельные image jobs без OOM/очереди внутри.")
         self.row(parent, "sd-server.exe", "INFINI_SDCPP_SERVER_EXE", browse="file")
         self.row(parent, "ROCm hybrid runtime", "INFINI_SDCPP_ROCM_COMPAT_ROOT", browse="dir", hint="Папка sdcpp-hybrid-gfx1030. ROCm/HIP/rocBLAS env применяется только к дочернему sd-server.exe.")
@@ -849,6 +856,17 @@ class SettingsGuiUiMixin:
         self.row(parent, "Z-Image contract", "INFINI_ZIMAGE_PROMPT_CONTRACT", values=["auto", "1", "0"], hint="Обычно auto. Это внутренний маркер для Z-Image payload/prompt contract.")
         self.row(parent, "Positive-only prompt", "INFINI_ZIMAGE_POSITIVE_ONLY", values=["1", "0"], hint="Для Z-Image Turbo обычно 1: negative_prompt не используется, все запреты/техусловия в positive prompt.")
         self.row(parent, "Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE", values=["1", "0"], hint="1 = не доставлять свежий craft без валидного item PNG. Основной product contract; выключать только для явной диагностики.")
+        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
+        ttk.Label(parent, text="Codex OAuth / ChatGPT subscription", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10)
+        self.row(parent, "Codex image model", "INFINI_CODEX_IMAGE_MODEL")
+        self.row(parent, "Codex quality", "INFINI_CODEX_IMAGE_QUALITY", values=["low", "medium", "high", "auto"])
+        self.row(parent, "Codex size", "INFINI_CODEX_IMAGE_SIZE", values=["1024x1024", "1536x1024", "1024x1536", "auto"])
+        self.row(parent, "Codex timeout", "INFINI_CODEX_IMAGE_TIMEOUT", width=16)
+        codex_buttons = ttk.Frame(parent)
+        codex_buttons.pack(fill="x", padx=10, pady=6)
+        for label, command in [("Sign in with ChatGPT", self.codex_login), ("Auth status", self.codex_status), ("Sign out", self.codex_logout)]:
+            ttk.Button(codex_buttons, text=label, command=command).pack(side="left", padx=3)
+        ttk.Label(parent, text="Сессия хранится в профиле пользователя, не в config.env. API key не нужен.", wraplength=800).pack(anchor="w", padx=10)
         ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
         self.row(parent, "Image API base", "INFINI_IMAGE_API_BASE_URL")
         self.row(parent, "Image API key", "INFINI_IMAGE_API_KEY", secret=True)

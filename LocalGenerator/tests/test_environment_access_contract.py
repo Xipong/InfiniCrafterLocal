@@ -96,4 +96,5 @@ def test_environment_access_contract_module_contract(request):
             '_contract_check_env_contract_scan_ignores_comments_and_os_environ_copy',
             '_contract_check_bad_infini_env_values_fallback_instead_of_crashing',
         ),
+        require_all=True,
     )

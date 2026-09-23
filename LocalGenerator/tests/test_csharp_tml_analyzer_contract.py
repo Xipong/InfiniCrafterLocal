@@ -69,4 +69,5 @@ def test_csharp_tml_analyzer_contract_module_contract(request):
             '_contract_check_generator_client_uses_named_terraria_id_sentinels_for_snapshots',
             '_contract_check_dump_tools_use_projectile_id_none_for_projectile_fields',
         ),
+        require_all=True,
     )

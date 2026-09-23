@@ -178,12 +178,17 @@ def test_happy_path_is_one_gameplay_one_visual_one_vfx_zero_repairs(monkeypatch:
     assert visual["debug"]["llmStageAccounting"]["visualRepairCalls"] == 0
 
     calls = 0
-    def director(*_args, **_kwargs):
+    captured_vfx_packets: list[dict[str, Any]] = []
+    def director(*args, **_kwargs):
         nonlocal calls
         calls += 1
+        captured_vfx_packets.append(copy.deepcopy(args[1]))
         return _vfx_output(visual)
     final = attach_hybrid_vfx_manifest(visual, "a+b", llm_director=director)
     assert calls == 1
+    assert captured_vfx_packets[0]["item"]["behaviorChecks"] == (
+        visual["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"]
+    )
     assert final["debug"]["llmStageAccounting"] == {
         "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0,
         "visualDirectorCalls": 1, "visualRepairCalls": 0,
@@ -292,11 +297,6 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
             "contactDamage": False,
         },
     }]
-    current["runtimeContract"]["claims"] = [{
-        "id": "claim_tool", "kind": "gameplay", "text": "tool and placement",
-        "backedBy": ["tool", "place", "primary_place"],
-    }]
-    current["realization"]["backedByClaims"] = ["claim_tool"]
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["missing_binding_dependency"]
 
@@ -511,7 +511,7 @@ def test_gameplay_repair_runs_only_after_exact_validator_failure(monkeypatch: py
     patch = {
         "entitiesUpsert": [], "entityIdsDelete": [], "bindingsUpsert": [],
         "bindingIdsDelete": ["bad_primary"], "callsUpsert": [], "callIdsDelete": [],
-        "claimsUpsert": [], "claimIdsDelete": [], "metadataPatch": {}, "note": "remove only duplicate binding",
+        "metadataPatch": {}, "note": "remove only duplicate binding",
         "realizationReplacement": copy.deepcopy(current["realization"]),
     }
     monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
@@ -529,7 +529,6 @@ def _empty_gameplay_patch() -> dict:
         "bindingsUpsert": [], "bindingIdsDelete": [], "bindingIndicesDelete": [],
         "callsUpsert": [], "callIdsDelete": [], "callIndicesDelete": [],
         "callParamKeysDelete": [], "callPropertyKeysDelete": [],
-        "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": "targeted repair",
     }
 
@@ -573,7 +572,6 @@ def test_repair_scope_rejects_new_global_id_collision_after_original_errors_clos
     report = validate_runtime_program(current)
     assert {row["code"] for row in report["errors"]} == {
         "binding_dependency",
-        "missing_claim_backing",
     }
     scope = build_runtime_repair_scope(current, report["errors"])
 
@@ -582,15 +580,8 @@ def test_repair_scope_rejects_new_global_id_collision_after_original_errors_clos
         row["id"] for row in current["runtimeProgram"]["entities"]
         if row["kind"] == "item_body"
     )
-    claim = next(
-        row for row in current["runtimeContract"]["claims"]
-        if original_call["id"] in row["backedBy"]
-    )
-    colliding_claim = copy.deepcopy(claim)
-    colliding_claim["backedBy"] = [colliding_call["id"]]
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [colliding_call]
-    patch["claimsUpsert"] = [colliding_claim]
 
     audit = validate_repair_patch_scope(current, patch, scope)
     assert not audit["ok"]
@@ -619,12 +610,7 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
         row for row in current["runtimeProgram"]["calls"]
         if row["id"] not in removed_call_ids
     ]
-    current["runtimeContract"]["claims"] = [
-        row for row in current["runtimeContract"]["claims"]
-        if not removed_call_ids.intersection(row["backedBy"])
-    ]
     current["runtimeProgram"]["primaryEntityId"] = "workbench_blade"
-    current["realization"]["backedByClaims"] = ["claim_nails"]
 
     report = validate_runtime_program(current)
     assert {row["code"] for row in report["errors"]} == {
@@ -1120,34 +1106,6 @@ def test_metadata_repair_drops_invalid_additional_property() -> None:
     assert repaired["concept"]["literalSynthesis"] == current["concept"]["literalSynthesis"]
 
 
-def test_metadata_repair_accepts_partial_parent_synthesis_and_freezes_the_rest() -> None:
-    current = build_runtime_fixture("workbench_blade")
-    current["runtimeContract"]["parentSynthesis"]["parentA"]["facts"] = [
-        f"fact {index}" for index in range(13)
-    ]
-    scope = build_runtime_repair_scope(current, [{
-        "path": "$.runtimeContract.parentSynthesis.parentA.facts",
-        "code": "shape_max_items",
-        "message": "facts array exceeds 8 items",
-    }])
-    assert scope["nonRepairableErrors"] == []
-
-    # The model returns only the broken part; composition/parentB stay frozen.
-    patch = _empty_gameplay_patch()
-    patch["metadataPatch"] = {"parentSynthesis": {"parentA": {
-        "facts": ["literal workbench"],
-        "runtimeRoles": current["runtimeContract"]["parentSynthesis"]["parentA"]["runtimeRoles"],
-    }}}
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
-    synthesis = repaired["runtimeContract"]["parentSynthesis"]
-    assert sorted(synthesis) == ["composition", "parentA", "parentB"]
-    assert synthesis["parentA"]["facts"] == ["literal workbench"]
-    assert synthesis["composition"] == current["runtimeContract"]["parentSynthesis"]["composition"]
-    assert synthesis["parentB"] == current["runtimeContract"]["parentSynthesis"]["parentB"]
-
-
 def test_uncombined_identity_closes_through_same_author_repair_stage(monkeypatch: pytest.MonkeyPatch) -> None:
     current = build_runtime_fixture("workbench_blade")
     current["name"] = "Workbench"
@@ -1231,7 +1189,6 @@ def test_exclusive_selection_candidates_recompute_after_scoped_retarget() -> Non
     program = current["runtimeProgram"]
     original = next(row for row in program["bindings"] if row["input"] == "primary_use")
     item_id = next(row["id"] for row in program["entities"] if row["kind"] == "item_body")
-    current["runtimeContract"]["claims"][0]["backedBy"].append(original["id"])
     program["bindings"].extend([
         _binding_row("item_primary", "primary_use", "use_item_body", item_id),
         _binding_row("item_place", "primary_use", "use_item_body", item_id),
@@ -1259,40 +1216,6 @@ def test_exclusive_selection_candidates_recompute_after_scoped_retarget() -> Non
     }]
     repaired = apply_repair_patch(current, filtered)
     assert validate_runtime_program(repaired)["ok"]
-    repaired_claim = next(
-        row for row in repaired["runtimeContract"]["claims"]
-        if row["id"] == current["runtimeContract"]["claims"][0]["id"]
-    )
-    assert original["id"] in repaired_claim["backedBy"]
-
-
-def test_direct_runtime_id_delete_closes_claim_backing() -> None:
-    current = build_runtime_fixture("workbench_blade")
-    binding = copy.deepcopy(current["runtimeProgram"]["bindings"][0])
-    binding_id = binding["id"]
-    claim = current["runtimeContract"]["claims"][0]
-    claim["backedBy"].append(binding_id)
-    patch = _empty_gameplay_patch()
-    patch["bindingIdsDelete"] = [binding_id]
-
-    repaired = apply_repair_patch(current, patch)
-
-    repaired_claim = next(
-        row for row in repaired["runtimeContract"]["claims"]
-        if row["id"] == claim["id"]
-    )
-    assert binding_id not in repaired_claim["backedBy"]
-    assert repaired_claim["backedBy"]
-
-    replacement_patch = _empty_gameplay_patch()
-    replacement_patch["bindingIdsDelete"] = [binding_id]
-    replacement_patch["bindingsUpsert"] = [binding]
-    replaced = apply_repair_patch(current, replacement_patch)
-    replaced_claim = next(
-        row for row in replaced["runtimeContract"]["claims"]
-        if row["id"] == claim["id"]
-    )
-    assert binding_id in replaced_claim["backedBy"]
 
 
 def test_invalid_primary_reference_uses_atomic_exact_entity_selection() -> None:
@@ -1364,7 +1287,7 @@ def test_primary_selection_null_is_a_true_noop() -> None:
     assert apply_repair_patch(current, filtered) == current
 
 
-def test_exclusive_input_transaction_preserves_reachability_and_claim_references() -> None:
+def test_exclusive_input_transaction_preserves_reachability() -> None:
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     original = next(row for row in program["bindings"] if row["input"] == "primary_use")
@@ -1373,7 +1296,6 @@ def test_exclusive_input_transaction_preserves_reachability_and_claim_references
     program["bindings"].append(
         _binding_row(duplicate_id, "primary_use", "use_item_body", body_id)
     )
-    current["runtimeContract"]["claims"][0]["backedBy"].append(duplicate_id)
     error = {
         "path": "$.runtimeProgram.bindings[1].input",
         "code": "duplicate_exclusive_input",
@@ -1397,7 +1319,7 @@ def test_exclusive_input_transaction_preserves_reachability_and_claim_references
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(current, filtered)
-    assert duplicate_id not in repaired["runtimeContract"]["claims"][0]["backedBy"]
+    assert all(row["id"] != duplicate_id for row in repaired["runtimeProgram"]["bindings"])
     assert validate_runtime_program(repaired)["ok"]
 
 
@@ -1564,8 +1486,6 @@ def test_vfx_repair_freezes_valid_fields_and_accepts_missing_broken_slot_params(
 def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
     current = build_runtime_fixture("workbench_blade")
     current["runtimeProgram"]["calls"] = [row for row in current["runtimeProgram"]["calls"] if row["id"] != "item_use"]
-    for claim in current["runtimeContract"]["claims"]:
-        claim["backedBy"] = [row_id for row_id in claim["backedBy"] if row_id != "item_use"]
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["binding_dependency"]
     scope = build_runtime_repair_scope(current, report["errors"])
@@ -2314,11 +2234,6 @@ def test_item_hit_event_does_not_require_optional_contact_geometry_call() -> Non
         row for row in program["calls"]
         if row["fn"] != "configure_item_contact_hitbox"
     ]
-    for claim in current["runtimeContract"]["claims"]:
-        claim["backedBy"] = [
-            value for value in claim["backedBy"]
-            if value != "item_contact"
-        ]
     binding = program["bindings"][0]
     binding["usePolicy"]["action"] = {
         "kind": "use_item_body", "targetId": "item",
@@ -2400,7 +2315,6 @@ def test_binding_dependency_repair_can_delete_the_exact_unwanted_binding() -> No
         row for row in current["runtimeProgram"]["calls"]
         if row["id"] != "witness_call"
     ]
-    current["runtimeContract"]["claims"][0]["backedBy"] = ["item_stats"]
 
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["binding_dependency"]
@@ -2701,8 +2615,6 @@ def test_gameplay_scope_create_policy_has_no_parallel_role_authority() -> None:
     current["runtimeProgram"]["calls"] = [
         row for row in current["runtimeProgram"]["calls"] if row["id"] != "item_use"
     ]
-    for claim in current["runtimeContract"]["claims"]:
-        claim["backedBy"] = [value for value in claim["backedBy"] if value != "item_use"]
     report = validate_runtime_program(current)
     assert any(row["code"] == "binding_dependency" for row in report["errors"])
 
@@ -2715,8 +2627,6 @@ def test_gameplay_scope_rejects_param_delete_for_new_call() -> None:
     current["runtimeProgram"]["calls"] = [
         row for row in current["runtimeProgram"]["calls"] if row["id"] != "item_use"
     ]
-    for claim in current["runtimeContract"]["claims"]:
-        claim["backedBy"] = [value for value in claim["backedBy"] if value != "item_use"]
     report = validate_runtime_program(current)
     scope = build_runtime_repair_scope(current, report["errors"])
 
@@ -2946,7 +2856,8 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     assert "Every upsert entry must be a complete schema-valid node" in repair_rules
     assert "id, fn, target, and the complete params object" in repair_rules
     required_shape = dossier["requiredJsonShape"]
-    assert required_shape["claimsUpsert"][0]["kind"] == "gameplay|physical|parent_synthesis"
+    assert "claimsUpsert" not in required_shape
+    assert "claimIdsDelete" not in required_shape
     assert set(required_shape["callsUpsert"][0]) == {"id", "fn", "target", "params"}
     card_fns = {
         card["fn"]
@@ -2965,8 +2876,8 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     author_truth = json.loads(author_payload)["runtimeProgramInvariants"]["realizationExecutionTruth"]
     assert dossier["runtimeExecutionTruth"] == author_truth
     assert "literal post-repair execution report" in repair_rules
-    assert "reconcile intentTrace kept/changed/dropped" in repair_rules
-    assert dossier["acceptedItemContext"]["claims"] == current["runtimeContract"]["claims"]
+    assert "rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport" in repair_rules
+    assert set(dossier["acceptedItemContext"]) == {"name", "category", "realization"}
 
 
 def test_initial_author_packet_places_unchanged_contract_before_recipe_specific_facts() -> None:

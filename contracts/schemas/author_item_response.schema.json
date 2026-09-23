@@ -50,6 +50,37 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 500
+        },
+        "plannedPlayerActions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "Non-binding initial gameplay sketch. It never routes execution or rejects a craft when the final program changes.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "input": {
+                "type": "string",
+                "enum": [
+                  "primary_use",
+                  "alternate_use",
+                  "hold",
+                  "equipped",
+                  "passive_or_event"
+                ]
+              },
+              "intent": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 280
+              }
+            },
+            "required": [
+              "input",
+              "intent"
+            ]
+          }
         }
       },
       "required": [
@@ -898,7 +929,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_item_stats"
@@ -1047,7 +1078,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_item_use"
@@ -1180,7 +1211,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_item_contact_hitbox"
@@ -1238,7 +1269,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_vanilla_ammo_item"
@@ -1325,7 +1356,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "restore_resources_on_use"
@@ -1388,7 +1419,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "apply_vanilla_buff_on_use"
@@ -1446,7 +1477,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "apply_generated_buff_on_use"
@@ -1572,7 +1603,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_tool"
@@ -1646,7 +1677,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_placeable"
@@ -1711,7 +1742,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "require_use_condition"
@@ -1778,7 +1809,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "add_hold_light"
@@ -1846,7 +1877,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_player_on_use"
@@ -1921,7 +1952,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_accessory"
@@ -2077,7 +2108,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_armor"
@@ -2205,7 +2236,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "configure_spawn"
@@ -2311,7 +2342,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "set_projectile_damage"
@@ -2386,7 +2417,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "set_projectile_lifetime"
@@ -2441,7 +2472,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "set_projectile_hitbox"
@@ -2521,7 +2552,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "set_projectile_collision"
@@ -2622,7 +2653,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_straight"
@@ -2666,7 +2697,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_slow_homing"
@@ -2729,7 +2760,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_gravity_arc"
@@ -2784,7 +2815,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_drift"
@@ -2838,7 +2869,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_orbit"
@@ -2893,7 +2924,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_boomerang"
@@ -2957,7 +2988,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_bounce"
@@ -3012,7 +3043,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_sine_homing"
@@ -3084,7 +3115,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_phase"
@@ -3138,7 +3169,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_accelerate"
@@ -3201,7 +3232,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_spiral"
@@ -3256,7 +3287,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_vortex_orb"
@@ -3319,7 +3350,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_blackhole_pull"
@@ -3382,7 +3413,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_proximity_missile"
@@ -3454,7 +3485,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_returning_glaive"
@@ -3518,7 +3549,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_expanding_wave"
@@ -3580,7 +3611,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_flail_tether"
@@ -3639,7 +3670,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_yoyo_hover"
@@ -3698,7 +3729,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_whip_lash"
@@ -3756,7 +3787,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_forward_then_retract"
@@ -3815,7 +3846,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "channel_beam"
@@ -3883,7 +3914,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "charge_then_release"
@@ -3942,7 +3973,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "target_and_fire"
@@ -4030,7 +4061,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "spawn_over_target"
@@ -4094,7 +4125,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "spawn_entity_on_event"
@@ -4221,7 +4252,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "apply_status_on_event"
@@ -4295,7 +4326,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "damage_area_on_event"
@@ -4372,7 +4403,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "chain_damage_on_event"
@@ -4454,7 +4485,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "pull_on_event"
@@ -4547,7 +4578,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "heal_owner_on_event"
@@ -4620,7 +4651,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "move_owner_on_event"
@@ -4711,7 +4742,7 @@
                   "id": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair."
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
                     "const": "emit_light_while_active"
@@ -4792,143 +4823,6 @@
         "calls"
       ]
     },
-    "runtimeContract": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "schema": {
-          "const": "infini.runtime-contract.low-level.v1"
-        },
-        "parentSynthesis": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "composition": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 500
-            },
-            "parentA": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "facts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 240
-                  },
-                  "minItems": 1,
-                  "maxItems": 8
-                },
-                "runtimeRoles": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "minItems": 1,
-                  "maxItems": 8
-                }
-              },
-              "required": [
-                "facts",
-                "runtimeRoles"
-              ]
-            },
-            "parentB": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "facts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 240
-                  },
-                  "minItems": 1,
-                  "maxItems": 8
-                },
-                "runtimeRoles": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "minItems": 1,
-                  "maxItems": 8
-                }
-              },
-              "required": [
-                "facts",
-                "runtimeRoles"
-              ]
-            }
-          },
-          "required": [
-            "composition",
-            "parentA",
-            "parentB"
-          ]
-        },
-        "claims": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 48,
-                "pattern": "^[a-z][a-z0-9_]{0,47}$"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "gameplay",
-                  "physical",
-                  "parent_synthesis"
-                ]
-              },
-              "text": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 280
-              },
-              "backedBy": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 48,
-                  "pattern": "^[a-z][a-z0-9_]{0,47}$"
-                },
-                "minItems": 1,
-                "maxItems": 16
-              }
-            },
-            "required": [
-              "id",
-              "kind",
-              "text",
-              "backedBy"
-            ]
-          },
-          "minItems": 1,
-          "maxItems": 24
-        }
-      },
-      "required": [
-        "schema",
-        "parentSynthesis",
-        "claims"
-      ]
-    },
     "realization": {
       "type": "object",
       "additionalProperties": false,
@@ -4943,71 +4837,185 @@
           "minLength": 1,
           "maxLength": 500
         },
-        "backedByClaims": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 48,
-            "pattern": "^[a-z][a-z0-9_]{0,47}$"
-          },
-          "minItems": 1,
-          "maxItems": 24
-        },
-        "intentTrace": {
+        "selfEvaluation": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "kept": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
+            "planVsProgram": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "aligned",
+                    "changed",
+                    "uncertain"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "actionChecks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "plannedIntent": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 280
+                      },
+                      "implementedBehavior": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 280
+                      },
+                      "runtimeRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 48,
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                        },
+                        "minItems": 1,
+                        "maxItems": 16
+                      },
+                      "result": {
+                        "type": "string",
+                        "enum": [
+                          "aligned",
+                          "changed",
+                          "dropped",
+                          "added",
+                          "uncertain"
+                        ]
+                      },
+                      "intentionality": {
+                        "type": "string",
+                        "enum": [
+                          "intentional",
+                          "accidental",
+                          "uncertain"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "required": [
+                      "plannedIntent",
+                      "implementedBehavior",
+                      "runtimeRefs",
+                      "result",
+                      "intentionality",
+                      "reason"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 24
+                }
               },
-              "maxItems": 12
+              "required": [
+                "verdict",
+                "summary",
+                "actionChecks"
+              ]
             },
-            "changed": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
+            "programVsReport": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "aligned",
+                    "mismatch",
+                    "uncertain"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "behaviorChecks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "runtimeRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 48,
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                        },
+                        "minItems": 1,
+                        "maxItems": 16
+                      },
+                      "programBehavior": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 280
+                      },
+                      "reportedBehavior": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 280
+                      },
+                      "result": {
+                        "type": "string",
+                        "enum": [
+                          "aligned",
+                          "mismatch",
+                          "omitted",
+                          "uncertain"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "required": [
+                      "runtimeRefs",
+                      "programBehavior",
+                      "reportedBehavior",
+                      "result",
+                      "reason"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 24
+                }
               },
-              "maxItems": 12
-            },
-            "dropped": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
-              },
-              "maxItems": 12
-            },
-            "added": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
-              },
-              "maxItems": 12
+              "required": [
+                "verdict",
+                "summary",
+                "behaviorChecks"
+              ]
             }
           },
           "required": [
-            "kept",
-            "changed",
-            "dropped",
-            "added"
+            "planVsProgram",
+            "programVsReport"
           ]
         }
       },
       "required": [
         "description",
         "playerExperience",
-        "backedByClaims",
-        "intentTrace"
+        "selfEvaluation"
       ]
     }
   },
@@ -5016,7 +5024,6 @@
     "category",
     "concept",
     "runtimeProgram",
-    "runtimeContract",
     "realization"
   ],
   "$id": "https://infinicrafter.local/contracts/author_item_response.schema.json",

@@ -126,6 +126,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private int _duplicateSuppressedCount;
     private int _downloadStartedCount;
     private readonly object _lock = new();
+    private bool _disposed; // Guarded by _lock, including the final file commit.
 
     public string CacheRoot { get; }
 
@@ -140,6 +141,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     {
         lock (_lock)
         {
+            _disposed = true;
             _inFlight.Clear();
             _knownMissing.Clear();
             _outbound.Clear();
@@ -826,6 +828,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     public void QueueDownloads(string baseUrl, IEnumerable<string> files, bool forceRetry = false, string itemId = "")
     {
         if (Main.dedServ) return;
+        lock (_lock) { if (_disposed) return; }
         baseUrl = SanitizeBaseUrl(baseUrl);
         if (string.IsNullOrWhiteSpace(baseUrl)) return;
         DateTime now = DateTime.UtcNow;
@@ -851,6 +854,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
             string key = baseUrl + "|" + itemId + "|" + file;
             lock (_lock)
             {
+                if (_disposed) return;
                 ClearExpiredInFlightAndMissingLocked(now);
                 _cacheMissCount++;
                 if (_inFlight.ContainsKey(key))
@@ -887,10 +891,18 @@ public sealed class GeneratedAssetSyncService : IDisposable
         bool integrityFailure = false;
         try
         {
-            Directory.CreateDirectory(CacheRoot);
+            lock (_lock)
+            {
+                if (_disposed) return;
+                Directory.CreateDirectory(CacheRoot);
+            }
             string url = baseUrl.TrimEnd('/') + "/get_asset?file=" + Uri.EscapeDataString(file);
             byte[] bytes = await DownloadAssetBytesWithBoundedStreamAsync(url).ConfigureAwait(false);
-            LocalHttpQuietFailure.Clear("asset:" + SanitizeBaseUrl(baseUrl));
+            lock (_lock)
+            {
+                if (_disposed) return;
+                LocalHttpQuietFailure.Clear("asset:" + SanitizeBaseUrl(baseUrl));
+            }
             if (bytes.Length <= 0 || bytes.Length > MaxAssetBytes)
             {
                 integrityFailure = true;
@@ -911,9 +923,13 @@ public sealed class GeneratedAssetSyncService : IDisposable
         }
         catch (Exception ex)
         {
-            if (LocalHttpQuietFailure.IsExpectedOffline(ex))
-                LocalHttpQuietFailure.Record("asset:" + SanitizeBaseUrl(baseUrl), ex, TimeSpan.FromSeconds(60));
-            lock (_lock) _knownMissing[key] = DateTime.UtcNow;
+            lock (_lock)
+            {
+                if (_disposed) return;
+                if (LocalHttpQuietFailure.IsExpectedOffline(ex))
+                    LocalHttpQuietFailure.Record("asset:" + SanitizeBaseUrl(baseUrl), ex, TimeSpan.FromSeconds(60));
+                _knownMissing[key] = DateTime.UtcNow;
+            }
             if (integrityFailure && Main.netMode == NetmodeID.MultiplayerClient && !string.IsNullOrWhiteSpace(itemId))
             {
                 Main.QueueMainThreadAction(() => InfiniCrafterLocalMod.GeneratedItems?.RequestOneFromServer(
@@ -941,9 +957,10 @@ public sealed class GeneratedAssetSyncService : IDisposable
         string partPath = local + ".part";
         try
         {
-            Directory.CreateDirectory(CacheRoot);
             lock (_lock)
             {
+                if (_disposed) return;
+                Directory.CreateDirectory(CacheRoot);
                 File.WriteAllBytes(partPath, bytes);
                 File.Move(partPath, local, overwrite: true);
                 foreach (string key in _pendingPacketAssets.Where(x =>

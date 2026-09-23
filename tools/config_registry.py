@@ -303,6 +303,63 @@ def build_registry() -> dict[str, Any]:
     }
 
 
+def _stale_registry_report(previous_text: str, current_text: str, path: Path) -> dict[str, Any]:
+    """Explain what drifted instead of only saying the registry is stale.
+
+    A bare "stale" verdict costs a regeneration round-trip to learn whether a
+    field appeared, a default moved, or only the fingerprint changed. The check
+    already holds both documents, so it can name the difference directly.
+    """
+    report: dict[str, Any] = {
+        "ok": False,
+        "error": "config registry is stale",
+        "path": str(path),
+        "regenerate": "python tools/config_registry.py",
+    }
+    if not previous_text:
+        report["reason"] = "registry file is missing"
+        return report
+
+    def _entries(text: str) -> dict[str, dict[str, Any]]:
+        try:
+            document = json.loads(text)
+        except Exception:
+            return {}
+        return {
+            str(entry.get("name")): entry
+            for entry in document.get("entries", [])
+            if isinstance(entry, dict)
+        }
+
+    previous, current = _entries(previous_text), _entries(current_text)
+    if not previous or not current:
+        report["reason"] = "registry file is not readable as JSON"
+        return report
+
+    added = sorted(set(current) - set(previous))
+    removed = sorted(set(previous) - set(current))
+    changed: dict[str, dict[str, Any]] = {}
+    for name in sorted(set(previous) & set(current)):
+        deltas = {
+            field: {"was": previous[name].get(field), "now": current[name].get(field)}
+            for field in ("default", "type", "gui", "documented", "secret", "visibility", "owners")
+            if previous[name].get(field) != current[name].get(field)
+        }
+        if deltas:
+            changed[name] = deltas
+
+    if added:
+        report["addedFields"] = added
+    if removed:
+        report["removedFields"] = removed
+    if changed:
+        report["changedFields"] = changed
+    if not (added or removed or changed):
+        # Field-level content matches, so only derived counters/fingerprint moved.
+        report["reason"] = "field contents match; regenerate to refresh counters and fingerprint"
+    return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
@@ -312,8 +369,13 @@ def main() -> int:
     report = build_registry()
     text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.check:
-        if not args.out.exists() or args.out.read_text(encoding="utf-8") != text:
-            print(json.dumps({"ok": False, "error": "config registry is stale", "path": str(args.out)}, ensure_ascii=False))
+        previous_text = args.out.read_text(encoding="utf-8") if args.out.exists() else ""
+        if previous_text != text:
+            print(json.dumps(
+                _stale_registry_report(previous_text, text, args.out),
+                ensure_ascii=False,
+                sort_keys=True,
+            ))
             return 1
     else:
         args.out.parent.mkdir(parents=True, exist_ok=True)

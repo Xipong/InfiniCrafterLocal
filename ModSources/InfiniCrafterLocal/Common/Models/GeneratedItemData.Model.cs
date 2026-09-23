@@ -156,8 +156,6 @@ public sealed class GeneratedParentSummarySpec
     public string Description { get; set; } = "";
     public string PlayerExperience { get; set; } = "";
     public string[] NotableEffects { get; set; } = Array.Empty<string>();
-    public string[] BackedByClaims { get; set; } = Array.Empty<string>();
-    public string ParentComposition { get; set; } = "";
     public string RuntimePrimaryEntityId { get; set; } = "";
     public string[] RuntimeEntityIds { get; set; } = Array.Empty<string>();
 
@@ -184,8 +182,6 @@ public sealed class GeneratedParentSummarySpec
         Description = Bounded(Description, 700);
         PlayerExperience = Bounded(PlayerExperience, 500);
         NotableEffects = BoundedArray(NotableEffects, 12, 280);
-        BackedByClaims = BoundedArray(BackedByClaims, 24, 48);
-        ParentComposition = Bounded(ParentComposition, 500);
         RuntimePrimaryEntityId = Bounded(RuntimePrimaryEntityId, 48);
         RuntimeEntityIds = BoundedArray(RuntimeEntityIds, 24, 48);
     }

@@ -292,10 +292,10 @@ public sealed class GeneratorClient
 
     private static string WithCacheOnlyFlag(string payloadJson)
     {
-        string trimmed = (payloadJson ?? "{}").Trim();
-        if (trimmed.EndsWith("}", StringComparison.Ordinal))
-            return trimmed[..^1] + ",\"cacheOnly\":true}";
-        return "{\"cacheOnly\":true}";
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(payloadJson ?? "{}") as System.Text.Json.Nodes.JsonObject
+            ?? throw new JsonException("Craft request must be a JSON object");
+        payload["cacheOnly"] = true;
+        return payload.ToJsonString(WireJsonOptions);
     }
 
     private GeneratedItemData? PollCacheOnlyUntilReady(PreparedGenerationRequest request, int requestTimeoutSeconds, int totalSeconds)
@@ -318,7 +318,7 @@ public sealed class GeneratorClient
 
     private static bool IsDeliverableGeneratedData(GeneratedItemData? data)
     {
-        if (data is null || string.IsNullOrWhiteSpace(data.Name))
+        if (data is null || string.IsNullOrWhiteSpace(data.Name) || string.IsNullOrWhiteSpace(data.Id))
             return false;
 
         string id = (data.Id ?? "").Trim();
@@ -598,35 +598,22 @@ public sealed class GeneratorClient
         if (existing is not null)
         {
             Item clone = item.Clone();
+            // Prefix(0) is a no-op. CloneDefaults clears all prefixed fields
+            // (including crit/size) while retaining this clone's ModItem identity.
+            // Unlike ResetPrefix it does not serialize reference-only data through
+            // ItemIO/NetReceive. Reapply the exact resolved authored definition.
+            clone.CloneDefaults(item.type);
+            existing.ApplyToItem(clone);
             clone.stack = item.stack;
-            try
-            {
-                if (clone.prefix != InfiniTerrariaSentinels.NoPrefix)
-                    clone.Prefix(InfiniTerrariaSentinels.NoPrefix);
-            }
-            catch { }
             return clone;
         }
 
-        try
-        {
-            Item baseItem = new();
-            baseItem.SetDefaults(item.type);
-            baseItem.stack = item.stack;
-            return baseItem;
-        }
-        catch
-        {
-            Item clone = item.Clone();
-            clone.stack = item.stack;
-            try
-            {
-                if (clone.prefix != InfiniTerrariaSentinels.NoPrefix)
-                    clone.Prefix(InfiniTerrariaSentinels.NoPrefix);
-            }
-            catch { }
-            return clone;
-        }
+        // If defaults cannot be obtained, abort instead of claiming that the
+        // original prefixed instance represents base_item_stats_ignore_prefixes.
+        Item baseItem = new();
+        baseItem.SetDefaults(item.type);
+        baseItem.stack = item.stack;
+        return baseItem;
     }
 
     private static void Normalize(GeneratedItemData data, string parentA, string parentB)
@@ -634,8 +621,6 @@ public sealed class GeneratorClient
         data.Normalize();
         if (data.ParentA == "Unknown") data.ParentA = parentA;
         if (data.ParentB == "Unknown") data.ParentB = parentB;
-        if (string.IsNullOrWhiteSpace(data.Name)) return;
-        if (string.IsNullOrWhiteSpace(data.Id)) data.Id = Guid.NewGuid().ToString("N")[..12];
     }
 
     private static object FingerprintFromItem(Item item, string sourceMod, string internalName, string[] autoFeatures, string[] nameTokens, GeneratedItemData? existing, int originalPrefix = 0)
@@ -895,7 +880,9 @@ public sealed class GeneratorClient
                 {
                     outList.Add(new AmmoCandidate
                     {
-                        Item = CraftIdentityItem(ammo),
+                        // Generated ammo shares one proxy type; its instance definition
+                        // must accompany request-only normalization, just like a parent.
+                        Item = CraftIdentityItem(ammo, ammo.ModItem is GeneratedItem generatedAmmo ? generatedAmmo.Data : null),
                         Source = "player_inventory_ammo_candidate_base_no_prefix",
                         InventorySlot = i,
                         Score = i

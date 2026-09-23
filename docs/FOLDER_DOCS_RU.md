@@ -12,6 +12,7 @@ Canonical boundary и owner routing находятся только в корн�
 - `TARGETED_REPAIR_PROTOCOL_RU.md` — leaf-local frozen Repair contract;
 - `TARGETED_REPAIR_AUDIT_RU.md` — machine/test audit of Repair locality;
 - `TECHNICAL_LOWERING_POLICY_RU.md` — allowed adapters;
+- `LLM_TRANSPORT_REQUEST_SHAPE_RU.md` — форма запроса к провайдеру: почему strict JSON Schema не работает на Gemini и какая диагностика это объясняет;
 - `LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md` — official/Calamity references.
 
 Old weapon-family/runtime-archetype documents were removed because they described retired architecture.

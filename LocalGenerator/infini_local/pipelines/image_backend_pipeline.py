@@ -485,6 +485,20 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
             return True
     return False
 
+def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
+    from infini_local.services.codex_image_backend import generate_image
+    from infini_local.pipelines import pipeline_visual_config as config
+    paths = []
+    for variant in range(max(1, int(GENERATE_VARIANTS))):
+        path = SPRITE_DIR / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex_{variant}.png"
+        generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
+                       quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
+                       timeout=config.CODEX_IMAGE_TIMEOUT)
+        paths.append(str(path))
+        log_event("info", "Codex OAuth generated sprite", {"spriteId": sprite_id, "model": config.CODEX_IMAGE_MODEL, "path": str(path)})
+    return paths
+
+
 def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
     """Generate sprite through an OpenAI-compatible image API.
 

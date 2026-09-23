@@ -286,6 +286,8 @@ class SettingsGuiTraceStateMixin:
         )
         self._set_widgets_enabled(self.extra_arg_buttons, backend == "sdcpp")
         self._set_widgets_enabled(self.sdcpp_debug_buttons, backend == "sdcpp")
+        for key in ("INFINI_CODEX_IMAGE_MODEL", "INFINI_CODEX_IMAGE_QUALITY", "INFINI_CODEX_IMAGE_SIZE", "INFINI_CODEX_IMAGE_TIMEOUT"):
+            self._set_field_enabled(key, backend == "openai_codex", "Эти поля используются только backend openai_codex.")
         for key in image_api_keys:
             self._set_field_enabled(key, backend == "image_api", f"Image backend сейчас `{backend}`, Image API поля не участвуют.")
         self._set_field_enabled("INFINI_A1111_URL", backend == "a1111", f"Image backend сейчас `{backend}`, A1111 URL не используется.")

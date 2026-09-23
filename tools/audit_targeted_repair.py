@@ -110,7 +110,6 @@ def _empty_patch() -> dict[str, Any]:
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "bindingsUpsert": [], "bindingIdsDelete": [], "bindingIndicesDelete": [],
         "callsUpsert": [], "callIdsDelete": [], "callIndicesDelete": [],
-        "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": "audit frozen merge",
     }
 

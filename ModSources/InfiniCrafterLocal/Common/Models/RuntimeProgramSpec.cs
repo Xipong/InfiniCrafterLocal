@@ -52,8 +52,8 @@ public sealed class RuntimeProgramSpec
         Bindings ??= Array.Empty<RuntimeBindingSpec>();
         ItemUse ??= new RuntimeItemUseSpec();
         ItemContact ??= new RuntimeItemContactSpec();
-        if (Entities.Length is < 1 or > InfiniRuntimeLimits.MaxRuntimeEntities)
-            throw new InvalidDataException($"runtimeProgram.entities must contain 1..{InfiniRuntimeLimits.MaxRuntimeEntities} rows");
+        if (Entities.Length < 1 || Entities.Length > Limits.MaxEntityCount)
+            throw new InvalidDataException($"runtimeProgram.entities must contain 1..{Limits.MaxEntityCount} rows");
         if (Bindings.Length > InfiniRuntimeLimits.MaxRuntimeBindings)
             throw new InvalidDataException($"runtimeProgram.bindings exceeds {InfiniRuntimeLimits.MaxRuntimeBindings}");
 

@@ -199,40 +199,10 @@ def _check_backend_drops_non_finite_lora_multipliers() -> None:
     assert entries == []
 
 
-# Coarse test bundle: the checks below used to be separate pytest items.
-# Keeping them as helper checks cuts collection/runtime noise while preserving
-# the same assertions inside one scenario-level contract per file.
-def _run_coarse_contracts(tmp_path):
-    import inspect as _inspect
-    import pytest as _pytest
+# One collected item per contract module: the checks above keep source order and
+# their own tracebacks. The shared runner discovers them by prefix, so a new check
+# cannot be silently left out of a hand-maintained dispatch list.
+def test_sdcpp_backend_contract_coarse_contract(request):
+    from contract_checks import run_contract_checks
 
-    for _name in [
-    '_check_backend_builds_safe_argv_without_template_bleed',
-    '_check_backend_repairs_known_bad_template_in_template_mode',
-    '_check_backend_zimage_payload_clears_negative_channel',
-    '_check_backend_extracts_a1111_base64_response',
-    '_check_backend_adds_lora_model_dir_and_prompt_tags',
-    '_check_image_pipeline_derives_sdcpp_lora_tag_from_selected_file_when_prompt_tags_blank',
-    '_check_backend_respects_manual_equals_flags_for_dedicated_paths',
-    '_check_backend_does_not_pass_inactive_lora_dir_without_tags',
-    '_check_backend_appends_lora_tags_individually_without_duplicates',
-    '_check_extra_args_split_strips_helper_quotes_for_argv_mode',
-    '_check_backend_drops_non_finite_lora_multipliers'
-    ]:
-        _fn = globals()[_name]
-        _sig = _inspect.signature(_fn)
-        _kwargs = {}
-        if "tmp_path" in _sig.parameters:
-            _case_dir = tmp_path / _name
-            _case_dir.mkdir(parents=True, exist_ok=True)
-            _kwargs["tmp_path"] = _case_dir
-        if "monkeypatch" in _sig.parameters:
-            with _pytest.MonkeyPatch.context() as _mp:
-                _kwargs["monkeypatch"] = _mp
-                _fn(**_kwargs)
-        else:
-            _fn(**_kwargs)
-
-
-def test_sdcpp_backend_contract_coarse_contract(tmp_path):
-    _run_coarse_contracts(tmp_path)
+    run_contract_checks(globals(), request, prefix="_check_")

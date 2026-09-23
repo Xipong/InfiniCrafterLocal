@@ -779,7 +779,7 @@
                 "const": "configure_item_stats"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -928,7 +928,7 @@
                 "const": "configure_item_use"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1061,7 +1061,7 @@
                 "const": "configure_item_contact_hitbox"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1119,7 +1119,7 @@
                 "const": "configure_vanilla_ammo_item"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1206,7 +1206,7 @@
                 "const": "restore_resources_on_use"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1269,7 +1269,7 @@
                 "const": "apply_vanilla_buff_on_use"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1327,7 +1327,7 @@
                 "const": "apply_generated_buff_on_use"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1453,7 +1453,7 @@
                 "const": "configure_tool"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1527,7 +1527,7 @@
                 "const": "configure_placeable"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1592,7 +1592,7 @@
                 "const": "require_use_condition"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1659,7 +1659,7 @@
                 "const": "add_hold_light"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1727,7 +1727,7 @@
                 "const": "move_player_on_use"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1802,7 +1802,7 @@
                 "const": "configure_accessory"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1958,7 +1958,7 @@
                 "const": "configure_armor"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2086,7 +2086,7 @@
                 "const": "configure_spawn"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2192,7 +2192,7 @@
                 "const": "set_projectile_damage"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2267,7 +2267,7 @@
                 "const": "set_projectile_lifetime"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2322,7 +2322,7 @@
                 "const": "set_projectile_hitbox"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2402,7 +2402,7 @@
                 "const": "set_projectile_collision"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2503,7 +2503,7 @@
                 "const": "move_straight"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2547,7 +2547,7 @@
                 "const": "move_slow_homing"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2610,7 +2610,7 @@
                 "const": "move_gravity_arc"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2665,7 +2665,7 @@
                 "const": "move_drift"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2719,7 +2719,7 @@
                 "const": "move_orbit"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2774,7 +2774,7 @@
                 "const": "move_boomerang"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2838,7 +2838,7 @@
                 "const": "move_bounce"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2893,7 +2893,7 @@
                 "const": "move_sine_homing"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2965,7 +2965,7 @@
                 "const": "move_phase"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3019,7 +3019,7 @@
                 "const": "move_accelerate"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3082,7 +3082,7 @@
                 "const": "move_spiral"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3137,7 +3137,7 @@
                 "const": "move_vortex_orb"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3200,7 +3200,7 @@
                 "const": "move_blackhole_pull"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3263,7 +3263,7 @@
                 "const": "move_proximity_missile"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3335,7 +3335,7 @@
                 "const": "move_returning_glaive"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3399,7 +3399,7 @@
                 "const": "move_expanding_wave"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3461,7 +3461,7 @@
                 "const": "move_flail_tether"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3520,7 +3520,7 @@
                 "const": "move_yoyo_hover"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3579,7 +3579,7 @@
                 "const": "move_whip_lash"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3637,7 +3637,7 @@
                 "const": "move_forward_then_retract"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3696,7 +3696,7 @@
                 "const": "channel_beam"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3764,7 +3764,7 @@
                 "const": "charge_then_release"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3823,7 +3823,7 @@
                 "const": "target_and_fire"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3911,7 +3911,7 @@
                 "const": "spawn_over_target"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3975,7 +3975,7 @@
                 "const": "spawn_entity_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4102,7 +4102,7 @@
                 "const": "apply_status_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4176,7 +4176,7 @@
                 "const": "damage_area_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4253,7 +4253,7 @@
                 "const": "chain_damage_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4335,7 +4335,7 @@
                 "const": "pull_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4428,7 +4428,7 @@
                 "const": "heal_owner_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4501,7 +4501,7 @@
                 "const": "move_owner_on_event"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4592,7 +4592,7 @@
                 "const": "emit_light_while_active"
               },
               "id": {
-                "description": "Stable call id used by claims and repair.",
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },

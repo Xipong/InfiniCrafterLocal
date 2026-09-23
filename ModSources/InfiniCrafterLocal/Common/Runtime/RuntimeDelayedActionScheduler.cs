@@ -18,9 +18,12 @@ internal static class RuntimeDelayedActionScheduler
 {
     private readonly record struct PendingAction(
         GeneratedItemData Data,
+        RuntimeEntitySpec SourceEntity,
         RuntimeEventActionSpec Action,
         int OwnerId,
+        Player Owner,
         int NpcId,
+        NPC? Target,
         Vector2 Position,
         Vector2 Direction,
         int DamageDone,
@@ -32,6 +35,7 @@ internal static class RuntimeDelayedActionScheduler
 
     public static bool TrySchedule(
         GeneratedItemData data,
+        RuntimeEntitySpec sourceEntity,
         RuntimeEventActionSpec action,
         Player owner,
         Vector2 position,
@@ -57,9 +61,12 @@ internal static class RuntimeDelayedActionScheduler
 
         Pending.Add(new PendingAction(
             data,
+            sourceEntity,
             action,
             owner.whoAmI,
+            owner,
             target?.whoAmI ?? -1,
+            target,
             position,
             direction,
             damageDone,
@@ -93,16 +100,20 @@ internal static class RuntimeDelayedActionScheduler
             if (pending.OwnerId < 0 || pending.OwnerId >= Main.maxPlayers)
                 continue;
             Player owner = Main.player[pending.OwnerId];
-            if (owner is null || !owner.active)
+            // RemoteClient.Reset replaces Player: a reused slot is not the author
+            // of this pending action, even if the newcomer is already active.
+            if (owner is null || !owner.active || !ReferenceEquals(owner, pending.Owner))
                 continue;
             NPC? target = pending.NpcId >= 0
                 && pending.NpcId < Main.maxNPCs
+                && ReferenceEquals(Main.npc[pending.NpcId], pending.Target)
                 && Main.npc[pending.NpcId].active
                 ? Main.npc[pending.NpcId]
                 : null;
             int spawnBudget = pending.ReservedSpawnBudget;
             RuntimeProgramExecutor.ExecuteAction(
                 pending.Data,
+                pending.SourceEntity,
                 pending.Action,
                 owner,
                 owner.GetSource_Misc("InfiniRuntimeDelayedAction"),

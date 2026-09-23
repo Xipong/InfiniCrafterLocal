@@ -11,7 +11,6 @@ from copy import deepcopy
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
-    RUNTIME_CONTRACT_SCHEMA,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
 )
@@ -96,7 +95,6 @@ class _Builder:
         self.entities: list[dict[str, Any]] = [{"id": "item", "kind": "item_body"}]
         self.bindings: list[dict[str, Any]] = []
         self.calls: list[dict[str, Any]] = []
-        self.claims: list[dict[str, Any]] = []
         self.call("item_stats", "configure_item_stats", "item", _item_stats(damage=damage))
         self.call("item_use", "configure_item_use", "item", _item_use(channel=channel, disable_melee_hitbox=not item_body_contact))
         if item_body_contact:
@@ -162,9 +160,6 @@ class _Builder:
         if movement:
             self.call(f"{entity_id}_motion", movement, entity_id, movement_params or {})
 
-    def claim(self, claim_id: str, text: str, *backing: str, kind: str = "gameplay") -> None:
-        self.claims.append({"id": claim_id, "kind": kind, "text": text, "backedBy": list(backing)})
-
     def finish(self, *, primary_entity_id: str, composition: str, parent_a: str, parent_b: str) -> dict[str, Any]:
         if primary_entity_id not in {row["id"] for row in self.entities}:
             raise ValueError(f"fixture primary entity {primary_entity_id!r} is absent")
@@ -177,25 +172,60 @@ class _Builder:
                 "parentAContribution": parent_a,
                 "parentBContribution": parent_b,
                 "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-            },
-            "runtimeContract": {
-                "schema": RUNTIME_CONTRACT_SCHEMA,
-                "parentSynthesis": {
-                    "composition": composition,
-                    "parentA": {"facts": [parent_a], "runtimeRoles": ["literal physical component"]},
-                    "parentB": {"facts": [parent_b], "runtimeRoles": ["literal mechanical component"]},
-                },
-                "claims": self.claims,
+                "plannedPlayerActions": [
+                    {
+                        "input": str(row["input"]),
+                        "intent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
+                    }
+                    for row in self.bindings
+                ] or [{"input": "passive_or_event", "intent": "Execute the authored passive or event-driven behavior."}],
             },
             "realization": {
                 "description": f"{composition} {self.mechanic}",
                 "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-                "backedByClaims": [str(row["id"]) for row in self.claims],
-                "intentTrace": {
-                    "kept": [composition, self.mechanic],
-                    "changed": [],
-                    "dropped": [],
-                    "added": [],
+                "selfEvaluation": {
+                    "planVsProgram": {
+                        "verdict": "aligned",
+                        "summary": "Every fixture draft action is represented by the explicit runtime program.",
+                        "actionChecks": [
+                            {
+                                "plannedIntent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
+                                "implementedBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "runtimeRefs": [str(row["id"])],
+                                "result": "aligned",
+                                "intentionality": "intentional",
+                                "reason": "The fixture draft and binding were authored from the same explicit action.",
+                            }
+                            for row in self.bindings
+                        ] or [{
+                            "plannedIntent": "Execute the authored passive or event-driven behavior.",
+                            "implementedBehavior": "The runtime calls implement the passive or event-driven behavior.",
+                            "runtimeRefs": [str(self.calls[0]["id"])],
+                            "result": "aligned",
+                            "intentionality": "intentional",
+                            "reason": "The fixture directly authors the cited runtime call.",
+                        }],
+                    },
+                    "programVsReport": {
+                        "verdict": "aligned",
+                        "summary": "The fixture report describes the explicit entities, inputs, calls, and events.",
+                        "behaviorChecks": [
+                            {
+                                "runtimeRefs": [str(row["id"])],
+                                "programBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
+                                "result": "aligned",
+                                "reason": "The fixture report is the accepted description of this explicit binding lane.",
+                            }
+                            for row in self.bindings
+                        ] or [{
+                            "runtimeRefs": [str(self.calls[0]["id"])],
+                            "programBehavior": "The runtime call executes the passive or event-driven behavior.",
+                            "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
+                            "result": "aligned",
+                            "reason": "The fixture report covers the cited runtime call.",
+                        }],
+                    },
                 },
             },
             "runtimeProgram": {
@@ -215,8 +245,6 @@ def _workbench_blade() -> dict[str, Any]:
     b.projectile("nail", "child_projectile", speed=13, lifetime=120, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
     b.bind("primary_workbench", "primary_use", "spawn_entity", "workbench_blade")
     b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"event": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0})
-    b.claim("claim_literal_bench", "The item body is the primary contact blade; the workbench projectile is an explicit secondary held effect.", "item_stats", "item_use", "item_contact", "primary_workbench", "workbench_blade_motion", kind="parent_synthesis")
-    b.claim("claim_nails", "Hits release five independently simulated nails.", "shed_nails")
     return b.finish(primary_entity_id="item", composition="A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.", parent_a="workbench body", parent_b="blade and nails")
 
 
@@ -227,8 +255,6 @@ def _umbrella_grenade() -> dict[str, Any]:
     b.bind("primary_guard", "primary_use", "spawn_entity", "umbrella_guard")
     b.bind("alternate_grenade", "alternate_use", "spawn_entity", "grenade_weight")
     b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"event": "on_expire", "radiusPx": 112, "damageMultiplier": 1.4})
-    b.claim("claim_guard", "Primary use creates the held umbrella body.", "primary_guard", "umbrella_guard_motion")
-    b.claim("claim_burst", "Alternate use creates a separate arcing grenade that bursts on expiry.", "alternate_grenade", "grenade_burst")
     return b.finish(primary_entity_id="umbrella_guard", composition="The umbrella is a literal brace and its weighted tip becomes a grenade.", parent_a="umbrella canopy and shaft", parent_b="grenade charge")
 
 
@@ -237,8 +263,6 @@ def _door_on_chain() -> dict[str, Any]:
     b.projectile("chained_door", "owner_attached_projectile", speed=0, lifetime=180, damage=48, damage_class="melee", tile=True, pierce=-1, movement="move_flail_tether", movement_params={"rangeTiles": 10, "returnSpeed": 14}, width=36, height=72)
     b.bind("primary_chain", "primary_use", "spawn_entity", "chained_door")
     b.call("door_stun", "apply_status_on_event", "chained_door", {"event": "on_hit", "buffId": 31, "durationTicks": 90})
-    b.claim("claim_chain", "The door itself is the damaging tethered entity.", "primary_chain", "chained_door_motion", kind="parent_synthesis")
-    b.claim("claim_stun", "Door impacts apply the authored status.", "door_stun")
     return b.finish(primary_entity_id="chained_door", composition="A full door remains intact and is fastened to a chain.", parent_a="door slab", parent_b="chain tether")
 
 
@@ -248,8 +272,6 @@ def _returning_potion() -> dict[str, Any]:
     b.bind("primary_tonic", "primary_use", "spawn_entity", "tonic_flask")
     b.call("tonic_heal", "heal_owner_on_event", "tonic_flask", {"event": "on_hit", "damageFraction": 0.18, "maxHeal": 12})
     b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"event": "on_hit", "buffId": 20, "durationTicks": 120})
-    b.claim("claim_return", "The potion is an actual returning projectile.", "primary_tonic", "tonic_flask_motion", kind="parent_synthesis")
-    b.claim("claim_heal", "Successful hits heal the owner within a hard cap.", "tonic_heal")
     return b.finish(primary_entity_id="tonic_flask", composition="A sealed potion bottle is thrown whole and returns like a boomerang.", parent_a="potion bottle", parent_b="returning-flight mechanism")
 
 
@@ -259,8 +281,6 @@ def _fishing_platform_tool() -> dict[str, Any]:
     b.bind("alternate_place", "alternate_use", "place_item", "item", stack_cost=1, placement_call_id="platform_result")
     b.call("tool_heads", "configure_tool", "item", {"pickPower": 35, "axePower": 0, "hammerPower": 20, "miningSpeedScale": 0.9})
     b.call("platform_result", "configure_placeable", "item", {"tileId": 19, "wallId": -1, "placeStyle": 0})
-    b.claim("claim_platform", "Alternate use places the explicitly authored platform tile; no fishing-rod family route is involved.", "alternate_place", "platform_result")
-    b.claim("claim_tool", "Primary use has explicit pick and hammer power.", "primary_tool", "tool_heads")
     return b.finish(primary_entity_id="item", composition="A fishing rod carries a fold-out platform panel as a literal placeable result.", parent_a="fishing rod", parent_b="platform tile")
 
 
@@ -270,8 +290,6 @@ def _shield_and_disc() -> dict[str, Any]:
     b.projectile("shield_disc", "free_projectile", speed=14, lifetime=150, damage=32, damage_class="melee", tile=True, pierce=3, movement="move_returning_glaive", movement_params={"returnAfterTicks": 30, "returnSpeed": 16}, width=28, height=28)
     b.bind("primary_shield", "primary_use", "spawn_entity", "shield_body")
     b.bind("alternate_disc", "alternate_use", "spawn_entity", "shield_disc")
-    b.claim("claim_shield", "Primary use explicitly spawns the held shield body.", "primary_shield", "shield_body_motion")
-    b.claim("claim_disc", "Alternate use independently spawns the returning disc.", "alternate_disc", "shield_disc_motion")
     return b.finish(primary_entity_id="shield_body", composition="A shield stays whole while its central plate detaches as a disc.", parent_a="shield body", parent_b="detachable disc")
 
 
@@ -284,8 +302,6 @@ def _held_and_deployed() -> dict[str, Any]:
     b.call("deployed_targeter", "target_and_fire", "deployed_lantern", {"shotEntity": "lantern_bolt", "intervalTicks": 45, "rangeTiles": 30, "sameTargetBias": 0.35})
     b.bind("primary_pike", "primary_use", "spawn_entity", "held_lantern_pike")
     b.bind("alternate_deploy", "alternate_use", "spawn_entity", "deployed_lantern")
-    b.claim("claim_primary", "Primary use creates only the held pike entity.", "primary_pike", "held_lantern_pike_motion")
-    b.claim("claim_alt", "Alternate use independently deploys a targeter that fires the authored bolt entity.", "alternate_deploy", "deployed_targeter")
     return b.finish(primary_entity_id="held_lantern_pike", composition="A lantern is mounted on a pike and can be planted without ceasing to be literal.", parent_a="pike body", parent_b="lantern targeter")
 
 
@@ -298,9 +314,6 @@ def _equipment_tool_combat() -> dict[str, Any]:
     b.call("mining_heads", "configure_tool", "item", {"pickPower": 55, "axePower": 0, "hammerPower": 0, "miningSpeedScale": 0.85})
     b.call("place_torch", "configure_placeable", "item", {"tileId": 4, "wallId": -1, "placeStyle": 0})
 
-    b.claim("claim_accessory", "Equipping the item applies exact passive modifiers.", "passive_harness", "harness_stats")
-    b.claim("claim_mining", "Primary use has explicit mining power; alternate use places the concrete light tile.", "primary_tool", "mining_heads", "alternate_torch", "place_torch")
-    b.claim("claim_combat", "Primary use preserves the authored item-body contact attack.", "primary_tool", "item_contact")
     return b.finish(primary_entity_id="item", composition="A mining harness retains its drill heads and installs its lamp as a literal tile.", parent_a="mining harness/tool", parent_b="placeable lamp")
 
 

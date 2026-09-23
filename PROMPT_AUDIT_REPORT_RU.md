@@ -1,4 +1,12 @@
-# Аудит prompt → Author/Repair → Visual/VFX → wire/runtime
+# АРХИВНЫЙ аудит prompt → Author/Repair → Visual/VFX → wire/runtime
+
+> Этот отчёт описывает старую архитектуру и сохранён только как provenance.
+> Его упоминания `runtimeContract.claims`, `backedByClaims` и claim-parity gate
+> не являются текущим контрактом. Текущий Author имеет четыре понятные стадии:
+> `concept` (необязательный набросок) → `runtimeProgram` (единственная исполняемая
+> истина) → `realization.description/playerExperience` (финальный отчёт) →
+> `realization.selfEvaluation` (самопроверка того же ответа). Компилятор может
+> добавить собственный технический `runtimeContract`, но модель его не пишет.
 
 ## 0. Краткий вердикт
 

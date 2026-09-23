@@ -51,7 +51,6 @@ def _empty_patch() -> dict[str, Any]:
         "bindingsUpsert": [], "bindingIdsDelete": [], "bindingIndicesDelete": [],
         "callsUpsert": [], "callIdsDelete": [], "callIndicesDelete": [],
         "callParamKeysDelete": [],
-        "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": "atomic binding use-policy replay",
     }
 
@@ -82,11 +81,20 @@ def _dual_use_placeable() -> dict[str, Any]:
             "contactDamage": False,
         },
     })
-    authored["runtimeContract"]["claims"].append({
-        "id": "claim_install",
-        "kind": "gameplay",
-        "text": "Alternate use installs the exact authored tile.",
-        "backedBy": ["alternate_install", "install_tile"],
+    authored["realization"]["selfEvaluation"]["planVsProgram"]["actionChecks"].append({
+        "plannedIntent": "No corresponding initial action.",
+        "implementedBehavior": "Alternate use installs the exact authored tile.",
+        "runtimeRefs": ["alternate_install", "install_tile"],
+        "result": "added",
+        "intentionality": "intentional",
+        "reason": "The test adds an explicit placement lane to the executable program.",
+    })
+    authored["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"].append({
+        "runtimeRefs": ["alternate_install", "install_tile"],
+        "programBehavior": "Alternate use installs the exact authored tile.",
+        "reportedBehavior": "Alternate use installs the exact authored tile.",
+        "result": "aligned",
+        "reason": "The test report names the added placement lane.",
     })
     return authored
 
@@ -115,16 +123,54 @@ def _resource_use_placeable() -> dict[str, Any]:
     })
     stats = next(row for row in program["calls"] if row["id"] == "item_stats")
     stats["params"].update({"damage": 0, "knockback": 0.0, "maxStack": 99})
-    authored["runtimeContract"]["claims"] = [
-        authored["runtimeContract"]["claims"][0],
-        {
-            "id": "claim_restore",
-            "kind": "gameplay",
-            "text": "Primary use restores the explicitly authored resource amount.",
-            "backedBy": ["primary_restore", "restore_life"],
+    authored["realization"] = {
+        "description": "Primary use restores life and consumes one stacked item; alternate use places the authored platform.",
+        "playerExperience": "The player chooses between a consumable heal and recoverable platform placement.",
+        "selfEvaluation": {
+            "planVsProgram": {
+                "verdict": "changed",
+                "summary": "The fixture's original tool lane became an explicit resource-use lane.",
+                "actionChecks": [
+                    {
+                        "plannedIntent": "Use the primary action.",
+                        "implementedBehavior": "Primary use restores life and consumes one item.",
+                        "runtimeRefs": ["primary_restore", "restore_life"],
+                        "result": "changed",
+                        "intentionality": "intentional",
+                        "reason": "The test explicitly replaces the primary tool behavior.",
+                    },
+                    {
+                        "plannedIntent": "Place the authored platform.",
+                        "implementedBehavior": "Alternate use places the authored platform.",
+                        "runtimeRefs": ["alternate_place", "platform"],
+                        "result": "aligned",
+                        "intentionality": "intentional",
+                        "reason": "The alternate placement lane remains explicit.",
+                    },
+                ],
+            },
+            "programVsReport": {
+                "verdict": "aligned",
+                "summary": "The report covers both executable use lanes.",
+                "behaviorChecks": [
+                    {
+                        "runtimeRefs": ["primary_restore", "restore_life"],
+                        "programBehavior": "Primary use restores life and consumes one item.",
+                        "reportedBehavior": "Primary use restores life and consumes one stacked item.",
+                        "result": "aligned",
+                        "reason": "The final report describes the primary resource-use lane.",
+                    },
+                    {
+                        "runtimeRefs": ["alternate_place", "platform"],
+                        "programBehavior": "Alternate use places the authored platform.",
+                        "reportedBehavior": "Alternate use places the authored platform.",
+                        "result": "aligned",
+                        "reason": "The final report describes the alternate placement lane.",
+                    },
+                ],
+            },
         },
-    ]
-    authored["realization"]["backedByClaims"] = ["claim_platform", "claim_restore"]
+    }
     return authored
 
 
@@ -139,10 +185,35 @@ def test_pure_placeable_repairs_alternate_place_to_primary_without_creating_comb
     program = authored["runtimeProgram"]
     program["bindings"] = [row for row in program["bindings"] if row["id"] != "primary_restore"]
     program["calls"] = [row for row in program["calls"] if row["id"] != "restore_life"]
-    authored["runtimeContract"]["claims"] = [
-        row for row in authored["runtimeContract"]["claims"] if row["id"] != "claim_restore"
-    ]
-    authored["realization"]["backedByClaims"] = ["claim_platform"]
+    authored["realization"] = {
+        "description": "Primary use places the authored platform.",
+        "playerExperience": "The item acts as a recoverable placeable platform.",
+        "selfEvaluation": {
+            "planVsProgram": {
+                "verdict": "changed",
+                "summary": "The resource-use lane was removed and placement moved to primary use.",
+                "actionChecks": [{
+                    "plannedIntent": "Place the authored platform.",
+                    "implementedBehavior": "Primary use places the authored platform.",
+                    "runtimeRefs": ["alternate_place", "platform"],
+                    "result": "changed",
+                    "intentionality": "intentional",
+                    "reason": "The repair test moves the same placement transaction to primary use.",
+                }],
+            },
+            "programVsReport": {
+                "verdict": "aligned",
+                "summary": "The report covers the only executable use lane.",
+                "behaviorChecks": [{
+                    "runtimeRefs": ["alternate_place", "platform"],
+                    "programBehavior": "Primary use places the authored platform.",
+                    "reportedBehavior": "Primary use places the authored platform.",
+                    "result": "aligned",
+                    "reason": "The final report describes the placement lane.",
+                }],
+            },
+        },
+    }
 
     report = validate_runtime_program(authored)
     assert "dual_use_placeable_input_contract" in _codes(report)

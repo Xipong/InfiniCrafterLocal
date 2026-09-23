@@ -3,24 +3,22 @@
   "ok": true,
   "coverage": "portable-static",
   "releaseReady": false,
-  "fullSuiteAvailable": false,
+  "fullSuiteAvailable": true,
   "fullSuiteDependencies": {
     "pytest": true,
     "pydantic": true,
     "pydantic_core": true,
     "Pillow": true,
-    "Hypothesis": false
+    "Hypothesis": true
   },
-  "missingFullSuiteDependencies": [
-    "Hypothesis"
-  ],
+  "missingFullSuiteDependencies": [],
   "failed": [],
   "timeoutSeconds": 30,
   "checks": [
     {
       "name": "syntax_and_json",
       "status": "passed",
-      "pythonFiles": 167,
+      "pythonFiles": 195,
       "jsonFiles": 22,
       "errors": []
     },
@@ -28,7 +26,7 @@
       "name": "test_process_safety",
       "status": "passed",
       "scope": "LocalGenerator/tests/test_*.py",
-      "boundedSubprocessCalls": 7,
+      "boundedSubprocessCalls": 11,
       "errors": []
     },
     {
@@ -50,9 +48,9 @@
       "name": "config_registry",
       "status": "passed",
       "returnCode": 0,
-      "durationSeconds": 0.467,
+      "durationSeconds": 1.02,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "/home/xipong/agent-work-main/common/.venv/bin/python",
         "-S",
         "tools/config_registry.py",
         "--check"
@@ -63,22 +61,22 @@
       "name": "targeted_repair",
       "status": "passed",
       "returnCode": 0,
-      "durationSeconds": 0.212,
+      "durationSeconds": 0.421,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "/home/xipong/agent-work-main/common/.venv/bin/python",
         "-S",
         "tools/audit_targeted_repair.py",
         "--check"
       ],
-      "outputTail": "[OK] Author=70484 chars; catalog=52\n  missing_required_parameter: 10654 chars, capabilities=1, errors=shape_one_of,shape_required\n  missing_item_use_capability: 9401 chars, capabilities=1, errors=binding_dependency\n  missing_position_driver: 29506 chars, capabilities=20, errors=missing_movement_component,missing_claim_backing\n  existing_dependency_parameter_mismatch: 13124 chars, capabilities=2, errors=missing_item_capability_param\n  policy=33/33; frozenMerge=True; frozenCallsites=6/6\n"
+      "outputTail": "[OK] Author=89436 chars; catalog=51\n  missing_required_parameter: 19010 chars, capabilities=1, errors=shape_one_of,shape_required\n  missing_item_use_capability: 18823 chars, capabilities=1, errors=binding_dependency\n  missing_position_driver: 34338 chars, capabilities=20, errors=missing_movement_component\n  existing_dependency_parameter_mismatch: 21558 chars, capabilities=2, errors=missing_item_capability_param\n  policy=38/38; frozenMerge=True; frozenCallsites=7/7\n"
     },
     {
       "name": "terraria_standardization",
       "status": "passed",
       "returnCode": 0,
-      "durationSeconds": 0.638,
+      "durationSeconds": 0.171,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "/home/xipong/agent-work-main/common/.venv/bin/python",
         "-S",
         "tools/audit_terraria_standardization.py",
         "--check"
@@ -89,9 +87,9 @@
       "name": "csharp_contracts",
       "status": "passed",
       "returnCode": 0,
-      "durationSeconds": 0.041,
+      "durationSeconds": 0.056,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "/home/xipong/agent-work-main/common/.venv/bin/python",
         "-S",
         "tools/check_csharp_contracts.py"
       ],
@@ -101,14 +99,14 @@
       "name": "project_hygiene",
       "status": "passed",
       "returnCode": 0,
-      "durationSeconds": 0.385,
+      "durationSeconds": 1.406,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "/home/xipong/agent-work-main/common/.venv/bin/python",
         "-S",
         "tools/check_project_hygiene.py"
       ],
       "outputTail": "[OK] project hygiene checks passed\n"
     }
   ],
-  "nextCommand": "Do not run full pytest here; install LocalGenerator/requirements-dev.txt in a capable environment."
+  "nextCommand": "/home/xipong/agent-work-main/common/.venv/bin/python tools/validate_release.py --skip-build"
 }

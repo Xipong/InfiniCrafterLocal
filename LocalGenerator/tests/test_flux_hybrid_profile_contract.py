@@ -45,7 +45,7 @@ def _contract_check_flux2_klein4b_hybrid_profile_matches_measured_winner() -> No
     assert "--diffusion-fa" not in profile
 
     preset = settings_schema.PRESETS["Локалка: LM Studio + FLUX.2 Klein 4B hybrid"]
-    assert preset["INFINI_SDCPP_SERVER_EXE"] == r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe"
+    assert preset["INFINI_SDCPP_SERVER_EXE"] == r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe"
     assert preset["INFINI_SDCPP_STEPS"] == "4"
     assert preset["INFINI_SDCPP_CFG"] == "1.0"
     assert preset["INFINI_SDCPP_SAMPLER"] == "euler"
@@ -88,4 +88,5 @@ def test_flux_hybrid_profile_contract_module_contract(request):
             '_contract_check_rocm_compat_environment_is_scoped_to_sd_server_child',
             '_contract_check_no_rocm_root_returns_an_unmodified_environment_copy',
         ),
+        require_all=True,
     )

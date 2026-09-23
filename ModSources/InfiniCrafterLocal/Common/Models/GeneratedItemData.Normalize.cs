@@ -191,7 +191,7 @@ public sealed partial class GeneratedItemData
         Gameplay.MobilityMode = SafeText(Gameplay.MobilityMode, 32).ToLowerInvariant();
         if (Gameplay.MobilityMode is not ("" or "recall_home" or "blink_to_cursor"))
             throw new InvalidDataException($"Unsupported move_player_on_use mode '{Gameplay.MobilityMode}'");
-        Gameplay.MobilityRangeTiles = ClampInt(Gameplay.MobilityRangeTiles, 0, 80);
+        Gameplay.MobilityRangeTiles = ClampInt(Gameplay.MobilityRangeTiles, 0, 120);
         Gameplay.MobilityCooldownTicks = ClampInt(Gameplay.MobilityCooldownTicks, 0, 36000);
         Gameplay.MiningSpeedScale = ClampFloat(Gameplay.MiningSpeedScale, 0.1f, 4f);
         Gameplay.HoldLightStrength = ClampFloat(Gameplay.HoldLightStrength, 0f, 1.5f);
@@ -208,14 +208,14 @@ public sealed partial class GeneratedItemData
         Accessory.Defense = ClampInt(Accessory.Defense, -100, 500);
         Accessory.MaxLife = ClampInt(Accessory.MaxLife, -500, 5000);
         Accessory.MaxMana = ClampInt(Accessory.MaxMana, -500, 5000);
-        Accessory.LifeRegen = ClampInt(Accessory.LifeRegen, -120, 120);
-        Accessory.ManaRegen = ClampInt(Accessory.ManaRegen, -120, 120);
-        Accessory.MovementSpeed = ClampFloat(Accessory.MovementSpeed, -0.5f, 2f);
+        Accessory.LifeRegen = ClampInt(Accessory.LifeRegen, -120, 200);
+        Accessory.ManaRegen = ClampInt(Accessory.ManaRegen, -120, 200);
+        Accessory.MovementSpeed = ClampFloat(Accessory.MovementSpeed, -0.9f, 3f);
         Accessory.GenericDamage = ClampFloat(Accessory.GenericDamage, -0.9f, 3f);
         Accessory.GenericCrit = ClampFloat(Accessory.GenericCrit, -100f, 100f);
         Accessory.Endurance = ClampFloat(Accessory.Endurance, 0f, 0.75f);
         Accessory.MinionSlots = ClampInt(Accessory.MinionSlots, 0, 20);
-        Accessory.SentrySlots = ClampInt(Accessory.SentrySlots, 0, 10);
+        Accessory.SentrySlots = ClampInt(Accessory.SentrySlots, 0, 20);
         Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
         Accessory.LightColorName = RuntimeColorPolicy.NormalizeRequired(Accessory.LightColorName, allowEmpty: Accessory.LightStrength <= 0f);
 
@@ -228,12 +228,12 @@ public sealed partial class GeneratedItemData
         Armor.Defense = ClampInt(Armor.Defense, 0, 500);
         Armor.MaxLife = ClampInt(Armor.MaxLife, -500, 5000);
         Armor.MaxMana = ClampInt(Armor.MaxMana, -500, 5000);
-        Armor.MovementSpeed = ClampFloat(Armor.MovementSpeed, -0.5f, 2f);
+        Armor.MovementSpeed = ClampFloat(Armor.MovementSpeed, -0.9f, 3f);
         Armor.GenericDamage = ClampFloat(Armor.GenericDamage, -0.9f, 3f);
         Armor.GenericCrit = ClampFloat(Armor.GenericCrit, -100f, 100f);
         Armor.SetBonusGenericDamage = ClampFloat(Armor.SetBonusGenericDamage, -0.9f, 3f);
-        Armor.SetBonusMovementSpeed = ClampFloat(Armor.SetBonusMovementSpeed, -0.5f, 2f);
-        Armor.SetBonusLifeRegen = ClampInt(Armor.SetBonusLifeRegen, -120, 120);
+        Armor.SetBonusMovementSpeed = ClampFloat(Armor.SetBonusMovementSpeed, -0.9f, 3f);
+        Armor.SetBonusLifeRegen = ClampInt(Armor.SetBonusLifeRegen, -120, 200);
     }
 
     private void NormalizeVisual()

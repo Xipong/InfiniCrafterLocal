@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from pathlib import Path
+import re
+
 import pytest
 
 from contract_checks import (
     assert_pipeline_phase_order,
     assert_pipeline_terminal_phase,
     discover_contract_checks,
+    literal_string_arguments,
     pipeline_phase_count,
     run_contract_checks,
 )
+
+TESTS_DIR = Path(__file__).resolve().parent
 
 
 def _contract_check_first() -> None:
@@ -38,6 +44,83 @@ def test_contract_check_discovery_is_ordered_and_explicit_lists_cannot_hide_chec
             names=("_contract_check_first",),
             require_all=True,
         )
+
+
+def test_contract_modules_use_the_shared_runner_instead_of_a_copied_dispatch_loop() -> None:
+    """No test module may hand-maintain its own list of checks.
+
+    Ten modules used to carry a copy of the runner with the check names written out
+    by hand. A hand-kept list drifts silently: a new check is simply never called,
+    and the module still reports one passing item. The copies also lost behaviour
+    the shared runner has -- cwd restoration and fixtures other than monkeypatch.
+    """
+    offenders: list[str] = []
+    stale_lists: list[str] = []
+    for path in sorted(TESTS_DIR.glob("test_*.py")):
+        if path.name == Path(__file__).name:
+            # This module names the banned pattern in its own assertions.
+            continue
+        source = path.read_text(encoding="utf-8")
+        if "_run_coarse_contracts" in source:
+            offenders.append(path.name)
+        if "run_contract_checks" not in source:
+            continue
+        # An explicit list is still allowed, but only with the no-omission gate.
+        calls = re.findall(r"run_contract_checks\((.*?)\)\n", source, flags=re.S)
+        for call in calls:
+            has_explicit_list = "(" in call and "'" in call
+            if has_explicit_list and "require_all" not in call and "prefix=" not in call:
+                stale_lists.append(f"{path.name}: {call.strip()[:60]}")
+
+    assert not offenders, (
+        "these modules copy the dispatch loop instead of using contract_checks."
+        f"run_contract_checks: {offenders}"
+    )
+    assert not stale_lists, (
+        "explicit check lists must pass require_all=True so a new check cannot be "
+        f"silently omitted: {stale_lists}"
+    )
+
+
+def test_literal_string_arguments_survives_parentheses_that_defeat_regex_scraping() -> None:
+    """Source-shape contracts must not depend on call-site formatting.
+
+    The GUI reachability contract used ``self\\.row\\([^)]*?["'](INFINI_...)["']``.
+    That pattern stops at the first ``)``, so a label like "Label (advanced)" or a
+    nested ``self._card(...)`` argument hid the row completely -- reporting an
+    exposed setting as missing.
+    """
+    brittle = r"self\.(?:row|check_row)\([^)]*?[\"'](INFINI_[A-Z0-9_]+)[\"']"
+    source = (
+        "class Gui:\n"
+        "    def build(self):\n"
+        '        self.row(card, "Plain", "INFINI_PLAIN")\n'
+        '        self.row(card, "Label (advanced)", "INFINI_PAREN_LABEL")\n'
+        '        self.row(self._card(parent, "x"), "Nested", "INFINI_NESTED_CALL")\n'
+        '        self.check_row(card, "Flag", hint="see (docs)", key="INFINI_HINT_FIRST")\n'
+        '        self.ignored(card, "Other", "INFINI_NOT_A_ROW")\n'
+    )
+
+    found = literal_string_arguments(
+        source, ("row", "check_row"), match=r"INFINI_[A-Z0-9_]+"
+    )
+    assert found == (
+        "INFINI_PLAIN",
+        "INFINI_PAREN_LABEL",
+        "INFINI_NESTED_CALL",
+        "INFINI_HINT_FIRST",
+    )
+    # Calls to other methods are not row declarations and must stay out.
+    assert "INFINI_NOT_A_ROW" not in found
+
+    # Demonstrate the regression this replaces: a parenthesis anywhere before the
+    # key hides that call site from the old pattern.
+    regex_found = set(re.findall(brittle, source, flags=re.S))
+    assert set(found) - regex_found == {
+        "INFINI_PAREN_LABEL",
+        "INFINI_NESTED_CALL",
+        "INFINI_HINT_FIRST",
+    }
 
 
 def test_pipeline_phase_assertions_hide_stage_spelling_from_behavior_tests() -> None:

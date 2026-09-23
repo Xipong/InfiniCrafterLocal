@@ -12,7 +12,6 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_SCHEMA,
     capability_provider_union,
 )
-RUNTIME_CONTRACT_SCHEMA = "infini.runtime-contract.low-level.v1"
 _ID_PATTERN = r"^[a-z][a-z0-9_]{0,47}$"
 PRIMARY_ENTITY_FIELD = "primaryEntityId"
 PRIMARY_ENTITY_AUTHOR_PATH = f"runtimeProgram.{PRIMARY_ENTITY_FIELD}"
@@ -128,25 +127,6 @@ def binding_schema() -> dict[str, Any]:
     }
 
 
-def claim_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "kind": {"type": "string", "enum": ["gameplay", "physical", "parent_synthesis"]},
-            "text": _strict_string(min_len=1, max_len=280),
-            "backedBy": {
-                "type": "array",
-                "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-                "minItems": 1,
-                "maxItems": 16,
-            },
-        },
-        "required": ["id", "kind", "text", "backedBy"],
-    }
-
-
 def runtime_program_author_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -182,57 +162,37 @@ def runtime_program_author_schema() -> dict[str, Any]:
     }
 
 
-def runtime_contract_schema() -> dict[str, Any]:
-    parent_side = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "facts": {
-                "type": "array",
-                "items": _strict_string(min_len=1, max_len=240),
-                "minItems": 1,
-                "maxItems": 8,
-            },
-            "runtimeRoles": {
-                "type": "array",
-                "items": _strict_string(min_len=1, max_len=120),
-                "minItems": 1,
-                "maxItems": 8,
-            },
-        },
-        "required": ["facts", "runtimeRoles"],
-    }
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "schema": {"const": RUNTIME_CONTRACT_SCHEMA},
-            "parentSynthesis": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "composition": _strict_string(min_len=1, max_len=500),
-                    "parentA": parent_side,
-                    "parentB": parent_side,
-                },
-                "required": ["composition", "parentA", "parentB"],
-            },
-            "claims": {
-                "type": "array",
-                "items": claim_schema(),
-                "minItems": 1,
-                "maxItems": 24,
-            },
-        },
-        "required": ["schema", "parentSynthesis", "claims"],
-    }
-
-
 def realization_schema() -> dict[str, Any]:
-    trace_list = {
+    runtime_refs = {
         "type": "array",
-        "items": _strict_string(min_len=1, max_len=240),
-        "maxItems": 12,
+        "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+        "minItems": 1,
+        "maxItems": 16,
+    }
+    deviation = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "plannedIntent": _strict_string(min_len=1, max_len=280),
+            "implementedBehavior": _strict_string(min_len=1, max_len=280),
+            "runtimeRefs": copy.deepcopy(runtime_refs),
+            "result": {"type": "string", "enum": ["aligned", "changed", "dropped", "added", "uncertain"]},
+            "intentionality": {"type": "string", "enum": ["intentional", "accidental", "uncertain"]},
+            "reason": _strict_string(min_len=1, max_len=400),
+        },
+        "required": ["plannedIntent", "implementedBehavior", "runtimeRefs", "result", "intentionality", "reason"],
+    }
+    mismatch = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "runtimeRefs": copy.deepcopy(runtime_refs),
+            "programBehavior": _strict_string(min_len=1, max_len=280),
+            "reportedBehavior": _strict_string(min_len=1, max_len=280),
+            "result": {"type": "string", "enum": ["aligned", "mismatch", "omitted", "uncertain"]},
+            "reason": _strict_string(min_len=1, max_len=400),
+        },
+        "required": ["runtimeRefs", "programBehavior", "reportedBehavior", "result", "reason"],
     }
     return {
         "type": "object",
@@ -240,25 +200,37 @@ def realization_schema() -> dict[str, Any]:
         "properties": {
             "description": _strict_string(min_len=1, max_len=700),
             "playerExperience": _strict_string(min_len=1, max_len=500),
-            "backedByClaims": {
-                "type": "array",
-                "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-                "minItems": 1,
-                "maxItems": 24,
-            },
-            "intentTrace": {
+            # Deliberately last: the same Author independently compares the
+            # non-binding draft with the program, then the program with its report.
+            "selfEvaluation": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "kept": copy.deepcopy(trace_list),
-                    "changed": copy.deepcopy(trace_list),
-                    "dropped": copy.deepcopy(trace_list),
-                    "added": copy.deepcopy(trace_list),
+                    "planVsProgram": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "verdict": {"type": "string", "enum": ["aligned", "changed", "uncertain"]},
+                            "summary": _strict_string(min_len=1, max_len=500),
+                            "actionChecks": {"type": "array", "items": deviation, "minItems": 1, "maxItems": 24},
+                        },
+                        "required": ["verdict", "summary", "actionChecks"],
+                    },
+                    "programVsReport": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "verdict": {"type": "string", "enum": ["aligned", "mismatch", "uncertain"]},
+                            "summary": _strict_string(min_len=1, max_len=500),
+                            "behaviorChecks": {"type": "array", "items": mismatch, "minItems": 1, "maxItems": 24},
+                        },
+                        "required": ["verdict", "summary", "behaviorChecks"],
+                    },
                 },
-                "required": ["kept", "changed", "dropped", "added"],
+                "required": ["planVsProgram", "programVsReport"],
             },
         },
-        "required": ["description", "playerExperience", "backedByClaims", "intentTrace"],
+        "required": ["description", "playerExperience", "selfEvaluation"],
     }
 
 
@@ -283,16 +255,35 @@ def author_item_response_schema() -> dict[str, Any]:
                     "parentAContribution": _strict_string(min_len=1, max_len=280),
                     "parentBContribution": _strict_string(min_len=1, max_len=280),
                     "playerExperience": _strict_string(min_len=1, max_len=500),
+                    "plannedPlayerActions": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "description": "Non-binding initial gameplay sketch. It never routes execution or rejects a craft when the final program changes.",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "input": {
+                                    "type": "string",
+                                    "enum": ["primary_use", "alternate_use", "hold", "equipped", "passive_or_event"],
+                                },
+                                "intent": _strict_string(min_len=1, max_len=280),
+                            },
+                            "required": ["input", "intent"],
+                        },
+                    },
                 },
-                "required": ["literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience"],
+                "required": [
+                    "literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience",
+                ],
             },
             "runtimeProgram": runtime_program_author_schema(),
-            "runtimeContract": runtime_contract_schema(),
             # Deliberately last: this is the same Author's post-program account
             # of what the accepted executable draft actually realizes.
             "realization": realization_schema(),
         },
-        "required": ["name", "category", "concept", "runtimeProgram", "runtimeContract", "realization"],
+        "required": ["name", "category", "concept", "runtimeProgram", "realization"],
     }
 
 
@@ -337,9 +328,6 @@ def author_item_repair_schema() -> dict[str, Any]:
                     "required": ["callId", "key"],
                 },
             },
-            "claimsUpsert": {"type": "array", "items": claim_schema(), "maxItems": 24},
-            "claimIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 24},
-            "claimIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 23}, "maxItems": 24},
             PRIMARY_ENTITY_SELECTION_FIELD: {
                 "oneOf": [
                     _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
@@ -366,33 +354,6 @@ def author_item_repair_schema() -> dict[str, Any]:
                     "name": _strict_string(min_len=1, max_len=80),
                     "category": {"type": "string", "enum": ["combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"]},
                     "concept": author_item_response_schema()["properties"]["concept"],
-                    # Repair returns only the parentSynthesis parts it is fixing.
-                    # Omitted parts stay frozen: filter_repair_patch_scope merges the
-                    # candidate over the current contract before applying, so a
-                    # partial candidate becomes a complete merged subtree.
-                    # Nested parent-side objects are partial for the same reason:
-                    # a leaf-only patch such as {"parentA": {"facts": [...]}} must
-                    # not be forced to re-emit the already-valid runtimeRoles.
-                    "parentSynthesis": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "composition": _strict_string(min_len=1, max_len=500),
-                            "parentA": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": runtime_contract_schema()["properties"]["parentSynthesis"]["properties"]["parentA"]["properties"],
-                                "minProperties": 1,
-                            },
-                            "parentB": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": runtime_contract_schema()["properties"]["parentSynthesis"]["properties"]["parentB"]["properties"],
-                                "minProperties": 1,
-                            },
-                        },
-                        "minProperties": 1,
-                    },
                 },
             },
             "realizationReplacement": realization_schema(),
@@ -400,7 +361,7 @@ def author_item_repair_schema() -> dict[str, Any]:
         },
         "required": [
             "entitiesUpsert", "entityIdsDelete", "bindingsUpsert", "bindingIdsDelete",
-            "callsUpsert", "callIdsDelete", "claimsUpsert", "claimIdsDelete", "metadataPatch", "note",
+            "callsUpsert", "callIdsDelete", "metadataPatch", "note",
         ],
     }
 
@@ -556,13 +517,6 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         raise ValueError(f"invalid gameplay repair patch: {report['errors'][:8]}")
     out = copy.deepcopy(dict(current))
     program = out.setdefault("runtimeProgram", {})
-    contract = out.setdefault("runtimeContract", {})
-    original_runtime_ids = {
-        str(row.get("id") or "")
-        for list_key in ("entities", "bindings", "calls")
-        for row in program.get(list_key) or []
-        if isinstance(row, Mapping) and str(row.get("id") or "")
-    }
 
     def upsert(rows: list[Any], replacements: list[Any]) -> list[Any]:
         by_id = {str(row.get("id")): copy.deepcopy(row) for row in rows if isinstance(row, dict) and row.get("id")}
@@ -629,42 +583,11 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
             or str(row.get("id") or "") == keep_id
         ]
 
-    claims = list(contract.get("claims") or []) if isinstance(contract, dict) else []
-    claims = delete_indices(claims, list(patch.get("claimIndicesDelete") or []))
-    claims = delete(claims, list(patch.get("claimIdsDelete") or []))
-    claims = upsert(claims, list(patch.get("claimsUpsert") or []))
-    final_runtime_ids = {
-        str(row.get("id") or "")
-        for list_key in ("entities", "bindings", "calls")
-        for row in program.get(list_key) or []
-        if isinstance(row, Mapping) and str(row.get("id") or "")
-    }
-    deleted_runtime_ids = original_runtime_ids - final_runtime_ids
-    if deleted_runtime_ids:
-        cleaned_claims: list[Any] = []
-        for claim in claims:
-            if not isinstance(claim, dict) or not isinstance(claim.get("backedBy"), list):
-                cleaned_claims.append(claim)
-                continue
-            previous_backing = list(claim["backedBy"])
-            claim["backedBy"] = [
-                value
-                for value in previous_backing
-                if str(value) not in deleted_runtime_ids
-            ]
-            if previous_backing and not claim["backedBy"]:
-                continue
-            cleaned_claims.append(claim)
-        claims = cleaned_claims
-    contract["claims"] = claims
-
     metadata = patch.get("metadataPatch")
     if isinstance(metadata, Mapping):
         for key in ("name", "category", "concept"):
             if key in metadata:
                 out[key] = copy.deepcopy(metadata[key])
-        if "parentSynthesis" in metadata:
-            contract["parentSynthesis"] = copy.deepcopy(metadata["parentSynthesis"])
     if "realizationReplacement" in patch:
         out["realization"] = copy.deepcopy(patch["realizationReplacement"])
     return out
@@ -676,15 +599,12 @@ __all__ = [
     "PRIMARY_ENTITY_JSON_PATH",
     "PRIMARY_ENTITY_SELECTION_FIELD",
     "PRIMARY_ENTITY_SELECTION_JSON_PATH",
-    "RUNTIME_CONTRACT_SCHEMA",
     "apply_repair_patch",
     "authored_primary_entity_id",
     "author_item_repair_schema",
     "author_item_response_schema",
     "binding_schema",
-    "claim_schema",
     "entity_schema",
-    "runtime_contract_schema",
     "realization_schema",
     "runtime_program_author_schema",
     "primary_entity_repair_transaction",

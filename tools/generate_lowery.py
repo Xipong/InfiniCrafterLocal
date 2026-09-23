@@ -55,7 +55,7 @@ def render() -> str:
         "",
         "## READ THIS FIRST — замороженная граница",
         "",
-        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и claims. "
+        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и финальный realization/selfEvaluation. "
         "Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.",
         "2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.",
         "3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology или fallback mechanic.",

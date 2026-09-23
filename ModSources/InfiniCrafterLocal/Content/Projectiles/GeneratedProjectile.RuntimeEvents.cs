@@ -22,6 +22,7 @@ public sealed partial class GeneratedProjectile
             {
                 if (RuntimeDelayedActionScheduler.TrySchedule(
                     _data,
+                    _entity,
                     action,
                     Owner(),
                     target?.Center ?? Projectile.Center,
@@ -34,7 +35,7 @@ public sealed partial class GeneratedProjectile
                     Projectile.netUpdate = true;
                 continue;
             }
-            RuntimeProgramExecutor.ExecuteAction(_data, action, Owner(), Projectile.GetSource_FromThis(), target?.Center ?? Projectile.Center, direction, target, damageDone, _childDepth, ref _remainingSpawnBudget);
+            RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), target?.Center ?? Projectile.Center, direction, target, damageDone, _childDepth, ref _remainingSpawnBudget);
         }
     }
 
@@ -65,6 +66,7 @@ public sealed partial class GeneratedProjectile
             {
                 if (RuntimeDelayedActionScheduler.TrySchedule(
                     _data,
+                    _entity,
                     action,
                     Owner(),
                     Projectile.Center,
@@ -77,7 +79,7 @@ public sealed partial class GeneratedProjectile
                     Projectile.netUpdate = true;
             }
             else
-                RuntimeProgramExecutor.ExecuteAction(_data, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, ref _remainingSpawnBudget);
+                RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, ref _remainingSpawnBudget);
             emitted = true;
         }
         if (emitted)

@@ -310,38 +310,10 @@ def _check_malformed_json_response_retries_once_inside_logical_call(monkeypatch)
     ]
 
 
-# Coarse test bundle: the checks below used to be separate pytest items.
-# Keeping them as helper checks cuts collection/runtime noise while preserving
-# the same assertions inside one scenario-level contract per file.
-def _run_coarse_contracts(tmp_path):
-    import inspect as _inspect
-    import pytest as _pytest
+# One collected item per contract module: the checks above keep source order and
+# their own tracebacks. The shared runner discovers them by prefix, so a new check
+# cannot be silently left out of a hand-maintained dispatch list.
+def test_llm_fallback_contract_coarse_contract(request):
+    from contract_checks import run_contract_checks
 
-    for _name in [
-    '_check_gui_exposes_fallback_model_fields',
-    '_check_llm_chat_json_switches_to_fallback_on_budget_error',
-    '_check_llm_chat_json_switches_to_fallback_after_two_transport_failures',
-    '_check_llm_chat_json_retries_transient_http_without_fallback',
-    '_check_network_attempt_budget_one_disables_inner_retry',
-    '_check_network_attempt_budget_one_disables_pool_failover',
-    '_check_gemini_length_response_retries_once_with_minimal_reasoning',
-    '_check_gemini_length_complete_json_prefix_is_not_retried',
-    '_check_malformed_json_response_retries_once_inside_logical_call'
-    ]:
-        _fn = globals()[_name]
-        _sig = _inspect.signature(_fn)
-        _kwargs = {}
-        if "tmp_path" in _sig.parameters:
-            _case_dir = tmp_path / _name
-            _case_dir.mkdir(parents=True, exist_ok=True)
-            _kwargs["tmp_path"] = _case_dir
-        if "monkeypatch" in _sig.parameters:
-            with _pytest.MonkeyPatch.context() as _mp:
-                _kwargs["monkeypatch"] = _mp
-                _fn(**_kwargs)
-        else:
-            _fn(**_kwargs)
-
-
-def test_llm_fallback_contract_coarse_contract(tmp_path):
-    _run_coarse_contracts(tmp_path)
+    run_contract_checks(globals(), request, prefix="_check_")

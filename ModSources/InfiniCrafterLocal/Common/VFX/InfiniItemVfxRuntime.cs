@@ -94,12 +94,18 @@ public static class InfiniItemVfxRuntime
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             int repeat = slot.RepeatEvery > 0 ? slot.RepeatEvery : 10;
-            if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs(slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
+            if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
             Color color = RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length > 0 ? data.Visual.Palette[0] : "white", Color.White);
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
-            if (kind == InfiniVfxRendererKind.LightCue) { Lighting.AddLight(player.Center, color.ToVector3() * Math.Clamp(slot.Scale * 0.2f, 0.04f, 1.2f)); continue; }
+            if (kind == InfiniVfxRendererKind.LightCue)
+            {
+                float strength = Math.Clamp(slot.Scale * 0.2f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
+                if (strength > 0f)
+                    Lighting.AddLight(player.Center, color.ToVector3() * strength);
+                continue;
+            }
             if (kind == InfiniVfxRendererKind.SoundCue) { SoundEngine.PlaySound(SoundID.Item1 with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f) }, player.Center); continue; }
-            int count = Math.Clamp(1 + (int)MathF.Round(slot.Density * 7f), 1, 8);
+            int count = InfiniVfxClientOptions.ScaleParticleCount(Math.Clamp(1 + (int)MathF.Round(slot.Density * 7f), 1, 8));
             for (int i = 0; i < count; i++)
             {
                 Vector2 velocity = Main.rand.NextVector2Circular(1f + slot.Spread, 1f + slot.Spread);

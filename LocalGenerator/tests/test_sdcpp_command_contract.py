@@ -235,37 +235,10 @@ def _check_sdcpp_lora_file_overrides_stale_lora_dir(monkeypatch) -> None:
     assert r"C:\stale\wrong_loras" not in cmd
 
 
-# Coarse test bundle: the checks below used to be separate pytest items.
-# Keeping them as helper checks cuts collection/runtime noise while preserving
-# the same assertions inside one scenario-level contract per file.
-def _run_coarse_contracts(tmp_path):
-    import inspect as _inspect
-    import pytest as _pytest
+# One collected item per contract module: the checks above keep source order and
+# their own tracebacks. The shared runner discovers them by prefix, so a new check
+# cannot be silently left out of a hand-maintained dispatch list.
+def test_sdcpp_command_contract_coarse_contract(request):
+    from contract_checks import run_contract_checks
 
-    for _name in [
-        '_check_sdcpp_safe_args_ignores_corrupt_command_template',
-        '_check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess',
-        '_check_sdcpp_template_mode_repairs_known_sampling_method_corruption',
-        '_check_sdcpp_lora_file_tag_helper_and_prompt_suffix',
-        '_check_sdcpp_debug_snapshot_exposes_lora_file_fields',
-        '_check_sdcpp_lora_file_overrides_stale_lora_dir',
-        '_check_sdcpp_canonical_state_cleanup_and_health_snapshot',
-        '_check_sdcpp_health_reads_canonical_state_fields',
-    ]:
-        _fn = globals()[_name]
-        _sig = _inspect.signature(_fn)
-        _kwargs = {}
-        if "tmp_path" in _sig.parameters:
-            _case_dir = tmp_path / _name
-            _case_dir.mkdir(parents=True, exist_ok=True)
-            _kwargs["tmp_path"] = _case_dir
-        if "monkeypatch" in _sig.parameters:
-            with _pytest.MonkeyPatch.context() as _mp:
-                _kwargs["monkeypatch"] = _mp
-                _fn(**_kwargs)
-        else:
-            _fn(**_kwargs)
-
-
-def test_sdcpp_command_contract_coarse_contract(tmp_path):
-    _run_coarse_contracts(tmp_path)
+    run_contract_checks(globals(), request, prefix="_check_")

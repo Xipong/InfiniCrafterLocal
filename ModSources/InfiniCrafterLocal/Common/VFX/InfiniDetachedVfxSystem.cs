@@ -39,7 +39,6 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
     private static readonly List<DetachedEmission> Emissions = new();
     private static readonly Dictionary<string, int> DrawCallsBySource = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, SourceParticleBudget> ParticleBudgetsBySource = new(StringComparer.Ordinal);
-    private static ulong _drawBudgetUpdate = ulong.MaxValue;
 
     private sealed class SourceParticleBudget
     {
@@ -129,6 +128,7 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
 
     private static void DrawProjectiles(On_Main.orig_DrawProjectiles orig, Main self)
     {
+        BeginDrawBudgetFrame();
         DrawLayer("BeforeProjectiles");
         orig(self);
         DrawLayer("AfterProjectiles");
@@ -138,36 +138,53 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
     {
         if (Main.dedServ || Emissions.Count == 0)
             return;
-        BeginDrawBudgetFrame();
         PruneExpired();
-        foreach (DetachedEmission emission in Emissions)
+        // Vanilla DrawProjectiles owns its own Begin/End. These surrounding
+        // layers therefore need separate batches with the same world transform.
+        SpriteBatch batch = Main.spriteBatch;
+        bool began = false;
+        try
         {
-            if (!string.Equals(emission.Layer, layer, StringComparison.Ordinal))
-                continue;
-            Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(emission.TexturePath, out float localForwardRadians);
-            if (texture is null || !SpendDraw(emission))
-                continue;
-            float progress = Math.Clamp(
-                (Main.GameUpdateCount - emission.StartUpdate) / (float)Math.Max(1, emission.Duration),
-                0f,
-                1f);
-            Main.spriteBatch.Draw(
-                texture,
-                emission.Center - Main.screenPosition,
-                null,
-                emission.Color * (emission.Alpha * (1f - progress)),
-                emission.Rotation - localForwardRadians,
-                new Vector2(texture.Width * 0.5f, texture.Height * 0.5f),
-                emission.Scale,
-                SpriteEffects.None,
-                0f);
+            foreach (DetachedEmission emission in Emissions)
+            {
+                if (!string.Equals(emission.Layer, layer, StringComparison.Ordinal))
+                    continue;
+                Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(emission.TexturePath, out float localForwardRadians);
+                if (texture is null || !SpendDraw(emission))
+                    continue;
+                if (!began)
+                {
+                    batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, Main.DefaultSamplerState,
+                        DepthStencilState.None, Main.Rasterizer, null, Main.GameViewMatrix.TransformationMatrix);
+                    began = true;
+                }
+                float progress = Math.Clamp(
+                    (Main.GameUpdateCount - emission.StartUpdate) / (float)Math.Max(1, emission.Duration),
+                    0f,
+                    1f);
+                batch.Draw(
+                    texture,
+                    emission.Center - Main.screenPosition,
+                    null,
+                    emission.Color * (emission.Alpha * (1f - progress)),
+                    emission.Rotation - localForwardRadians,
+                    new Vector2(texture.Width * 0.5f, texture.Height * 0.5f),
+                    emission.Scale,
+                    SpriteEffects.None,
+                    0f);
+            }
+        }
+        finally
+        {
+            if (began)
+                batch.End();
         }
     }
 
     private static bool SpendDraw(DetachedEmission emission)
     {
         int spent = DrawCallsBySource.TryGetValue(emission.SourceKey, out int value) ? value : 0;
-        if (spent >= emission.MaxDrawCalls)
+        if (spent >= InfiniVfxClientOptions.EffectiveDrawBudget(emission.MaxDrawCalls))
             return false;
         DrawCallsBySource[emission.SourceKey] = spent + 1;
         return true;
@@ -175,9 +192,7 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
 
     private static void BeginDrawBudgetFrame()
     {
-        if (_drawBudgetUpdate == Main.GameUpdateCount)
-            return;
-        _drawBudgetUpdate = Main.GameUpdateCount;
+        // Called once by DrawProjectiles, not once per layer or simulation tick.
         DrawCallsBySource.Clear();
     }
 
@@ -202,6 +217,5 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
         Emissions.Clear();
         DrawCallsBySource.Clear();
         ParticleBudgetsBySource.Clear();
-        _drawBudgetUpdate = ulong.MaxValue;
     }
 }

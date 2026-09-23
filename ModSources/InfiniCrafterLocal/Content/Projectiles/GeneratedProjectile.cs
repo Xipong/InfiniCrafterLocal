@@ -125,6 +125,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _configured = true;
         _pendingHydrationTicks = 0;
         ApplyEntityStats();
+        if (!preserveSyncedState)
+            Projectile.originalDamage = Projectile.damage;
         if (preserveSyncedState)
         {
             Projectile.timeLeft = Math.Max(1, syncedTimeLeft);
@@ -139,14 +141,16 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private void ApplyEntityStats()
     {
         RuntimeEntitySpec entity = _entity!;
+        Vector2 center = Projectile.Center;
         Projectile.width = entity.Hitbox.WidthPx;
         Projectile.height = entity.Hitbox.HeightPx;
+        Projectile.Center = center;
         Projectile.scale = entity.Hitbox.DrawScale * entity.Visual.Scale;
         Projectile.friendly = entity.Damage.Enabled && entity.Damage.Damage > 0;
         Projectile.hostile = false;
-        Projectile.damage = entity.Damage.Enabled ? entity.Damage.Damage : 0;
-        Projectile.originalDamage = Projectile.damage;
-        Projectile.knockBack = entity.Damage.Knockback;
+        // NewProjectileDirect owns initial damage/knockback (including event
+        // multipliers); live/network state owns subsequent changes such as charge.
+        // Hydrating entity metadata must not reset either to authored base stats.
         Projectile.DamageType = TerrariaRuntimeVocabulary.ResolveDamageClass(entity.Damage.DamageClass);
         Projectile.ownerHitCheck = entity.Damage.OwnerHitCheck;
         Projectile.penetrate = entity.Collision.Pierce;

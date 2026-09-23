@@ -54,7 +54,6 @@ VALIDATION_ERROR_CODES = frozenset({
     "event_not_emitted",
     "event_spawn_budget",
     "exclusive_component_conflict",
-    "gameplay_claim_without_execution",
     "hidden_item_primary_requires_spawn_target",
     "illegal_event_cycle",
     "inert_component",
@@ -63,12 +62,10 @@ VALIDATION_ERROR_CODES = frozenset({
     "missing_capability_dependency",
     "missing_capability_group",
     "missing_binding_dependency",
-    "missing_claim_backing",
     "missing_dependency_param",
     "missing_entity_reference",
     "missing_item_capability_param",
     "missing_movement_component",
-    "missing_realization_claim",
     "missing_required_component",
     "place_item_without_stack_cost",
     "hybrid_placeable_max_stack",
@@ -183,14 +180,12 @@ def _traversable_runtime_shell(document: Mapping[str, Any]) -> bool:
     """
 
     program = document.get("runtimeProgram")
-    contract = document.get("runtimeContract")
-    if not isinstance(program, Mapping) or not isinstance(contract, Mapping):
+    if not isinstance(program, Mapping):
         return False
     containers = (
         program.get("entities"),
         program.get("bindings"),
         program.get("calls"),
-        contract.get("claims"),
     )
     return all(
         isinstance(rows, list) and all(isinstance(row, dict) for row in rows)
@@ -456,13 +451,10 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
 
     issues: list[ValidationIssue] = []
     program_raw = document.get("runtimeProgram")
-    contract_raw = document.get("runtimeContract")
     program: Mapping[str, Any] = program_raw if isinstance(program_raw, Mapping) else {}
-    contract: Mapping[str, Any] = contract_raw if isinstance(contract_raw, Mapping) else {}
     entities = _rows(program.get("entities"))
     bindings = _rows(program.get("bindings"))
     calls = _rows(program.get("calls"))
-    claims = _rows(contract.get("claims"))
 
     entities_by_id: dict[str, dict[str, Any]] = {}
     bindings_by_id: dict[str, dict[str, Any]] = {}
@@ -486,10 +478,6 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         register(binding, namespace="binding", path=f"$.runtimeProgram.bindings[{index}].id", target=bindings_by_id)
     for index, call in enumerate(calls):
         register(call, namespace="call", path=f"$.runtimeProgram.calls[{index}].id", target=calls_by_id)
-    claim_ids: dict[str, dict[str, Any]] = {}
-    for index, claim in enumerate(claims):
-        register(claim, namespace="claim", path=f"$.runtimeContract.claims[{index}].id", target=claim_ids)
-
     item_entities = [row for row in entities if row.get("kind") == "item_body"]
     if len(item_entities) != 1:
         issues.append(ValidationIssue("$.runtimeProgram.entities", "item_body_count", f"Exactly one item_body is required; found {len(item_entities)}.", ("add one item_body", "remove extras")))
@@ -795,34 +783,10 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     if event_spawn_budget > MAX_EVENT_SPAWNS_PER_ACTIVATION:
         issues.append(ValidationIssue("$.runtimeProgram.calls", "event_spawn_budget", f"Event spawn count {event_spawn_budget} exceeds {MAX_EVENT_SPAWNS_PER_ACTIVATION}.", (f"sum <= {MAX_EVENT_SPAWNS_PER_ACTIVATION}",)))
 
-    backing_ids = set(entities_by_id) | set(bindings_by_id) | set(calls_by_id)
-    for index, claim in enumerate(claims):
-        raw_backing = claim.get("backedBy")
-        backed = [str(value) for value in raw_backing] if isinstance(raw_backing, list) else []
-        missing = [value for value in backed if value not in backing_ids]
-        if missing:
-            issues.append(ValidationIssue(f"$.runtimeContract.claims[{index}].backedBy", "missing_claim_backing", f"Claim '{claim.get('id')}' references missing ids: {', '.join(missing)}.", tuple(sorted(backing_ids)), tuple(missing)))
-        if claim.get("kind") == "gameplay" and not any(value in calls_by_id or value in bindings_by_id for value in backed):
-            issues.append(ValidationIssue(f"$.runtimeContract.claims[{index}].backedBy", "gameplay_claim_without_execution", f"Gameplay claim '{claim.get('id')}' needs call/binding backing.", tuple(sorted(set(calls_by_id) | set(bindings_by_id)))))
-    realization_raw = document.get("realization")
-    realization: Mapping[str, Any] = realization_raw if isinstance(realization_raw, Mapping) else {}
-    backed_claims_raw = realization.get("backedByClaims")
-    backed_claims = [str(value) for value in backed_claims_raw] if isinstance(backed_claims_raw, list) else []
-    missing_claims = [value for value in backed_claims if value not in claim_ids]
-    if missing_claims:
-        issues.append(ValidationIssue(
-            "$.realization.backedByClaims",
-            "missing_realization_claim",
-            "Realization references missing claim ids: " + ", ".join(missing_claims) + ".",
-            tuple(sorted(claim_ids)),
-            tuple(missing_claims),
-        ))
-
     stats = {
         "entities": len(entities),
         "bindings": len(bindings),
         "calls": len(calls),
-        "claims": len(claims),
         "eventSpawnBudget": event_spawn_budget,
         "spawnGraphDepth": depth,
         "capabilitiesUsed": sorted({str(row.get("fn")) for row in calls}),
@@ -841,10 +805,19 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     if shape["ok"]:
         return _validate_runtime_program_semantics(document)
 
+    # Concept is a model-thinking/debug surface only. Provider schemas still
+    # request its rich shape, but local craft acceptance ignores every concept
+    # shape problem so an omitted or malformed sketch can never cancel gameplay.
     raw_shape_errors = [
         row for row in shape.get("errors") or []
         if isinstance(row, Mapping)
+        and not (
+            str(row.get("path") or "") == "$.concept"
+            or str(row.get("path") or "").startswith("$.concept.")
+        )
     ]
+    if not raw_shape_errors and _traversable_runtime_shell(document):
+        return _validate_runtime_program_semantics(document)
     shape_issues = [
         ValidationIssue(
             path=str(row.get("path") or "$"),

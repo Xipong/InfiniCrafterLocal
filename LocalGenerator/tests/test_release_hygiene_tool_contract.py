@@ -171,4 +171,5 @@ def test_release_hygiene_tool_contract_module_contract(request):
             '_contract_check_release_report_rejects_an_incomplete_roster',
             '_contract_check_runtime_selftest_checker_matches_the_csharp_emitter',
         ),
+        require_all=True,
     )

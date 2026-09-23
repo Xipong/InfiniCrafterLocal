@@ -499,7 +499,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     if not lowering_audit["ok"]:
         raise RuntimeError(f"technical lowerer wrote undeclared fields: {lowering_audit['violations'][:8]}")
 
-    contract = _dict(out.get("runtimeContract"))
+    # runtimeContract is compiler-owned technical provenance only. The Author no
+    # longer emits prose claims or parent synthesis into this namespace.
+    contract: dict[str, Any] = {}
     contract["compiledSchema"] = RUNTIME_WIRE_SCHEMA
     contract["runtimeApiVersion"] = RUNTIME_PROGRAM_API_VERSION
     contract["finalWireReceipts"] = ctx.receipts

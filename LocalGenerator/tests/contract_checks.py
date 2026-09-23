@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from contextlib import ExitStack
 import inspect
 import os
@@ -112,6 +113,51 @@ def _case_tmp_path(base: Path, name: str) -> Path:
     path = base / case_name
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def literal_string_arguments(
+    source: str,
+    method_names: Sequence[str],
+    *,
+    match: str | re.Pattern[str] | None = None,
+) -> tuple[str, ...]:
+    """Collect literal string arguments passed to the named ``self.<method>`` calls.
+
+    Source-shape contracts used to scrape call sites with regular expressions like
+    ``self\\.row\\([^)]*?["'](INFINI_[A-Z0-9_]+)["']``.  That pattern stops at the
+    first ``)`` and therefore silently misses any call whose earlier arguments
+    contain a parenthesis -- a label such as ``"Label (advanced)"``, a nested
+    ``self._card(...)`` call, or a hint containing brackets.  A missed call site
+    reads as "this setting is not exposed in the GUI", so the contract can pass
+    while the row exists or fail while it is present.
+
+    Parsing the module instead makes the answer independent of formatting: every
+    literal string argument (positional or keyword) of a matching call is returned
+    in source order, deduplicated.
+    """
+    wanted = set(method_names)
+    if isinstance(match, str):
+        match = re.compile(match)
+
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        if not isinstance(function, ast.Attribute) or function.attr not in wanted:
+            continue
+        if not (isinstance(function.value, ast.Name) and function.value.id == "self"):
+            continue
+        arguments = list(node.args) + [keyword.value for keyword in node.keywords]
+        for argument in arguments:
+            if not (isinstance(argument, ast.Constant) and isinstance(argument.value, str)):
+                continue
+            value = argument.value
+            if match is not None and not match.fullmatch(value):
+                continue
+            if value not in found:
+                found.append(value)
+    return tuple(found)
 
 
 def run_contract_checks(

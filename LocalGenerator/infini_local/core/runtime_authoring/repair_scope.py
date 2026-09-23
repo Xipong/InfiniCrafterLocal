@@ -50,7 +50,7 @@ RUNTIME_REPAIR_SCOPE_REPORT_SCHEMA = "infini.runtime-repair-scope-report.v6"
 RUNTIME_REPAIR_FILTER_REPORT_SCHEMA = "infini.runtime-repair-filter-report.v3"
 
 _NODE_PATH_RE = re.compile(
-    r"^\$\.(?:runtimeProgram\.(entities|bindings|calls)|runtimeContract\.(claims))\[(\d+)\]"
+    r"^\$\.runtimeProgram\.(entities|bindings|calls)\[(\d+)\]"
 )
 
 # Every deterministic validation code has an explicit Repair strategy.  This
@@ -71,7 +71,6 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "event_not_emitted": {"strategy": "patch_or_synthesize_exact_event_producer", "llmRepairable": True, "allowNodeDelete": False},
     "event_spawn_budget": {"strategy": "patch_spawn_count_or_delete_edge", "llmRepairable": True, "allowNodeDelete": True},
     "exclusive_component_conflict": {"strategy": "patch_or_delete_conflicting_call", "llmRepairable": True, "allowNodeDelete": True},
-    "gameplay_claim_without_execution": {"strategy": "patch_or_delete_claim", "llmRepairable": True, "allowNodeDelete": True},
     "hidden_item_primary_requires_spawn_target": {"strategy": "select_exact_spawn_target_as_primary", "llmRepairable": True, "allowNodeDelete": False},
     "illegal_event_cycle": {"strategy": "patch_or_delete_cycle_edge", "llmRepairable": True, "allowNodeDelete": True},
     "inert_component": {"strategy": "patch_effect_params_or_delete_call", "llmRepairable": True, "allowNodeDelete": True},
@@ -80,13 +79,11 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "missing_capability_dependency": {"strategy": "patch_or_synthesize_exact_dependency", "llmRepairable": True, "allowNodeDelete": False},
     "missing_capability_group": {"strategy": "patch_or_synthesize_one_of_dependency", "llmRepairable": True, "allowNodeDelete": False},
     "missing_binding_dependency": {"strategy": "synthesize_exact_binding_dependency", "llmRepairable": True, "allowNodeDelete": False},
-    "missing_claim_backing": {"strategy": "patch_or_delete_claim", "llmRepairable": True, "allowNodeDelete": True},
     "missing_dependency_param": {"strategy": "patch_exact_missing_param", "llmRepairable": True, "allowNodeDelete": False},
     "missing_entity_reference": {"strategy": "retarget_or_create_exact_missing_entity", "llmRepairable": True, "allowNodeDelete": False},
 
     "missing_item_capability_param": {"strategy": "patch_or_synthesize_exact_item_dependency", "llmRepairable": True, "allowNodeDelete": False},
     "missing_movement_component": {"strategy": "choose_one_compatible_position_driver", "llmRepairable": True, "allowNodeDelete": False},
-    "missing_realization_claim": {"strategy": "replace_realization_from_final_claims", "llmRepairable": True, "allowNodeDelete": False},
     "missing_required_component": {"strategy": "synthesize_exact_required_component", "llmRepairable": True, "allowNodeDelete": False},
     "place_item_without_stack_cost": {"strategy": "replace_complete_use_transaction", "llmRepairable": True, "allowNodeDelete": False},
     "hybrid_placeable_max_stack": {"strategy": "patch_exact_item_param", "llmRepairable": True, "allowNodeDelete": False},
@@ -123,12 +120,10 @@ def _values(value: Any) -> list[Any]:
 
 def _program_rows(current: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
     program = _mapping(current.get("runtimeProgram"))
-    contract = _mapping(current.get("runtimeContract"))
     return {
         "entities": _rows(program.get("entities")),
         "bindings": _rows(program.get("bindings")),
         "calls": _rows(program.get("calls")),
-        "claims": _rows(contract.get("claims")),
     }
 
 
@@ -148,8 +143,8 @@ def _node_from_path(path: str, rows: Mapping[str, list[dict[str, Any]]]) -> tupl
     match = _NODE_PATH_RE.match(path)
     if not match:
         return None
-    namespace = match.group(1) or match.group(2) or ""
-    index = int(match.group(3))
+    namespace = match.group(1) or ""
+    index = int(match.group(2))
     values = rows.get(namespace, [])
     row_id = str(values[index].get("id") or "") if 0 <= index < len(values) else ""
     return namespace, index, row_id
@@ -358,14 +353,14 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
             "schema": {"const": RUNTIME_REPAIR_SCOPE_SCHEMA},
             "mutable": {
                 "type": "object", "additionalProperties": False,
-                "properties": {name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds", "claimIds")},
-                "required": ["entityIds", "bindingIds", "callIds", "claimIds"],
+                "properties": {name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds")},
+                "required": ["entityIds", "bindingIds", "callIds"],
             },
             "deletable": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
-                    **{name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds", "claimIds")},
-                    **{name: copy.deepcopy(index_array) for name in ("entityIndices", "bindingIndices", "callIndices", "claimIndices")},
+                    **{name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds")},
+                    **{name: copy.deepcopy(index_array) for name in ("entityIndices", "bindingIndices", "callIndices")},
                     "callParamKeys": {
                         "type": "array",
                         "uniqueItems": True,
@@ -393,7 +388,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         },
                     },
                 },
-                "required": ["entityIds", "bindingIds", "callIds", "claimIds", "entityIndices", "bindingIndices", "callIndices", "claimIndices", "callParamKeys", "callPropertyKeys"],
+                "required": ["entityIds", "bindingIds", "callIds", "entityIndices", "bindingIndices", "callIndices", "callParamKeys", "callPropertyKeys"],
             },
             "create": {
                 "type": "object", "additionalProperties": False,
@@ -426,12 +421,8 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                         },
                         "required": ["allowed", "allowedTargetIds", "allowedTargetKinds", "allowedFns", "requiredReferenceEntityIds"],
                     },
-                    "claims": {
-                        "type": "object", "additionalProperties": False,
-                        "properties": {"allowed": {"type": "boolean"}}, "required": ["allowed"],
-                    },
                 },
-                "required": ["entities", "bindings", "calls", "claims"],
+                "required": ["entities", "bindings", "calls"],
             },
             "retarget": {
                 "type": "object", "additionalProperties": False,
@@ -444,7 +435,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                     **{name: copy.deepcopy(id_array) for name in (
                         "entityKindIds", "bindingInputIds", "bindingActionIds",
                         "bindingTargetIds", "callFnIds", "callTargetIds",
-                        "callEventIds", "claimKindIds", "claimBackingIds",
+                        "callEventIds",
                     )},
                     "callReferenceParams": {
                         "type": "array",
@@ -455,7 +446,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                 "required": [
                     "entityKindIds", "bindingInputIds", "bindingActionIds",
                     "bindingTargetIds", "callFnIds", "callTargetIds",
-                    "callEventIds", "callReferenceParams", "claimKindIds", "claimBackingIds",
+                    "callEventIds", "callReferenceParams",
                 ],
             },
             "metadataFields": copy.deepcopy(id_array),
@@ -559,8 +550,8 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
             },
             "contextIds": {
                 "type": "object", "additionalProperties": False,
-                "properties": {name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds", "claimIds")},
-                "required": ["entityIds", "bindingIds", "callIds", "claimIds"],
+                "properties": {name: copy.deepcopy(id_array) for name in ("entityIds", "bindingIds", "callIds")},
+                "required": ["entityIds", "bindingIds", "callIds"],
             },
             "fieldPermissions": {
                 "type": "object", "additionalProperties": False,
@@ -576,9 +567,9 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                             "required": ["id", "paths"],
                         },
                     }
-                    for name in ("entities", "bindings", "calls", "claims")
+                    for name in ("entities", "bindings", "calls")
                 },
-                "required": ["entities", "bindings", "calls", "claims"],
+                "required": ["entities", "bindings", "calls"],
             },
             "repairTransactions": {
                 "type": "object",
@@ -672,10 +663,10 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
 def _new_scope() -> dict[str, Any]:
     return {
         "schema": RUNTIME_REPAIR_SCOPE_SCHEMA,
-        "mutable": {"entityIds": [], "bindingIds": [], "callIds": [], "claimIds": []},
+        "mutable": {"entityIds": [], "bindingIds": [], "callIds": []},
         "deletable": {
-            "entityIds": [], "bindingIds": [], "callIds": [], "claimIds": [],
-            "entityIndices": [], "bindingIndices": [], "callIndices": [], "claimIndices": [],
+            "entityIds": [], "bindingIds": [], "callIds": [],
+            "entityIndices": [], "bindingIndices": [], "callIndices": [],
             "callParamKeys": [], "callPropertyKeys": [],
         },
         "create": {
@@ -689,20 +680,18 @@ def _new_scope() -> dict[str, Any]:
                 "allowed": False, "allowedTargetIds": [], "allowedTargetKinds": [], "allowedFns": [],
                 "requiredReferenceEntityIds": [],
             },
-            "claims": {"allowed": False},
         },
         "retarget": {"entityIds": [], "bindingTargetIds": [], "callTargetIds": []},
         "identityChanges": {
             "entityKindIds": [], "bindingInputIds": [], "bindingActionIds": [],
             "bindingTargetIds": [], "callFnIds": [], "callTargetIds": [],
             "callEventIds": [], "callReferenceParams": [],
-            "claimKindIds": [], "claimBackingIds": [],
         },
         "metadataFields": [],
         "bindingAlternatives": [],
         "eventAlternatives": [],
-        "contextIds": {"entityIds": [], "bindingIds": [], "callIds": [], "claimIds": []},
-        "fieldPermissions": {"entities": [], "bindings": [], "calls": [], "claims": []},
+        "contextIds": {"entityIds": [], "bindingIds": [], "callIds": []},
+        "fieldPermissions": {"entities": [], "bindings": [], "calls": []},
         "repairTransactions": {
             PRIMARY_ENTITY_SELECTION_FIELD: {
                 "allowed": False,
@@ -948,12 +937,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     rows = _program_rows(current)
     error_paths_all = [str(row.get("path") or "$") for row in error_rows]
     namespace_by_id, row_by_id = _id_maps(rows)
-    mutable = {name: set() for name in ("entities", "bindings", "calls", "claims")}
-    deletable = {name: set() for name in ("entities", "bindings", "calls", "claims")}
-    deletable_indices = {name: set() for name in ("entities", "bindings", "calls", "claims")}
+    mutable = {name: set() for name in ("entities", "bindings", "calls")}
+    deletable = {name: set() for name in ("entities", "bindings", "calls")}
+    deletable_indices = {name: set() for name in ("entities", "bindings", "calls")}
     deletable_call_param_keys: set[tuple[str, str]] = set()
     deletable_call_property_keys: set[tuple[str, str]] = set()
-    context = {name: set() for name in ("entities", "bindings", "calls", "claims")}
+    context = {name: set() for name in ("entities", "bindings", "calls")}
     create_entity_exact: set[str] = set()
     create_entity_kinds: set[str] = set()
     create_binding_targets: set[str] = set()
@@ -968,7 +957,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     create_call_target_kinds: set[str] = set()
     create_call_fns: set[str] = set()
     required_reference_entities: set[str] = set()
-    allow_create_claim = False
     retarget_binding_ids: set[str] = set()
     retarget_call_ids: set[str] = set()
     entity_kind_change_ids: set[str] = set()
@@ -979,11 +967,9 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     call_target_change_ids: set[str] = set()
     call_event_change_ids: set[str] = set()
     call_reference_param_changes: set[str] = set()
-    claim_kind_change_ids: set[str] = set()
-    claim_backing_change_ids: set[str] = set()
     metadata_fields: set[str] = set()
     field_permissions: dict[str, dict[str, set[str]]] = {
-        namespace: {} for namespace in ("entities", "bindings", "calls", "claims")
+        namespace: {} for namespace in ("entities", "bindings", "calls")
     }
     event_alternative_rows: list[dict[str, Any]] = []
     binding_alternative_overrides: dict[str, list[dict[str, str]]] = {}
@@ -1127,11 +1113,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 if existing_fn in CAPABILITY_REGISTRY:
                     existing_broken_capabilities.add(existing_fn)
             if node_id:
-                root_prefix = (
-                    f"$.runtimeProgram.{node_namespace}[{node_index}]"
-                    if node_namespace != "claims"
-                    else f"$.runtimeContract.claims[{node_index}]"
-                )
+                root_prefix = f"$.runtimeProgram.{node_namespace}[{node_index}]"
                 if path == root_prefix:
                     # Provider union validation emits a generic shape_one_of at
                     # the row root together with a precise descendant error.
@@ -1183,9 +1165,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         create_call_targets.add(target)
                     if fn in CAPABILITY_REGISTRY:
                         create_call_fns.add(fn)
-                elif node_namespace == "claims":
-                    allow_create_claim = True
-
         if node_id:
             if node_namespace == "entities" and path.startswith(f"$.runtimeProgram.entities[{node_index}].kind"):
                 entity_kind_change_ids.add(node_id)
@@ -1228,18 +1207,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 )
                 if property_match and code == "shape_additional_property":
                     deletable_call_property_keys.add((node_id, property_match.group(1)))
-            if node_namespace == "claims":
-                if path.startswith(f"$.runtimeContract.claims[{node_index}].kind"):
-                    claim_kind_change_ids.add(node_id)
-                if path.startswith(f"$.runtimeContract.claims[{node_index}].backedBy"):
-                    claim_backing_change_ids.add(node_id)
-
         # Metadata is a separate bounded subtree.
         for field in ("name", "category", "concept"):
             if path.startswith(f"$.{field}"):
                 metadata_fields.add(field)
-        if path.startswith("$.runtimeContract.parentSynthesis"):
-            metadata_fields.add("parentSynthesis")
 
         if code == "unknown_registry_requirement":
             pass
@@ -2119,11 +2090,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     if isinstance(call.get("params"), Mapping) and "event" in call["params"]:
                         call_event_change_ids.add(call_id)
                         grant("calls", call_id, "params.event")
-        elif code in {"missing_claim_backing", "gameplay_claim_without_execution"}:
-            if node_namespace == "claims":
-                mark("claims", node_id, can_delete=True)
-                grant("claims", node_id, "backedBy")
-
         # Existing related nodes are useful context unless explicitly mutable.
         for row_id in related:
             context_id(row_id)
@@ -2139,12 +2105,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         if cap is not None:
             existing_broken_capabilities.add(cap.name)
-
-    affected_backing_ids = mutable["entities"] | mutable["bindings"] | mutable["calls"] | deletable["entities"] | deletable["bindings"] | deletable["calls"]
-    for claim in rows["claims"]:
-        claim_id = str(claim.get("id") or "")
-        if affected_backing_ids.intersection(str(value) for value in claim.get("backedBy") or []):
-            mark("claims", claim_id)
 
     # Remove mutable rows from immutable context sets.
     for namespace in context:
@@ -2236,27 +2196,19 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     for encoded in call_reference_param_changes:
         row_id, param_name = encoded.split(":", 1)
         grant("calls", row_id, f"params.{param_name}")
-    for row_id in claim_kind_change_ids:
-        grant("claims", row_id, "kind")
-    for row_id in claim_backing_change_ids:
-        grant("claims", row_id, "backedBy")
-
     scope = _new_scope()
     scope["mutable"] = {
         "entityIds": sorted(mutable["entities"]),
         "bindingIds": sorted(mutable["bindings"]),
         "callIds": sorted(mutable["calls"]),
-        "claimIds": sorted(mutable["claims"]),
     }
     scope["deletable"] = {
         "entityIds": sorted(deletable["entities"]),
         "bindingIds": sorted(deletable["bindings"]),
         "callIds": sorted(deletable["calls"]),
-        "claimIds": sorted(deletable["claims"]),
         "entityIndices": sorted(deletable_indices["entities"]),
         "bindingIndices": sorted(deletable_indices["bindings"]),
         "callIndices": sorted(deletable_indices["calls"]),
-        "claimIndices": sorted(deletable_indices["claims"]),
         "callParamKeys": [
             {"callId": call_id, "key": key}
             for call_id, key in sorted(deletable_call_param_keys)
@@ -2288,7 +2240,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "allowedFns": sorted(name for name in create_call_fns if name in CAPABILITY_REGISTRY),
             "requiredReferenceEntityIds": sorted(required_reference_entities),
         },
-        "claims": {"allowed": allow_create_claim},
     }
     scope["retarget"] = {
         "entityIds": sorted(str(row.get("id") or "") for row in rows["entities"] if str(row.get("id") or "")),
@@ -2304,8 +2255,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         "callTargetIds": sorted(call_target_change_ids),
         "callEventIds": sorted(call_event_change_ids),
         "callReferenceParams": sorted(call_reference_param_changes),
-        "claimKindIds": sorted(claim_kind_change_ids),
-        "claimBackingIds": sorted(claim_backing_change_ids),
     }
     scope["metadataFields"] = sorted(metadata_fields)
 
@@ -2313,11 +2262,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         "entityIds": sorted(context["entities"]),
         "bindingIds": sorted(context["bindings"]),
         "callIds": sorted(context["calls"]),
-        "claimIds": sorted(context["claims"]),
     }
     scope["fieldPermissions"] = {
         namespace: _field_permission_rows(field_permissions[namespace])
-        for namespace in ("entities", "bindings", "calls", "claims")
+        for namespace in ("entities", "bindings", "calls")
     }
     error_codes = {str(row.get("code") or row.get("kind") or "") for row in error_rows}
     primary_candidates = sorted(
@@ -2434,7 +2382,6 @@ def _empty_filtered_patch(note: str) -> dict[str, Any]:
         "bindingsUpsert": [], "bindingIdsDelete": [], "bindingIndicesDelete": [],
         "callsUpsert": [], "callIdsDelete": [], "callIndicesDelete": [],
         "callParamKeysDelete": [], "callPropertyKeysDelete": [],
-        "claimsUpsert": [], "claimIdsDelete": [], "claimIndicesDelete": [],
         "metadataPatch": {}, "note": note or "deterministically filtered targeted repair",
     }
 
@@ -2497,15 +2444,13 @@ def _new_row_allowed(
         if required_refs and not required_refs.intersection(_entity_reference_params(row)):
             return False, "missing_required_affected_entity_reference"
         return True, ""
-    if namespace == "claims":
-        return bool(policy.get("allowed")), "claim_creation_not_required"
     return False, "unknown_namespace"
 
 
 
 
 def _metadata_permission_paths(scope: Mapping[str, Any], field: str) -> tuple[str, ...]:
-    prefix = f"$.{field}" if field != "parentSynthesis" else "$.runtimeContract.parentSynthesis"
+    prefix = f"$.{field}"
     paths: set[str] = set()
     for raw in scope.get("errorPaths") or []:
         path = str(raw or "")
@@ -2525,7 +2470,7 @@ def _metadata_deletion_paths(scope: Mapping[str, Any], field: str) -> tuple[str,
     granted for any other validator code.
     """
 
-    prefix = f"$.{field}" if field != "parentSynthesis" else "$.runtimeContract.parentSynthesis"
+    prefix = f"$.{field}"
     paths: set[str] = set()
     for requirement in scope.get("repairRequirements") or []:
         if not isinstance(requirement, Mapping):
@@ -2622,7 +2567,6 @@ def filter_repair_patch_scope(
         ("entities", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete", "entityIds", "id"),
         ("bindings", "bindingsUpsert", "bindingIdsDelete", "bindingIndicesDelete", "bindingIds", "id"),
         ("calls", "callsUpsert", "callIdsDelete", "callIndicesDelete", "callIds", "id"),
-        ("claims", "claimsUpsert", "claimIdsDelete", "claimIndicesDelete", "claimIds", "id"),
     )
     for namespace, upsert_key, delete_key, index_delete_key, scope_key, id_key in specs:
         original_rows = rows[namespace]
@@ -2739,14 +2683,13 @@ def filter_repair_patch_scope(
 
     allowed_metadata = set(str(value) for value in _values(scope.get("metadataFields")))
     metadata = _mapping(patch.get("metadataPatch"))
-    contract = _mapping(current.get("runtimeContract"))
     for field, candidate in metadata.items():
         path = f"$.metadataPatch.{field}"
         if field not in allowed_metadata:
-            preserved = contract.get("parentSynthesis") if field == "parentSynthesis" else current.get(field)
+            preserved = current.get(field)
             ignored.append(_filter_ignored(path, candidate, preserved, "valid_metadata_frozen"))
             continue
-        preserved = contract.get("parentSynthesis") if field == "parentSynthesis" else current.get(field)
+        preserved = current.get(field)
         permissions = _metadata_permission_paths(scope, field)
         deletions = _metadata_deletion_paths(scope, field)
         if isinstance(preserved, Mapping) and isinstance(candidate, Mapping):
@@ -2964,7 +2907,6 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
         ("entities", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete", "entityIds"),
         ("bindings", "bindingsUpsert", "bindingIdsDelete", "bindingIndicesDelete", "bindingIds"),
         ("calls", "callsUpsert", "callIdsDelete", "callIndicesDelete", "callIds"),
-        ("claims", "claimsUpsert", "claimIdsDelete", "claimIndicesDelete", "claimIds"),
     )
     for namespace, upsert_key, delete_key, index_delete_key, scope_key in specs:
         mutable_ids = set(str(value) for value in mutable.get(scope_key) or [])
@@ -3071,12 +3013,6 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                                 continue
                             if f"{row_id}:{param_name}" not in allowed_ref_changes and params.get(param_name) != original_params.get(param_name):
                                 errors.append(_scope_error(path + f".params.{param_name}", "entity reference is immutable unless that reference is in the repair error", actual=params.get(param_name)))
-                if namespace == "claims":
-                    if row_id not in set(_values(identity.get("claimKindIds"))) and row.get("kind") != original.get("kind"):
-                        errors.append(_scope_error(path + ".kind", "claim kind is immutable for this repair", actual=row.get("kind")))
-                    if row_id not in set(_values(identity.get("claimBackingIds"))) and row.get("backedBy") != original.get("backedBy"):
-                        errors.append(_scope_error(path + ".backedBy", "claim backing is immutable unless the backing itself is invalid", actual=row.get("backedBy")))
-
             # Complete-node provider responses are permitted, but only scoped identity fields may change.
             if namespace == "bindings" and row_id in existing[namespace] and row_id in set(_values(identity.get("bindingTargetIds"))):
                 allowed_targets = set(str(value) for value in _values(retarget.get("bindingTargetIds")))
@@ -3438,7 +3374,7 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
     mutable = _mapping(scope.get("mutable"))
     context_ids = _mapping(scope.get("contextIds"))
     create = _mapping(scope.get("create"))
-    key_by_namespace = {"entities": "entityIds", "bindings": "bindingIds", "calls": "callIds", "claims": "claimIds"}
+    key_by_namespace = {"entities": "entityIds", "bindings": "bindingIds", "calls": "callIds"}
 
     mutable_sets = {
         namespace: set(str(value) for value in _values(mutable.get(key_by_namespace[namespace])))
@@ -3509,19 +3445,6 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
             affected_entities.update(refs)
     affected_entities.discard("")
 
-    # Claims tied to the local graph are sent read-only as well.
-    local_backing_ids = (
-        affected_entities
-        | wanted["bindings"] | wanted["calls"]
-        | mutable_sets["bindings"] | mutable_sets["calls"] | mutable_sets["entities"]
-    )
-    for claim in rows["claims"]:
-        claim_id = str(claim.get("id") or "")
-        if claim_id in mutable_sets["claims"]:
-            continue
-        if local_backing_ids.intersection(str(value) for value in claim.get("backedBy") or []):
-            wanted["claims"].add(claim_id)
-
     broken: dict[str, Any] = {}
     dependency: dict[str, Any] = {}
     summaries: dict[str, Any] = {}
@@ -3550,15 +3473,10 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
                 {key: row.get(key) for key in ("id", "fn", "target")}
                 for row in values
             ]
-        else:
-            summaries[namespace] = [
-                {"id": row.get("id"), "kind": row.get("kind"), "backedBy": copy.deepcopy(row.get("backedBy") or [])}
-                for row in values
-            ]
 
     deletable = _mapping(scope.get("deletable"))
     broken_by_index: dict[str, list[dict[str, Any]]] = {}
-    for namespace in ("entities", "bindings", "calls", "claims"):
+    for namespace in ("entities", "bindings", "calls"):
         index_key = namespace[:-1] + "Indices" if namespace != "entities" else "entityIndices"
         indices = [int(value) for value in deletable.get(index_key) or []]
         broken_by_index[namespace] = [

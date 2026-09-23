@@ -8,6 +8,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from contract_checks import literal_string_arguments
 from infini_local.desktop import settings_env, settings_gui, settings_schema
 import infini_local.desktop.settings_sdcpp_args as settings_sdcpp_args
 
@@ -82,7 +83,17 @@ def _check_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
 
 
 def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
-    visible_rows = set(re.findall(r"self\.(?:row|text_row|check_row)\([^)]*?[\"'](INFINI_[A-Z0-9_]+)[\"']", GUI_SOURCE, flags=re.S))
+    # Parsed from the module rather than regex-scraped: a call whose earlier
+    # arguments contain a parenthesis (a label like "Label (advanced)", a nested
+    # self._card(...), a bracketed hint) is invisible to a `[^)]*?` pattern, which
+    # would report an exposed setting as missing.
+    visible_rows = set(
+        literal_string_arguments(
+            GUI_SOURCE,
+            ("row", "text_row", "check_row"),
+            match=r"INFINI_[A-Z0-9_]+",
+        )
+    )
     dynamic_pool_rows = {
         f"INFINI_LLM_POOL_{slot}_{suffix}"
         for slot in (2, 3, 4)
@@ -177,7 +188,7 @@ def _check_pipeline_preset_is_saved_and_restored_from_config() -> None:
         key: "OpenRouter + local Z-Image/sd.cpp",
         "INFINI_LLM_PROVIDER": "openai_compat",
         "INFINI_IMAGE_BACKEND": "sdcpp",
-        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe",
+        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe",
         "INFINI_SDCPP_SERVER_EXTRA_ARGS": settings_schema.SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
         "INFINI_SDCPP_STEPS": "4",
     }) == compat_flux
@@ -313,48 +324,10 @@ def _check_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real() -> No
     assert gate in registry
 
 
-# Coarse test bundle: the checks below used to be separate pytest items.
-# Keeping them as helper checks cuts collection/runtime noise while preserving
-# the same assertions inside one scenario-level contract per file.
-def _run_coarse_contracts(tmp_path):
-    import inspect as _inspect
-    import pytest as _pytest
+# One collected item per contract module: the checks above keep source order and
+# their own tracebacks. The shared runner discovers them by prefix, so a new check
+# cannot be silently left out of a hand-maintained dispatch list.
+def test_settings_gui_contract_coarse_contract(request):
+    from contract_checks import run_contract_checks
 
-    for _name in [
-    '_check_settings_gui_imports_without_tkinter_installed',
-    '_check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env',
-    '_check_sdcpp_option_help_is_visible_and_has_expanded_flags',
-    '_check_schema_fields_and_image_profiles_are_reachable_from_gui',
-    '_check_gui_extra_arg_helpers_replace_conflicting_value_flags',
-    '_check_sdcpp_presets_use_measured_amd_placements_without_redundant_assignments',
-    '_check_flow_shift_help_explains_meaning_not_only_quality',
-    '_check_gui_health_identity_helpers_detect_other_copy_from_root',
-    '_check_gui_trace_fetch_uses_health_identity_and_longer_timeout',
-    '_check_pipeline_preset_is_saved_and_restored_from_config',
-    '_check_start_server_has_safe_stale_process_cleanup_contract',
-    '_check_radmin_gui_has_auto_url_and_friend_guide_controls',
-    '_check_radmin_gui_friend_guide_says_clients_do_not_need_localgenerator_for_ready_items',
-    '_check_gui_exposes_llm_temperatures_not_zimage_temperature',
-    '_check_gui_exposes_critical_delivery_and_busy_wait_controls',
-    '_check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount',
-    '_check_gui_env_file_io_lives_in_settings_env',
-    '_check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy',
-    '_check_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real'
-    ]:
-        _fn = globals()[_name]
-        _sig = _inspect.signature(_fn)
-        _kwargs = {}
-        if "tmp_path" in _sig.parameters:
-            _case_dir = tmp_path / _name
-            _case_dir.mkdir(parents=True, exist_ok=True)
-            _kwargs["tmp_path"] = _case_dir
-        if "monkeypatch" in _sig.parameters:
-            with _pytest.MonkeyPatch.context() as _mp:
-                _kwargs["monkeypatch"] = _mp
-                _fn(**_kwargs)
-        else:
-            _fn(**_kwargs)
-
-
-def test_settings_gui_contract_coarse_contract(tmp_path):
-    _run_coarse_contracts(tmp_path)
+    run_contract_checks(globals(), request, prefix="_check_")

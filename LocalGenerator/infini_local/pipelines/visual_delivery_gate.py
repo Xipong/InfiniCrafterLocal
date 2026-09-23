@@ -66,7 +66,7 @@ def _asset_path_exists(path_value: Any) -> bool:
     path = _resolved_asset_path(path_value)
     if path is None:
         return False
-    return asset_sync_service.is_complete_png_file(path) if path.suffix.lower() == ".png" else True
+    return path.suffix.lower() == ".png" and asset_sync_service.is_complete_png_file(path)
 
 
 def _asset_roster_problems(paths: list[Path]) -> list[dict[str, Any]]:

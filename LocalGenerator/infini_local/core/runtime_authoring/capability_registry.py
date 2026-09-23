@@ -352,7 +352,7 @@ class CapabilitySpec:
                 "id": {
                     "type": "string",
                     "pattern": r"^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by claims and repair.",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 },
                 "fn": {"const": self.name},
                 "target": {

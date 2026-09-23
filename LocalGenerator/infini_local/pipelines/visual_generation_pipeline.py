@@ -779,8 +779,6 @@ def _request_visual_kit(
             "itemReadOnly": {
                 "name": data.get("name"),
                 "realization": copy.deepcopy(data.get("realization") or {}),
-                "claims": copy.deepcopy((data.get("runtimeContract") or {}).get("claims") or [])
-                if isinstance(data.get("runtimeContract"), Mapping) else [],
             },
             "equipmentOverlayReadOnly": copy.deepcopy(equipment_overlay),
             "assetModeCatalog": visual_asset_mode_catalog(),
@@ -805,14 +803,11 @@ def _request_visual_kit(
             "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. "
             "A baked sprite is mandatory delivery: never request or accept a placeholder. Return JSON only."
         )
-        runtime_contract_raw = data.get("runtimeContract")
-        runtime_contract: Mapping[str, Any] = runtime_contract_raw if isinstance(runtime_contract_raw, Mapping) else {}
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
             "item": {
                 "name": data.get("name"),
                 "realization": copy.deepcopy(data.get("realization") or {}),
-                "claims": copy.deepcopy(runtime_contract.get("claims") or []),
             },
             "parents": {
                 "parentA": {"packet": raw_parent_card_for_llm(a)},

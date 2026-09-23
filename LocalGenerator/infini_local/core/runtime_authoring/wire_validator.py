@@ -89,6 +89,13 @@ def _validate_component_shape(value: Any, allowed: frozenset[str], path: str, er
     return value
 
 
+def _positive_integer_effect(value: Any, path: str, errors: list[dict[str, Any]]) -> bool:
+    if not isinstance(value, int) or isinstance(value, bool):
+        errors.append({"path": path, "code": "invalid_integer", "message": "Effect value must be an integer without coercion."})
+        return False
+    return value > 0
+
+
 def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
     if isinstance(value, Mapping):
@@ -158,10 +165,13 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(entities_raw, list) or not entities:
         errors.append({"path": "$.runtimeProgram.entities", "code": "required_nonempty_array", "message": "At least one compiled entity is required."})
     entity_by_id: dict[str, Mapping[str, Any]] = {}
-    for index, entity in enumerate(entities):
+    for index, entity in enumerate(entities_raw if isinstance(entities_raw, list) else []):
+        entity_path = f"$.runtimeProgram.entities[{index}]"
+        if not isinstance(entity, Mapping):
+            errors.append({"path": entity_path, "code": "required_object", "message": "Entity entry must be an object."})
+            continue
         entity_id = str(entity.get("id") or "")
         kind = str(entity.get("kind") or "")
-        entity_path = f"$.runtimeProgram.entities[{index}]"
         _reject_unknown(entity, _ENTITY_KEYS, entity_path, errors)
         component_specs = (
             ("visual", _VISUAL_KEYS), ("spawn", _SPAWN_KEYS), ("damage", _DAMAGE_KEYS),
@@ -218,7 +228,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             # require either a movement component or a controller that owns
             # their full position lifecycle.
             controller_code = (entity.get("controller") or {}).get("code") if isinstance(entity.get("controller"), Mapping) else None
-            controller_owns_position = controller_code in {1, 2, 3}
+            controller_owns_position = (
+                isinstance(controller_code, int) and not isinstance(controller_code, bool)
+                and controller_code in {1, 2, 3}
+            )
             mobile_kind = kind in {"owner_attached_projectile", "free_projectile", "child_projectile"}
             if mobile_kind and "movement" not in entity and not controller_owns_position:
                 errors.append({
@@ -260,6 +273,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if child and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].entityId", "code": "missing_entity_reference", "message": f"Unknown event target entity {child!r}."})
 
+    item_bodies = [row for row in entities if row.get("kind") == "item_body"]
+    if len(item_bodies) != 1:
+        errors.append({"path": "$.runtimeProgram.entities", "code": "item_body_count", "message": f"Exactly one item_body is required; found {len(item_bodies)}."})
     item_id = str(runtime.get("itemEntityId") or "")
     item = next((row for row in entities if str(row.get("id") or "") == item_id), None)
     if item is None or str(item.get("kind") or "") != "item_body":
@@ -276,6 +292,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         if primary_owner != expected_owner:
             errors.append({"path": "$.runtimeProgram.primaryOwner", "code": "primary_owner_mismatch", "message": f"Primary entity kind {primary_kind!r} requires primaryOwner {expected_owner!r}."})
     exclusive_inputs: set[str] = set()
+    binding_ids: set[str] = set()
     bindings = runtime.get("bindings") or []
     if not isinstance(bindings, list):
         errors.append({"path": "$.runtimeProgram.bindings", "code": "required_array", "message": "Compiled bindings must be an array."})
@@ -285,6 +302,13 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": f"$.runtimeProgram.bindings[{index}]", "code": "required_object", "message": "Binding must be an object."})
             continue
         binding_path = f"$.runtimeProgram.bindings[{index}]"
+        binding_id = binding.get("id")
+        if not isinstance(binding_id, str) or not binding_id.strip():
+            errors.append({"path": f"{binding_path}.id", "code": "required_id", "message": "Binding id must be a nonempty string."})
+        elif binding_id in binding_ids:
+            errors.append({"path": f"{binding_path}.id", "code": "duplicate_id", "message": f"Duplicate binding id {binding_id!r}."})
+        else:
+            binding_ids.add(binding_id)
         _reject_unknown(binding, _BINDING_KEYS, binding_path, errors)
         policy = binding.get("usePolicy")
         if not isinstance(policy, Mapping):
@@ -374,15 +398,21 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     accessory = data.get("accessory") if isinstance(data.get("accessory"), Mapping) else {}
     armor = data.get("armor") if isinstance(data.get("armor"), Mapping) else {}
-    generated_buff = gameplay.get("generatedBuff") if isinstance(gameplay.get("generatedBuff"), Mapping) else {}
-    has_generated_buff = int(generated_buff.get("durationTicks") or 0) > 0 and any(
+    generated_buff_raw = gameplay.get("generatedBuff")
+    generated_buff = generated_buff_raw if isinstance(generated_buff_raw, Mapping) else {}
+    # Validate every field before boolean composition; short-circuiting must not
+    # hide malformed values behind an otherwise valid healing effect.
+    heals_life = _positive_integer_effect(gameplay.get("healLife", 0), "$.gameplay.healLife", errors)
+    heals_mana = _positive_integer_effect(gameplay.get("healMana", 0), "$.gameplay.healMana", errors)
+    buff_has_duration = _positive_integer_effect(generated_buff.get("durationTicks", 0), "$.gameplay.generatedBuff.durationTicks", errors)
+    has_generated_buff = buff_has_duration and any(
         value not in (None, 0, 0.0, "", False, 1, 1.0, "white")
         for key, value in generated_buff.items()
         if key != "durationTicks"
     )
     has_use_effect = (
-        int(gameplay.get("healLife") or 0) > 0
-        or int(gameplay.get("healMana") or 0) > 0
+        heals_life
+        or heals_mana
         or bool(gameplay.get("extraBuffs"))
         or has_generated_buff
         or bool(str(gameplay.get("mobilityMode") or ""))
@@ -409,54 +439,6 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     errors.extend(_walk_forbidden({"runtimeProgram": runtime}))
 
-    # Promise-delivery parity on the compiled wire: a gameplay claim that promises
-    # an executable engine behavior must exist in the delivered surface.  Claim
-    # text is scanned only for capability vocabulary that maps 1:1 onto a
-    # compiled executor surface - this validates promise-vs-execution consistency,
-    # not item identity or art direction.
-    parity_warnings: list[dict[str, Any]] = []
-    contract_for_parity = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), Mapping) else {}
-    promise_rules = (
-        (("blink", "teleport", "recall"), "mobilityMode"),
-        (("minion", "sentry", "turret", "companion"), None),  # None = any entity targeting component
-        (("explode", "explosion", "detonat"), "damage_area_on_event"),
-        (("poison", "burning", "curse", "frostburn"), "apply_status_on_event"),
-    )
-    gameplay_parity = data.get("gameplay") if isinstance(data.get("gameplay"), Mapping) else {}
-    entity_rows = [row for row in entities if isinstance(row, Mapping)]
-    claims_parity = contract_for_parity.get("claims") if isinstance(contract_for_parity.get("claims"), list) else []
-    for index, claim in enumerate(claims_parity):
-        if str(claim.get("kind") or "") != "gameplay":
-            continue
-        claim_text = str(claim.get("text") or "").lower()
-        for tokens, required_surface in promise_rules:
-            if not any(token in claim_text for token in tokens):
-                continue
-            if required_surface is None:
-                if any(isinstance(entity.get("targeting"), Mapping) and entity["targeting"] for entity in entity_rows):
-                    continue
-            elif required_surface == "mobilityMode":
-                if gameplay_parity.get("mobilityMode"):
-                    continue
-            else:
-                wired_actions = {
-                    str(event.get("action") or "")
-                    for entity in entity_rows
-                    for event in (entity.get("events") or [])
-                    if isinstance(event, Mapping)
-                }
-                if required_surface in wired_actions:
-                    continue
-            parity_warnings.append({
-                "path": f"$.runtimeContract.claims[{index}]",
-                "code": "unbacked_promise_capability",
-                "message": (
-                    f"Claim '{claim.get('id')}' promises {tokens[0]} but the compiled wire "
-                    f"delivers no {required_surface} surface."
-                ),
-            })
-            break
-
     contract_raw = data.get("runtimeContract")
     contract = contract_raw if isinstance(contract_raw, Mapping) else {}
     receipts_raw = contract.get("finalWireReceipts")
@@ -481,7 +463,6 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             "receipts": len(receipts),
         },
         "technicalLowering": lowering,
-        "promiseParityWarnings": parity_warnings,
     }
 
 

@@ -8,50 +8,15 @@
           "literalSynthesis": "A full door remains intact and is fastened to a chain.",
           "parentAContribution": "door slab",
           "parentBContribution": "chain tether",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Door on a Chain",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "primary_chain",
-                "chained_door_motion"
-              ],
-              "id": "claim_chain",
-              "kind": "parent_synthesis",
-              "text": "The door itself is the damaging tethered entity."
-            },
-            {
-              "backedBy": [
-                "door_stun"
-              ],
-              "id": "claim_stun",
-              "kind": "gameplay",
-              "text": "Door impacts apply the authored status."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A full door remains intact and is fastened to a chain.",
-            "parentA": {
-              "facts": [
-                "door slab"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "chain tether"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -200,17 +165,38 @@
         "realization": {
           "description": "Swings a literal reinforced door from a bounded tether.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_chain",
-            "claim_stun"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A full door remains intact and is fastened to a chain."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_chain"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_chain"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Swings a literal reinforced door from a bounded tether.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -233,7 +219,13 @@
           "literalSynthesis": "A full door remains intact and is fastened to a chain.",
           "parentAContribution": "door slab",
           "parentBContribution": "chain tether",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Door on a Chain",
         "runtimeProgram": {
@@ -347,17 +339,38 @@
         "realization": {
           "description": "Swings a literal reinforced door from a bounded tether.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_chain",
-            "claim_stun"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A full door remains intact and is fastened to a chain."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_chain"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_chain"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Swings a literal reinforced door from a bounded tether.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -391,7 +404,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "4f962d7f0cff7993cfa223d809baa8ddd8ee35a2a6f74d6e9fa24524a785ffac"
+      "expectedDeliveryWireSha256": "6ce7a898fcaa947880f5516184fbe5130098df0af498f91c7fdd2bf942f52f4f"
     },
     {
       "authored": {
@@ -401,62 +414,23 @@
           "literalSynthesis": "A mining harness retains its drill heads and installs its lamp as a literal tile.",
           "parentAContribution": "mining harness/tool",
           "parentBContribution": "placeable lamp",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned use_item_body behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned place_item behavior."
+            },
+            {
+              "input": "equipped",
+              "intent": "Execute the planned equip_passive behavior."
+            }
+          ]
         },
         "name": "Mining Harness Lamp",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "passive_harness",
-                "harness_stats"
-              ],
-              "id": "claim_accessory",
-              "kind": "gameplay",
-              "text": "Equipping the item applies exact passive modifiers."
-            },
-            {
-              "backedBy": [
-                "primary_tool",
-                "mining_heads",
-                "alternate_torch",
-                "place_torch"
-              ],
-              "id": "claim_mining",
-              "kind": "gameplay",
-              "text": "Primary use has explicit mining power; alternate use places the concrete light tile."
-            },
-            {
-              "backedBy": [
-                "primary_tool",
-                "item_contact"
-              ],
-              "id": "claim_combat",
-              "kind": "gameplay",
-              "text": "Primary use preserves the authored item-body contact attack."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A mining harness retains its drill heads and installs its lamp as a literal tile.",
-            "parentA": {
-              "facts": [
-                "mining harness/tool"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "placeable lamp"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -600,18 +574,76 @@
         "realization": {
           "description": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_accessory",
-            "claim_mining",
-            "claim_combat"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A mining harness retains its drill heads and installs its lamp as a literal tile."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned use_item_body behavior.",
+                  "implementedBehavior": "The executable program implements use_item_body.",
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "alternate_torch"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned equip_passive behavior.",
+                  "implementedBehavior": "The executable program implements equip_passive.",
+                  "runtimeRefs": [
+                    "passive_harness"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_torch"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "passive_harness"
+                  ],
+                  "programBehavior": "The executable program implements equip_passive.",
+                  "reportedBehavior": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -631,7 +663,21 @@
           "literalSynthesis": "A mining harness retains its drill heads and installs its lamp as a literal tile.",
           "parentAContribution": "mining harness/tool",
           "parentBContribution": "placeable lamp",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned use_item_body behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned place_item behavior."
+            },
+            {
+              "input": "equipped",
+              "intent": "Execute the planned equip_passive behavior."
+            }
+          ]
         },
         "name": "Mining Harness Lamp",
         "runtimeProgram": {
@@ -722,18 +768,76 @@
         "realization": {
           "description": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_accessory",
-            "claim_mining",
-            "claim_combat"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A mining harness retains its drill heads and installs its lamp as a literal tile."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned use_item_body behavior.",
+                  "implementedBehavior": "The executable program implements use_item_body.",
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "alternate_torch"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned equip_passive behavior.",
+                  "implementedBehavior": "The executable program implements equip_passive.",
+                  "runtimeRefs": [
+                    "passive_harness"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_torch"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "passive_harness"
+                  ],
+                  "programBehavior": "The executable program implements equip_passive.",
+                  "reportedBehavior": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -784,7 +888,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "6816150f36fafa030dd4639db3f007a914b1c604590ec66235a8d58c9e61932c"
+      "expectedDeliveryWireSha256": "1b1eab483aeac5ba4a4e6d0d93dc9e2269c54540b9173319ef9c1c35903efce8"
     },
     {
       "authored": {
@@ -794,51 +898,19 @@
           "literalSynthesis": "A fishing rod carries a fold-out platform panel as a literal placeable result.",
           "parentAContribution": "fishing rod",
           "parentBContribution": "platform tile",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned use_item_body behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned place_item behavior."
+            }
+          ]
         },
         "name": "Angler's Platform Rod",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "alternate_place",
-                "platform_result"
-              ],
-              "id": "claim_platform",
-              "kind": "gameplay",
-              "text": "Alternate use places the explicitly authored platform tile; no fishing-rod family route is involved."
-            },
-            {
-              "backedBy": [
-                "primary_tool",
-                "tool_heads"
-              ],
-              "id": "claim_tool",
-              "kind": "gameplay",
-              "text": "Primary use has explicit pick and hammer power."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A fishing rod carries a fold-out platform panel as a literal placeable result.",
-            "parentA": {
-              "facts": [
-                "fishing rod"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "platform tile"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -950,17 +1022,57 @@
         "realization": {
           "description": "Functions as a tool and places a concrete temporary-looking platform tile.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_platform",
-            "claim_tool"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A fishing rod carries a fold-out platform panel as a literal placeable result."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned use_item_body behavior.",
+                  "implementedBehavior": "The executable program implements use_item_body.",
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "alternate_place"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Functions as a tool and places a concrete temporary-looking platform tile.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_place"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Functions as a tool and places a concrete temporary-looking platform tile.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -979,7 +1091,17 @@
           "literalSynthesis": "A fishing rod carries a fold-out platform panel as a literal placeable result.",
           "parentAContribution": "fishing rod",
           "parentBContribution": "platform tile",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned use_item_body behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned place_item behavior."
+            }
+          ]
         },
         "name": "Angler's Platform Rod",
         "runtimeProgram": {
@@ -1057,17 +1179,57 @@
         "realization": {
           "description": "Functions as a tool and places a concrete temporary-looking platform tile.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_platform",
-            "claim_tool"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A fishing rod carries a fold-out platform panel as a literal placeable result."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned use_item_body behavior.",
+                  "implementedBehavior": "The executable program implements use_item_body.",
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned place_item behavior.",
+                  "implementedBehavior": "The executable program implements place_item.",
+                  "runtimeRefs": [
+                    "alternate_place"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_tool"
+                  ],
+                  "programBehavior": "The executable program implements use_item_body.",
+                  "reportedBehavior": "Functions as a tool and places a concrete temporary-looking platform tile.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_place"
+                  ],
+                  "programBehavior": "The executable program implements place_item.",
+                  "reportedBehavior": "Functions as a tool and places a concrete temporary-looking platform tile.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -1105,7 +1267,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "3c911c73e37bff444efe38205f9d7b19e830a5fe23c12dfea8148956d61c104f"
+      "expectedDeliveryWireSha256": "bf73362ca7a0bd880aa2e0b496e62817be702b688cb1d9d10ea57c5afd1ecd92"
     },
     {
       "authored": {
@@ -1115,51 +1277,19 @@
           "literalSynthesis": "A lantern is mounted on a pike and can be planted without ceasing to be literal.",
           "parentAContribution": "pike body",
           "parentBContribution": "lantern targeter",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Lantern Pike Turret",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "primary_pike",
-                "held_lantern_pike_motion"
-              ],
-              "id": "claim_primary",
-              "kind": "gameplay",
-              "text": "Primary use creates only the held pike entity."
-            },
-            {
-              "backedBy": [
-                "alternate_deploy",
-                "deployed_targeter"
-              ],
-              "id": "claim_alt",
-              "kind": "gameplay",
-              "text": "Alternate use independently deploys a targeter that fires the authored bolt entity."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A lantern is mounted on a pike and can be planted without ceasing to be literal.",
-            "parentA": {
-              "facts": [
-                "pike body"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "lantern targeter"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -1461,17 +1591,57 @@
         "realization": {
           "description": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_primary",
-            "claim_alt"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A lantern is mounted on a pike and can be planted without ceasing to be literal."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_pike"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "alternate_deploy"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_pike"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_deploy"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -1496,7 +1666,17 @@
           "literalSynthesis": "A lantern is mounted on a pike and can be planted without ceasing to be literal.",
           "parentAContribution": "pike body",
           "parentBContribution": "lantern targeter",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Lantern Pike Turret",
         "runtimeProgram": {
@@ -1718,17 +1898,57 @@
         "realization": {
           "description": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_primary",
-            "claim_alt"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A lantern is mounted on a pike and can be planted without ceasing to be literal."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_pike"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "alternate_deploy"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_pike"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_deploy"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -1762,7 +1982,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "647705a5ef6048e7f767ab8d135305dc8ca490c6dcc63026da148b34f5cb9bab"
+      "expectedDeliveryWireSha256": "6fd405b9187aecfed86f6a313da5429c1308bebc364834b334660268600e7307"
     },
     {
       "authored": {
@@ -1772,50 +1992,15 @@
           "literalSynthesis": "A sealed potion bottle is thrown whole and returns like a boomerang.",
           "parentAContribution": "potion bottle",
           "parentBContribution": "returning-flight mechanism",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Returning Tonic",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "primary_tonic",
-                "tonic_flask_motion"
-              ],
-              "id": "claim_return",
-              "kind": "parent_synthesis",
-              "text": "The potion is an actual returning projectile."
-            },
-            {
-              "backedBy": [
-                "tonic_heal"
-              ],
-              "id": "claim_heal",
-              "kind": "gameplay",
-              "text": "Successful hits heal the owner within a hard cap."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A sealed potion bottle is thrown whole and returns like a boomerang.",
-            "parentA": {
-              "facts": [
-                "potion bottle"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "returning-flight mechanism"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -1974,17 +2159,38 @@
         "realization": {
           "description": "Throws a potion flask that returns and heals its owner on a hit.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_return",
-            "claim_heal"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A sealed potion bottle is thrown whole and returns like a boomerang."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_tonic"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_tonic"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Throws a potion flask that returns and heals its owner on a hit.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -2008,7 +2214,13 @@
           "literalSynthesis": "A sealed potion bottle is thrown whole and returns like a boomerang.",
           "parentAContribution": "potion bottle",
           "parentBContribution": "returning-flight mechanism",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Returning Tonic",
         "runtimeProgram": {
@@ -2130,17 +2342,38 @@
         "realization": {
           "description": "Throws a potion flask that returns and heals its owner on a hit.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_return",
-            "claim_heal"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A sealed potion bottle is thrown whole and returns like a boomerang."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_tonic"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_tonic"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Throws a potion flask that returns and heals its owner on a hit.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -2174,7 +2407,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "2dd89432518749976bcde93ade9af4ab42b613a21e2b0496ed9ed43b96fdf592"
+      "expectedDeliveryWireSha256": "e4223710287cceb4b4d7a445b1ba34ff1eddf77b3537ae5e47a3cc1140ebabb5"
     },
     {
       "authored": {
@@ -2184,51 +2417,19 @@
           "literalSynthesis": "A shield stays whole while its central plate detaches as a disc.",
           "parentAContribution": "shield body",
           "parentBContribution": "detachable disc",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Shield with Breakaway Disc",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "primary_shield",
-                "shield_body_motion"
-              ],
-              "id": "claim_shield",
-              "kind": "gameplay",
-              "text": "Primary use explicitly spawns the held shield body."
-            },
-            {
-              "backedBy": [
-                "alternate_disc",
-                "shield_disc_motion"
-              ],
-              "id": "claim_disc",
-              "kind": "gameplay",
-              "text": "Alternate use independently spawns the returning disc."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A shield stays whole while its central plate detaches as a disc.",
-            "parentA": {
-              "facts": [
-                "shield body"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "detachable disc"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -2449,17 +2650,57 @@
         "realization": {
           "description": "Primary use holds a contact shield; alternate use launches a returning disc.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_shield",
-            "claim_disc"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A shield stays whole while its central plate detaches as a disc."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_shield"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "alternate_disc"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_shield"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use holds a contact shield; alternate use launches a returning disc.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_disc"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use holds a contact shield; alternate use launches a returning disc.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -2482,7 +2723,17 @@
           "literalSynthesis": "A shield stays whole while its central plate detaches as a disc.",
           "parentAContribution": "shield body",
           "parentBContribution": "detachable disc",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Shield with Breakaway Disc",
         "runtimeProgram": {
@@ -2649,17 +2900,57 @@
         "realization": {
           "description": "Primary use holds a contact shield; alternate use launches a returning disc.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_shield",
-            "claim_disc"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A shield stays whole while its central plate detaches as a disc."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_shield"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "alternate_disc"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_shield"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use holds a contact shield; alternate use launches a returning disc.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_disc"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use holds a contact shield; alternate use launches a returning disc.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -2693,7 +2984,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "679ebd19c8afd94bdc95e045f3ad2f1b473834ec38a814a535d2dd353fc63c80"
+      "expectedDeliveryWireSha256": "3c95b1bf58298f98062f7f1162a2736e9c3af459655686286517b3ba88ad5c3a"
     },
     {
       "authored": {
@@ -2703,51 +2994,19 @@
           "literalSynthesis": "The umbrella is a literal brace and its weighted tip becomes a grenade.",
           "parentAContribution": "umbrella canopy and shaft",
           "parentBContribution": "grenade charge",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Umbrella Grenadier",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "primary_guard",
-                "umbrella_guard_motion"
-              ],
-              "id": "claim_guard",
-              "kind": "gameplay",
-              "text": "Primary use creates the held umbrella body."
-            },
-            {
-              "backedBy": [
-                "alternate_grenade",
-                "grenade_burst"
-              ],
-              "id": "claim_burst",
-              "kind": "gameplay",
-              "text": "Alternate use creates a separate arcing grenade that bursts on expiry."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "The umbrella is a literal brace and its weighted tip becomes a grenade.",
-            "parentA": {
-              "facts": [
-                "umbrella canopy and shaft"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "grenade charge"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -2977,17 +3236,57 @@
         "realization": {
           "description": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_guard",
-            "claim_burst"
-          ],
-          "intentTrace": {
-            "kept": [
-              "The umbrella is a literal brace and its weighted tip becomes a grenade."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_guard"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "alternate_grenade"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_guard"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_grenade"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -3011,7 +3310,17 @@
           "literalSynthesis": "The umbrella is a literal brace and its weighted tip becomes a grenade.",
           "parentAContribution": "umbrella canopy and shaft",
           "parentBContribution": "grenade charge",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            },
+            {
+              "input": "alternate_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Umbrella Grenadier",
         "runtimeProgram": {
@@ -3186,17 +3495,57 @@
         "realization": {
           "description": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_guard",
-            "claim_burst"
-          ],
-          "intentTrace": {
-            "kept": [
-              "The umbrella is a literal brace and its weighted tip becomes a grenade."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_guard"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                },
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "alternate_grenade"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_guard"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                },
+                {
+                  "runtimeRefs": [
+                    "alternate_grenade"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -3230,7 +3579,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "bda955449e58b2c9ea869854bb16c8a503fcfda38cb9459d77b27141ae5e6c74"
+      "expectedDeliveryWireSha256": "cdcc5cc94bdc4a2b6bef9bd156ddb95cb5b1d1d475c70cb069c3ced01dd061ac"
     },
     {
       "authored": {
@@ -3240,53 +3589,15 @@
           "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
           "parentAContribution": "workbench body",
           "parentBContribution": "blade and nails",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Workbench-Backed Blade",
-        "runtimeContract": {
-          "claims": [
-            {
-              "backedBy": [
-                "item_stats",
-                "item_use",
-                "item_contact",
-                "primary_workbench",
-                "workbench_blade_motion"
-              ],
-              "id": "claim_literal_bench",
-              "kind": "parent_synthesis",
-              "text": "The item body is the primary contact blade; the workbench projectile is an explicit secondary held effect."
-            },
-            {
-              "backedBy": [
-                "shed_nails"
-              ],
-              "id": "claim_nails",
-              "kind": "gameplay",
-              "text": "Hits release five independently simulated nails."
-            }
-          ],
-          "parentSynthesis": {
-            "composition": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
-            "parentA": {
-              "facts": [
-                "workbench body"
-              ],
-              "runtimeRoles": [
-                "literal physical component"
-              ]
-            },
-            "parentB": {
-              "facts": [
-                "blade and nails"
-              ],
-              "runtimeRoles": [
-                "literal mechanical component"
-              ]
-            }
-          },
-          "schema": "infini.runtime-contract.low-level.v1"
-        },
         "runtimeProgram": {
           "apiVersion": "infini.runtime-program.v5",
           "bindings": [
@@ -3514,17 +3825,38 @@
         "realization": {
           "description": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_literal_bench",
-            "claim_nails"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_workbench"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_workbench"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         }
       },
@@ -3549,7 +3881,13 @@
           "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
           "parentAContribution": "workbench body",
           "parentBContribution": "blade and nails",
-          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+          "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute the planned spawn_entity behavior."
+            }
+          ]
         },
         "name": "Workbench-Backed Blade",
         "runtimeProgram": {
@@ -3716,17 +4054,38 @@
         "realization": {
           "description": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
           "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-          "backedByClaims": [
-            "claim_literal_bench",
-            "claim_nails"
-          ],
-          "intentTrace": {
-            "kept": [
-              "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity."
-            ],
-            "changed": [],
-            "dropped": [],
-            "added": []
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute the planned spawn_entity behavior.",
+                  "implementedBehavior": "The executable program implements spawn_entity.",
+                  "runtimeRefs": [
+                    "primary_workbench"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The planned action is represented by the cited runtime lane."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The historical fixture report is expected to describe its final executable program.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "primary_workbench"
+                  ],
+                  "programBehavior": "The executable program implements spawn_entity.",
+                  "reportedBehavior": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+                  "result": "aligned",
+                  "reason": "The final report is expected to cover the cited executable lane."
+                }
+              ]
+            }
           }
         },
         "gameplay": {
@@ -3760,7 +4119,7 @@
           "enabled": false
         }
       },
-      "expectedDeliveryWireSha256": "7f30883bdff94e9f1038a7a54162ba07765cf93e07481fd10bb5b40735d907f4"
+      "expectedDeliveryWireSha256": "81cefc52e6b60c5c8e95ac5962d0247da49f4b127d03390dfe52a90845db52db"
     }
   ],
   "historicalLiveEvidence": false,

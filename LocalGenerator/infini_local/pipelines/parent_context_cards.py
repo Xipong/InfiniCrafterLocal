@@ -159,8 +159,8 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
         }
         if summary:
             generated_parent["summary"] = {key: copy.deepcopy(summary.get(key)) for key in (
-                "schema", "name", "identity", "description", "playerExperience", "notableEffects", "backedByClaims",
-                "parentComposition", "runtimePrimaryEntityId", "runtimeEntityIds",
+                "schema", "name", "identity", "description", "playerExperience", "notableEffects",
+                "runtimePrimaryEntityId", "runtimeEntityIds",
             ) if _compact_keep(summary.get(key))}
         card["raw"]["generatedParent"] = generated_parent
     # Do not send section bookkeeping or token-byte metadata to the LLM; the raw object keys are enough.

@@ -4,13 +4,12 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 1,
-        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 19178,
+      "dossierChars": 19010,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -27,7 +26,6 @@
       "readOnlyDependencyCounts": {
         "bindings": 0,
         "calls": 0,
-        "claims": 0,
         "entities": 1
       },
       "supportingCapabilities": []
@@ -36,7 +34,6 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 0,
-        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -44,14 +41,12 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 21045,
+      "dossierChars": 18823,
       "errorCodes": [
-        "binding_dependency",
-        "missing_claim_backing"
+        "binding_dependency"
       ],
       "errorPaths": [
-        "$.runtimeProgram.bindings[0].input",
-        "$.runtimeContract.claims[0].backedBy"
+        "$.runtimeProgram.bindings[0].input"
       ],
       "existingBrokenCapabilities": [],
       "name": "missing_item_use_capability",
@@ -59,7 +54,6 @@
       "readOnlyDependencyCounts": {
         "bindings": 1,
         "calls": 0,
-        "claims": 0,
         "entities": 1
       },
       "supportingCapabilities": []
@@ -68,7 +62,6 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 0,
-        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -95,14 +88,12 @@
         "move_whip_lash",
         "move_yoyo_hover"
       ],
-      "dossierChars": 36602,
+      "dossierChars": 34338,
       "errorCodes": [
-        "missing_movement_component",
-        "missing_claim_backing"
+        "missing_movement_component"
       ],
       "errorPaths": [
-        "$.runtimeProgram.calls",
-        "$.runtimeContract.claims[0].backedBy"
+        "$.runtimeProgram.calls"
       ],
       "existingBrokenCapabilities": [],
       "name": "missing_position_driver",
@@ -110,7 +101,6 @@
       "readOnlyDependencyCounts": {
         "bindings": 1,
         "calls": 0,
-        "claims": 0,
         "entities": 1
       },
       "supportingCapabilities": []
@@ -119,7 +109,6 @@
       "brokenCounts": {
         "bindings": 0,
         "calls": 1,
-        "claims": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -127,7 +116,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 21726,
+      "dossierChars": 21558,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -143,7 +132,6 @@
       "readOnlyDependencyCounts": {
         "bindings": 0,
         "calls": 1,
-        "claims": 0,
         "entities": 1
       },
       "supportingCapabilities": []
@@ -168,16 +156,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 86928,
+  "fullAuthorPayloadChars": 89436,
   "fullCapabilityCatalogCount": 51,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 41,
+    "declaredCodes": 38,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 40,
+    "emittedCodes": 37,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 41,
-    "runtimeDeclaredCodes": 40,
+    "policyCodes": 38,
+    "runtimeDeclaredCodes": 37,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

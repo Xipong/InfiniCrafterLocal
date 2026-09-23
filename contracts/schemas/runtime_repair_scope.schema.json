@@ -789,15 +789,6 @@
           "type": "array",
           "uniqueItems": true
         },
-        "claimIds": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
         "entityIds": {
           "items": {
             "maxLength": 48,
@@ -811,8 +802,7 @@
       "required": [
         "entityIds",
         "bindingIds",
-        "callIds",
-        "claimIds"
+        "callIds"
       ],
       "type": "object"
     },
@@ -1620,18 +1610,6 @@
           ],
           "type": "object"
         },
-        "claims": {
-          "additionalProperties": false,
-          "properties": {
-            "allowed": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "allowed"
-          ],
-          "type": "object"
-        },
         "entities": {
           "additionalProperties": false,
           "properties": {
@@ -1668,8 +1646,7 @@
       "required": [
         "entities",
         "bindings",
-        "calls",
-        "claims"
+        "calls"
       ],
       "type": "object"
     },
@@ -1758,23 +1735,6 @@
           "type": "array",
           "uniqueItems": true
         },
-        "claimIds": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
-        "claimIndices": {
-          "items": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
         "entityIds": {
           "items": {
             "maxLength": 48,
@@ -1797,11 +1757,9 @@
         "entityIds",
         "bindingIds",
         "callIds",
-        "claimIds",
         "entityIndices",
         "bindingIndices",
         "callIndices",
-        "claimIndices",
         "callParamKeys",
         "callPropertyKeys"
       ],
@@ -2087,31 +2045,6 @@
           },
           "type": "array"
         },
-        "claims": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maxLength": 48,
-                "minLength": 1,
-                "type": "string"
-              },
-              "paths": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              }
-            },
-            "required": [
-              "id",
-              "paths"
-            ],
-            "type": "object"
-          },
-          "type": "array"
-        },
         "entities": {
           "items": {
             "additionalProperties": false,
@@ -2141,8 +2074,7 @@
       "required": [
         "entities",
         "bindings",
-        "calls",
-        "claims"
+        "calls"
       ],
       "type": "object"
     },
@@ -2211,24 +2143,6 @@
           "type": "array",
           "uniqueItems": true
         },
-        "claimBackingIds": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
-        "claimKindIds": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
         "entityKindIds": {
           "items": {
             "maxLength": 48,
@@ -2247,9 +2161,7 @@
         "callFnIds",
         "callTargetIds",
         "callEventIds",
-        "callReferenceParams",
-        "claimKindIds",
-        "claimBackingIds"
+        "callReferenceParams"
       ],
       "type": "object"
     },
@@ -2283,15 +2195,6 @@
           "type": "array",
           "uniqueItems": true
         },
-        "claimIds": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
         "entityIds": {
           "items": {
             "maxLength": 48,
@@ -2305,8 +2208,7 @@
       "required": [
         "entityIds",
         "bindingIds",
-        "callIds",
-        "claimIds"
+        "callIds"
       ],
       "type": "object"
     },

@@ -19,6 +19,58 @@ from infini_local.desktop.settings_gui_theme import (
 
 
 class SettingsGuiServerControlsMixin:
+    def codex_login(self):
+        from queue import Queue
+        from infini_local.services import codex_auth
+        if getattr(self, "_codex_login_running", False):
+            self.status_var.set("Codex OAuth: вход уже ожидает завершения в браузере.")
+            return
+        self._codex_login_running = True
+        self._codex_login_cancel = threading.Event()
+        self._codex_login_results = Queue()
+        cancel, results = self._codex_login_cancel, self._codex_login_results
+        self.status_var.set("Codex OAuth: заверши вход в открывшемся браузере (3 минуты).")
+        def worker():
+            try:
+                codex_auth.login(cancel=cancel)
+                results.put("Codex OAuth: вход выполнен. Выбери openai_codex и сохрани настройки.")
+            except codex_auth.CodexError as exc:
+                results.put(str(exc))
+            except Exception:
+                results.put("Codex OAuth: не удалось открыть браузер или сохранить сессию.")
+        threading.Thread(target=worker, daemon=True, name="codex-oauth-login").start()
+        self.after(150, self._poll_codex_login)
+
+    def _poll_codex_login(self):
+        from queue import Empty
+        try:
+            result = self._codex_login_results.get_nowait()
+        except Empty:
+            self.after(150, self._poll_codex_login)
+            return
+        self._codex_login_running = False
+        self.status_var.set(result)
+
+    def codex_status(self):
+        from infini_local.services.codex_auth import auth_status
+        status = auth_status()
+        text = "вход не выполнен"
+        if status["authenticated"]:
+            text = "сессия сохранена; токен обновится при запросе" if status["expired"] else "сессия готова"
+        self.status_var.set("Codex OAuth: " + text + ". Квота проверяется сервером при генерации.")
+
+    def codex_logout(self):
+        from infini_local.services.codex_auth import logout
+        if getattr(self, "_codex_login_running", False):
+            self._codex_login_cancel.set()
+            self.status_var.set("Codex OAuth: отмена входа; после завершения нажми Sign out ещё раз.")
+            return
+        try:
+            logout()
+            self.status_var.set("Codex OAuth: локальная сессия InfiniCrafter удалена.")
+        except OSError:
+            self.status_var.set("Codex OAuth: не удалось удалить локальную сессию.")
+
     def browse_file(self, key: str):
         initial = self.vars[key].get() if key in self.vars else ""
         filename = filedialog.askopenfilename(title="Выбери файл", initialdir=str(Path(initial).parent) if initial else str(ROOT))
@@ -362,6 +414,10 @@ class SettingsGuiServerControlsMixin:
                 warnings.append(f"LLM {slot} включён, но Model пустой — profile не попадёт в round-robin pool.")
             if provider == "openrouter" and not (data.get(prefix + "API_KEY") or "").strip():
                 warnings.append(f"LLM {slot}: OpenRouter выбран, но API key пустой.")
+        if backend == "openai_codex":
+            from infini_local.services.codex_auth import auth_status
+            if not auth_status()["authenticated"]:
+                warnings.append("Codex OAuth выбран, но вход не выполнен. Нажми Sign in with ChatGPT.")
         if backend == "image_api" and not data.get("INFINI_IMAGE_API_KEY"):
             warnings.append("Image API выбран, но API key пустой.")
         asset_transport = (data.get("INFINI_MP_ASSET_TRANSPORT") or "native").strip().lower()
@@ -444,6 +500,8 @@ class SettingsGuiServerControlsMixin:
             self.status_var.set("Нет server.py процесса, запущенного из этого GUI.")
 
     def on_close(self):
+        if getattr(self, "_codex_login_running", False):
+            self._codex_login_cancel.set()
         self.destroy()
 
 __all__ = ["SettingsGuiServerControlsMixin"]
