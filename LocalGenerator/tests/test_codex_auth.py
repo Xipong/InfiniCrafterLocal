@@ -139,6 +139,144 @@ def test_authorization_code_exchange_uses_native_form_encoding(monkeypatch):
     assert auth.post_json(auth.TOKEN_URL, {"code": "test+code", "grant_type": "authorization_code"}, form=True) == {"ok": True}
 
 
+def test_twice_escaped_unicode_credential_cannot_survive_error_or_text_output(monkeypatch):
+    import io
+    from email.message import Message
+    from urllib.error import HTTPError
+    from infini_local.services import codex_text_backend
+    auth = auth_module()
+    secret = "test-access-not-real"
+    twice = ''.join('\\\\u%04x' % ord(ch) for ch in secret)
+    assert auth._decode_unicode_runs(twice) == secret
+    class Opener:
+        def open(self, request, timeout):
+            body = json.dumps({"error": {"message": "quota " + twice}}).encode()
+            raise HTTPError(request.full_url, 403, "denied", Message(), io.BytesIO(body))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    with pytest.raises(auth.CodexError) as caught:
+        auth.get_json("https://chatgpt.com/backend-api/codex/models", headers={"Authorization": "Bearer " + secret})
+    assert secret not in str(caught.value).replace('\\', '')
+    monkeypatch.setattr(auth, "get_credentials", lambda: auth.Credentials(secret, "test-refresh-not-real", "test-account", 9999999999))
+    monkeypatch.setattr(auth, "post_sse", lambda *a, **kw: {"status": "completed", "output": [
+        {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": '{"echo":"' + twice + '"}'}]}]})
+    with pytest.raises(auth.CodexError, match="credential"):
+        codex_text_backend.generate_chat({"model": "test-model", "messages": [{"role": "user", "content": "test"}]}, timeout=3)
+
+
+def test_http_diagnostic_does_not_return_nested_escaped_credentials(monkeypatch):
+    import io
+    from email.message import Message
+    from urllib.error import HTTPError
+    auth = auth_module()
+    secret = "test-access-not-real"
+    nested = '{"token":"' + ''.join('\\u%04x' % ord(ch) for ch in secret) + '"}'
+    body = json.dumps({"error": {"message": "quota " + nested}}).encode()
+    class Opener:
+        def open(self, request, timeout):
+            raise HTTPError(request.full_url, 403, "denied", Message(), io.BytesIO(body))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    with pytest.raises(auth.CodexError) as caught:
+        auth.get_json("https://chatgpt.com/backend-api/codex/models", headers={"Authorization": "Bearer " + secret})
+    diagnostic = str(caught.value)
+    assert "HTTP 403" in diagnostic
+    assert secret not in diagnostic
+    assert "\\u" not in diagnostic
+
+
+def test_codex_http_error_keeps_non_message_diagnostic_without_secrets(monkeypatch):
+    import io
+    from email.message import Message
+    from urllib.error import HTTPError
+    auth = auth_module()
+    class Opener:
+        def open(self, request, timeout):
+            raise HTTPError(request.full_url, 400, "bad", Message(), io.BytesIO(b'{"error":{"code":"unsupported_parameter","param":"stream"}}'))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    with pytest.raises(auth.CodexError, match="unsupported_parameter"):
+        auth.get_json("https://chatgpt.com/backend-api/codex/models", headers={"Authorization": "Bearer test-access-not-real"})
+
+
+def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
+    import io
+    auth = auth_module()
+    event = b'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
+    socket_limits = []
+    class Socket:
+        def settimeout(self, value):
+            socket_limits.append(value)
+    class Response(io.BytesIO):
+        def __init__(self):
+            super().__init__(event)
+            from types import SimpleNamespace
+            self.fp = SimpleNamespace(raw=SimpleNamespace(_sock=Socket()))
+        def readline(self, *args, **kwargs):
+            time.sleep(0.04)
+            return super().readline(*args, **kwargs)
+    class Opener:
+        def open(self, request, timeout):
+            return Response()
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    with pytest.raises(auth.CodexError, match="timed out"):
+        auth.post_sse("https://chatgpt.com/backend-api/codex/responses", {"stream": True}, timeout=0.02)
+    assert socket_limits and all(0 < value <= 0.02 for value in socket_limits)
+
+
+def test_codex_sse_uses_completed_output_items_when_final_envelope_omits_output(monkeypatch):
+    import io
+    auth = auth_module()
+    stream = b'data: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"final"}]}}\n\ndata: {"type":"response.completed","response":{"id":"resp-2","status":"completed","output":[]}}\n\n'
+    class Opener:
+        def open(self, request, timeout):
+            return io.BytesIO(stream)
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    result = auth.post_sse("https://chatgpt.com/backend-api/codex/responses", {"stream": True})
+    assert result["output"][0]["content"][0]["text"] == "final"
+
+
+def test_subscription_sse_requires_completed_event_and_never_accepts_partial_text(monkeypatch):
+    import io
+    auth = auth_module()
+    streams = [
+        b'data: {"type":"response.output_text.delta","delta":"partial"}\n\ndata: {"type":"response.completed","response":{"id":"resp-test","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"complete"}]}]}}\n\n',
+        b'data: {"type":"response.output_text.delta","delta":"partial"}\n\n',
+    ]
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == "https://chatgpt.com/backend-api/codex/responses"
+            assert request.get_header("Accept") == "text/event-stream"
+            return io.BytesIO(streams.pop(0))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    assert auth.post_sse("https://chatgpt.com/backend-api/codex/responses", {"stream": True}, headers={"Authorization": "Bearer test-access-not-real"})["id"] == "resp-test"
+    with pytest.raises(auth.CodexError, match="before completion"):
+        auth.post_sse("https://chatgpt.com/backend-api/codex/responses", {"stream": True})
+
+
+def test_bounded_catalog_get_uses_only_codex_origin_and_redacts_errors(monkeypatch):
+    import io
+    from email.message import Message
+    from urllib.error import HTTPError
+    auth = auth_module()
+    key = "test-access-not-real"
+    requests = []
+    class Opener:
+        def open(self, request, timeout):
+            requests.append(request)
+            assert timeout == 3
+            if len(requests) == 1:
+                return io.BytesIO(b'{"models": []}')
+            raise HTTPError(request.full_url, 403, "denied", Message(), io.BytesIO(json.dumps({"error": {"message": "denied " + key}}).encode()))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    url = "https://chatgpt.com/backend-api/codex/models?client_version=0.4.241"
+    headers = {"Authorization": "Bearer " + key}
+    assert auth.get_json(url, headers=headers, timeout=3, limit=128) == {"models": []}
+    assert requests[0].get_method() == "GET"
+    with pytest.raises(auth.CodexError, match="HTTP 403") as caught:
+        auth.get_json(url, headers=headers, timeout=3, limit=128)
+    assert key not in str(caught.value)
+    with pytest.raises(auth.CodexError):
+        auth.get_json("https://api.openai.com/v1/models", headers=headers)
+
+
 def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path):
     auth = auth_module()
     path = tmp_path / "codex-auth.json"

@@ -91,7 +91,7 @@ class SettingsGuiUiMixin:
     def _set_widget_enabled(self, widget, enabled: bool):
         try:
             if isinstance(widget, ttk.Combobox):
-                widget.configure(state="readonly" if enabled else "disabled")
+                widget.configure(state=("normal" if getattr(widget, "_infini_editable", False) else "readonly") if enabled else "disabled")
                 return
             if isinstance(widget, tk.Text):
                 widget.configure(state="normal" if enabled else "disabled")
@@ -162,6 +162,8 @@ class SettingsGuiUiMixin:
             style.configure("Ghost.TButton", padding=(10, 6), font=("Segoe UI", 9))
             style.configure("TEntry", padding=(7, 5), fieldbackground="#ffffff", bordercolor=BORDER_DARK_FG, lightcolor=BORDER_DARK_FG, darkcolor=BORDER_DARK_FG)
             style.configure("TCombobox", padding=(7, 5), fieldbackground="#ffffff", bordercolor=BORDER_DARK_FG)
+            style.map("TCombobox", fieldbackground=[("readonly", "#ffffff"), ("disabled", "#f1f5f9")],
+                      foreground=[("readonly", TEXT_FG), ("disabled", MUTED_FG)])
         except (AttributeError, RuntimeError, TypeError):
             # Headless/import smoke tests use no-op ttk shims. Styling is best-effort only.
             pass
@@ -267,6 +269,21 @@ class SettingsGuiUiMixin:
         except (AttributeError, RuntimeError, TypeError, tk.TclError):
             return
         self._paint_tab_navigation()
+        if index not in (1, 3) or index in getattr(self, "_codex_auto_ping_tabs", set()):
+            return
+        from infini_local.services.codex_auth import auth_status
+        if not auth_status().get("authenticated"):
+            return
+        field = "INFINI_LLM_PROVIDER" if index == 1 else "INFINI_IMAGE_BACKEND"
+        if getattr(self, "_value")(field) != "openai_codex":
+            return
+        seen = getattr(self, "_codex_auto_ping_tabs", set())
+        seen.add(index)
+        self._codex_auto_ping_tabs = seen
+        if index == 1:
+            getattr(self, "refresh_codex_text_catalog")()
+        else:
+            getattr(self, "ping_codex_image_account")()
 
     def _build_tab_navigation(self, parent):
         nav = tk.Frame(parent, bg=CARD_BG, padx=4, pady=4, highlightthickness=1, highlightbackground=BORDER_FG)
@@ -313,9 +330,9 @@ class SettingsGuiUiMixin:
         try:
             outer = tk.Frame(parent, bg=CARD_BG, highlightthickness=1, highlightbackground=BORDER_FG, bd=0)
             outer._infini_bg = CARD_BG
-            outer.pack(fill="x", padx=10, pady=(8, 10))
+            outer.pack(fill="x", padx=8, pady=(4, 6))
             if title:
-                head = tk.Frame(outer, bg=CARD_BG, padx=16, pady=12)
+                head = tk.Frame(outer, bg=CARD_BG, padx=12, pady=8)
                 head._infini_bg = CARD_BG
                 head.pack(fill="x")
                 left = tk.Frame(head, bg=CARD_BG)
@@ -332,7 +349,7 @@ class SettingsGuiUiMixin:
                 if status:
                     chip = self._chip(head, status[0], status[1])
                     chip.pack(side="right", padx=(12, 0))
-            body = tk.Frame(outer, bg=CARD_BG, padx=4, pady=0)
+            body = tk.Frame(outer, bg=CARD_BG, padx=2, pady=4)
             body._infini_bg = CARD_BG
             body.pack(fill="x")
             return body
@@ -376,9 +393,9 @@ class SettingsGuiUiMixin:
         shell = ttk.Frame(self, padding=(12, 10), style="Infini.TFrame")
         shell.pack(fill="both", expand=True)
 
-        header = tk.Frame(shell, bg=HEADER_BG, padx=16, pady=12, highlightthickness=1, highlightbackground="#102344")
+        header = tk.Frame(shell, bg=HEADER_BG, padx=14, pady=7, highlightthickness=1, highlightbackground="#102344")
         header._infini_bg = HEADER_BG
-        header.pack(fill="x", pady=(0, 12))
+        header.pack(fill="x", pady=(0, 7))
         brand = tk.Frame(header, bg=HEADER_BG)
         brand._infini_bg = HEADER_BG
         logo = tk.Label(brand, text="⚡", bg=HEADER_BG, fg="#38bdf8", font=("Segoe UI Symbol", 23, "bold"))
@@ -412,9 +429,9 @@ class SettingsGuiUiMixin:
         # right-most config button is never clipped at the default window width.
         brand.pack(side="left", fill="x", expand=True)
 
-        preset_bar = tk.Frame(shell, bg=CARD_BG, padx=14, pady=9, highlightthickness=1, highlightbackground=BORDER_FG)
+        preset_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=5, highlightthickness=1, highlightbackground=BORDER_FG)
         preset_bar._infini_bg = CARD_BG
-        preset_bar.pack(fill="x", pady=(0, 12))
+        preset_bar.pack(fill="x", pady=(0, 7))
         preset_label = tk.Label(preset_bar, text="Профиль генерации", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
         preset_label.pack(side="left", padx=(0, 10))
         self.preset_var = tk.StringVar(value=self._pipeline_preset_from_config(self.data))
@@ -447,7 +464,7 @@ class SettingsGuiUiMixin:
         except (AttributeError, RuntimeError, TypeError):
             pass
         status_bar.pack(fill="x", side="bottom")
-        tk.Label(status_bar, text="●", bg=CARD_BG, fg=SUCCESS_BG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 6))
+        tk.Label(status_bar, text="●", bg=CARD_BG, fg=ACCENT_BG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 6))
         tk.Label(status_bar, text="Состояние", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
         tk.Label(status_bar, textvariable=self.status_var, bg=CARD_BG, fg=MUTED_FG, font=("Segoe UI", 9), anchor="w", justify="left").pack(side="left", fill="x", expand=True)
 
@@ -479,7 +496,7 @@ class SettingsGuiUiMixin:
     def check_row(self, parent, label, key, hint=None):
         bg = self._bg_of(parent, CARD_BG)
         hint_style = "HintMuted.TLabel" if bg == CARD_MUTED_BG else "Hint.TLabel"
-        frame = ttk.Frame(parent, padding=(12, 7), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
+        frame = ttk.Frame(parent, padding=(10, 4), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
         frame.pack(fill="x")
         try:
             setattr(frame, "_infini_bg", bg)
@@ -502,11 +519,11 @@ class SettingsGuiUiMixin:
         self._register_field_widgets(key, [widget], hint, hint_label)
         return frame
 
-    def row(self, parent, label, key, width=64, secret=False, browse=None, values=None, hint=None):
+    def row(self, parent, label, key, width=64, secret=False, browse=None, values=None, hint=None, editable=False):
         bg = self._bg_of(parent, CARD_BG)
         label_style = "FieldLabelMuted.TLabel" if bg == CARD_MUTED_BG else "FieldLabel.TLabel"
         hint_style = "HintMuted.TLabel" if bg == CARD_MUTED_BG else "Hint.TLabel"
-        frame = ttk.Frame(parent, padding=(12, 7), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
+        frame = ttk.Frame(parent, padding=(10, 4), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
         frame.pack(fill="x")
         try:
             frame._infini_bg = bg
@@ -516,7 +533,8 @@ class SettingsGuiUiMixin:
         label_widget.pack(side="left")
         var = self._var(key)
         if values:
-            widget = ttk.Combobox(frame, textvariable=var, values=values, width=width, state="readonly")
+            widget = ttk.Combobox(frame, textvariable=var, values=values, width=width, state="normal" if editable else "readonly")
+            setattr(widget, "_infini_editable", editable)
             widget.bind("<<ComboboxSelected>>", lambda _e, key=key: (self._refresh_visibility(), self._show_field_help(key)), add="+")
         else:
             widget = ttk.Entry(frame, textvariable=var, width=width, show="*" if secret and not self.show_secrets.get() else "")
@@ -558,7 +576,7 @@ class SettingsGuiUiMixin:
         bg = self._bg_of(parent, CARD_BG)
         label_style = "FieldLabelMuted.TLabel" if bg == CARD_MUTED_BG else "FieldLabel.TLabel"
         hint_style = "HintMuted.TLabel" if bg == CARD_MUTED_BG else "Hint.TLabel"
-        frame = ttk.Frame(parent, padding=(12, 7), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
+        frame = ttk.Frame(parent, padding=(10, 4), style="CardInner.TFrame" if bg == CARD_BG else "MutedCard.TFrame")
         frame.pack(fill="x")
         try:
             frame._infini_bg = bg
@@ -706,45 +724,54 @@ class SettingsGuiUiMixin:
         )
 
     def _build_llm(self, parent):
-        ttk.Label(parent, text="LLM: кто пишет контракт предмета", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
-        self.row(parent, "Use LLM", "INFINI_USE_LLM", values=["1", "0"], hint="Главный переключатель LLM-авторинга. 0 допустим только для явных debug/dev сценариев.")
-        self.row(parent, "Balance mode", "INFINI_BALANCE_MODE", values=["safety", "normalize", "report"])
-        self.row(parent, "Deterministic dev fallback", "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", values=["0", "1"], hint="Только для разработки: разрешает кодовый fallback, если LLM недоступна. В обычной игре оставлять 0.")
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        self.row(parent, "LLM provider", "INFINI_LLM_PROVIDER", values=["local", "openrouter", "openai_compat"], hint="OpenRouter может писать контракт, а картинки при этом могут идти локально через Z-Image.")
-        self.row(parent, "LM Studio URL", "INFINI_LMSTUDIO_URL")
-        self.row(parent, "LM Studio model", "INFINI_LMSTUDIO_MODEL")
-        self.row(parent, "OpenRouter API key", "INFINI_OPENROUTER_API_KEY", secret=True)
-        self.row(parent, "OpenRouter model", "INFINI_OPENROUTER_MODEL", hint="auto или slug модели с OpenRouter.")
-        self.row(parent, "OpenRouter referer", "INFINI_OPENROUTER_HTTP_REFERER")
-        self.row(parent, "OpenRouter title", "INFINI_OPENROUTER_APP_TITLE")
-        self.row(parent, "Compat base URL", "INFINI_OPENAI_COMPAT_BASE_URL")
-        self.row(parent, "Compat API key", "INFINI_OPENAI_COMPAT_API_KEY", secret=True)
-        self.row(parent, "Compat model", "INFINI_OPENAI_COMPAT_MODEL")
-        self.row(parent, "LLM 1 API mode", "INFINI_LLM_API_MODE", values=["auto", "responses", "chat_completions"], hint="auto сначала пробует /responses и запоминает поддержку; при отказе тот же self-contained packet идёт через /chat/completions.")
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        ttk.Label(parent, text="Fallback LLM (optional)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
-        self.row(parent, "Fallback provider", "INFINI_LLM_FALLBACK_PROVIDER", values=["", "local", "openrouter", "openai_compat"], hint="Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.")
-        self.row(parent, "Fallback model", "INFINI_LLM_FALLBACK_MODEL", hint="Пусто = fallback выключен. Если основная модель умерла по бабкам/сети, сервер попробует эту модель.")
-        self.row(parent, "Fallback base URL", "INFINI_LLM_FALLBACK_BASE_URL", hint="Пусто = взять base URL от fallback provider по умолчанию/из основных полей.")
-        self.row(parent, "Fallback API key", "INFINI_LLM_FALLBACK_API_KEY", secret=True, hint="Пусто = использовать основной ключ выбранного fallback provider.")
-        self.row(parent, "Fallback after transport fails", "INFINI_LLM_FALLBACK_NETWORK_FAILS", width=16, hint="Сколько сетевых/timeout падений подряд терпеть на основной модели, прежде чем уходить на fallback. По умолчанию 2.")
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        ttk.Label(parent, text="Primary generation controls", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
-        self.row(parent, "Response format", "INFINI_LLM_RESPONSE_FORMAT", values=["auto", "json_schema", "json_object", "off"])
-        self.row(parent, "Planner temperature", "INFINI_LLM_TEMPERATURE", width=16, hint="Температура основной LLM, которая пишет gameplay/runtime contract. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте. Не относится к fallback-модели.")
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        ttk.Label(parent, text="Scoped same-author repair (одна bounded попытка)", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
-        ttk.Label(parent, text="Не verifier и не полный reauthor: после rejection Author role возвращает только разрешённые repair-поля; принятые concept/runtime domains сохраняются.", style="Hint.TLabel").pack(anchor="w", padx=14, pady=(0, 6))
-        self.row(parent, "Repair temperature", "INFINI_LLM_REAUTHOR_TEMPERATURE", width=16, hint="Пусто = Planner temperature. Обычно 0.0-0.2 для bounded repair rejected domain.")
-        self.row(parent, "Visual temp", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.")
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        ttk.Label(parent, text="Output / reasoning", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=(4, 2))
-        self.row(parent, "Max answer tokens", "INFINI_LLM_MAX_TOKENS", width=16, hint="Для OpenRouter free/cheap reasoning-моделей обычно 9000-12000, иначе reasoning съедает бюджет и JSON не успевает выйти.")
-        self.row(parent, "Reasoning mode", "INFINI_LLM_REASONING_MODE", values=["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "tokens", "prompt_light", "prompt_strong"], hint="OpenRouter: auto/effort/tokens через reasoning. Local LM Studio: API reasoning не шлём, prompt_* добавляет только внутренний чек без вывода reasoning.")
-        self.row(parent, "Reasoning token budget", "INFINI_LLM_REASONING_MAX_TOKENS", width=16, hint="Используется при mode=tokens; OpenRouter мапит это на max_tokens/thinking_budget там, где модель поддерживает.")
-        self.row(parent, "Hide reasoning output", "INFINI_LLM_REASONING_EXCLUDE", values=["1", "0"], hint="1 = reasoning используется, но не возвращается в message.content; меньше ломает JSON-парсер.")
-        self.row(parent, "Local prompt reasoning", "INFINI_LLM_LOCAL_REASONING_PROMPT", values=["1", "0"], hint="Для локалок без API reasoning: разрешить короткий внутренний чек в system prompt. Цепочку мыслей выводить всё равно запрещено.")
+        primary = self._card(parent, "01 · Текстовый автор", "Выбери источник контракта предмета. Codex работает через аккаунт, остальные провайдеры сохраняют свои поля.", icon="◉")
+        self.row(primary, "Use LLM", "INFINI_USE_LLM", values=["1", "0"], hint="Главный переключатель LLM-авторинга. 0 допустим только для явных debug/dev сценариев.")
+        self.row(primary, "Balance mode", "INFINI_BALANCE_MODE", values=["safety", "normalize", "report"])
+        self.row(primary, "Deterministic dev fallback", "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", values=["0", "1"], hint="Только для разработки: разрешает кодовый fallback, если LLM недоступна. В обычной игре оставлять 0.")
+        self.row(primary, "LLM provider", "INFINI_LLM_PROVIDER", values=["local", "openrouter", "openai_compat", "openai_codex"])
+
+        codex_card = self._card(parent, "02 · Codex / ChatGPT", "Только текст: модели и поддерживаемые reasoning efforts из live-каталога аккаунта. Запрос не генерирует контент.", icon="✦", status=("OAuth", "blue"))
+        model_row = self.row(codex_card, "Codex text model", "INFINI_CODEX_LLM_MODEL", values=[self.data.get("INFINI_CODEX_LLM_MODEL") or ""], editable=True, hint="Slug редактируемый. Перед генерацией выбери модель; пустое значение не запускает Codex. Ошибка обновления не стирает сохранённый slug.")
+        self.codex_model_combo = next(w for w in model_row.winfo_children() if isinstance(w, ttk.Combobox))
+        self.codex_model_combo.bind("<<ComboboxSelected>>", lambda _e: self._update_codex_efforts(), add="+")
+        self.vars["INFINI_CODEX_LLM_MODEL"].trace_add("write", lambda *_: self._update_codex_efforts())
+        buttons = ttk.Frame(codex_card, style="CardInner.TFrame")
+        buttons.pack(fill="x", padx=10, pady=4)
+        for text, action in (("Обновить текстовые модели", self.refresh_codex_text_catalog), ("Войти", self.codex_login), ("Сессия", self.codex_status), ("Выйти", self.codex_logout)):
+            self._modern_button(buttons, text, action, variant="soft" if text.startswith("Обновить") else "ghost").pack(side="left", padx=(0, 6))
+        self.codex_catalog_var = tk.StringVar(value="При открытии вкладки с готовой сессией каталог обновляется сам; после входа нажми «Обновить».")
+        self._info_panel(codex_card, self.codex_catalog_var)
+
+        other = self._card(parent, "03 · Другие провайдеры", "Неактивные поля приглушены, но сохранены при смене источника.", icon="⌁")
+        self.row(other, "LM Studio URL", "INFINI_LMSTUDIO_URL")
+        self.row(other, "LM Studio model", "INFINI_LMSTUDIO_MODEL")
+        self.row(other, "OpenRouter API key", "INFINI_OPENROUTER_API_KEY", secret=True)
+        self.row(other, "OpenRouter model", "INFINI_OPENROUTER_MODEL", hint="auto или slug модели с OpenRouter.")
+        self.row(other, "OpenRouter referer", "INFINI_OPENROUTER_HTTP_REFERER")
+        self.row(other, "OpenRouter title", "INFINI_OPENROUTER_APP_TITLE")
+        self.row(other, "Compat base URL", "INFINI_OPENAI_COMPAT_BASE_URL")
+        self.row(other, "Compat API key", "INFINI_OPENAI_COMPAT_API_KEY", secret=True)
+        self.row(other, "Compat model", "INFINI_OPENAI_COMPAT_MODEL")
+        self.row(other, "LLM 1 API mode", "INFINI_LLM_API_MODE", values=["auto", "responses", "chat_completions"], hint="auto сначала пробует /responses и запоминает поддержку; при отказе тот же self-contained packet идёт через /chat/completions.")
+        fallback = self._card(parent, "04 · Fallback LLM", "Необязательный резерв для локальных/API провайдеров.", icon="↳")
+        self.row(fallback, "Fallback provider", "INFINI_LLM_FALLBACK_PROVIDER", values=["", "local", "openrouter", "openai_compat"], hint="Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.")
+        self.row(fallback, "Fallback model", "INFINI_LLM_FALLBACK_MODEL", hint="Пусто = fallback выключен. Если основная модель умерла по бабкам/сети, сервер попробует эту модель.")
+        self.row(fallback, "Fallback base URL", "INFINI_LLM_FALLBACK_BASE_URL", hint="Пусто = взять base URL от fallback provider по умолчанию/из основных полей.")
+        self.row(fallback, "Fallback API key", "INFINI_LLM_FALLBACK_API_KEY", secret=True, hint="Пусто = использовать основной ключ выбранного fallback provider.")
+        self.row(fallback, "Fallback after transport fails", "INFINI_LLM_FALLBACK_NETWORK_FAILS", width=16, hint="Сколько сетевых/timeout падений подряд терпеть на основной модели, прежде чем уходить на fallback. По умолчанию 2.")
+        controls = self._card(parent, "05 · Генерация и reasoning", "Gameplay Author и текстовый Visual Director. PNG-качество на вкладке «Картинки».", icon="◇")
+        self.row(controls, "Response format", "INFINI_LLM_RESPONSE_FORMAT", values=["auto", "json_schema", "json_object", "off"])
+        self.row(controls, "Planner temperature", "INFINI_LLM_TEMPERATURE", width=16, hint="Температура основной LLM, которая пишет gameplay/runtime contract. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте. Не относится к fallback-модели.")
+        self.row(controls, "Repair temperature", "INFINI_LLM_REAUTHOR_TEMPERATURE", width=16, hint="Пусто = Planner temperature. Обычно 0.0-0.2 для bounded repair rejected domain.")
+        self.row(controls, "Visual temp", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.")
+        visual_row = self.row(controls, "Visual Director effort", "INFINI_CODEX_VISUAL_REASONING", values=["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"], hint="Отдельный reasoning текстового Visual Director; inherit = усилие основной LLM, model_default = без effort в запросе; не image-модель.")
+        self.codex_visual_reasoning_combo = next(w for w in visual_row.winfo_children() if isinstance(w, ttk.Combobox))
+        self.row(controls, "Max answer tokens", "INFINI_LLM_MAX_TOKENS", width=16, hint="Другие провайдеры: бюджет ответа. Codex /responses не принимает max_output_tokens: поле не отправляется и не ограничивает квоту; применяются только временные/байтовые ограничения.")
+        reasoning_row = self.row(controls, "Reasoning mode", "INFINI_LLM_REASONING_MODE", values=["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "tokens", "prompt_light", "prompt_strong"], hint="Codex: выбери effort текущей модели; другие провайдеры сохраняют свои API/prompt режимы.")
+        self.codex_reasoning_combo = next(w for w in reasoning_row.winfo_children() if isinstance(w, ttk.Combobox))
+        self.row(controls, "Reasoning token budget", "INFINI_LLM_REASONING_MAX_TOKENS", width=16, hint="Используется при mode=tokens; OpenRouter мапит это на max_tokens/thinking_budget там, где модель поддерживает.")
+        self.row(controls, "Hide reasoning output", "INFINI_LLM_REASONING_EXCLUDE", values=["1", "0"], hint="1 = reasoning используется, но не возвращается в message.content; меньше ломает JSON-парсер.")
+        self.row(controls, "Local prompt reasoning", "INFINI_LLM_LOCAL_REASONING_PROMPT", values=["1", "0"], hint="Для локалок без API reasoning: разрешить короткий внутренний чек в system prompt. Цепочку мыслей выводить всё равно запрещено.")
 
     def _build_multidev(self, parent):
         hero = self._card(
@@ -816,10 +843,25 @@ class SettingsGuiUiMixin:
             self._attach_static_help(b, url)
 
     def _build_image(self, parent):
-        ttk.Label(parent, text="Image backend: кто рисует PNG", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
-        self._build_zimage_guide(parent)
-        self.row(parent, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "openai_codex", "image_api", "off", "comfyui", "a1111"], hint="openai_codex = ChatGPT/Codex OAuth по подписке; sdcpp = локальная модель; image_api = отдельный API; off = без PNG.")
-        self.row(parent, "Shared image concurrency", "INFINI_IMAGE_MAX_CONCURRENCY", width=8, hint="Один общий GPU/sd-server: 1. Увеличивай только если backend действительно обслуживает параллельные image jobs без OOM/очереди внутри.")
+        root = parent
+        choice = self._card(root, "01 · Движок изображения", "PNG-движок выбирается независимо от текстового LLM и Visual Director.", icon="▧")
+        self.row(choice, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "openai_codex", "image_api", "off", "comfyui", "a1111"], hint="openai_codex = ChatGPT/Codex OAuth по подписке; sdcpp = локальная модель; image_api = отдельный API; off = без PNG.")
+        self.row(choice, "Shared image concurrency", "INFINI_IMAGE_MAX_CONCURRENCY", width=8, hint="Один общий GPU/sd-server: 1. Увеличивай только если backend действительно обслуживает параллельные image jobs без OOM/очереди внутри.")
+        codex = self._card(root, "02 · Codex PNG", "Встроенная известная image-модель — не список моделей аккаунта.", icon="✦", status=("известная модель", "amber"))
+        model_row = self.row(codex, "Codex image model", "INFINI_CODEX_IMAGE_MODEL", values=[self.data.get("INFINI_CODEX_IMAGE_MODEL") or "gpt-image-2", "gpt-image-2"], editable=True, hint="gpt-image-2 — встроенная известная модель. Ручное имя сохраняется, но не подтверждает доступ к нему.")
+        self._modern_button(model_row, "Пинг · read-only", self.ping_codex_image_account).pack(side="right", padx=(8, 0))
+        self.row(codex, "Codex quality", "INFINI_CODEX_IMAGE_QUALITY", values=["low", "medium", "high", "auto"])
+        self.row(codex, "Codex size", "INFINI_CODEX_IMAGE_SIZE", values=["1024x1024", "1536x1024", "1024x1536", "auto"])
+        self.row(codex, "Codex timeout", "INFINI_CODEX_IMAGE_TIMEOUT", width=16)
+        self._info_panel(codex, "Качество и размер влияют на время генерации и расход квоты подписки. high/большой PNG может стоить дороже по лимитам; точных цен и остатка квоты этот UI не получает. Reasoning Visual Director — на вкладке LLM, не параметр image engine.", tone="blue")
+        self._info_panel(codex, "Нет live-каталога image-моделей. gpt-image-2 — известная встроенная модель, не подтверждение доступности на этом аккаунте. Пинг рядом с моделью читает текстовый endpoint, а не image-права/квоту.", tone="amber")
+        auth_actions = ttk.Frame(codex, style="CardInner.TFrame")
+        auth_actions.pack(fill="x", padx=10, pady=4)
+        for label, command in (("Войти", self.codex_login), ("Выйти", self.codex_logout)):
+            self._modern_button(auth_actions, label, command).pack(side="left", padx=(0, 6))
+        self.codex_image_account_var = tk.StringVar(value="Если есть сохранённая сессия, аккаунт проверяется при открытии вкладки; image-доступ не подтверждён.")
+        self._info_panel(codex, self.codex_image_account_var)
+        parent = self._card(root, "03 · Локальный sd.cpp", "FLUX.2 / Z-Image: пути, LoRA, запуск и sampler.", icon="▦")
         self.row(parent, "sd-server.exe", "INFINI_SDCPP_SERVER_EXE", browse="file")
         self.row(parent, "ROCm hybrid runtime", "INFINI_SDCPP_ROCM_COMPAT_ROOT", browse="dir", hint="Папка sdcpp-hybrid-gfx1030. ROCm/HIP/rocBLAS env применяется только к дочернему sd-server.exe.")
         self.row(parent, "Diffusion model", "INFINI_SDCPP_MODEL", browse="model", hint="FLUX.2 Klein или Z-Image *.gguf.")
@@ -856,25 +898,15 @@ class SettingsGuiUiMixin:
         self.row(parent, "Z-Image contract", "INFINI_ZIMAGE_PROMPT_CONTRACT", values=["auto", "1", "0"], hint="Обычно auto. Это внутренний маркер для Z-Image payload/prompt contract.")
         self.row(parent, "Positive-only prompt", "INFINI_ZIMAGE_POSITIVE_ONLY", values=["1", "0"], hint="Для Z-Image Turbo обычно 1: negative_prompt не используется, все запреты/техусловия в positive prompt.")
         self.row(parent, "Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE", values=["1", "0"], hint="1 = не доставлять свежий craft без валидного item PNG. Основной product contract; выключать только для явной диагностики.")
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
-        ttk.Label(parent, text="Codex OAuth / ChatGPT subscription", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10)
-        self.row(parent, "Codex image model", "INFINI_CODEX_IMAGE_MODEL")
-        self.row(parent, "Codex quality", "INFINI_CODEX_IMAGE_QUALITY", values=["low", "medium", "high", "auto"])
-        self.row(parent, "Codex size", "INFINI_CODEX_IMAGE_SIZE", values=["1024x1024", "1536x1024", "1024x1536", "auto"])
-        self.row(parent, "Codex timeout", "INFINI_CODEX_IMAGE_TIMEOUT", width=16)
-        codex_buttons = ttk.Frame(parent)
-        codex_buttons.pack(fill="x", padx=10, pady=6)
-        for label, command in [("Sign in with ChatGPT", self.codex_login), ("Auth status", self.codex_status), ("Sign out", self.codex_logout)]:
-            ttk.Button(codex_buttons, text=label, command=command).pack(side="left", padx=3)
-        ttk.Label(parent, text="Сессия хранится в профиле пользователя, не в config.env. API key не нужен.", wraplength=800).pack(anchor="w", padx=10)
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
+        self._build_zimage_guide(root)
+        parent = self._card(root, "04 · Внешний Image API", "Отдельный API key и endpoint; не относится к Codex-подписке.", icon="↗")
         self.row(parent, "Image API base", "INFINI_IMAGE_API_BASE_URL")
         self.row(parent, "Image API key", "INFINI_IMAGE_API_KEY", secret=True)
         self.row(parent, "Image API model", "INFINI_IMAGE_API_MODEL")
         self.row(parent, "Image API path", "INFINI_IMAGE_API_PATH")
         self.row(parent, "Image API size", "INFINI_IMAGE_API_SIZE", values=["512x512", "768x768", "1024x1024"])
         self.row(parent, "Image API timeout", "INFINI_IMAGE_API_TIMEOUT", width=16)
-        ttk.Separator(parent).pack(fill="x", padx=10, pady=8)
+        parent = self._card(root, "05 · A1111 / ComfyUI", "Альтернативные локальные серверы изображений.", icon="⌁")
         self.row(parent, "A1111 URL", "INFINI_A1111_URL")
         self.row(parent, "ComfyUI URL", "INFINI_COMFYUI_URL")
 

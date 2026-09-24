@@ -1,15 +1,16 @@
-# ChatGPT / Codex OAuth для генерации PNG
+# ChatGPT / Codex OAuth для LLM и генерации PNG
 
 ## Включение
 
-1. Открой `LocalGenerator/settings_gui.py`, вкладку **Image**.
-2. Выбери **Image backend → openai_codex**.
-3. Нажми **Sign in with ChatGPT** и заверши вход в браузере. Используется собственная сессия InfiniCrafter; установленный Codex CLI или Hermes не требуется.
-4. Сохрани настройки и перезапусти LocalGenerator. Параметры image backend загружаются при старте сервера.
-
-Поля по умолчанию:
+1. Запусти `LocalGenerator/settings_gui.py` тем же Python/пользователем, что запускает сервер.
+2. Нажми **Sign in with ChatGPT** и заверши вход в браузере. Это собственная сессия InfiniCrafter; установленный Codex CLI или Hermes не требуется.
+3. Для обычных LLM-этапов выбери **LLM provider → openai_codex**, обнови список моделей аккаунта и выбери модель. Для картинок независимо выбери **Image backend → openai_codex**.
+4. Сохрани настройки и перезапусти LocalGenerator: провайдеры и параметры загружаются при старте сервера.
 
 ```dotenv
+INFINI_LLM_PROVIDER=openai_codex
+INFINI_CODEX_LLM_MODEL=<slug выбранной текстовой модели>
+INFINI_CODEX_VISUAL_REASONING=inherit
 INFINI_IMAGE_BACKEND=openai_codex
 INFINI_CODEX_IMAGE_MODEL=gpt-image-2
 INFINI_CODEX_IMAGE_QUALITY=medium
@@ -17,7 +18,15 @@ INFINI_CODEX_IMAGE_SIZE=1024x1024
 INFINI_CODEX_IMAGE_TIMEOUT=240
 ```
 
-Этот переключатель меняет только image backend. Gameplay Author, Visual Director и VFX Director продолжают использовать выбранный LLM provider. `image_api` остаётся отдельным Platform/OpenAI-compatible API backend; его ключи и платный баланс не используются при `openai_codex`.
+LLM и image-провайдеры независимы. `openai_codex` для LLM вызывает подписочный `/backend-api/codex/responses`, а для изображений — `/backend-api/codex/images/generations`. `image_api`, `openai_compat` и OpenRouter остаются отдельными ключевыми/возможно платными маршрутами: ключ Platform и его баланс **не используются** подписочными запросами. Ошибка подписки не переключает выбранный Codex-провайдер автоматически на платный API.
+
+## Модели, качество и расход
+
+- При открытии вкладки с выбранным Codex и сохранённой сессией выполняется read-only проверка автоматически; кнопка обновления текстовых моделей повторно делает GET `/backend-api/codex/models?client_version=…` с текущим аккаунтом. Пикер показывает только видимые в каталоге **текстовые** модели и их заявленные уровни reasoning. Список означает рекламируемую доступность для этого аккаунта, не гарантирует успешный конкретный запрос. При ошибке уже выбранное имя не стирается; неизвестное имя можно сохранить вручную.
+- **Отдельного подтверждённого API-каталога image-моделей нет.** `gpt-image-2` — известное встроенное имя, не проверка image-entitlement. Проверка сеанса или account ping не расходует image quota, но не доказывает image-доступ: его покажет только настоящий запрос. Нельзя выбирать текстовые slugs как image-модели на основании текстового каталога.
+- `INFINI_CODEX_IMAGE_QUALITY=low|medium|high|auto` передаётся именно в image endpoint вместе с размером и одной картинкой (`n=1`). `low` обычно дешевле по вычислениям, `high` — дороже/медленнее, `auto` оставляет выбор серверу; точное списание подписочной квоты локально не известно. Не используй `auto`, если важна предсказуемость.
+- `INFINI_CODEX_VISUAL_REASONING=inherit|model_default|none|minimal|low|medium|high|xhigh|max` управляет **текстовым Visual Director / visual repair**, который готовит authored prompt; `inherit` берёт общий LLM effort, `model_default` не посылает effort; при общем `off` Gameplay Author всё равно требует минимум `medium` для сохранения контракта, а Visual Director оставляет выбор модели. Это **не** reasoning внутри image-модели: документированного отдельного поля image reasoning у подписочного image endpoint нет. Выбирай уровень, который выбранная текстовая модель объявила в каталоге; `ultra` намеренно не отправляется как обычный effort.
+- Подписочный `/responses` отклоняет `max_output_tokens` (проверено HTTP 400), поэтому общий `INFINI_LLM_MAX_TOKENS` **не является лимитом расходов** для Codex. Запрос ограничен временем и размером ответа, но не числом серверных output tokens. Температура также не применяется к этому маршруту.
 
 Альтернатива GUI — команды из каталога `LocalGenerator` в установленном Python-окружении проекта:
 
@@ -46,8 +55,9 @@ python -m infini_local.services.codex_auth logout
 
 ## Проверка реализации
 
-- Offline-регрессии: PKCE/state и дубликаты callback-параметров, реальный loopback callback с подменой только внешнего token endpoint, form encoding, refresh при конкурентных потоках, приватное сохранение/выход, HTTP redaction, отдельный dispatch и отсутствие fallback, GUI schema/CLI.
-- Полный Python suite после интеграции: **330 passed**. Headless C# runner против реальных tModLoader/FNA: **40 passed, 0 failed**; ограничения движкового acceptance перечислены в `ENGINE_RUNTIME_AUDIT_RU.md`.
-- Native Windows probe: реальный DPAPI save/load и Tk build, доступность полей, очередь результата входа, выход и config roundtrip. Внешний login в этом UI-прогоне заменён offline-fixture; Windows file-lock на WSL UNC дал `EINVAL` и не засчитан как Windows lock acceptance. Linux refresh-lock проверен регрессией.
-- Живая подписочная проверка backend через существующую Codex CLI-сессию: один PNG `1672×941`, `gpt-image-2`, high, **44.07 с**. Это демонстрационная иллюстрация, не игровой спрайт. Запрошенный size был `1536x1024`; указаны фактические размеры ответа. Credentials не переносились в сессию InfiniCrafter и не публиковались.
-- Собственный браузерный вход с реальным аккаунтом, полный live craft и запуск игры этим прогоном не проверялись. Перед использованием нужно выполнить **Sign in with ChatGPT** в InfiniCrafter.
+- Offline-регрессии: PKCE/state и callback, refresh/session privacy, раздельный LLM/image dispatch, SSE completion и отказ принимать обрывки ответа, каталог аккаунта/ошибки обновления GUI, сохранение ручного slug, отсутствие скрытого платного fallback, качество PNG и независимый reasoning Visual Director. Полный Python suite: **363 passed**; headless C# runner против установленных tModLoader/FNA: **40 passed, 0 failed**; 12 проектных quality gates и Ruff прошли. Ограничения движкового acceptance перечислены в `ENGINE_RUNTIME_AUDIT_RU.md`.
+- Native Windows Tk probe с фиктивным конфигом и без входа/секретов: UI собирается, модель/quality/size/image ping видны в начальном viewport, состояния read-only/pending не выглядят как подтверждённый успех, настройки проходят roundtrip. Реальный браузерный login в UI-прогоне не выполнялся; Windows file-lock на WSL UNC остаётся неподдерживаемой границей. Linux refresh-lock покрыт регрессией.
+- Read-only каталог подписки проверен через существующую Codex CLI-сессию **в памяти**; текстовые модели аккаунта видны, но это не тест отдельной сессии InfiniCrafter и не список image-моделей. Пробный GET предполагаемого `/images/models` вернул HTTP 404; подтверждённого image-каталога нет.
+- Живая проверка текстового backend через ту же временно заимствованную CLI-сессию: подписочный `/responses` вернул валидный JSON при `gpt-6-sol` и low effort. Проверка показала, что `max_output_tokens` подписочный сервер отвергает HTTP 400, поэтому он не отправляется. Ни один API key/файл сессии в репозиторий не перенесён.
+- Предыдущая живая проверка image backend: один PNG `1672×941`, `gpt-image-2`, high, **44.07 с**. Это демонстрационная иллюстрация, не игровой спрайт; запрошен был size `1536x1024`, указаны фактические размеры ответа. Новые image-запросы в этом цикле не выполнялись.
+- Собственный браузерный вход с реальным аккаунтом, полный live craft, GPU/multiplayer и запуск игры этим прогоном не проверялись. Перед использованием выполни **Sign in with ChatGPT** в том же Python-профиле, что запускает сервер.

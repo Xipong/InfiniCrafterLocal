@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 121,
+  "documentedFieldCount": 123,
   "entries": [
     {
       "declarations": [
@@ -651,6 +651,54 @@
       ],
       "secret": false,
       "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CODEX_LLM_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "inherit",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "inherit",
+      "documented": true,
+      "example": "inherit",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_CODEX_VISUAL_REASONING",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
       "visibility": "gui"
     },
     {
@@ -5423,15 +5471,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 223,
-  "fingerprint": "8995a0c75d1abec1f2229322ec2f38afdb4dfe3469dee01a6839ff6f09d4500a",
+  "fieldCount": 225,
+  "fingerprint": "b55075e2f340b6a174ec47139ba02741242e70e586f69967c12aa88243d9a491",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 123,
+  "guiFieldCount": 125,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

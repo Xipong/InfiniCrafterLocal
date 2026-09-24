@@ -238,15 +238,14 @@ def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
     assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.DEFAULTS
     assert settings_schema.DEFAULTS["INFINI_LLM_REAUTHOR_TEMPERATURE"] == ""
     assert settings_schema.DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"] == "0.42"
-    fallback_heading = GUI_SOURCE.index('text="Fallback LLM (optional)"')
+    fallback_heading = GUI_SOURCE.index('"04 · Fallback LLM"')
     fallback_last_row = GUI_SOURCE.index('"Fallback after transport fails"', fallback_heading)
-    primary_heading = GUI_SOURCE.index('text="Primary generation controls"')
+    primary_heading = GUI_SOURCE.index('"05 · Генерация и reasoning"')
     planner_row = GUI_SOURCE.index('"Planner temperature"', primary_heading)
-    repair_heading = GUI_SOURCE.index('text="Scoped same-author repair', planner_row)
-    repair_temperature_row = GUI_SOURCE.index('"Repair temperature"', repair_heading)
+    repair_temperature_row = GUI_SOURCE.index('"Repair temperature"', planner_row)
     visual_row = GUI_SOURCE.index('"Visual temp"', repair_temperature_row)
-    output_heading = GUI_SOURCE.index('text="Output / reasoning"', visual_row)
-    assert fallback_heading < fallback_last_row < primary_heading < planner_row < repair_heading < repair_temperature_row < visual_row < output_heading
+    reasoning_row = GUI_SOURCE.index('"Reasoning mode"', visual_row)
+    assert fallback_heading < fallback_last_row < primary_heading < planner_row < repair_temperature_row < visual_row < reasoning_row
     assert '"Repair model"' not in GUI_SOURCE
     assert "Это не sd.cpp temperature" in GUI_SOURCE
 

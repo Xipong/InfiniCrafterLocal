@@ -230,8 +230,20 @@ class SettingsGuiTraceStateMixin:
             self._set_field_enabled(key, provider == "openrouter", f"LLM provider сейчас `{provider}`, OpenRouter поля не используются.")
         for key in compat_llm:
             self._set_field_enabled(key, provider == "openai_compat", f"LLM provider сейчас `{provider}`, compat API поля не используются.")
-        for key in ("INFINI_LLM_REAUTHOR_TEMPERATURE",):
-            getattr(self, "_set_field_enabled")(key, llm_enabled, "Use LLM=0; scoped same-author repair не вызывается.")
+        self._set_field_enabled("INFINI_CODEX_LLM_MODEL", provider == "openai_codex" and llm_enabled, "Текстовая Codex-модель используется только при LLM provider=openai_codex и Use LLM=1.")
+        self._set_field_enabled("INFINI_CODEX_VISUAL_REASONING", provider == "openai_codex" and llm_enabled, "Reasoning Visual Director используется только при текстовом Codex provider.")
+        self._set_field_enabled("INFINI_LLM_MAX_TOKENS", provider != "openai_codex", "Codex /responses отвергает max_output_tokens; числовой лимит не отправляется и не ограничивает квоту.")
+        if hasattr(self, "codex_reasoning_combo"):
+            if provider == "openai_codex":
+                self._update_codex_efforts()
+            else:
+                self.codex_reasoning_combo.configure(values=["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "tokens", "prompt_light", "prompt_strong"])
+                self.codex_visual_reasoning_combo.configure(values=["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"])
+        for key in ("INFINI_LLM_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE", "INFINI_VISUAL_DIRECTOR_TEMPERATURE"):
+            enabled = provider != "openai_codex" and (llm_enabled or key != "INFINI_LLM_REAUTHOR_TEMPERATURE")
+            reason = ("Codex /responses не принимает temperature; значение сохраняется для других провайдеров."
+                      if provider == "openai_codex" else "Use LLM=0; scoped same-author repair не вызывается.")
+            getattr(self, "_set_field_enabled")(key, enabled, reason)
 
         set_field_enabled = getattr(self, "_set_field_enabled")
         set_field_enabled("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD", attack_consumable_debug, "Debug minimum выключен; поставь галочку выше, чтобы выбрать batch size.")
@@ -249,13 +261,13 @@ class SettingsGuiTraceStateMixin:
         api_reasoning_active = provider != "local" and reasoning_mode not in off_modes and reasoning_mode not in prompt_modes
         self._set_field_enabled(
             "INFINI_LLM_REASONING_MAX_TOKENS",
-            api_reasoning_active and reasoning_mode in {"tokens", "token_budget", "max_tokens", "budget"},
-            "Бюджет токенов работает только при reasoning mode = tokens и не-local provider.",
+            api_reasoning_active and provider != "openai_codex" and reasoning_mode in {"tokens", "token_budget", "max_tokens", "budget"},
+            "Codex не поддерживает reasoning token budget; у других провайдеров работает при mode=tokens.",
         )
         self._set_field_enabled(
             "INFINI_LLM_REASONING_EXCLUDE",
-            api_reasoning_active,
-            "Exclude нужен только когда провайдеру реально отправляется API reasoning object.",
+            api_reasoning_active and provider != "openai_codex",
+            "Codex /responses не принимает exclude; другие API могут использовать этот флаг для reasoning output.",
         )
         local_prompt_active = reasoning_mode in prompt_modes or (provider == "local" and reasoning_mode not in off_modes)
         self._set_field_enabled(

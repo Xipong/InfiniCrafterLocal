@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import threading
+from queue import Empty, Queue
 import time
 import urllib.request
 import webbrowser
@@ -19,6 +20,103 @@ from infini_local.desktop.settings_gui_theme import (
 
 
 class SettingsGuiServerControlsMixin:
+    def ping_codex_image_account(self):
+        """Read-only account connectivity probe; there is no image-model list API."""
+        from infini_local.services import codex_catalog
+
+        generation = getattr(self, "_codex_image_ping_generation", 0) + 1
+        self._codex_image_ping_generation = generation
+        results = Queue()
+        self.codex_image_account_var.set("Проверка аккаунта через read-only текстовый endpoint…")
+        self.status_var.set("Codex: проверка аккаунта; image-доступ не проверяется.")
+
+        def worker():
+            try:
+                codex_catalog.list_text_models()
+                results.put(True)
+            except Exception:
+                results.put(False)
+
+        threading.Thread(target=worker, daemon=True, name="codex-image-account-ping").start()
+
+        def poll():
+            if generation != self._codex_image_ping_generation:
+                return
+            try:
+                reachable = results.get_nowait()
+            except Empty:
+                self.after(150, poll)
+                return
+            self.codex_image_account_var.set(
+                "Аккаунт доступен через текстовый каталог; image-доступ не проверен (нет image-каталога)."
+                if reachable else "Аккаунт/сеть не ответили; image-доступ не проверен. Выбранная image-модель сохранена."
+            )
+            self.status_var.set(self.codex_image_account_var.get())
+
+        self.after(150, poll)
+
+    def refresh_codex_text_catalog(self):
+        """Account-scoped read-only text catalog; only the Tk loop touches widgets."""
+        from infini_local.services import codex_catalog
+
+        generation = getattr(self, "_codex_catalog_generation", 0) + 1
+        self._codex_catalog_generation = generation
+        results = Queue()
+        self.codex_catalog_var.set("Читаем текстовые модели текущего Codex-аккаунта…")
+
+        def worker():
+            try:
+                results.put((True, codex_catalog.list_text_models()))
+            except Exception:
+                # Never display raw transport exceptions: they may include URLs or session data.
+                results.put((False, ()))
+
+        threading.Thread(target=worker, daemon=True, name="codex-text-catalog").start()
+
+        def poll():
+            if generation != self._codex_catalog_generation:
+                return
+            try:
+                ok, models = results.get_nowait()
+            except Empty:
+                self.after(150, poll)
+                return
+            if ok:
+                self._codex_text_models = {model.slug: model for model in models}
+                current = self.vars["INFINI_CODEX_LLM_MODEL"].get().strip()
+                choices = [model.slug for model in models]
+                if current and current not in choices:
+                    choices.insert(0, current)
+                self.codex_model_combo.configure(values=choices)
+                self.codex_catalog_var.set(f"Текстовый каталог аккаунта: {len(models)} моделей. Список не проверяет image-доступ.")
+                self._update_codex_efforts()
+            else:
+                self.codex_catalog_var.set("Не удалось обновить текстовый каталог. Сохранённый slug остаётся; проверь вход/сеть.")
+            self.status_var.set(self.codex_catalog_var.get())
+
+        self.after(150, poll)
+
+    def _update_codex_efforts(self):
+        from infini_local.services.codex_text_backend import EFFORTS
+        current = self.vars["INFINI_CODEX_LLM_MODEL"].get().strip()
+        model = getattr(self, "_codex_text_models", {}).get(current)
+        if model is None:
+            if hasattr(self, "_codex_text_models") and current:
+                self.codex_reasoning_combo.configure(values=["off", "none", "minimal", "low", "medium", "high", "xhigh"])
+                self.codex_visual_reasoning_combo.configure(values=["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"])
+                self.codex_catalog_var.set("Ручной slug вне текущего каталога: доступ/effort не подтверждены. Значение сохранено.")
+            return
+        selectable = tuple(effort for effort in model.efforts if effort in EFFORTS)
+        self.codex_reasoning_combo.configure(values=("off", *selectable))
+        self.codex_visual_reasoning_combo.configure(values=("inherit", "model_default", *selectable))
+        # A newly selected model must not silently rewrite a user's saved effort.
+        reasoning = self.vars["INFINI_LLM_REASONING_MODE"].get()
+        visual = self.vars["INFINI_CODEX_VISUAL_REASONING"].get()
+        if reasoning not in ("off", *selectable) or visual not in ("inherit", "model_default", *selectable):
+            self.codex_catalog_var.set("Сохранённый reasoning не поддерживается выбранной моделью; выбери допустимый effort. Значения не изменены.")
+        else:
+            self.codex_catalog_var.set(f"Текстовая модель аккаунта: effort {', '.join(selectable) or 'не заявлен'}; default: {model.default_effort or 'не указан'}. Image-доступ не проверен.")
+
     def codex_login(self):
         from queue import Queue
         from infini_local.services import codex_auth
@@ -67,6 +165,16 @@ class SettingsGuiServerControlsMixin:
             return
         try:
             logout()
+            # A worker may have fetched the previous account's catalog before
+            # sign-out. Retire every queued UI result and remove account metadata.
+            self._codex_catalog_generation = getattr(self, "_codex_catalog_generation", 0) + 1
+            self._codex_image_ping_generation = getattr(self, "_codex_image_ping_generation", 0) + 1
+            self._codex_auto_ping_tabs = set()
+            self._codex_text_models = {}
+            current = self.vars["INFINI_CODEX_LLM_MODEL"].get().strip()
+            self.codex_model_combo.configure(values=[current] if current else [])
+            self.codex_catalog_var.set("Сессия удалена; каталог очищен. Сохранённый slug не проверен.")
+            self.codex_image_account_var.set("Сессия удалена; image-доступ не проверен.")
             self.status_var.set("Codex OAuth: локальная сессия InfiniCrafter удалена.")
         except OSError:
             self.status_var.set("Codex OAuth: не удалось удалить локальную сессию.")

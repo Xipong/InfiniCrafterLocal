@@ -207,19 +207,67 @@ class _NoRedirect(urlrequest.HTTPRedirectHandler):
         return None
 
 
-def post_json(url: str, payload: dict, *, headers: dict | None = None, timeout: float = 30, limit: int = 65536, form: bool = False) -> dict:
-    """No redirects or automatic retries; bounded responses, sanitized errors."""
-    parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.hostname not in {"auth.openai.com", "chatgpt.com"} or parsed.username or parsed.password or parsed.port not in (None, 443):
+def _validated_https_origin(url: str) -> None:
+    try:
+        parsed = urlsplit(url)
+        allowed = (parsed.scheme == "https" and parsed.hostname in {"auth.openai.com", "chatgpt.com"}
+                   and parsed.username is None and parsed.password is None and parsed.port in (None, 443))
+    except ValueError:
+        allowed = False
+    if not allowed:
         raise CodexError("OAuth transport requires the fixed OpenAI HTTPS origin")
-    headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "infinicrafter/1.0", **(headers or {})}
-    if form:
-        from urllib.parse import urlencode
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
-        raw_payload = urlencode(payload).encode()
-    else:
-        raw_payload = json.dumps(payload).encode()
-    req = urlrequest.Request(url, data=raw_payload, headers=headers, method="POST")
+
+
+def _decode_unicode_runs(message: str) -> str:
+    # Error text and model output can contain nested JSON string literals.
+    def decode(match: re.Match) -> str:
+        escapes = ''.join('\\u' + code for code in re.findall(r"u([0-9a-fA-F]{4})", match.group(0)))
+        return json.loads('"' + escapes + '"').encode("utf-8", "replace").decode("utf-8")
+
+    for _ in range(3):
+        decoded = re.sub(r"(?:\\+u[0-9a-fA-F]{4})+", decode, message)
+        if decoded == message:
+            break
+        message = decoded
+    return message
+
+
+def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict) -> CodexError:
+    # Decode first so JSON escapes cannot hide an echoed credential.
+    raw = exc.read(65536)
+    try:
+        data = json.loads(raw)
+        error = data.get("error", data) if isinstance(data, dict) else {}
+        message = (str(error.get("message") or json.dumps(error, ensure_ascii=False)) if isinstance(error, dict)
+                   else str(error))
+    except (ValueError, UnicodeError):
+        message = raw.decode("utf-8", "replace")
+    message = _decode_unicode_runs(message)
+    sensitive = [str(payload[k]) for k in ("refresh_token", "code", "code_verifier") if payload.get(k)]
+    for key, value in headers.items():
+        if key.lower() in {"authorization", "chatgpt-account-id"}:
+            sensitive.extend([value, value.removeprefix("Bearer ")])
+    for secret in sorted(sensitive, key=len, reverse=True):
+        if secret:
+            message = message.replace(secret, "[REDACTED]")
+    message = re.sub(r"(?:eyJ[\w-]+\.[\w-]+\.[\w-]+|(?:sk-|rt_)[\w-]{12,})", "[REDACTED]", message)
+    message = " ".join(message.split())[:500]
+    return CodexError(f"OpenAI HTTP {exc.code}: {message or 'request rejected'}")
+
+
+def _json_request(url: str, payload: dict, *, method: str, headers: dict | None, timeout: float, limit: int, form: bool = False) -> dict:
+    """Bounded JSON transport, no redirects, credentials never reach another origin."""
+    _validated_https_origin(url)
+    merged = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "infinicrafter/1.0", **(headers or {})}
+    raw_payload = None
+    if method == "POST":
+        if form:
+            from urllib.parse import urlencode
+            merged["Content-Type"] = "application/x-www-form-urlencoded"
+            raw_payload = urlencode(payload).encode()
+        else:
+            raw_payload = json.dumps(payload).encode()
+    req = urlrequest.Request(url, data=raw_payload, headers=merged, method=method)
     try:
         with urlrequest.build_opener(_NoRedirect()).open(req, timeout=timeout) as response:
             raw = response.read(limit + 1)
@@ -230,28 +278,86 @@ def post_json(url: str, payload: dict, *, headers: dict | None = None, timeout: 
             raise CodexError("OpenAI response must be a JSON object")
         return result
     except urlerror.HTTPError as exc:
-        # Decode first so JSON escapes cannot hide an echoed credential.
-        raw = exc.read(65536)
-        try:
-            data = json.loads(raw)
-            error = data.get("error", {}) if isinstance(data, dict) else {}
-            message = str(error.get("message", "")) if isinstance(error, dict) else str(error)
-        except (ValueError, UnicodeError):
-            message = raw.decode("utf-8", "replace")
-        sensitive = [str(payload[k]) for k in ("refresh_token", "code", "code_verifier") if payload.get(k)]
-        for key, value in headers.items():
-            if key.lower() in {"authorization", "chatgpt-account-id"}:
-                sensitive.extend([value, value.removeprefix("Bearer ")])
-        for secret in sorted(sensitive, key=len, reverse=True):
-            if secret:
-                message = message.replace(secret, "[REDACTED]")
-        message = re.sub(r"(?:eyJ[\w-]+\.[\w-]+\.[\w-]+|(?:sk-|rt_)[\w-]{12,})", "[REDACTED]", message)
-        message = " ".join(message.split())[:500]
-        raise CodexError(f"OpenAI HTTP {exc.code}: {message or 'request rejected'}") from None
+        raise _http_failure(exc, payload, merged) from None
     except (ValueError, UnicodeError):
         raise CodexError("OpenAI returned invalid JSON") from None
     except (urlerror.URLError, OSError):
         raise CodexError("OpenAI connection failed or timed out") from None
+
+
+def post_json(url: str, payload: dict, *, headers: dict | None = None, timeout: float = 30, limit: int = 65536, form: bool = False) -> dict:
+    return _json_request(url, payload, method="POST", headers=headers, timeout=timeout, limit=limit, form=form)
+
+
+def get_json(url: str, *, headers: dict | None = None, timeout: float = 8, limit: int = 1024 * 1024) -> dict:
+    return _json_request(url, {}, method="GET", headers=headers, timeout=timeout, limit=limit)
+
+
+def post_sse(url: str, payload: dict, *, headers: dict | None = None, timeout: float = 120, limit: int = 8 * 1024 * 1024) -> dict:
+    """Read the native subscription Responses stream; partial output is never success."""
+    if url != "https://chatgpt.com/backend-api/codex/responses" or payload.get("stream") is not True:
+        raise CodexError("Codex text requires the fixed streaming subscription endpoint")
+    _validated_https_origin(url)
+    merged = {"Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "infinicrafter/1.0", **(headers or {})}
+    req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=merged, method="POST")
+    deadline = time.monotonic() + timeout
+    try:
+        with urlrequest.build_opener(_NoRedirect()).open(req, timeout=timeout) as response:
+            total = 0
+            data_lines: list[bytes] = []
+            completed_items: list[dict] = []
+            text_deltas: list[str] = []
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise CodexError("Codex text stream timed out")
+                # urllib sets a socket timeout per read, not for the whole SSE
+                # request. Reduce every network read to the remaining budget.
+                sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+                if sock is not None:
+                    sock.settimeout(max(0.001, remaining))
+                line = response.readline(256 * 1024 + 1)
+                if time.monotonic() > deadline:
+                    raise CodexError("Codex text stream timed out")
+                total += len(line)
+                if total > limit or len(line) > 256 * 1024:
+                    raise CodexError("Codex text stream exceeded its size limit")
+                if not line:
+                    break
+                if line.startswith(b"data:"):
+                    data_lines.append(line[5:].strip())
+                    continue
+                if line.strip() or not data_lines:
+                    continue
+                raw = b"\n".join(data_lines)
+                data_lines.clear()
+                if raw == b"[DONE]":
+                    break
+                try:
+                    event = json.loads(raw)
+                except (ValueError, UnicodeError):
+                    raise CodexError("Codex returned malformed stream data") from None
+                if not isinstance(event, dict):
+                    raise CodexError("Codex returned malformed stream data")
+                kind = event.get("type")
+                if kind == "response.output_item.done" and isinstance(event.get("item"), dict):
+                    completed_items.append(event["item"])
+                if kind == "response.output_text.delta" and isinstance(event.get("delta"), str):
+                    text_deltas.append(event["delta"])
+                if kind in {"response.failed", "response.incomplete", "error"}:
+                    raise CodexError("Codex text response failed or was incomplete")
+                if kind == "response.completed":
+                    result = event.get("response")
+                    if not isinstance(result, dict) or result.get("status") not in (None, "completed"):
+                        raise CodexError("Codex text completion was invalid")
+                    if not result.get("output"):
+                        result["output"] = completed_items or ([{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "".join(text_deltas)}]}] if text_deltas else [])
+                    return result
+            raise CodexError("Codex text stream ended before completion")
+    except urlerror.HTTPError as exc:
+        raise _http_failure(exc, payload, merged) from None
+    except (urlerror.URLError, OSError):
+        raise CodexError("Codex text connection failed or timed out") from None
 
 
 @contextmanager

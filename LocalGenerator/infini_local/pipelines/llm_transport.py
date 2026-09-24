@@ -17,6 +17,8 @@ from urllib.parse import urlsplit
 from infini_local.core.env_utils import env_str
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_config import (
+    CODEX_LLM_MODEL,
+    CODEX_VISUAL_REASONING,
     LLM_FALLBACK_API_KEY,
     LLM_FALLBACK_BASE_URL,
     LLM_FALLBACK_MODEL,
@@ -281,6 +283,16 @@ def _llm_context_key(context: dict[str, Any] | None) -> str:
 
 def _legacy_primary_llm_context() -> dict[str, Any]:
     provider = _normalized_llm_provider(LLM_PROVIDER or "")
+    if provider == "openai_codex":
+        return {
+            "provider": provider,
+            "base_url": "https://chatgpt.com/backend-api/codex",
+            "model": CODEX_LLM_MODEL,
+            "api_key": "",
+            "label": "llm_1",
+            "profile_id": "llm_1",
+            "api_mode": "responses",
+        }
     if provider == "openrouter":
         return {
             "provider": provider,
@@ -334,6 +346,9 @@ def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     elif provider == "local":
         base_url = base_url or LMSTUDIO_URL
         api_key = ""
+    elif provider == "openai_codex":
+        base_url = "https://chatgpt.com/backend-api/codex"
+        api_key = ""
     else:
         provider = "openai_compat"
         base_url = base_url or OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
@@ -346,7 +361,7 @@ def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         "api_key": api_key,
         "label": profile_id,
         "profile_id": profile_id,
-        "api_mode": _normalized_api_mode(raw.get("api_mode")),
+        "api_mode": "responses" if provider == "openai_codex" else _normalized_api_mode(raw.get("api_mode")),
         "http_referer": OPENROUTER_HTTP_REFERER if provider == "openrouter" else "",
         "app_title": OPENROUTER_APP_TITLE if provider == "openrouter" else "",
     }
@@ -470,6 +485,10 @@ def _fallback_llm_context() -> dict[str, Any] | None:
     elif provider == "openai_compat":
         ctx["base_url"] = LLM_FALLBACK_BASE_URL or OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
         ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENAI_COMPAT_API_KEY
+    elif provider == "openai_codex":
+        ctx["base_url"] = "https://chatgpt.com/backend-api/codex"
+        ctx["api_key"] = ""
+        ctx["api_mode"] = "responses"
     else:
         ctx["provider"] = "local"
         ctx["base_url"] = LLM_FALLBACK_BASE_URL or LMSTUDIO_URL
@@ -492,14 +511,23 @@ def llm_base_url(context: dict[str, Any] | None = None) -> str:
     return str(ctx.get("base_url") or "")
 
 def llm_chat_completions_url(context: dict[str, Any] | None = None) -> str:
+    if active_llm_provider(context or _primary_llm_context()) == "openai_codex":
+        from infini_local.services.codex_auth import CodexError
+        raise CodexError("Codex subscription does not support chat/completions")
     return _join_openai_compat_url(llm_base_url(context), "/chat/completions")
 
 
 def llm_responses_url(context: dict[str, Any] | None = None) -> str:
+    if active_llm_provider(context or _primary_llm_context()) == "openai_codex":
+        from infini_local.services.codex_text_backend import RESPONSES_URL
+        return RESPONSES_URL
     return _join_openai_compat_url(llm_base_url(context), "/responses")
 
 
 def llm_models_url(context: dict[str, Any] | None = None) -> str:
+    if active_llm_provider(context or _primary_llm_context()) == "openai_codex":
+        from infini_local.services.codex_catalog import CLIENT_VERSION, MODELS_URL
+        return f"{MODELS_URL}?client_version={CLIENT_VERSION}"
     return _join_openai_compat_url(llm_base_url(context), "/models")
 
 def llm_auth_snapshot() -> dict[str, Any]:
@@ -557,6 +585,22 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "apiKeyConfigured": configured,
             "status": "configured" if configured else "missing_or_optional_api_key",
             "hint": "Set INFINI_OPENAI_COMPAT_API_KEY if your compatible endpoint requires Bearer auth.",
+            "fallback": fallback_view,
+            "pool": pool_view,
+        }
+    if provider == "openai_codex":
+        from infini_local.services.codex_auth import auth_status
+
+        signed_in = bool(auth_status().get("authenticated"))
+        model = str(primary.get("model") or "").strip()
+        status = "sign_in_required" if not signed_in else "model_required" if not model else "signed_in_unverified"
+        return {
+            "provider": provider,
+            "baseUrl": primary.get("base_url"),
+            "model": model,
+            "apiKeyConfigured": None,
+            "status": status,
+            "hint": "Refresh the subscription catalog and select a model; status alone does not verify account access.",
             "fallback": fallback_view,
             "pool": pool_view,
         }
@@ -678,7 +722,10 @@ def llm_reasoning_payload(model_name: str = "", context: dict[str, Any] | None =
     handled by system-prompt hinting instead.
     """
     configured = _configured_reasoning_payload()
-    if configured is None or active_llm_provider(context) == "local":
+    provider = active_llm_provider(context)
+    if configured is None and provider == "openai_codex" and str(LLM_REASONING_MODE or "").strip().lower() == "max":
+        configured = {"effort": "max", "exclude": bool(LLM_REASONING_EXCLUDE)}
+    if configured is None or provider == "local":
         return None
     return configured
 
@@ -816,6 +863,7 @@ _REASONING_EFFORT_RANK = {
     "medium": 3,
     "high": 4,
     "xhigh": 5,
+    "max": 6,
 }
 
 
@@ -872,6 +920,9 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
     ctx = context or _primary_llm_context()
     provider = active_llm_provider(ctx)
     configured = str(ctx.get("model") or "auto").strip()
+    if provider == "openai_codex" and configured.lower() in {"", "auto", "default"}:
+        from infini_local.services.codex_auth import CodexError
+        raise CodexError("Choose an available Codex text model in settings before generating")
     if configured and configured.lower() not in {"auto", "local-model", "local_model", "default"}:
         return configured
     cache_key = _llm_context_key(ctx)
@@ -1147,6 +1198,17 @@ def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> di
     model_name = model_override or resolve_llm_model(context)
     out["model"] = model_name
     _remap_reasoning_for_context(out, model_name=model_name, context=context)
+    if active_llm_provider(context) == "openai_codex" and payload.get(LLM_STAGE_KEY) in {"visual_director", "visual_repair"}:
+        if CODEX_VISUAL_REASONING == "model_default":
+            out.pop("reasoning", None)
+            out.pop("reasoning_effort", None)
+        elif CODEX_VISUAL_REASONING != "inherit":
+            from infini_local.services.codex_auth import CodexError
+            from infini_local.services.codex_text_backend import EFFORTS
+            if CODEX_VISUAL_REASONING not in EFFORTS:
+                raise CodexError("Unsupported Visual Director Codex reasoning effort")
+            out["reasoning"] = {"effort": CODEX_VISUAL_REASONING}
+            out.pop("reasoning_effort", None)
     _apply_google_high_reasoning_completion_headroom(
         out,
         model_name=model_name,
@@ -1319,6 +1381,12 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
     replay = _llm_replay_json_response(payload)
     if replay is not None:
         return replay
+    if active_llm_provider(context) == "openai_codex":
+        from infini_local.services.codex_text_backend import generate_chat
+        prepared = _payload_for_context(payload, context)
+        result = generate_chat(prepared, timeout=timeout)
+        log_event("info", "LLM usage", {"stage": stage, **(result.get("_debug") or {}), **_usage_fields(result)})
+        return result
     mode = _normalized_api_mode(context.get("api_mode"))
     capability_key = _llm_context_key(context)
     lease = _CURRENT_LLM_ITEM_LEASE.get()
@@ -1718,6 +1786,10 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         return _with_transport_footprint(result, used_payload, mode)
 
     lease = _CURRENT_LLM_ITEM_LEASE.get()
+    if active_llm_provider(_primary_llm_context()) == "openai_codex":
+        # A subscription quota/auth failure must never switch silently to a
+        # paid Platform/OpenRouter route or multiply one stage into retries.
+        return finish(_llm_json_single_context(payload, timeout, _primary_llm_context()), payload)
     if lease is not None and lease.pool_size > 1:
         attempted: set[str] = set()
         retry_causes: list[str] = []

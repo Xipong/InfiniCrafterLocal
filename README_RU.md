@@ -28,9 +28,9 @@ parents
 - `docs/THREE_STAGE_LLM_PIPELINE_RU.md` — baseline 3 calls;
 - `TECHNICAL_LOWERING_AUDIT_RU.md` — lossless lowering proof.
 
-## PNG через подписку ChatGPT / Codex
+## LLM и PNG через подписку ChatGPT / Codex
 
-В GUI выбери `Image backend = openai_codex`, нажми **Sign in with ChatGPT**, сохрани настройки и перезапусти LocalGenerator. Это отдельный OAuth backend: Platform API key, Hermes и Codex CLI не требуются. Настройки LLM не меняются. [Инструкция, хранение сессии и границы проверки](docs/CODEX_IMAGE_OAUTH_RU.md).
+В GUI нажми **Sign in with ChatGPT**, выбери независимо `LLM provider = openai_codex` и/или `Image backend = openai_codex`, обнови каталог текстовых моделей, сохрани настройки и перезапусти LocalGenerator. OAuth-сессия принадлежит InfiniCrafter: Platform API key, Hermes и Codex CLI не требуются. Текстовый каталог не подтверждает доступность image-моделей; quality управляет image-запросом, а отдельный reasoning — только текстовым Visual Director. [Инструкция, расходы, ограничения и хранение сессии](docs/CODEX_IMAGE_OAUTH_RU.md).
 
 ## Portable validation
 
