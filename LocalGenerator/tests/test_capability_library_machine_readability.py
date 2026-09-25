@@ -23,7 +23,7 @@ def test_machine_readable_registry_is_complete_and_runtime_grounded() -> None:
     report = capability_library_audit()
     assert report["score"] == report["scoreMax"], report["issues"]
     assert report["ok"], report["issues"]
-    assert report["metrics"]["capabilities"] == 51
+    assert report["metrics"]["capabilities"] == 52
     assert report["metrics"]["boundedNumericParameters"] == report["metrics"]["numericParameters"]
     assert report["metrics"]["verticalSliceCount"] == len(CAPABILITY_REGISTRY)
     assert report["metrics"]["typedEntityReferences"] == 2
@@ -38,6 +38,7 @@ def test_registry_manifest_contains_composition_grammar_not_only_function_names(
     assert {row["event"] for row in manifest["events"]} == set(EVENT_KIND_REGISTRY)
     assert all(row["slot"] for row in manifest["capabilities"])
     assert all("authority" in row and "requires" in row and "positionOwnership" in row for row in manifest["capabilities"])
+    assert all("activationSpawnCountParam" in row and "meaningfulForStationary" in row and "multiplicity" in row for row in manifest["capabilities"])
 
 
 def test_no_capability_hides_delivery_behind_broad_wildcard() -> None:
@@ -65,14 +66,8 @@ def test_model_cards_losslessly_project_patterns_and_shared_field_vocabulary() -
     }
     assert set(guide["semanticTypes"]) == expected_semantic_types
     assert guide["exclusiveGroup"]["scope"] == "per exact target entity"
-    assert set(guide["authority"]) == {
-        capability.network_authority
-        for capability in CAPABILITY_REGISTRY.values()
-    } | {
-        authority
-        for capability in CAPABILITY_REGISTRY.values()
-        for authority in capability.authority_by_effect.values()
-    }
+    assert "authority" not in guide
+    assert all(row["authority"] for row in runtime_authoring_registry_manifest()["capabilities"])
     assert set(guide["positionOwnership"]) == {
         capability.position_ownership
         for capability in CAPABILITY_REGISTRY.values()

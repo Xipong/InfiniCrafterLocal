@@ -289,7 +289,7 @@ public sealed class BuffEntrySpec
 public sealed class AccessorySpec
 {
     public bool Enabled { get; set; } = false;
-    public string Archetype { get; set; } = "generic"; // mobility, defense, damage, utility, hybrid
+    public string Archetype { get; set; } = "generic"; // Legacy metadata only; never selects an equipment effect.
     public int Defense { get; set; } = 0;
     public int MaxLife { get; set; } = 0;
     public int MaxMana { get; set; } = 0;

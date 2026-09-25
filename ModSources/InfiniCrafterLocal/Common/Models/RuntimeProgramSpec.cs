@@ -147,6 +147,9 @@ public sealed class RuntimeProgramSpec
         ItemUse.Normalize();
         ItemContact.Normalize();
         bool hasActiveItemUse = Bindings.Any(x => x is not null && x.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse);
+        bool hasEmittingItemUse = Bindings.Any(x => x is not null
+            && (x.Input == RuntimeInputKind.PrimaryUse || x.Input == RuntimeInputKind.AlternateUse)
+            && x.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem);
         bool hasItemContactBinding = Bindings.Any(x => x?.UsePolicy.ContactDamage == true);
         if (hasActiveItemUse && !ItemUse.Configured)
             throw new InvalidDataException("active primary/alternate binding requires explicit configure_item_use");
@@ -158,7 +161,7 @@ public sealed class RuntimeProgramSpec
             graph[entity.Id] = new HashSet<string>(StringComparer.Ordinal);
             foreach (RuntimeEventActionSpec action in entity.Events)
             {
-                RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasActiveItemUse);
+                RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasEmittingItemUse);
                 if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
                     RuntimeEntitySpec? child = TryGetEntity(action.EntityId);

@@ -953,8 +953,8 @@
                     "properties": {
                       "damageClass": {
                         "type": "string",
-                        "pattern": "^(?:default|generic|melee|melee_no_speed|ranged|magic|magic_summon_hybrid|summon|summon_melee_speed|throwing|[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$",
-                        "description": "Exact built-in token or loaded tModLoader ModName/ClassName copied from parent facts",
+                        "pattern": "^(?:default|generic|melee|melee_no_speed|ranged|magic|magic_summon_hybrid|summon|summon_melee_speed|throwing|(?!Terraria/)[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$",
+                        "description": "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)",
                         "x-infini-semanticType": "terraria_damage_class"
                       },
                       "damage": {
@@ -1539,13 +1539,11 @@
                         "description": "Canonical light color",
                         "x-infini-semanticType": "runtime_color"
                       },
-                      "oreSenseRadiusTiles": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 60,
-                        "description": "Ore-sense radius",
-                        "x-infini-units": "tiles",
-                        "x-infini-semanticType": "tiles"
+                      "oreSenseEnabled": {
+                        "type": "boolean",
+                        "description": "Enable Terraria spelunker-style ore highlighting; not a radius",
+                        "x-infini-semanticType": "boolean_capability",
+                        "x-infini-neutral": false
                       },
                       "movementSpeed": {
                         "type": "number",
@@ -1581,7 +1579,7 @@
                       "miningSpeedMultiplier",
                       "lightStrength",
                       "lightColor",
-                      "oreSenseRadiusTiles",
+                      "oreSenseEnabled",
                       "movementSpeed",
                       "jumpBoost",
                       "manaRegen",
@@ -1974,89 +1972,194 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "defense": {
+                      "defensePoints": {
                         "type": "integer",
                         "minimum": -50,
                         "maximum": 200,
-                        "description": "Defense",
-                        "x-infini-semanticType": "defense_points"
+                        "description": "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment",
+                        "x-infini-units": "defense_points",
+                        "x-infini-semanticType": "defense_points",
+                        "x-infini-neutral": 0
                       },
-                      "maxLife": {
+                      "maxLifePoints": {
                         "type": "integer",
                         "minimum": -200,
                         "maximum": 1000,
-                        "description": "Maximum life",
-                        "x-infini-semanticType": "life_points"
+                        "description": "Add maximum life",
+                        "x-infini-units": "life_points",
+                        "x-infini-semanticType": "life_points",
+                        "x-infini-neutral": 0
                       },
-                      "maxMana": {
+                      "maxManaPoints": {
                         "type": "integer",
                         "minimum": -200,
                         "maximum": 1000,
-                        "description": "Maximum mana",
-                        "x-infini-semanticType": "mana_points"
+                        "description": "Add maximum mana",
+                        "x-infini-units": "mana_points",
+                        "x-infini-semanticType": "mana_points",
+                        "x-infini-neutral": 0
                       },
-                      "lifeRegen": {
+                      "lifeRegenHalfHpPerSecond": {
                         "type": "integer",
                         "minimum": -100,
                         "maximum": 200,
-                        "description": "Life regeneration",
-                        "x-infini-semanticType": "terraria_life_regen"
+                        "description": "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)",
+                        "x-infini-units": "half_hp_per_second",
+                        "x-infini-semanticType": "half_hp_per_second",
+                        "x-infini-neutral": 0
                       },
-                      "manaRegen": {
+                      "manaRegenBonusPoints": {
                         "type": "integer",
                         "minimum": -100,
                         "maximum": 200,
-                        "description": "Mana regeneration",
-                        "x-infini-semanticType": "terraria_mana_regen"
+                        "description": "Add Player.manaRegenBonus points; not directly mana/second",
+                        "x-infini-units": "mana_regen_bonus_points",
+                        "x-infini-semanticType": "mana_regen_bonus_points",
+                        "x-infini-neutral": 0
                       },
-                      "movementSpeed": {
+                      "moveSpeedBonusPercent": {
                         "type": "number",
-                        "minimum": -0.9,
-                        "maximum": 3,
-                        "description": "Movement speed modifier",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to Player.moveSpeed",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
                       },
-                      "genericDamage": {
+                      "maxRunSpeedBonusPxPerTick": {
                         "type": "number",
-                        "minimum": -0.9,
-                        "maximum": 3,
-                        "description": "Generic damage additive modifier",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "minimum": -5,
+                        "maximum": 20,
+                        "description": "Add to Player.maxRunSpeed, subject to other Terraria movement limits",
+                        "x-infini-units": "pixels_per_tick",
+                        "x-infini-semanticType": "pixels_per_tick",
+                        "x-infini-neutral": 0
                       },
-                      "genericCrit": {
+                      "jumpSpeedBonusPxPerTick": {
+                        "type": "number",
+                        "minimum": -5,
+                        "maximum": 20,
+                        "description": "Add to Player.jumpSpeedBoost (positive raises jump speed)",
+                        "x-infini-units": "pixels_per_tick",
+                        "x-infini-semanticType": "pixels_per_tick",
+                        "x-infini-neutral": 0
+                      },
+                      "genericCritChancePercentagePoints": {
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
-                        "description": "Generic critical chance points",
-                        "x-infini-semanticType": "percentage_points"
+                        "description": "Add percentage points to generic critical chance",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
                       },
-                      "endurance": {
+                      "genericAttackSpeedBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to generic attack speed",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "genericKnockbackBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to generic StatModifier knockback; not flat points",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "minionSlotsBonus": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Add minion slots",
+                        "x-infini-units": "slots",
+                        "x-infini-semanticType": "slots",
+                        "x-infini-neutral": 0
+                      },
+                      "sentrySlotsBonus": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Add sentry slots",
+                        "x-infini-units": "slots",
+                        "x-infini-semanticType": "slots",
+                        "x-infini-neutral": 0
+                      },
+                      "manaCostReductionPercentagePoints": {
                         "type": "number",
                         "minimum": 0,
-                        "maximum": 0.75,
-                        "description": "Damage reduction",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "maximum": 90,
+                        "description": "Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
                       },
-                      "minionSlots": {
-                        "type": "integer",
+                      "ammoSaveChancePercent": {
+                        "type": "number",
                         "minimum": 0,
-                        "maximum": 20,
-                        "description": "Additional minion slots",
-                        "x-infini-semanticType": "minion_slots"
+                        "maximum": 99,
+                        "description": "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                        "x-infini-units": "probability_percent",
+                        "x-infini-semanticType": "probability_percent",
+                        "x-infini-neutral": 0
                       },
-                      "sentrySlots": {
+                      "aggroPoints": {
                         "type": "integer",
+                        "minimum": -1000,
+                        "maximum": 1000,
+                        "description": "Add to Player.aggro (negative reduces targeting)",
+                        "x-infini-units": "aggro_points",
+                        "x-infini-semanticType": "aggro_points",
+                        "x-infini-neutral": 0
+                      },
+                      "damageReductionPercentagePoints": {
+                        "type": "number",
                         "minimum": 0,
-                        "maximum": 20,
-                        "description": "Additional sentry slots",
-                        "x-infini-semanticType": "sentry_slots"
+                        "maximum": 75,
+                        "description": "Add percent/100 to Player.endurance damage reduction",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "genericArmorPenetrationPoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add flat armor penetration points to DamageClass.Generic",
+                        "x-infini-units": "armor_points",
+                        "x-infini-semanticType": "armor_points",
+                        "x-infini-neutral": 0
+                      },
+                      "whipRangeBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to Player.whipRangeMultiplier",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "taggedSummonSourceDamageBonusPercent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 300,
+                        "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
+                        "x-infini-units": "source_damage_percent",
+                        "x-infini-semanticType": "source_damage_percent",
+                        "x-infini-neutral": 0
                       },
                       "lightStrength": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 1.5,
-                        "description": "Equipped light",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "description": "Client-only equipped light; requires lightColor when positive",
+                        "x-infini-units": "light_intensity",
+                        "x-infini-semanticType": "light_intensity",
+                        "x-infini-neutral": 0
                       },
                       "lightColor": {
                         "type": "string",
@@ -2073,25 +2176,30 @@
                           "gray",
                           "black"
                         ],
-                        "description": "Canonical light color",
-                        "x-infini-semanticType": "runtime_color"
+                        "description": "Explicit equipped light color",
+                        "x-infini-semanticType": "runtime_color",
+                        "x-infini-neutral": ""
+                      },
+                      "fallDamageImmune": {
+                        "type": "boolean",
+                        "description": "Prevent fall damage while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "lavaImmune": {
+                        "type": "boolean",
+                        "description": "Grant lava immunity while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "waterWalk": {
+                        "type": "boolean",
+                        "description": "Walk on water while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
                       }
                     },
-                    "required": [
-                      "defense",
-                      "maxLife",
-                      "maxMana",
-                      "lifeRegen",
-                      "manaRegen",
-                      "movementSpeed",
-                      "genericDamage",
-                      "genericCrit",
-                      "endurance",
-                      "minionSlots",
-                      "sentrySlots",
-                      "lightStrength",
-                      "lightColor"
-                    ]
+                    "required": []
                   }
                 },
                 "required": [
@@ -2143,82 +2251,413 @@
                       "setKey": {
                         "type": "string",
                         "pattern": "^[a-z0-9_]{0,48}$",
-                        "description": "Exact authored set key",
-                        "x-infini-semanticType": "bounded_text"
+                        "description": "Exact authored set key (empty when no matching set is intended)",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": ""
                       },
-                      "defense": {
+                      "defensePoints": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 200,
-                        "description": "Defense",
-                        "x-infini-semanticType": "defense_points"
+                        "description": "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment",
+                        "x-infini-units": "defense_points",
+                        "x-infini-semanticType": "defense_points",
+                        "x-infini-neutral": 0
                       },
-                      "maxLife": {
+                      "maxLifePoints": {
                         "type": "integer",
                         "minimum": -200,
                         "maximum": 1000,
-                        "description": "Maximum life",
-                        "x-infini-semanticType": "life_points"
+                        "description": "Add maximum life",
+                        "x-infini-units": "life_points",
+                        "x-infini-semanticType": "life_points",
+                        "x-infini-neutral": 0
                       },
-                      "maxMana": {
+                      "maxManaPoints": {
                         "type": "integer",
                         "minimum": -200,
                         "maximum": 1000,
-                        "description": "Maximum mana",
-                        "x-infini-semanticType": "mana_points"
+                        "description": "Add maximum mana",
+                        "x-infini-units": "mana_points",
+                        "x-infini-semanticType": "mana_points",
+                        "x-infini-neutral": 0
                       },
-                      "movementSpeed": {
-                        "type": "number",
-                        "minimum": -0.9,
-                        "maximum": 3,
-                        "description": "Movement speed modifier",
-                        "x-infini-semanticType": "unitless_scalar"
-                      },
-                      "genericDamage": {
-                        "type": "number",
-                        "minimum": -0.9,
-                        "maximum": 3,
-                        "description": "Generic damage additive modifier",
-                        "x-infini-semanticType": "unitless_scalar"
-                      },
-                      "genericCrit": {
-                        "type": "number",
-                        "minimum": -100,
-                        "maximum": 100,
-                        "description": "Generic critical chance points",
-                        "x-infini-semanticType": "percentage_points"
-                      },
-                      "setBonusGenericDamage": {
-                        "type": "number",
-                        "minimum": -0.9,
-                        "maximum": 3,
-                        "description": "Set bonus generic damage",
-                        "x-infini-semanticType": "unitless_scalar"
-                      },
-                      "setBonusMovementSpeed": {
-                        "type": "number",
-                        "minimum": -0.9,
-                        "maximum": 3,
-                        "description": "Set bonus movement speed",
-                        "x-infini-semanticType": "unitless_scalar"
-                      },
-                      "setBonusLifeRegen": {
+                      "lifeRegenHalfHpPerSecond": {
                         "type": "integer",
                         "minimum": -100,
                         "maximum": 200,
-                        "description": "Set bonus life regen",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "description": "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)",
+                        "x-infini-units": "half_hp_per_second",
+                        "x-infini-semanticType": "half_hp_per_second",
+                        "x-infini-neutral": 0
+                      },
+                      "manaRegenBonusPoints": {
+                        "type": "integer",
+                        "minimum": -100,
+                        "maximum": 200,
+                        "description": "Add Player.manaRegenBonus points; not directly mana/second",
+                        "x-infini-units": "mana_regen_bonus_points",
+                        "x-infini-semanticType": "mana_regen_bonus_points",
+                        "x-infini-neutral": 0
+                      },
+                      "moveSpeedBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to Player.moveSpeed",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "maxRunSpeedBonusPxPerTick": {
+                        "type": "number",
+                        "minimum": -5,
+                        "maximum": 20,
+                        "description": "Add to Player.maxRunSpeed, subject to other Terraria movement limits",
+                        "x-infini-units": "pixels_per_tick",
+                        "x-infini-semanticType": "pixels_per_tick",
+                        "x-infini-neutral": 0
+                      },
+                      "jumpSpeedBonusPxPerTick": {
+                        "type": "number",
+                        "minimum": -5,
+                        "maximum": 20,
+                        "description": "Add to Player.jumpSpeedBoost (positive raises jump speed)",
+                        "x-infini-units": "pixels_per_tick",
+                        "x-infini-semanticType": "pixels_per_tick",
+                        "x-infini-neutral": 0
+                      },
+                      "genericCritChancePercentagePoints": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100,
+                        "description": "Add percentage points to generic critical chance",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "genericAttackSpeedBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to generic attack speed",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "genericKnockbackBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to generic StatModifier knockback; not flat points",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "minionSlotsBonus": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Add minion slots",
+                        "x-infini-units": "slots",
+                        "x-infini-semanticType": "slots",
+                        "x-infini-neutral": 0
+                      },
+                      "sentrySlotsBonus": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Add sentry slots",
+                        "x-infini-units": "slots",
+                        "x-infini-semanticType": "slots",
+                        "x-infini-neutral": 0
+                      },
+                      "manaCostReductionPercentagePoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 90,
+                        "description": "Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "ammoSaveChancePercent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 99,
+                        "description": "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                        "x-infini-units": "probability_percent",
+                        "x-infini-semanticType": "probability_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "aggroPoints": {
+                        "type": "integer",
+                        "minimum": -1000,
+                        "maximum": 1000,
+                        "description": "Add to Player.aggro (negative reduces targeting)",
+                        "x-infini-units": "aggro_points",
+                        "x-infini-semanticType": "aggro_points",
+                        "x-infini-neutral": 0
+                      },
+                      "damageReductionPercentagePoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 75,
+                        "description": "Add percent/100 to Player.endurance damage reduction",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "genericArmorPenetrationPoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add flat armor penetration points to DamageClass.Generic",
+                        "x-infini-units": "armor_points",
+                        "x-infini-semanticType": "armor_points",
+                        "x-infini-neutral": 0
+                      },
+                      "whipRangeBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add percent/100 to Player.whipRangeMultiplier",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "taggedSummonSourceDamageBonusPercent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 300,
+                        "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
+                        "x-infini-units": "source_damage_percent",
+                        "x-infini-semanticType": "source_damage_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "lightStrength": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1.5,
+                        "description": "Client-only equipped light; requires lightColor when positive",
+                        "x-infini-units": "light_intensity",
+                        "x-infini-semanticType": "light_intensity",
+                        "x-infini-neutral": 0
+                      },
+                      "lightColor": {
+                        "type": "string",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "description": "Explicit equipped light color",
+                        "x-infini-semanticType": "runtime_color",
+                        "x-infini-neutral": ""
+                      },
+                      "fallDamageImmune": {
+                        "type": "boolean",
+                        "description": "Prevent fall damage while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "lavaImmune": {
+                        "type": "boolean",
+                        "description": "Grant lava immunity while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "waterWalk": {
+                        "type": "boolean",
+                        "description": "Walk on water while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "setBonusGenericCritChancePercentagePoints": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusMoveSpeedBonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusLifeRegenHalfHpPerSecond": {
+                        "type": "integer",
+                        "minimum": -100,
+                        "maximum": 200,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)",
+                        "x-infini-units": "half_hp_per_second",
+                        "x-infini-semanticType": "half_hp_per_second",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusManaRegenBonusPoints": {
+                        "type": "integer",
+                        "minimum": -100,
+                        "maximum": 200,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus points; not directly mana/second",
+                        "x-infini-units": "mana_regen_bonus_points",
+                        "x-infini-semanticType": "mana_regen_bonus_points",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusMinionSlotsBonus": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots",
+                        "x-infini-units": "slots",
+                        "x-infini-semanticType": "slots",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusSentrySlotsBonus": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots",
+                        "x-infini-units": "slots",
+                        "x-infini-semanticType": "slots",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusManaCostReductionPercentagePoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 90,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusAmmoSaveChancePercent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 99,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                        "x-infini-units": "probability_percent",
+                        "x-infini-semanticType": "probability_percent",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusAggroPoints": {
+                        "type": "integer",
+                        "minimum": -1000,
+                        "maximum": 1000,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add to Player.aggro (negative reduces targeting)",
+                        "x-infini-units": "aggro_points",
+                        "x-infini-semanticType": "aggro_points",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusDamageReductionPercentagePoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 75,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction",
+                        "x-infini-units": "percentage_points",
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-neutral": 0
+                      },
+                      "setBonusGenericArmorPenetrationPoints": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic",
+                        "x-infini-units": "armor_points",
+                        "x-infini-semanticType": "armor_points",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
                       "slot",
-                      "setKey",
-                      "defense",
-                      "maxLife",
-                      "maxMana",
-                      "movementSpeed",
-                      "genericDamage",
-                      "genericCrit"
+                      "setKey"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "add_equipment_damage_bonus"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "phase": {
+                        "type": "string",
+                        "enum": [
+                          "equipped",
+                          "matching_armor_set"
+                        ],
+                        "description": "equipped applies while wearing this accessory/armor; matching_armor_set applies only on the head of a complete matching set",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "damageClass": {
+                        "type": "string",
+                        "enum": [
+                          "generic",
+                          "melee",
+                          "ranged",
+                          "magic",
+                          "summon"
+                        ],
+                        "description": "Equipped damage class; this equipment operation supports only these five classes",
+                        "x-infini-semanticType": "equipment_damage_class"
+                      },
+                      "bonusPercent": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 300,
+                        "description": "Add this percent to the selected class damage additive modifier; 15 means +15%",
+                        "x-infini-units": "additive_percent",
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-neutral": 0
+                      }
+                    },
+                    "required": [
+                      "phase",
+                      "damageClass",
+                      "bonusPercent"
                     ]
                   }
                 },
@@ -2371,8 +2810,8 @@
                     "properties": {
                       "damageClass": {
                         "type": "string",
-                        "pattern": "^(?:default|generic|melee|melee_no_speed|ranged|magic|magic_summon_hybrid|summon|summon_melee_speed|throwing|[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$",
-                        "description": "Exact built-in token or loaded tModLoader ModName/ClassName copied from parent facts",
+                        "pattern": "^(?:default|generic|melee|melee_no_speed|ranged|magic|magic_summon_hybrid|summon|summon_melee_speed|throwing|(?!Terraria/)[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$",
+                        "description": "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)",
                         "x-infini-semanticType": "terraria_damage_class"
                       },
                       "damage": {
@@ -4303,6 +4742,15 @@
                         "description": "Status duration",
                         "x-infini-units": "ticks",
                         "x-infini-semanticType": "ticks"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
@@ -4380,6 +4828,15 @@
                         "maximum": 4,
                         "description": "Multiplier applied to this call target entity's authored projectile damage",
                         "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
@@ -4461,6 +4918,15 @@
                         "maximum": 2,
                         "description": "Multiplier applied to this call target entity's authored projectile damage",
                         "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
@@ -4554,6 +5020,15 @@
                         "description": "Required for periodic event",
                         "x-infini-units": "ticks",
                         "x-infini-semanticType": "ticks"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
@@ -4628,6 +5103,15 @@
                         "maximum": 200,
                         "description": "Per-event heal cap",
                         "x-infini-semanticType": "life_points"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
@@ -4688,15 +5172,6 @@
                         "description": "Source event",
                         "x-infini-semanticType": "runtime_event_kind"
                       },
-                      "mode": {
-                        "type": "string",
-                        "enum": [
-                          "blink_to_entity",
-                          "blink_to_event_position"
-                        ],
-                        "description": "Mobility executor",
-                        "x-infini-semanticType": "bounded_text"
-                      },
                       "rangeTiles": {
                         "type": "integer",
                         "minimum": 1,
@@ -4709,7 +5184,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 3600,
-                        "description": "Cooldown",
+                        "description": "Shared owner mobility cooldown",
                         "x-infini-units": "ticks",
                         "x-infini-semanticType": "ticks"
                       },
@@ -4717,11 +5192,19 @@
                         "type": "boolean",
                         "description": "Require safe destination",
                         "x-infini-semanticType": "bounded_text"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
                       }
                     },
                     "required": [
                       "event",
-                      "mode",
                       "rangeTiles",
                       "cooldownTicks",
                       "safeTileOnly"

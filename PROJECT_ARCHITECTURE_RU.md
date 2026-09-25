@@ -11,6 +11,8 @@ Deterministic code только:
 - проецирует typed wire DTO;
 - исполняет точные opcodes/capabilities в C# с fail-closed поведением.
 
+Canonical equipment/event primitive registry дополнительно порождает C# numeric bounds, Author schemas, prompt cards, wire/receipt expectations и [`docs/PRIMITIVE_PARITY_RU.md`](docs/PRIMITIVE_PARITY_RU.md). Классоспецифичные equipped damage fields представлены одним `add_equipment_damage_bonus(phase, damageClass, bonusPercent)`; compiler переводит точный selector и процент в сохранённый C# DTO без выбора класса/фазы за Author. Исторические DTO clamps сохранены отдельной registry-owned технической таблицей, включая generic damage и generic armor set damage. AST loss audit проверяет C# DTO/executor surface против модели и фиксирует причины скрытых legacy-полей; прежний audit только известных wire-путей не доказывал полноту C#.
+
 ## Три baseline-стадии
 
 1. **Gameplay Author** — авторит `runtimeProgram`.
@@ -49,7 +51,7 @@ Schema, prompt catalog, machine manifest, docs inventory и audit проецир
 
 ## Explicit primary ownership
 
-Каждая authored `call` и `binding` обязана явно содержать `role: "primary" | "secondary"`. Все rows одного target entity имеют один role; ровно один entity во всей программе primary. Validator не выводит роль из имени, category, input, capability или entity kind. Compiler механически проецирует `primaryEntityId` и `primaryOwner: "item_body" | "projectile"` в final wire.
+Author явно задаёт ровно один существующий `runtimeProgram.primaryEntityId`. В Author `calls` и `bindings` нет поля `role`: compiler детерминированно ставит wire `binding.role=primary` только когда exact `binding.usePolicy.action.targetId == primaryEntityId`, иначе `secondary`. `primaryOwner: "item_body" | "projectile"` выводится только из kind выбранной entity. Ни имя, категория, input, capability, урон, ни факт spawn не выбирают primary вместо модели.
 
 `primaryOwner` — executable contract, а не telemetry: C# использует его для item `noMelee`/contact hitbox и разрешает `heldProj`/item-animation ownership только primary projectile. Secondary projectile может быть явно spawned тем же use как дополнительная атака/VFX body, но не отбирает melee/held ownership.
 

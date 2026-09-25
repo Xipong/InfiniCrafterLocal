@@ -34,6 +34,10 @@ sortedcontainers==2.4.0
     # via hypothesis
 tomli==2.4.1
     # via pytest
+tree-sitter==0.25.2
+    # via -r LocalGenerator/requirements-dev.txt
+tree-sitter-c-sharp==0.23.5
+    # via -r LocalGenerator/requirements-dev.txt
 typing-extensions==4.16.0
     # via
     #   exceptiongroup

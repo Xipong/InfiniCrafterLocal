@@ -9,12 +9,13 @@ entities, bindings, events, movement, damage, or lifecycle.
 
 import copy
 import json
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_trailing_commas
 from infini_local.core.llm_stage_messages import stage_chat_message
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
@@ -39,6 +40,12 @@ from infini_local.pipelines.visual_asset_modes import (
 VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v1"
 VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v1"
 _ALLOWED_ASSET_MODES = set(VISUAL_ASSET_MODES)
+
+
+@dataclass(frozen=True)
+class MalformedVisualDirectorOutput:
+    raw_text: str
+    error: str
 
 
 def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
@@ -236,6 +243,8 @@ def _validate_kit(
     equipment_overlay_required: bool = False,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     errors: list[dict[str, Any]] = []
+    if isinstance(raw, MalformedVisualDirectorOutput):
+        return None, [{"path": "$", "message": f"malformed_json: {raw.error}"}]
     if not isinstance(raw, dict):
         return None, [{"path": "$", "message": "Visual Director response must be an object"}]
     # Declared lossless normalization: the exact asset mode plus exact entity id
@@ -466,6 +475,7 @@ def _visual_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]
     mutable_ids = set(str(value) for value in scope.get("mutableEntityIds") or [])
     rows = source.get("entities") if isinstance(source.get("entities"), list) else []
     return {
+        "malformedRawText": raw.raw_text if isinstance(raw, MalformedVisualDirectorOutput) else "",
         "broken": {
             "item": copy.deepcopy(source.get("item")) if scope.get("itemMutable") else None,
             "equipOverlay": copy.deepcopy(source.get("equipOverlay")) if scope.get("equipOverlayMutable") else None,
@@ -744,7 +754,7 @@ def _request_visual_kit(
     repair_errors: list[dict[str, Any]] | None = None,
     previous: Any = None,
     repair_scope: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | MalformedVisualDirectorOutput:
     runtime_rows = _runtime_card(data)
     entity_ids = [row["id"] for row in runtime_rows]
     equipment_overlay = equipment_overlay_requirement(data)
@@ -761,13 +771,21 @@ def _request_visual_kit(
             "You are the conditional Visual Repair. Return only a narrow patch for exact invalid visual fields/rows. "
             "You may return a complete broken row; deterministic merge freezes every already-valid old field and keeps "
             "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. "
-            "When an accepted runtime entity is the same physical object as item_body, it must use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
+            "The runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item. "
+            "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
             "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. Return JSON only."
         )
+        if isinstance(previous, MalformedVisualDirectorOutput):
+            system += (
+                " The previous response is malformed JSON. Repair its syntax and container only: preserve all "
+                "recoverable visual fields and entity choices verbatim from malformedRawText; do not invent "
+                "an absent design. Emit the complete broken visual response through the repair patch fields."
+            )
         context = _visual_repair_context(previous, repair_scope or {})
         payload: dict[str, Any] = {
             "task": "Patch only exact invalid visualKit fields/rows.",
             "exactErrors": copy.deepcopy(repair_errors or []),
+            "malformedRawText": context["malformedRawText"],
             "repairScope": copy.deepcopy(dict(repair_scope or {})),
             "brokenFragments": context["broken"],
             "validGeneratedContext": context["validReadOnly"],
@@ -786,8 +804,8 @@ def _request_visual_kit(
                 "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
                 "already-valid fields and independent rows are frozen; extra rewrites are ignored",
                 "preserve valid literal parent composition and accepted runtime entity set",
-                "item_body must use baked_sprite; no placeholder PNG",
-                "when an accepted runtime entity is the same physical object as item_body, use reuse_item_icon with visualProjectRef=item and do not author a second visual project",
+                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
+                "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "when equipmentOverlayReadOnly.required is true, repair equipOverlayPatch as a separate wearable presentation asset",
             ],
             "responseSchema": schema,
@@ -799,9 +817,10 @@ def _request_visual_kit(
             "Preserve literal parent objects and their physical relationships. For each exact entityId choose one finite assetMode: "
             "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. item_body must be baked_sprite with visualProjectRef=item and exact copies of item prompt/silhouette/visualIdentity. "
             "A distinct baked entity uses visualProjectRef=entity and authors prompt/silhouette/visualIdentity. reuse_item_icon uses visualProjectRef=item and omits those fields; runtime_geometry/no_asset use visualProjectRef=none and omit them. "
-            "When an accepted runtime entity is the same physical object as item_body, it must use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
+            "The runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item. "
+            "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
             "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. "
-            "A baked sprite is mandatory delivery: never request or accept a placeholder. Return JSON only."
+            "A baked sprite is mandatory delivery: never request or accept a placeholder. Return a strict JSON object with double-quoted JSON object keys and string values; no trailing commas or JavaScript expressions."
         )
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
@@ -824,8 +843,8 @@ def _request_visual_kit(
                 "baked_sprite requires a real generated PNG; no placeholder",
                 "item.prompt and every baked_sprite entity prompt must require a transparent background; never request a solid, black, white or otherwise opaque background",
                 "never author impact sprite prompts here; VFX owns them only when it selects rendererKind=impactSprite",
-                "item_body is one item visual project: copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
-                "when an accepted runtime entity is the same physical object as item_body, use reuse_item_icon with visualProjectRef=item and do not author a second visual project",
+                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
+                "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "reuse_item_icon carries only entityId, assetMode, visualProjectRef=item and scale; do not duplicate prompt or identity fields",
                 "runtime_geometry/no_asset carry only entityId, assetMode, visualProjectRef=none and scale",
                 "when equipmentOverlayReadOnly.required is true, author equipOverlay as a separate transparent wearable layer for that exact slot, without drawing a player body",
@@ -855,8 +874,12 @@ def _request_visual_kit(
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
     content = raw["choices"][0]["message"]["content"]
-    parsed = parse_first_valid_llm_json(content)
-    return parsed if isinstance(parsed, dict) else {"_raw": str(content)[:6000]}
+    try:
+        return parse_first_valid_llm_json(content)
+    except (ValueError, TypeError) as exc:
+        if repair:
+            raise PlannerUnavailable(f"Visual Repair returned malformed JSON: {type(exc).__name__}: {exc}") from exc
+        return MalformedVisualDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
 
 
 def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
@@ -982,6 +1005,8 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             equipment_overlay_required=equipment_overlay_required,
         )
         patch = _request_visual_kit(data, a, b, ca, cb, repair_errors=errors, previous=raw, repair_scope=repair_scope)
+        if not isinstance(patch, Mapping):
+            raise PlannerUnavailable("Visual Repair response must be a JSON object")
         repaired, repair_audit = _apply_visual_repair_patch(raw, patch, repair_scope, entity_ids, return_audit=True)
         kit, errors = _validate_kit(
             repaired,
@@ -991,6 +1016,18 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         )
         if kit is None:
             raise PlannerUnavailable("Visual Repair did not produce an entity-complete visual kit: " + json.dumps(errors[:16], ensure_ascii=False))
+        if isinstance(raw, MalformedVisualDirectorOutput):
+            source = recover_object_with_trailing_commas(raw.raw_text)
+            if source is None:
+                raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
+            recovered_kit, _ = _validate_kit(
+                source, entity_ids, item_body_id,
+                equipment_overlay_required=equipment_overlay_required,
+            )
+            if recovered_kit is None:
+                raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
+            if recovered_kit != kit:
+                raise PlannerUnavailable("Visual format Repair changed recoverable visual fields")
         raw = repaired
         data.setdefault("debug", {})["visualRepairRawPatch"] = copy.deepcopy(patch)
         data["debug"]["visualRepairPatch"] = copy.deepcopy(repair_audit.get("filteredPatch") or {})

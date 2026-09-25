@@ -7,6 +7,29 @@ using InfiniCrafterLocal.Common.Models;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static int ReplayGeneratedContracts(string path)
+    {
+        int passed = 0, failed = 0;
+        foreach (string line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            using JsonDocument row = JsonDocument.Parse(line);
+            string caseId = row.RootElement.GetProperty("case").GetString() ?? "unknown";
+            string json = row.RootElement.GetProperty("data").GetRawText();
+            GeneratedItemData? parsed = GeneratedItemData.FromJson(json);
+            if (parsed is not null)
+            {
+                passed++;
+                continue;
+            }
+            failed++;
+            ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson", out ContractJsonError? error);
+            Console.WriteLine($"REPLAY FAIL {caseId}: {error?.ErrorType ?? "unknown"}: {error?.Message ?? "no diagnostics"}");
+        }
+        Console.WriteLine($"Live contract replay: {passed} passed, {failed} failed");
+        return failed == 0 && passed > 0 ? 0 : 1;
+    }
+
     private static void AppliedTraceObservesProjectionWithoutChangingDefinition()
     {
         var hash = typeof(InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService)

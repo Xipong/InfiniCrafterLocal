@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Runtime;
 using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.GameContent;
 using Terraria.ID;
 using Terraria.Utilities;
@@ -76,6 +78,14 @@ internal static partial class EngineRuntimeChecks
                         Vector2 arrived = player.Center;
                         Equal(false, generated.TryRunGeneratedMobility(data.Gameplay), label + " cooldown blocks repeat");
                         Equal(arrived, player.Center, label + " blocked repeat does not move player");
+                        var action = new RuntimeEventActionSpec {
+                            ActionCode = RuntimeEventActionCode.MoveOwner, Mode = "blink_to_event_position",
+                            RangeTiles = 120, CooldownTicks = 60, SafeTileOnly = true };
+                        int remainingBudget = 0;
+                        RuntimeProgramExecutor.ExecuteAction(data, new RuntimeEntitySpec(), action,
+                            player, new EntitySource_Misc("event cooldown regression"),
+                            arrived + new Vector2(64f, 0f), Vector2.UnitX, null, 0, 0, ref remainingBudget);
+                        Equal(arrived, player.Center, label + " event blink shares owner mobility cooldown");
                     });
                 }
                 catch (Exception error) { failures.Add(label + ": " + error.Message); }

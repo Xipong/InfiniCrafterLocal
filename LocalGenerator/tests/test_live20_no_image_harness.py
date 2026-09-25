@@ -46,6 +46,10 @@ def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path:
 
     assert report["ok"], report
     assert hydrated["visual"]["spriteStatus"] == "qa_no_image_fixture"
+    item_body = next(entity for entity in data["runtimeProgram"]["entities"] if entity["kind"] == "item_body")
+    assert item_body["visual"]["assetMode"] == "baked_sprite"
+    assert item_body["visual"]["spriteStatus"] == "qa_no_image_fixture"
+    assert item_body["visual"]["spritePath"] == str(fixture_path.resolve())
     assert non_item[0]["visual"]["spriteStatus"] == "qa_no_image_fixture"
     assert non_item[1]["visual"]["spriteStatus"] == "reused_item_icon"
     assert hydrated["debug"]["noImageQaFixturePath"] == str(fixture_path.resolve())
@@ -88,3 +92,27 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
     }
     assert "required_equipment_overlay_missing" not in problem_codes
     assert "required_impact_sprite_missing" not in problem_codes
+
+
+def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does(tmp_path: Path) -> None:
+    fixture = write_no_image_fixture_png(tmp_path / "no-image.png")
+    data = build_runtime_fixture("workbench_blade")
+    entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
+    for row in data["runtimeProgram"]["entities"]:
+        if row["kind"] != "item_body":
+            row.setdefault("visual", {})["assetMode"] = "baked_sprite"
+    data["vfxManifest"] = {"slots": [{
+        "entityId": entity["id"], "rendererKind": "impactRing", "textureRole": "impact",
+    }]}
+
+    hydrate_no_image_fixture_assets(data, fixture)
+    assert "impactSpritePath" not in entity["visual"]
+    ring_report = visual_delivery_report(data, check_backend_config=False)
+    assert ring_report["ok"], ring_report["problems"]
+    assert not any(slot["role"] == "impact:" + entity["id"] for slot in ring_report["slots"])
+
+    data["vfxManifest"]["slots"][0]["rendererKind"] = "impactSprite"
+    sprite_report = visual_delivery_report(data, check_backend_config=False)
+    assert "required_impact_sprite_missing" in {problem["code"] for problem in sprite_report["problems"]}
+    hydrate_no_image_fixture_assets(data, fixture)
+    assert visual_delivery_report(data, check_backend_config=False)["ok"]

@@ -525,6 +525,19 @@ def test_visual_entity_to_runtime_pair_to_final_vfx_manifest_closure() -> None:
         "spritePrompt": "literal authored lantern impact",
         "spriteNegativePrompt": "text, watermark",
     })
+    unpaired = copy.deepcopy(raw_vfx)
+    unpaired["slots"][0]["textureRole"] = "impact"
+    unpaired_report = validate_vfx_director_output(unpaired, compiled)
+    assert not unpaired_report["ok"]
+    assert any(error["path"] == "$.slots[0].textureRole" for error in unpaired_report["errors"])
+
+    paired = copy.deepcopy(impact_raw)
+    paired["slots"].append({**unpaired["slots"][0], "id": "impact_trail_slot"})
+    assert validate_vfx_director_output(paired, compiled)["ok"]
+
+    primitive = copy.deepcopy(unpaired)
+    primitive["slots"][0]["rendererKind"] = "impactRing"
+    assert validate_vfx_director_output(primitive, compiled)["ok"]
     impact_final = attach_hybrid_vfx_manifest(
         compiled,
         "lantern pike impact",

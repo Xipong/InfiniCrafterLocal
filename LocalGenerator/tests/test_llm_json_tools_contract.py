@@ -5,7 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.core.llm_json_tools import json_object_candidates, parse_first_valid_llm_json
+from infini_local.core.llm_json_tools import (
+    json_object_candidates,
+    parse_first_valid_llm_json,
+    recover_object_with_trailing_commas,
+)
 
 
 def _check_llm_json_tools_parse_fenced_and_duplicate_objects() -> None:
@@ -23,6 +27,14 @@ def _check_llm_json_tools_ignores_private_thought_json() -> None:
     text = '<thought>{"name":"Decoy"}</thought>{"name":"Authored"}'
     assert parse_first_valid_llm_json(text)["name"] == "Authored"
     assert json_object_candidates('<thought>{"name":"unfinished-decoy"}') == []
+
+
+def _check_lossless_trailing_comma_recovery_does_not_modify_string_values() -> None:
+    assert recover_object_with_trailing_commas('{"label":",}", "rows":[{"value":7,},],}') == {
+        "label": ",}", "rows": [{"value": 7}],
+    }
+    assert recover_object_with_trailing_commas('{"missing":') is None
+    assert recover_object_with_trailing_commas('{"damage":42,"damage":43,}') is None
 
 
 # One collected item per contract module: the checks above keep source order and

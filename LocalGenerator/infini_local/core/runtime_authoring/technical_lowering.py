@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
+    equipment_damage_wire_path,
 )
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
@@ -155,12 +156,42 @@ def declared_global_inputs_for(lowerer_id: str) -> tuple[str, ...]:
     return ()
 
 
-def audit_compiler_receipts(receipts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+_MISSING = object()
+
+
+def _final_value(document: Mapping[str, Any], path: str) -> Any:
+    """Read a compiler receipt path without evaluating arbitrary expressions."""
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*|\[\d+\])*", path):
+        return _MISSING
+    value: Any = document
+    for segment in re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", path):
+        if segment.startswith("["):
+            index = int(segment[1:-1])
+            if not isinstance(value, list) or index >= len(value):
+                return _MISSING
+            value = value[index]
+        else:
+            if not isinstance(value, Mapping) or segment not in value:
+                return _MISSING
+            value = value[segment]
+    return value
+
+
+def audit_compiler_receipts(
+    receipts: Iterable[Mapping[str, Any]], *, authored_document: Mapping[str, Any] | None = None,
+    final_document: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    program = authored_document.get("runtimeProgram") if authored_document is not None else None
+    source_calls = program.get("calls") if isinstance(program, Mapping) else None
+    source_calls = source_calls if isinstance(source_calls, list) else []
     violations: list[dict[str, Any]] = []
-    for receipt in receipts:
+    receipt_rows = tuple(receipts)
+    delivered_equipment: dict[str, int] = {}
+    for receipt in receipt_rows:
         fn = str(receipt.get("fn") or "")
         lowerer_id = str(receipt.get("lowererId") or "")
         path = str(receipt.get("finalPath") or "")
+        authored_path = str(receipt.get("authoredPath") or "")
         declared = declared_global_outputs_for(lowerer_id) if lowerer_id else declared_outputs_for(fn)
         declared_inputs = declared_global_inputs_for(lowerer_id) if lowerer_id else ()
         authored_paths = tuple(str(value) for value in receipt.get("authoredPaths") or ())
@@ -179,6 +210,175 @@ def audit_compiler_receipts(receipts: Iterable[Mapping[str, Any]]) -> dict[str, 
                 "declaredOutputs": list(declared),
                 "reason": "compiler receipt used an undeclared input or output field",
             })
+        if final_document is not None and _final_value(final_document, path) != receipt.get("value"):
+            violations.append({
+                "callId": str(receipt.get("callId") or ""),
+                "fn": fn,
+                "finalPath": path,
+                "reason": "final wire value differs from compiler receipt",
+            })
+        parameter_match = re.fullmatch(
+            r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)", authored_path
+        ) if fn and not lowerer_id else None
+        if fn and authored_paths and (fn != "add_equipment_damage_bonus" or receipt.get("status") != "delivered"):
+            violations.append({
+                "callId": str(receipt.get("callId") or ""), "fn": fn,
+                "authoredPath": authored_path, "finalPath": path,
+                "reason": "unexpected capability parameter source list or status",
+            })
+        if fn and not lowerer_id and (receipt.get("status") == "delivered" or parameter_match is not None):
+            match = parameter_match
+            cap = CAPABILITY_REGISTRY.get(fn)
+            if match is not None and receipt.get("status") != "delivered" and not (
+                fn == "apply_vanilla_buff_on_use" and receipt.get("status") == "technical_projection"
+            ):
+                violations.append({
+                    "callId": str(receipt.get("callId") or ""), "fn": fn,
+                    "authoredPath": authored_path, "finalPath": path,
+                    "reason": "capability parameter receipt has an unexpected status",
+                })
+            if match is not None and cap is not None and match.group(2) in cap.params and fn != "add_equipment_damage_bonus":
+                param = match.group(2)
+                spec = cap.params[param]
+                names = {param, spec.wire_name} - {""}
+                expected_paths = tuple(
+                    candidate for candidate in cap.final_wire_paths
+                    if candidate.rsplit(".", 1)[-1] in names
+                )
+                if not expected_paths or not any(path_matches(candidate, path) for candidate in expected_paths):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""),
+                        "fn": fn,
+                        "authoredPath": authored_path,
+                        "finalPath": path,
+                        "expectedPaths": list(expected_paths),
+                        "reason": "wrong capability output for authored parameter",
+                    })
+            if match is None or cap is None or match.group(2) not in cap.params:
+                violations.append({
+                    "callId": str(receipt.get("callId") or ""),
+                    "fn": fn,
+                    "authoredPath": authored_path,
+                    "finalPath": path,
+                    "reason": "compiler receipt used an undeclared authored parameter",
+                })
+            elif authored_document is not None:
+                index = int(match.group(1))
+                source_call = source_calls[index] if index < len(source_calls) else None
+                source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
+                if (not isinstance(source_call, Mapping)
+                    or source_call.get("fn") != fn
+                    or source_call.get("id") != receipt.get("callId")
+                    or not isinstance(source_params, Mapping)
+                    or match.group(2) not in source_params):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""),
+                        "fn": fn,
+                        "authoredPath": authored_path,
+                        "finalPath": path,
+                        "reason": "authored parameter absent from originating call",
+                    })
+                elif receipt.get("value") != cap.params[match.group(2)].to_wire(source_params[match.group(2)]):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""),
+                        "fn": fn,
+                        "authoredPath": authored_path,
+                        "finalPath": path,
+                        "reason": "compiler receipt value is not the declared projection of its authored parameter",
+                    })
+                if fn == "configure_item_stats":
+                    param = match.group(2)
+                    expected = f"gameplay.{cap.params[param].wire_name or param}"
+                    if path != expected:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""),
+                            "fn": fn,
+                            "authoredPath": authored_path,
+                            "finalPath": path,
+                            "expectedPath": expected,
+                            "reason": "wrong item stat output for authored parameter",
+                        })
+                if fn in {"configure_accessory", "configure_armor"}:
+                    prefix = "accessory" if fn == "configure_accessory" else "armor"
+                    expected = f"{prefix}.{cap.params[match.group(2)].wire_name or match.group(2)}"
+                    if path != expected:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""),
+                            "fn": fn,
+                            "authoredPath": authored_path,
+                            "finalPath": path,
+                            "expectedPath": expected,
+                            "reason": "wrong equipment output for authored parameter",
+                        })
+                    delivered_equipment[authored_path] = delivered_equipment.get(authored_path, 0) + 1
+                elif fn == "add_equipment_damage_bonus" and isinstance(source_params, Mapping):
+                    source_target = str(source_call.get("target") or "") if isinstance(source_call, Mapping) else ""
+                    configs = [row for row in source_calls
+                               if isinstance(row, Mapping) and row.get("target") == source_target
+                               and row.get("fn") in {"configure_accessory", "configure_armor"}]
+                    if len(configs) == 1 and match.group(2) == "bonusPercent":
+                        try:
+                            expected = equipment_damage_wire_path(
+                                str(source_params.get("phase") or ""),
+                                str(source_params.get("damageClass") or ""),
+                                armor=configs[0].get("fn") == "configure_armor",
+                            )
+                        except ValueError:
+                            expected = ""
+                        base = f"runtimeProgram.calls[{index}].params"
+                        expected_sources = [f"{base}.phase", f"{base}.damageClass", f"{base}.bonusPercent"]
+                        if path != expected or receipt.get("authoredPaths") != expected_sources:
+                            violations.append({
+                                "callId": str(receipt.get("callId") or ""),
+                                "fn": fn,
+                                "finalPath": path,
+                                "expectedPath": expected,
+                                "reason": "wrong equipment output for authored parameter",
+                            })
+                        delivered_equipment[authored_path] = delivered_equipment.get(authored_path, 0) + 1
+                    else:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""), "fn": fn,
+                            "finalPath": path, "reason": "equipment class modifier has no unique declared configuration",
+                        })
+    if authored_document is not None:
+        for index, call in enumerate(source_calls):
+            if not isinstance(call, Mapping) or call.get("fn") not in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
+                continue
+            params = call.get("params")
+            if not isinstance(params, Mapping):
+                continue
+            param_names = params if call.get("fn") != "add_equipment_damage_bonus" else ("bonusPercent",)
+            for param in param_names:
+                authored_path = f"runtimeProgram.calls[{index}].params.{param}"
+                if delivered_equipment.get(authored_path, 0) != 1:
+                    violations.append({
+                        "callId": str(call.get("id") or ""),
+                        "fn": str(call.get("fn") or ""),
+                        "authoredPath": authored_path,
+                        "reason": "equipment parameter has no receipt or more than one receipt",
+                    })
+        delivered_sources = {
+            (str(receipt.get("fn") or ""), str(receipt.get("callId") or ""), str(source))
+            for receipt in receipt_rows
+            if receipt.get("fn") and receipt.get("callId")
+            for source in (receipt.get("authoredPath"), *(receipt.get("authoredPaths") or ()))
+            if source
+        }
+        for index, source_call in enumerate(source_calls):
+            if not isinstance(source_call, Mapping):
+                continue
+            source_params = source_call.get("params")
+            if not isinstance(source_params, Mapping):
+                continue
+            for name in source_params:
+                key = (str(source_call.get("fn") or ""), str(source_call.get("id") or ""),
+                       f"runtimeProgram.calls[{index}].params.{name}")
+                if key not in delivered_sources:
+                    violations.append({
+                        "callId": key[1], "fn": key[0], "authoredPath": key[2],
+                        "reason": "authored parameter has no compiler receipt",
+                    })
     return {
         "schema": "infini.technical-lowering-audit.v1",
         "ok": not violations,

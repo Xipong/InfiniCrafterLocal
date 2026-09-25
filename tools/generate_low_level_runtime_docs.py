@@ -83,6 +83,7 @@ def inventory_markdown() -> str:
         "",
         "> Этот файл генерируется `python tools/generate_low_level_runtime_docs.py`. Не редактировать таблицы вручную.",
         "> Каноническая граница Author/Repair/Lowery и edit-routing: `lowery.md`. Этот файл — registry projection.",
+        "> Полная матрица исторического Author ↔ C# executable ↔ model-visible, единицы и исключения: [`PRIMITIVE_PARITY_RU.md`](PRIMITIVE_PARITY_RU.md).",
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -289,8 +290,8 @@ def lowering_markdown() -> str:
         "",
         "## Capability-level proof",
         "",
-        "Capability receipts содержат `callId`, `fn`, `finalPath`; global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`. "
-        "`audit_compiler_receipts` принимает запись только когда authored inputs и final output объявлены соответствующим owner manifest. Mutation test добавляет недекларированный input/output и обязан получить отказ.",
+        "Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`. "
+        "`audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.",
         "",
         "## Решение по старому lowering",
         "",

@@ -74,6 +74,16 @@ def hydrate_no_image_fixture_assets(data: dict[str, Any], fixture_path: Path) ->
         if not isinstance(entity, dict):
             continue
         entity_visual = entity.setdefault("visual", {})
+        if entity.get("kind") == "item_body":
+            # Match visual_sprite_generation's exact item-body projection: the
+            # top-level inventory icon is also its canonical runtime sprite.
+            entity_visual.update({
+                "assetMode": "baked_sprite",
+                "spriteStatus": "qa_no_image_fixture",
+                "spritePath": fixture,
+                "spriteUrl": "",
+                "spriteTechnicalScore": 1.0,
+            })
         if entity.get("kind") != "item_body":
             mode = str(entity_visual.get("assetMode") or "")
             if mode == "baked_sprite":

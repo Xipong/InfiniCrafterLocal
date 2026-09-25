@@ -9,13 +9,14 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_trailing_commas
 from infini_local.core.llm_stage_messages import (
     ATTRIBUTED_PLANNER_HISTORY_KIND,
     attributed_planner_history,
     stage_chat_message,
 )
 from infini_local.core.runtime_authoring import (
+    BINDING_ACTION_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     RUNTIME_WIRE_SCHEMA,
@@ -31,6 +32,7 @@ from infini_local.core.runtime_authoring import (
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
 )
+from infini_local.core.runtime_authoring.binding_use_policy import STACK_COST_RULE
 from infini_local.core.vfx_manifest import MalformedVfxDirectorOutput
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_AUTHOR_SYSTEM_RULE,
@@ -73,7 +75,11 @@ _AUTHOR_SYSTEM = (
     "Write realization.selfEvaluation last as the same_pass_self_evaluation: independently compare concept.plannedPlayerActions with runtimeProgram in planVsProgram.actionChecks, then compare every executable runtime lane with description/playerExperience in programVsReport.behaviorChecks. Every check must cite exact runtime ids, including aligned checks. Never describe mechanics absent from the program. Use only catalog capabilities. Check every reference, "
     "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
     f"{PRIMARY_AUTHOR_SYSTEM_RULE} Group bindings by input and reject the draft if an exclusive input has more than one row. Every binding is one complete usePolicy transaction; configure_item_use never chooses or requires a companion action binding. Catalog membership is not a recommendation. "
-    "Return JSON only; no markdown or reasoning."
+    "Use exact catalog param names: configure_item_stats currency is params.valueCopper in copper coins; never use params.value. "
+    "Percent-valued params are whole percentage numbers: for +15% enter 15, not 0.15 (which means +0.15%). "
+    f"{STACK_COST_RULE} "
+    f"{', '.join(BINDING_ACTION_REGISTRY['apply_item_effects'].required_item_capabilities_any_of)} require item_body apply_item_effects: apply_item_effects is the only active binding that enables item resource/buff/mobility effects. A spawn_entity or use_item_body binding alone does not heal or apply those effects. To heal and spawn in one use, author an apply_item_effects binding plus an explicit item_body.on_use spawn_entity_on_event action. "
+    "Return a strict JSON object with double-quoted JSON object keys and string values; no trailing commas or JavaScript expressions. No markdown or reasoning."
 )
 
 
@@ -159,19 +165,24 @@ def _repair_malformed_author_json(
         "rules": [
             "Preserve every recoverable authored value, id, capability, parameter, binding transaction, concept, and realization from malformedRawText.",
             "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
+            "Call params must use allowedCallParamsReadOnly for their exact fn; do not invent undeclared params even if they sound plausible.",
             "Use originalRecipeContext only to disambiguate damaged syntax; never introduce a choice absent from malformedRawText.",
             "Return exactly one strict full Author JSON object with no markdown or prose.",
         ],
         "parseError": f"{type(parse_error).__name__}: {parse_error}",
         "malformedRawText": malformed_raw_text,
         "originalRecipeContext": json.loads(original_recipe_context),
+        "allowedCallParamsReadOnly": {
+            name: sorted(cap.params) for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible
+        },
         "requiredJsonShape": author_item_prompt_shape_card(),
     }
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
         "You are the single conditional Gameplay Format Repair for InfiniCrafterLocal. "
         "Repair only JSON syntax/container damage in malformedRawText. Preserve the Author's exact recoverable design and executable choices; "
-        "do not reauthor or complete missing gameplay. Return strict full Author JSON only."
+        "do not reauthor or complete missing gameplay; do not invent undeclared params. "
+        "Use allowedCallParamsReadOnly to check each call's fn. Return strict full Author JSON only."
     )
     messages = [
         stage_chat_message("system", "author_repair_contract", system + llm_reasoning_system_suffix(model_name)),
@@ -205,6 +216,11 @@ def _repair_malformed_author_json(
         parsed = parse_first_valid_llm_json(content)
         if not isinstance(parsed, Mapping):
             raise PlannerUnavailable("Gameplay Author format Repair returned non-object JSON")
+        recovered = recover_object_with_trailing_commas(malformed_raw_text)
+        if recovered is None:
+            raise PlannerUnavailable("Gameplay format Repair cannot prove recoverable authored fields")
+        if _prepare_parsed_author_item(recovered) != _prepare_parsed_author_item(parsed):
+            raise PlannerUnavailable("Gameplay format Repair changed recoverable authored fields")
         return _prepare_parsed_author_item(parsed), content
     except PlannerUnavailable:
         raise
@@ -445,7 +461,7 @@ def repair_author_item_after_failure(
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
 
-        "Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
+        "Omit unchanged root patch fields: absent optional arrays/metadataPatch mean no change; note and realizationReplacement are required. Do not copy dossier keys into the patch. Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
         "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."
     )

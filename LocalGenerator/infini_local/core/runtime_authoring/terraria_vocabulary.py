@@ -26,11 +26,13 @@ DAMAGE_CLASS_TOKENS: Final[tuple[str, ...]] = (
 
 # Exact tModLoader content identity for optional modded damage classes. Built-ins
 # use the finite tokens above; modded values must use the registered FullName
-# shape `ModName/ClassName`, copied from loaded parent facts. This is not an alias.
+# shape `ModName/ClassName`, copied from a parent's damageClass facts, not its
+# item FullName. `Terraria/` is the vanilla item namespace, never a ModDamageClass
+# registration; accepting it would pass Author and fail in ResolveDamageClass.
 DAMAGE_CLASS_TOKEN_PATTERN: Final[str] = (
     r"^(?:"
     + "|".join(DAMAGE_CLASS_TOKENS)
-    + r"|[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$"
+    + r"|(?!Terraria/)[A-Za-z][A-Za-z0-9_]{0,63}/[A-Za-z][A-Za-z0-9_]{0,63})$"
 )
 
 # ItemUseStyleID stable/1.4.4 names, excluding None and the unused DrinkOld.

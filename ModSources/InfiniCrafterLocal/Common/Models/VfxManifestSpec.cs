@@ -226,8 +226,7 @@ public sealed class VfxSlotSpec
         TextureRole = ExactEnumText(TextureRole, "textureRole", "item", "entity", "projectile", "field", "impact", "none");
         if (rendererKind == InfiniVfxRendererKind.ImpactSprite && TextureRole != "impact")
             throw new InvalidDataException("impactSprite requires textureRole=impact");
-        if (rendererKind is InfiniVfxRendererKind.ProjectileAfterimage or InfiniVfxRendererKind.SpriteStampTrail or InfiniVfxRendererKind.ActorAfterimage or InfiniVfxRendererKind.ImpactSprite
-            && TextureRole == "none")
+        if (VfxRendererRegistry.ConsumesSpriteTexture(rendererKind) && TextureRole == "none")
             throw new InvalidDataException("sprite renderer requires a non-none textureRole");
         ParticleRole = ExactEnumText(ParticleRole, "particleRole", "item", "entity", "projectile", "field", "impact", "none");
         Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");

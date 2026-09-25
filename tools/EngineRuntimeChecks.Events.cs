@@ -11,6 +11,14 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void EventSpawnZeroMultiplierIsNotReplacedByOne()
+    {
+        Equal(0f, RuntimeProgramExecutor.EventSpawnDamageMultiplier(
+            new RuntimeEventActionSpec { DamageMultiplier = 0f }), "zero child damage multiplier");
+        Equal(0.25f, RuntimeProgramExecutor.EventSpawnDamageMultiplier(
+            new RuntimeEventActionSpec { DamageMultiplier = 0.25f }), "fractional child damage multiplier");
+    }
+
     private static void EventDamageUsesAuthoredSource()
     {
         var oldMetrics = Terraria.Main.SceneMetrics;

@@ -44,7 +44,9 @@ _RENDERERS = (
     "actorAfterimage", "impactRing", "impactSprite", "childMotes",
     "lightCue", "soundCue",
 )
-_SPRITE_RENDERERS = {"projectileAfterimage", "spriteStampTrail", "actorAfterimage", "impactSprite"}
+SPRITE_TEXTURE_RENDERERS = frozenset({
+    "projectileAfterimage", "spriteStampTrail", "actorAfterimage", "impactSprite",
+})
 _BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
 _TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
@@ -239,6 +241,7 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
         errors.append({"path": "$.slots", "message": f"at most {max_slots} slots"})
     seen_ids: set[str] = set()
     impact_sprite_entities: set[str] = set()
+    impact_texture_consumers: list[tuple[int, str]] = []
     normalized_slots: list[dict[str, Any]] = []
     enum_fields = {
         "rendererKind": _RENDERERS, "backend": _BACKENDS, "textureRole": _TEXTURE_ROLES,
@@ -297,9 +300,17 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             errors.append({"path": path, "message": "soundCue requires channel=sound and lane=cue"})
         if clean["rendererKind"] == "lightCue" and (clean["channel"], clean["lane"]) != ("light", "cue"):
             errors.append({"path": path, "message": "lightCue requires channel=light and lane=cue"})
-        if clean["rendererKind"] in _SPRITE_RENDERERS and clean["textureRole"] == "none":
+        if clean["rendererKind"] in SPRITE_TEXTURE_RENDERERS and clean["textureRole"] == "none":
             errors.append({"path": path + ".textureRole", "message": "sprite renderer requires a non-none textureRole"})
+        if clean["rendererKind"] in SPRITE_TEXTURE_RENDERERS and clean["textureRole"] == "impact":
+            impact_texture_consumers.append((index, entity_id))
         normalized_slots.append(clean)
+    for index, entity_id in impact_texture_consumers:
+        if entity_id not in impact_sprite_entities:
+            errors.append({
+                "path": f"$.slots[{index}].textureRole",
+                "message": "sprite renderer using impact texture requires an impactSprite slot for the same entity",
+            })
     return {
         "ok": not errors,
         "errors": errors,
@@ -362,7 +373,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Use only enum values and numeric ranges from runtimeSurface.",
             "projectileAfterimage, spriteStampTrail, actorAfterimage, and impactSprite consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match.",
             "Sprite renderers require a non-none textureRole. Primitive and particle renderers do not consume a gameplay PNG.",
-            "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt must request one dedicated transparent impact sprite. Every other renderer must return both strings empty.",
+            "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt must request one dedicated transparent impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
             "Slots may be empty when presentation should be restrained.",
             "Return only one JSON object matching outputSchema.",
         ],

@@ -66,6 +66,8 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "duplicate_exclusive_input": {"strategy": "patch_or_delete_conflicting_binding", "llmRepairable": True, "allowNodeDelete": True},
     "duplicate_id": {"strategy": "delete_exact_duplicate", "llmRepairable": True, "allowNodeDelete": True},
     "duplicate_single_component": {"strategy": "patch_or_delete_conflicting_call", "llmRepairable": True, "allowNodeDelete": True},
+    "duplicate_equipment_damage_selector": {"strategy": "patch_selector_or_delete_duplicate", "llmRepairable": True, "allowNodeDelete": True},
+    "equipment_scope_conflict": {"strategy": "select_one_equipment_configuration_or_delete_modifier", "llmRepairable": True, "allowNodeDelete": True},
     "empty_component": {"strategy": "patch_effect_params_or_delete_call", "llmRepairable": True, "allowNodeDelete": True},
     "entity_not_binding_spawnable": {"strategy": "patch_exact_binding_action", "llmRepairable": True, "allowNodeDelete": False},
     "event_not_emitted": {"strategy": "patch_or_synthesize_exact_event_producer", "llmRepairable": True, "allowNodeDelete": False},
@@ -83,7 +85,10 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "missing_entity_reference": {"strategy": "retarget_or_create_exact_missing_entity", "llmRepairable": True, "allowNodeDelete": False},
 
     "missing_item_capability_param": {"strategy": "patch_or_synthesize_exact_item_dependency", "llmRepairable": True, "allowNodeDelete": False},
+    "missing_light_color": {"strategy": "patch_exact_missing_param", "llmRepairable": True, "allowNodeDelete": False},
+    "set_bonus_head_only": {"strategy": "patch_exact_param_or_remove_bonus", "llmRepairable": True, "allowNodeDelete": False},
     "missing_movement_component": {"strategy": "choose_one_compatible_position_driver", "llmRepairable": True, "allowNodeDelete": False},
+    "missing_set_key": {"strategy": "patch_exact_missing_param", "llmRepairable": True, "allowNodeDelete": False},
     "missing_required_component": {"strategy": "synthesize_exact_required_component", "llmRepairable": True, "allowNodeDelete": False},
     "place_item_without_stack_cost": {"strategy": "replace_complete_use_transaction", "llmRepairable": True, "allowNodeDelete": False},
     "hybrid_placeable_max_stack": {"strategy": "patch_exact_item_param", "llmRepairable": True, "allowNodeDelete": False},
@@ -211,7 +216,8 @@ def _capability_dependency_closure(names: Iterable[str]) -> set[str]:
         for requirement in cap.requirements:
             if requirement.capability in CAPABILITY_REGISTRY:
                 pending.append(requirement.capability)
-            pending.extend(value for value in requirement.any_of if value in CAPABILITY_REGISTRY)
+            if requirement.kind == "capability_group_present":
+                pending.extend(value for value in requirement.any_of if value in CAPABILITY_REGISTRY)
     return out
 
 
@@ -1247,6 +1253,27 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     mark("bindings", row_id, can_delete=True)
                     binding_input_change_ids.add(row_id)
                     grant("bindings", row_id, "input")
+        elif code == "set_bonus_head_only" and node_namespace == "calls":
+            for row_id in related:
+                modifier = row_by_id.get(row_id, {})
+                if (
+                    row_id != node_id
+                    and str(modifier.get("fn") or "") == "add_equipment_damage_bonus"
+                    and str(modifier.get("target") or "") == str(node_row.get("target") or "")
+                    and _mapping(modifier.get("params")).get("phase") == "matching_armor_set"
+                ):
+                    # The invalid bonus can be removed without changing a valid
+                    # body/legs item into a head piece or unfreezing its design.
+                    mark("calls", row_id, can_delete=True)
+        elif code in {"duplicate_equipment_damage_selector", "equipment_scope_conflict"}:
+            if node_namespace == "calls" and node_id:
+                mark("calls", node_id, can_delete=True)
+                if code == "duplicate_equipment_damage_selector":
+                    grant("calls", node_id, "params.damageClass")
+                    grant("calls", node_id, "params.phase")
+            for row_id in related:
+                if row_id != node_id:
+                    context_id(row_id)
         elif code in {"duplicate_single_component", "exclusive_component_conflict"}:
             for row_id in related:
                 if namespace_by_id.get(row_id) == "calls":

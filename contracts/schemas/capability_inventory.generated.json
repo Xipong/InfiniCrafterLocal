@@ -188,7 +188,6 @@
         "gameplay.useStyleName",
         "gameplay.autoReuse",
         "gameplay.useTurn",
-        "gameplay.channelUse",
         "gameplay.holdoutOffsetX",
         "gameplay.holdoutOffsetY",
         "gameplay.handPose",
@@ -545,7 +544,16 @@
       "provenance": "existing healing item fields",
       "purpose": "Restore exact life and/or mana when use succeeds.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "anyOf": [
+            "apply_item_effects"
+          ],
+          "kind": "binding_action_present",
+          "message": "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+          "target": "item_body"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -597,7 +605,16 @@
       "provenance": "existing apply_player_effect_on_use buff path",
       "purpose": "Apply one concrete Terraria buff when use succeeds.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "anyOf": [
+            "apply_item_effects"
+          ],
+          "kind": "binding_action_present",
+          "message": "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+          "target": "item_body"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -722,15 +739,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "oreSenseRadiusTiles": {
+        "oreSenseEnabled": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 60,
-          "minimum": 0,
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "tiles",
-          "units": "tiles"
+          "semanticType": "boolean_capability",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -739,6 +756,14 @@
       "purpose": "Apply a bounded generated stat/light/ore-sense buff.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "anyOf": [
+            "apply_item_effects"
+          ],
+          "kind": "binding_action_present",
+          "message": "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+          "target": "item_body"
+        },
         {
           "kind": "non_neutral_param",
           "message": "at least one generated-buff effect must be non-neutral",
@@ -1136,7 +1161,16 @@
       "provenance": "existing mobility_effect",
       "purpose": "Run one explicit bounded mobility action on successful use.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "anyOf": [
+            "apply_item_effects"
+          ],
+          "kind": "binding_action_present",
+          "message": "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+          "target": "item_body"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1163,66 +1197,148 @@
         "accessory.lifeRegen",
         "accessory.manaRegen",
         "accessory.movementSpeed",
-        "accessory.genericDamage",
+        "accessory.maxRunSpeed",
+        "accessory.jumpSpeed",
         "accessory.genericCrit",
-        "accessory.endurance",
+        "accessory.attackSpeed",
+        "accessory.knockback",
         "accessory.minionSlots",
         "accessory.sentrySlots",
+        "accessory.manaCostReduction",
+        "accessory.ammoSaveChance",
+        "accessory.aggro",
+        "accessory.endurance",
+        "accessory.armorPenetration",
+        "accessory.whipRange",
+        "accessory.summonTagDamage",
         "accessory.lightStrength",
-        "accessory.lightColorName"
+        "accessory.lightColorName",
+        "accessory.fallDamageImmune",
+        "accessory.lavaImmune",
+        "accessory.waterWalk"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "defense": {
+        "aggroPoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -1000,
+          "reference": null,
+          "required": false,
+          "semanticType": "aggro_points",
+          "units": "aggro_points"
+        },
+        "ammoSaveChancePercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 99,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "probability_percent",
+          "units": "probability_percent"
+        },
+        "damageReductionPercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 75,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "defensePoints": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
           "minimum": -50,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "defense_points",
+          "units": "defense_points"
+        },
+        "fallDamageImmune": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
-        "endurance": {
+        "genericArmorPenetrationPoints": {
           "enum": [],
           "kind": "number",
-          "maximum": 0.75,
+          "maximum": 100,
           "minimum": 0,
           "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
+          "required": false,
+          "semanticType": "armor_points",
+          "units": "armor_points"
         },
-        "genericCrit": {
+        "genericAttackSpeedBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "genericCritChancePercentagePoints": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
           "minimum": -100,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "percentage_points",
-          "units": ""
+          "units": "percentage_points"
         },
-        "genericDamage": {
+        "genericKnockbackBonusPercent": {
           "enum": [],
           "kind": "number",
-          "maximum": 3,
-          "minimum": -0.9,
+          "maximum": 300,
+          "minimum": -90,
           "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "jumpSpeedBonusPxPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": -5,
+          "reference": null,
+          "required": false,
+          "semanticType": "pixels_per_tick",
+          "units": "pixels_per_tick"
+        },
+        "lavaImmune": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegen": {
+        "lifeRegenHalfHpPerSecond": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
           "minimum": -100,
           "reference": null,
-          "required": true,
-          "semanticType": "terraria_life_regen",
-          "units": ""
+          "required": false,
+          "semanticType": "half_hp_per_second",
+          "units": "half_hp_per_second"
         },
         "lightColor": {
           "enum": [
@@ -1242,7 +1358,7 @@
           "maximum": null,
           "minimum": null,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "runtime_color",
           "units": ""
         },
@@ -1252,94 +1368,169 @@
           "maximum": 1.5,
           "minimum": 0,
           "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
+          "required": false,
+          "semanticType": "light_intensity",
+          "units": "light_intensity"
         },
-        "manaRegen": {
+        "manaCostReductionPercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 90,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "manaRegenBonusPoints": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
           "minimum": -100,
           "reference": null,
-          "required": true,
-          "semanticType": "terraria_mana_regen",
-          "units": ""
+          "required": false,
+          "semanticType": "mana_regen_bonus_points",
+          "units": "mana_regen_bonus_points"
         },
-        "maxLife": {
+        "maxLifePoints": {
           "enum": [],
           "kind": "integer",
           "maximum": 1000,
           "minimum": -200,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "life_points",
-          "units": ""
+          "units": "life_points"
         },
-        "maxMana": {
+        "maxManaPoints": {
           "enum": [],
           "kind": "integer",
           "maximum": 1000,
           "minimum": -200,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "mana_points",
-          "units": ""
+          "units": "mana_points"
         },
-        "minionSlots": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 20,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "minion_slots",
-          "units": ""
-        },
-        "movementSpeed": {
+        "maxRunSpeedBonusPxPerTick": {
           "enum": [],
           "kind": "number",
-          "maximum": 3,
-          "minimum": -0.9,
+          "maximum": 20,
+          "minimum": -5,
           "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
+          "required": false,
+          "semanticType": "pixels_per_tick",
+          "units": "pixels_per_tick"
         },
-        "sentrySlots": {
+        "minionSlotsBonus": {
           "enum": [],
           "kind": "integer",
           "maximum": 20,
           "minimum": 0,
           "reference": null,
-          "required": true,
-          "semanticType": "sentry_slots",
+          "required": false,
+          "semanticType": "slots",
+          "units": "slots"
+        },
+        "moveSpeedBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "sentrySlotsBonus": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "slots",
+          "units": "slots"
+        },
+        "taggedSummonSourceDamageBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "source_damage_percent",
+          "units": "source_damage_percent"
+        },
+        "waterWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
+        },
+        "whipRangeBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
         }
       },
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "existing accessory_effect",
-      "purpose": "Apply exact passive player stat modifiers while equipped as an accessory.",
+      "purpose": "Apply independently chosen passive equipment effects; numeric bonuses use explicit units.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "anyOf": [
+            "add_equipment_damage_bonus"
+          ],
           "kind": "at_least_one_param_nonzero",
           "message": "An accessory call must author at least one non-zero executable effect or be removed.",
           "nonzeroParams": [
-            "defense",
-            "maxLife",
-            "maxMana",
-            "lifeRegen",
-            "manaRegen",
-            "movementSpeed",
-            "genericDamage",
-            "genericCrit",
-            "endurance",
-            "minionSlots",
-            "sentrySlots",
+            "defensePoints",
+            "maxLifePoints",
+            "maxManaPoints",
+            "lifeRegenHalfHpPerSecond",
+            "manaRegenBonusPoints",
+            "moveSpeedBonusPercent",
+            "maxRunSpeedBonusPxPerTick",
+            "jumpSpeedBonusPxPerTick",
+            "genericCritChancePercentagePoints",
+            "genericAttackSpeedBonusPercent",
+            "genericKnockbackBonusPercent",
+            "minionSlotsBonus",
+            "sentrySlotsBonus",
+            "manaCostReductionPercentagePoints",
+            "ammoSaveChancePercent",
+            "aggroPoints",
+            "damageReductionPercentagePoints",
+            "genericArmorPenetrationPoints",
+            "whipRangeBonusPercent",
+            "taggedSummonSourceDamageBonusPercent",
+            "lightStrength",
+            "fallDamageImmune",
+            "lavaImmune",
+            "waterWalk"
+          ],
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "positive_param_requires_param",
+          "message": "Positive equipped light requires explicit lightColor; no hidden white fallback.",
+          "nonzeroParams": [
             "lightStrength"
           ],
+          "param": "lightColor",
           "target": "same_target"
         }
       ],
@@ -1370,105 +1561,384 @@
         "armor.defense",
         "armor.maxLife",
         "armor.maxMana",
+        "armor.lifeRegen",
+        "armor.manaRegen",
         "armor.movementSpeed",
-        "armor.genericDamage",
+        "armor.maxRunSpeed",
+        "armor.jumpSpeed",
         "armor.genericCrit",
-        "armor.setBonusGenericDamage",
+        "armor.attackSpeed",
+        "armor.knockback",
+        "armor.minionSlots",
+        "armor.sentrySlots",
+        "armor.manaCostReduction",
+        "armor.ammoSaveChance",
+        "armor.aggro",
+        "armor.endurance",
+        "armor.armorPenetration",
+        "armor.whipRange",
+        "armor.summonTagDamage",
+        "armor.lightStrength",
+        "armor.lightColorName",
+        "armor.fallDamageImmune",
+        "armor.lavaImmune",
+        "armor.waterWalk",
+        "armor.setBonusGenericCrit",
         "armor.setBonusMovementSpeed",
-        "armor.setBonusLifeRegen"
+        "armor.setBonusLifeRegen",
+        "armor.setBonusManaRegen",
+        "armor.setBonusMinionSlots",
+        "armor.setBonusSentrySlots",
+        "armor.setBonusManaCostReduction",
+        "armor.setBonusAmmoSaveChance",
+        "armor.setBonusAggro",
+        "armor.setBonusEndurance",
+        "armor.setBonusArmorPenetration"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "defense": {
+        "aggroPoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -1000,
+          "reference": null,
+          "required": false,
+          "semanticType": "aggro_points",
+          "units": "aggro_points"
+        },
+        "ammoSaveChancePercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 99,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "probability_percent",
+          "units": "probability_percent"
+        },
+        "damageReductionPercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 75,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "defensePoints": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "defense_points",
+          "units": "defense_points"
+        },
+        "fallDamageImmune": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
-        "genericCrit": {
+        "genericArmorPenetrationPoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "armor_points",
+          "units": "armor_points"
+        },
+        "genericAttackSpeedBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "genericCritChancePercentagePoints": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
           "minimum": -100,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "percentage_points",
-          "units": ""
+          "units": "percentage_points"
         },
-        "genericDamage": {
+        "genericKnockbackBonusPercent": {
           "enum": [],
           "kind": "number",
-          "maximum": 3,
-          "minimum": -0.9,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "maxLife": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 1000,
-          "minimum": -200,
-          "reference": null,
-          "required": true,
-          "semanticType": "life_points",
-          "units": ""
-        },
-        "maxMana": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 1000,
-          "minimum": -200,
-          "reference": null,
-          "required": true,
-          "semanticType": "mana_points",
-          "units": ""
-        },
-        "movementSpeed": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 3,
-          "minimum": -0.9,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "setBonusGenericDamage": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 3,
-          "minimum": -0.9,
+          "maximum": 300,
+          "minimum": -90,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "jumpSpeedBonusPxPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": -5,
+          "reference": null,
+          "required": false,
+          "semanticType": "pixels_per_tick",
+          "units": "pixels_per_tick"
+        },
+        "lavaImmune": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
-        "setBonusLifeRegen": {
+        "lifeRegenHalfHpPerSecond": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
           "minimum": -100,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
-          "units": ""
+          "semanticType": "half_hp_per_second",
+          "units": "half_hp_per_second"
         },
-        "setBonusMovementSpeed": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 3,
-          "minimum": -0.9,
+        "lightColor": {
+          "enum": [
+            "white",
+            "red",
+            "orange",
+            "yellow",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "gray",
+            "black"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
+          "semanticType": "runtime_color",
           "units": ""
+        },
+        "lightStrength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.5,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "light_intensity",
+          "units": "light_intensity"
+        },
+        "manaCostReductionPercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 90,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "manaRegenBonusPoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "mana_regen_bonus_points",
+          "units": "mana_regen_bonus_points"
+        },
+        "maxLifePoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -200,
+          "reference": null,
+          "required": false,
+          "semanticType": "life_points",
+          "units": "life_points"
+        },
+        "maxManaPoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -200,
+          "reference": null,
+          "required": false,
+          "semanticType": "mana_points",
+          "units": "mana_points"
+        },
+        "maxRunSpeedBonusPxPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": -5,
+          "reference": null,
+          "required": false,
+          "semanticType": "pixels_per_tick",
+          "units": "pixels_per_tick"
+        },
+        "minionSlotsBonus": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "slots",
+          "units": "slots"
+        },
+        "moveSpeedBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "sentrySlotsBonus": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "slots",
+          "units": "slots"
+        },
+        "setBonusAggroPoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 1000,
+          "minimum": -1000,
+          "reference": null,
+          "required": false,
+          "semanticType": "aggro_points",
+          "units": "aggro_points"
+        },
+        "setBonusAmmoSaveChancePercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 99,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "probability_percent",
+          "units": "probability_percent"
+        },
+        "setBonusDamageReductionPercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 75,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "setBonusGenericArmorPenetrationPoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "armor_points",
+          "units": "armor_points"
+        },
+        "setBonusGenericCritChancePercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "setBonusLifeRegenHalfHpPerSecond": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "half_hp_per_second",
+          "units": "half_hp_per_second"
+        },
+        "setBonusManaCostReductionPercentagePoints": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 90,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "setBonusManaRegenBonusPoints": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "mana_regen_bonus_points",
+          "units": "mana_regen_bonus_points"
+        },
+        "setBonusMinionSlotsBonus": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "slots",
+          "units": "slots"
+        },
+        "setBonusMoveSpeedBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "setBonusSentrySlotsBonus": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "slots",
+          "units": "slots"
         },
         "setKey": {
           "enum": [],
@@ -1493,14 +1963,95 @@
           "required": true,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "taggedSummonSourceDamageBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "source_damage_percent",
+          "units": "source_damage_percent"
+        },
+        "waterWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "whipRangeBonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
         }
       },
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "existing armor_effect",
-      "purpose": "Apply exact armor slot stats and optional set-key bonus.",
+      "purpose": "Apply independently chosen armor effects and matching three-piece set bonuses.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "nonneutral_params_require_param",
+          "message": "A three-piece armor set bonus needs an explicit non-empty setKey shared by head, body and legs.",
+          "nonzeroParams": [
+            "setBonusGenericCritChancePercentagePoints",
+            "setBonusMoveSpeedBonusPercent",
+            "setBonusLifeRegenHalfHpPerSecond",
+            "setBonusManaRegenBonusPoints",
+            "setBonusMinionSlotsBonus",
+            "setBonusSentrySlotsBonus",
+            "setBonusManaCostReductionPercentagePoints",
+            "setBonusAmmoSaveChancePercent",
+            "setBonusAggroPoints",
+            "setBonusDamageReductionPercentagePoints",
+            "setBonusGenericArmorPenetrationPoints"
+          ],
+          "param": "setKey",
+          "target": "same_target"
+        },
+        {
+          "equals": "head",
+          "kind": "nonneutral_params_require_exact_param",
+          "message": "Only the head piece executes an armor set bonus once a matching head, body and legs are equipped.",
+          "nonzeroParams": [
+            "setBonusGenericCritChancePercentagePoints",
+            "setBonusMoveSpeedBonusPercent",
+            "setBonusLifeRegenHalfHpPerSecond",
+            "setBonusManaRegenBonusPoints",
+            "setBonusMinionSlotsBonus",
+            "setBonusSentrySlotsBonus",
+            "setBonusManaCostReductionPercentagePoints",
+            "setBonusAmmoSaveChancePercent",
+            "setBonusAggroPoints",
+            "setBonusDamageReductionPercentagePoints",
+            "setBonusGenericArmorPenetrationPoints"
+          ],
+          "param": "slot",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "positive_param_requires_param",
+          "message": "Positive equipped light requires explicit lightColor; no hidden white fallback.",
+          "nonzeroParams": [
+            "lightStrength"
+          ],
+          "param": "lightColor",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1509,6 +2060,100 @@
       "technicalLoweringOutputs": [
         "armor.enabled"
       ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "add_equipment_damage_bonus",
+      "componentSlot": "equipment_class_damage",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "accessory.genericDamage",
+        "accessory.meleeDamage",
+        "accessory.rangedDamage",
+        "accessory.magicDamage",
+        "accessory.summonDamage",
+        "armor.genericDamage",
+        "armor.meleeDamage",
+        "armor.rangedDamage",
+        "armor.magicDamage",
+        "armor.summonDamage",
+        "armor.setBonusGenericDamage",
+        "armor.setBonusMeleeDamage",
+        "armor.setBonusRangedDamage",
+        "armor.setBonusMagicDamage",
+        "armor.setBonusSummonDamage"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "bonusPercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": true,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "damageClass": {
+          "enum": [
+            "generic",
+            "melee",
+            "ranged",
+            "magic",
+            "summon"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "equipment_damage_class",
+          "units": ""
+        },
+        "phase": {
+          "enum": [
+            "equipped",
+            "matching_armor_set"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "factorized equipment GetDamage(DamageClass) without changing legacy DTO",
+      "purpose": "Add one selected DamageClass modifier while equipped or with a matching armor set; each class and phase is a separate explicit choice.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "configure_accessory",
+            "configure_armor"
+          ],
+          "kind": "capability_group_present",
+          "message": "Equipment class damage requires exactly one explicit accessory or armor configuration on the same item.",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
     },
     {
       "authorityByEffect": {},
@@ -3661,7 +4306,8 @@
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].buffId",
-        "runtimeProgram.entities[].events[].durationTicks"
+        "runtimeProgram.entities[].events[].durationTicks",
+        "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
@@ -3675,6 +4321,16 @@
           "required": true,
           "semanticType": "terraria_buff_id",
           "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
         },
         "durationTicks": {
           "enum": [],
@@ -3749,7 +4405,8 @@
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].radiusPx",
-        "runtimeProgram.entities[].events[].damageMultiplier"
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
@@ -3763,6 +4420,16 @@
           "required": true,
           "semanticType": "unitless_scalar",
           "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
         },
         "event": {
           "enum": [
@@ -3838,7 +4505,8 @@
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].rangeTiles",
-        "runtimeProgram.entities[].events[].damageMultiplier"
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
@@ -3862,6 +4530,16 @@
           "required": true,
           "semanticType": "unitless_scalar",
           "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
         },
         "event": {
           "enum": [
@@ -3940,11 +4618,22 @@
         "runtimeProgram.entities[].events[].mode",
         "runtimeProgram.entities[].events[].strength",
         "runtimeProgram.entities[].events[].radiusTiles",
-        "runtimeProgram.entities[].events[].periodTicks"
+        "runtimeProgram.entities[].events[].periodTicks",
+        "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
       "parameters": {
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
         "event": {
           "enum": [
             "on_hit",
@@ -4049,7 +4738,8 @@
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].damageFraction",
-        "runtimeProgram.entities[].events[].maxHeal"
+        "runtimeProgram.entities[].events[].maxHeal",
+        "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -4063,6 +4753,16 @@
           "required": true,
           "semanticType": "unitless_scalar",
           "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
         },
         "event": {
           "enum": [
@@ -4134,10 +4834,11 @@
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
-        "runtimeProgram.entities[].events[].mode",
         "runtimeProgram.entities[].events[].rangeTiles",
         "runtimeProgram.entities[].events[].cooldownTicks",
-        "runtimeProgram.entities[].events[].safeTileOnly"
+        "runtimeProgram.entities[].events[].safeTileOnly",
+        "runtimeProgram.entities[].events[].delayTicks",
+        "runtimeProgram.entities[].events[].mode"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -4149,6 +4850,16 @@
           "minimum": 0,
           "reference": null,
           "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
           "semanticType": "ticks",
           "units": "ticks"
         },
@@ -4164,19 +4875,6 @@
           "reference": null,
           "required": true,
           "semanticType": "runtime_event_kind",
-          "units": ""
-        },
-        "mode": {
-          "enum": [
-            "blink_to_entity",
-            "blink_to_event_position"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "bounded_text",
           "units": ""
         },
         "rangeTiles": {
@@ -4203,7 +4901,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "blink-to-impact extracted from old attack mobility fields",
-      "purpose": "Run an explicit owner movement action after a projectile event.",
+      "purpose": "Execute owner teleport to the recorded event position, limited by range and shared mobility cooldown.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

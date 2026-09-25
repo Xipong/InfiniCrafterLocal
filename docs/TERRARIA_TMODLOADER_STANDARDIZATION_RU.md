@@ -6,6 +6,8 @@
 
 Главное правило: стандартизация не имеет права превращаться в semantic router. Vanilla mapping переводит один authored token в одно точное tModLoader-значение; он не выбирает за Gameplay Author movement, delivery, attachment, lifecycle или weapon family.
 
+Таблица конкретных `UpdateAccessory`/`UpdateEquip`/`UpdateArmorSet` additive процентов, percentage points, flat points, диапазонов, нейтральных значений и C# wire projection генерируется из одного registry в [`PRIMITIVE_PARITY_RU.md`](PRIMITIVE_PARITY_RU.md). Пять исполняемых классов `GetDamage` не являются пятью Author knobs: `add_equipment_damage_bonus` принимает explicit `damageClass`, `phase` и `bonusPercent`, а compiler one-to-one материализует сохранённые scalar DTO-поля. Generic-only crit/attack speed/knockback/armor penetration **не** подразумевают поддержку иных классов. Нормализация выборочных числовых DTO safety bounds генерируется в `GeneratedEquipmentBounds.g.cs` из registry, включая pre-IR clamps для сохранённых generic damage полей; lifecycle/authority выбирает runtime, не модель.
+
 ## Что приведено к tModLoader
 
 ### Канонический finite vocabulary

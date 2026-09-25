@@ -16,7 +16,7 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static int Main()
+    private static int Main(string[] args)
     {
         string sandbox = System.IO.Directory.CreateTempSubdirectory("icl-engine-checks-").FullName;
         try
@@ -25,6 +25,10 @@ internal static partial class EngineRuntimeChecks
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 2 && args[0] == "--replay-contracts")
+                return ReplayGeneratedContracts(args[1]);
+            if (args.Length != 0)
+                throw new ArgumentException("Expected --replay-contracts <jsonl-path>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -55,6 +59,8 @@ internal static partial class EngineRuntimeChecks
             ("draw budgets reset without world tick", DrawBudgetsResetWithoutWorldTick),
             ("detached layers own sprite batch", DetachedLayersOwnSpriteBatch),
             ("item VFX cadence handles integer seeds", ItemVfxCadenceHandlesIntegerSeeds),
+            ("primitive impact ring does not require impact texture", PrimitiveImpactRingDoesNotRequireImpactTexture),
+            ("VFX events follow actual item and projectile producers", VfxEventReferencesFollowRuntimeProducers),
             ("detached VFX state is bounded and cleared", DetachedVfxStateIsBoundedAndCleared),
             ("cache-only flag preserves request", CacheOnlyFlagPreservesRequest),
             ("generator delivery requires identity", GeneratorDeliveryRequiresIdentity),
@@ -63,6 +69,9 @@ internal static partial class EngineRuntimeChecks
             ("inventory ammo keeps generated definition", InventoryAmmoKeepsGeneratedDefinition),
             ("runtime entity count respects declared limit", RuntimeEntityCountRespectsDeclaredLimit),
             ("equipment authored ranges reach player", EquipmentAuthoredRangesReachPlayer),
+            ("equipment class damage reaches exact DamageClass", EquipmentClassDamageReachesExactDamageClass),
+            ("legacy equipment clamps remain unchanged", LegacyEquipmentClampsRemainUnchanged),
+            ("legacy unclamped equipment stats remain intact", LegacyUnclampedEquipmentStatsRemainIntact),
             ("signed accessory defense reaches player", SignedAccessoryDefenseReachesPlayer),
             ("blink authored range reaches teleport", BlinkAuthoredRangeReachesTeleport),
             ("disposed asset download cannot publish", DisposedAssetDownloadCannotPublish),
@@ -71,6 +80,7 @@ internal static partial class EngineRuntimeChecks
             ("delayed status keeps original NPC", DelayedStatusKeepsOriginalNpc),
             ("delayed queue honors limits", DelayedQueueHonorsLimits),
             ("event damage uses authored source", EventDamageUsesAuthoredSource),
+            ("event spawn zero multiplier is not replaced by one", EventSpawnZeroMultiplierIsNotReplacedByOne),
             ("player save reference requires version markers", PlayerSaveReferenceRequiresVersionMarkers),
             ("applied trace observes projection without changing definition", AppliedTraceObservesProjectionWithoutChangingDefinition),
         };

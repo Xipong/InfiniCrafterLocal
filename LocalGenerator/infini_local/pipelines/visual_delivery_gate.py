@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
+from infini_local.core.vfx_manifest import SPRITE_TEXTURE_RENDERERS
 from infini_local.pipelines.pipeline_visual_config import (
     IMAGE_BACKEND,
     IMAGE_BACKEND_CONFIG_ERROR,
@@ -99,7 +100,9 @@ def _impact_entity_ids(data: dict[str, Any]) -> set[str]:
     return {
         str(slot.get("entityId") or "").strip()
         for slot in manifest.get("slots") or []
-        if isinstance(slot, dict) and str(slot.get("textureRole") or "").strip().lower() == "impact"
+        if isinstance(slot, dict)
+        and str(slot.get("rendererKind") or "") in SPRITE_TEXTURE_RENDERERS
+        and str(slot.get("textureRole") or "").strip().lower() == "impact"
     } - {""}
 
 

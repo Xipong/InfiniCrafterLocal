@@ -205,18 +205,7 @@ public sealed partial class GeneratedItemData
 
     private void NormalizeEquipment()
     {
-        Accessory.Defense = ClampInt(Accessory.Defense, -100, 500);
-        Accessory.MaxLife = ClampInt(Accessory.MaxLife, -500, 5000);
-        Accessory.MaxMana = ClampInt(Accessory.MaxMana, -500, 5000);
-        Accessory.LifeRegen = ClampInt(Accessory.LifeRegen, -120, 200);
-        Accessory.ManaRegen = ClampInt(Accessory.ManaRegen, -120, 200);
-        Accessory.MovementSpeed = ClampFloat(Accessory.MovementSpeed, -0.9f, 3f);
-        Accessory.GenericDamage = ClampFloat(Accessory.GenericDamage, -0.9f, 3f);
-        Accessory.GenericCrit = ClampFloat(Accessory.GenericCrit, -100f, 100f);
-        Accessory.Endurance = ClampFloat(Accessory.Endurance, 0f, 0.75f);
-        Accessory.MinionSlots = ClampInt(Accessory.MinionSlots, 0, 20);
-        Accessory.SentrySlots = ClampInt(Accessory.SentrySlots, 0, 20);
-        Accessory.LightStrength = ClampFloat(Accessory.LightStrength, 0f, 1.5f);
+        GeneratedEquipmentBounds.Normalize(Accessory);
         Accessory.LightColorName = RuntimeColorPolicy.NormalizeRequired(Accessory.LightColorName, allowEmpty: Accessory.LightStrength <= 0f);
 
         Armor.Slot = SafeText(Armor.Slot, 16).ToLowerInvariant();
@@ -225,15 +214,7 @@ public sealed partial class GeneratedItemData
         if (!Armor.Enabled && Armor.Slot is not ("" or "head" or "body" or "legs"))
             Armor.Slot = "";
         Armor.SetKey = SafeText(Armor.SetKey, 64);
-        Armor.Defense = ClampInt(Armor.Defense, 0, 500);
-        Armor.MaxLife = ClampInt(Armor.MaxLife, -500, 5000);
-        Armor.MaxMana = ClampInt(Armor.MaxMana, -500, 5000);
-        Armor.MovementSpeed = ClampFloat(Armor.MovementSpeed, -0.9f, 3f);
-        Armor.GenericDamage = ClampFloat(Armor.GenericDamage, -0.9f, 3f);
-        Armor.GenericCrit = ClampFloat(Armor.GenericCrit, -100f, 100f);
-        Armor.SetBonusGenericDamage = ClampFloat(Armor.SetBonusGenericDamage, -0.9f, 3f);
-        Armor.SetBonusMovementSpeed = ClampFloat(Armor.SetBonusMovementSpeed, -0.9f, 3f);
-        Armor.SetBonusLifeRegen = ClampInt(Armor.SetBonusLifeRegen, -120, 200);
+        GeneratedEquipmentBounds.Normalize(Armor);
     }
 
     private void NormalizeVisual()
@@ -275,21 +256,22 @@ public sealed partial class GeneratedItemData
 
     private void ValidateVfxEntityEventReferences()
     {
+        bool hasItemContactBinding = RuntimeProgram.Bindings.Any(x => x.UsePolicy.ContactDamage);
+        bool hasEmittingItemUse = RuntimeProgram.Bindings.Any(x =>
+            (x.Input == RuntimeInputKind.PrimaryUse || x.Input == RuntimeInputKind.AlternateUse)
+            && x.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem);
         foreach (VfxSlotSpec slot in VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>())
         {
             if (slot is null) continue;
             RuntimeEntitySpec? entity = RuntimeProgram.TryGetEntity(slot.EntityId);
             if (entity is null)
                 throw new InvalidDataException($"VFX slot '{slot.Id}' references unknown entity '{slot.EntityId}'");
-            bool emitted = slot.Event == RuntimeEventKind.OnSpawn
-                || RuntimeProgram.Bindings.Any(x => x.UsePolicy.Action.TargetId == entity.Id && slot.Event == RuntimeEventKind.OnUse)
-                || entity.Events.Any(x => x.Event == slot.Event)
-                || (entity.Damage.Enabled && slot.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
-                || (entity.Collision.TileCollide && slot.Event == RuntimeEventKind.OnTileCollision)
-                || slot.Event is RuntimeEventKind.OnExpire or RuntimeEventKind.OnKill;
-            if (!emitted)
-                throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}'");
-            if (slot.TextureRole == "impact"
+            try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse); }
+            catch (InvalidDataException error)
+            {
+                throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}': {error.Message}", error);
+            }
+            if (slot.TextureRole == "impact" && VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot))
                 && SourceMode is not ("developer_fixture" or "test_fixture")
                 && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
                     || entity.Visual.ImpactSpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))

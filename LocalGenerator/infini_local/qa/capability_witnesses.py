@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
+    BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     EVENT_CAPABILITIES,
     MOVEMENT_CAPABILITIES,
@@ -62,15 +63,16 @@ def _params(fn: str) -> dict[str, Any]:
         "restore_resources_on_use": {"healLife": 20, "healMana": 0, "potionSickness": False},
         "apply_generated_buff_on_use": {
             "durationTicks": 60, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
-            "lightColor": "white", "oreSenseRadiusTiles": 0, "movementSpeed": 0.0,
+            "lightColor": "white", "oreSenseEnabled": False, "movementSpeed": 0.0,
             "jumpBoost": 0.0, "manaRegen": 0, "lifeRegen": 0,
         },
         "configure_placeable": {"tileId": 4, "wallId": -1, "placeStyle": 0},
         "require_use_condition": {"mode": "grounded"},
         "move_player_on_use": {"mode": "recall_home", "rangeTiles": 0, "cooldownTicks": 60, "safeTileOnly": True},
+        "configure_accessory": {"defensePoints": 1},
+        "add_equipment_damage_bonus": {"phase": "equipped", "damageClass": "melee", "bonusPercent": 15},
         "configure_armor": {
-            "slot": "head", "setKey": "witness_set", "defense": 1, "maxLife": 0,
-            "maxMana": 0, "movementSpeed": 0.0, "genericDamage": 0.0, "genericCrit": 0.0,
+            "slot": "head", "setKey": "witness_set", "defensePoints": 1,
         },
         "configure_spawn": deepcopy(_SPAWN),
         "set_projectile_damage": deepcopy(_DAMAGE),
@@ -85,7 +87,7 @@ def _params(fn: str) -> dict[str, Any]:
         "chain_damage_on_event": {"event": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
         "pull_on_event": {"event": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8, "periodTicks": 12},
         "heal_owner_on_event": {"event": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
-        "move_owner_on_event": {"event": "on_hit", "mode": "blink_to_entity", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
+        "move_owner_on_event": {"event": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out
@@ -143,13 +145,17 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             bindings.append(_binding("witness_binding", "primary_use", "use_item_body", "item"))
         else:
             calls.append(_call("item_use", "configure_item_use", "item", _ITEM_BASE_USE))
+            if fn == "add_equipment_damage_bonus":
+                calls.append(_call("base_equipment", "configure_accessory", "item", {"defensePoints": 1}))
             calls.append(_call("witness_call", fn, "item"))
             action = "use_item_body"
             input_kind = "primary_use"
             if fn == "configure_placeable":
                 action = "place_item"
-            elif fn in {"configure_accessory", "configure_armor"}:
+            elif fn in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
                 action = "equip_passive"; input_kind = "equipped"
+            elif fn in BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of:
+                action = "apply_item_effects"
             bindings.append(_binding(
                 "witness_binding",
                 input_kind,

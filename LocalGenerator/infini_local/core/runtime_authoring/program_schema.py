@@ -359,10 +359,7 @@ def author_item_repair_schema() -> dict[str, Any]:
             "realizationReplacement": realization_schema(),
             "note": _strict_string(min_len=1, max_len=500),
         },
-        "required": [
-            "entitiesUpsert", "entityIdsDelete", "bindingsUpsert", "bindingIdsDelete",
-            "callsUpsert", "callIdsDelete", "metadataPatch", "note",
-        ],
+        "required": ["note"],
     }
 
 

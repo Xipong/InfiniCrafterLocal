@@ -310,7 +310,8 @@ def _equipment_tool_combat() -> dict[str, Any]:
     b.bind("primary_tool", "primary_use", "use_item_body", "item")
     b.bind("alternate_torch", "alternate_use", "place_item", "item", stack_cost=1, placement_call_id="place_torch")
     b.bind("passive_harness", "equipped", "equip_passive", "item")
-    b.call("harness_stats", "configure_accessory", "item", {"defense": 4, "maxLife": 0, "maxMana": 0, "lifeRegen": 0, "manaRegen": 0, "movementSpeed": 0.08, "genericDamage": 0.05, "genericCrit": 2.0, "endurance": 0.02, "minionSlots": 0, "sentrySlots": 0, "lightStrength": 0.35, "lightColor": "yellow"})
+    b.call("harness_stats", "configure_accessory", "item", {"defensePoints": 4, "moveSpeedBonusPercent": 8, "genericCritChancePercentagePoints": 2, "damageReductionPercentagePoints": 2, "lightStrength": 0.35, "lightColor": "yellow"})
+    b.call("harness_damage", "add_equipment_damage_bonus", "item", {"phase": "equipped", "damageClass": "generic", "bonusPercent": 5})
     b.call("mining_heads", "configure_tool", "item", {"pickPower": 55, "axePower": 0, "hammerPower": 0, "miningSpeedScale": 0.85})
     b.call("place_torch", "configure_placeable", "item", {"tileId": 4, "wallId": -1, "placeStyle": 0})
 

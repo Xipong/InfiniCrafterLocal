@@ -49,6 +49,8 @@ VALIDATION_ERROR_CODES = frozenset({
     "duplicate_exclusive_input",
     "duplicate_id",
     "duplicate_single_component",
+    "duplicate_equipment_damage_selector",
+    "equipment_scope_conflict",
     "empty_component",
     "entity_not_binding_spawnable",
     "event_not_emitted",
@@ -65,7 +67,10 @@ VALIDATION_ERROR_CODES = frozenset({
     "missing_dependency_param",
     "missing_entity_reference",
     "missing_item_capability_param",
+    "missing_light_color",
+    "set_bonus_head_only",
     "missing_movement_component",
+    "missing_set_key",
     "missing_required_component",
     "place_item_without_stack_cost",
     "hybrid_placeable_max_stack",
@@ -247,7 +252,7 @@ def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
     return any((
         _numeric_param(params, "miningSpeedMultiplier", 1) != 1,
         _numeric_param(params, "lightStrength", 0) > 0,
-        _numeric_param(params, "oreSenseRadiusTiles", 0) > 0,
+        params.get("oreSenseEnabled") is True,
         _numeric_param(params, "movementSpeed", 0) != 0,
         _numeric_param(params, "jumpBoost", 0) > 0,
         _numeric_param(params, "manaRegen", 0) > 0,
@@ -413,12 +418,54 @@ def _validate_requirement(
             )
         return None
     if requirement.kind == "at_least_one_param_nonzero":
-        if not any(_numeric_param(params, name, 0) != 0 for name in requirement.nonzero_params):
+        declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        if declared_cap is None or not (
+            any(name in params and params[name] != declared_cap.params[name].neutral
+                for name in requirement.nonzero_params)
+            or any(
+                row.get("fn") in requirement.any_of
+                and isinstance(row.get("params"), Mapping)
+                and row["params"].get("phase") == "equipped"
+                and _numeric_param(row["params"], "bonusPercent", 0) != 0
+                for row in target_calls
+            )
+        ):
             return ValidationIssue(
                 f"{path}.params",
                 "inert_component",
                 requirement.message,
                 ("set one non-zero effect", "remove the call"),
+            )
+        return None
+    if requirement.kind == "nonneutral_params_require_param":
+        declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        has_bonus = declared_cap is not None and any(
+            name in params and params[name] != declared_cap.params[name].neutral
+            for name in requirement.nonzero_params
+        )
+        if has_bonus and not params.get(requirement.param):
+            return ValidationIssue(
+                f"{path}.params.{requirement.param}", "missing_set_key",
+                requirement.message, ("author a non-empty shared setKey", "remove the set bonus"),
+            )
+        return None
+    if requirement.kind == "nonneutral_params_require_exact_param":
+        declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        has_bonus = declared_cap is not None and any(
+            name in params and params[name] != declared_cap.params[name].neutral
+            for name in requirement.nonzero_params
+        )
+        if has_bonus and params.get(requirement.param) != requirement.equals:
+            return ValidationIssue(
+                f"{path}.params.{requirement.param}", "set_bonus_head_only",
+                requirement.message, ("author the set bonus on the head piece", "remove the set bonus"),
+            )
+        return None
+    if requirement.kind == "positive_param_requires_param":
+        if any(_numeric_param(params, name, 0) > 0 for name in requirement.nonzero_params) and not params.get(requirement.param):
+            return ValidationIssue(
+                f"{path}.params.{requirement.param}", "missing_light_color",
+                requirement.message, ("author lightColor", "remove positive lightStrength"),
             )
         return None
     if requirement.kind == "non_neutral_param":
@@ -619,10 +666,57 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             if isinstance(raw_spawn_count, int) and not isinstance(raw_spawn_count, bool) and raw_spawn_count >= 0:
                 event_spawn_budget += raw_spawn_count
 
+    seen_equipment_damage: dict[tuple[str, str, str], str] = {}
     for index, call in enumerate(calls):
         cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         if cap is None:
             continue
+        if cap.name == "add_equipment_damage_bonus":
+            raw_bonus_params = call.get("params")
+            bonus_params: Mapping[str, Any] = raw_bonus_params if isinstance(raw_bonus_params, Mapping) else {}
+            target_id = str(call.get("target") or "")
+            configurations = [row for row in calls_by_target.get(target_id, [])
+                              if row.get("fn") in {"configure_accessory", "configure_armor"}]
+            if len(configurations) != 1:
+                issues.append(ValidationIssue(
+                    f"$.runtimeProgram.calls[{index}]", "equipment_scope_conflict",
+                    "Select exactly one explicit accessory or armor configuration for this class bonus.",
+                    ("configure_accessory", "configure_armor"), (str(call.get("id") or ""), target_id),
+                ))
+            elif bonus_params.get("phase") == "matching_armor_set":
+                config = configurations[0]
+                config_index = calls.index(config)
+                config_id = str(config.get("id") or "")
+                raw_armor_params = config.get("params")
+                armor_params: Mapping[str, Any] = raw_armor_params if isinstance(raw_armor_params, Mapping) else {}
+                if config.get("fn") != "configure_armor":
+                    issues.append(ValidationIssue(
+                        f"$.runtimeProgram.calls[{index}].params.phase", "equipment_scope_conflict",
+                        "A matching armor set phase cannot target an accessory.",
+                        ("equipped",), (str(call.get("id") or ""), target_id),
+                    ))
+                elif not armor_params.get("setKey"):
+                    issues.append(ValidationIssue(
+                        f"$.runtimeProgram.calls[{config_index}].params.setKey", "missing_set_key",
+                        "Matching armor set damage requires configured armor with a nonempty setKey.",
+                        ("author an exact matching setKey",), (config_id, str(call.get("id") or ""), target_id),
+                    ))
+                elif armor_params.get("slot") != "head":
+                    issues.append(ValidationIssue(
+                        f"$.runtimeProgram.calls[{config_index}].params.slot", "set_bonus_head_only",
+                        "Only the head piece executes a matching three-piece armor set bonus.",
+                        ("configure_armor(slot=head)", "remove only the invalid class bonus call"),
+                        (config_id, str(call.get("id") or ""), target_id),
+                    ))
+            selector = (target_id, str(bonus_params.get("phase") or ""), str(bonus_params.get("damageClass") or ""))
+            if selector in seen_equipment_damage:
+                issues.append(ValidationIssue(
+                    f"$.runtimeProgram.calls[{index}]", "duplicate_equipment_damage_selector",
+                    "The same equipment phase and damage class may be authored only once.",
+                    ("merge the exact modifier into one call",),
+                    (seen_equipment_damage[selector], str(call.get("id") or ""), target_id),
+                ))
+            seen_equipment_damage[selector] = str(call.get("id") or "")
         for requirement in cap.requirements:
             issue = _validate_requirement(
                 requirement,

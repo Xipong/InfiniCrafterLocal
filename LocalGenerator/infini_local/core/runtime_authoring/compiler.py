@@ -14,6 +14,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
@@ -21,6 +22,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
     ENTITY_KIND_REGISTRY,
     VISUAL_ROLE_BY_ENTITY_KIND,
+    equipment_damage_wire_path,
 )
 from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
 from infini_local.core.runtime_authoring.technical_lowering import (
@@ -42,12 +44,12 @@ from infini_local.core.runtime_authoring.validator import (
 class _CompileContext:
     receipts: list[dict[str, Any]]
 
-    def write(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str) -> None:
+    def write(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str, authored_param: str | None = None) -> None:
         target[key] = copy.deepcopy(value)
         self.receipts.append({
             "callId": str(call.get("id") or ""),
             "fn": str(call.get("fn") or ""),
-            "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.{key}",
+            "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.{authored_param or key}",
             "finalPath": path,
             "value": copy.deepcopy(value),
             "status": "delivered",
@@ -83,6 +85,7 @@ def _compile_item_call(
     runtime: dict[str, Any],
     item_entity: dict[str, Any],
     entity_index: int,
+    equipment_config: str,
 ) -> None:
     fn = str(call.get("fn") or "")
     p = _copy_params(call)
@@ -90,23 +93,21 @@ def _compile_item_call(
     def project(target: dict[str, Any], path_prefix: str, mapping: Mapping[str, str]) -> None:
         for source, destination in mapping.items():
             if source in p:
-                ctx.write(call=call, path=f"{path_prefix}.{destination}", value=p[source], target=target, key=destination)
+                spec = CAPABILITY_REGISTRY[fn].params[source]
+                ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
+
+    def project_equipment(target: dict[str, Any], prefix: str) -> None:
+        for source, spec in CAPABILITY_REGISTRY[fn].params.items():
+            if source in p:
+                destination = spec.wire_name or source
+                ctx.write(call=call, path=f"{prefix}.{destination}",
+                          value=spec.to_wire(p[source]), target=target,
+                          key=destination, authored_param=source)
 
     if fn == "configure_item_stats":
         project(gameplay, "gameplay", {
-            "damageClass": "damageClass",
-            "damage": "damage",
-            "knockback": "knockback",
-            "useTimeTicks": "useTime",
-            "useAnimationTicks": "useAnimation",
-            "manaCost": "manaCost",
-            "rarity": "rarity",
-            "valueCopper": "value",
-            "maxStack": "maxStack",
-            "craftYield": "craftYield",
-            "widthPx": "width",
-            "heightPx": "height",
-            "scale": "itemScale",
+            name: spec.wire_name or name
+            for name, spec in CAPABILITY_REGISTRY[fn].params.items()
         })
         return
     if fn == "configure_item_use":
@@ -123,7 +124,6 @@ def _compile_item_call(
             "useStyle": "useStyleName",
             "autoReuse": "autoReuse",
             "useTurn": "useTurn",
-            "channel": "channelUse",
             "holdoutOffsetX": "holdoutOffsetX",
             "holdoutOffsetY": "holdoutOffsetY",
             "handPose": "handPose",
@@ -183,7 +183,7 @@ def _compile_item_call(
             "miningSpeedMultiplier": "miningSpeedMultiplier",
             "lightStrength": "emitLightStrength",
             "lightColor": "lightColorName",
-            "oreSenseRadiusTiles": "oreSenseRadiusTiles",
+            "oreSenseEnabled": "oreSenseRadiusTiles",
             "movementSpeed": "movementSpeed",
             "jumpBoost": "jumpBoost",
             "manaRegen": "manaRegen",
@@ -216,23 +216,30 @@ def _compile_item_call(
     if fn == "configure_accessory":
         accessory["enabled"] = True
         ctx.write_derived(call=call, path="accessory.enabled", value=True, target=accessory, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
-        project(accessory, "accessory", {
-            "defense": "defense", "maxLife": "maxLife", "maxMana": "maxMana",
-            "lifeRegen": "lifeRegen", "manaRegen": "manaRegen", "movementSpeed": "movementSpeed",
-            "genericDamage": "genericDamage", "genericCrit": "genericCrit", "endurance": "endurance",
-            "minionSlots": "minionSlots", "sentrySlots": "sentrySlots",
-            "lightStrength": "lightStrength", "lightColor": "lightColorName",
-        })
+        project_equipment(accessory, "accessory")
         return
     if fn == "configure_armor":
         armor["enabled"] = True
         ctx.write_derived(call=call, path="armor.enabled", value=True, target=armor, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
-        project(armor, "armor", {
-            "slot": "slot", "setKey": "setKey", "defense": "defense", "maxLife": "maxLife", "maxMana": "maxMana",
-            "movementSpeed": "movementSpeed", "genericDamage": "genericDamage", "genericCrit": "genericCrit",
-            "setBonusGenericDamage": "setBonusGenericDamage",
-            "setBonusMovementSpeed": "setBonusMovementSpeed", "setBonusLifeRegen": "setBonusLifeRegen",
-        })
+        project_equipment(armor, "armor")
+        return
+    if fn == "add_equipment_damage_bonus":
+        if equipment_config not in {"armor", "accessory"}:
+            raise RuntimeError("validated equipment class modifier has no unique equipment configuration")
+        path = equipment_damage_wire_path(
+            str(p["phase"]), str(p["damageClass"]), armor=equipment_config == "armor",
+        )
+        target = armor if equipment_config == "armor" else accessory
+        _, key = path.split(".", 1)
+        ctx.write(
+            call=call, path=path,
+            value=CAPABILITY_REGISTRY[fn].params["bonusPercent"].to_wire(p["bonusPercent"]),
+            target=target, key=key, authored_param="bonusPercent",
+        )
+        source = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params"
+        ctx.receipts[-1]["authoredPaths"] = [
+            f"{source}.phase", f"{source}.damageClass", f"{source}.bonusPercent",
+        ]
         return
     raise AssertionError(f"unhandled item capability {fn}")
 
@@ -298,7 +305,7 @@ def _compile_entity_call(
                 "rangeTiles": "rangeTiles",
                 "sameTargetBias": "sameTargetBias",
             }.items():
-                ctx.write(call=call, path=f"{base}.targeting.{destination}", value=p[source_key], target=targeting, key=destination)
+                ctx.write(call=call, path=f"{base}.targeting.{destination}", value=p[source_key], target=targeting, key=destination, authored_param=source_key)
         else:
             controller_params = controller.setdefault("params", {})
             for key, value in p.items():
@@ -322,13 +329,15 @@ def _compile_entity_call(
         }
         if fn == "spawn_entity_on_event":
             event_row["entityId"] = p.pop("entity")
+        if fn == "move_owner_on_event":
+            event_row["mode"] = "blink_to_event_position"  # C# DTO discriminator; not an authored branch
         event_row.update(p)
         events.append(event_row)
         event_index = len(events) - 1
         for key, value in event_row.items():
             if key == "id":
                 continue
-            if key in {"action", "actionCode"}:
+            if key in {"action", "actionCode"} or (fn == "move_owner_on_event" and key == "mode"):
                 authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn"
             elif key == "entityId":
                 authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.entity"
@@ -340,7 +349,7 @@ def _compile_entity_call(
                 "authoredPath": authored_path,
                 "finalPath": f"{base}.events[{event_index}].{key}",
                 "value": copy.deepcopy(value),
-                "status": "technical_projection" if key == "actionCode" else "delivered",
+                "status": "technical_projection" if key in {"action", "actionCode"} or (fn == "move_owner_on_event" and key == "mode") else "delivered",
             })
         return
     raise AssertionError(f"unhandled runtime entity capability {fn}")
@@ -455,6 +464,12 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     gameplay: dict[str, Any] = {"kind": str(out.get("category") or "generic")}
     accessory: dict[str, Any] = {"enabled": False}
     armor: dict[str, Any] = {"enabled": False}
+    equipment_configs = {str(call.get("fn")) for call in calls
+                         if call.get("fn") in {"configure_accessory", "configure_armor"}}
+    equipment_config = (
+        "armor" if equipment_configs == {"configure_armor"} else
+        "accessory" if equipment_configs == {"configure_accessory"} else ""
+    )
     for call in calls:
         target = str(call.get("target") or "")
         entity_index = entity_index_by_id[target]
@@ -472,6 +487,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                 runtime=runtime,
                 item_entity=compiled_entity,
                 entity_index=entity_index,
+                equipment_config=equipment_config,
             )
         else:
             _compile_entity_call(ctx, call, entity=compiled_entity, entity_index=entity_index)
@@ -495,7 +511,11 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             receipt["finalPath"] = f"{prefix}{event_index_by_id[event_id]}]{suffix}"
     runtime["bindings"] = sorted(runtime["bindings"], key=lambda row: str(row.get("id") or ""))
 
-    lowering_audit = audit_compiler_receipts(ctx.receipts)
+    lowering_audit = audit_compiler_receipts(
+        ctx.receipts,
+        authored_document=document,
+        final_document={"runtimeProgram": runtime, "gameplay": gameplay, "accessory": accessory, "armor": armor},
+    )
     if not lowering_audit["ok"]:
         raise RuntimeError(f"technical lowerer wrote undeclared fields: {lowering_audit['violations'][:8]}")
 

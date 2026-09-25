@@ -639,4 +639,84 @@ internal static partial class EngineRuntimeChecks
             }, "detached event");
         });
     }
+
+    private static void PrimitiveImpactRingDoesNotRequireImpactTexture()
+    {
+        var entity = new RuntimeEntitySpec { Id = "arrow", Kind = RuntimeEntityKind.FreeProjectile };
+        var slot = new VfxSlotSpec {
+            Id = "arrow_hit", EntityId = entity.Id, Event = RuntimeEventKind.OnSpawn,
+            RendererKind = "impactRing", TextureRole = "impact",
+        };
+        var data = new GeneratedItemData {
+            SourceMode = "generated",
+            RuntimeProgram = new RuntimeProgramSpec { Entities = new[] { entity } },
+            VfxManifest = new VfxManifestSpec { Slots = new[] { slot } },
+        };
+        // Exercise the actual delivery/DTO seam without creating a world or GPU.
+        MethodInfo validate = typeof(GeneratedItemData).GetMethod("ValidateVfxEntityEventReferences",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        validate.Invoke(data, null);
+
+        slot.RendererKind = "impactSprite";
+        try
+        {
+            validate.Invoke(data, null);
+            throw new InvalidOperationException("impactSprite without an authored PNG was accepted");
+        }
+        catch (TargetInvocationException error) when (error.InnerException is System.IO.InvalidDataException) { }
+        entity.Visual.ImpactSpritePath = "impact.png";
+        entity.Visual.ImpactSpriteStatus = "generated";
+        validate.Invoke(data, null);
+    }
+
+    private static void VfxEventReferencesFollowRuntimeProducers()
+    {
+        var item = new RuntimeEntitySpec { Id = "held_item", Kind = RuntimeEntityKind.ItemBody };
+        var shot = new RuntimeEntitySpec { Id = "shot", Kind = RuntimeEntityKind.FreeProjectile };
+        shot.Damage.Enabled = true;
+        var binding = new RuntimeBindingSpec {
+            Id = "use", Input = RuntimeInputKind.PrimaryUse,
+            UsePolicy = new RuntimeBindingUsePolicySpec {
+                Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.SpawnEntity, TargetId = shot.Id },
+                ContactDamage = true,
+            },
+        };
+        var slot = new VfxSlotSpec {
+            Id = "presentation", EntityId = item.Id, Event = RuntimeEventKind.OnUse,
+            RendererKind = "impactRing", TextureRole = "none",
+        };
+        var data = new GeneratedItemData {
+            SourceMode = "generated",
+            RuntimeProgram = new RuntimeProgramSpec {
+                ItemEntityId = item.Id, Entities = new[] { item, shot }, Bindings = new[] { binding },
+            },
+            VfxManifest = new VfxManifestSpec { Slots = new[] { slot } },
+        };
+        MethodInfo validate = typeof(GeneratedItemData).GetMethod("ValidateVfxEntityEventReferences",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        void Expect(string entityId, string eventName, bool allowed)
+        {
+            slot.EntityId = entityId;
+            slot.Event = eventName;
+            try
+            {
+                validate.Invoke(data, null);
+                if (!allowed) throw new InvalidOperationException($"{entityId}/{eventName} had no executable producer");
+            }
+            catch (TargetInvocationException error) when (!allowed && error.InnerException is System.IO.InvalidDataException) { }
+        }
+
+        Expect(item.Id, RuntimeEventKind.OnUse, true); // spawn target is the shot, but UseItem fires on the item
+        Expect(item.Id, RuntimeEventKind.OnHit, true); // item contact damage is an independent use lane
+        Expect(item.Id, RuntimeEventKind.Periodic, true); // held/equipped presentation
+        Expect(shot.Id, RuntimeEventKind.Periodic, true); // projectile AI draws even without a periodic action
+        Expect(shot.Id, RuntimeEventKind.OnSpawn, true);
+        Expect(item.Id, RuntimeEventKind.OnSpawn, false);
+        binding.UsePolicy.ContactDamage = false;
+        Expect(item.Id, RuntimeEventKind.OnHit, false);
+        binding.UsePolicy.Action.Kind = RuntimeBindingAction.PlaceItem;
+        Expect(item.Id, RuntimeEventKind.OnUse, false); // placement intentionally skips on_use
+        data.RuntimeProgram.Bindings = Array.Empty<RuntimeBindingSpec>();
+        Expect(item.Id, RuntimeEventKind.OnUse, false);
+    }
 }

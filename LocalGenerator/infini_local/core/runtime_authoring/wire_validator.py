@@ -443,7 +443,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     contract = contract_raw if isinstance(contract_raw, Mapping) else {}
     receipts_raw = contract.get("finalWireReceipts")
     receipts = receipts_raw if isinstance(receipts_raw, list) else []
-    lowering = audit_compiler_receipts(receipts)
+    lowering = audit_compiler_receipts(receipts, final_document=data)
     if not lowering.get("ok"):
         errors.append({
             "path": "$.runtimeContract.finalWireReceipts",

@@ -5,6 +5,7 @@ from types import MappingProxyType
 from typing import Any, Final, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
+    STACK_COST_RULE,
     action_kind,
     contact_damage as binding_contact_damage,
     target_id as binding_target_id,
@@ -287,6 +288,19 @@ class ParamSpec:
     semantic_type: str = ""
     reference: ReferenceSpec | None = None
     default: Any = field(default=None, compare=False)
+    wire_name: str = ""
+    wire_divisor: int = 1
+    wire_boolean_true_value: int | None = None
+    runtime_minimum: float | int | None = None
+    runtime_maximum: float | int | None = None
+    neutral: Any = None
+    execution_phase: str = ""
+
+    def to_wire(self, value: Any) -> Any:
+        # Declared unit conversion, not a choice of mechanic or a numeric clamp.
+        if self.wire_boolean_true_value is not None:
+            return self.wire_boolean_true_value if value else 0
+        return value / self.wire_divisor if self.wire_divisor != 1 else value
 
     def schema(self) -> dict[str, Any]:
         out: dict[str, Any] = {"type": self.kind}
@@ -308,6 +322,8 @@ class ParamSpec:
             out["x-infini-reference"] = self.reference.card()
         if self.default is not None:
             out["default"] = self.default
+        if self.neutral is not None:
+            out["x-infini-neutral"] = self.neutral
         return out
 
 
@@ -381,9 +397,10 @@ class CapabilitySpec:
         for name, spec in self.params.items():
             row: dict[str, Any] = {
                 "type": spec.kind,
-                "required": spec.required,
                 "meaning": spec.description,
             }
+            if spec.required:
+                row["required"] = True
             if spec.minimum is not None:
                 row["min"] = spec.minimum
             if spec.maximum is not None:
@@ -394,33 +411,57 @@ class CapabilitySpec:
                 row["pattern"] = spec.pattern
             if spec.units:
                 row["units"] = spec.units
-            if spec.semantic_type:
+            if spec.semantic_type and spec.semantic_type != spec.units:
                 row["semanticType"] = spec.semantic_type
             if spec.reference is not None:
                 row["reference"] = spec.reference.card()
             if spec.default is not None:
                 row["default"] = spec.default
+            if spec.neutral is not None:
+                row["neutral"] = spec.neutral
             params[name] = row
-        authority: Any = self.network_authority
-        if self.authority_by_effect:
-            authority = {"primary": self.network_authority, "byEffect": dict(self.authority_by_effect)}
-        return {
+        card: dict[str, Any] = {
             "fn": self.name,
             "does": self.summary,
-            "slot": self.component_slot,
-            "exclusiveGroup": self.exclusive_group or None,
-            "positionOwnership": self.position_ownership,
             "targets": list(self.target_kinds),
             "params": params,
-            "acceptedEvents": list(self.allowed_events),
-            "emitsEvents": list(self.emitted_events),
+        }
+        if self.exclusive_group:
+            card["exclusiveGroup"] = self.exclusive_group
+        if self.position_ownership != "none":
+            card["positionOwnership"] = self.position_ownership
+        if self.allowed_events:
+            card["acceptedEvents"] = list(self.allowed_events)
+        if self.emitted_events:
+            card["emitsEvents"] = list(self.emitted_events)
+        if self.requirements:
+            card["requires"] = [row.card() for row in self.requirements]
+        if self.multiplicity != "single_per_target":
+            card["multiplicity"] = self.multiplicity
+        if self.performance_budget != "bounded by runtime program limits":
+            card["budget"] = self.performance_budget
+        return card
+
+    def audit_card(self) -> dict[str, Any]:
+        """Complete machine projection; hook/wire/authority are not LLM design choices."""
+        card = self.prompt_card()
+        card.update({
+            "slot": self.component_slot,
+            "authority": self.network_authority,
+            "authorityByEffect": dict(self.authority_by_effect),
+            "positionOwnership": self.position_ownership,
             "requires": [row.card() for row in self.requirements],
+            "wirePaths": list(self.final_wire_paths),
+            "csharpOwner": self.csharp_owner,
             "multiplicity": self.multiplicity,
-            "authority": authority,
             "budget": self.performance_budget,
             "activationSpawnCountParam": self.activation_spawn_count_param or None,
             "meaningfulForStationary": self.meaningful_for_stationary,
-        }
+            "acceptedEvents": list(self.allowed_events),
+            "emitsEvents": list(self.emitted_events),
+            "exclusiveGroup": self.exclusive_group or None,
+        })
+        return card
 
 
 
@@ -437,6 +478,13 @@ def _p(
     semantic_type: str = "",
     reference: ReferenceSpec | None = None,
     default: Any = None,
+    wire_name: str = "",
+    wire_divisor: int = 1,
+    wire_boolean_true_value: int | None = None,
+    runtime_minimum: float | int | None = None,
+    runtime_maximum: float | int | None = None,
+    neutral: Any = None,
+    execution_phase: str = "",
 ) -> ParamSpec:
     return ParamSpec(
         kind=kind,
@@ -450,6 +498,13 @@ def _p(
         semantic_type=semantic_type,
         reference=reference,
         default=default,
+        wire_name=wire_name,
+        wire_divisor=wire_divisor,
+        wire_boolean_true_value=wire_boolean_true_value,
+        runtime_minimum=runtime_minimum,
+        runtime_maximum=runtime_maximum,
+        neutral=neutral,
+        execution_phase=execution_phase,
     )
 
 
@@ -519,12 +574,121 @@ def _cap(
 
 _DAMAGE_CLASS = DAMAGE_CLASS_TOKENS
 _DAMAGE_CLASS_PATTERN = DAMAGE_CLASS_TOKEN_PATTERN
+# Exact C# equipment GetDamage overloads, not all item/projectile DamageClass IDs.
+EQUIPMENT_DAMAGE_CLASSES: Final[tuple[str, ...]] = ("generic", "melee", "ranged", "magic", "summon")
+# Selective pre-IR clamps belong to the saved C# DTO, not to old Author names.
+# GeneratedEquipmentBounds must retain these after class modifiers become typed calls.
+LEGACY_EQUIPMENT_CLASS_DAMAGE_BOUNDS: Final[Mapping[str, Mapping[str, tuple[float, float]]]] = MappingProxyType({
+    "accessory": MappingProxyType({"genericDamage": (-0.9, 3.0)}),
+    "armor": MappingProxyType({"genericDamage": (-0.9, 3.0), "setBonusGenericDamage": (-0.9, 3.0)}),
+})
+
+
+def equipment_damage_wire_path(phase: str, damage_class: str, *, armor: bool) -> str:
+    """One-to-one selector over the supported legacy equipment DTO fields."""
+    if damage_class not in EQUIPMENT_DAMAGE_CLASSES or phase not in {"equipped", "matching_armor_set"}:
+        raise ValueError("unsupported equipment damage selector")
+    if phase == "matching_armor_set" and not armor:
+        raise ValueError("accessories do not have a matching armor set phase")
+    field = damage_class + "Damage"
+    if phase == "matching_armor_set":
+        field = "setBonus" + field[0].upper() + field[1:]
+    return ("armor." if armor else "accessory.") + field
+
 _COLOR = ("white", "red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "gray", "black")
 _USE_STYLE = ITEM_USE_STYLE_TOKENS
 _MOVEMENT_OWNER = "InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile.Executors.cs"
 _MODEL_OWNER = "InfiniCrafterLocal.Common.Models.RuntimeProgramSpec.cs"
 _COMPILER_OWNER = "infini_local.core.runtime_authoring.compiler::compile_runtime_program"
 
+
+def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
+    """One Author vocabulary for equipped effects and their exact DTO projection."""
+    phase = "ModItem.UpdateEquip" if armor else "ModItem.UpdateAccessory"
+
+    # Preserve exactly the clamps that existed before the Author refit.
+    # Fields absent here were previously passed through the DTO unchanged:
+    # their Author bounds are still validated, but legacy saved recipes are not narrowed.
+    legacy_safety = ({
+        "defense": (0, 500), "maxLife": (-500, 5000), "maxMana": (-500, 5000),
+        "movementSpeed": (-0.9, 3),
+        "genericCrit": (-100, 100),
+        "setBonusMovementSpeed": (-0.9, 3), "setBonusLifeRegen": (-120, 200),
+    } if armor else {
+        "defense": (-100, 500), "maxLife": (-500, 5000), "maxMana": (-500, 5000),
+        "lifeRegen": (-120, 200), "manaRegen": (-120, 200),
+        "movementSpeed": (-0.9, 3),
+        "genericCrit": (-100, 100), "endurance": (0, 0.75),
+        "minionSlots": (0, 20), "sentrySlots": (0, 20),
+        "lightStrength": (0, 1.5),
+    })
+
+    def stat(wire: str, meaning: str, low: float, high: float, units: str, *,
+             percent: bool = False, integer: bool = False) -> ParamSpec:
+        safety = legacy_safety.get(wire)
+        return _p("integer" if integer else "number", meaning, required=False,
+                  minimum=low, maximum=high, units=units, semantic_type=units,
+                  wire_name=wire, wire_divisor=100 if percent else 1,
+                  runtime_minimum=safety[0] if safety else None,
+                  runtime_maximum=safety[1] if safety else None,
+                  neutral=0, execution_phase=phase)
+
+    p: dict[str, ParamSpec] = {
+        "defensePoints": stat("defense", "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment", 0 if armor else -50, 200, "defense_points", integer=True),
+        "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
+        "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
+        "lifeRegenHalfHpPerSecond": stat("lifeRegen", "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)", -100, 200, "half_hp_per_second", integer=True),
+        "manaRegenBonusPoints": stat("manaRegen", "Add Player.manaRegenBonus points; not directly mana/second", -100, 200, "mana_regen_bonus_points", integer=True),
+        "moveSpeedBonusPercent": stat("movementSpeed", "Add percent/100 to Player.moveSpeed", -90, 300, "additive_percent", percent=True),
+        "maxRunSpeedBonusPxPerTick": stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"),
+        "jumpSpeedBonusPxPerTick": stat("jumpSpeed", "Add to Player.jumpSpeedBoost (positive raises jump speed)", -5, 20, "pixels_per_tick"),
+        "genericCritChancePercentagePoints": stat("genericCrit", "Add percentage points to generic critical chance", -100, 100, "percentage_points"),
+        "genericAttackSpeedBonusPercent": stat("attackSpeed", "Add percent/100 to generic attack speed", -90, 300, "additive_percent", percent=True),
+        "genericKnockbackBonusPercent": stat("knockback", "Add percent/100 to generic StatModifier knockback; not flat points", -90, 300, "additive_percent", percent=True),
+        "minionSlotsBonus": stat("minionSlots", "Add minion slots", 0, 20, "slots", integer=True),
+        "sentrySlotsBonus": stat("sentrySlots", "Add sentry slots", 0, 20, "slots", integer=True),
+        "manaCostReductionPercentagePoints": stat("manaCostReduction", "Subtract percent/100 from Player.manaCost factor, floored at 0.1", 0, 90, "percentage_points", percent=True),
+        "ammoSaveChancePercent": stat("ammoSaveChance", "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)", 0, 99, "probability_percent", percent=True),
+        "aggroPoints": stat("aggro", "Add to Player.aggro (negative reduces targeting)", -1000, 1000, "aggro_points", integer=True),
+        "damageReductionPercentagePoints": stat("endurance", "Add percent/100 to Player.endurance damage reduction", 0, 75, "percentage_points", percent=True),
+        "genericArmorPenetrationPoints": stat("armorPenetration", "Add flat armor penetration points to DamageClass.Generic", 0, 100, "armor_points"),
+        "whipRangeBonusPercent": stat("whipRange", "Add percent/100 to Player.whipRangeMultiplier", -90, 300, "additive_percent", percent=True),
+        "taggedSummonSourceDamageBonusPercent": stat("summonTagDamage", "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip", 0, 300, "source_damage_percent", percent=True),
+        "lightStrength": stat("lightStrength", "Client-only equipped light; requires lightColor when positive", 0, 1.5, "light_intensity"),
+        "lightColor": _p("string", "Explicit equipped light color", required=False, enum=_COLOR,
+                         wire_name="lightColorName", neutral="", execution_phase=phase),
+    }
+    for name, meaning in (
+        ("fallDamageImmune", "Prevent fall damage while equipped"),
+        ("lavaImmune", "Grant lava immunity while equipped"),
+        ("waterWalk", "Walk on water while equipped"),
+    ):
+        p[name] = _p("boolean", meaning, required=False, wire_name=name,
+                     neutral=False, execution_phase=phase)
+    if armor:
+        set_phase = "ModItem.UpdateArmorSet; exact setKey on head, body and legs"
+        set_effects = (
+            "genericCritChancePercentagePoints",
+            "moveSpeedBonusPercent", "lifeRegenHalfHpPerSecond", "manaRegenBonusPoints",
+            "minionSlotsBonus", "sentrySlotsBonus", "manaCostReductionPercentagePoints",
+            "ammoSaveChancePercent", "aggroPoints", "damageReductionPercentagePoints",
+            "genericArmorPenetrationPoints",
+        )
+        for name in set_effects:
+            spec = p[name]
+            set_wire = "setBonus" + spec.wire_name[0].upper() + spec.wire_name[1:]
+            safety = legacy_safety.get(set_wire)
+            p["setBonus" + name[0].upper() + name[1:]] = replace(
+                spec, description="Matching armor set (head piece only; matching head, body and legs must actually be equipped): " + spec.description,
+                wire_name=set_wire,
+                runtime_minimum=safety[0] if safety else None,
+                runtime_maximum=safety[1] if safety else None,
+                execution_phase=set_phase)
+    return MappingProxyType(p)
+
+
+_ACCESSORY_PRIMITIVES = _equipment_params(armor=False)
+_ARMOR_PRIMITIVES = _equipment_params(armor=True)
 
 _CAPS: list[CapabilitySpec] = [
     _cap(
@@ -533,19 +697,19 @@ _CAPS: list[CapabilitySpec] = [
         "item",
         ("item_body",),
         {
-            "damageClass": _p("string", "Exact built-in token or loaded tModLoader ModName/ClassName copied from parent facts", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
+            "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Base item damage", minimum=0, maximum=2000),
             "knockback": _p("number", "Item knockback", minimum=0, maximum=20),
-            "useTimeTicks": _p("integer", "Use time", minimum=1, maximum=600, units="ticks"),
-            "useAnimationTicks": _p("integer", "Use animation", minimum=1, maximum=600, units="ticks"),
+            "useTimeTicks": _p("integer", "Use time", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
+            "useAnimationTicks": _p("integer", "Use animation", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
             "manaCost": _p("integer", "Mana consumed per use", minimum=0, maximum=500),
             "rarity": _p("integer", "Exact loaded Item.rare ID (built-in normal rarities are 0..11); copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
-            "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper"),
+            "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper", wire_name="value"),
             "maxStack": _p("integer", "Maximum stack", minimum=1, maximum=9999),
             "craftYield": _p("integer", "Items granted by one craft", minimum=1, maximum=9999),
-            "widthPx": _p("integer", "Inventory/world hitbox width", minimum=8, maximum=256, units="pixels"),
-            "heightPx": _p("integer", "Inventory/world hitbox height", minimum=8, maximum=256, units="pixels"),
-            "scale": _p("number", "Item draw scale", minimum=0.25, maximum=4),
+            "widthPx": _p("integer", "Inventory/world hitbox width", minimum=8, maximum=256, units="pixels", wire_name="width"),
+            "heightPx": _p("integer", "Inventory/world hitbox height", minimum=8, maximum=256, units="pixels", wire_name="height"),
+            "scale": _p("number", "Item draw scale", minimum=0.25, maximum=4, wire_name="itemScale"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -560,7 +724,7 @@ _CAPS: list[CapabilitySpec] = [
         "item",
         ("item_body",),
         {
-            "useStyle": _p("string", "Named Terraria ItemUseStyleID", enum=_USE_STYLE),
+            "useStyle": _p("string", "Named Terraria ItemUseStyleID", enum=_USE_STYLE, wire_name="useStyleName"),
             "autoReuse": _p("boolean", "Allow repeated use while input is held"),
             "useTurn": _p("boolean", "Allow facing turn during use"),
             "hideUseGraphic": _p("boolean", "Hide inventory sprite during use"),
@@ -573,10 +737,10 @@ _CAPS: list[CapabilitySpec] = [
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem/UseStyle",
-        wire=("gameplay.useStyleName", "gameplay.autoReuse", "gameplay.useTurn", "gameplay.channelUse", "gameplay.holdoutOffsetX", "gameplay.holdoutOffsetY", "gameplay.handPose", "gameplay.releaseTiming", "runtimeProgram.itemUse.*"),
+        wire=("gameplay.useStyleName", "gameplay.autoReuse", "gameplay.useTurn", "gameplay.holdoutOffsetX", "gameplay.holdoutOffsetY", "gameplay.handPose", "gameplay.releaseTiming", "runtimeProgram.itemUse.*"),
         provenance="existing use_affordance and explicit root affordance fields",
         repair_group="item_use",
-        lowering=("gameplay.useStyle", "gameplay.autoReuse", "gameplay.useTurn", "gameplay.channelUse", "runtimeProgram.itemUse.*"),
+        lowering=("gameplay.useStyle", "gameplay.autoReuse", "gameplay.useTurn", "runtimeProgram.itemUse.*"),
     ),
     _cap(
         "configure_item_contact_hitbox",
@@ -600,8 +764,8 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "ammoCategory": _p("string", "Exact stable Terraria AmmoID category", enum=VANILLA_AMMO_CATEGORY_TOKENS),
-            "projectileId": _p("integer", "Exact vanilla ProjectileID fired when this ammo is consumed; do not guess", minimum=1, maximum=VANILLA_PROJECTILE_TYPE_ID_MAX),
-            "shootSpeedPxPerTick": _p("number", "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo", minimum=-20, maximum=80, units="pixels_per_tick"),
+            "projectileId": _p("integer", "Exact vanilla ProjectileID fired when this ammo is consumed; do not guess", minimum=1, maximum=VANILLA_PROJECTILE_TYPE_ID_MAX, wire_name="ammoProjectileId"),
+            "shootSpeedPxPerTick": _p("number", "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo", minimum=-20, maximum=80, units="pixels_per_tick", wire_name="ammoShootSpeedPxPerTick"),
             "notAmmo": _p("boolean", "Exact Item.notAmmo flag for special ammo-slot/tooltip behaviour"),
         },
         py=_COMPILER_OWNER,
@@ -619,7 +783,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "healLife": _p("integer", "Life restored", minimum=0, maximum=500),
             "healMana": _p("integer", "Mana restored", minimum=0, maximum=500),
-            "potionSickness": _p("boolean", "Set exact Terraria Item.potion flag; false allows non-potion healing items"),
+            "potionSickness": _p("boolean", "Set exact Terraria Item.potion flag; false allows non-potion healing items", wire_name="potion"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -634,8 +798,8 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id"),
-            "durationTicks": _p("integer", "Buff duration", minimum=1, maximum=21600, units="ticks"),
+            "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id", wire_name="buffCode"),
+            "durationTicks": _p("integer", "Buff duration", minimum=1, maximum=21600, units="ticks", wire_name="buffTime"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -653,9 +817,9 @@ _CAPS: list[CapabilitySpec] = [
         {
             "durationTicks": _p("integer", "Duration", minimum=1, maximum=21600, units="ticks"),
             "miningSpeedMultiplier": _p("number", "Mining-time multiplier", minimum=0.25, maximum=4),
-            "lightStrength": _p("number", "Emitted light", minimum=0, maximum=1.5),
-            "lightColor": _p("string", "Canonical light color", enum=_COLOR),
-            "oreSenseRadiusTiles": _p("integer", "Ore-sense radius", minimum=0, maximum=60, units="tiles"),
+            "lightStrength": _p("number", "Emitted light", minimum=0, maximum=1.5, wire_name="emitLightStrength"),
+            "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
+            "oreSenseEnabled": _p("boolean", "Enable Terraria spelunker-style ore highlighting; not a radius", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False),
             "movementSpeed": _p("number", "Additive movement speed", minimum=-0.5, maximum=2),
             "jumpBoost": _p("number", "Jump speed bonus", minimum=0, maximum=8),
             "manaRegen": _p("integer", "Mana regeneration bonus", minimum=0, maximum=120),
@@ -709,9 +873,9 @@ _CAPS: list[CapabilitySpec] = [
         "item",
         ("item_body",),
         {
-            "mode": _p("string", "Use condition", enum=("grounded", "not_wet", "life_above", "mana_above")),
-            "minLife": _p("integer", "Required life for life_above", required=False, minimum=0, maximum=1000),
-            "minMana": _p("integer", "Required mana for mana_above", required=False, minimum=0, maximum=1000),
+            "mode": _p("string", "Use condition", enum=("grounded", "not_wet", "life_above", "mana_above"), wire_name="useConditionMode"),
+            "minLife": _p("integer", "Required life for life_above", required=False, minimum=0, maximum=1000, wire_name="useConditionMinLife"),
+            "minMana": _p("integer", "Required mana for mana_above", required=False, minimum=0, maximum=1000, wire_name="useConditionMinMana"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem",
@@ -726,8 +890,8 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "strength": _p("number", "Light strength", minimum=0.01, maximum=1.5),
-            "color": _p("string", "Canonical light color", enum=_COLOR),
+            "strength": _p("number", "Light strength", minimum=0.01, maximum=1.5, wire_name="holdLightStrength"),
+            "color": _p("string", "Canonical light color", enum=_COLOR, wire_name="holdLightColorName"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::HoldItem",
@@ -742,10 +906,10 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "mode": _p("string", "Mobility executor", enum=("recall_home", "blink_to_cursor")),
-            "rangeTiles": _p("integer", "Maximum blink range", minimum=0, maximum=120, units="tiles"),
-            "cooldownTicks": _p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks"),
-            "safeTileOnly": _p("boolean", "Require safe destination"),
+            "mode": _p("string", "Mobility executor", enum=("recall_home", "blink_to_cursor"), wire_name="mobilityMode"),
+            "rangeTiles": _p("integer", "Maximum blink range", minimum=0, maximum=120, units="tiles", wire_name="mobilityRangeTiles"),
+            "cooldownTicks": _p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks"),
+            "safeTileOnly": _p("boolean", "Require safe destination", wire_name="mobilitySafeTileOnly"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UseItem/InfiniCraftPlayer.Mobility.cs",
@@ -756,24 +920,10 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_accessory",
-        "Apply exact passive player stat modifiers while equipped as an accessory.",
+        "Apply independently chosen passive equipment effects; numeric bonuses use explicit units.",
         "equipment",
         ("item_body",),
-        {
-            "defense": _p("integer", "Defense", minimum=-50, maximum=200),
-            "maxLife": _p("integer", "Maximum life", minimum=-200, maximum=1000),
-            "maxMana": _p("integer", "Maximum mana", minimum=-200, maximum=1000),
-            "lifeRegen": _p("integer", "Life regeneration", minimum=-100, maximum=200),
-            "manaRegen": _p("integer", "Mana regeneration", minimum=-100, maximum=200),
-            "movementSpeed": _p("number", "Movement speed modifier", minimum=-0.9, maximum=3),
-            "genericDamage": _p("number", "Generic damage additive modifier", minimum=-0.9, maximum=3),
-            "genericCrit": _p("number", "Generic critical chance points", minimum=-100, maximum=100),
-            "endurance": _p("number", "Damage reduction", minimum=0, maximum=0.75),
-            "minionSlots": _p("integer", "Additional minion slots", minimum=0, maximum=20),
-            "sentrySlots": _p("integer", "Additional sentry slots", minimum=0, maximum=20),
-            "lightStrength": _p("number", "Equipped light", minimum=0, maximum=1.5),
-            "lightColor": _p("string", "Canonical light color", enum=_COLOR),
-        },
+        _ACCESSORY_PRIMITIVES,
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UpdateAccessory",
         wire=("accessory.*",),
@@ -783,28 +933,37 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_armor",
-        "Apply exact armor slot stats and optional set-key bonus.",
+        "Apply independently chosen armor effects and matching three-piece set bonuses.",
         "equipment",
         ("item_body",),
-        {
+        MappingProxyType({
             "slot": _p("string", "Armor equip slot", enum=("head", "body", "legs")),
-            "setKey": _p("string", "Exact authored set key", pattern=r"^[a-z0-9_]{0,48}$"),
-            "defense": _p("integer", "Defense", minimum=0, maximum=200),
-            "maxLife": _p("integer", "Maximum life", minimum=-200, maximum=1000),
-            "maxMana": _p("integer", "Maximum mana", minimum=-200, maximum=1000),
-            "movementSpeed": _p("number", "Movement speed modifier", minimum=-0.9, maximum=3),
-            "genericDamage": _p("number", "Generic damage additive modifier", minimum=-0.9, maximum=3),
-            "genericCrit": _p("number", "Generic critical chance points", minimum=-100, maximum=100),
-            "setBonusGenericDamage": _p("number", "Set bonus generic damage", required=False, minimum=-0.9, maximum=3),
-            "setBonusMovementSpeed": _p("number", "Set bonus movement speed", required=False, minimum=-0.9, maximum=3),
-            "setBonusLifeRegen": _p("integer", "Set bonus life regen", required=False, minimum=-100, maximum=200),
-        },
+            "setKey": _p("string", "Exact authored set key (empty when no matching set is intended)", pattern=r"^[a-z0-9_]{0,48}$", neutral=""),
+            **_ARMOR_PRIMITIVES,
+        }),
         py=_COMPILER_OWNER,
         cs="GeneratedArmorItems.cs/GeneratedItem.cs::UpdateEquip",
         wire=("armor.*",),
         provenance="existing armor_effect",
         repair_group="armor",
         lowering=("armor.*",),
+    ),
+    _cap(
+        "add_equipment_damage_bonus",
+        "Add one selected DamageClass modifier while equipped or with a matching armor set; each class and phase is a separate explicit choice.",
+        "equipment",
+        ("item_body",),
+        {
+            "phase": _p("string", "equipped applies while wearing this accessory/armor; matching_armor_set applies only on the head of a complete matching set", enum=("equipped", "matching_armor_set")),
+            "damageClass": _p("string", "Equipped damage class; this equipment operation supports only these five classes", enum=EQUIPMENT_DAMAGE_CLASSES, semantic_type="equipment_damage_class"),
+            "bonusPercent": _p("number", "Add this percent to the selected class damage additive modifier; 15 means +15%", minimum=-90, maximum=300, units="additive_percent", semantic_type="additive_percent", wire_divisor=100, neutral=0, execution_phase="UpdateAccessory/UpdateEquip or UpdateArmorSet according to authored phase"),
+        },
+        multiplicity="many_per_target",
+        py=_COMPILER_OWNER,
+        cs="GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
+        wire=(),
+        provenance="factorized equipment GetDamage(DamageClass) without changing legacy DTO",
+        repair_group="equipment_class_damage",
     ),
     _cap(
         "configure_spawn",
@@ -831,7 +990,7 @@ _CAPS: list[CapabilitySpec] = [
         "entity_combat",
         PROJECTILE_ENTITY_KINDS,
         {
-            "damageClass": _p("string", "Exact built-in token or loaded tModLoader ModName/ClassName copied from parent facts", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
+            "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Projectile base damage", minimum=0, maximum=2000),
             "knockback": _p("number", "Projectile knockback", minimum=0, maximum=20),
             "ownerHitCheck": _p("boolean", "Require owner line/held hit check"),
@@ -1033,7 +1192,7 @@ _CAPS.extend([
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
-            "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$"),
+            "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
             "rangeTiles": _p("number", "Target range", minimum=1, maximum=120, units="tiles"),
             "sameTargetBias": _p("number", "Bias toward current target", minimum=0, maximum=1),
@@ -1066,7 +1225,7 @@ _CAPS.extend([
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
             "event": _p("string", "Source event", enum=EVENT_KINDS),
-            "entity": _p("string", "Referenced entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$"),
+            "entity": _p("string", "Referenced entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Spawn count", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "damageMultiplier": _p("number", "Multiplier applied to the referenced child entity's authored base damage", minimum=0, maximum=4),
@@ -1177,14 +1336,13 @@ _CAPS.extend([
     ),
     _cap(
         "move_owner_on_event",
-        "Run an explicit owner movement action after a projectile event.",
+        "Execute owner teleport to the recorded event position, limited by range and shared mobility cooldown.",
         "event",
         PROJECTILE_ENTITY_KINDS,
         {
             "event": _p("string", "Source event", enum=("on_hit", "on_tile_collision", "on_expire")),
-            "mode": _p("string", "Mobility executor", enum=("blink_to_entity", "blink_to_event_position")),
             "rangeTiles": _p("integer", "Maximum movement range", minimum=1, maximum=120, units="tiles"),
-            "cooldownTicks": _p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks"),
+            "cooldownTicks": _p("integer", "Shared owner mobility cooldown", minimum=0, maximum=3600, units="ticks"),
             "safeTileOnly": _p("boolean", "Require safe destination"),
         },
         multiplicity="many_per_target",
@@ -1300,7 +1458,7 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
     ),
     "apply_item_effects": BindingActionSpec(
         "apply_item_effects", ("item_body",), ("primary_use", "alternate_use"),
-        "Apply explicitly authored item buffs/resource/mobility effects on use.",
+        "The only active binding that enables authored item buffs/resource/mobility effects; combine with item_body.on_use events for simultaneous projectile spawns.",
         ("restore_resources_on_use", "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use"),
     ),
     "place_item": BindingActionSpec(
@@ -1493,14 +1651,11 @@ if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
+    if cap.name == "configure_item_stats":
+        return tuple(f"gameplay.{spec.wire_name or name}" for name, spec in cap.params.items())
     item_paths: dict[str, tuple[str, ...]] = {
-        "configure_item_stats": (
-            "gameplay.damageClass", "gameplay.damage", "gameplay.knockback", "gameplay.useTime", "gameplay.useAnimation",
-            "gameplay.manaCost", "gameplay.rarity", "gameplay.value", "gameplay.maxStack", "gameplay.craftYield",
-            "gameplay.width", "gameplay.height", "gameplay.itemScale",
-        ),
         "configure_item_use": (
-            "gameplay.useStyleName", "gameplay.autoReuse", "gameplay.useTurn", "gameplay.channelUse",
+            "gameplay.useStyleName", "gameplay.autoReuse", "gameplay.useTurn",
             "gameplay.holdoutOffsetX", "gameplay.holdoutOffsetY", "gameplay.handPose", "gameplay.releaseTiming",
             "runtimeProgram.itemUse.configured", "runtimeProgram.itemUse.useStyle", "runtimeProgram.itemUse.hideUseGraphic", "runtimeProgram.itemUse.disableMeleeHitbox",
             "runtimeProgram.itemUse.channel", "runtimeProgram.itemUse.handPose", "runtimeProgram.itemUse.releaseTiming",
@@ -1520,11 +1675,20 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         "require_use_condition": ("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
         "add_hold_light": ("gameplay.holdLightStrength", "gameplay.holdLightColorName"),
         "move_player_on_use": ("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
-        "configure_accessory": tuple(["accessory.enabled", *[f"accessory.{name}" for name in ("defense", "maxLife", "maxMana", "lifeRegen", "manaRegen", "movementSpeed", "genericDamage", "genericCrit", "endurance", "minionSlots", "sentrySlots", "lightStrength", "lightColorName")]]),
-        "configure_armor": tuple(["armor.enabled", *[f"armor.{name}" for name in ("slot", "setKey", "defense", "maxLife", "maxMana", "movementSpeed", "genericDamage", "genericCrit", "setBonusGenericDamage", "setBonusMovementSpeed", "setBonusLifeRegen")]]),
+
     }
     if cap.name in item_paths:
         return item_paths[cap.name]
+    if cap.name in {"configure_accessory", "configure_armor"}:
+        prefix = "accessory" if cap.name == "configure_accessory" else "armor"
+        return (f"{prefix}.enabled", *(f"{prefix}.{spec.wire_name or name}" for name, spec in cap.params.items()))
+    if cap.name == "add_equipment_damage_bonus":
+        return tuple(
+            equipment_damage_wire_path(phase, damage_class, armor=armor)
+            for armor in (False, True)
+            for phase in (("equipped", "matching_armor_set") if armor else ("equipped",))
+            for damage_class in EQUIPMENT_DAMAGE_CLASSES
+        )
     if cap.name == "configure_spawn":
         return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{name}" for name in cap.params]])
     if cap.name == "set_projectile_damage":
@@ -1553,6 +1717,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
             if name == "event":
                 continue
             mapped.append("runtimeProgram.entities[].events[].entityId" if name == "entity" else f"runtimeProgram.entities[].events[].{name}")
+        if cap.name == "move_owner_on_event":
+            mapped.append("runtimeProgram.entities[].events[].mode")  # fixed DTO discriminator for the only executed destination
         return tuple(mapped)
     if cap.name == "emit_light_while_active":
         return tuple(f"runtimeProgram.entities[].light.{name}" for name in cap.params)
@@ -1565,7 +1731,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
         "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
         "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
-        "configure_accessory": "accessory", "configure_armor": "armor", "configure_spawn": "spawn",
+        "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
         "set_projectile_collision": "collision", "spawn_over_target": "spawn_over_target", "emit_light_while_active": "light",
     }
@@ -1596,6 +1762,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "move_player_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
         "configure_accessory": "Content/Items/GeneratedItem.cs::UpdateAccessory",
         "configure_armor": "Content/Items/GeneratedItem.cs::UpdateEquip",
+        "add_equipment_damage_bonus": "Content/Items/GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
         "configure_spawn": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
         "set_projectile_damage": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_lifetime": "Content/Projectiles/GeneratedProjectile.cs::Configure",
@@ -1632,6 +1799,11 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+    if cap.name == "add_equipment_damage_bonus":
+        return (RequirementSpec(
+            "capability_group_present", target="item_body", any_of=("configure_accessory", "configure_armor"),
+            message="Equipment class damage requires exactly one explicit accessory or armor configuration on the same item.",
+        ),)
     if cap.name == "spawn_over_target":
         return (RequirementSpec("capability_present", capability="configure_spawn", message="spawn_over_target extends the same entity's explicit spawn component"),)
     if cap.name in {"channel_beam", "charge_then_release"}:
@@ -1664,20 +1836,44 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                 message="A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
             ),
         )
+    if cap.name in BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of:
+        requirements = [RequirementSpec(
+            kind="binding_action_present", target="item_body", any_of=("apply_item_effects",),
+            message="This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+        )]
+        if cap.name == "apply_generated_buff_on_use":
+            requirements.append(RequirementSpec(
+                "non_neutral_param", message="at least one generated-buff effect must be non-neutral",
+            ))
+        return tuple(requirements)
     if cap.name == "configure_accessory":
         return (RequirementSpec(
             kind="at_least_one_param_nonzero",
-            nonzero_params=(
-                "defense", "maxLife", "maxMana", "lifeRegen", "manaRegen",
-                "movementSpeed", "genericDamage", "genericCrit", "endurance",
-                "minionSlots", "sentrySlots", "lightStrength",
-            ),
+            nonzero_params=tuple(name for name in cap.params if name != "lightColor"),
+            any_of=("add_equipment_damage_bonus",),
             message="An accessory call must author at least one non-zero executable effect or be removed.",
-        ),)
+        ), RequirementSpec(
+            kind="positive_param_requires_param", param="lightColor",
+            nonzero_params=("lightStrength",),
+            message="Positive equipped light requires explicit lightColor; no hidden white fallback.",
+        ))
+    if cap.name == "configure_armor":
+        return (RequirementSpec(
+            kind="nonneutral_params_require_param",
+            param="setKey",
+            nonzero_params=tuple(name for name in cap.params if name.startswith("setBonus")),
+            message="A three-piece armor set bonus needs an explicit non-empty setKey shared by head, body and legs.",
+        ), RequirementSpec(
+            kind="nonneutral_params_require_exact_param", param="slot", equals="head",
+            nonzero_params=tuple(name for name in cap.params if name.startswith("setBonus")),
+            message="Only the head piece executes an armor set bonus once a matching head, body and legs are equipped.",
+        ), RequirementSpec(
+            kind="positive_param_requires_param", param="lightColor",
+            nonzero_params=("lightStrength",),
+            message="Positive equipped light requires explicit lightColor; no hidden white fallback.",
+        ))
     if cap.name == "require_use_condition":
         return (RequirementSpec("conditional_param", param="mode", any_of=("life_above:minLife", "mana_above:minMana"), message="threshold modes require their threshold parameter"),)
-    if cap.name == "apply_generated_buff_on_use":
-        return (RequirementSpec("non_neutral_param", message="at least one generated-buff effect must be non-neutral"),)
     if cap.category == "event":
         return (RequirementSpec("event_available", param="event", message="target entity must actually emit the selected event"),)
     return ()
@@ -1698,7 +1894,7 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
         semantic_type = "terraria_tile_id_or_disabled"
     elif name == "wallId":
         semantic_type = "terraria_wall_id_or_disabled"
-    elif name in {"damageClass"}:
+    elif name in {"damageClass"} and not semantic_type:
         semantic_type = "terraria_damage_class"
     elif name == "useStyle":
         semantic_type = "terraria_item_use_style"
@@ -1740,6 +1936,13 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
 
 
 def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
+    if cap.category == "event" and "delayTicks" not in cap.params:
+        cap = replace(cap, params=MappingProxyType({
+            **cap.params,
+            "delayTicks": _p("integer", "Delay this exact action after the chosen event; 0 executes immediately", required=False,
+                             minimum=0, maximum=600, units="ticks", neutral=0,
+                             execution_phase="bounded delayed action scheduler"),
+        }))
     authority, by_effect = _authority_for(cap)
     slot = _component_slot(cap)
     exclusive_group = ""
@@ -1877,6 +2080,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
 
     return {
         "stableIdPattern": r"^[a-z][a-z0-9_]{0,47}$",
+        "stackCost": STACK_COST_RULE,
         "semanticTypeRule": (
             "semanticType is a low-level quantity/category label, not a gameplay classifier; "
             "the owning parameter's meaning, type, enum/pattern, min/max and units remain authoritative"
@@ -1912,12 +2116,6 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "owns_position_until_release": "Owns position until the authored release transition.",
             "owns_position_while_active": "Owns position for the capability's active lifetime.",
             "owns_stationary_position": "Keeps an explicitly stationary entity positioned.",
-        },
-        "authority": {
-            "client_visual_only": "Client-only presentation; no authoritative gameplay mutation.",
-            "owner_execute_sync": "Owning client executes and synchronizes bounded state.",
-            "owner_request_server_execute": "Owner requests; server validates and executes.",
-            "server_execute": "Server executes authoritative gameplay.",
         },
         "meaningfulForStationary": (
             "Machine readability hint only. targets is the validity allowlist; true says the "
@@ -1984,7 +2182,7 @@ def runtime_authoring_registry_manifest() -> dict[str, Any]:
         "inputs": [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()],
         "bindingActions": [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()],
         "events": [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()],
-        "capabilities": compact_capability_catalog(),
+        "capabilities": [cap.audit_card() for cap in visible_capabilities()],
     }
 
 

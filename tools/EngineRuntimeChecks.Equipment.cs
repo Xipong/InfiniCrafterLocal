@@ -9,6 +9,41 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void LegacyUnclampedEquipmentStatsRemainIntact()
+    {
+        var data = GeneratedItemData.Placeholder();
+        data.Accessory.Enabled = true;
+        data.Accessory.MaxRunSpeed = 30f; // Legacy DTO did not clamp this field.
+        data.Accessory.AttackSpeed = 4f;
+        data.Normalize(); // Same legacy DTO normalization invoked by FromJson/ToNetworkJson.
+        Equal(30f, data.Accessory.MaxRunSpeed, "unclamped legacy run-speed survives normalization");
+        Equal(4f, data.Accessory.AttackSpeed, "unclamped legacy attack-speed survives normalization");
+        var armorData = GeneratedItemData.Placeholder();
+        armorData.Armor.Enabled = true;
+        armorData.Armor.Slot = "head";
+        armorData.Armor.SetBonusMagicDamage = 4f; // Only generic set damage was clamped.
+        armorData.Normalize();
+        Equal(4f, armorData.Armor.SetBonusMagicDamage, "unclamped legacy set damage survives normalization");
+    }
+
+    private static void LegacyEquipmentClampsRemainUnchanged()
+    {
+        var data = GeneratedItemData.Placeholder();
+        data.Accessory.GenericDamage = 100f;
+        data.Accessory.Defense = 1000;
+        data.Accessory.Endurance = 100f;
+        data.Accessory.FallDamageImmune = true;
+        data.Armor.SetBonusGenericDamage = 100f;
+        data.Armor.SetBonusLifeRegen = 1000;
+        data.Normalize();
+        Equal(3f, data.Accessory.GenericDamage, "legacy generic additive bonus capped");
+        Equal(500, data.Accessory.Defense, "legacy defense cap retained");
+        Equal(0.75f, data.Accessory.Endurance, "legacy endurance cap retained");
+        Equal(true, data.Accessory.FallDamageImmune, "boolean immunity survives normalization");
+        Equal(3f, data.Armor.SetBonusGenericDamage, "legacy set generic damage capped");
+        Equal(200, data.Armor.SetBonusLifeRegen, "legacy set life regen capped");
+    }
+
     private static void SignedAccessoryDefenseReachesPlayer()
     {
         var failures = new List<string>();
@@ -144,6 +179,59 @@ internal static partial class EngineRuntimeChecks
                 Equal(regenCap, data.Armor.SetBonusLifeRegen, "set life regen cap");
                 Equal(sign < 0 ? 0 : 20, data.Accessory.SentrySlots, "sentry slot cap");
             }
+        }
+    }
+
+    private static void EquipmentClassDamageReachesExactDamageClass()
+    {
+        (string Group, string Field, DamageClass Class)[] cases = {
+            ("accessory", "GenericDamage", DamageClass.Generic),
+            ("accessory", "MeleeDamage", DamageClass.Melee),
+            ("accessory", "RangedDamage", DamageClass.Ranged),
+            ("accessory", "MagicDamage", DamageClass.Magic),
+            ("accessory", "SummonDamage", DamageClass.Summon),
+            ("armor", "GenericDamage", DamageClass.Generic),
+            ("armor", "MeleeDamage", DamageClass.Melee),
+            ("armor", "RangedDamage", DamageClass.Ranged),
+            ("armor", "MagicDamage", DamageClass.Magic),
+            ("armor", "SummonDamage", DamageClass.Summon),
+            ("set", "SetBonusGenericDamage", DamageClass.Generic),
+            ("set", "SetBonusMeleeDamage", DamageClass.Melee),
+            ("set", "SetBonusRangedDamage", DamageClass.Ranged),
+            ("set", "SetBonusMagicDamage", DamageClass.Magic),
+            ("set", "SetBonusSummonDamage", DamageClass.Summon),
+        };
+        foreach (var test in cases)
+        {
+            WithPlayer((player, _) =>
+            {
+                var data = GeneratedItemData.Placeholder();
+                data.Accessory.Enabled = test.Group == "accessory";
+                data.Armor.Enabled = !data.Accessory.Enabled;
+                data.Armor.Slot = "head";
+                data.Armor.SetKey = "class_damage_probe";
+                data.RuntimeProgram.Bindings = new[] {
+                    new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
+                        Role = RuntimeEntityRole.Primary, UsePolicy = new RuntimeBindingUsePolicySpec {
+                            Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.EquipPassive, TargetId = data.RuntimeProgram.ItemEntityId },
+                        } },
+                };
+                object equipment = test.Group == "accessory" ? data.Accessory : data.Armor;
+                equipment.GetType().GetProperty(test.Field)!.SetValue(equipment, 0.15f);
+                string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                data = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("class damage fixture rejected");
+                var generated = new GeneratedItem();
+                var item = new Item();
+                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
+                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+                float before = player.GetDamage(test.Class).Additive;
+                float untouched = player.GetDamage(DamageClass.Throwing).Additive;
+                if (test.Group == "accessory") generated.UpdateAccessory(player, false);
+                else if (test.Group == "armor") generated.UpdateEquip(player);
+                else generated.UpdateArmorSet(player); // tML calls this only after IsArmorSet matches.
+                Equal(before + 0.15f, player.GetDamage(test.Class).Additive, test.Group + "." + test.Field + " class modifier");
+                Equal(untouched, player.GetDamage(DamageClass.Throwing).Additive, "unselected class remains unchanged");
+            });
         }
     }
 }

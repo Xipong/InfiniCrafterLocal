@@ -20,8 +20,10 @@ jobs:
           python -m pip install -r LocalGenerator/requirements-dev.lock
       - name: Run pytest in isolated deterministic shards
         run: PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4 --json-out artifacts/validation/pytest_shards.json
+      - name: Live20 harness contract tests (offline)
+        run: INFINI_TEST_USE_PROJECT_CONFIG=0 PYTHONPATH=LocalGenerator python -m pytest toolbox/tests -q
       - name: Python compileall
-        run: python -m compileall LocalGenerator
+        run: python -m compileall LocalGenerator toolbox
       - name: Env poisoning smoke
         run: |
           cd LocalGenerator
@@ -44,6 +46,12 @@ jobs:
         run: python tools/check_project_hygiene.py
       - name: Generated schema drift
         run: PYTHONPATH=LocalGenerator python tools/export_contract_schemas.py --check
+      - name: Canonical equipment bounds drift
+        run: PYTHONPATH=LocalGenerator python tools/generate_equipment_bounds.py --check
+      - name: C# executable primitive loss audit
+        run: PYTHONPATH=LocalGenerator python -m infini_local.qa.primitive_loss_audit
+      - name: Canonical primitive parity documentation drift
+        run: PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
       - name: Generated config registry drift
         run: PYTHONPATH=LocalGenerator python tools/config_registry.py --check
       - name: Python C# lifecycle parity
@@ -55,7 +63,7 @@ jobs:
       - name: Runtime impact and infrastructure isolation
         run: PYTHONPATH=LocalGenerator python tools/runtime_impact_report.py
       - name: Ruff contract-boundary lint
-        run: ruff check LocalGenerator/infini_local tools
+        run: ruff check LocalGenerator/infini_local tools toolbox
       - name: Pyright contract-boundary types
         run: pyright
       - name: C# static contract surface

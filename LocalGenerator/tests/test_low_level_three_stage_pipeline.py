@@ -211,23 +211,28 @@ def test_visual_director_contract_preserves_same_physical_object_as_one_visual_p
     monkeypatch.setattr(visual_stage, "llm_chat_json", transport)
 
     visual_stage._request_visual_kit(compiled, {}, {}, {}, {})
+    visual_stage._request_visual_kit(
+        compiled, {}, {}, {}, {}, repair_errors=[], previous={}, repair_scope={},
+    )
 
-    assert len(captured) == 1
-    system = str(captured[0]["messages"][0]["content"])
-    payload = json.loads(str(captured[0]["messages"][1]["content"]))
-    rules = "\n".join(str(row) for row in payload["rules"])
-    for surface in (system, rules):
-        assert "same physical object" in surface
-        assert "reuse_item_icon" in surface
-        assert "visualProjectRef=item" in surface
+    assert len(captured) == 2
+    for request in captured:
+        system = str(request["messages"][0]["content"])
+        payload = json.loads(str(request["messages"][1]["content"]))
+        rules = "\n".join(str(row) for row in payload["rules"])
+        for surface in (system, rules):
+            assert "same physical object" in surface
+            assert "reuse_item_icon" in surface
+            assert "visualProjectRef=item" in surface
+            assert "regardless of its entityId" in surface
+            assert "kind=item_body must use baked_sprite" in surface
+            assert "another non-item_body entity" in surface
 
 
 def test_malformed_gameplay_author_json_uses_the_single_format_repair(monkeypatch: pytest.MonkeyPatch) -> None:
     authored = build_runtime_fixture("workbench_blade")
-    responses = iter([
-        '{"name":"broken",',
-        json.dumps(authored),
-    ])
+    malformed = json.dumps(authored)[:-1] + ",}"
+    responses = iter([malformed, json.dumps(authored)])
     requests: list[dict[str, Any]] = []
 
     def transport(request: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
@@ -244,17 +249,48 @@ def test_malformed_gameplay_author_json_uses_the_single_format_repair(monkeypatc
     assert planned is not None
     assert [request["_infini_stage"] for request in requests] == ["planner", "author_repair"]
     repair_context = json.loads(requests[1]["messages"][1]["content"])
-    assert repair_context["malformedRawText"] == '{"name":"broken",'
+    assert repair_context["malformedRawText"] == malformed
     assert repair_context["task"].startswith("Repair JSON syntax only")
+    assert "multiple" not in repair_context["allowedCallParamsReadOnly"]["spawn_entity_on_event"]
+    assert "count" in repair_context["allowedCallParamsReadOnly"]["spawn_entity_on_event"]
+    assert "do not invent undeclared params" in requests[1]["messages"][0]["content"]
     assert planned["debug"]["llmStageAccounting"]["gameplayAuthorCalls"] == 1
     assert planned["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
     assert json.loads(planned["_llmHistory"]["messages"][-1]["content"])["runtimeProgram"] == authored["runtimeProgram"]
 
 
+def test_gameplay_format_repair_rejects_completed_design_absent_from_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    authored = build_runtime_fixture("workbench_blade")
+    responses = iter(['{"name":"broken",', json.dumps(authored)])
+    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
+    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(gameplay_stage, "llm_chat_json", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": next(responses)}}],
+    })
+    with pytest.raises(PlannerUnavailable, match="recoverable"):
+        gameplay_stage.try_llm_plan({}, {}, {}, {}, "a+b")
+
+
+def test_gameplay_format_repair_rejects_rewriting_recoverable_damage(monkeypatch: pytest.MonkeyPatch) -> None:
+    authored = build_runtime_fixture("workbench_blade")
+    malformed = json.dumps(authored)[:-1] + ",}"
+    changed = copy.deepcopy(authored)
+    stats = next(call for call in changed["runtimeProgram"]["calls"] if call["id"] == "item_stats")
+    stats["params"]["damage"] += 1
+    responses = iter([malformed, json.dumps(changed)])
+    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
+    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(gameplay_stage, "llm_chat_json", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": next(responses)}}],
+    })
+    with pytest.raises(PlannerUnavailable, match="recoverable"):
+        gameplay_stage.try_llm_plan({}, {}, {}, {}, "a+b")
+
+
 def test_format_repair_consumes_the_only_gameplay_repair_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     invalid = build_runtime_fixture("workbench_blade")
     next(call for call in invalid["runtimeProgram"]["calls"] if call["id"] == "item_stats")["params"].pop("damage")
-    responses = iter(['{"name":"broken",', json.dumps(invalid)])
+    responses = iter([json.dumps(invalid)[:-1] + ",}", json.dumps(invalid)])
     monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
     monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(
@@ -435,6 +471,115 @@ def test_visual_and_vfx_repairs_are_conditional_and_local(monkeypatch: pytest.Mo
     assert final["vfxManifest"]["slots"][0]["id"] == bad_vfx["slots"][0]["id"]
 
 
+def test_malformed_visual_json_uses_single_bounded_visual_repair(monkeypatch: pytest.MonkeyPatch) -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    compiled["debug"] = {"planner": "llm_low_level_runtime_author", "llmStageAccounting": {
+        "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0, "visualDirectorCalls": 0,
+        "visualRepairCalls": 0, "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
+    }}
+    kit = _visual_kit(compiled)
+    malformed = json.dumps(kit)[:-1] + ",}"
+    patch = _visual_patch(compiled)
+    patch["animationPlan"] = kit["animationPlan"]
+    responses = iter([malformed, json.dumps(patch)])
+    requests: list[dict[str, Any]] = []
+
+    def transport(request: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
+        requests.append(copy.deepcopy(request))
+        return {"choices": [{"message": {"content": next(responses)}}]}
+
+    monkeypatch.setattr(visual_stage, "USE_LLM", True)
+    monkeypatch.setattr(visual_stage, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(visual_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_stage, "llm_chat_json", transport)
+    visual = visual_stage.apply_visual_director(compiled, {}, {}, {}, {})
+    assert [request["_infini_stage"] for request in requests] == ["visual_director", "visual_repair"]
+    context = json.loads(requests[1]["messages"][1]["content"])
+    assert context["malformedRawText"] == malformed
+    assert context["exactErrors"][0]["message"].startswith("malformed_json:")
+    assert visual["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 1
+    assert visual["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
+    assert visual["visualKit"]["item"]["visualIdentity"] == "literal composition"
+    assert visual["visualKit"]["animationPlan"] == kit["animationPlan"]
+
+
+def test_visual_format_repair_rejects_rewriting_recoverable_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    compiled["debug"] = {"planner": "llm_low_level_runtime_author", "llmStageAccounting": {
+        "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0, "visualDirectorCalls": 0,
+        "visualRepairCalls": 0, "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
+    }}
+    kit = _visual_kit(compiled)
+    malformed = json.dumps(kit)[:-1] + ",}"
+    patch = _visual_patch(compiled)
+    patch["itemPatch"]["visualIdentity"] = "replaced concept"
+    for entity in patch["entitiesUpsert"]:
+        if entity.get("visualProjectRef") == "item" and "visualIdentity" in entity:
+            entity["visualIdentity"] = "replaced concept"
+    patch["animationPlan"] = kit["animationPlan"]
+    responses = iter([malformed, json.dumps(patch)])
+    monkeypatch.setattr(visual_stage, "USE_LLM", True)
+    monkeypatch.setattr(visual_stage, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(visual_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_stage, "llm_chat_json", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": next(responses)}}],
+    })
+    with pytest.raises(PlannerUnavailable, match="recoverable"):
+        visual_stage.apply_visual_director(compiled, {}, {}, {}, {})
+
+
+def test_visual_format_repair_rejects_design_absent_from_malformed_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    compiled["debug"] = {"planner": "llm_low_level_runtime_author", "llmStageAccounting": {
+        "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0, "visualDirectorCalls": 0,
+        "visualRepairCalls": 0, "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
+    }}
+    patch = _visual_patch(compiled)
+    patch["animationPlan"] = "Follow exact runtime movement."
+    responses = iter(['{"schema":', json.dumps(patch)])
+    monkeypatch.setattr(visual_stage, "USE_LLM", True)
+    monkeypatch.setattr(visual_stage, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(visual_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_stage, "llm_chat_json", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": next(responses)}}],
+    })
+    with pytest.raises(PlannerUnavailable, match="recoverable"):
+        visual_stage.apply_visual_director(compiled, {}, {}, {}, {})
+
+
+def test_unrecoverable_visual_json_fails_after_one_repair_without_substituting_design(monkeypatch: pytest.MonkeyPatch) -> None:
+    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    compiled["debug"] = {"planner": "llm_low_level_runtime_author", "llmStageAccounting": {
+        "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0, "visualDirectorCalls": 0,
+        "visualRepairCalls": 0, "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
+    }}
+    empty_patch = {
+        "schema": visual_stage.VISUAL_REPAIR_PATCH_SCHEMA,
+        "itemPatch": None,
+        "entitiesUpsert": [],
+        "entityIdsDelete": [],
+        "entityIndicesDelete": [],
+        "animationPlan": None,
+        "note": "no recoverable authored design",
+    }
+    responses = iter(['{"schema":', json.dumps(empty_patch)])
+    calls = 0
+
+    def transport(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return {"choices": [{"message": {"content": next(responses)}}]}
+
+    monkeypatch.setattr(visual_stage, "USE_LLM", True)
+    monkeypatch.setattr(visual_stage, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(visual_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_stage, "llm_chat_json", transport)
+    with pytest.raises(PlannerUnavailable, match="entity-complete visual kit"):
+        visual_stage.apply_visual_director(compiled, {}, {}, {}, {})
+    assert calls == 2
+    assert compiled["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
+
+
 def test_malformed_vfx_json_uses_the_single_bounded_vfx_repair(monkeypatch: pytest.MonkeyPatch) -> None:
     visual = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     visual["visualKit"] = _visual_kit(visual)
@@ -521,6 +666,46 @@ def test_gameplay_repair_runs_only_after_exact_validator_failure(monkeypatch: py
     assert all(row["id"] != "bad_primary" for row in repaired["runtimeProgram"]["bindings"])
     assert repaired["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
     assert repaired["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 0
+
+
+def test_gameplay_repair_accepts_sparse_patch_with_only_changed_node(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = build_runtime_fixture("workbench_blade")
+    current["debug"] = {"llmStageAccounting": {"gameplayAuthorCalls": 1}}
+    current["runtimeProgram"]["bindings"].append(_binding_row("bad_primary", "primary_use", "spawn_entity", "nail"))
+    failure = {"stage": "strict_author_validation", "errors": [
+        {"path": "$.runtimeProgram.bindings[1].input", "code": "duplicate_exclusive_input", "message": "duplicate"},
+    ]}
+    patch = {
+        "bindingIdsDelete": ["bad_primary"],
+        "note": "remove only duplicate binding",
+        "realizationReplacement": copy.deepcopy(current["realization"]),
+    }
+    requests: list[dict] = []
+    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
+    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
+
+    def send(request: dict, **_kwargs: object) -> dict:
+        requests.append(request)
+        return {"choices": [{"message": {"content": json.dumps(patch)}}]}
+
+    monkeypatch.setattr(gameplay_stage, "llm_chat_json", send)
+    repaired = gameplay_stage.repair_author_item_after_failure(current, {}, {}, {}, {}, "key", failure_report=failure)
+
+    assert all(row["id"] != "bad_primary" for row in repaired["runtimeProgram"]["bindings"])
+    assert repaired["debug"]["gameplayRepairRawPatch"] == patch
+    assert repaired["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
+    assert "Omit unchanged root patch fields" in requests[0]["messages"][0]["content"]
+    assert "note and realizationReplacement are required" in requests[0]["messages"][0]["content"]
+    dossier = json.loads(requests[0]["messages"][1]["content"])
+    assert "requiredRootFields" not in dossier
+
+
+def test_sparse_gameplay_repair_rejects_explicit_wrong_types_and_unknown_fields() -> None:
+    shape_report = gameplay_stage.strict_author_item_repair_report
+    assert shape_report({"note": "targeted", "callsUpsert": []})["ok"]
+    assert not shape_report({"note": "targeted", "callsUpsert": {}})["ok"]
+    assert not shape_report({"note": "targeted", "extraGameplay": []})["ok"]
+    assert not shape_report({"callsUpsert": []})["ok"]
 
 
 def _empty_gameplay_patch() -> dict:
@@ -2309,6 +2494,51 @@ def test_item_hit_event_repair_selects_exactly_one_existing_contact_lane() -> No
     assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
 
 
+def test_equipment_set_damage_repair_can_fill_its_declared_set_key() -> None:
+    current = build_capability_witness("configure_armor")
+    armor = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "configure_armor")
+    armor["params"]["setKey"] = ""
+    current["runtimeProgram"]["calls"].append({
+        "id": "set_damage", "fn": "add_equipment_damage_bonus", "target": "item",
+        "params": {"phase": "matching_armor_set", "damageClass": "magic", "bonusPercent": 15},
+    })
+    report = validate_runtime_program(current)
+    assert any(row["code"] == "missing_set_key" for row in report["errors"])
+    scope = build_runtime_repair_scope(current, report["errors"])
+    permissions = {row["id"]: row["paths"] for row in scope["fieldPermissions"]["calls"]}
+    assert "params.setKey" in permissions.get(armor["id"], [])
+    assert "params.phase" not in permissions.get("set_damage", [])
+    fixed = copy.deepcopy(armor)
+    fixed["params"]["setKey"] = "matching_set"
+    patch = _empty_gameplay_patch()
+    patch["callsUpsert"] = [fixed]
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
+
+
+def test_body_armor_set_damage_repair_can_remove_only_invalid_modifier() -> None:
+    current = build_capability_witness("configure_armor")
+    armor = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "configure_armor")
+    armor["params"]["slot"] = "body"
+    current["runtimeProgram"]["calls"].append({
+        "id": "set_damage", "fn": "add_equipment_damage_bonus", "target": "item",
+        "params": {"phase": "matching_armor_set", "damageClass": "magic", "bonusPercent": 15},
+    })
+    report = validate_runtime_program(current)
+    assert any(row["code"] == "set_bonus_head_only" for row in report["errors"])
+    scope = build_runtime_repair_scope(current, report["errors"])
+    assert "set_damage" in scope["deletable"]["callIds"]
+    assert armor["id"] not in scope["deletable"]["callIds"]
+    patch = _empty_gameplay_patch()
+    patch["callIdsDelete"] = ["set_damage"]
+    filtered, audit = filter_repair_patch_scope(current, patch, scope)
+    assert audit["ok"], audit
+    result = apply_repair_patch(current, filtered)
+    assert validate_runtime_program(result)["ok"]
+    assert next(row for row in result["runtimeProgram"]["calls"] if row["fn"] == "configure_armor")["params"]["slot"] == "body"
+
+
 def test_binding_dependency_repair_can_delete_the_exact_unwanted_binding() -> None:
     current = build_capability_witness("configure_accessory")
     current["runtimeProgram"]["calls"] = [
@@ -2349,7 +2579,7 @@ def test_accessory_component_requires_one_nonzero_executable_effect() -> None:
     assert scope["deletable"]["callIds"] == ["witness_call"]
 
     fixed = copy.deepcopy(accessory)
-    fixed["params"]["defense"] = 1
+    fixed["params"]["defensePoints"] = 1
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [fixed]
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
@@ -3001,6 +3231,7 @@ def test_visual_request_uses_real_strict_json_schema_transport(
     response_format = request["response_format"]
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["strict"] is True
+    assert "double-quoted JSON object keys" in request["messages"][0]["content"]
     schema = response_format["json_schema"]["schema"]
     assert schema["properties"]["entities"]["minItems"] == len(
         compiled["runtimeProgram"]["entities"]

@@ -38,7 +38,11 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "item_capability_param",
     "at_least_one_param_nonnegative",
     "at_least_one_param_nonzero",
+    "nonneutral_params_require_param",
+    "nonneutral_params_require_exact_param",
+    "positive_param_requires_param",
     "binding_input_present",
+    "binding_action_present",
     "binding_tuple_present",
     "binding_action_reference",
     "conditional_param",
@@ -279,19 +283,21 @@ def capability_library_audit() -> dict[str, Any]:
             for name in requirement.any_of:
                 if requirement.kind == "capability_group_present" and name not in capability_names:
                     error("unknown_requirement_group_member", f"{base}.requirements", name)
-            if requirement.kind == "at_least_one_param_nonzero":
+            if requirement.kind in {"at_least_one_param_nonzero", "nonneutral_params_require_param", "nonneutral_params_require_exact_param", "positive_param_requires_param"}:
                 if not requirement.nonzero_params:
                     error("empty_nonzero_requirement", f"{base}.requirements", requirement.kind)
                 for name in requirement.nonzero_params:
                     if name not in cap.params:
                         error("unknown_nonzero_requirement_param", f"{base}.requirements", name)
+                if requirement.kind in {"nonneutral_params_require_param", "nonneutral_params_require_exact_param", "positive_param_requires_param"} and requirement.param not in cap.params:
+                    error("unknown_requirement_param", f"{base}.requirements", requirement.param)
             if requirement.kind == "binding_input_present":
                 if not requirement.any_of:
                     error("empty_binding_input_requirement", f"{base}.requirements", requirement.kind)
                 for input_name in requirement.any_of:
                     if input_name not in INPUT_KIND_REGISTRY:
                         error("unknown_requirement_input", f"{base}.requirements", input_name)
-            if requirement.kind == "binding_action_reference":
+            if requirement.kind in {"binding_action_present", "binding_action_reference"}:
                 if not requirement.any_of:
                     error("empty_binding_action_requirement", f"{base}.requirements", requirement.kind)
                 for action_name in requirement.any_of:

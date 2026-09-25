@@ -20,11 +20,11 @@
 
 ## Измеренные свойства
 
-- capabilities: **51**; parameters: **182**; numeric: **142/142 bounded**;
+- capabilities: **52**; parameters: **229**; numeric: **180/180 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
-- typed entity references: **2**; requirements: **18**; binding dependency edges: **8**;
-- exact wire paths: **253**; global technical lowerer outputs: **96**;
-- Python↔C# range parity rows: **79**; vertical witnesses: **51**;
+- typed entity references: **2**; requirements: **27**; binding dependency edges: **8**;
+- exact wire paths: **312**; global technical lowerer outputs: **149**;
+- Python↔C# range parity rows: **85**; vertical witnesses: **52**;
 - errors: **0**; warnings: **0**.
 
 ## Почему библиотека действительно машиночитаема
@@ -44,7 +44,7 @@
 - Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.
 - Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.
 - Prompt catalog крупный, но self-contained: около 71k символов на обычных parents и до 83k на rich generated-parent fixture при hard limit 96k; retrieval/tool loop не используется.
-- Каталог покрывает реализованные 51 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
+- Каталог покрывает реализованные 52 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
 
 ## Практическая оценка
 

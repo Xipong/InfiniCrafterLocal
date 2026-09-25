@@ -60,6 +60,9 @@ internal static class RuntimeProgramExecutor
         }
     }
 
+    internal static float EventSpawnDamageMultiplier(RuntimeEventActionSpec action)
+        => Math.Clamp(action.DamageMultiplier, 0f, 10f);
+
     private static void SpawnEntity(
         GeneratedItemData data,
         RuntimeEventActionSpec action,
@@ -89,7 +92,7 @@ internal static class RuntimeProgramExecutor
             remainingSpawnBudget,
             requestedCount: requested,
             spreadOverride: action.SpreadRadians,
-            damageMultiplier: action.DamageMultiplier <= 0f ? 1f : action.DamageMultiplier);
+            damageMultiplier: EventSpawnDamageMultiplier(action));
         remainingSpawnBudget = Math.Max(0, remainingSpawnBudget - spawned);
     }
 
@@ -197,6 +200,8 @@ internal static class RuntimeProgramExecutor
             eventPosition = owner.Center + delta.SafeNormalize(Vector2.UnitX) * maxDistance;
         Vector2 topLeft = eventPosition - owner.Size * 0.5f;
         if (action.SafeTileOnly && Collision.SolidCollision(topLeft, owner.width, owner.height))
+            return;
+        if (!owner.GetModPlayer<InfiniCraftPlayer>().TryReserveGeneratedMobilityCooldown(action.CooldownTicks))
             return;
         owner.Teleport(topLeft, 1);
         owner.velocity = Vector2.Zero;

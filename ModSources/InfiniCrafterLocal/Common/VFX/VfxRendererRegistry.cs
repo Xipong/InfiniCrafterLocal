@@ -19,6 +19,12 @@ public static class VfxRendererRegistry
     public static InfiniVfxRendererKind Resolve(string? rendererKind, string? eventName = null)
         => ParseKind(rendererKind);
 
+    public static bool ConsumesSpriteTexture(InfiniVfxRendererKind kind)
+        => kind is InfiniVfxRendererKind.ProjectileAfterimage
+            or InfiniVfxRendererKind.SpriteStampTrail
+            or InfiniVfxRendererKind.ActorAfterimage
+            or InfiniVfxRendererKind.ImpactSprite;
+
     public static InfiniVfxRendererKind ParseKind(string? value)
     {
         return value switch

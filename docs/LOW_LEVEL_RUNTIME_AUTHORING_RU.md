@@ -2,6 +2,7 @@
 
 > Не является владельцем контракта. Каноническая замороженная граница, owner routing и generated lowering manifest находятся в [`../lowery.md`](../lowery.md).
 > Exact Author/Repair JSON shape владеет `LocalGenerator/infini_local/core/runtime_authoring/program_schema.py`; registry facts — `capability_registry.py`.
+> Авторские названия и единицы equipment/event primitives, C# execution phase и намеренно скрытые поля — в generated [`PRIMITIVE_PARITY_RU.md`](PRIMITIVE_PARITY_RU.md). `runtime_authoring_registry_manifest()` содержит технические authority/wire сведения; компактный LLM-каталог их не требует.
 
 ## Author response
 
@@ -49,9 +50,13 @@ otherwise                                                           -> secondary
 
 Bindings связывают конкретный input с одним атомарным `usePolicy`. Calls прикрепляют одну capability к одной entity. Cross-entity behavior использует typed references. Movement, controller, damage, input, lifecycle, targeting, body contact и event actions остаются независимыми решениями модели; whole-weapon macro отсутствует.
 
+`stackCost=1` действительно расходует одну единицу generated item на активном use; возврат projectile не возвращает предмет. Для многоразового броска Author выбирает `0`. `place_item` всегда требует `1` в том же binding; возврат размещённого предмета при сломе обеспечен world ledger. Это контракт стоимости, а не выбор weapon archetype.
+
 Event producer alternatives выводятся только из `EVENT_KIND_REGISTRY` и `ENTITY_KIND_REGISTRY.base_events`. Author или Repair выбирает один полный вариант и явно пишет необходимые call/binding; код не вставляет producer автоматически.
 
 Полный generated registry inventory: [`LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).
+
+У единиц нет неявных альтернатив: `configure_item_stats.params.valueCopper` — именно медные монеты, не `value`; у процентных Author-параметров `15` означает +15%, а `0.15` означает +0,15% (wire additive fraction = 0.15 и 0.0015 соответственно). Equipment damage выражен единым `add_equipment_damage_bonus(phase, damageClass, bonusPercent)` с пятью *исполняемыми* классами; не копируй `genericDamage`/`meleeDamage` из C# DTO в Author и не выдавай generic-only crit/speed/knockback/penetration за произвольный DamageClass. `damageClass` item/projectile — встроенный token либо exact зарегистрированный `DamageClass.FullName`, взятый именно из поля damageClass родителя; `item.fullName` (в частности, `Terraria/<ItemName>`) не является классом урона. Неизвестный класс отклоняется, а не заменяется на `generic`. Расхождение из-за неверной единицы или типа не исправляется semantic router. Только исторически нормализовавшиеся поля C# DTO сохраняют прежний clamp; новые рецепты в любом случае обязаны пройти Author bounds.
 
 ## Validation и compilation
 
@@ -65,7 +70,9 @@ Gameplay Repair получает frozen accepted state, exact errors, finite reg
 
 ## Visual/VFX
 
-Visual roles losslessly выводятся из accepted entity kinds. Visual и VFX могут ссылаться только на accepted runtime entities/events и не могут добавлять gameplay.
+Visual roles losslessly выводятся из accepted entity kinds. Visual и VFX могут ссылаться только на accepted runtime entities/events и не могут добавлять gameplay. `textureRole=impact` требует отдельный authored impact PNG **только у sprite-consuming renderer** (`projectileAfterimage`, `spriteStampTrail`, `actorAfterimage`, `impactSprite`). `impactSprite` сам задаёт dedicated prompt; иной sprite-consuming renderer с `textureRole=impact` обязан ссылаться на тот же entity, у которого есть `impactSprite` slot. Примитивный/particle `impactRing` рисуется без PNG, его `textureRole` не превращается в требование генерации изображения. Python delivery gate и C# DTO проверяют одну и ту же зависимость renderer → texture. C# проверяет VFX producer через тот же `RuntimeEventKind.ValidateProducer`, что и gameplay action: `periodic` исполняется без authored event action, item-body `on_use` не зависит от spawn target, contact `on_hit` зависит от `contactDamage`, а `place_item` не испускает `on_use`.
+
+Для headless проверки конкретного Live20 результат `image_boundary.ndjson.finalContract` сначала насыщается техническим QA PNG через `hydrate_no_image_fixture_assets`, затем проходит **реальный** `sanitize_recipe_for_delivery`; полученный JSONL (`{case,data}`) передаётся в `tools/EngineRuntimeChecks.csproj -- --replay-contracts <path>`. Это проверяет `GeneratedItemData.FromJson` на установленном tModLoader, но не игровой world loop/рендер и не годность QA PNG как арта.
 
 ## Проверка projection
 

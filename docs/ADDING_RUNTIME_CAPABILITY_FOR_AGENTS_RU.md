@@ -2,7 +2,7 @@
 
 Новая capability существует только после полного vertical slice.
 
-1. Добавь `CapabilitySpec` в `capability_registry.py`: точный смысл, target kinds, typed params, units/ranges, slot/exclusivity, requirements/events, authority, budget, exact wire paths, Python callable и C# method symbols.
+1. Добавь `CapabilitySpec` в `capability_registry.py`: точный смысл, target kinds, typed params, **единицу, neutral, Author range, one-to-one wire projection и execution phase**, slot/exclusivity, requirements/events, authority, budget, exact wire paths, Python callable и C# method symbols. Проценты, percentage points и multiplier не синонимы; runtime safety envelope может быть шире Author ради старых DTO, но не уже.
 2. Используй registry-generated provider schema/prompt; не добавляй ручной alias.
 3. Реализуй validator rule только через декларативные metadata или общий точный rule. Не выбирай design default.
 4. Добавь compiler projection и receipts; каждый `finalPath` должен быть declared.
@@ -15,9 +15,12 @@
 ```bash
 PYTHONPATH=LocalGenerator python tools/export_contract_schemas.py
 PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py
+PYTHONPATH=LocalGenerator python tools/generate_equipment_bounds.py
+PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py
+PYTHONPATH=LocalGenerator python -m infini_local.qa.primitive_loss_audit
 ```
 
-10. Запусти parity/mutation/full tests и C# build/runtime smoke.
+10. Добавь RED→GREEN test: новый C# executable field без Author primitive должен ломать AST loss audit; если поле deliberately internal, укажи проверяемую причину в `primitive_loss_audit.py`. Запусти parity/mutation/full tests и C# build/runtime smoke. Аудит wire-only не доказывает полноту C#.
 
 ## Запрещённый shortcut
 

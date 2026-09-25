@@ -1899,6 +1899,7 @@
                           "move_player_on_use",
                           "configure_accessory",
                           "configure_armor",
+                          "add_equipment_damage_bonus",
                           "configure_spawn",
                           "set_projectile_damage",
                           "set_projectile_lifetime",

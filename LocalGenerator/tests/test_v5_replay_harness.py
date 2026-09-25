@@ -59,8 +59,9 @@ def test_v5_replay_detects_executable_drift_and_unknown_wire_fields(tmp_path) ->
         replay_raw=None,
     )
     assert drift_report["ok"] is False
-    assert any(row["name"] == "saved_snapshot" for row in drift_report["checks"])
-    assert any(row["path"].startswith("wire.gameplay.damage") for row in drift_report["differences"])
+    assert drift_report["checks"][0]["name"] == "strict_wire"
+    assert "final wire value differs" in drift_report["checks"][0]["error"]
+    assert "gameplay.damage" in drift_report["checks"][0]["error"]
 
     invalid = deepcopy(item)
     invalid["runtimeProgram"]["entities"][0]["unknownFinalWireField"] = True

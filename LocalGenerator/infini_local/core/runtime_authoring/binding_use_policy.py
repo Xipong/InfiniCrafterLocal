@@ -7,6 +7,15 @@ from typing import Any, Iterable, Mapping
 ACTIVE_USE_INPUTS = frozenset({"primary_use", "alternate_use"})
 PLACE_ITEM_ACTION = "place_item"
 ITEM_BODY_ACTION = "use_item_body"
+STACK_COST_RULE = (
+    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
+    "and the placed generated item is returned by the placement ledger when broken. "
+    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
+    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
+    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
+    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
+    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
+)
 
 
 def use_policy(binding: Mapping[str, Any]) -> Mapping[str, Any]:
