@@ -39,6 +39,9 @@ def _check_lossless_syntax_only_recovery_does_not_modify_string_values() -> None
         "attributes": {"speed": 2, "mode": True, "mark": "speed:2"},
     }
     assert recover('{"missing":') is None
+    assert recover('{"item":{"damage":20}') == {"item": {"damage": 20}}
+    assert recover('{"item":{"damage":20') is None
+    assert recover('{"item":[1,2]') is None
     assert recover('{"damage":42,"damage":43,}') is None
     assert recover('{damage:42,"damage":43}') is None
     assert recover('{"mode":recall_home}') is None

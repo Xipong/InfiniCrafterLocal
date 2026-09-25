@@ -38,7 +38,10 @@ from live20_support_v5 import (  # noqa: E402  # pyright: ignore[reportMissingIm
     author_stage,
     expected_stage_temperature,
     response_format_type,
+    should_retry_case_failure,
     run_parallel_crafts,
+    pace_case_transport_retry,
+    case_transport_retry_report,
     transport_retry_summary,
     select_case_routes,
 )
@@ -136,6 +139,52 @@ def test_failed_logical_call_hidden_retry_is_caught_by_physical_http_overhead() 
     assert summary["httpRequestOverhead"] == 1
     assert summary["transportRetryCount"] == 1
     assert summary["transportRetryAccountingConsistent"] is False
+
+
+def test_only_last_logical_transport_error_is_case_retryable() -> None:
+    assert should_retry_case_failure(had_logical_error=True, low_level_transport_error=True)
+    assert not should_retry_case_failure(had_logical_error=False, low_level_transport_error=True)
+    assert not should_retry_case_failure(had_logical_error=True, low_level_transport_error=False)
+
+
+def test_explicit_case_transport_retry_keeps_failed_logical_call_and_minute_wait_visible() -> None:
+    logical = [{
+        "sequence": 7, "case": "case_a", "caseIndex": 1, "caseLogicalSequence": 3,
+        "phase": "error", "transportError": True, "llmStage": VISUAL_DIRECTOR,
+    }]
+    attempts = [
+        {"event": "CASE_ATTEMPT_START", "case": "case_a", "caseIndex": 1, "attempt": 1},
+        {"event": "CASE_ATTEMPT_END", "case": "case_a", "caseIndex": 1, "attempt": 1, "outcome": "transport_error"},
+        {"event": "CASE_RETRY_SCHEDULED", "case": "case_a", "caseIndex": 1,
+         "attempt": 1, "caseLogicalSequence": 3, "waitSeconds": 60},
+        {"event": "CASE_RETRY_WAIT_COMPLETE", "case": "case_a", "caseIndex": 1,
+         "attempt": 1, "caseLogicalSequence": 3, "elapsedSeconds": 60.0},
+        {"event": "CASE_ATTEMPT_START", "case": "case_a", "caseIndex": 1, "attempt": 2},
+        {"event": "CASE_ATTEMPT_END", "case": "case_a", "caseIndex": 1, "attempt": 2, "outcome": "success"},
+    ]
+    report = case_transport_retry_report(logical, attempts)
+    assert report["caseTransportRetryCount"] == 1
+    assert report["unaccountedTransportErrors"] == []
+    assert report["caseAttemptCoverage"] is True
+    assert report["retryWaitCoverage"] is True
+    assert report["caseAttemptCount"] == 2
+    assert case_transport_retry_report(logical, attempts[:2])["unaccountedTransportErrors"]
+    assert not case_transport_retry_report(logical, attempts[:3])["retryWaitCoverage"]
+    forged = [dict(row) for row in attempts]
+    forged[2]["caseLogicalSequence"] = 2
+    assert case_transport_retry_report(logical, forged)["unaccountedTransportErrors"]
+
+
+def test_case_transport_retry_waits_at_least_one_minute_even_if_sleep_returns_early() -> None:
+    elapsed = [0.0]
+    waits: list[float] = []
+    def partial_sleep(seconds: float) -> None:
+        waits.append(seconds)
+        elapsed[0] += min(seconds, 30.0)
+    assert pace_case_transport_retry(60, sleep_fn=partial_sleep, now_fn=lambda: elapsed[0]) == 60.0
+    assert waits == [60, 30.0]
+    with pytest.raises(ValueError, match="at least 60"):
+        pace_case_transport_retry(59, sleep_fn=partial_sleep, now_fn=lambda: elapsed[0])
 
 
 def test_parallel_runner_persists_a_completed_case_before_earlier_sibling_finishes() -> None:

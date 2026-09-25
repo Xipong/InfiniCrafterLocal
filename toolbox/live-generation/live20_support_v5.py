@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 import threading
+import time
 from typing import Any, TypeVar, cast
 
 from infini_local.qa.live_no_image_fixture import (
@@ -71,7 +72,7 @@ class CaseStageAccounting:
     last_logical_sequence: int = 0
     last_logical_error_sequence: int = 0
     last_logical_error_transport: bool = False
-    transport_failures_ignored: int = 0
+    case_transport_retries: int = 0
 
     def begin_logical(self, stage: str) -> int:
         self.logical_requests += 1
@@ -284,6 +285,74 @@ def valid_author_call_budget(*, initial_calls: int, repair_calls: int) -> bool:
 
 def should_retry_case_failure(*, had_logical_error: bool, low_level_transport_error: bool) -> bool:
     return had_logical_error and low_level_transport_error
+
+
+def pace_case_transport_retry(
+    delay_seconds: int, *,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    now_fn: Callable[[], float] = time.monotonic,
+) -> float:
+    """Wait at least a minute between a failed transport and the next case attempt."""
+    if delay_seconds < 60:
+        raise ValueError("case transport retry delay must be at least 60 seconds")
+    started = now_fn()
+    for _ in range(16):
+        remaining = delay_seconds - (now_fn() - started)
+        if remaining <= 0:
+            return now_fn() - started
+        sleep_fn(remaining)
+    raise RuntimeError("retry wait did not advance the monotonic clock")
+
+
+def case_transport_retry_report(
+    logical_rows: list[dict[str, Any]], harness_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Reconcile each visible transport error with one paced, explicit case retry."""
+    def key(row: dict[str, Any]) -> tuple[Any, Any, Any]:
+        return row.get("case"), row.get("caseIndex"), row.get("caseLogicalSequence")
+
+    def attempt_key(row: dict[str, Any]) -> tuple[Any, Any, Any]:
+        return row.get("case"), row.get("caseIndex"), row.get("attempt")
+
+    scheduled = [row for row in harness_rows if row.get("event") == "CASE_RETRY_SCHEDULED"]
+    completed = [row for row in harness_rows if row.get("event") == "CASE_RETRY_WAIT_COMPLETE"]
+    starts = [row for row in harness_rows if row.get("event") == "CASE_ATTEMPT_START"]
+    ends = [row for row in harness_rows if row.get("event") == "CASE_ATTEMPT_END"]
+    scheduled_keys = {key(row) for row in scheduled}
+    completed_by_attempt = {attempt_key(row): row for row in completed}
+    errors = [row for row in logical_rows if row.get("phase") == "error" and row.get("transportError")]
+    unaccounted = [{
+        "sequence": row.get("sequence"), "case": row.get("case"),
+        "caseIndex": row.get("caseIndex"), "caseLogicalSequence": row.get("caseLogicalSequence"),
+    } for row in errors if key(row) not in scheduled_keys]
+    start_keys = [attempt_key(row) for row in starts]
+    end_keys = [attempt_key(row) for row in ends]
+    wait_ok = (
+        len(scheduled) == len(scheduled_keys) == len(completed) == len(completed_by_attempt)
+        and all(
+            attempt_key(row) in completed_by_attempt
+            and key(completed_by_attempt[attempt_key(row)]) == key(row)
+            and float(row.get("waitSeconds") or 0) >= 60
+            and float(completed_by_attempt[attempt_key(row)].get("elapsedSeconds") or 0)
+                >= float(row.get("waitSeconds") or 0)
+            for row in scheduled
+        )
+    )
+    return {
+        "caseTransportRetryCount": len(scheduled),
+        "caseTransportRetryEvents": [{
+            "case": row.get("case"), "caseIndex": row.get("caseIndex"),
+            "attempt": row.get("attempt"), "caseLogicalSequence": row.get("caseLogicalSequence"),
+            "waitSeconds": row.get("waitSeconds"),
+        } for row in scheduled],
+        "unaccountedTransportErrors": unaccounted,
+        "retryWaitCoverage": wait_ok,
+        "caseAttemptCount": len(starts),
+        "caseAttemptCoverage": (
+            len(starts) == len(ends) == len(set(start_keys)) == len(set(end_keys))
+            and set(start_keys) == set(end_keys)
+        ),
+    }
 
 
 def transport_retry_events(logical_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

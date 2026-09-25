@@ -34,7 +34,11 @@ parser.add_argument(
     help="Parent item JSONL; defaults to the bundled exact Terraria fixture in toolbox/fixtures.",
 )
 parser.add_argument("--expected-case-count", type=int, help="Require the selected case count before network.")
-parser.add_argument("--transport-retries", type=int, default=0, help="Transport-only retries after the first case attempt.")
+parser.add_argument("--transport-retries", type=int, default=0, help="Explicit retries per case for confirmed network failures only.")
+parser.add_argument(
+    "--transport-retry-delay-seconds", type=int, default=60,
+    help="Minimum wait after a network failure before retrying that case; at least 60 seconds.",
+)
 parser.add_argument("--expected-provider", help="Fail before network if the configured provider differs.")
 parser.add_argument("--expected-model", help="Fail before network or per request if the exact model differs.")
 parser.add_argument("--expected-base-url", help="Require the exact configured OpenAI-compatible endpoint.")
@@ -70,6 +74,8 @@ parser.add_argument("--preflight-only", action="store_true", help="Validate froz
 args = parser.parse_args()
 if args.transport_retries < 0 or args.transport_retries > 100:
     raise SystemExit("--transport-retries must be within 0..100")
+if args.transport_retry_delay_seconds < 60 or args.transport_retry_delay_seconds > 3600:
+    raise SystemExit("--transport-retry-delay-seconds must be within 60..3600")
 if args.parallel_crafts < 1 or args.parallel_crafts > 8:
     raise SystemExit("--parallel-crafts must be within 1..8")
 
@@ -135,7 +141,9 @@ os.environ['INFINI_TRACE_PROMPTS'] = '1'
 os.environ['INFINI_TRACE_MAX_PROMPT_CHARS'] = '200000'
 os.environ['INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK'] = '0'
 os.environ['INFINI_VISUAL_REQUIRE_ITEM_SPRITE'] = '0'
-if args.require_zero_transport_retries:
+# Pacing is owned by this harness. Do not permit lower-level transport retries
+# to fire immediately, or their attempts would escape the one-minute ledger.
+if args.transport_retries > 0 or args.require_zero_transport_retries:
     os.environ['INFINI_LLM_FALLBACK_NETWORK_FAILS'] = '1'
 sys.path.insert(0, str(LOCAL))
 
@@ -152,6 +160,8 @@ from live20_support_v5 import (  # noqa: E402
     current_case_accounting,
     is_first_author_success,
     should_retry_case_failure,
+    case_transport_retry_report,
+    pace_case_transport_retry,
     transport_retry_summary,
     valid_author_call_budget,
     run_parallel_crafts,
@@ -161,9 +171,9 @@ from live20_support_v5 import (  # noqa: E402
 )
 from infini_local.pipelines import llm_transport  # noqa: E402
 
-if args.require_zero_transport_retries and int(llm_transport.LLM_FALLBACK_NETWORK_FAILS) != 1:
+if (args.transport_retries > 0 or args.require_zero_transport_retries) and int(llm_transport.LLM_FALLBACK_NETWORK_FAILS) != 1:
     raise SystemExit(
-        "zero-retry acceptance requires INFINI_LLM_FALLBACK_NETWORK_FAILS=1 "
+        "paced case retries require one physical HTTP attempt per logical call "
         f"(loaded {llm_transport.LLM_FALLBACK_NETWORK_FAILS})"
     )
 
@@ -663,6 +673,8 @@ campaign_identity = {
     'expectedCaseCount': args.expected_case_count,
     'minFirstAuthor': args.min_first_author,
     'transportRetries': args.transport_retries,
+    'transportRetryDelaySeconds': args.transport_retry_delay_seconds,
+    'transportRetryScope': 'case_only_after_confirmed_logical_transport_error',
     'requireZeroTransportRetries': bool(args.require_zero_transport_retries),
     'networkAttemptBudget': int(llm_transport.LLM_FALLBACK_NETWORK_FAILS),
     'parallelCrafts': args.parallel_crafts,
@@ -688,6 +700,10 @@ def _run_case(job: tuple[int, tuple[str, dict[str, Any], dict[str, Any]]]) -> tu
         for transport_attempt in range(1, args.transport_retries + 2):
             started = time.time()
             before = case_state.snapshot()
+            append(HARNESS_EVENTS, {
+                'event': 'CASE_ATTEMPT_START', 'case': case_id, 'caseIndex': index,
+                'attempt': transport_attempt, **wall_time_fields(),
+            })
             try:
                 result = combine.combine(payload)
             except Exception as exc:
@@ -701,16 +717,38 @@ def _run_case(job: tuple[int, tuple[str, dict[str, Any], dict[str, Any]]]) -> tu
                     ),
                     low_level_transport_error=case_state.last_logical_error_transport,
                 )
+                append(HARNESS_EVENTS, {
+                    'event': 'CASE_ATTEMPT_END', 'case': case_id, 'caseIndex': index,
+                    'attempt': transport_attempt,
+                    'outcome': 'transport_error' if retryable_transport else 'nontransport_error',
+                    'caseLogicalSequence': case_state.last_logical_sequence,
+                    'logicalRequests': metrics['logicalRequests'], **wall_time_fields(),
+                })
                 if retryable_transport and transport_attempt <= args.transport_retries:
-                    case_state.transport_failures_ignored += 1
+                    case_state.case_transport_retries += 1
+                    append(HARNESS_EVENTS, {
+                        'event': 'CASE_RETRY_SCHEDULED', 'case': case_id, 'caseIndex': index,
+                        'attempt': transport_attempt,
+                        'caseLogicalSequence': case_state.last_logical_sequence,
+                        'waitSeconds': args.transport_retry_delay_seconds, **wall_time_fields(),
+                    })
                     progress(
                         f'[{index}/{len(selected_cases)}] RETRY transport {case_id} '
-                        f'attempt={transport_attempt}: {exc!r}'
+                        f'attempt={transport_attempt} after {args.transport_retry_delay_seconds}s: {exc!r}'
                     )
+                    elapsed = pace_case_transport_retry(args.transport_retry_delay_seconds)
+                    append(HARNESS_EVENTS, {
+                        'event': 'CASE_RETRY_WAIT_COMPLETE', 'case': case_id, 'caseIndex': index,
+                        'attempt': transport_attempt,
+                        'caseLogicalSequence': case_state.last_logical_sequence,
+                        'elapsedSeconds': elapsed, **wall_time_fields(),
+                    })
                     continue
                 row = {
                     'case': case_id,
                     'caseIndex': index,
+                    'caseAttempts': transport_attempt,
+                    'caseTransportRetries': case_state.case_transport_retries,
                     'ok': False,
                     'ms': int((time.time() - started) * 1000),
                     'logicalRequests': metrics['logicalRequests'],
@@ -727,7 +765,7 @@ def _run_case(job: tuple[int, tuple[str, dict[str, Any], dict[str, Any]]]) -> tu
                     'traceback': traceback.format_exc(),
                 }
                 progress(f'[{index}/{len(selected_cases)}] FAIL {case_id}: {exc!r}')
-                return row, case_state.transport_failures_ignored
+                return row, case_state.case_transport_retries
 
             metrics = case_state.delta_since(before)
             logical_requests = metrics['logicalRequests']
@@ -743,9 +781,17 @@ def _run_case(job: tuple[int, tuple[str, dict[str, Any], dict[str, Any]]]) -> tu
                 repair_calls=scoped_repair_calls,
             )
             if not budget_valid:
+                append(HARNESS_EVENTS, {
+                    'event': 'CASE_ATTEMPT_END', 'case': case_id, 'caseIndex': index,
+                    'attempt': transport_attempt, 'outcome': 'author_budget_violation',
+                    'caseLogicalSequence': case_state.last_logical_sequence,
+                    'logicalRequests': logical_requests, **wall_time_fields(),
+                })
                 row = {
                     'case': case_id,
                     'caseIndex': index,
+                    'caseAttempts': transport_attempt,
+                    'caseTransportRetries': case_state.case_transport_retries,
                     'ok': False,
                     'ms': int((time.time() - started) * 1000),
                     'logicalRequests': logical_requests,
@@ -761,11 +807,19 @@ def _run_case(job: tuple[int, tuple[str, dict[str, Any], dict[str, Any]]]) -> tu
                     f'[{index}/{len(selected_cases)}] FAIL {case_id}: '
                     f'initialAuthorCalls={initial_author_calls} scopedRepairCalls={scoped_repair_calls}'
                 )
-                return row, case_state.transport_failures_ignored
+                return row, case_state.case_transport_retries
 
+            append(HARNESS_EVENTS, {
+                'event': 'CASE_ATTEMPT_END', 'case': case_id, 'caseIndex': index,
+                'attempt': transport_attempt, 'outcome': 'success',
+                'caseLogicalSequence': case_state.last_logical_sequence,
+                'logicalRequests': logical_requests, **wall_time_fields(),
+            })
             row = {
                 'case': case_id,
                 'caseIndex': index,
+                'caseAttempts': transport_attempt,
+                'caseTransportRetries': case_state.case_transport_retries,
                 'ok': True,
                 'ms': int((time.time() - started) * 1000),
                 'logicalRequests': logical_requests,
@@ -796,7 +850,7 @@ def _run_case(job: tuple[int, tuple[str, dict[str, Any], dict[str, Any]]]) -> tu
                 f'allLlmStages={logical_requests} firstAuthorSuccess={first_author_success} | '
                 f'{int((time.time()-started)*1000)} ms'
             )
-            return row, case_state.transport_failures_ignored
+            return row, case_state.case_transport_retries
 
     raise RuntimeError(f'case worker exhausted without a result: {case_id}')
 
@@ -867,6 +921,7 @@ summary: dict[str, Any] = {
 }
 result_rows = [json.loads(line) for line in RESULTS.read_text(encoding='utf-8').splitlines() if line.strip()]
 logical_rows = [json.loads(line) for line in LOGICAL.read_text(encoding='utf-8').splitlines() if line.strip()]
+harness_rows = [json.loads(line) for line in HARNESS_EVENTS.read_text(encoding='utf-8').splitlines() if line.strip()]
 image_rows = [json.loads(line) for line in IMAGES.read_text(encoding='utf-8').splitlines() if line.strip()]
 successful_case_ids = [str(row.get('case') or '') for row in result_rows if row.get('ok')]
 image_case_counts = {
@@ -910,6 +965,11 @@ summary.update(
         http_requests=global_counts['httpRequests'],
     )
 )
+summary.update(case_transport_retry_report(logical_rows, harness_rows))
+summary['caseTransportRetryAccountingConsistent'] = (
+    transport_failures == summary['caseTransportRetryCount']
+    == sum(int(row.get('caseTransportRetries') or 0) for row in result_rows)
+)
 summary['requireZeroTransportRetries'] = bool(args.require_zero_transport_retries)
 expected_peak_crafts = min(args.parallel_crafts, len(selected_cases))
 summary['concurrencyCoverage'] = {
@@ -933,13 +993,16 @@ summary['requiredFirstAuthorSuccesses'] = args.min_first_author
 summary['authorBudgetViolations'] = [
     str(row.get('case') or '') for row in result_rows if not row.get('authorCallBudgetValid')
 ]
-summary['transportFailuresIgnored'] = transport_failures
 summary['ok'] = (
     not summary['failedCases']
     and not summary['authorBudgetViolations']
-    and not summary['logicalTransportErrors']
+    and not summary['unaccountedTransportErrors']
     and not summary['logicalNonTransportErrors']
-    and (not args.require_zero_transport_retries or summary['transportRetryCount'] == 0)
+    and summary['caseAttemptCoverage']
+    and summary['retryWaitCoverage']
+    and summary['caseTransportRetryAccountingConsistent']
+    and summary['transportRetryAccountingConsistent']
+    and summary['transportRetryCount'] == 0  # No fast hidden retries; explicit paced retries are counted separately.
     and summary['concurrencyCoverage']['ok']
     and len(result_rows) == len(selected_cases)
     and summary['imageBoundaryCoverage']['ok']

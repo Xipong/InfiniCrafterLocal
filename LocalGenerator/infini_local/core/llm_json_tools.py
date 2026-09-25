@@ -81,15 +81,49 @@ def extract_json(text: str) -> str:
     return candidates[0] if candidates else (text or "").strip()
 
 
+def _candidate_with_one_missing_root_closer(text: str) -> str | None:
+    """Close only an otherwise complete outer object ending at a nested `}`."""
+    visible = _visible_model_output(text).strip()
+    visible = re.sub(r"^```(?:json)?", "", visible).strip()
+    visible = re.sub(r"```$", "", visible).strip()
+    if not visible.startswith("{") or not visible.endswith("}"):
+        return None
+    containers: list[str] = []
+    in_string = False
+    escaped = False
+    for char in visible:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char in "{[":
+            containers.append(char)
+        elif char in "}]":
+            if not containers or containers.pop() != ("{" if char == "}" else "["):
+                return None
+    return visible + "}" if not in_string and containers == ["{"] else None
+
+
 def recover_object_with_syntax_only_repairs(text: str) -> dict[str, Any] | None:
     """Repair bounded punctuation/key quotes without changing any authored value.
 
-    Only duplicate/trailing commas and bare ASCII object keys followed by a
-    colon are eligible. Strings and scalar tokens are copied byte-for-byte;
-    missing values, array holes, duplicate keys, and non-JSON constants fail.
+    Only duplicate/trailing commas, bare ASCII object keys followed by a
+    colon, and one missing outer brace after a complete nested object are
+    eligible. Strings and scalar tokens are copied byte-for-byte; missing
+    values, array holes, duplicate keys, and non-JSON constants fail.
     The caller must compare the recovered object with Format Repair's answer.
     """
-    for candidate in json_object_candidates(text):
+    candidates = json_object_candidates(text)
+    if not candidates:
+        closed = _candidate_with_one_missing_root_closer(text)
+        if closed is not None:
+            candidates = [closed]
+    for candidate in candidates:
         output: list[str] = []
         containers: list[str] = []
         in_string = False
