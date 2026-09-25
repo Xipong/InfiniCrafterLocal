@@ -20,6 +20,12 @@ def _output_text(response: dict) -> str:
     for item in output:
         if not isinstance(item, dict) or item.get("type") != "message" or item.get("role") != "assistant":
             continue
+        # Progress commentary is not the authored stage result. Preserve legacy
+        # unphased messages, but never splice commentary into the final JSON.
+        if item.get("phase") == "commentary":
+            continue
+        if item.get("status") not in (None, "completed"):
+            raise codex_auth.CodexError("Codex returned incomplete text output")
         parts = item.get("content")
         if not isinstance(parts, list):
             continue
@@ -52,7 +58,8 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
         if role == "system":
             instructions.append(content)
         else:
-            inputs.append({"type": "message", "role": role, "content": [{"type": "input_text", "text": content}]})
+            content_type = "output_text" if role == "assistant" else "input_text"
+            inputs.append({"type": "message", "role": role, "content": [{"type": content_type, "text": content}]})
     if not inputs:
         raise codex_auth.CodexError("Codex text requires a user or developer message")
     request: dict[str, Any] = {
@@ -111,8 +118,20 @@ def generate_chat(packet: dict[str, Any], *, timeout: int) -> dict[str, Any]:
         raise codex_auth.CodexError("Codex response contained a session credential; output rejected")
     usage = response.get("usage")
     usage = usage if isinstance(usage, dict) else {}
-    safe_usage = {key: usage[key] for key in ("input_tokens", "output_tokens", "total_tokens")
-                  if isinstance(usage.get(key), int) and not isinstance(usage[key], bool) and usage[key] >= 0}
+    safe_usage: dict[str, Any] = {
+        key: usage[key] for key in ("input_tokens", "output_tokens", "total_tokens")
+        if isinstance(usage.get(key), int) and not isinstance(usage[key], bool) and usage[key] >= 0
+    }
+    # Preserve counters used by usage diagnostics without forwarding arbitrary
+    # provider metadata (which can include session credentials).
+    for details_key, counter_key in (
+        ("input_tokens_details", "cached_tokens"),
+        ("output_tokens_details", "reasoning_tokens"),
+    ):
+        details = usage.get(details_key)
+        counter = details.get(counter_key) if isinstance(details, dict) else None
+        if isinstance(counter, int) and not isinstance(counter, bool) and counter >= 0:
+            safe_usage[details_key] = {counter_key: counter}
     return {
         "choices": [{"message": {"role": "assistant", "content": content}}],
         "usage": safe_usage,
