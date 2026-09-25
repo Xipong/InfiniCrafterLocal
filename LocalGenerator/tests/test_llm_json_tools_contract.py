@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from infini_local.core.llm_json_tools import (
     json_object_candidates,
     parse_first_valid_llm_json,
-    recover_object_with_trailing_commas,
+    recover_object_with_syntax_only_repairs,
 )
 
 
@@ -29,12 +29,25 @@ def _check_llm_json_tools_ignores_private_thought_json() -> None:
     assert json_object_candidates('<thought>{"name":"unfinished-decoy"}') == []
 
 
-def _check_lossless_trailing_comma_recovery_does_not_modify_string_values() -> None:
-    assert recover_object_with_trailing_commas('{"label":",}", "rows":[{"value":7,},],}') == {
+def _check_lossless_syntax_only_recovery_does_not_modify_string_values() -> None:
+    recover = recover_object_with_syntax_only_repairs
+    assert recover('{"label":",}", "rows":[{"value":7,},],}') == {
         "label": ",}", "rows": [{"value": 7}],
     }
-    assert recover_object_with_trailing_commas('{"missing":') is None
-    assert recover_object_with_trailing_commas('{"damage":42,"damage":43,}') is None
+    assert recover('{"calls":[{"damage":12,\n, "kind":"test"}],"attributes":{speed: 2, mode:true, mark:"speed:2"}}') == {
+        "calls": [{"damage": 12, "kind": "test"}],
+        "attributes": {"speed": 2, "mode": True, "mark": "speed:2"},
+    }
+    assert recover('{"missing":') is None
+    assert recover('{"damage":42,"damage":43,}') is None
+    assert recover('{damage:42,"damage":43}') is None
+    assert recover('{"mode":recall_home}') is None
+    assert recover('{"array":[1,,2]}') is None
+    assert recover('{"array":[,1]}') is None
+    assert recover('{"array":[,]}') is None
+    assert recover('{"array":[1,,]}') is None
+    assert recover('{"missing":,}') is None
+    assert recover('{"a":1,,}') == {"a": 1}
 
 
 # One collected item per contract module: the checks above keep source order and

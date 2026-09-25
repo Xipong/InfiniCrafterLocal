@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_trailing_commas
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import stage_chat_message
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
@@ -1017,7 +1017,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         if kit is None:
             raise PlannerUnavailable("Visual Repair did not produce an entity-complete visual kit: " + json.dumps(errors[:16], ensure_ascii=False))
         if isinstance(raw, MalformedVisualDirectorOutput):
-            source = recover_object_with_trailing_commas(raw.raw_text)
+            source = recover_object_with_syntax_only_repairs(raw.raw_text)
             if source is None:
                 raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
             recovered_kit, _ = _validate_kit(

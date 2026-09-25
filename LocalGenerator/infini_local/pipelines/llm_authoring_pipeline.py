@@ -9,7 +9,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_trailing_commas
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     ATTRIBUTED_PLANNER_HISTORY_KIND,
     attributed_planner_history,
@@ -216,7 +216,7 @@ def _repair_malformed_author_json(
         parsed = parse_first_valid_llm_json(content)
         if not isinstance(parsed, Mapping):
             raise PlannerUnavailable("Gameplay Author format Repair returned non-object JSON")
-        recovered = recover_object_with_trailing_commas(malformed_raw_text)
+        recovered = recover_object_with_syntax_only_repairs(malformed_raw_text)
         if recovered is None:
             raise PlannerUnavailable("Gameplay format Repair cannot prove recoverable authored fields")
         if _prepare_parsed_author_item(recovered) != _prepare_parsed_author_item(parsed):
