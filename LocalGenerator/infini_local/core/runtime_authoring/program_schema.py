@@ -443,6 +443,12 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
     if isinstance(enum, list) and value not in enum:
         add("enum", path, enum, value)
 
+    all_of = schema.get("allOf")
+    if isinstance(all_of, list):
+        for branch in all_of:
+            if isinstance(branch, Mapping) and len(errors) < limit:
+                errors.extend(strict_schema_errors(value, branch, path=path, root=root_schema, limit=limit - len(errors)))
+
     one_of = schema.get("oneOf")
     if isinstance(one_of, list):
         branches = [branch for branch in one_of if isinstance(branch, Mapping)]

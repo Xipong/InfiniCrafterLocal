@@ -50,6 +50,13 @@ _RENDERERS = (
 SPRITE_TEXTURE_RENDERERS = frozenset({
     "projectileAfterimage", "spriteStampTrail", "actorAfterimage", "impactSprite",
 })
+# Existing runtime invariants, shared by the model-facing surface/schema and
+# semantic diagnostics. These constrain authored fields; they never fill them.
+_RENDERER_REQUIREMENTS = {
+    "lightCue": {"channel": "light", "lane": "cue"},
+    "soundCue": {"channel": "sound", "lane": "cue"},
+    "impactSprite": {"textureRole": "impact"},
+}
 _BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
 _TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
@@ -117,6 +124,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "schema": VFX_DIRECTOR_SCHEMA,
         "rendererKind": list(_RENDERERS),
+        "rendererRequirements": copy.deepcopy(_RENDERER_REQUIREMENTS),
         "backend": list(_BACKENDS),
         "textureRole": list(_TEXTURE_ROLES),
         "particleRole": list(_TEXTURE_ROLES),
@@ -152,7 +160,10 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
             "entityId": {"type": "string", "enum": entity_ids},
             "event": {"type": "string", "enum": events},
-            "rendererKind": {"type": "string", "enum": list(_RENDERERS)},
+            "rendererKind": {
+                "type": "string", "enum": list(_RENDERERS),
+                "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
+            },
             "backend": {"type": "string", "enum": list(_BACKENDS)},
             "textureRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
             "particleRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
@@ -187,6 +198,13 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "visualCost", "startTick", "repeatEvery", "spritePrompt", "spriteNegativePrompt",
         ],
     }
+    slot["allOf"] = [
+        {
+            "if": {"properties": {"rendererKind": {"const": renderer}}, "required": ["rendererKind"]},
+            "then": {"properties": {field: {"const": value} for field, value in required.items()}},
+        }
+        for renderer, required in _RENDERER_REQUIREMENTS.items()
+    ]
     schema = {
         "type": "object", "additionalProperties": False,
         "properties": {
@@ -319,7 +337,7 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
         if clean["rendererKind"] == "impactSprite":
             if not sprite_prompt.strip():
                 errors.append({"path": path + ".spritePrompt", "message": "impactSprite requires a dedicated non-empty transparent sprite prompt"})
-            if clean["textureRole"] != "impact":
+            if clean["textureRole"] != _RENDERER_REQUIREMENTS["impactSprite"]["textureRole"]:
                 errors.append({"path": path + ".textureRole", "message": "impactSprite requires textureRole=impact"})
             if entity_id in impact_sprite_entities:
                 errors.append({"path": path + ".entityId", "message": "runtime wire supports at most one impactSprite asset per entity"})
@@ -328,10 +346,11 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             errors.append({"path": path + ".spritePrompt", "message": "sprite prompts are owned only by impactSprite slots and must be empty otherwise"})
         clean["spritePrompt"] = sprite_prompt
         clean["spriteNegativePrompt"] = sprite_negative
-        if clean["rendererKind"] == "soundCue" and (clean["channel"], clean["lane"]) != ("sound", "cue"):
-            errors.append({"path": path, "message": "soundCue requires channel=sound and lane=cue"})
-        if clean["rendererKind"] == "lightCue" and (clean["channel"], clean["lane"]) != ("light", "cue"):
-            errors.append({"path": path, "message": "lightCue requires channel=light and lane=cue"})
+        for renderer in ("soundCue", "lightCue"):
+            required = _RENDERER_REQUIREMENTS[renderer]
+            if clean["rendererKind"] == renderer and any(clean[field] != value for field, value in required.items()):
+                fields = " and ".join(f"{field}={value}" for field, value in required.items())
+                errors.append({"path": path, "message": f"{renderer} requires {fields}"})
         if clean["rendererKind"] in SPRITE_TEXTURE_RENDERERS and clean["textureRole"] == "none":
             errors.append({"path": path + ".textureRole", "message": "sprite renderer requires a non-none textureRole"})
         if clean["rendererKind"] in SPRITE_TEXTURE_RENDERERS and clean["textureRole"] == "impact":
@@ -402,8 +421,8 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         "rules": [
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
-            "Use only enum values and numeric ranges from runtimeSurface.",
-            "projectileAfterimage, spriteStampTrail, actorAfterimage, and impactSprite consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match.",
+            "Use only enum values and numeric ranges from runtimeSurface; each selected rendererKind also requires the exact companion fields in rendererRequirements (encoded in the slot schema).",
+            "projectileAfterimage, spriteStampTrail, and actorAfterimage consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match. impactSprite instead consumes its dedicated impact texture.",
             "Sprite renderers require a non-none textureRole. Primitive and particle renderers do not consume a gameplay PNG.",
             "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt must request one dedicated transparent impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
             "Slots may be empty when presentation should be restrained.",
@@ -555,7 +574,13 @@ def _filter_vfx_repair_patch(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     from infini_local.core.runtime_authoring import strict_schema_errors
 
-    schema_errors = strict_schema_errors(patch, _vfx_repair_schema(data))
+    shape_schema = _vfx_repair_schema(data)
+    # Renderer compatibility applies to the merged slot. Before frozen-first
+    # filtering, an unrelated rewrite may contradict a valid frozen companion;
+    # it must be ignored, not cancel an otherwise useful repair. Keep structural
+    # validation here and the full renderer/schema gate after the merge.
+    shape_schema["properties"]["slotsUpsert"]["items"].pop("allOf", None)
+    schema_errors = strict_schema_errors(patch, shape_schema)
     patch_mapping: Mapping[str, Any] = patch if isinstance(patch, Mapping) else {}
     if isinstance(patch, MalformedVfxDirectorOutput):
         schema_errors.insert(0, {

@@ -98,6 +98,71 @@
     "slotsUpsert": {
       "items": {
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "lightCue"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "channel": {
+                  "const": "light"
+                },
+                "lane": {
+                  "const": "cue"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "soundCue"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "channel": {
+                  "const": "sound"
+                },
+                "lane": {
+                  "const": "cue"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "impactSprite"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "textureRole": {
+                  "const": "impact"
+                }
+              }
+            }
+          }
+        ],
         "properties": {
           "alpha": {
             "description": "Engine units: Renderer-specific opacity/volume coefficient: projectile sprite/primitive draw color multiplied by alpha; impactSprite fades from alpha over its lifetime; sound volume clamp(alpha, 0.05, 1). Projectile and item dust color paths do not use slot alpha; not universal opacity.",
@@ -261,6 +326,7 @@
             "type": "string"
           },
           "rendererKind": {
+            "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
             "enum": [
               "projectileAfterimage",
               "spriteStampTrail",
