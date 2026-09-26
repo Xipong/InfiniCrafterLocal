@@ -47,6 +47,18 @@ Transport debug / `LLM usage` сохраняет:
 
 Основное ускорение полного craft зависит от remote prefill, decode/reasoning, количества Repairs и квот/ожидания. Несколько миллисекунд подготовки не превращают десятки секунд LLM-работы в мгновенный craft. Урезание self-evaluation/capabilities, уменьшение reasoning и параллельный запуск зависимых стадий без доказательства эквивалентности не выполнялись.
 
+## Разбор сохранённого Live20 и локальный CPU-профиль
+
+Это **историческая** панель `typed-final-3834acd-flashlite31-all18k-medium-live20`, не испытание текущего prompt/cache patch. Проанализированы `logical_llm.ndjson`, `http_llm.ndjson`, `results.ndjson` и `harness_events.ndjson`; usage двух trace layers сверены как мультимножества. Сырые payload/config не публикуются.
+
+- 94 запроса, 91 HTTP-ответ и 3 transport errors. Медианы завершившихся logical calls: Author **85.83 с** (22 ответа), scoped Repair **66.47 с** (19), Visual **60.54 с** (21), VFX **27.09 с** (20), VFX Repair **17.48 с** (9). Они не складываются в медиану craft; часть вызовов относится к прерванным попыткам.
+- Медиана полного case от первого `CASE_ATTEMPT_START` до последнего `CASE_ATTEMPT_END`, включая transport retries/ожидания: **263.10 с**, диапазон **188.23–583.07 с**. `results.ndjson.ms` отсчитывается заново для каждой попытки; его медиана **248.64 с** не включает прежние неудачные попытки. Из-за parallel=3 сумма времени отдельных case не равна времени всей панели.
+- **Кэш уже использовался до этих изменений:** 11 из 22 ответов Author явно сообщили положительный `prompt_tokens_details.cached_tokens`, всего **179331 токен**. В остальных 80 из 91 ответов поле отсутствует — это unknown, а не 80 доказанных cache misses. Во всех стадиях, кроме Author, сведений о cache hit нет. Медиана Author среди ответов с подтверждённым hit — **85.45 с**: наличие кэша само по себе не означает быстрый ответ и не устраняет decode/reasoning. Это не парный cold/warm эксперимент.
+- Для 17 case без transport retry остаток `results.ms − sum(logical response durations)` имеет медиану **142 мс**, максимум **219 мс**; медианная доля остатка **0.0604%**. Это время вне измеренных LLM calls, не чистый CPU-профиль. Case с retries намеренно исключены: их terminal-attempt `ms` нельзя сравнивать со всеми попытками.
+- Панель остаётся rejected: 20 конечных результатов, но только 2 first-Author success при минимуме 10; Repairs были нужны 18 предметам. Уменьшение частоты необходимых Repairs — более существенный резерв времени, чем микросекундные изменения Python. Отключение валидации/Repair или механическое принятие неполного Author не является допустимым ускорением.
+
+Дополнительный offline-профиль текущего `be5b1a9`: 5 прогревов, 101 обычное измерение и отдельные 100 cProfile-итераций, fixture `workbench_blade`. Обычные медианы: построение `json_object` Author **2.20 мс**, `validate_runtime_program` **14.77 мс**. В builder доминируют JSON serialization, построение карточек каталога и вычисление длины статического префикса; в validator — рекурсивный `strict_schema_errors` и type checks. cProfile накладные расходы не выданы за обычную runtime latency. Валидатор не упрощался: риск потерять shape/union-проверки ради десятка миллисекунд несоразмерен наблюдаемой сетевой задержке.
+
 ## Проверка
 
 Offline regressions проверяют разные recipes и процессы, invalidation, отсутствие internal marker в provider wire, побайтовое сохранение текста при split, unknown endpoints, explicit zero против missing usage, scoped Repair и настоящую ветвь same-profile Responses lease с предыдущим response ID. Проверки transport используют перехват HTTP/адаптера; это не доказательство принятия запроса живым провайдером или фактического GPU cache hit.
