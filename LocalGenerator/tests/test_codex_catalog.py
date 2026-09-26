@@ -7,11 +7,18 @@ import pytest
 from infini_local.services import codex_auth
 
 
-def test_visible_subscription_text_models_keep_declared_reasoning_without_platform_filter(monkeypatch):
+@pytest.fixture
+def account_credentials(monkeypatch):
+    credentials = codex_auth.Credentials(
+        "test-access-not-real", "test-refresh-not-real", "test-account", time.time() + 3600,
+    )
+    monkeypatch.setattr(codex_auth, "get_credentials", lambda: credentials)
+    return credentials
+
+
+def test_visible_subscription_text_models_keep_declared_reasoning_without_platform_filter(monkeypatch, account_credentials):
     from infini_local.services import codex_catalog
 
-    monkeypatch.setattr(codex_auth, "get_credentials", lambda: codex_auth.Credentials(
-        "test-access-not-real", "test-refresh-not-real", "test-account", time.time() + 3600))
     captured = []
     def get(url, **options):
         captured.append((url, options))
@@ -35,10 +42,9 @@ def test_visible_subscription_text_models_keep_declared_reasoning_without_platfo
     assert "api.openai.com" not in captured[0][0]
 
 
-def test_catalog_never_returns_echoed_session_credentials_as_model_metadata(monkeypatch):
+def test_catalog_never_returns_echoed_session_credentials_as_model_metadata(monkeypatch, account_credentials):
     from infini_local.services import codex_catalog
-    credentials = codex_auth.Credentials("test-access-not-real", "test-refresh-not-real", "test-account", time.time() + 3600)
-    monkeypatch.setattr(codex_auth, "get_credentials", lambda: credentials)
+    credentials = account_credentials
     monkeypatch.setattr(codex_auth, "get_json", lambda *a, **kw: {"models": [
         {"slug": credentials.access_token, "visibility": "list", "display_name": "unsafe"},
         {"slug": "gpt-safe", "visibility": "list", "display_name": "echo " + credentials.access_token,
@@ -54,11 +60,9 @@ def test_catalog_never_returns_echoed_session_credentials_as_model_metadata(monk
     assert credentials.access_token not in repr(models)
 
 
-def test_empty_or_invalid_model_catalog_is_an_error_not_an_invented_slug(monkeypatch):
+def test_empty_or_invalid_model_catalog_is_an_error_not_an_invented_slug(monkeypatch, account_credentials):
     from infini_local.services import codex_catalog
 
-    monkeypatch.setattr(codex_auth, "get_credentials", lambda: codex_auth.Credentials(
-        "test-access-not-real", "test-refresh-not-real", "test-account", time.time() + 3600))
     monkeypatch.setattr(codex_auth, "get_json", lambda *a, **kw: {"models": [{"slug": "", "visibility": "list"}]})
     with pytest.raises(codex_auth.CodexError):
         codex_catalog.list_text_models()

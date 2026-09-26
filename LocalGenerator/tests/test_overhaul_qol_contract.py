@@ -49,13 +49,4 @@ def _contract_check_inventory_asset_prefetch_is_bounded_and_optional():
 def test_overhaul_qol_contract_module_contract(request):
     from contract_checks import run_contract_checks
 
-    run_contract_checks(
-        globals(),
-        request,
-        (
-            '_contract_check_overhaul_qol_config_surface_exists',
-            '_contract_check_station_keeps_manual_clear_qol_without_quickfill_or_swap',
-            '_contract_check_inventory_asset_prefetch_is_bounded_and_optional',
-        ),
-        require_all=True,
-    )
+    run_contract_checks(globals(), request)

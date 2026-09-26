@@ -391,6 +391,30 @@ def _resolve_ref(root: Mapping[str, Any], ref: str) -> Mapping[str, Any] | None:
     return value if isinstance(value, Mapping) else None
 
 
+def _schema_const_paths(branch: Mapping[str, Any], prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], Any]:
+    """Collect literal const paths from schema properties, not authored prose."""
+    result = {prefix: branch["const"]} if "const" in branch else {}
+    properties = branch.get("properties")
+    if isinstance(properties, Mapping):
+        for key, child in properties.items():
+            if isinstance(key, str) and isinstance(child, Mapping):
+                result.update(_schema_const_paths(child, (*prefix, key)))
+    return result
+
+
+def _authored_const_value(value: Any, path: tuple[str, ...]) -> tuple[bool, Any]:
+    for key in path:
+        if not isinstance(value, Mapping) or key not in value:
+            return False, None
+        value = value[key]
+    return True, value
+
+
+def _authored_const_matches(value: Any, path: tuple[str, ...], expected: Any) -> bool:
+    present, actual = _authored_const_value(value, path)
+    return present and type(actual) is type(expected) and actual == expected
+
+
 def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "$", root: Mapping[str, Any] | None = None, limit: int = 128) -> list[dict[str, Any]]:
     root_schema = root or schema
     errors: list[dict[str, Any]] = []
@@ -421,12 +445,54 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
 
     one_of = schema.get("oneOf")
     if isinstance(one_of, list):
-        branch_results = [strict_schema_errors(value, branch, path=path, root=root_schema, limit=limit) for branch in one_of if isinstance(branch, Mapping)]
+        branches = [branch for branch in one_of if isinstance(branch, Mapping)]
+        branch_results = [strict_schema_errors(value, branch, path=path, root=root_schema, limit=limit) for branch in branches]
         matches = [branch for branch in branch_results if not branch]
         if len(matches) != 1:
             add("one_of", path, "exactly_one", len(matches))
             if not matches and branch_results:
-                errors.extend(min(branch_results, key=len)[: max(0, limit - len(errors))])
+                const_paths = [_schema_const_paths(branch) for branch in branches]
+                shared = set.intersection(*(set(paths) for paths in const_paths)) if const_paths else set()
+                discriminators = {
+                    key for key in shared
+                    if any(type(paths[key]) is not type(const_paths[0][key]) or paths[key] != const_paths[0][key]
+                           for paths in const_paths[1:])
+                }
+                # Non-discriminating consts (e.g. place_item stackCost=1) are
+                # ordinary validation constraints, not evidence of branch identity.
+                selected = [index for index, paths in enumerate(const_paths)
+                            if discriminators and all(_authored_const_matches(value, key, paths[key])
+                                                      for key in discriminators)]
+                if len(selected) == 1:
+                    errors.extend(branch_results[selected[0]][: max(0, limit - len(errors))])
+                elif not selected:
+                    present = {key for key in discriminators if _authored_const_value(value, key)[0]}
+                    partial = [index for index, paths in enumerate(const_paths)
+                               if present and all(_authored_const_matches(value, key, paths[key]) for key in present)]
+                    if partial and len(present) < len(discriminators):
+                        # A known outer discriminator can still expose errors
+                        # identical in every remaining branch, without guessing
+                        # which nested variant the Author meant.
+                        for row in branch_results[partial[0]]:
+                            if row["kind"] in {"required", "additional_property"} and all(row in branch_results[index] for index in partial[1:]):
+                                errors.append(row)
+                                if len(errors) >= limit:
+                                    break
+                    elif not partial and present and len(present) == len(discriminators):
+                        # All outer discriminators except one are exact, but its
+                        # authored value is unknown. Point at that invalid leaf
+                        # without advertising any variant's const as expected.
+                        for key in discriminators:
+                            other_keys = present - {key}
+                            if not other_keys or key not in present:
+                                continue
+                            candidates = [paths for paths in const_paths
+                                          if all(_authored_const_matches(value, other, paths[other])
+                                                 for other in other_keys)]
+                            if candidates and not any(_authored_const_matches(value, key, paths[key])
+                                                      for paths in candidates):
+                                add("one_of", path + "".join(f".{part}" for part in key))
+                                break
         return errors[:limit]
 
     any_of = schema.get("anyOf")

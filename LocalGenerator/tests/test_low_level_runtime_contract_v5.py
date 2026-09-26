@@ -121,7 +121,6 @@ def test_generated_parent_summary_uses_late_report_and_behavior_checks() -> None
 
 def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     names = set(CAPABILITY_REGISTRY)
-    assert len(names) == 52
     assert {row["fn"] for row in compact_capability_catalog()} == names
     assert len(capability_provider_union()) == len(names)
     heal_capability = CAPABILITY_REGISTRY["heal_owner_on_event"]

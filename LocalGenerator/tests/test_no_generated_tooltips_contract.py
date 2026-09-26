@@ -20,6 +20,14 @@ def _read(path: str) -> str:
     return (CS / path).read_text("utf-8", errors="ignore")
 
 
+def _contains_key(value: object, forbidden: str) -> bool:
+    if isinstance(value, dict):
+        return forbidden in value or any(_contains_key(child, forbidden) for child in value.values())
+    if isinstance(value, list):
+        return any(_contains_key(child, forbidden) for child in value)
+    return False
+
+
 def test_generated_item_author_and_repair_surfaces_forbid_tooltips() -> None:
     author = author_item_response_schema()
     repair = author_item_repair_schema()
@@ -29,7 +37,11 @@ def test_generated_item_author_and_repair_surfaces_forbid_tooltips() -> None:
     assert "tooltip" not in author["required"]
     assert "tooltip" not in repair["properties"]["metadataPatch"]["properties"]
     assert "tooltip" not in card["root"]
-    assert "tooltip" not in build_runtime_fixture("workbench_blade")
+    fixture = build_runtime_fixture("workbench_blade")
+    assert not _contains_key(fixture, "tooltip")
+    # Negative control: checking only the top-level dict would miss authored
+    # tooltip fields hidden in metadata or nested runtime entities.
+    assert _contains_key({"runtimeProgram": {"entities": [{"tooltip": "invented"}]}}, "tooltip")
 
 
 def test_generated_item_wire_and_runtime_have_no_authored_tooltip_renderer() -> None:

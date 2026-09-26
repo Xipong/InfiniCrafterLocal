@@ -201,21 +201,4 @@ def _contract_check_server_restart_replays_failure_with_inputs_still_in_station(
 def test_mp_craft_state_simulator_module_contract(request):
     from contract_checks import run_contract_checks
 
-    run_contract_checks(
-        globals(),
-        request,
-        (
-            "_contract_check_deposit_moves_exact_mouse_unit_into_server_station",
-            "_contract_check_open_void_bag_uses_same_mouse58_boundary_and_needs_no_inventory_return",
-            "_contract_check_client_ref_cannot_craft_without_matching_server_escrow",
-            "_contract_check_generated_identity_is_validated_at_deposit_and_start",
-            "_contract_check_success_consumes_station_once_and_reveals_once",
-            "_contract_check_cancel_refunds_exact_escrow_once_and_late_commit_is_ignored",
-            "_contract_check_take_to_mouse_and_clear_return_exact_station_items",
-            "_contract_check_late_escrow_retry_replays_older_cached_result_without_mutation",
-            "_contract_check_disconnect_reconnect_replays_by_stable_client_token",
-            "_contract_check_dedupe_and_pending_gate_do_not_consume_again",
-            "_contract_check_commit_ack_loss_reconnect_replays_without_parent_refund",
-            "_contract_check_server_restart_replays_failure_with_inputs_still_in_station",
-        ),
-    )
+    run_contract_checks(globals(), request)

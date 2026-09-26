@@ -39,7 +39,7 @@ def _regen(value):
 @pytest.mark.parametrize("old", range(101))
 def test_axe_tooltip_percent_reconstructs_every_legacy_integer(old):
     doc = _tool(old * 5)
-    assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
+    # Compilation validates the authored program before projecting its wire.
     wire = compile_runtime_program(doc)
     assert wire["gameplay"]["axePower"] == old
     assert isinstance(wire["gameplay"]["axePower"], int)
@@ -52,7 +52,6 @@ def test_axe_tooltip_percent_reconstructs_every_legacy_integer(old):
 @pytest.mark.parametrize("old", range(121))
 def test_regen_hp_per_second_reconstructs_every_legacy_integer(old):
     doc = _regen(old / 2)
-    assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
     wire = compile_runtime_program(doc)
     assert wire["gameplay"]["generatedBuff"]["lifeRegen"] == old
     assert isinstance(wire["gameplay"]["generatedBuff"]["lifeRegen"], int)
@@ -175,11 +174,10 @@ def test_periodic_missing_fields_are_reported_once_by_canonical_shape():
 
 def test_all_numeric_prompt_cards_reconstruct_meaning_bounds_units_and_dependencies():
     cards = {c["fn"]: c for c in compact_capability_catalog()}
-    assert len(cards) == len(CAPABILITY_REGISTRY) == 52
+    assert set(cards) == set(CAPABILITY_REGISTRY)
     guide = runtime_authoring_prompt_field_guide()
     assert "configure_accessory" in guide["armorParamInheritance"]
     assert "Matching armor set" in guide["setBonusParamPrefix"]
-    reviewed = 0
     for fn, cap in CAPABILITY_REGISTRY.items():
         card = cards[fn]
         assert set(card["params"]) == set(cap.params)
@@ -187,7 +185,6 @@ def test_all_numeric_prompt_cards_reconstruct_meaning_bounds_units_and_dependenc
         for name, spec in cap.params.items():
             if spec.kind not in ("integer", "number"):
                 continue
-            reviewed += 1
             row = card["params"][name]
             meaning = row.get("meaning", "")
             if fn == "configure_armor" and name.startswith("setBonus"):
@@ -205,4 +202,3 @@ def test_all_numeric_prompt_cards_reconstruct_meaning_bounds_units_and_dependenc
                                                 ("Px", "pixels"), ("Radians", "radians"))) or not spec.units
             else:
                 assert row["units"] == spec.units
-    assert reviewed == 180

@@ -63,11 +63,13 @@ def test_remote_craft_uses_world_owned_stable_identity_lease_and_replay() -> Non
     assert "TryReplayCraft" in system
     assert "IsCraftPending" in system
     assert "CompleteCraft" in system
+    assert "GetList<TagCompound>(CraftTransactionsSaveKey).Take(MaxCraftTransactions)" in system
     assert '"infiniPendingRemoteCrafts"' in craft_state
     assert "RestorePendingRemoteCrafts" in craft_state
     assert "ResendPendingRemoteCrafts" in multiplayer
-    assert '"servercraft:" + whoAmI' not in multiplayer
+    assert '"servercraft:"' not in multiplayer
     assert "ServerCommittedCraftRequests" not in multiplayer
+    assert "ServerCancelledCraftRequests" not in multiplayer
 
 
 def test_remote_station_mirror_is_not_also_saved_as_inventory_refund() -> None:

@@ -2211,7 +2211,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     for row_id in binding_input_change_ids:
         grant("bindings", row_id, "input")
     for row_id in binding_action_change_ids:
-        grant("bindings", row_id, "action")
+        grant("bindings", row_id, "usePolicy.action.kind")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
     for row_id in call_fn_change_ids:
@@ -2650,7 +2650,12 @@ def filter_repair_patch_scope(
                         separators=(",", ":"),
                     )
                     allowed_transactions = binding_alternative_map.get(row_id)
-                    if allowed_transactions is not None and actual_transaction in allowed_transactions:
+                    # An alternative is a complete transaction only when Repair
+                    # may replace the atomic usePolicy. A missing/invalid leaf
+                    # must still pass through the frozen-subtree merge below.
+                    if (allowed_transactions is not None
+                            and actual_transaction in allowed_transactions
+                            and {"", "usePolicy"}.intersection(permissions.get(row_id, ()))):
                         replacement = copy.deepcopy(dict(candidate))
                         if replacement != original:
                             filtered[upsert_key].append(replacement)

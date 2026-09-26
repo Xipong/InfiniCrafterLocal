@@ -54,10 +54,8 @@ def test_multiplayer_lane_identity_authority_and_refunds_are_request_scoped() ->
     assert "packet.Write((byte)Math.Clamp(laneIndex, 0, 2));" in multi
     assert "!modPlayer.IsCraftLaneVisible(laneIndex)" in mp
     assert "modPlayer.IsCraftLanePending(laneIndex)" in mp
-    assert "int firstInputIndex = laneIndex * 2;" in mp
-    assert "TrySnapshotServerEscrowInput(firstInputIndex" in mp
-    assert "TrySnapshotServerEscrowInput(firstInputIndex + 1" in mp
-    assert "GeneratedStationEscrowStateSystem.TryBeginCraft" in mp
+    # Request-slot reservation is checked inside HandleRequestServerCraftPacket
+    # by test_240_csharp_multiplayer_boundary_bugfixes, not globally here.
     assert "TryHandleExtraCraftCommit(requestId" in mp
     assert "TryCancelExtraServerCraft(requestId" in mp
     assert "AddMultiDevPendingRefunds(refunds, includeRemoteAwaiting: !_stationEscrowUsesRemoteAuthority);" in craft_state

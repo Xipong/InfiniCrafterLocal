@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from contract_checks import literal_string_arguments
 from infini_local.desktop import settings_env, settings_gui, settings_schema
 import infini_local.desktop.settings_sdcpp_args as settings_sdcpp_args
+import infini_local.desktop.settings_gui_trace_state as settings_trace_state
 
 
 GUI_PATH = Path(settings_gui.__file__)
@@ -24,8 +25,6 @@ GUI_SOURCE = "\n".join(
         GUI_PATH.with_name("settings_gui_server_controls.py"),
     ]
 )
-SETTINGS_ENV_SOURCE = Path(settings_env.__file__).read_text(encoding="utf-8")
-SETTINGS_SDCPP_ARGS_SOURCE = Path(settings_sdcpp_args.__file__).read_text(encoding="utf-8")
 
 
 class _BlockTkinter(importlib.abc.MetaPathFinder):
@@ -118,10 +117,8 @@ def _check_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
     assert "--rng cpu" in rendered
     assert "--rng cuda" not in rendered
     assert "--flow-shift 3" in rendered
-    assert "from infini_local.desktop.settings_sdcpp_args import (" in GUI_SOURCE
-    assert "def split_extra_for_gui" in SETTINGS_SDCPP_ARGS_SOURCE
-    assert "def _split_extra_for_gui" not in GUI_SOURCE
     assert settings_gui.SettingsGui._split_extra_for_gui is settings_sdcpp_args.split_extra_for_gui
+    assert settings_gui.SettingsGui._remove_extra_options is settings_sdcpp_args.remove_extra_options
 
 
 def _check_sdcpp_presets_use_measured_amd_placements_without_redundant_assignments() -> None:
@@ -279,14 +276,20 @@ def _check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() 
     assert f"{minimum}=10" in example
 
 
-def _check_gui_env_file_io_lives_in_settings_env() -> None:
-    assert "from infini_local.desktop.settings_env import" in GUI_SOURCE
-    assert "def parse_env" not in GUI_SOURCE
-    assert "def write_env" not in GUI_SOURCE
-    assert "def parse_env" in SETTINGS_ENV_SOURCE
-    assert "def write_env" in SETTINGS_ENV_SOURCE
-    assert callable(settings_env.parse_env)
-    assert callable(settings_env.write_env)
+def _check_gui_env_file_io_lives_in_settings_env(tmp_path: Path) -> None:
+    assert settings_gui.parse_env is settings_env.parse_env
+    assert settings_trace_state.parse_env is settings_env.parse_env
+    assert settings_trace_state.write_env is settings_env.write_env
+    path = tmp_path / "settings.env"
+    settings_trace_state.write_env(path, {
+        "INFINI_GUI_PIPELINE_PRESET": "OpenRouter + local Z-Image/sd.cpp",
+        "INFINI_IMAGE_BACKEND": "sdcpp",
+        "INFINI_MANUAL_KEY": "retained",
+    })
+    parsed = settings_gui.parse_env(path)
+    assert parsed["INFINI_GUI_PIPELINE_PRESET"] == "OpenRouter + local Z-Image/sd.cpp"
+    assert parsed["INFINI_IMAGE_BACKEND"] == "sdcpp"
+    assert parsed["INFINI_MANUAL_KEY"] == "retained"
 
 def _check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy() -> None:
     tag = settings_gui.SettingsGui._lora_tag_from_file(r"C:\\Models\\pixel_art.safetensors", "")

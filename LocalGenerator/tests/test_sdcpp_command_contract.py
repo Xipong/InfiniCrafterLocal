@@ -18,17 +18,29 @@ def _expected_host_path(path: str) -> str:
     return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
 
 
+def _set_pipeline_sdcpp_command(monkeypatch, **overrides: str) -> None:
+    config = {
+        "SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "SDCPP_SERVER_EXE": r"C:\Games\sdcpp\sd-server.exe",
+        "SDCPP_MODEL": r"C:\Games\sdcpp\models\z-image.gguf",
+        "SDCPP_VAE": r"C:\Games\sdcpp\models\ae.safetensors",
+        "SDCPP_LLM": r"C:\Games\sdcpp\models\qwen.gguf",
+        "SDCPP_LORA_DIR": r"C:\Games\sdcpp\loras",
+        "SDCPP_LORA_PROMPT_TAGS": "<lora:terraria:0.5>",
+        "SDCPP_SERVER_EXTRA_ARGS": "",
+        "SDCPP_SAMPLER": "euler",
+    }
+    config.update(overrides)
+    for key, value in config.items():
+        monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, key, value)
+
+
 def _check_sdcpp_safe_args_ignores_corrupt_command_template(monkeypatch) -> None:
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_MODE", "safe_args")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXE", r"C:\Games\sdcpp\sd-server.exe")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_MODEL", r"C:\Games\sdcpp\models\z-image.gguf")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_VAE", r"C:\Games\sdcpp\models\ae.safetensors")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LLM", r"C:\Games\sdcpp\models\qwen.gguf")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_DIR", r"C:\Games\sdcpp\loras")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "<lora:terraria:0.5>")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "-v --flow-shift 3")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SAMPLER", "euler")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_TEMPLATE", "{exe} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}")
+    _set_pipeline_sdcpp_command(
+        monkeypatch,
+        SDCPP_SERVER_EXTRA_ARGS="-v --flow-shift 3",
+        SDCPP_SERVER_COMMAND_TEMPLATE="{exe} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
+    )
 
     cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
 
@@ -43,14 +55,7 @@ def _check_sdcpp_safe_args_ignores_corrupt_command_template(monkeypatch) -> None
 
 
 def _check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess(monkeypatch) -> None:
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_MODE", "safe_args")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXE", r"C:\Games\sdcpp\sd-server.exe")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_MODEL", r"C:\Games\sdcpp\models\z-image.gguf")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_VAE", r"C:\Games\sdcpp\models\ae.safetensors")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LLM", r"C:\Games\sdcpp\models\qwen.gguf")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_DIR", r"C:\Games\sdcpp\loras")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "<lora:terraria:0.5>")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "")
+    _set_pipeline_sdcpp_command(monkeypatch)
 
     cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
 
@@ -64,19 +69,12 @@ def _check_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess(monkeypat
 
 
 def _check_sdcpp_template_mode_repairs_known_sampling_method_corruption(monkeypatch) -> None:
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_MODE", "template")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXE", r"C:\Games\sdcpp\sd-server.exe")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_MODEL", r"C:\Games\sdcpp\models\z-image.gguf")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_VAE", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LLM", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_DIR", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "-v")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SAMPLER", "euler")
-    monkeypatch.setattr(
-        IMAGE_BACKEND_PIPELINE,
-        "SDCPP_SERVER_COMMAND_TEMPLATE",
-        "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
+    _set_pipeline_sdcpp_command(
+        monkeypatch,
+        SDCPP_SERVER_COMMAND_MODE="template",
+        SDCPP_VAE="", SDCPP_LLM="", SDCPP_LORA_DIR="", SDCPP_LORA_PROMPT_TAGS="",
+        SDCPP_SERVER_EXTRA_ARGS="-v",
+        SDCPP_SERVER_COMMAND_TEMPLATE="{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
     )
 
     cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
@@ -210,15 +208,12 @@ def _check_sdcpp_health_reads_canonical_state_fields() -> None:
 
 
 def _check_sdcpp_lora_file_overrides_stale_lora_dir(monkeypatch) -> None:
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_COMMAND_MODE", "safe_args")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXE", r"C:\Games\sdcpp\sd-server.exe")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_MODEL", r"C:\Games\sdcpp\models\z-image.gguf")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_VAE", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LLM", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_DIR", r"C:\stale\wrong_loras")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_LORA_PROMPT_TAGS", "<lora:terraria_items:0.55>")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SERVER_EXTRA_ARGS", "")
-    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "SDCPP_SAMPLER", "euler")
+    _set_pipeline_sdcpp_command(
+        monkeypatch,
+        SDCPP_VAE="", SDCPP_LLM="",
+        SDCPP_LORA_DIR=r"C:\stale\wrong_loras",
+        SDCPP_LORA_PROMPT_TAGS="<lora:terraria_items:0.55>",
+    )
     # Simulate server startup normalization after reading INFINI_SDCPP_LORA_FILE.
     monkeypatch.setattr(
         IMAGE_BACKEND_PIPELINE,

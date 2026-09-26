@@ -24,7 +24,7 @@ import time
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_ROOT = ROOT / "LocalGenerator" / "tests"
+TEST_ROOTS = (ROOT / "LocalGenerator" / "tests", ROOT / "toolbox" / "tests")
 FULL_TEST_MODULES = {
     "pytest": "pytest",
     "pydantic": "pydantic",
@@ -51,7 +51,8 @@ ISOLATED_TEST_FILES = {
 
 
 def _test_files() -> list[Path]:
-    return sorted(path for path in TEST_ROOT.glob("test_*.py") if path.is_file())
+    return sorted(path for root in TEST_ROOTS for path in root.glob("test_*.py")
+                  if path.is_file() and path.resolve().is_relative_to(root.resolve()))
 
 
 def missing_full_test_dependencies() -> list[str]:
@@ -163,7 +164,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
         }
     files = _test_files()
     if not files:
-        return {"schema": "infini.pytest-shards.v3", "ok": False, "errors": ["no test files found"], "shards": []}
+        return {"schema": "infini.pytest-shards.v3", "ok": False, "status": "not_selected", "errors": ["no test files found"], "shards": []}
 
     partitions = _partition(files, max(1, shard_count))
     selected = list(enumerate(partitions, 1))
@@ -182,6 +183,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
     base_env = dict(os.environ)
     base_env["PYTHONUTF8"] = "1"
     base_env["INFINI_SKIP_CONFIG_FILE"] = "1"
+    base_env["INFINI_TEST_USE_PROJECT_CONFIG"] = "0"
 
     for number, shard in selected:
         print(f"[SHARD {number}] starting files={len(shard)}", flush=True)
@@ -208,7 +210,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
                 ),
             )
             env = dict(base_env)
-            env["PYTHONPATH"] = str(temp_root / "LocalGenerator")
+            env["PYTHONPATH"] = os.pathsep.join((str(temp_root / "LocalGenerator"), str(temp_root)))
             normal = [path for path in shard if path.name not in ISOLATED_TEST_FILES]
             isolated = [path for path in shard if path.name in ISOLATED_TEST_FILES]
             commands: list[tuple[str, list[Path]]] = []
@@ -217,7 +219,12 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
             commands.extend(("isolated", [path]) for path in isolated)
 
             for command_index, (mode, command_files) in enumerate(commands, 1):
-                relatives = [path.relative_to(ROOT / "LocalGenerator").as_posix() for path in command_files]
+                relatives = [
+                    path.relative_to(ROOT / "LocalGenerator").as_posix()
+                    if path.is_relative_to(ROOT / "LocalGenerator")
+                    else "../" + path.relative_to(ROOT).as_posix()
+                    for path in command_files
+                ]
                 row = _run_pytest_command(
                     temp_root=temp_root,
                     relatives=relatives,
@@ -237,7 +244,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
                 "fileCount": len(shard),
                 "executedFileCount": sum(row["fileCount"] for row in command_rows),
                 "isolatedFileCount": len(isolated),
-                "files": [path.relative_to(ROOT / "LocalGenerator").as_posix() for path in shard],
+                "files": [path.relative_to(ROOT).as_posix() for path in shard],
                 "status": "passed" if shard_ok else "failed",
                 "exitCode": 0 if shard_ok else next((int(row["exitCode"]) for row in command_rows if row["status"] != "passed"), 1),
                 "passed": sum(int(row["passed"] or 0) for row in command_rows),

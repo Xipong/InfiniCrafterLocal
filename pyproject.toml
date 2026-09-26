@@ -50,6 +50,6 @@ reportUnknownVariableType = "none"
 reportUnknownParameterType = "none"
 
 [tool.pytest.ini_options]
-testpaths = ["LocalGenerator/tests"]
+testpaths = ["LocalGenerator/tests", "toolbox/tests"]
 pythonpath = ["LocalGenerator"]
 addopts = "-ra"

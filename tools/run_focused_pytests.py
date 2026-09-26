@@ -8,17 +8,17 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_ROOT = (ROOT / "LocalGenerator" / "tests").resolve()
+TEST_ROOTS = ((ROOT / "LocalGenerator" / "tests").resolve(), (ROOT / "toolbox" / "tests").resolve())
 
 
 def _safe_test_path(raw: str) -> Path:
     path = (ROOT / raw).resolve()
-    try:
-        path.relative_to(TEST_ROOT)
-    except ValueError as exc:
-        raise ValueError(f"focused pytest path must stay under {TEST_ROOT}: {raw!r}") from exc
+    if not any(path == root or path.is_relative_to(root) for root in TEST_ROOTS):
+        raise ValueError(f"focused pytest path must stay under a test root: {raw!r}")
     if not path.exists():
         raise ValueError(f"focused pytest path does not exist: {raw!r}")
+    if path.is_file() and not (path.name.startswith("test_") and path.suffix == ".py"):
+        raise ValueError(f"focused pytest path must be a test module: {raw!r}")
     return path
 
 
@@ -35,6 +35,7 @@ def main() -> int:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(ROOT / "LocalGenerator")
     env["INFINI_FOCUSED_PYTEST"] = "1"
+    env["INFINI_TEST_USE_PROJECT_CONFIG"] = "0"
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-q", *(str(path) for path in selected)],
         cwd=ROOT,

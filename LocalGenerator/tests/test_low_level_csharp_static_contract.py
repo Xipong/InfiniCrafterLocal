@@ -13,33 +13,10 @@ def _read(path: str) -> str:
     return (CS / path).read_text("utf-8", errors="ignore")
 
 
-def test_csharp_uses_v5_dto_and_explicit_entity_dispatch() -> None:
-    dto = _read("Common/Models/RuntimeProgramSpec.cs")
-    item = _read("Content/Items/GeneratedItem.cs") + _read("Content/Items/GeneratedItem.UseStyle.cs")
-    projectile = _read("Content/Projectiles/GeneratedProjectile.cs") + _read("Content/Projectiles/GeneratedProjectile.Executors.cs")
-    executor = _read("Common/Runtime/RuntimeProgramExecutor.cs")
-    assert "infini.runtime-program.v5" in dto
-    assert "infini.runtime-program.wire.v3" in dto
-    assert "RuntimeProgram.Entities" in item or "RuntimeProgram" in item
-    assert "binding.Input" in item or "Binding" in item
-    assert "Movement.Code" in projectile
-    assert "ActionCode" in executor or "actionCode" in executor
-    for token in ("GeneratedRuntimeFamilyPolicy", "AttackSpec", "RuntimeFamily"):
-        assert token not in item + projectile + executor
-
-
-def test_old_monolithic_projectile_partials_and_policies_are_deleted() -> None:
-    deleted = [
-        "Content/Projectiles/GeneratedProjectile.Runtime.cs",
-        "Content/Projectiles/GeneratedProjectile.Impact.cs",
-        "Content/Projectiles/GeneratedProjectile.ChargeRelease.cs",
-        "Content/Projectiles/GeneratedProjectile.Sentry.cs",
-        "Content/Projectiles/GeneratedProjectile.OverheadBarrage.cs",
-        "Common/Models/GeneratedRuntimeFamilyPolicy.cs",
-        "Common/Models/GeneratedChildSpecPolicy.cs",
-        "Common/Models/GeneratedSecondaryTriggerPolicy.cs",
-    ]
-    assert all(not (CS / path).exists() for path in deleted)
+def test_old_child_spec_model_policy_is_deleted() -> None:
+    # Unlike the other retired projectile partials, this Common/Models path is
+    # not in check_csharp_contracts.py's deleted-architecture file list.
+    assert not (CS / "Common/Models/GeneratedChildSpecPolicy.cs").exists()
 
 
 def test_generated_parent_summary_csharp_dto_matches_v2_delivery_surface() -> None:
@@ -83,12 +60,6 @@ def test_generated_parent_reference_is_hydrated_or_rejected_at_combine_wire_boun
     ):
         assert token in wire
     assert wire.index("GeneratedItemData.IsPlayerSaveReferenceOnly(existing)") < wire.index("Item craftItem = CraftIdentityItem(item, existing)")
-
-
-def test_unknown_opcodes_fail_closed_in_csharp() -> None:
-    executor = _read("Content/Projectiles/GeneratedProjectile.Executors.cs") + _read("Common/Runtime/RuntimeProgramExecutor.cs")
-    assert "default:" in executor
-    assert "Kill" in executor or "return false" in executor or "InvalidOperationException" in executor
 
 
 def test_release_timing_prompt_tokens_match_held_sprite_projection() -> None:

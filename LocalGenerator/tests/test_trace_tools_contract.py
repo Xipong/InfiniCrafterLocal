@@ -46,14 +46,6 @@ def _check_trace_event_routes_prompt_events_to_prompt_trace(tmp_path: Path) -> N
     assert row["prompt"] == "hello"
 
 
-def _check_tail_ndjson_survives_bad_lines(tmp_path: Path) -> None:
-    f = tmp_path / "events.ndjson"
-    f.write_text('{"ok": true}\nnot json\n', encoding="utf-8")
-    rows = trace_tools.tail_ndjson(f, 10)
-    assert rows == [{"ok": True}]
-    assert f.read_text(encoding="utf-8") == '{"ok": true}\n'
-
-
 def _check_serialized_ndjson_append_and_rotation(tmp_path: Path) -> None:
     trace_file = tmp_path / "concurrent.ndjson"
 
@@ -102,6 +94,7 @@ def _check_tail_and_recovery_ignore_broken_suffix(tmp_path: Path) -> None:
     trace_file.write_bytes(
         b'{"sequence":1}\n'
         b'{"sequence":2}\n'
+        b'not json\n'
         b'\x00invalid trailing bytes\n'
         b'{"partial":'
     )

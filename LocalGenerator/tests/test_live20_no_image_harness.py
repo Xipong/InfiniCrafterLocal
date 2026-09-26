@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
-import struct
-import zlib
+
+from PIL import Image
+import pytest
 
 from infini_local.pipelines.visual_delivery_gate import visual_delivery_report
 from infini_local.qa.live_no_image_fixture import (
@@ -14,20 +16,20 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path) -> None:
     fixture_path = write_no_image_fixture_png(tmp_path / "qa-fixture.png")
-    raw = fixture_path.read_bytes()
-    assert raw.startswith(b"\x89PNG\r\n\x1a\n")
-    assert raw[12:16] == b"IHDR"
-    assert struct.unpack(">II", raw[16:24]) == (32, 32)
-    offset = 8
-    compressed = bytearray()
-    while offset < len(raw):
-        length = struct.unpack(">I", raw[offset:offset + 4])[0]
-        kind = raw[offset + 4:offset + 8]
-        payload = raw[offset + 8:offset + 8 + length]
-        if kind == b"IDAT":
-            compressed.extend(payload)
-        offset += 12 + length
-    assert len(zlib.decompress(bytes(compressed))) == 32 * (1 + 32 * 4)
+    # Exercise the decoder used by delivery consumers, not a parallel partial PNG parser.
+    with Image.open(fixture_path) as image:
+        assert image.format == "PNG"
+        assert image.size == (32, 32)
+        assert image.mode == "RGBA"
+        image.load()
+        assert image.getpixel((0, 0)) == (24, 24, 24, 255)
+        assert image.getpixel((4, 0)) == (255, 0, 255, 255)
+    # Negative control: a matching PNG header/dimensions with a broken IHDR CRC
+    # cannot pass merely because its signature looks right.
+    damaged = bytearray(fixture_path.read_bytes())
+    damaged[24] ^= 1
+    with pytest.raises(OSError):
+        Image.open(BytesIO(damaged)).load()
 
     data = build_runtime_fixture("workbench_blade")
     data["visual"] = {}

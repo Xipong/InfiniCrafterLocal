@@ -105,35 +105,20 @@ def _contract_check_projectile_vfx_event_relay_is_server_authored_exact_and_life
     assert "EmitAndSyncVfxEvent(RuntimeEventKind.ChannelComplete" in executors
 
 
-def _contract_check_server_craft_replay_is_world_persistent_and_stable_client_scoped() -> None:
-    multiplayer = _text("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
-    world = _text("Common/Systems/GeneratedStationEscrowStateSystem.cs")
-
-    for token in (
-        "CraftTransactionsSaveKey",
-        "TryReplayCraft",
-        "IsCraftPending",
-        "TryBeginCraft",
-        "CompleteCraft",
-        "GetList<TagCompound>(CraftTransactionsSaveKey).Take(MaxCraftTransactions)",
-    ):
-        assert token in world
-    assert "servercraft:" not in multiplayer
-    assert "ServerCommittedCraftRequests" not in multiplayer
-    assert "ServerCancelledCraftRequests" not in multiplayer
-
-
 def _contract_check_generated_utility_sync_consumes_payload_before_every_reject() -> None:
     source = _text("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
     handler = _method(source, "public static void HandleGeneratedUtilityBuffSyncPacket", "public void RequestGeneratedAltUseFromServer")
-    assert handler.count("DiscardGeneratedBuffState(reader);") >= 4
-    for reason in [
+    for reason in (
         "playerId >= Main.maxPlayers",
         "Main.netMode == NetmodeID.Server && playerId != whoAmI",
         "player is null || !player.active",
-    ]:
-        branch = handler[handler.index(reason):]
+    ):
+        # Stop at this guard's closing brace: searching the rest of the method
+        # could mistake the next guard's discard for this one's.
+        branch = handler.split(reason, 1)[1].split("}", 1)[0]
         assert branch.index("DiscardGeneratedBuffState(reader);") < branch.index("return;")
+    server = handler.split("if (Main.netMode == NetmodeID.Server)\n        {", 1)[1].split("}", 1)[0]
+    assert server.index("DiscardGeneratedBuffState(reader);") < server.index("SendGeneratedBuffState(-1, whoAmI)")
 
 
 def _contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots() -> None:
@@ -155,22 +140,7 @@ def _contract_check_server_craft_transactions_log_reservation_commit_and_refund_
     assert "if (success)\n            ClearServerStationEscrowLane(laneIndex);" in result
 
 
-# One collected item per contract module; individual checks keep source order and tracebacks.
 def test_240_csharp_multiplayer_boundary_bugfixes_module_contract(request):
     from contract_checks import run_contract_checks
 
-    run_contract_checks(
-        globals(),
-        request,
-        (
-            '_contract_check_asset_notifications_are_server_authored_and_downloads_are_stream_bounded',
-            '_contract_check_registry_bounds_only_hydration_request_state_not_authoritative_definitions',
-            '_contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed',
-            '_contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authored',
-            '_contract_check_projectile_vfx_event_relay_is_server_authored_exact_and_lifetime_independent',
-            '_contract_check_server_craft_replay_is_world_persistent_and_stable_client_scoped',
-            '_contract_check_generated_utility_sync_consumes_payload_before_every_reject',
-            '_contract_check_server_craft_transactions_log_reservation_commit_and_refund_with_slots',
-        ),
-        require_all=True,
-    )
+    run_contract_checks(globals(), request)

@@ -99,7 +99,15 @@ def test_captured_live20_repair_boundaries_close_offline() -> None:
                 row["id"]: row["paths"]
                 for row in scope["fieldPermissions"]["bindings"]
             }
-            assert actual_paths == expected_paths, case
+            # Preserve the archived witness verbatim. Its former diagnostic
+            # alias `action` now names the actual authored discriminator leaf;
+            # this test-only projection must not broaden any other permission.
+            projected_paths = {
+                binding_id: sorted("usePolicy.action.kind" if path == "action" else path for path in paths)
+                for binding_id, paths in expected_paths.items()
+            }
+            assert actual_paths == projected_paths, case
+            assert all("action" not in paths for paths in actual_paths.values()), case
             assert scope["retarget"]["bindingTargetIds"] == replay["expectedRetargetBindingTargetIds"]
 
         source_code = replay.get("createAllowedFnsFromErrorCode")

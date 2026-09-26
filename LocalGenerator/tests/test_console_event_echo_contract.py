@@ -15,8 +15,6 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TRACE_TOOLS = ROOT / "infini_local" / "storage" / "trace_tools.py"
-TRACE_RUNTIME = ROOT / "infini_local" / "storage" / "trace_runtime.py"
 SERVER = ROOT / "infini_local" / "web" / "server.py"
 
 
@@ -126,17 +124,25 @@ def _check_level_threshold_resolution(monkeypatch):
     assert reloaded._configured_echo_levels() == ("warn", "error")
 
 
-def _check_runtime_and_server_are_wired_to_the_echo():
-    runtime_text = TRACE_RUNTIME.read_text(encoding="utf-8")
-    server_text = SERVER.read_text(encoding="utf-8")
-    tools_text = TRACE_TOOLS.read_text(encoding="utf-8")
+def _check_runtime_and_server_are_wired_to_the_echo(tmp_path, capsys, monkeypatch):
+    from infini_local.storage import trace_runtime
 
-    # The runtime log_event must pass the configured levels through.
-    assert "echo_levels=CONSOLE_EVENT_LEVELS" in runtime_text
-    assert "INFINI_CONSOLE_EVENT_LEVEL" in runtime_text
-    # The file write must stay unconditional, before any echo decision.
-    assert tools_text.index("append_ndjson(cache_dir") < tools_text.index("if echo_levels")
-    # The banner must tell the user which mode is active and how to change it.
+    monkeypatch.setattr(trace_runtime, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(trace_runtime, "CONSOLE_EVENT_LEVELS", ("warn", "error"))
+    trace_runtime.log_event("warn", "visible through runtime", {"status": 400})
+    trace_runtime.log_event("info", "file only through runtime")
+    assert "visible through runtime" in capsys.readouterr().out
+    assert [json.loads(line)["message"] for line in (tmp_path / "events.ndjson").read_text().splitlines()] == [
+        "visible through runtime", "file only through runtime",
+    ]
+    # Negative control: opt-out keeps the file as authority even when no echo is emitted.
+    monkeypatch.setattr(trace_runtime, "CONSOLE_EVENT_LEVELS", ())
+    trace_runtime.log_event("error", "silent through runtime")
+    assert capsys.readouterr().out == ""
+    assert "silent through runtime" in (tmp_path / "events.ndjson").read_text()
+
+    # The server banner must expose the mode and the setting to change it.
+    server_text = SERVER.read_text(encoding="utf-8")
     assert "CONSOLE_EVENT_LEVELS" in server_text
     assert "INFINI_CONSOLE_EVENT_LEVEL" in server_text
 

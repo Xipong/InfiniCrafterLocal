@@ -124,9 +124,6 @@ def test_exact_repetition_policy_is_global_and_not_a_primary_semantic_rule() -> 
 
 
 def test_event_dependency_is_a_typed_registry_projection() -> None:
-    projector_source = inspect.getsource(capability_registry.event_dependency_alternatives)
-    assert not any(repr(event_name) in projector_source for event_name in EVENT_KIND_REGISTRY)
-
     on_hit = event_dependency_alternatives("on_hit", "free_projectile")
     assert on_hit == (
         EventDependencyAlternative.required_call("set_projectile_damage"),
@@ -184,22 +181,62 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
         ),
     )
 
-    registry_owner = "infini_local.core.runtime_authoring.capability_registry"
-    assert _imports_symbol(validator, registry_owner, "event_dependency_alternatives")
-    assert _imports_symbol(repair_scope, registry_owner, "event_dependency_alternatives")
-
 
 def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeypatch) -> None:
+    # Without damage, this on_hit has no producer under the original registry;
+    # its existing collision call becomes the producer after the registry edit.
+    without_damage = build_runtime_fixture("workbench_blade")
+    without_damage["runtimeProgram"]["calls"] = [
+        row for row in without_damage["runtimeProgram"]["calls"]
+        if row["id"] != "workbench_blade_damage"
+    ]
+    original_errors = validator.validate_runtime_program(without_damage)["errors"]
+    assert [(row["code"], row["allowed"]) for row in original_errors] == [
+        ("event_not_emitted", ["set_projectile_damage"]),
+    ]
+
+    # Conversely, removing collision leaves an unrelated required-component
+    # error, but on_hit itself is still emitted by the original damage call.
+    without_collision = build_runtime_fixture("workbench_blade")
+    without_collision["runtimeProgram"]["calls"] = [
+        row for row in without_collision["runtimeProgram"]["calls"]
+        if row["id"] != "workbench_blade_collision"
+    ]
+    assert [row["code"] for row in validator.validate_runtime_program(without_collision)["errors"]] == [
+        "missing_required_component",
+    ]
+
     registry = dict(EVENT_KIND_REGISTRY)
-    registry["on_release"] = replace(
-        registry["on_release"],
-        producer_capabilities=("set_projectile_damage",),
+    registry["on_hit"] = replace(
+        registry["on_hit"],
+        producer_capabilities=("set_projectile_collision",),
     )
     monkeypatch.setattr(capability_registry, "EVENT_KIND_REGISTRY", registry)
-    expected = (EventDependencyAlternative.required_call("set_projectile_damage"),)
-    assert capability_registry.event_dependency_alternatives("on_release", "free_projectile") == expected
-    assert validator.event_dependency_alternatives("on_release", "free_projectile") == expected
-    assert repair_scope.event_dependency_alternatives("on_release", "free_projectile") == expected
+    assert validator.validate_runtime_program(without_damage)["ok"] is True
+
+    changed_errors = validator.validate_runtime_program(without_collision)["errors"]
+    event_errors = [row for row in changed_errors if row["code"] == "event_not_emitted"]
+    assert len(event_errors) == 1
+    assert event_errors[0]["allowed"] == ["set_projectile_collision"]
+    assert event_errors[0]["relatedIds"] == ["workbench_blade"]
+    scope = repair_scope.build_runtime_repair_scope(without_collision, event_errors)
+    assert scope["create"]["calls"]["allowedFns"] == ["set_projectile_collision"]
+    assert scope["create"]["calls"]["allowedTargetIds"] == ["workbench_blade"]
+    assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["set_projectile_collision"]
+    assert scope["eventAlternatives"] == [{
+        "callId": "shed_nails",
+        "targetId": "workbench_blade",
+        "allowed": [{
+            "event": "on_hit",
+            "requiredCalls": [{
+                "fn": "set_projectile_collision",
+                "targetId": "workbench_blade",
+                "exactParams": [],
+            }],
+            "requiredBindings": [],
+        }],
+        "mustChooseOneCompleteAlternative": True,
+    }]
 
 
 def test_removed_facade_modules_have_no_consumers() -> None:

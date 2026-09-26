@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import re
 
@@ -15,6 +16,30 @@ from contract_checks import (
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
+
+
+def _unsafe_contract_calls(source: str) -> list[int]:
+    """Find explicit check lists lacking a no-omission gate, regardless of layout."""
+    unsafe = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        function_name = (node.func.id if isinstance(node.func, ast.Name)
+                         else node.func.attr if isinstance(node.func, ast.Attribute) else None)
+        if function_name != "run_contract_checks":
+            continue
+        names = node.args[2] if len(node.args) >= 3 else next(
+            (kw.value for kw in node.keywords if kw.arg == "names"), None
+        )
+        if names is None:
+            continue
+        gated = any(
+            kw.arg == "require_all" and isinstance(kw.value, ast.Constant)
+            and kw.value.value is True for kw in node.keywords
+        )
+        if not gated:
+            unsafe.append(node.lineno)
+    return unsafe
 
 
 def _contract_check_first() -> None:
@@ -65,12 +90,8 @@ def test_contract_modules_use_the_shared_runner_instead_of_a_copied_dispatch_loo
             offenders.append(path.name)
         if "run_contract_checks" not in source:
             continue
-        # An explicit list is still allowed, but only with the no-omission gate.
-        calls = re.findall(r"run_contract_checks\((.*?)\)\n", source, flags=re.S)
-        for call in calls:
-            has_explicit_list = "(" in call and "'" in call
-            if has_explicit_list and "require_all" not in call and "prefix=" not in call:
-                stale_lists.append(f"{path.name}: {call.strip()[:60]}")
+        # Parse actual calls, not a regex terminated by a nested close-paren.
+        stale_lists.extend(f"{path.name}:{line}" for line in _unsafe_contract_calls(source))
 
     assert not offenders, (
         "these modules copy the dispatch loop instead of using contract_checks."
@@ -80,6 +101,19 @@ def test_contract_modules_use_the_shared_runner_instead_of_a_copied_dispatch_loo
         "explicit check lists must pass require_all=True so a new check cannot be "
         f"silently omitted: {stale_lists}"
     )
+
+
+def test_contract_runner_gate_detects_nested_explicit_lists_without_misreading_comments() -> None:
+    source = '''
+def example(request):
+    # require_all=True in a comment does not enforce discovery coverage.
+    run_contract_checks(globals(), request, tuple(["_contract_check_first"]))
+    run_contract_checks(globals(), request, names=("_contract_check_first",), require_all=True)
+    run_contract_checks(globals(), request)
+    contract_checks.run_contract_checks(globals(), request, names=("_contract_check_first",))
+    contract_checks.run_contract_checks(globals(), request, names=("_contract_check_first",), require_all=True)
+'''
+    assert _unsafe_contract_calls(source) == [4, 7]
 
 
 def test_literal_string_arguments_survives_parentheses_that_defeat_regex_scraping() -> None:

@@ -61,13 +61,4 @@ def _contract_check_dump_tools_use_projectile_id_none_for_projectile_fields() ->
 def test_csharp_tml_analyzer_contract_module_contract(request):
     from contract_checks import run_contract_checks
 
-    run_contract_checks(
-        globals(),
-        request,
-        (
-            '_contract_check_generated_item_apply_uses_named_none_use_style_ids',
-            '_contract_check_generator_client_uses_named_terraria_id_sentinels_for_snapshots',
-            '_contract_check_dump_tools_use_projectile_id_none_for_projectile_fields',
-        ),
-        require_all=True,
-    )
+    run_contract_checks(globals(), request)

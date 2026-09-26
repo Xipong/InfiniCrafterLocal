@@ -24,17 +24,23 @@ def _is_os_environ(node: ast.AST) -> bool:
 
 
 def _raw_env_reads(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    try:
+        label = path.relative_to(ROOT)
+    except ValueError:
+        label = path
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     hits: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if _is_os_environ(node.func.value):
+            if isinstance(node.func.value, ast.Name) and node.func.value.id == "os" and node.func.attr == "getenv":
+                hits.append(f"{label}:{node.lineno}:os.getenv")
+            elif _is_os_environ(node.func.value):
                 # Explicitly not a config read; useful in tests/tools and allowed by the contract.
                 if node.func.attr in {"copy", "setdefault"}:
                     continue
-                hits.append(f"{path.relative_to(ROOT)}:{node.lineno}:os.environ.{node.func.attr}")
+                hits.append(f"{label}:{node.lineno}:os.environ.{node.func.attr}")
         elif isinstance(node, ast.Subscript) and _is_os_environ(node.value):
-            hits.append(f"{path.relative_to(ROOT)}:{node.lineno}:os.environ[]")
+            hits.append(f"{label}:{node.lineno}:os.environ[]")
     return hits
 
 
@@ -56,6 +62,18 @@ def _contract_check_env_contract_scan_ignores_comments_and_os_environ_copy(tmp_p
         encoding="utf-8",
     )
     assert _raw_env_reads(probe) == []
+    # Negative controls: actual reads, including the os.getenv spelling that
+    # previously escaped the scanner, must be reported without executing source.
+    probe.write_text(
+        'import os\n'
+        'first = os.getenv("INFINI_DIRECT")\n'
+        'second = os.environ.get("INFINI_OTHER")\n'
+        'third = os.environ["INFINI_THIRD"]\n',
+        encoding="utf-8",
+    )
+    assert [hit.rsplit(":", 1)[-1] for hit in _raw_env_reads(probe)] == [
+        "os.getenv", "os.environ.get", "os.environ[]",
+    ]
 
 
 def _contract_check_bad_infini_env_values_fallback_instead_of_crashing() -> None:

@@ -1,22 +1,38 @@
 from pathlib import Path
 
+import pytest
+
+from infini_local.pipelines import llm_transport
+
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "infini_local" / "web" / "server.py"
-LLM_PIPELINE = ROOT / "infini_local" / "pipelines" / "llm_authoring_pipeline.py"
 LLM_TRANSPORT = ROOT / "infini_local" / "pipelines" / "llm_transport.py"
 UTILITY_ROUTES = ROOT / "infini_local" / "web" / "server_utility_routes.py"
 
 
-def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast():
-    server_text = SERVER.read_text(encoding="utf-8")
-    text = LLM_PIPELINE.read_text(encoding="utf-8") + LLM_TRANSPORT.read_text(encoding="utf-8")
-    assert "def llm_auth_snapshot" in text
-    assert "llm_auth_snapshot" in server_text
-    assert "missing_api_key" in text
-    assert "Set INFINI_OPENROUTER_API_KEY" in text
-    assert '"llmAuth": llm_auth_snapshot()' in server_text
-    assert "ensure_llm_auth_configured(" in text
-    assert "OpenRouter auth failed" in text
+def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
+    # Config-only boundary: never resolve credentials or contact a provider.
+    primary = {"provider": "openrouter", "base_url": "https://openrouter.ai/api/v1",
+               "model": "test-model", "api_key": ""}
+    monkeypatch.setattr(llm_transport, "_legacy_primary_llm_context", lambda: primary)
+    monkeypatch.setattr(llm_transport, "configured_llm_pool", lambda: [])
+    monkeypatch.setattr(llm_transport, "_fallback_llm_context", lambda: None)
+    snapshot = llm_transport.llm_auth_snapshot()
+    assert snapshot["provider"] == "openrouter"
+    assert snapshot["apiKeyConfigured"] is False
+    assert snapshot["status"] == "missing_api_key"
+    assert "INFINI_OPENROUTER_API_KEY" in snapshot["hint"]
+    assert "api_key" not in snapshot
+    with pytest.raises(RuntimeError, match="INFINI_OPENROUTER_API_KEY"):
+        llm_transport.ensure_llm_auth_configured(primary)
+    primary["api_key"] = "test-key-not-real"
+    assert llm_transport.llm_auth_snapshot()["status"] == "configured"
+    llm_transport.ensure_llm_auth_configured(primary)
+
+    # Server wiring and pipeline phrasing remain source checks until safe
+    # isolated web/pipeline integration observers exist.
+    assert '"llmAuth": llm_auth_snapshot()' in SERVER.read_text(encoding="utf-8")
+    assert "OpenRouter auth failed" in LLM_TRANSPORT.read_text(encoding="utf-8")
 
 
 def _check_server_exposes_local_shutdown_endpoint_for_gui_restart():

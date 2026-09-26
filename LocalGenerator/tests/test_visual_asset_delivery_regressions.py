@@ -85,6 +85,33 @@ def _equipment_kit(*, include_overlay: bool) -> dict:
     return kit
 
 
+def _stub_image_generation(monkeypatch, tmp_path: Path) -> list[tuple[str, str, str]]:
+    """Intercept imagegen while leaving final PNG validation on its real path."""
+    item_path = write_no_image_fixture_png(tmp_path / "item.png")
+    calls: list[tuple[str, str, str]] = []
+
+    def fake_item(candidate: dict) -> dict:
+        candidate["visual"].update({
+            "spritePath": str(item_path),
+            "spriteUrl": "/sprite/item.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 1.0,
+        })
+        return candidate
+
+    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int):
+        del asset_id
+        path = write_no_image_fixture_png(tmp_path / f"{role}.png", size=canvas)
+        calls.append((role, prompt, negative))
+        return str(path), f"/sprite/{path.name}", 1.0, "generated"
+
+    monkeypatch.setattr(visual_sprite_generation, "maybe_generate_sprite", fake_item)
+    monkeypatch.setattr(visual_sprite_generation, "generate_visual_asset", fake_asset)
+    monkeypatch.setattr(visual_sprite_generation, "write_visual_manifest", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "full")
+    return calls
+
+
 def test_equipment_visual_kit_requires_and_projects_separate_overlay() -> None:
     missing, errors = _validate_kit(
         _equipment_kit(include_overlay=False),
@@ -121,31 +148,7 @@ def test_overlay_and_entity_generation_receive_exact_authored_negative_prompt(mo
     )
     assert kit is not None, errors
     data = _apply_kit(_equipment_data(), kit)
-    item_path = tmp_path / "item.png"
-    item_path.write_bytes(b"item-fixture")
-
-    def fake_item(candidate: dict) -> dict:
-        candidate["visual"].update({
-            "spritePath": str(item_path),
-            "spriteUrl": "/sprite/item.png",
-            "spriteStatus": "generated",
-            "spriteTechnicalScore": 1.0,
-        })
-        return candidate
-
-    calls: list[tuple[str, str, str]] = []
-
-    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int):
-        del asset_id, canvas
-        path = tmp_path / f"{role}.png"
-        path.write_bytes(b"fixture")
-        calls.append((role, prompt, negative))
-        return str(path), f"/sprite/{path.name}", 1.0, "generated"
-
-    monkeypatch.setattr(visual_sprite_generation, "maybe_generate_sprite", fake_item)
-    monkeypatch.setattr(visual_sprite_generation, "generate_visual_asset", fake_asset)
-    monkeypatch.setattr(visual_sprite_generation, "write_visual_manifest", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "full")
+    calls = _stub_image_generation(monkeypatch, tmp_path)
 
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
     by_role = {role: (prompt, negative) for role, prompt, negative in calls}
@@ -156,6 +159,15 @@ def test_overlay_and_entity_generation_receive_exact_authored_negative_prompt(mo
     )
     assert out["visual"]["equipOverlayStatus"] == "generated"
     assert out["visual"]["equipOverlayPath"].endswith("equip_overlay.png")
+    delivery = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
+    assert delivery["ok"], delivery["problems"]
+    assert {slot["role"] for slot in delivery["slots"] if slot["usable"]} == {
+        "item", "equip_overlay", "entity:shot"
+    }
+    Path(out["visual"]["equipOverlayPath"]).unlink()
+    missing_overlay = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
+    assert not missing_overlay["ok"]
+    assert "required_equipment_overlay_missing" in {p["code"] for p in missing_overlay["problems"]}
 
 
 def test_impact_texture_is_vfx_authored_planned_generated_and_projected(monkeypatch, tmp_path: Path) -> None:
@@ -179,42 +191,21 @@ def test_impact_texture_is_vfx_authored_planned_generated_and_projected(monkeypa
     assert impact["required"] is True
     assert impact["prompt"] == "authored amber shard impact burst"
 
-    item_path = tmp_path / "item.png"
-    item_path.write_bytes(b"item-fixture")
-
-    def fake_item(candidate: dict) -> dict:
-        candidate["visual"].update({
-            "spritePath": str(item_path),
-            "spriteUrl": "/sprite/item.png",
-            "spriteStatus": "generated",
-            "spriteTechnicalScore": 1.0,
-        })
-        return candidate
-
-    calls: list[tuple[str, str, str]] = []
-
-    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int):
-        del asset_id, canvas
-        path = tmp_path / f"{role}.png"
-        path.write_bytes(b"fixture")
-        calls.append((role, prompt, negative))
-        return str(path), f"/sprite/{path.name}", 1.0, "generated"
-
-    monkeypatch.setattr(visual_sprite_generation, "maybe_generate_sprite", fake_item)
-    monkeypatch.setattr(visual_sprite_generation, "generate_visual_asset", fake_asset)
-    monkeypatch.setattr(visual_sprite_generation, "write_visual_manifest", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "full")
+    calls = _stub_image_generation(monkeypatch, tmp_path)
 
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
     assert ("impact_shot", "authored amber shard impact burst", "text, watermark, opaque square") in calls
     shot = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "shot")
     assert shot["visual"]["impactSpritePath"].endswith("impact_shot.png")
     assert shot["visual"]["impactSpriteStatus"] == "generated"
-    monkeypatch.setattr(visual_delivery_gate, "_asset_path_exists", lambda _path: True)
     report = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
     impact_slot = next(slot for slot in report["slots"] if slot["role"] == "impact:shot")
     assert impact_slot["usable"] is True
     assert not any(problem.get("code") == "required_impact_sprite_missing" for problem in report["problems"])
+    Path(shot["visual"]["impactSpritePath"]).write_bytes(b"not a PNG")
+    corrupt_impact = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
+    assert not corrupt_impact["ok"]
+    assert "required_impact_sprite_missing" in {p["code"] for p in corrupt_impact["problems"]}
 
 
 def test_delivery_asset_roster_is_bounded_by_count_and_total_bytes(tmp_path: Path) -> None:
@@ -254,6 +245,11 @@ def test_visual_delivery_rejects_corrupt_and_truncated_png(monkeypatch, tmp_path
     assert visual_delivery_gate.visual_delivery_report(
         _delivery_data(valid), check_backend_config=False
     )["ok"] is True
+    placeholder = _delivery_data(valid)
+    placeholder["visual"]["spriteStatus"] = "placeholder"
+    placeholder_report = visual_delivery_gate.visual_delivery_report(placeholder, check_backend_config=False)
+    assert not placeholder_report["ok"]
+    assert "required_item_sprite_missing" in {p["code"] for p in placeholder_report["problems"]}
 
     corrupt = tmp_path / "corrupt.png"
     corrupt.write_bytes(b"not a png")
