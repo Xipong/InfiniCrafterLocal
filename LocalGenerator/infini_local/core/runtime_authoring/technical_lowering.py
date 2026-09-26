@@ -135,6 +135,28 @@ def path_matches(pattern: str, path: str) -> bool:
     return re.fullmatch(expression, normalized) is not None
 
 
+def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Only explicit optional registry defaults equal to their neutral may fill an absent leaf."""
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is None:
+        return {}
+    return {
+        name: spec.default for name, spec in cap.params.items()
+        if name not in params and not spec.required and spec.default is not None
+        and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral
+    }
+
+
+def _parameter_outputs(fn: str, name: str) -> tuple[str, ...]:
+    cap = CAPABILITY_REGISTRY[fn]
+    spec = cap.params[name]
+    names = {name, spec.wire_name} - {""}
+    return tuple(dict.fromkeys(
+        candidate for candidate in cap.final_wire_paths
+        if candidate.rsplit(".", 1)[-1] in names
+    ))
+
+
 def declared_outputs_for(fn: str) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY.get(fn)
     if cap is None:
@@ -210,7 +232,10 @@ def audit_compiler_receipts(
                 "declaredOutputs": list(declared),
                 "reason": "compiler receipt used an undeclared input or output field",
             })
-        if final_document is not None and _final_value(final_document, path) != receipt.get("value"):
+        if final_document is not None and (
+            _final_value(final_document, path) != receipt.get("value")
+            or type(_final_value(final_document, path)) is not type(receipt.get("value"))
+        ):
             violations.append({
                 "callId": str(receipt.get("callId") or ""),
                 "fn": fn,
@@ -229,7 +254,8 @@ def audit_compiler_receipts(
         if fn and not lowerer_id and (receipt.get("status") == "delivered" or parameter_match is not None):
             match = parameter_match
             cap = CAPABILITY_REGISTRY.get(fn)
-            if match is not None and receipt.get("status") != "delivered" and not (
+            is_omission = receipt.get("status") == "declared_neutral_omission"
+            if match is not None and receipt.get("status") != "delivered" and not is_omission and not (
                 fn == "apply_vanilla_buff_on_use" and receipt.get("status") == "technical_projection"
             ):
                 violations.append({
@@ -240,11 +266,7 @@ def audit_compiler_receipts(
             if match is not None and cap is not None and match.group(2) in cap.params and fn != "add_equipment_damage_bonus":
                 param = match.group(2)
                 spec = cap.params[param]
-                names = {param, spec.wire_name} - {""}
-                expected_paths = tuple(
-                    candidate for candidate in cap.final_wire_paths
-                    if candidate.rsplit(".", 1)[-1] in names
-                )
+                expected_paths = _parameter_outputs(fn, param)
                 if not expected_paths or not any(path_matches(candidate, path) for candidate in expected_paths):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""),
@@ -253,6 +275,19 @@ def audit_compiler_receipts(
                         "finalPath": path,
                         "expectedPaths": list(expected_paths),
                         "reason": "wrong capability output for authored parameter",
+                    })
+            if match is not None and cap is not None and match.group(2) in cap.params and is_omission:
+                name = match.group(2)
+                spec = cap.params[name]
+                if (spec.required or spec.default is None
+                    or type(spec.default) is not type(spec.neutral)
+                    or spec.default != spec.neutral
+                    or type(receipt.get("value")) is not type(spec.to_wire(spec.default))
+                    or receipt.get("value") != spec.to_wire(spec.default)):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""), "fn": fn,
+                        "authoredPath": authored_path, "finalPath": path,
+                        "reason": "omission receipt lacks an exact declared neutral default/projection",
                     })
             if match is None or cap is None or match.group(2) not in cap.params:
                 violations.append({
@@ -269,13 +304,25 @@ def audit_compiler_receipts(
                 if (not isinstance(source_call, Mapping)
                     or source_call.get("fn") != fn
                     or source_call.get("id") != receipt.get("callId")
-                    or not isinstance(source_params, Mapping)
-                    or match.group(2) not in source_params):
+                    or not isinstance(source_params, Mapping)):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""),
                         "fn": fn,
                         "authoredPath": authored_path,
                         "finalPath": path,
+                        "reason": "authored parameter absent from originating call",
+                    })
+                elif is_omission:
+                    if match.group(2) in source_params:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""), "fn": fn,
+                            "authoredPath": authored_path, "finalPath": path,
+                            "reason": "omission receipt points to an explicitly authored parameter",
+                        })
+                elif match.group(2) not in source_params:
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""), "fn": fn,
+                        "authoredPath": authored_path, "finalPath": path,
                         "reason": "authored parameter absent from originating call",
                     })
                 elif receipt.get("value") != cap.params[match.group(2)].to_wire(source_params[match.group(2)]):
@@ -379,6 +426,44 @@ def audit_compiler_receipts(
                         "callId": key[1], "fn": key[0], "authoredPath": key[2],
                         "reason": "authored parameter has no compiler receipt",
                     })
+        for index, source_call in enumerate(source_calls):
+            if not isinstance(source_call, Mapping):
+                continue
+            fn = str(source_call.get("fn") or "")
+            params = source_call.get("params")
+            if not isinstance(params, Mapping):
+                continue
+            for name in declared_neutral_omissions(fn, params):
+                source_path = f"runtimeProgram.calls[{index}].params.{name}"
+                for expected in _parameter_outputs(fn, name):
+                    matching = [row for row in receipt_rows
+                                if row.get("fn") == fn and row.get("callId") == source_call.get("id")
+                                and row.get("authoredPath") == source_path
+                                and path_matches(expected, str(row.get("finalPath") or ""))
+                                and row.get("status") == "declared_neutral_omission"]
+                    if len(matching) != 1:
+                        violations.append({
+                            "callId": str(source_call.get("id") or ""), "fn": fn,
+                            "authoredPath": source_path, "finalPath": expected,
+                            "reason": "declared neutral omission has no unique omission receipt",
+                        })
+    if final_document is not None:
+        # Wire-only auditing has no Author call list: require coverage of each
+        # present declared default slot, but do not claim whether it was omitted.
+        for fn, cap in CAPABILITY_REGISTRY.items():
+            for name in declared_neutral_omissions(fn, {}):
+                for expected in _parameter_outputs(fn, name):
+                    if "[]" in expected or _final_value(final_document, expected) is _MISSING:
+                        continue
+                    matching = [row for row in receipt_rows
+                                if row.get("fn") == fn and row.get("finalPath") == expected
+                                and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(name),
+                                                 str(row.get("authoredPath") or ""))]
+                    if len(matching) != 1:
+                        violations.append({
+                            "fn": fn, "finalPath": expected,
+                            "reason": "declared neutral wire slot has no unique parameter receipt",
+                        })
     return {
         "schema": "infini.technical-lowering-audit.v1",
         "ok": not violations,

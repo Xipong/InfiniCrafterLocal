@@ -59,6 +59,8 @@ def params_cell(cap: Any) -> str:
             shape += f"[{spec.minimum}..{spec.maximum}]"
         if spec.units:
             shape += f" {spec.units}"
+        if spec.default is not None:
+            shape += f"; optional, omitted = {json.dumps(spec.default)}"
         if spec.reference is not None:
             shape += " -> entity:" + ",".join(spec.reference.target_kinds)
         rows.append(f"`{name}`: {shape}")
@@ -292,6 +294,7 @@ def lowering_markdown() -> str:
         "",
         "Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`. "
         "`audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.",
+        "Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Старые корректные явные значения не меняются.",
         "",
         "## Решение по старому lowering",
         "",

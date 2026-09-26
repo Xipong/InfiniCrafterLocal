@@ -823,10 +823,12 @@
                     "x-infini-units": "engine units: Item.knockBack"
                   },
                   "manaCost": {
-                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent",
+                    "default": 0,
+                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent; omitted means no mana cost, independently of DamageClass",
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "mana_points"
                   },
                   "maxStack": {
@@ -889,7 +891,6 @@
                   "knockback",
                   "useTimeTicks",
                   "useAnimationTicks",
-                  "manaCost",
                   "rarity",
                   "valueCopper",
                   "maxStack",
@@ -980,18 +981,22 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "holdoutOffsetX": {
+                    "default": 0,
                     "description": "Held draw offset X",
                     "maximum": 96,
                     "minimum": -96,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "pixels"
                   },
                   "holdoutOffsetY": {
+                    "default": 0,
                     "description": "Held draw offset Y",
                     "maximum": 96,
                     "minimum": -96,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "pixels"
                   },
@@ -1027,9 +1032,7 @@
                   "useTurn",
                   "hideUseGraphic",
                   "disableMeleeHitbox",
-                  "channel",
-                  "holdoutOffsetX",
-                  "holdoutOffsetY"
+                  "channel"
                 ],
                 "type": "object"
               },
@@ -1344,19 +1347,23 @@
                     "x-infini-units": "ticks"
                   },
                   "jumpSpeedBonusPxPerTick": {
+                    "default": 0,
                     "description": "Add to Player.jumpSpeedBoost in pixels/tick",
                     "maximum": 8,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "pixels/world tick"
                   },
                   "lifeRegenHpPerSecond": {
+                    "default": 0,
                     "description": "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)",
                     "maximum": 60,
                     "minimum": 0,
                     "multipleOf": 0.5,
                     "type": "number",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "HP/s"
                   },
@@ -1383,34 +1390,42 @@
                     "maximum": 1.5,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: RGB coefficient"
                   },
                   "manaRegenBonusPoints": {
+                    "default": 0,
                     "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
                     "maximum": 120,
                     "minimum": 0,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: manaRegenBonus points"
                   },
                   "miningSpeedMultiplier": {
+                    "default": 1,
                     "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
+                    "x-infini-neutral": 1,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: pickSpeed divisor"
                   },
                   "moveSpeedBonusFactor": {
+                    "default": 0,
                     "description": "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers",
                     "maximum": 2,
                     "minimum": -0.5,
                     "type": "number",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: additive moveSpeed factor"
                   },
                   "oreSenseEnabled": {
+                    "default": false,
                     "description": "Enable Terraria spelunker-style ore highlighting; not a radius",
                     "type": "boolean",
                     "x-infini-neutral": false,
@@ -1419,14 +1434,8 @@
                 },
                 "required": [
                   "durationTicks",
-                  "miningSpeedMultiplier",
                   "lightStrength",
-                  "lightColor",
-                  "oreSenseEnabled",
-                  "moveSpeedBonusFactor",
-                  "jumpSpeedBonusPxPerTick",
-                  "manaRegenBonusPoints",
-                  "lifeRegenHpPerSecond"
+                  "lightColor"
                 ],
                 "type": "object"
               },

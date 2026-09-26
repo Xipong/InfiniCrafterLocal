@@ -50,7 +50,12 @@ def _registry_with_rename(monkeypatch, fn, old, new):
 
 def _project(fn, new, value):
     call = {"id": "renamed", "fn": fn, "target": "item" if fn.startswith(("configure_item", "configure_vanilla", "restore_", "apply_generated")) else "shot",
-            "_sourceIndex": 0, "params": {new: value}}
+            "_sourceIndex": 0, "params": {
+                # This test calls the isolated projector, not the full compiler
+                # that materializes omissions. Author neutrals explicitly here.
+                **{name: spec.default for name, spec in compiler.CAPABILITY_REGISTRY[fn].params.items()
+                   if spec.default is not None}, new: value,
+            }}
     ctx = compiler._CompileContext(receipts=[])
     if call["target"] == "item":
         gameplay, runtime = {}, {}

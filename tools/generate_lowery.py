@@ -62,7 +62,8 @@ def render() -> str:
         "4. Authoring compression допустима только для буквально одинакового low-level значения, повторённого минимум "
         f"**{EXACT_REPETITION_COMPRESSION_POLICY['minimumRepeatedPlacements']}** раз. Она обязана сохранять literal equality и не может добавлять design choice.",
         "5. Обязательная wire projection из уже authored identity (например, exact entity kind → renderer role или exact primary id/target equality → binding role) не считается authoring compression: она сериализует одно решение, а не заменяет несколько решений модели.",
-        "6. Repair получает конечные registry-derived alternatives и exact permissions. Модель выбирает и явно пишет полный вариант; код ничего не вставляет и после merge повторно запускает canonical validator.",
+        "6. Repair получает конечные registry-derived alternatives и exact permissions. Модель выбирает и явно пишет полный вариант; patch не заполняет пропуски и после frozen-first merge повторно запускается canonical validator.",
+        "7. Только optional params с явно объявленным registry default=neutral допускают пропуск в полном Author как точный выбор этой нейтрали. Compiler материализует её после validation с отдельным receipt declared_neutral_omission. Это явное изменение контракта, не fallback невалидного значения и не правило для всех нулей. Связанные эффекты/обязательные группы проверяются совместно; omission в Repair означает не менять.",
         "",
         "## Единственные owners",
         "",

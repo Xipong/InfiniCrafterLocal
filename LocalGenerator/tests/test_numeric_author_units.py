@@ -90,7 +90,11 @@ def test_legacy_names_are_not_author_aliases_and_schema_keeps_steps():
         params = schemas[name]
         assert new in params["properties"] and old not in params["properties"]
         assert params["properties"][new]["multipleOf"] == step
-        assert new in params["required"]
+        if name == "configure_tool":
+            assert new in params["required"]
+        else:
+            assert new not in params["required"]
+            assert params["properties"][new]["default"] == 0
         document = _tool(0) if name == "configure_tool" else _regen(0)
         target = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == name)
         target["params"][old] = target["params"].pop(new)

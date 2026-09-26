@@ -26,6 +26,7 @@ from infini_local.core.runtime_authoring.event_producer_validation import item_b
 from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
 from infini_local.core.runtime_authoring.technical_lowering import (
     audit_compiler_receipts,
+    declared_neutral_omissions,
     primary_binding_role,
     primary_binding_role_receipt,
     primary_owner_for_kind,
@@ -51,7 +52,8 @@ class _CompileContext:
             "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.{authored_param or key}",
             "finalPath": path,
             "value": copy.deepcopy(value),
-            "status": "delivered",
+            "status": ("declared_neutral_omission" if (authored_param or key) in call.get("_neutralOmissions", ())
+                       else "delivered"),
         })
 
     def write_derived(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str, source: str) -> None:
@@ -382,6 +384,13 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     calls = [dict(row) for row in authored_program.get("calls", []) if isinstance(row, Mapping)]
     for index, call in enumerate(calls):
         call["_sourceIndex"] = index
+        authored_params = _dict(call.get("params"))
+        omitted = declared_neutral_omissions(str(call.get("fn") or ""), authored_params)
+        if omitted:
+            # Only the private compiler copy is completed; the Author source and
+            # Repair's sparse fragments retain their original omission.
+            call["params"] = {**authored_params, **copy.deepcopy(omitted)}
+            call["_neutralOmissions"] = frozenset(omitted)
 
     item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")
     item_entity_id = str(item_entity["id"])

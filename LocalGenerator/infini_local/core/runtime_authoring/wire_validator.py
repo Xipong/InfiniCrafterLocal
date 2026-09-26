@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from math import isfinite
 from typing import Any
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
@@ -14,6 +15,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
     ENTITY_KINDS,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
@@ -21,6 +23,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.validator import _has_non_neutral_generated_buff
 
 _MAX_MOVEMENT_CODE = 19
 _MAX_CONTROLLER_CODE = 3
@@ -94,6 +97,37 @@ def _positive_integer_effect(value: Any, path: str, errors: list[dict[str, Any]]
         errors.append({"path": path, "code": "invalid_integer", "message": "Effect value must be an integer without coercion."})
         return False
     return value > 0
+
+
+def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
+    """Project typed wire stats back to the canonical Author-side effect predicate."""
+    params: dict[str, Any] = {}
+    for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items():
+        # Duration and color describe an effect; neither executes one. The
+        # registry marks exactly the executable stats with neutral values.
+        if spec.neutral is None:
+            continue
+        value = wire.get(spec.wire_name or name)
+        if spec.wire_boolean_true_value is not None:
+            if type(value) is int:
+                params[name] = value == spec.wire_boolean_true_value
+        elif spec.kind in {"integer", "number"}:
+            if (spec.kind == "integer" or spec.wire_multiplier != 1) and type(value) is not int:
+                continue
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            try:
+                if isfinite(value):
+                    authored_value = value * spec.wire_divisor / spec.wire_multiplier
+                    if (spec.minimum is not None and authored_value < spec.minimum) or (
+                        spec.maximum is not None and authored_value > spec.maximum
+                    ):
+                        continue
+                    params[name] = authored_value
+            except OverflowError:
+                # An unbounded malformed integer cannot be a valid wire stat.
+                continue
+    return _has_non_neutral_generated_buff(params)
 
 
 def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
@@ -405,11 +439,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     heals_life = _positive_integer_effect(gameplay.get("healLife", 0), "$.gameplay.healLife", errors)
     heals_mana = _positive_integer_effect(gameplay.get("healMana", 0), "$.gameplay.healMana", errors)
     buff_has_duration = _positive_integer_effect(generated_buff.get("durationTicks", 0), "$.gameplay.generatedBuff.durationTicks", errors)
-    has_generated_buff = buff_has_duration and any(
-        value not in (None, 0, 0.0, "", False, 1, 1.0, "white")
-        for key, value in generated_buff.items()
-        if key != "durationTicks"
-    )
+    has_generated_buff = buff_has_duration and _generated_buff_has_effect(generated_buff)
     has_use_effect = (
         heals_life
         or heals_mana
@@ -443,7 +473,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     contract = contract_raw if isinstance(contract_raw, Mapping) else {}
     receipts_raw = contract.get("finalWireReceipts")
     receipts = receipts_raw if isinstance(receipts_raw, list) else []
-    lowering = audit_compiler_receipts(receipts, final_document=data)
+    # Delivery intentionally strips internal provenance. Audit any present
+    # contract (including a broken/empty one), but never demand receipts from
+    # a delivery DTO that makes no provenance claim.
+    lowering = audit_compiler_receipts(receipts, final_document=data if "runtimeContract" in data else None)
     if not lowering.get("ok"):
         errors.append({
             "path": "$.runtimeContract.finalWireReceipts",

@@ -102,6 +102,8 @@ internal static partial class EngineRuntimeChecks
             ("event spawn zero multiplier is not replaced by one", EventSpawnZeroMultiplierIsNotReplacedByOne),
             ("player save reference requires version markers", PlayerSaveReferenceRequiresVersionMarkers),
             ("applied trace observes projection without changing definition", AppliedTraceObservesProjectionWithoutChangingDefinition),
+            ("neutral item omissions preserve exact Item projection", NeutralItemOmissionsPreserveProjection),
+            ("neutral buff omissions reach real player effects", NeutralBuffOmissionsReachRealPlayerEffects),
         };
         int failed = 0;
         foreach (var (name, check) in checks)

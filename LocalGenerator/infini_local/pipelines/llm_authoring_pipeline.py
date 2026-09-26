@@ -385,6 +385,7 @@ def build_gameplay_repair_dossier(
             "Return exactly the repair patch schema; never return the full item.",
             "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from readOnlySourceFragments.brokenFragments, changing only permitted fields; never omit unchanged required fields.",
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
+            "For existing nodes, omission means no change, not reset to a card default. Preserve accepted absences too; an optional default describes the full Author object after frozen-first merge, never permission to add or delete a field. New nodes must satisfy the full capability requirements.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
             "For each exact repairScope.deletable.callPropertyKeys entry that must be removed, emit the matching callPropertyKeysDelete {callId,key}; a note claiming removal does not mutate the program.",
             "Use create permissions only for the exact blocker or its declared support dependency.",

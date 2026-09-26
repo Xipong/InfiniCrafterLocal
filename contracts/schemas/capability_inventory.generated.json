@@ -85,7 +85,7 @@
           "maximum": 500,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "mana_points",
           "units": ""
         },
@@ -282,7 +282,7 @@
           "maximum": 96,
           "minimum": -96,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "pixels"
         },
@@ -292,7 +292,7 @@
           "maximum": 96,
           "minimum": -96,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "pixels"
         },
@@ -663,7 +663,7 @@
           "maximum": 8,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "pixels/world tick"
         },
@@ -673,7 +673,7 @@
           "maximum": 60,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "HP/s"
         },
@@ -715,7 +715,7 @@
           "maximum": 120,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "engine units: manaRegenBonus points"
         },
@@ -725,7 +725,7 @@
           "maximum": 4,
           "minimum": 0.25,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "engine units: pickSpeed divisor"
         },
@@ -735,7 +735,7 @@
           "maximum": 2,
           "minimum": -0.5,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "engine units: additive moveSpeed factor"
         },
@@ -745,7 +745,7 @@
           "maximum": null,
           "minimum": null,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "boolean_capability",
           "units": ""
         }
