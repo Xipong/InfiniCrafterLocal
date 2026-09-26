@@ -49,6 +49,14 @@ Canonical owner — `LocalGenerator/infini_local/core/runtime_authoring/capabili
 
 Привилегированный client→server command не добавлялся: одного sender/slot/range/sequence недостаточно для подтверждения факта попадания. Требуется отдельная явно определённая trust boundary (server collision/hit receipt либо принятая vanilla owner-hit authority), source/target generation и no-duplication tests. Прямые серверные изменения NPC velocity также требуют надёжной sync. Эти ограничения нельзя считать устранёнными no-image Live20 или DLL build.
 
+## Live acceptance: blocked before full panel
+
+Проверенный исходный snapshot: `aa51a48654f6a697b855d8b51eabe6a9aec02b78`. После него меняется только этот отчёт. No-image preflight прошёл с `gemini-3.5-flash-lite`, `chat_completions`, `json_object`, concurrency=3, 20 cases, minFirstAuthor=10, case transport retries ≤10 с интервалом ≥60 s; fallback и image calls запрещены. Frozen temperatures: Author/Visual=0.5, VFX=0.34, Repair=0.12; token budgets: Author/Visual=12000, VFX=4000.
+
+26 сентября 2026 перед full panel выполнены два коротких availability probes, не входящих в Live20: прямой маршрут вернул HTTP 400 `FAILED_PRECONDITION` / `User location is not supported for the API use`; прежний локальный HTTP proxy `127.0.0.1:10808` вернул HTTP 429 `RESOURCE_EXHAUSTED`. Точное quota violation: `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, metric `generativelanguage.googleapis.com/generate_content_free_tier_requests`, model `gemini-3.5-flash-lite`, quotaValue=500. Ответ содержит RetryInfo=52 s, но конкретная исчерпанная квота — **суточная**, поэтому минутные повторы не запускались.
+
+[Официальная документация Gemini](https://ai.google.dev/gemini-api/docs/rate-limits) определяет RPD reset как midnight Pacific; ближайшая граница — 26 сентября 2026, 10:00 МСК. Доступность после reset необходимо проверить заново. Платный маршрут, смена модели и обход quota не использовались. Новый Live20 не стартовал; текущих accepted результатов для C# replay нет. Старый `fa52c4e` panel не засчитывается за этот snapshot. Статус: **offline verified / live blocked / MP defect open**, не полная acceptance.
+
 ## Намеренно custom/hidden и acceptance
 
 Custom остаются dynamic entity graph/proxy types, arbitrary delayed finite actions, budget accounting, hydration/storage, per-instance assets и authored movement/controllers. Type-wide sand ammo/ID-static immunity и weapon `Item.useAmmo` без полного PickAmmo vertical slice намеренно не exposed. Исторические удалённые executors не объявляются восстановленными просто по сходству названий; roster дан в `PRIMITIVE_PARITY_RU.md`.
