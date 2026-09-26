@@ -16,6 +16,7 @@ from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
+from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_stage_messages import stage_chat_message
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
@@ -40,6 +41,7 @@ from infini_local.pipelines.visual_asset_modes import (
 VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v1"
 VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v1"
 _ALLOWED_ASSET_MODES = set(VISUAL_ASSET_MODES)
+_VISUAL_STATIC_PREFIX_KEYS = ("task", "assetModeCatalog", "rules")
 
 
 @dataclass(frozen=True)
@@ -851,6 +853,14 @@ def _request_visual_kit(
             ],
             "responseSchema": schema,
         }
+    # Ordering only: keep every field/value in the same complete JSON object.
+    # Entity-specific responseSchema (including its exact ID enums) remains after
+    # the boundary, as do all parent, item, error, and Repair context fields.
+    payload = {
+        **{key: payload[key] for key in _VISUAL_STATIC_PREFIX_KEYS},
+        **{key: value for key, value in payload.items() if key not in _VISUAL_STATIC_PREFIX_KEYS},
+    }
+    prefix_chars = json_prefix_chars(payload, _VISUAL_STATIC_PREFIX_KEYS)
     model = resolve_llm_model()
     request = {
         "model": model,
@@ -872,6 +882,7 @@ def _request_visual_kit(
         ),
     }
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
+    request = with_prompt_cache_prefix(request, message_index=1, prefix_chars=prefix_chars)
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
     content = raw["choices"][0]["message"]["content"]
     try:

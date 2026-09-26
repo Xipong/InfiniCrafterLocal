@@ -21,6 +21,10 @@ Canonical equipment/event primitive registry дополнительно поро
 
 Gameplay/Visual/VFX Repair вызываются только после фактического отказа валидатора своей стадии. Успешный путь: `1 + 1 + 1`, repairs `0`. Repair не пересобирает полный stage output: deterministic scope передаёт модели invalid fragments, exact missing dependencies, минимальный blocker capability subset и валидный read-only context. Существующие корректные значения frozen; из полного возвращённого узла применяются только exact broken/missing leaves. Scope-escape игнорируется с audit, а не отменяет полезное исправление.
 
+## Prompt cache и transport latency
+
+Постоянный model-visible префикс явно отделён от recipe-specific суффикса internal marker, без удаления capabilities и без кеширования готовых ответов. Поддерживаемые provider adapters используют стабильный content-derived routing key и, где доступно, explicit cache breakpoint; неизвестные endpoints не получают чужих параметров. Самодостаточные stage packets не продолжают Responses history через `previous_response_id`. Provider usage различает cache hit, явный ноль и отсутствие данных. Условия хранения, ограничения Gemini/Codex/local и локальный microbenchmark: [`docs/LLM_PROMPT_CACHE_AND_LATENCY_RU.md`](docs/LLM_PROMPT_CACHE_AND_LATENCY_RU.md).
+
 ## Контракты
 
 - runtime API: `infini.runtime-program.v5`;

@@ -30,6 +30,9 @@ from infini_local.core.vfx_manifest_config import (
 VFX_MANIFEST_SCHEMA = "infini.vfx.runtime-events.v15"
 VFX_DIRECTOR_SCHEMA = "infini.vfx-director.runtime-events.v2"
 VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v1"
+# Exact pairs/roles and the output schema depend on the accepted runtime program.
+VFX_PROMPT_STATIC_KEYS = ("schema", "rules")
+VFX_REPAIR_PROMPT_STATIC_KEYS = ("task", "rules")
 
 
 @dataclass(frozen=True)
@@ -92,8 +95,6 @@ def _allowed_pairs(data: Mapping[str, Any]) -> list[dict[str, Any]]:
 def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "schema": VFX_DIRECTOR_SCHEMA,
-        "runtimePairs": _allowed_pairs(data),
-        "runtimeVisualRoles": runtime_visual_roles(data),
         "rendererKind": list(_RENDERERS),
         "backend": list(_BACKENDS),
         "textureRole": list(_TEXTURE_ROLES),
@@ -115,6 +116,8 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
             "startTick": [0, 120], "repeatEvery": [0, 120],
         },
         "maxSlots": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS))),
+        "runtimePairs": _allowed_pairs(data),
+        "runtimeVisualRoles": runtime_visual_roles(data),
     }
 
 
@@ -355,7 +358,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "generatedParentSummary": copy.deepcopy(dict(summary_raw)) if isinstance(summary_raw, Mapping) else {},
         }
 
-    return {
+    packet = {
         "schema": "infini.vfx-director-input.runtime-events.v1",
         "item": {
             "id": str(data.get("id") or ""), "name": str(data.get("name") or ""),
@@ -377,6 +380,10 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Slots may be empty when presentation should be restrained.",
             "Return only one JSON object matching outputSchema.",
         ],
+    }
+    return {
+        **{key: packet[key] for key in VFX_PROMPT_STATIC_KEYS},
+        **{key: value for key, value in packet.items() if key not in VFX_PROMPT_STATIC_KEYS},
     }
 
 
@@ -705,6 +712,10 @@ def _request(
                 "presentation only; gameplay is immutable",
             ],
         }
+        user = {
+            **{key: user[key] for key in VFX_REPAIR_PROMPT_STATIC_KEYS},
+            **{key: value for key, value in user.items() if key not in VFX_REPAIR_PROMPT_STATIC_KEYS},
+        }
         messages = [
             stage_chat_message("system", "vfx_repair_contract", _director_system(repair=True)),
             stage_chat_message("user", "vfx_repair_context", json.dumps(user, ensure_ascii=False, separators=(",", ":"))),
@@ -889,6 +900,7 @@ def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "MalformedVfxDirectorOutput", "attach_hybrid_vfx_manifest",
+    "VFX_PROMPT_STATIC_KEYS", "VFX_REPAIR_PROMPT_STATIC_KEYS",
     "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_schema", "vfx_director_surface",
     "vfx_repair_schema",
 ]

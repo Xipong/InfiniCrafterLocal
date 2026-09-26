@@ -4,17 +4,20 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 import copy
+import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 from urllib import request as urlrequest
 from urllib import error as urlerror
 from urllib.parse import urlsplit
 
 from infini_local.core.env_utils import env_str
+from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_config import (
     CODEX_LLM_MODEL,
@@ -642,7 +645,7 @@ def llm_headers(extra: dict[str, str] | None = None, context: dict[str, Any] | N
 def llm_json_response_format(
     name: str = "infini_json",
     *,
-    schema: dict[str, Any] | None = None,
+    schema: dict[str, Any] | Callable[[], dict[str, Any]] | None = None,
     strict: bool = False,
     auto_preference: str | None = None,
 ) -> dict[str, Any] | None:
@@ -664,12 +667,15 @@ def llm_json_response_format(
         return None
     if mode == "json_object":
         return {"type": "json_object"}
+    # Stage schemas can be large. Do not construct a provider projection that
+    # json_object/off will discard; local validation remains unchanged.
+    resolved_schema = schema() if callable(schema) else schema
     return {
         "type": "json_schema",
         "json_schema": {
             "name": name,
             "strict": bool(strict),
-            "schema": schema or {"type": "object", "additionalProperties": True},
+            "schema": resolved_schema or {"type": "object", "additionalProperties": True},
         },
     }
 
@@ -988,9 +994,60 @@ def with_llm_stage(payload: dict[str, Any], stage: str) -> dict[str, Any]:
 def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
     out = json.loads(json.dumps(payload, ensure_ascii=False))
     out.pop(LLM_STAGE_KEY, None)
+    out.pop(PROMPT_CACHE_METADATA_KEY, None)
     if out.get("response_format") is None:
         out.pop("response_format", None)
     return out
+
+def _prompt_cache_boundary(payload: dict[str, Any]) -> tuple[int, int] | None:
+    marker = payload.get(PROMPT_CACHE_METADATA_KEY)
+    if not isinstance(marker, dict):
+        return None
+    index, chars = marker.get("messageIndex"), marker.get("prefixChars")
+    messages = payload.get("messages")
+    if (type(index) is not int or type(chars) is not int or not isinstance(messages, list)
+            or index < 0 or index >= len(messages)):
+        return None
+    message = messages[index]
+    if (not isinstance(message, dict) or message.get("role") != "user"
+            or not isinstance(message.get("content"), str)
+            or chars <= 0 or chars > len(message["content"])):
+        return None
+    return index, chars
+
+def _prompt_cache_identity(payload: dict[str, Any], model: str) -> str:
+    """Content-derived routing hint, never a receipt of provider cache reuse."""
+    boundary = _prompt_cache_boundary(payload)
+    if boundary is None:
+        raise ValueError("prompt cache identity requires a valid static boundary")
+    index, chars = boundary
+    messages = payload["messages"]
+    stable = {
+        "model": model,
+        "messages": [*messages[:index], {**messages[index], "content": messages[index]["content"][:chars]}],
+        "response_format": payload.get("response_format"),
+        "reasoning": payload.get("reasoning"),
+        "reasoning_effort": payload.get("reasoning_effort"),
+    }
+    digest = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
+    return "infini-" + digest[:32]
+
+def _cache_route(context: dict[str, Any], model: str) -> str:
+    """Only documented canonical OpenAI Platform / OpenRouter endpoint+model pairs."""
+    parsed = urlsplit(str(context.get("base_url") or "").rstrip("/"))
+    base = (parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.path.rstrip("/"))
+    provider = active_llm_provider(context)
+    if provider == "openai_compat" and base == ("https", "api.openai.com", "/v1") and not parsed.port:
+        slug = model
+    elif provider == "openrouter" and base == ("https", "openrouter.ai", "/api/v1") and not parsed.port and model.startswith("openai/"):
+        slug = model.removeprefix("openai/")
+    else:
+        return ""
+    match = re.fullmatch(r"gpt-(\d+)(?:\.(\d+))?(?:-[a-z0-9-]+)?", slug.lower())
+    if not match:
+        return ""
+    return "explicit" if (int(match.group(1)), int(match.group(2) or 0)) >= (5, 6) else "key"
 
 def http_json(url: str, payload: dict[str, Any], timeout: int = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1217,17 +1274,28 @@ def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> di
     return out
 
 
-def _usage_fields(result: dict[str, Any]) -> dict[str, int]:
+def _usage_fields(result: dict[str, Any]) -> dict[str, Any]:
     usage_raw = result.get("usage")
     usage: dict[str, Any] = usage_raw if isinstance(usage_raw, dict) else {}
     input_details_raw = usage.get("input_tokens_details")
     prompt_details_raw = usage.get("prompt_tokens_details")
     input_details: dict[str, Any] = input_details_raw if isinstance(input_details_raw, dict) else {}
     prompt_details: dict[str, Any] = prompt_details_raw if isinstance(prompt_details_raw, dict) else {}
+
+    def counter(name: str) -> int | None:
+        for details in (input_details, prompt_details):
+            value = details.get(name)
+            if type(value) is int and value >= 0:
+                return value
+        return None
+
+    cached = counter("cached_tokens")
     return {
         "inputTokens": int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0),
         "outputTokens": int(usage.get("output_tokens") or usage.get("completion_tokens") or 0),
-        "cachedInputTokens": int(input_details.get("cached_tokens") or prompt_details.get("cached_tokens") or 0),
+        "cachedInputTokens": cached,
+        "cacheWriteTokens": counter("cache_write_tokens"),
+        "cacheHit": (cached > 0) if cached is not None else None,
     }
 
 
@@ -1249,9 +1317,50 @@ def _response_format_for_responses(value: Any) -> dict[str, Any] | None:
     }
 
 
-def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: str = "") -> dict[str, Any]:
+def _cache_wire_options(wire: dict[str, Any], source: dict[str, Any],
+                        context: dict[str, Any], *, api_mode: str) -> None:
+    boundary = _prompt_cache_boundary(source)
+    if boundary is None:
+        return
+    model = str(wire.get("model") or "")
+    route = _cache_route(context, model)
+    if not route:
+        return
+    index, chars = boundary
+    content = source["messages"][index]["content"]
+    if route == "explicit":
+        if api_mode == "responses":
+            target = index - sum(1 for message in source["messages"][:index]
+                                 if isinstance(message, dict) and message.get("role") == "system")
+            messages = wire.get("input")
+            block_type = "input_text"
+        else:
+            target = index
+            messages = wire.get("messages")
+            block_type = "text"
+        if (not isinstance(messages, list) or target >= len(messages) or target < 0
+                or messages[target].get("content") != content):
+            return
+        # The two blocks concatenate to precisely the original authored text.
+        blocks = [{"type": block_type, "text": content[:chars],
+                   "prompt_cache_breakpoint": {"mode": "explicit"}}]
+        if chars < len(content):
+            blocks.append({"type": block_type, "text": content[chars:]})
+        messages[target]["content"] = blocks
+        wire["prompt_cache_options"] = {"mode": "explicit"}
+    # Breakpoints define what is reusable; a content-stable routing key also
+    # keeps different recipes on the same provider cache route. Hash effective
+    # reasoning settings, not superseded pre-adapter aliases.
+    identity_source = {**source, "reasoning": wire.get("reasoning"),
+                       "reasoning_effort": wire.get("reasoning_effort")}
+    wire["prompt_cache_key"] = _prompt_cache_identity(identity_source, model)
+
+
+def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: str = "", *,
+                                 cache_source: dict[str, Any] | None = None,
+                                 context: dict[str, Any] | None = None) -> dict[str, Any]:
     instructions: list[str] = []
-    input_messages: list[dict[str, str]] = []
+    input_messages: list[dict[str, Any]] = []
     for raw in payload.get("messages") or []:
         if not isinstance(raw, dict):
             continue
@@ -1284,6 +1393,8 @@ def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: 
     effort = str(payload.get("reasoning_effort") or reasoning.get("effort") or "").strip()
     if effort:
         out["reasoning"] = {"effort": "high" if effort == "xhigh" else effort}
+    if cache_source is not None and context is not None:
+        _cache_wire_options(out, cache_source, context, api_mode="responses")
     return out
 
 
@@ -1320,9 +1431,9 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, co
         and messages[0].get("role") == "system"
         and messages[1].get("role") == "user"
     )
-    if lease is not None and lease.context is context and not lease.responses_disabled and clean_stage_dossier:
+    if lease is not None and lease.context is context and not lease.responses_disabled and clean_stage_dossier and PROMPT_CACHE_METADATA_KEY not in payload:
         previous_id = lease.previous_response_id
-    request_payload = _responses_payload_from_chat(prepared, previous_id)
+    request_payload = _responses_payload_from_chat(prepared, previous_id, cache_source=payload, context=context)
     try:
         result = http_json(
             llm_responses_url(context),
@@ -1340,7 +1451,7 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, co
             raise RuntimeError("LLM Responses endpoint returned no output text")
         response_id = str(result.get("id") or "")
         if lease is not None and lease.context is context:
-            lease.previous_response_id = response_id
+            lease.previous_response_id = "" if PROMPT_CACHE_METADATA_KEY in payload else response_id
         usage = _usage_fields(result)
         return {
             "choices": [{"message": {"role": "assistant", "content": content}}],
@@ -1384,8 +1495,13 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
     if active_llm_provider(context) == "openai_codex":
         from infini_local.services.codex_text_backend import generate_chat
         prepared = _payload_for_context(payload, context)
+        if _prompt_cache_boundary(payload) is not None:
+            identity_source = {**prepared, PROMPT_CACHE_METADATA_KEY: payload[PROMPT_CACHE_METADATA_KEY]}
+            prepared["prompt_cache_key"] = _prompt_cache_identity(identity_source, str(prepared["model"]))
         result = generate_chat(prepared, timeout=timeout)
-        log_event("info", "LLM usage", {"stage": stage, **(result.get("_debug") or {}), **_usage_fields(result)})
+        usage = _usage_fields(result)
+        result["_debug"] = {**(result.get("_debug") or {}), **usage}
+        log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})
         return result
     mode = _normalized_api_mode(context.get("api_mode"))
     capability_key = _llm_context_key(context)
@@ -1460,7 +1576,7 @@ def _strict_schema_rejected(exc: Exception, payload: dict[str, Any]) -> bool:
 
 def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
     ensure_llm_auth_configured(context)
-    prepared = _clean_llm_payload(payload)
+    prepared = dict(payload)
     capability_key = _llm_context_key(context)
     schema_downgraded = False
     # A profile that already refused the strict schema in this run must not be
@@ -1516,6 +1632,7 @@ def _llm_chat_json_exact_context(
     schema_downgraded: bool = False,
 ) -> dict[str, Any]:
     candidate = _payload_for_context(payload, context)
+    _cache_wire_options(candidate, payload, context, api_mode="chat")
     url = llm_chat_completions_url(context)
     try:
         result = http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))

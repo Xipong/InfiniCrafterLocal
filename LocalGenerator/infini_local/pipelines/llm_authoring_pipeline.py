@@ -9,6 +9,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
+from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     ATTRIBUTED_PLANNER_HISTORY_KIND,
@@ -33,7 +34,9 @@ from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
 )
 from infini_local.core.runtime_authoring.binding_use_policy import STACK_COST_RULE
-from infini_local.core.vfx_manifest import MalformedVfxDirectorOutput
+from infini_local.core.vfx_manifest import (
+    MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
+)
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_AUTHOR_SYSTEM_RULE,
     PRIMARY_REPAIR_SYSTEM_RULE,
@@ -61,6 +64,14 @@ from infini_local.pipelines.llm_transport import (
     with_llm_stage,
 )
 from infini_local.storage.trace_runtime import _trace_message_summary, trace_event
+
+
+_AUTHOR_CACHE_PREFIX_KEYS = (
+    "priorityHeader", "gameplayAuthoringStages", "runtimeProgramInvariants",
+    "runtimeCapabilityContract", "requiredJsonShape", "selfCheck",
+)
+_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
+_FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "allowedCallParamsReadOnly", "requiredJsonShape")
 
 
 _AUTHOR_SYSTEM = (
@@ -140,13 +151,16 @@ def build_initial_author_request(
         "temperature": env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author",
-            schema=author_item_provider_response_schema(),
+            schema=author_item_provider_response_schema,
             strict=True,
             auto_preference="json_schema",
         ),
     }
     request = apply_llm_common_options(request, model_name=selected_model)
     request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
+    request = with_prompt_cache_prefix(
+        request, message_index=1, prefix_chars=json_prefix_chars(payload, _AUTHOR_CACHE_PREFIX_KEYS),
+    )
     return request, user_content, system
 
 
@@ -169,13 +183,13 @@ def _repair_malformed_author_json(
             "Use originalRecipeContext only to disambiguate damaged syntax; never introduce a choice absent from malformedRawText.",
             "Return exactly one strict full Author JSON object with no markdown or prose.",
         ],
-        "parseError": f"{type(parse_error).__name__}: {parse_error}",
-        "malformedRawText": malformed_raw_text,
-        "originalRecipeContext": json.loads(original_recipe_context),
         "allowedCallParamsReadOnly": {
             name: sorted(cap.params) for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible
         },
         "requiredJsonShape": author_item_prompt_shape_card(),
+        "parseError": f"{type(parse_error).__name__}: {parse_error}",
+        "malformedRawText": malformed_raw_text,
+        "originalRecipeContext": json.loads(original_recipe_context),
     }
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
@@ -194,12 +208,15 @@ def _repair_malformed_author_json(
         "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author_format_repair",
-            schema=author_item_provider_response_schema(),
+            schema=author_item_provider_response_schema,
             strict=True,
             auto_preference="json_schema",
         ),
     }, model_name=model_name)
     request = apply_minimum_reasoning_effort(request, model_name=model_name, minimum="medium")
+    request = with_prompt_cache_prefix(
+        request, message_index=1, prefix_chars=json_prefix_chars(repair_context, _FORMAT_REPAIR_CACHE_PREFIX_KEYS),
+    )
     trace_event(
         "prompt", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair request",
         {"provider": active_llm_provider(), "model": model_name, "malformedChars": len(malformed_raw_text)},
@@ -397,6 +414,7 @@ def build_gameplay_repair_dossier(
             "authorSchema": RUNTIME_PROGRAM_SCHEMA,
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         },
+        "runtimeExecutionTruth": realization_execution_truth_for_llm(),
         "parents": {
             "a": {"packet": raw_parent_card_for_llm(dict(a))},
             "b": {"packet": raw_parent_card_for_llm(dict(b))},
@@ -409,7 +427,6 @@ def build_gameplay_repair_dossier(
         "exactValidationErrors": exact_errors,
         "failureStage": str(failure_report.get("stage") or "runtime_program_validation"),
         "repairScope": scope,
-        "runtimeExecutionTruth": realization_execution_truth_for_llm(),
         "readOnlySourceFragments": {
             "brokenFragments": fragments["broken"],
             "brokenFragmentsByIndex": fragments["brokenByIndex"],
@@ -477,11 +494,14 @@ def repair_author_item_after_failure(
         "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_repair",
-            schema=author_item_provider_repair_response_schema(),
+            schema=author_item_provider_repair_response_schema,
             strict=True,
             auto_preference="json_schema",
         ),
     }, model_name=model_name)
+    request = with_prompt_cache_prefix(
+        request, message_index=1, prefix_chars=json_prefix_chars(repair_context, _REPAIR_CACHE_PREFIX_KEYS),
+    )
     trace_event(
         "prompt",
         "LLM:gameplay_repair",
@@ -570,6 +590,10 @@ def call_llm_vfx_director(
         ) if output_schema else {"type": "json_object"},
     }
     request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
+    static_keys = VFX_REPAIR_PROMPT_STATIC_KEYS if stage_name == "vfx_repair" else VFX_PROMPT_STATIC_KEYS
+    request = with_prompt_cache_prefix(
+        request, message_index=1, prefix_chars=json_prefix_chars(user, static_keys),
+    )
     raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
     content = raw["choices"][0]["message"]["content"]
     try:

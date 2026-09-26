@@ -99,6 +99,13 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
         if effort not in EFFORTS:
             raise codex_auth.CodexError("Codex text reasoning effort is not supported by the transport")
         request["reasoning"] = {"effort": effort}
+    # Codex's upstream ResponsesApiRequest supports the routing key; unlike
+    # Platform breakpoints/retention, this field is part of its subscription wire.
+    cache_key = packet.get("prompt_cache_key")
+    if cache_key is not None:
+        if not isinstance(cache_key, str) or not cache_key or len(cache_key) > 64:
+            raise codex_auth.CodexError("Invalid Codex prompt-cache routing key")
+        request["prompt_cache_key"] = cache_key
     # Codex reasoning models do not expose a compatible temperature knob.
     return request
 
@@ -124,14 +131,19 @@ def generate_chat(packet: dict[str, Any], *, timeout: int) -> dict[str, Any]:
     }
     # Preserve counters used by usage diagnostics without forwarding arbitrary
     # provider metadata (which can include session credentials).
-    for details_key, counter_key in (
-        ("input_tokens_details", "cached_tokens"),
-        ("output_tokens_details", "reasoning_tokens"),
+    for details_key, counter_keys in (
+        ("input_tokens_details", ("cached_tokens", "cache_write_tokens")),
+        ("output_tokens_details", ("reasoning_tokens",)),
     ):
         details = usage.get(details_key)
-        counter = details.get(counter_key) if isinstance(details, dict) else None
-        if isinstance(counter, int) and not isinstance(counter, bool) and counter >= 0:
-            safe_usage[details_key] = {counter_key: counter}
+        if not isinstance(details, dict):
+            continue
+        safe_counters = {
+            key: details[key] for key in counter_keys
+            if type(details.get(key)) is int and details[key] >= 0
+        }
+        if safe_counters:
+            safe_usage[details_key] = safe_counters
     return {
         "choices": [{"message": {"role": "assistant", "content": content}}],
         "usage": safe_usage,
