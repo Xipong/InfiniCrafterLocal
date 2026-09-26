@@ -131,6 +131,7 @@ public sealed partial class GeneratedProjectile
     public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
     {
         if (_data is null || _entity is null) return;
+        RuntimeHitPullBridge.SendProjectileHit(Projectile, target, hit.Crit);
         if (IsGeneratedWhipTagSource && target.active && InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)
             && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
             && Main.player[Projectile.owner] is { active: true })
@@ -168,6 +169,7 @@ public sealed partial class GeneratedProjectile
     public override void OnKill(int timeLeft)
     {
         if (_data is null || _entity is null) return;
+        RuntimeHitPullBridge.RememberRetired(Projectile);
         if (!_expireEventRan && timeLeft <= 1)
         {
             _expireEventRan = true;

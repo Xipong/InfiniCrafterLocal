@@ -84,7 +84,7 @@ Visual Director выбирает `baked_sprite`, `reuse_item_icon`, `runtime_geo
 
 ## Проверенные границы typed primitive runtime
 
-Текущие unit conversions, measured prompt size, C# lifecycle fixes и **известный MP hit-authority дефект** перечислены в [`docs/TYPED_PRIMITIVE_RUNTIME_AUDIT_RU.md`](docs/TYPED_PRIMITIVE_RUNTIME_AUDIT_RU.md). AST coverage и успешный no-image pipeline не означают полную игровую/сетевую semantic parity. Старые отчёты low-level v5 помечены историческими.
+Текущие unit conversions, measured prompt size, self-contained vocabulary, C# lifecycle fixes и **owner-hit MP authority/sync с headless-проверками** перечислены в [`docs/TYPED_PRIMITIVE_RUNTIME_AUDIT_RU.md`](docs/TYPED_PRIMITIVE_RUNTIME_AUDIT_RU.md). Owner-hit использует vanilla owner trust, а не независимое server collision proof. AST coverage, socket-free проверки и успешный no-image pipeline не означают полную игровую/сетевую semantic parity. Старые отчёты low-level v5 помечены историческими.
 
 ## Доказательства
 

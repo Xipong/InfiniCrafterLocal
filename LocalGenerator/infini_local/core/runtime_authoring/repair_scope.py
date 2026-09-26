@@ -11,6 +11,8 @@ are represented as tightly constrained create policies.
 import copy
 import json
 import re
+from dataclasses import replace
+from itertools import product
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
@@ -27,9 +29,11 @@ from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
     EVENT_CAPABILITIES,
+    EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     event_dependency_alternatives,
 )
+from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
@@ -330,6 +334,51 @@ def _matching_entity_ids(rows: Mapping[str, list[dict[str, Any]]], kinds: Iterab
         for row in rows["entities"]
         if str(row.get("id") or "") and str(row.get("kind") or "") in allowed
     }
+
+
+def _event_producer_options(
+    event: str, source_id: str, source_kind: str,
+    rows: Mapping[str, list[dict[str, Any]]],
+) -> list[tuple[Any, tuple[str, ...]]]:
+    """Keep the event source separate from each exact binding action target."""
+    spec = EVENT_KIND_REGISTRY.get(event)
+    if spec is None:
+        return []
+    if (source_kind == "item_body" and spec.producer_binding_contact_damage is True
+            and item_body_contact_suppressed(
+                call for call in rows["calls"] if str(call.get("target") or "") == source_id
+            )):
+        return []
+    options: list[tuple[Any, tuple[str, ...]]] = []
+    for dependency in event_dependency_alternatives(event, source_kind):
+        if source_kind not in spec.producer_binding_kinds or not dependency.required_bindings:
+            options.append((dependency, (source_id,) * len(dependency.required_bindings)))
+            continue
+        choices: list[list[tuple[Any, str]]] = []
+        for requirement in dependency.required_bindings:
+            variants: list[tuple[Any, str]] = []
+            actions = requirement.any_of_actions or tuple(BINDING_ACTION_REGISTRY)
+            for action in actions:
+                action_spec = BINDING_ACTION_REGISTRY.get(action)
+                if action_spec is None:
+                    continue
+                inputs = tuple(input_name for input_name in requirement.any_of_inputs
+                               if input_name in INPUT_KIND_REGISTRY
+                               and action in INPUT_KIND_REGISTRY[input_name].allowed_actions
+                               and input_name in action_spec.allowed_inputs)
+                if not inputs:
+                    continue
+                targets = _matching_entity_ids(rows, action_spec.target_kinds)
+                if "item_body" in action_spec.target_kinds:
+                    targets.intersection_update({source_id})
+                for target in sorted(targets):
+                    variants.append((replace(requirement, any_of_inputs=inputs,
+                                             any_of_actions=(action,)), target))
+            choices.append(variants)
+        for selection in product(*choices):
+            options.append((replace(dependency, required_bindings=tuple(row[0] for row in selection)),
+                            tuple(row[1] for row in selection)))
+    return options
 
 
 
@@ -1343,7 +1392,9 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     call_event_change_ids.add(node_id)
                     grant("calls", node_id, "params.event")
                     for event in cap.allowed_events:
-                        for dependency in event_dependency_alternatives(event, target_kind):
+                        for dependency, binding_targets in _event_producer_options(
+                            event, target_id, target_kind, rows,
+                        ):
                             required_calls: list[dict[str, Any]] = []
                             viable = True
                             for raw_requirement in dependency.required_calls:
@@ -1382,25 +1433,74 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 continue
                             required_bindings = [
                                 {
-                                    "targetId": target_id,
+                                    "targetId": binding_target,
                                     "anyOfInputs": list(requirement.any_of_inputs),
                                     "anyOfActions": list(requirement.any_of_actions),
                                     "requiredContactDamage": requirement.required_contact_damage,
                                 }
-                                for requirement in dependency.required_bindings
+                                for requirement, binding_target in zip(dependency.required_bindings, binding_targets)
                             ]
                             for requirement in required_bindings:
+                                action_target = requirement["targetId"]
                                 allowed_inputs = set(requirement["anyOfInputs"])
                                 allowed_actions = set(requirement["anyOfActions"])
                                 required_contact = requirement["requiredContactDamage"]
                                 if not any(
                                     str(binding.get("input") or "") in allowed_inputs
                                     and (not allowed_actions or action_kind(binding) in allowed_actions)
-                                    and binding_target_id(binding) == target_id
+                                    and binding_target_id(binding) == action_target
                                     and (required_contact is None or contact_damage(binding) is required_contact)
                                     for binding in rows["bindings"]
                                 ):
-                                    create_binding_targets.add(target_id)
+                                    contact_updates = [
+                                        binding for binding in rows["bindings"]
+                                        if required_contact is not None
+                                        and binding_target_id(binding) == action_target
+                                        and str(binding.get("input") or "") in allowed_inputs
+                                        and action_kind(binding) in allowed_actions
+                                        and contact_damage(binding) is not required_contact
+                                    ]
+                                    for binding in contact_updates:
+                                        binding_id = str(binding.get("id") or "")
+                                        fixed = transaction(
+                                            input_name=str(binding.get("input") or ""),
+                                            action_name=action_kind(binding),
+                                            target=action_target,
+                                            stack_cost_value=stack_cost(binding),
+                                            contact_damage_value=bool(required_contact),
+                                            placement_call=placement_call_id(binding),
+                                        )
+                                        mark("bindings", binding_id)
+                                        grant("bindings", binding_id, "usePolicy")
+                                        binding_alternative_overrides.setdefault(binding_id, []).append(fixed)
+                                    if contact_updates:
+                                        continue
+                                    owner_item_target = (
+                                        target_id if target_kind == "item_body"
+                                        else sole_item_entity_id
+                                    )
+                                    projected = _binding_creation_alternatives(
+                                        rows,
+                                        owner_item_target_id=owner_item_target,
+                                        required_inputs=allowed_inputs,
+                                        additional_item_capabilities=planned_item_capabilities_by_target.get(
+                                            owner_item_target, set()
+                                        ),
+                                    ) if owner_item_target else []
+                                    if not any(
+                                        binding_target_id(candidate) == action_target
+                                        and action_kind(candidate) in allowed_actions
+                                        and (required_contact is None or contact_damage(candidate) is required_contact)
+                                        and not (
+                                            INPUT_KIND_REGISTRY[str(candidate.get("input") or "")].exclusive
+                                            and any(str(existing.get("input") or "") == candidate.get("input")
+                                                    for existing in rows["bindings"])
+                                        )
+                                        for candidate in projected
+                                    ):
+                                        viable = False
+                                        break
+                                    create_binding_targets.add(action_target)
                                     create_binding_inputs.update(allowed_inputs)
                                     if allowed_actions:
                                         create_binding_actions.update(allowed_actions)
@@ -1419,7 +1519,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                         }
                                     )
                                     request_binding_creation(
-                                        target_id=target_id,
+                                        target_id=action_target,
                                         inputs=allowed_inputs,
                                         actions=requested_actions,
                                         required_contact=required_contact,
@@ -1428,18 +1528,28 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                             else sole_item_entity_id
                                         ),
                                     )
+                            if not viable:
+                                continue
                             allowed_alternatives.append({
                                 "event": event,
                                 "requiredCalls": required_calls,
                                 "requiredBindings": required_bindings,
                             })
                 if allowed_alternatives:
+                    requirement_row["allowedValues"] = sorted({
+                        option["event"] for option in allowed_alternatives
+                    })
                     event_alternative_rows.append({
                         "callId": node_id,
                         "targetId": target_id,
                         "allowed": allowed_alternatives,
                         "mustChooseOneCompleteAlternative": True,
                     })
+                elif cap is not None and node_id:
+                    # This invalid event has no executable producer under
+                    # frozen context; deletion of its own call is leaf-local.
+                    mark("calls", node_id, can_delete=True)
+                    requirement_row["allowedValues"] = []
         elif code == "place_item_without_stack_cost":
             if node_namespace == "bindings":
                 binding_id = str(node_row.get("id") or "")
@@ -1878,15 +1988,14 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 event_target_id = target_ids[0]
                 event_target_kind = str(row_by_id.get(event_target_id, {}).get("kind") or "")
                 event_name = str((node_row.get("params") or {}).get("event") or "")
-                structured_alternatives = event_dependency_alternatives(
-                    event_name,
-                    event_target_kind,
+                structured_alternatives = _event_producer_options(
+                    event_name, event_target_id, event_target_kind, rows,
                 )
                 allowed_event_alternatives: list[dict[str, Any]] = []
                 event_create_choices: list[dict[str, Any]] = []
                 event_existing_choices: list[dict[str, Any]] = []
                 binding_change_required_by_alternative: list[bool] = []
-                for dependency in structured_alternatives:
+                for dependency, binding_targets in structured_alternatives:
                     alternative_viable = True
                     required_calls: list[dict[str, Any]] = []
                     required_bindings: list[dict[str, Any]] = []
@@ -1911,7 +2020,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         })
                     if not alternative_viable:
                         continue
-                    for binding_requirement in dependency.required_bindings:
+                    for binding_requirement, action_target_id in zip(dependency.required_bindings, binding_targets):
                         allowed_inputs = set(binding_requirement.any_of_inputs)
                         allowed_actions = set(binding_requirement.any_of_actions)
                         if not allowed_actions:
@@ -1922,13 +2031,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             }
                         required_contact = binding_requirement.required_contact_damage
                         required_bindings.append({
-                            "targetId": event_target_id,
+                            "targetId": action_target_id,
                             "anyOfInputs": sorted(allowed_inputs),
                             "anyOfActions": sorted(allowed_actions),
                             "requiredContactDamage": required_contact,
                         })
                         exact_binding_present = any(
-                            binding_target_id(binding) == event_target_id
+                            binding_target_id(binding) == action_target_id
                             and str(binding.get("input") or "") in allowed_inputs
                             and action_kind(binding) in allowed_actions
                             and (
@@ -1943,7 +2052,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         if required_contact is not None:
                             for binding in rows["bindings"]:
                                 if (
-                                    binding_target_id(binding) != event_target_id
+                                    binding_target_id(binding) != action_target_id
                                     or str(binding.get("input") or "") not in allowed_inputs
                                     or action_kind(binding) not in allowed_actions
                                     or contact_damage(binding) is required_contact
@@ -1953,7 +2062,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 fixed = transaction(
                                     input_name=str(binding.get("input") or ""),
                                     action_name=action_kind(binding),
-                                    target=event_target_id,
+                                    target=action_target_id,
                                     stack_cost_value=stack_cost(binding),
                                     contact_damage_value=required_contact,
                                     placement_call=placement_call_id(binding),
@@ -1982,7 +2091,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             projected_row
                             for projected_row in projected_rows
                             if not pending_existing_choices
-                            and binding_target_id(projected_row) == event_target_id
+                            and binding_target_id(projected_row) == action_target_id
                             and action_kind(projected_row) in allowed_actions
                             and not (
                                 INPUT_KIND_REGISTRY[str(projected_row.get("input") or "")].exclusive
@@ -2020,6 +2129,11 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         "allowed": allowed_event_alternatives,
                         "mustChooseOneCompleteAlternative": True,
                     })
+                elif node_id:
+                    # Frozen engine gates leave no executable producer. Only
+                    # the invalid event call may be removed, not valid gates.
+                    mark("calls", node_id, can_delete=True)
+                    requirement_row["allowedValues"] = []
                 event_create_choices = list({
                     repr(row): row for row in event_create_choices
                 }.values())
@@ -2325,6 +2439,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     }
     for row_id in sorted(
         binding_input_change_ids | binding_action_change_ids | binding_target_change_ids
+        | binding_alternative_overrides.keys()
     ):
         binding = binding_rows_by_id.get(row_id)
         if binding is None:

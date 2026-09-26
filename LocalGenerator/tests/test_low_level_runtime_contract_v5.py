@@ -125,6 +125,14 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     assert len(capability_provider_union()) == len(names)
     heal_capability = CAPABILITY_REGISTRY["heal_owner_on_event"]
     assert heal_capability.network_authority == "owner_execute_sync"
+    for name in ("apply_status_on_event", "chain_damage_on_event"):
+        assert CAPABILITY_REGISTRY[name].network_authority == "owner_execute_sync"
+    area = CAPABILITY_REGISTRY["damage_area_on_event"]
+    assert area.network_authority == "server_execute"
+    assert dict(area.authority_by_effect) == {"on_hit": "owner_execute_sync", "on_crit": "owner_execute_sync"}
+    pull = CAPABILITY_REGISTRY["pull_on_event"]
+    assert pull.authority_by_effect["on_hit:target_to_owner"] == "owner_request_server_execute"
+    assert pull.authority_by_effect["owner_to_target"] == "owner_execute_sync"
     parent_a = {"name": "Workbench", "id": "a", "damage": 0, "useTime": 20, "tags": ["furniture"]}
     parent_b = {"name": "Blade", "id": "b", "damage": 18, "useTime": 24, "tags": ["metal"]}
     payload = build_llm_author_payload(parent_a, parent_b, parent_a, parent_b, "a+b")

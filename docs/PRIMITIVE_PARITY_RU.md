@@ -29,8 +29,8 @@ Author schema ограничивает новые значения всех пр
 | defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | -50…200 | accessory.defense | ModItem.UpdateAccessory |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000 | accessory.maxMana | ModItem.UpdateAccessory |
-| lifeRegenHalfHpPerSecond | Add Terraria lifeRegen units (2 units = 1 HP/second before other effects) | half_hp_per_second | 0 | -100…200 | accessory.lifeRegen | ModItem.UpdateAccessory |
-| manaRegenBonusPoints | Add Player.manaRegenBonus engine points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | accessory.manaRegen | ModItem.UpdateAccessory |
+| lifeRegenHalfHpPerSecond | Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing | half_hp_per_second | 0 | -100…200 | accessory.lifeRegen | ModItem.UpdateAccessory |
+| manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | mana_regen_bonus_points | 0 | -100…200 | accessory.manaRegen | ModItem.UpdateAccessory |
 | moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | accessory.movementSpeed /100 | ModItem.UpdateAccessory |
 | maxRunSpeedBonusPxPerTick | Add to Player.maxRunSpeed, subject to other Terraria movement limits | pixels_per_tick | 0 | -5…20 | accessory.maxRunSpeed | ModItem.UpdateAccessory |
 | jumpSpeedBonusPxPerTick | Add to Player.jumpSpeedBoost (positive raises jump speed) | pixels_per_tick | 0 | -5…20 | accessory.jumpSpeed | ModItem.UpdateAccessory |
@@ -63,8 +63,8 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | 0…200 | armor.defense | ModItem.UpdateEquip |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000 | armor.maxMana | ModItem.UpdateEquip |
-| lifeRegenHalfHpPerSecond | Add Terraria lifeRegen units (2 units = 1 HP/second before other effects) | half_hp_per_second | 0 | -100…200 | armor.lifeRegen | ModItem.UpdateEquip |
-| manaRegenBonusPoints | Add Player.manaRegenBonus engine points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
+| lifeRegenHalfHpPerSecond | Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing | half_hp_per_second | 0 | -100…200 | armor.lifeRegen | ModItem.UpdateEquip |
+| manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | mana_regen_bonus_points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
 | moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | armor.movementSpeed /100 | ModItem.UpdateEquip |
 | maxRunSpeedBonusPxPerTick | Add to Player.maxRunSpeed, subject to other Terraria movement limits | pixels_per_tick | 0 | -5…20 | armor.maxRunSpeed | ModItem.UpdateEquip |
 | jumpSpeedBonusPxPerTick | Add to Player.jumpSpeedBoost (positive raises jump speed) | pixels_per_tick | 0 | -5…20 | armor.jumpSpeed | ModItem.UpdateEquip |
@@ -87,8 +87,8 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | armor.waterWalk | ModItem.UpdateEquip |
 | setBonusGenericCritChancePercentagePoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance | percentage_points | 0 | -100…100 | armor.setBonusGenericCrit | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusMoveSpeedBonusPercent | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | armor.setBonusMovementSpeed /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusLifeRegenHalfHpPerSecond | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Terraria lifeRegen units (2 units = 1 HP/second before other effects) | half_hp_per_second | 0 | -100…200 | armor.setBonusLifeRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusManaRegenBonusPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus engine points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | armor.setBonusManaRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusLifeRegenHalfHpPerSecond | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing | half_hp_per_second | 0 | -100…200 | armor.setBonusLifeRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusManaRegenBonusPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | mana_regen_bonus_points | 0 | -100…200 | armor.setBonusManaRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusMinionSlotsBonus | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots | slots | 0 | 0…20 | armor.setBonusMinionSlots | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusSentrySlotsBonus | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots | slots | 0 | 0…20 | armor.setBonusSentrySlots | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusManaCostReductionPercentagePoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | armor.setBonusManaCostReduction /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |

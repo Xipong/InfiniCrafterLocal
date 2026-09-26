@@ -24,6 +24,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     event_dependency_alternatives,
     event_dependency_descriptors,
 )
+from infini_local.core.runtime_authoring.event_producer_validation import item_body_event_produced
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     authored_primary_entity_id,
@@ -276,6 +277,10 @@ def _event_available(
 
     target_calls = calls_by_target.get(target_id, [])
     alternatives = event_dependency_alternatives(event, kind)
+    if kind in spec.producer_binding_kinds:
+        if item_body_event_produced(event, target_id=target_id, target_calls=target_calls, bindings=bindings):
+            return True, (), ""
+        return False, event_dependency_descriptors(alternatives), f"{event} requires an enabled item-body producer on {target_id}"
 
     for alternative in alternatives:
         if event_alternative_is_present(

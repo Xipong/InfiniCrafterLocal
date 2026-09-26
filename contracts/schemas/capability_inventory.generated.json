@@ -2788,7 +2788,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 3",
-      "purpose": "Multiply velocity by authored retention each tick.",
+      "purpose": "Multiply velocity by authored retention per projectile update.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -4310,7 +4310,7 @@
         "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
-      "networkAuthority": "server_execute",
+      "networkAuthority": "owner_execute_sync",
       "parameters": {
         "buffId": {
           "enum": [],
@@ -4384,7 +4384,10 @@
       "technicalLoweringOutputs": []
     },
     {
-      "authorityByEffect": {},
+      "authorityByEffect": {
+        "on_crit": "owner_execute_sync",
+        "on_hit": "owner_execute_sync"
+      },
       "capability": "damage_area_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
@@ -4461,7 +4464,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "burst/aura/blackhole AoE extracted from on-hit executor",
-      "purpose": "Deal server-authoritative AoE damage around the event position.",
+      "purpose": "Deal bounded AoE damage around the event position; excludes an already-hit direct target.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4509,7 +4512,7 @@
         "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
-      "networkAuthority": "server_execute",
+      "networkAuthority": "owner_execute_sync",
       "parameters": {
         "count": {
           "enum": [],
@@ -4594,6 +4597,8 @@
     },
     {
       "authorityByEffect": {
+        "on_hit:target_to_entity": "owner_request_server_execute",
+        "on_hit:target_to_owner": "owner_request_server_execute",
         "owner_to_target": "owner_execute_sync",
         "target_to_entity": "server_execute",
         "target_to_owner": "server_execute"

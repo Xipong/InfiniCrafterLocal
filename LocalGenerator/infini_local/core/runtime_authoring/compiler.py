@@ -5,10 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, MutableMapping
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
-    ACTIVE_USE_INPUTS,
-    PLACE_ITEM_ACTION,
     action_kind,
-    contact_damage,
     placement_call_id,
     project_to_wire,
     target_id as binding_target_id,
@@ -21,9 +18,11 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
     ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
     VISUAL_ROLE_BY_ENTITY_KIND,
     equipment_damage_wire_path,
 )
+from infini_local.core.runtime_authoring.event_producer_validation import item_body_producer_bindings
 from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
 from infini_local.core.runtime_authoring.technical_lowering import (
     audit_compiler_receipts,
@@ -550,19 +549,19 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             for entity in runtime.get("entities") or []
             if isinstance(entity, Mapping) and str(entity.get("kind") or "") == "item_body"
         ), "")
-    item_use_inputs = {
-        str(binding.get("input") or "")
-        for binding in runtime.get("bindings") or []
-        if isinstance(binding, Mapping)
-        and str(binding.get("input") or "") in ACTIVE_USE_INPUTS
-        and action_kind(binding) != PLACE_ITEM_ACTION
-    }
-    item_contact_enabled = any(
-        contact_damage(binding)
-        for binding in runtime.get("bindings") or []
-        if isinstance(binding, Mapping)
-        and str(binding.get("input") or "") in item_use_inputs
+    bindings = tuple(row for row in runtime.get("bindings") or [] if isinstance(row, Mapping))
+    contact_suppressed = bool(
+        _dict(runtime.get("itemUse")).get("disableMeleeHitbox")
+        or _dict(data.get("gameplay")).get("ammoCategory")
     )
+    item_producers = {
+        name: item_body_producer_bindings(
+            name, target_id=item_entity_id, target_calls=(), bindings=bindings,
+            contact_suppressed=contact_suppressed,
+        )
+        for name, spec in EVENT_KIND_REGISTRY.items()
+        if "item_body" in spec.producer_binding_kinds
+    }
     for entity in runtime.get("entities") or []:
         if not isinstance(entity, Mapping):
             continue
@@ -571,26 +570,24 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         kind_spec = ENTITY_KIND_REGISTRY.get(entity_kind)
         for event_name in (kind_spec.base_events if kind_spec is not None else ()):
             rows.append({"entityId": entity_id, "event": event_name})
-        if (entity_kind == "item_body" and item_contact_enabled) or (
-            entity_kind != "item_body" and _dict(entity.get("damage")).get("enabled")
-        ):
+        if entity_kind == "item_body":
+            for event_name, producers in item_producers.items():
+                if producers and EVENT_KIND_REGISTRY[event_name].producer_binding_contact_damage is True:
+                    rows.append({"entityId": entity_id, "event": event_name})
+        elif _dict(entity.get("damage")).get("enabled"):
             rows.extend(({"entityId": entity_id, "event": "on_hit"}, {"entityId": entity_id, "event": "on_crit"}))
         if _dict(entity.get("collision")).get("tileCollide"):
             rows.append({"entityId": entity_id, "event": "on_tile_collision"})
         for event in entity.get("events") or []:
             if isinstance(event, Mapping):
                 event_name = str(event.get("event") or "")
-                if entity_kind == "item_body" and event_name in {"on_hit", "on_crit"} and not item_contact_enabled:
-                    continue
-                if entity_kind == "item_body" and event_name == "on_use" and not item_use_inputs:
+                if entity_kind == "item_body" and event_name in item_producers and not item_producers[event_name]:
                     continue
                 rows.append({"entityId": entity_id, "event": event_name})
-    for binding in runtime.get("bindings") or []:
-        if not isinstance(binding, Mapping):
-            continue
-        input_name = str(binding.get("input") or "")
-        if input_name in item_use_inputs and item_entity_id:
-            rows.append({"entityId": item_entity_id, "event": "on_use", "input": input_name})
+    for event_name, producers in item_producers.items():
+        if EVENT_KIND_REGISTRY[event_name].producer_binding_contact_damage is None and item_entity_id:
+            for binding in producers:
+                rows.append({"entityId": item_entity_id, "event": event_name, "input": str(binding.get("input") or "")})
     unique: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in rows:
         key = (str(row.get("entityId") or ""), str(row.get("event") or ""), str(row.get("input") or ""))

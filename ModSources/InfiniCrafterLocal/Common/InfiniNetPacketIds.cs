@@ -24,4 +24,5 @@ public static class InfiniNetPacketIds
     public const byte SyncGeneratedItemVfxEvent = 18;
     public const byte NotifyGeneratedPlacement = 19;
     public const byte SetMultiDevCraftMode = 20;
+    public const byte GeneratedHitNpcPull = 21;
 }

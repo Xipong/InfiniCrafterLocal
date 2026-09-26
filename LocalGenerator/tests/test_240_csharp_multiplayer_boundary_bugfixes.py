@@ -68,7 +68,7 @@ def _contract_check_projectile_extra_ai_is_versioned_bounded_and_fail_closed() -
     assert "_activationDelayTicks = Math.Max(0, syncedActivationDelay)" in configure
 
 
-def _contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authored() -> None:
+def _contract_check_v5_lifesteal_is_owner_local_and_npc_damage_uses_event_authority() -> None:
     source = _text("Common/Runtime/RuntimeProgramExecutor.cs")
     heal = _method(source, "private static void HealOwner", "private static void MoveOwner")
     area = _method(source, "private static void DamageArea", "private static void ChainDamage")
@@ -77,8 +77,14 @@ def _contract_check_v5_lifesteal_is_owner_local_and_npc_damage_is_server_authore
     assert "ShouldRunLocalPlayerAction(owner)" in heal
     assert "ShouldRunPlayerGameplay(owner)" not in heal
     assert "owner.Heal(heal)" in heal
-    assert "ShouldRunNpcGameplay()" in area
-    assert "ShouldRunNpcGameplay()" in chain
+    # Static wiring guard only; owner/remote/server/SP execution and native
+    # network dispatch are observed by tools/EngineRuntimeChecks.NetworkHit.cs.
+    assert "ShouldRunNpcEvent(action, owner)" in area
+    assert "ShouldRunNpcEvent(action, owner)" in chain
+    authority = _method(source, "internal static bool ShouldRunNpcEvent", "public static void ExecuteAction")
+    assert "RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit" in authority
+    assert "ShouldRunLocalPlayerAction(owner)" in authority
+    assert "ShouldRunNpcGameplay()" in authority
 
 
 def _contract_check_projectile_vfx_event_relay_is_server_authored_exact_and_lifetime_independent() -> None:

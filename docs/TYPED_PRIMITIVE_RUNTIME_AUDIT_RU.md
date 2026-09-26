@@ -43,11 +43,40 @@ Canonical owner — `LocalGenerator/infini_local/core/runtime_authoring/capabili
 - Event-spawn ledger разделяется siblings/descendants, delayed actions резервируют budget при enqueue и возвращают неиспользованный резерв. Root Hold/Shoot capacity отдельно от event allowance, включая allowance=0. Peer snapshot не создаёт authority ledger.
 - Delayed item-use source хранит snapshot Item с Context/AmmoItemIdUsed и исходными stats: расход последней единицы не отменяет событие. Projectile parent проверяется по экземпляру ModProjectile/слоту/owner/type/identity; неактивный прежний source допустим. При повторном использовании поколения действие отменяется и резерв возвращается: полная независимость terminal action от reuse ещё не реализована. Штатный item-periodic Misc source сохраняется, произвольный Misc не превращается в ложный ItemUse.
 
-## Известный MP-дефект — не закрыт этим snapshot
+## Проверка самодостаточности Author prompt
 
-Для player-owned projectile/item `on_hit/on_crit` установленный tML 2026.6.3.6 вызывает соответствующий hook на owner client. Infini NPC actions (`apply_status`, AoE, chain и NPC-pull) требуют server/SP authority. Vanilla strike packet #28 не повторяет item/projectile hook на сервере и не несёт его source identity. Поэтому такие NPC-эффекты owner-hit в MP теряются. Это подтверждённое несовпадение фаз по установленной DLL и RED headless observer, а не только отсутствие сетевого smoke.
+После Live20 проведены независимое чтение **только переданного system/user packet**, проверка всех 180 numeric params против consumers и отдельный аудит topology/producer constraints. Совпадение requiredness со schema не означало понятность контракта: найдены реальные пояснительные ошибки и недостающие source facts. Это не доказательство, что все 18 Repairs вызваны prompt, и не доказательство слабости модели как единственной причины.
 
-Привилегированный client→server command не добавлялся: одного sender/slot/range/sequence недостаточно для подтверждения факта попадания. Требуется отдельная явно определённая trust boundary (server collision/hit receipt либо принятая vanilla owner-hit authority), source/target generation и no-duplication tests. Прямые серверные изменения NPC velocity также требуют надёжной sync. Эти ограничения нельзя считать устранёнными no-image Live20 или DLL build.
+Исправлены следующие model-facing границы без host defaults или выбора дизайна за Author:
+
+- AoE/chain используют authored base damage **владельца события**: `configure_item_stats.damage` для тела, `set_projectile_damage.damage` для снаряда, не `damageDone`. Множитель отличается от additive процентов.
+- `move_drift` работает за projectile update, не world tick; `extraUpdates`, raw local immunity cooldown и sentinel `-1` объяснены отдельно. Числовые ranges, значения и lowering сохранены.
+- Пояснены cadence/animation, regen units, нейтральные множители, процентные пункты и raw engine величины без ложного перевода в физические единицы.
+- `DamageClass` теперь имеет смысловой словарь: unclassed не получает generic бонусы; summon не использует обычный crit; whip-class наследует melee speed, но не melee damage. Выбор класса не создаёт minion/controller/ammo mechanics. Все 13 `ItemUseStyle` также описаны как конкретные animation/pose, не whole-weapon presets.
+- Source-backed placement facts больше не теряют `placeStyle=0`: vanilla значение копируется точно, generated значение берётся из однозначного authored placement binding, а не transient Item projection. Отсутствующий стиль остаётся отсутствующим; несколько placements не сворачиваются в произвольно выбранный один.
+- Вход, действие и источник события разведены; `contactDamage` не отменяет `disableMeleeHitbox`/ammo suppression; pure placement и hybrid placement получают точные ограничения input, а не оружейный шаблон. Статический spawn budget отделён от общего runtime activation budget.
+- Общая проверка выбранных calls требует все не-optional поля, в том числе сознательно выбранные `0`/`false`, но не подставляет их. Неизвестные content IDs нельзя угадывать.
+
+Часть Terraria величин остаётся raw engine coefficient: без доказанной биекции переименование в секунды, метры или проценты исказило бы контракт. Prompt обязан назвать смысл, шкалу и ограничения; он не обещает численно восстановить всё поведение неизвестного стороннего мода. Live-эффект новых формулировок **не измерен**: предыдущий Live20 остаётся RED, новая модельная кампания в эту проверку не входит.
+
+Повторное независимое чтение только итогового system/user packet не обнаружило блокирующих противоречий: built-in DamageClass и ItemUseStyle покрыты полностью; необходимые значения и связи доступны из самого пакета. Это качественный review, не измерение live first-Author success.
+
+Цена уточнений на том же serializer fixture: user 80263 → 88744 символов (+8481), WordPiece proxy 29019 → 31289; catalog 63986 → 66543 символов. System неизменён; 52 capabilities / 180 numeric params сохранены. Это **не дополнительное сокращение prompt**: добавлены недостающие объяснения, а не урезана семантика. До лимита 96000 остаётся 7256 символов на этом fixture; реальные parent facts имеют собственный размер. Локальная schema в `json_object` по-прежнему не передаётся.
+
+## MP owner-hit: исправленная authority boundary
+
+Исходный дефект: tML 2026.6.3.6 вызывает player-owned projectile/item `on_hit/on_crit` на owner client, а прежний server/SP guard терял статус, AoE, chain и NPC-pull. Vanilla strike #28 не повторяет эти mod hooks на сервере.
+
+Исправление сохраняет **vanilla owner-authoritative hit trust**, не заявляя независимое серверное доказательство столкновения:
+
+- Статус и дополнительный AoE/chain от `on_hit/on_crit` исполняются на owner через нативные `NPC.AddBuff` / `Player.ApplyDamageToNPC` и их sync. Для остальных событий прежняя server/SP authority сохранена; callback целиком повторно на сервере не вызывается.
+- Для NPC velocity есть узкий receipt `GeneratedHitNpcPull`: сервер сам находит authored actions/force в известном definition. Пакет не задаёт произвольный урон, buff или силу, не повторяет spawn/VFX. Снаряд ищется по **owner + network identity**, не client-local слоту; terminal grace ограничен 60 world ticks и исходным ModProjectile generation.
+- NPC получает server-issued generation token через GlobalNPC ExtraAI. Замена NPC до приёма или отложенного исполнения не перенаправляет pull на новый экземпляр; настоящий `NPC.Transform` сохраняет identity. Item receipt использует недавний server-observed source и исходный input, а не случайно выбранный к моменту приёма предмет. Source/world/player identity проверяются, duplicate sequence отбрасывается.
+- Admission ограничен на отправителя/тик, pending receipt actions — на владельца, общий предел очереди сохранён. Сервер устанавливает `NPC.netUpdate` после изменения velocity.
+
+Parent запуск canonical-source headless: **65 passed, 0 failed**, включая сетевые sender/receiver serialization через память, разные projectile slots, generation/Transform, смену предмета/режима и насыщение очереди двумя владельцами. Нативная отправка статуса наблюдается на границе `NetMessage.SendData(53)`; это не проверка доставки через socket. Реальная DLL собрана: **0 warnings, 0 errors**. Headless fixture размещения проходит через настоящий `GeneratorClient.Prepare`, не копию serializer.
+
+Ограничения: live MP match и сетевые лаги не проверены; receipt вне bounded source lifetime либо до получения NPC generation не принимается. Это исправление gameplay NPC effects, не remote hit-VFX и не отдельная репликация custom whip tags. `.tmod` packaging и игровой smoke не выполнялись. No-image Live20 старого snapshot не доказывает исправление этой MP-границы.
 
 ## История live acceptance: quota и смена тестовой конфигурации
 
@@ -91,6 +120,14 @@ Canonical owner — `LocalGenerator/infini_local/core/runtime_authoring/capabili
 Найдены и исправлены ошибки самих раннеров: `toolbox/tests` теперь входит в default pytest discovery, focused и sharded selection; production/shared/config changes консервативно выбирают оба offline test roots. Нулевой выбор имеет `not_selected`, а непокрытые changed paths явно перечисляются и не выдают частичный прогон за полную проверку. Все runners принудительно отключают project-config/live режим для offline тестов. Добавлены 18 focused runner-selection regressions, включая реальный sandbox subprocess.
 
 После объединения изменений обычный `pytest -q` завершился **748 passed in 20.95s**. Это не сокращение количества: сохранены полезные numeric cases и добавлены регрессии на обнаруженные дефекты. Время измерено в одном локальном запуске, не является контролируемым performance benchmark. Полный sandbox-sharded прогон также прошёл: **748 tests**, 65 файлов, 4 shards, 28.125s; в нём реально исполнены toolbox tests. C# runtime в этой дополнительной пачке не менялся.
+
+## Итоговые offline gates после prompt/MP исправлений
+
+- Default Python/toolbox suite: **780 passed**, без skip/xfail для закрытия этой работы. 65 C# headless checks и forced mod DLL rebuild также прошли; полный игровой запуск не выполнялся.
+- Ruff/Pyright, 10 generated schema artifacts, `lowery.md`/inventory/parity docs и targeted-Repair audit проходят. Targeted Repair: policy 43/43, frozen callsites 7/7; Terraria standardization 88/88; delivery/parity/mutation/C# scanner/hygiene — GREEN.
+- Producer registry теперь согласован с runtime: item-body use/contact events не требуют, чтобы spawn binding целился в item_body; `apply_item_effects` может иметь независимый контакт. `equipped` имеет один executable binding. Repair различает source/target, не предлагает `spawn_entity(item_body)` и не предлагает контакт через frozen hitbox/ammo suppression; удалять можно только неисполняемый invalid event call.
+- Parent дополнительно воспроизвёл одноразовый iterator bug в новой suppression-проверке: после проверки hitbox generator уже был исчерпан и скрывал ammo. Исправлено сохранением bounded tuple; ammo-регрессия теперь включает hitbox, чтобы один suppressor не маскировал другой.
+- Build-infrastructure: Linux restore оставил Linux `NuGetPackageRoot` для последующего Windows build. Windows restore с точным уже установленным `TmlVersionResolved=2026.6.3.6` и пустым `TmlVersion` обошёл только alias-feed discovery SDK, падавший на отсутствующем необязательном tModLoaderDev. После этого выполнен **обычный** `dotnet.exe build ... --no-restore --no-incremental -p:TmlBuildMod=false`, не замена DLL-сборки headless результатом. SDK/игра не патчились.
 
 ## Намеренно custom/hidden и acceptance
 

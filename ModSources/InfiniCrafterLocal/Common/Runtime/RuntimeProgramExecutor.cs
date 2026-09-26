@@ -33,6 +33,14 @@ internal sealed class RuntimeSpawnBudget
 
 internal static class RuntimeProgramExecutor
 {
+    // tML dispatches owner-hit hooks only on the owner. NPC.AddBuff and
+    // Player.ApplyDamageToNPC sync their own changes; server-side replay of
+    // these authored actions would duplicate damage/status on other events.
+    internal static bool ShouldRunNpcEvent(RuntimeEventActionSpec action, Player owner)
+        => action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
+            ? InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
+            : InfiniRuntimeAuthority.ShouldRunNpcGameplay();
+
     public static void ExecuteAction(
         GeneratedItemData data,
         RuntimeEntitySpec sourceEntity,
@@ -72,7 +80,7 @@ internal static class RuntimeProgramExecutor
                 SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget);
                 break;
             case RuntimeEventActionCode.ApplyStatus:
-                if (InfiniRuntimeAuthority.ShouldRunNpcGameplay() && directTarget is { active: true })
+                if (ShouldRunNpcEvent(action, owner) && directTarget is { active: true })
                     directTarget.AddBuff(action.BuffId, action.DurationTicks);
                 break;
             case RuntimeEventActionCode.DamageArea:
@@ -155,7 +163,7 @@ internal static class RuntimeProgramExecutor
 
     private static void DamageArea(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
     {
-        if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay() || action.RadiusPx <= 0)
+        if (!ShouldRunNpcEvent(action, owner) || action.RadiusPx <= 0)
             return;
         var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
         baseDamage = Math.Max(1, baseDamage);
@@ -174,7 +182,7 @@ internal static class RuntimeProgramExecutor
 
     private static void ChainDamage(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
     {
-        if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay())
+        if (!ShouldRunNpcEvent(action, owner))
             return;
         float range = Math.Max(16f, action.RangeTiles * 16f);
         var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
@@ -212,7 +220,10 @@ internal static class RuntimeProgramExecutor
         if (directTarget is { active: true })
         {
             if (directTarget.knockBackResist > 0f)
+            {
                 directTarget.velocity += (destination - directTarget.Center).SafeNormalize(Vector2.Zero) * strength * directTarget.knockBackResist;
+                if (InfiniRuntimeAuthority.IsServer) directTarget.netUpdate = true;
+            }
             return;
         }
         int pulled = 0;
@@ -221,6 +232,7 @@ internal static class RuntimeProgramExecutor
             if (!npc.CanBeChasedBy() || npc.knockBackResist <= 0f || Vector2.DistanceSquared(npc.Center, eventPosition) > radius * radius)
                 continue;
             npc.velocity += (destination - npc.Center).SafeNormalize(Vector2.Zero) * strength * npc.knockBackResist;
+            if (InfiniRuntimeAuthority.IsServer) npc.netUpdate = true;
             if (++pulled >= 16)
                 break;
         }

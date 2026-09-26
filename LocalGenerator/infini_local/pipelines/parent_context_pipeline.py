@@ -449,7 +449,7 @@ def runtime_facts_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
     rf = fp.get("runtimeFacts") if isinstance(fp, dict) else None
     if isinstance(rf, dict):
         return rf
-    keys = ["type", "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation", "rare", "rarityDetails", "value", "maxStack", "consumable", "accessory", "defense", "createTile", "createWall", "pickPower", "axePower", "hammerPower", "healLife", "healMana", "potion", "manaCost", "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "buffType", "buffTime"]
+    keys = ["type", "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation", "rare", "rarityDetails", "value", "maxStack", "consumable", "accessory", "defense", "createTile", "createWall", "placeStyle", "pickPower", "axePower", "hammerPower", "healLife", "healMana", "potion", "manaCost", "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "buffType", "buffTime"]
     return {k: item_field(item, k, None) for k in keys if item_field(item, k, None) is not None}
 
 def auto_features_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
@@ -512,7 +512,39 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     raw = _raw_item_fields_for_llm(item)
     # If the live client sent richer fields, keep them; if older payload, itemRaw is built from item fields.
     raw.update({k: item_field(item, k, None) for k in LLM_ITEM_RAW_KEYS if item_field(item, k, None) is not None})
-    return _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
+    out = _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
+    if generated_data_of(item):
+        for key in ("createTile", "createWall", "placeStyle"):
+            out.pop(key, None)
+        out.update(_generated_placement_fields(item))
+    return out
+
+def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
+    """Only a single explicit canonical place binding can be represented as item fields.
+
+    Active-use Item fields can be reset to nonplacing outside the use hook. Multiple
+    distinct placements remain visible on their separate generatedParent bindings.
+    """
+    program = dict_get_ci(generated_data_of(item), "runtimeProgram", {})
+    if not isinstance(program, dict):
+        return {}
+    placements = []
+    for binding in program.get("bindings") or []:
+        if not isinstance(binding, dict):
+            continue
+        policy = dict_get_ci(binding, "usePolicy", {})
+        action = dict_get_ci(policy, "action", {}) if isinstance(policy, dict) else {}
+        if not isinstance(action, dict) or dict_get_ci(action, "kind") != "place_item":
+            continue
+        placement = dict_get_ci(action, "placement", {})
+        if isinstance(placement, dict):
+            placements.append(placement)
+    if len(placements) != 1:
+        return {}
+    placement = placements[0]
+    return {key: placement[source] for key, source in (
+        ("createTile", "tileId"), ("createWall", "wallId"), ("placeStyle", "placeStyle")
+    ) if source in placement and placement[source] is not None}
 
 def _pnum(proj: dict[str, Any], key: str, default: float = 0.0) -> float:
     try:
@@ -735,8 +767,12 @@ def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
             n = int(float(v))
         except Exception:
             continue
-        if n > 0 or k in {"createTile", "createWall"}:
+        if n > 0 or k in {"createTile", "createWall", "placeStyle"}:
             out[k] = n
+    if generated_data_of(item):
+        for key in ("createTile", "createWall", "placeStyle"):
+            out.pop(key, None)
+        out.update(_generated_placement_fields(item))
     sets = item.get("itemSetsRaw") or item.get("setsRaw")
     if isinstance(sets, dict):
         selected: dict[str, Any] = {}

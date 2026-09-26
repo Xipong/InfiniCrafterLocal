@@ -37,7 +37,8 @@ internal static class RuntimeDelayedActionScheduler
         int ChildDepth,
         int Ticks,
         int ReservedSpawnBudget,
-        RuntimeSpawnBudget Budget);
+        RuntimeSpawnBudget Budget,
+        bool OwnerHitReceipt);
 
     private static readonly List<PendingAction> Pending = new();
 
@@ -52,12 +53,21 @@ internal static class RuntimeDelayedActionScheduler
         NPC? target,
         int damageDone,
         int childDepth,
-        RuntimeSpawnBudget budget)
+        RuntimeSpawnBudget budget,
+        bool ownerHitReceipt = false)
     {
         if (data is null || action is null || owner is null || !owner.active || source is null || action.DelayTicks <= 0)
             return false;
         if (Pending.Count >= InfiniRuntimeLimits.MaxPendingRuntimeActions)
             return false;
+        if (ownerHitReceipt)
+        {
+            int ownerPending = 0;
+            foreach (PendingAction pending in Pending)
+                if (pending.OwnerHitReceipt && pending.OwnerId == owner.whoAmI
+                    && ReferenceEquals(pending.Owner, owner) && ++ownerPending >= 32)
+                    return false;
+        }
 
         Projectile? sourceProjectile = null;
         ModProjectile? sourceModProjectile = null;
@@ -121,7 +131,7 @@ internal static class RuntimeDelayedActionScheduler
             sourceProjectile, projectileSlot, sourceProjectile?.identity ?? 0,
             sourceProjectile?.type ?? 0, sourceModProjectile,
             target?.whoAmI ?? -1, target, position, direction, damageDone,
-            childDepth, Math.Clamp(action.DelayTicks, 1, 600), reservedSpawnBudget, budget));
+            childDepth, Math.Clamp(action.DelayTicks, 1, 600), reservedSpawnBudget, budget, ownerHitReceipt));
         return true;
     }
 
@@ -181,6 +191,12 @@ internal static class RuntimeDelayedActionScheduler
                 && Main.npc[pending.NpcId].active
                 ? Main.npc[pending.NpcId]
                 : null;
+            // A direct-hit pull cannot silently become an area pull if its NPC
+            // died or the slot was recycled during the authored delay.
+            if (pending.Target is not null && target is null
+                && pending.Action.ActionCode == RuntimeEventActionCode.Pull
+                && pending.Action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                continue;
             RuntimeProgramExecutor.ExecuteAction(
                 pending.Data,
                 pending.SourceEntity,

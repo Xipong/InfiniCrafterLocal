@@ -155,6 +155,45 @@ def test_model_cards_explain_ambiguous_engine_magnitudes_without_invented_units(
         assert cards[fn][name]["units"] == "pixels/projectile update"
 
 
+def test_numeric_prompt_distinguishes_authored_damage_update_rate_and_raw_cooldown():
+    cards = {c["fn"]: c for c in compact_capability_catalog()}
+    for fn in ("damage_area_on_event", "chain_damage_on_event"):
+        meaning = cards[fn]["params"]["damageMultiplier"]["meaning"]
+        assert "item_body" in meaning and "configure_item_stats.damage" in meaning
+        assert "set_projectile_damage.damage" in meaning and "damageDone" in meaning
+        assert "at least 1" in meaning and "before target defense" in meaning
+    drift = cards["move_drift"]
+    assert "per projectile update" in drift["does"]
+    assert "1 + extraUpdates" in drift["params"]["velocityRetention"]["meaning"]
+    assert "10" in cards["configure_spawn"]["params"]["speedPxPerTick"]["meaning"]
+    cooldown = cards["set_projectile_collision"]["params"]["localNpcHitCooldownTicks"]
+    assert cooldown["min"] == -1 and cooldown["max"] == 600
+    for phrase in ("unscaled", "-1", "once", "0..600", "owner", "extraUpdates"):
+        assert phrase in cooldown["meaning"]
+    guide = runtime_authoring_prompt_field_guide()["paramNotation"]
+    assert "world ticks" in guide and "1 + extraUpdates" in guide
+    assert "localNpcHitCooldownTicks" in guide
+
+
+def test_numeric_prompt_keeps_distinct_factors_percentages_and_sentinels():
+    cards = {c["fn"]: c["params"] for c in compact_capability_catalog()}
+    guide = runtime_authoring_prompt_field_guide()["paramNotation"]
+    for phrase in ("15", "0.15", "bonusPercent", "CritChancePercentagePoints",
+                   "manaCostReductionPercentagePoints", "damageReductionPercentagePoints",
+                   "ammoSaveChancePercent", "damageMultiplier=1", "AoE/chain floor at 1",
+                   "damageFraction=0.15", "homingStrength=0.15", "pierce=-1",
+                   "tileId/wallId=-1", "Default receives no Generic", "Summon crit is nonstandard"):
+        assert phrase in guide
+    for phrase in ("+2", "+1 HP/s", "-2", "-1 HP/s"):
+        assert phrase in cards["configure_accessory"]["lifeRegenHalfHpPerSecond"]["meaning"]
+    assert "not mana/s" in cards["configure_accessory"]["manaRegenBonusPoints"]["meaning"]
+    assert "independent" in cards["configure_item_stats"]["useAnimationTicks"]["meaning"]
+    assert "interval" in cards["configure_item_stats"]["useTimeTicks"]["meaning"]
+    assert "1 unchanged" in cards["set_projectile_hitbox"]["hitboxScale"]["meaning"]
+    assert "1 unchanged" in cards["move_accelerate"]["acceleration"]["meaning"]
+    assert "1 unchanged" in cards["charge_then_release"]["powerMultiplier"]["meaning"]
+
+
 def test_periodic_missing_fields_are_reported_once_by_canonical_shape():
     from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 

@@ -2,6 +2,7 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Projectiles;
 using Terraria.ModLoader;
@@ -34,6 +35,11 @@ public sealed class InfiniCrafterLocalMod : Mod
     public override void HandlePacket(System.IO.BinaryReader reader, int whoAmI)
     {
         byte packetType = reader.ReadByte();
+        if (packetType == InfiniNetPacketIds.GeneratedHitNpcPull)
+        {
+            RuntimeHitPullBridge.HandlePacket(reader, whoAmI);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.RequestGeneratedAsset)
         {
             AssetSync?.HandleAssetRequestPacket(reader, whoAmI);

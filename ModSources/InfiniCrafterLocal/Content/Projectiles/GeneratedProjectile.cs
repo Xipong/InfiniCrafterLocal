@@ -57,6 +57,14 @@ public sealed partial class GeneratedProjectile : ModProjectile
     internal bool Matches(string? generatedItemId, string? entityId)
         => _configured && string.Equals(_generatedItemId, generatedItemId?.Trim(), StringComparison.Ordinal)
             && string.Equals(_entityId, entityId?.Trim(), StringComparison.Ordinal);
+    internal bool TryGetHitSource(out GeneratedItemData data, out RuntimeEntitySpec entity)
+    {
+        data = _data!; entity = _entity!;
+        return _configured && data is not null && entity is not null
+            && entity.IsProjectileEntity
+            && ReferenceEquals(data.RuntimeProgram.TryGetEntity(_entityId), entity)
+            && string.Equals(data.Id, _generatedItemId, StringComparison.Ordinal);
+    }
 
     private bool IsPrimaryRuntimeEntity
         => _configured

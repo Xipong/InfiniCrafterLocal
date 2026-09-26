@@ -934,7 +934,7 @@
                     "x-infini-semanticType": "draw_scale"
                   },
                   "useAnimationTicks": {
-                    "description": "Use animation",
+                    "description": "Duration of one use animation, independent of useTimeTicks; differing values can allow multiple uses during one animation, not necessarily one projectile per click",
                     "maximum": 600,
                     "minimum": 1,
                     "type": "integer",
@@ -942,7 +942,7 @@
                     "x-infini-units": "ticks"
                   },
                   "useTimeTicks": {
-                    "description": "Use time",
+                    "description": "Terraria use/reuse interval (60 ticks/s), not the animation length",
                     "maximum": 600,
                     "minimum": 1,
                     "type": "integer",
@@ -1161,7 +1161,7 @@
                     "x-infini-units": "pixels"
                   },
                   "hitboxScale": {
-                    "description": "Contact hitbox scale",
+                    "description": "Contact hitbox scale; 1 unchanged",
                     "maximum": 2,
                     "minimum": 0.5,
                     "type": "number",
@@ -1988,7 +1988,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "lifeRegenHalfHpPerSecond": {
-                    "description": "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)",
+                    "description": "Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2034,7 +2034,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "manaRegenBonusPoints": {
-                    "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
+                    "description": "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2254,7 +2254,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "lifeRegenHalfHpPerSecond": {
-                    "description": "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)",
+                    "description": "Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2300,7 +2300,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "manaRegenBonusPoints": {
-                    "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
+                    "description": "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2408,7 +2408,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "setBonusLifeRegenHalfHpPerSecond": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)",
+                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2426,7 +2426,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "setBonusManaRegenBonusPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus engine points; not directly mana/second",
+                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2658,7 +2658,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "speedPxPerTick": {
-                    "description": "Initial Projectile.velocity pixels per projectile update; extraUpdates adds updates per world tick",
+                    "description": "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick",
                     "maximum": 80,
                     "minimum": 0,
                     "type": "number",
@@ -2871,7 +2871,7 @@
                     "x-infini-units": "pixels"
                   },
                   "hitboxScale": {
-                    "description": "Runtime hitbox multiplier",
+                    "description": "Runtime damage hitbox multiplier; 1 unchanged (beam/whip use special line collisions)",
                     "maximum": 3,
                     "minimum": 0.25,
                     "type": "number",
@@ -2955,7 +2955,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "localNpcHitCooldownTicks": {
-                    "description": "Raw Terraria Projectile.localNPCHitCooldown engine cooldown; only in local mode; -1 hits each NPC once (not converted to world ticks)",
+                    "description": "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds",
                     "maximum": 600,
                     "minimum": -1,
                     "type": "integer",
@@ -3199,7 +3199,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "velocityRetention": {
-                    "description": "Multiply projectile velocity each projectile update",
+                    "description": "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s",
                     "maximum": 1.05,
                     "minimum": 0.8,
                     "type": "number",
@@ -3553,7 +3553,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "acceleration": {
-                    "description": "Velocity multiplier per projectile update until maxSpeed cap",
+                    "description": "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged",
                     "maximum": 1.2,
                     "minimum": 1.0,
                     "type": "number",
@@ -3933,7 +3933,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "maxScale": {
-                    "description": "Scale cap",
+                    "description": "Projectile.scale cap (not a pixel radius)",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
@@ -4306,7 +4306,7 @@
                     "x-infini-units": "ticks"
                   },
                   "powerMultiplier": {
-                    "description": "Full-charge damage/knockback multiplier",
+                    "description": "Full-charge damage/knockback multiplier; 1 unchanged",
                     "maximum": 4,
                     "minimum": 1,
                     "type": "number",
@@ -4734,7 +4734,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "damageMultiplier": {
-                    "description": "Multiplier applied to this call target entity's authored projectile damage",
+                    "description": "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone",
                     "maximum": 4,
                     "minimum": 0.05,
                     "type": "number",
@@ -4827,7 +4827,7 @@
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
                   "damageMultiplier": {
-                    "description": "Multiplier applied to this call target entity's authored projectile damage",
+                    "description": "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone",
                     "maximum": 2,
                     "minimum": 0.05,
                     "type": "number",

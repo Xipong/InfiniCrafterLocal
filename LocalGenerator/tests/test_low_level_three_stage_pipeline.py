@@ -2158,7 +2158,12 @@ def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() 
     assert {
         row["usePolicy"]["action"]["targetId"]
         for row in requirement["allowedBindingTransactions"]
-    } == {"item"}
+    } == {"item", "workbench_blade"}
+    assert all(
+        row["usePolicy"]["action"]["kind"] == "spawn_entity"
+        or row["usePolicy"]["action"]["targetId"] == "item"
+        for row in requirement["allowedBindingTransactions"]
+    )
 
 
 def test_event_repair_preserves_complete_binding_alternatives_without_cross_product(
@@ -2349,17 +2354,13 @@ def test_item_hit_event_requires_contact_binding_and_repair_updates_exact_policy
         row for row in scope["repairRequirements"]
         if row["code"] == "event_not_emitted"
     )
-    assert requirement["requiredBindingUpdates"] == [{
-        "bindingId": binding["id"],
-        "allowed": [{
-            "input": binding["input"],
-            "usePolicy": {
-                **copy.deepcopy(binding["usePolicy"]),
-                "contactDamage": True,
-            },
-        }],
-    }]
-    assert requirement["mustApplyAll"] is True
+    assert binding["id"] in requirement["allowedExistingBindingIds"]
+    assert any(row["usePolicy"]["contactDamage"] is True
+               and row["usePolicy"]["action"]["targetId"] == "item"
+               for row in requirement["allowedBindingTransactions"])
+    assert any(row["usePolicy"]["action"]["kind"] == "spawn_entity"
+               and row["usePolicy"]["action"]["targetId"] == "workbench_blade"
+               for row in requirement["allowedBindingTransactions"])
 
     fixed_binding = copy.deepcopy(binding)
     fixed_binding["usePolicy"]["contactDamage"] = True
@@ -2377,7 +2378,7 @@ def test_item_hit_event_requires_contact_binding_and_repair_updates_exact_policy
     assert (item_id, "on_crit") in pairs
 
 
-def test_item_hit_event_ignores_contact_binding_for_another_target() -> None:
+def test_item_hit_event_uses_item_contact_even_when_binding_spawns_another_target() -> None:
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     binding = program["bindings"][0]
@@ -2394,22 +2395,11 @@ def test_item_hit_event_ignores_contact_binding_for_another_target() -> None:
     event_call["params"]["event"] = "on_hit"
 
     report = validate_runtime_program(current)
-    assert [row["code"] for row in report["errors"]] == ["event_not_emitted"]
-    scope = build_runtime_repair_scope(current, report["errors"])
-    requirement = next(
-        row for row in scope["repairRequirements"]
-        if row["code"] == "event_not_emitted"
-    )
-    assert requirement["requiredBindingUpdates"] == [{
-        "bindingId": binding["id"],
-        "allowed": [{
-            "input": binding["input"],
-            "usePolicy": {
-                **copy.deepcopy(binding["usePolicy"]),
-                "contactDamage": True,
-            },
-        }],
-    }]
+    assert report["ok"], report["errors"]
+    compiled = compile_runtime_program(current)
+    assert any(row["event"] == "on_hit" for row in next(
+        entity for entity in compiled["runtimeProgram"]["entities"] if entity["id"] == "item"
+    )["events"])
 
 
 def test_item_hit_event_does_not_require_optional_contact_geometry_call() -> None:

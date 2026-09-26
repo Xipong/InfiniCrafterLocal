@@ -485,6 +485,7 @@ public sealed class GeneratorClient
             existing = canonical;
         }
         Item craftItem = CraftIdentityItem(item, existing);
+        RuntimePlacementSpec? placement = CanonicalParentPlacement(existing);
         int originalPrefix = SafePrefix(item);
         bool prefixIgnored = originalPrefix != InfiniTerrariaSentinels.NoPrefix;
         var autoFeatures = AutoFeaturesFromItem(craftItem).ToArray();
@@ -521,8 +522,9 @@ public sealed class GeneratorClient
             accessory = craftItem.accessory,
             maxStack = craftItem.maxStack,
             stack = item.stack,
-            createTile = craftItem.createTile,
-            createWall = craftItem.createWall,
+            createTile = existing is null ? (int?)craftItem.createTile : placement?.TileId,
+            createWall = existing is null ? (int?)craftItem.createWall : placement?.WallId,
+            placeStyle = existing is null ? (int?)craftItem.placeStyle : placement?.PlaceStyle,
             defense = craftItem.defense,
             headSlot = craftItem.headSlot,
             bodySlot = craftItem.bodySlot,
@@ -550,7 +552,7 @@ public sealed class GeneratorClient
             ammoRaw = AmmoRawFromItem(craftItem, player),
             // Only generated items carry authored design tags. Vanilla/modded parents do not get fake semantic tags.
             tags = existing?.Tags is { Length: > 0 } ? existing.Tags : Array.Empty<string>(),
-            runtimeFacts = RuntimeFactsFromItem(craftItem),
+            runtimeFacts = RuntimeFactsFromItem(craftItem, existing),
             autoFeatures,
             nameTokens,
             canonical = existing?.Canonical ?? CanonicalFromItem(craftItem, autoFeatures),
@@ -564,6 +566,20 @@ public sealed class GeneratorClient
                 note = "Terraria reforges/prefixes are intentionally ignored for InfiniCraft recipes; original items/refunds keep their prefix."
             }
         };
+    }
+
+    private static RuntimePlacementSpec? CanonicalParentPlacement(GeneratedItemData? definition)
+    {
+        // Generated Item placement fields are reset outside an active place_item use.
+        // Only one explicit canonical placement can be represented as item facts;
+        // multiple bindings remain independently visible in generatedData.
+        if (definition is null)
+            return null;
+        var placements = definition.RuntimeProgram.Bindings
+            .Where(binding => binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
+            .Select(binding => binding.UsePolicy.Action.Placement)
+            .Take(2).ToArray();
+        return placements.Length == 1 ? placements[0] : null;
     }
 
     private static void Normalize(GeneratedItemData data, Item a, Item b) => Normalize(data, CraftParentName(a), CraftParentName(b));
@@ -625,6 +641,7 @@ public sealed class GeneratorClient
 
     private static object FingerprintFromItem(Item item, string sourceMod, string internalName, string[] autoFeatures, string[] nameTokens, GeneratedItemData? existing, int originalPrefix = 0)
     {
+        RuntimePlacementSpec? placement = CanonicalParentPlacement(existing);
         return new
         {
             sourceMod,
@@ -654,8 +671,9 @@ public sealed class GeneratorClient
             headSlot = item.headSlot,
             bodySlot = item.bodySlot,
             legSlot = item.legSlot,
-            createTile = item.createTile,
-            createWall = item.createWall,
+            createTile = existing is null ? (int?)item.createTile : placement?.TileId,
+            createWall = existing is null ? (int?)item.createWall : placement?.WallId,
+            placeStyle = existing is null ? (int?)item.placeStyle : placement?.PlaceStyle,
             pickPower = item.pick,
             axePower = item.axe,
             hammerPower = item.hammer,
@@ -680,15 +698,16 @@ public sealed class GeneratorClient
             noUseGraphic = item.noUseGraphic,
             useTurn = item.useTurn,
             autoReuse = item.autoReuse,
-            runtimeFacts = RuntimeFactsFromItem(item),
+            runtimeFacts = RuntimeFactsFromItem(item, existing),
             autoFeatures,
             nameTokens
         };
     }
 
 
-    private static object RuntimeFactsFromItem(Item item)
+    private static object RuntimeFactsFromItem(Item item, GeneratedItemData? existing = null)
     {
+        RuntimePlacementSpec? placement = CanonicalParentPlacement(existing);
         return new
         {
             type = item.type,
@@ -716,8 +735,9 @@ public sealed class GeneratorClient
             headSlot = item.headSlot,
             bodySlot = item.bodySlot,
             legSlot = item.legSlot,
-            createTile = item.createTile,
-            createWall = item.createWall,
+            createTile = existing is null ? (int?)item.createTile : placement?.TileId,
+            createWall = existing is null ? (int?)item.createWall : placement?.WallId,
+            placeStyle = existing is null ? (int?)item.placeStyle : placement?.PlaceStyle,
             pickPower = item.pick,
             axePower = item.axe,
             hammerPower = item.hammer,

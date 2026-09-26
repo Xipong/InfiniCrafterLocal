@@ -24,6 +24,22 @@ DAMAGE_CLASS_TOKENS: Final[tuple[str, ...]] = (
     "throwing",
 )
 
+# Semantic descriptions of exact identities, not behaviour presets. Special
+# cases are documented in installed tML 2026.6 DamageClass XML; keep them here
+# with the tokens so prompts need not send C# symbol names as explanations.
+DAMAGE_CLASS_MEANINGS: Final[Mapping[str, str]] = MappingProxyType({
+    "default": "Unclassed damage; does not receive generic bonuses.",
+    "generic": "Generic/all-class bonuses, without an additional class-specific bonus source.",
+    "melee": "Melee damage and melee stat bonuses, plus generic bonuses.",
+    "melee_no_speed": "Melee damage bonuses, but attack speed has no effect on the item.",
+    "ranged": "Ranged damage and ranged stat bonuses, plus generic bonuses.",
+    "magic": "Magic damage and magic stat bonuses, plus generic bonuses.",
+    "magic_summon_hybrid": "Inherits magic, summon and generic stat modifiers.",
+    "summon": "Summon and generic stat bonuses; no standard critical-hit calculation.",
+    "summon_melee_speed": "Summon and generic bonuses plus melee attack speed, not melee damage; no standard critical-hit calculation (vanilla whip class).",
+    "throwing": "Throwing-class bonuses, plus generic bonuses; a modding class not used by vanilla items.",
+})
+
 # Exact tModLoader content identity for optional modded damage classes. Built-ins
 # use the finite tokens above; modded values must use the registered FullName
 # shape `ModName/ClassName`, copied from a parent's damageClass facts, not its
@@ -51,6 +67,24 @@ ITEM_USE_STYLE_TOKENS: Final[tuple[str, ...]] = (
     "rapier",
     "raise_lamp",
 )
+
+# Animation/pose meanings from installed ItemUseStyleID XML and Player.ItemCheck_ApplyUseStyle.
+# These describe held-item presentation, not executable use or weapon presets.
+ITEM_USE_STYLE_MEANINGS: Final[Mapping[str, str]] = MappingProxyType({
+    "swing": "Swing the held item in an overhead arc.",
+    "eat_food": "Move the held item toward the mouth in an eating gesture.",
+    "thrust": "Thrust the held item horizontally in front of the player.",
+    "hold_up": "Hold the item up in front of the player.",
+    "shoot": "Point the held item forward toward the cursor.",
+    "drink_long": "Tip the item toward the mouth early, then hold that drinking pose.",
+    "drink_liquid": "Tilt the held item toward the mouth with the front arm.",
+    "golf_play": "Swing the item like a golf club, with backswing and follow-through.",
+    "hidden_animation": "Suppress the usual held-item use pose/body animation.",
+    "mow_the_lawn": "Move both arms in a forward-and-back mowing gesture.",
+    "guitar": "Hold the item at the torso while the front arm strums.",
+    "rapier": "Thrust the held item toward the cursor at any angle.",
+    "raise_lamp": "Raise the held item high with the back/off hand.",
+})
 
 # Generated ammo items can safely set the per-instance Item.ammo value for these
 # stable vanilla categories.  Sand is intentionally excluded: its complete
@@ -130,9 +164,11 @@ AMMO_CATEGORY_TMODLOADER_NAMES: Final[Mapping[str, str]] = MappingProxyType({
 
 __all__ = [
     "AMMO_CATEGORY_TMODLOADER_NAMES",
+    "DAMAGE_CLASS_MEANINGS",
     "DAMAGE_CLASS_TMODLOADER_NAMES",
     "DAMAGE_CLASS_TOKEN_PATTERN",
     "DAMAGE_CLASS_TOKENS",
+    "ITEM_USE_STYLE_MEANINGS",
     "ITEM_USE_STYLE_TMODLOADER_NAMES",
     "ITEM_USE_STYLE_TOKENS",
     "VANILLA_AMMO_CATEGORY_TOKENS",

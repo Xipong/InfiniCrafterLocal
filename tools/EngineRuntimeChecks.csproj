@@ -26,6 +26,8 @@
     <Compile Include="EngineRuntimeChecks.Assets.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
+    <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />
+    <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/ParticleLibrary/ParticleLibrary.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/Luminance/bin/Debug/net8.0/Luminance.dll" />

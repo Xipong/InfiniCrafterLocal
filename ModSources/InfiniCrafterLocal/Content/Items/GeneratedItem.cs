@@ -491,6 +491,7 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (!BindingUsesItemBodyContact(binding)) return;
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
+        RuntimeHitPullBridge.SendItemHit(player, this, target, hit.Crit);
         RunItemEvent(player, itemEntity, RuntimeEventKind.OnHit, target, damageDone);
         if (hit.Crit) RunItemEvent(player, itemEntity, RuntimeEventKind.OnCrit, target, damageDone);
         InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnHit);

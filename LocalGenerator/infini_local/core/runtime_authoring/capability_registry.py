@@ -700,8 +700,8 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         "defensePoints": stat("defense", "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment", 0 if armor else -50, 200, "defense_points", integer=True),
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
-        "lifeRegenHalfHpPerSecond": stat("lifeRegen", "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)", -100, 200, "half_hp_per_second", integer=True),
-        "manaRegenBonusPoints": stat("manaRegen", "Add Player.manaRegenBonus engine points; not directly mana/second", -100, 200, "mana_regen_bonus_points", integer=True),
+        "lifeRegenHalfHpPerSecond": stat("lifeRegen", "Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing", -100, 200, "half_hp_per_second", integer=True),
+        "manaRegenBonusPoints": stat("manaRegen", "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s", -100, 200, "mana_regen_bonus_points", integer=True),
         "moveSpeedBonusPercent": stat("movementSpeed", "Add percent/100 to Player.moveSpeed", -90, 300, "additive_percent", percent=True),
         "maxRunSpeedBonusPxPerTick": stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"),
         "jumpSpeedBonusPxPerTick": stat("jumpSpeed", "Add to Player.jumpSpeedBoost (positive raises jump speed)", -5, 20, "pixels_per_tick"),
@@ -763,8 +763,8 @@ _CAPS: list[CapabilitySpec] = [
             "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Base item damage", minimum=0, maximum=2000),
             "knockback": _p("number", "Item.knockBack engine strength, not pixels or damage", minimum=0, maximum=20),
-            "useTimeTicks": _p("integer", "Use time", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
-            "useAnimationTicks": _p("integer", "Use animation", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
+            "useTimeTicks": _p("integer", "Terraria use/reuse interval (60 ticks/s), not the animation length", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
+            "useAnimationTicks": _p("integer", "Duration of one use animation, independent of useTimeTicks; differing values can allow multiple uses during one animation, not necessarily one projectile per click", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
             "manaCost": _p("integer", "Mana consumed per use", minimum=0, maximum=500),
             "rarity": _p("integer", "Exact loaded Item.rare ID (built-in normal rarities are 0..11); copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
             "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper", wire_name="value"),
@@ -811,7 +811,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_combat",
         ("item_body",),
         {
-            "hitboxScale": _p("number", "Contact hitbox scale", minimum=0.5, maximum=2),
+            "hitboxScale": _p("number", "Contact hitbox scale; 1 unchanged", minimum=0.5, maximum=2),
             "contactForgivenessPx": _p("integer", "Extend scaled contact hitbox by this many pixels on each side", minimum=0, maximum=64, units="pixels"),
         },
         py=_COMPILER_OWNER,
@@ -1034,7 +1034,7 @@ _CAPS: list[CapabilitySpec] = [
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
         {
-            "speedPxPerTick": _p("number", "Initial Projectile.velocity pixels per projectile update; extraUpdates adds updates per world tick", minimum=0, maximum=80, units="pixels/projectile update"),
+            "speedPxPerTick": _p("number", "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick", minimum=0, maximum=80, units="pixels/projectile update"),
             "count": _p("integer", "Default root binding spawn count per activation; event actions and target_and_fire select their own counts", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
@@ -1085,7 +1085,7 @@ _CAPS: list[CapabilitySpec] = [
             "widthPx": _p("integer", "Hitbox width", minimum=4, maximum=192, units="pixels"),
             "heightPx": _p("integer", "Hitbox height", minimum=4, maximum=192, units="pixels"),
             "drawScale": _p("number", "Projectile sprite draw multiplier before entity visual scale; 1 unchanged, not damage hitbox size", minimum=0.25, maximum=4),
-            "hitboxScale": _p("number", "Runtime hitbox multiplier", minimum=0.25, maximum=3),
+            "hitboxScale": _p("number", "Runtime damage hitbox multiplier; 1 unchanged (beam/whip use special line collisions)", minimum=0.25, maximum=3),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults",
@@ -1105,7 +1105,7 @@ _CAPS: list[CapabilitySpec] = [
             "pierce": _p("integer", "Terraria Projectile.penetrate count; -1 means infinite", minimum=-1, maximum=100),
             "extraUpdates": _p("integer", "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)", minimum=0, maximum=5),
             "npcImmunityMode": _p("string", "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers", enum=("owner", "local")),
-            "localNpcHitCooldownTicks": _p("integer", "Raw Terraria Projectile.localNPCHitCooldown engine cooldown; only in local mode; -1 hits each NPC once (not converted to world ticks)", minimum=-1, maximum=600, units="engine cooldown units"),
+            "localNpcHitCooldownTicks": _p("integer", "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds", minimum=-1, maximum=600, units="engine cooldown units"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults/OnTileCollide",
@@ -1150,8 +1150,8 @@ _CAPS.extend([
     _movement("move_gravity_arc", "Apply downward velocity acceleration per projectile update.", 2, {
         "gravityPerTick": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="pixels/update per projectile update"),
     }, provenance="existing movement code 2"),
-    _movement("move_drift", "Multiply velocity by authored retention each tick.", 3, {
-        "velocityRetention": _p("number", "Multiply projectile velocity each projectile update", minimum=0.8, maximum=1.05),
+    _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
+        "velocityRetention": _p("number", "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05),
     }, provenance="existing movement code 3"),
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
         "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
@@ -1172,7 +1172,7 @@ _CAPS.extend([
         "phaseStrength": _p("number", "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians; not collision phasing", minimum=0, maximum=1),
     }, provenance="existing movement code 8"),
     _movement("move_accelerate", "Multiply speed up to an explicit cap.", 9, {
-        "acceleration": _p("number", "Velocity multiplier per projectile update until maxSpeed cap", minimum=1.0, maximum=1.2),
+        "acceleration": _p("number", "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged", minimum=1.0, maximum=1.2),
         "maxSpeed": _p("number", "Speed cap", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 9"),
     _movement("move_spiral", "Rotate velocity by an authored angle per projectile update.", 10, {
@@ -1197,7 +1197,7 @@ _CAPS.extend([
     }, provenance="existing movement code 14"),
     _movement("move_expanding_wave", "Expand the entity while preserving authored collision/damage.", 15, {
         "scalePerTick": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5),
-        "maxScale": _p("number", "Scale cap", minimum=0.25, maximum=4),
+        "maxScale": _p("number", "Projectile.scale cap (not a pixel radius)", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
     _movement("move_flail_tether", "Tether to owner, fly out and return; only movement/owner controller.", 16, {
         "rangeTiles": _p("number", "Maximum tether length", minimum=2, maximum=60, units="tiles"),
@@ -1241,7 +1241,7 @@ _CAPS.extend([
         ("owner_attached_projectile", "free_projectile"),
         {
             "chargeTicks": _p("integer", "Full charge duration", minimum=1, maximum=600, units="ticks"),
-            "powerMultiplier": _p("number", "Full-charge damage/knockback multiplier", minimum=1, maximum=4),
+            "powerMultiplier": _p("number", "Full-charge damage/knockback multiplier; 1 unchanged", minimum=1, maximum=4),
         },
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController",
@@ -1324,13 +1324,13 @@ _CAPS.extend([
     ),
     _cap(
         "damage_area_on_event",
-        "Deal server-authoritative AoE damage around the event position.",
+        "Deal bounded AoE damage around the event position; excludes an already-hit direct target.",
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
             "event": _p("string", "Source event", enum=("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill")),
             "radiusPx": _p("integer", "Damage radius", minimum=8, maximum=768, units="pixels"),
-            "damageMultiplier": _p("number", "Multiplier applied to this call target entity's authored projectile damage", minimum=0.05, maximum=4),
+            "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=4),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1349,7 +1349,7 @@ _CAPS.extend([
             "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
             "count": _p("integer", "Maximum chained targets", minimum=1, maximum=12),
             "rangeTiles": _p("number", "Search radius", minimum=1, maximum=60, units="tiles"),
-            "damageMultiplier": _p("number", "Multiplier applied to this call target entity's authored projectile damage", minimum=0.05, maximum=2),
+            "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=2),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1539,7 +1539,7 @@ INPUT_KIND_REGISTRY: Final[Mapping[str, InputKindSpec]] = MappingProxyType({
     "primary_use": InputKindSpec("primary_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Primary item-use input: choose exactly one action root; configure_item_use configures the input but is not another binding.", ("configure_item_use",)),
     "alternate_use": InputKindSpec("alternate_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Alternate item-use input: choose exactly one action root; configure_item_use configures the input but is not another binding.", ("configure_item_use",)),
     "hold": InputKindSpec("hold", True, ("spawn_entity",), "While-held binding; currently supports maintaining one spawned runtime entity."),
-    "equipped": InputKindSpec("equipped", False, ("equip_passive",), "Accessory/armor equipped state."),
+    "equipped": InputKindSpec("equipped", True, ("equip_passive",), "Accessory/armor equipped state; exactly one binding owns this input."),
 })
 
 EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
@@ -1561,7 +1561,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         ("set_projectile_damage",),
         "Emitted after explicit contact/projectile damage hits an NPC.",
         producer_binding_inputs=("primary_use", "alternate_use"),
-        producer_binding_actions=("spawn_entity", "use_item_body"),
+        producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
         producer_binding_kinds=("item_body",),
         producer_binding_contact_damage=True,
     ),
@@ -1570,7 +1570,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         ("set_projectile_damage",),
         "Emitted after an explicitly damaging hit is critical.",
         producer_binding_inputs=("primary_use", "alternate_use"),
-        producer_binding_actions=("spawn_entity", "use_item_body"),
+        producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
         producer_binding_kinds=("item_body",),
         producer_binding_contact_damage=True,
     ),
@@ -1846,10 +1846,17 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
 def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
     if cap.category == "movement" or cap.category in {"entity_spawn", "entity_lifecycle", "entity_collision", "entity_combat", "controller"}:
         return "owner_execute_sync", {}
-    if cap.name in {"apply_status_on_event", "damage_area_on_event", "chain_damage_on_event"}:
-        return "server_execute", {}
+    if cap.name in {"apply_status_on_event", "chain_damage_on_event"}:
+        return "owner_execute_sync", {}
+    if cap.name == "damage_area_on_event":
+        return "server_execute", {"on_hit": "owner_execute_sync", "on_crit": "owner_execute_sync"}
     if cap.name == "pull_on_event":
-        return "server_execute", {"owner_to_target": "owner_execute_sync", "target_to_owner": "server_execute", "target_to_entity": "server_execute"}
+        return "server_execute", {
+            "owner_to_target": "owner_execute_sync",
+            "target_to_owner": "server_execute", "target_to_entity": "server_execute",
+            "on_hit:target_to_owner": "owner_request_server_execute",
+            "on_hit:target_to_entity": "owner_request_server_execute",
+        }
     if cap.name in {"spawn_entity_on_event", "move_owner_on_event", "move_player_on_use"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
@@ -2133,11 +2140,22 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "Every listed param is required unless marked optional; optional params may be omitted. "
             "A missing optional zero-neutral param makes no authored nonzero effect. "
             "Suffix units: Ticks=ticks (60/s), Tiles=tiles (16 px), Px=pixels, Radians=radians. "
-            "Projectile movement/velocity is per projectile update; extraUpdates adds updates per world tick, "
-            "while authored durations and event intervals ending Ticks remain world ticks; "
-            "localNpcHitCooldownTicks is the explicitly labeled raw engine exception. "
-            "Other units and numeric bounds remain on each parameter card; percent and "
-            "percentage-point values are entered as whole numbers (15 for +15%, not 0.15)."
+            "Projectile movement/velocity is per projectile update (1 + extraUpdates updates per world tick); "
+            "authored durations and event intervals "
+            "ending Ticks remain world ticks, except raw localNpcHitCooldownTicks (see card). "
+            "Percent/percentage-point/chance cards use percent-scale values (15 means 15%, not 0.15): "
+            "bonusPercent=15 adds +0.15 to a damage modifier; CritChancePercentagePoints=15 adds "
+            "15 raw crit-chance points; manaCostReductionPercentagePoints=15 subtracts 0.15 from "
+            "manaCost factor (floor 0.1 per application); damageReductionPercentagePoints=15 adds "
+            "0.15 to endurance; ammoSaveChancePercent=15 is a 15% independent save chance per "
+            "equipped piece (combined as 1-product(1-p)). Raw crit points need not equal final crit: "
+            "Default receives no Generic modifiers, Summon crit is nonstandard, modded DamageClass "
+            "may override inheritance. By contrast damageMultiplier=1 multiplies authored base by 1 "
+            "(AoE/chain floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
+            "lerps velocity per update. Neutral examples (not inserted defaults): velocityRetention=1, "
+            "acceleration=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
+            "has no fan; pierce=-1 is infinite and tileId/wallId=-1 disables placement. "
+            "Use each card's own bounds/units; no universal zero neutral."
         ),
         "stackCost": STACK_COST_RULE,
         "armorParamInheritance": "configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.",
