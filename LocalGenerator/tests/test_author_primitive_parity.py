@@ -210,7 +210,7 @@ def test_item_stat_receipts_cannot_swap_equal_valued_outputs() -> None:
 def test_tool_receipts_cannot_swap_equal_valued_outputs() -> None:
     authored = build_capability_witness("configure_tool")
     tool = next(row for row in authored["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
-    tool["params"].update({"pickPower": 20, "axePower": 20})
+    tool["params"].update({"pickPower": 20, "axePowerTooltipPercent": 100})
     compiled = compile_runtime_program(authored)
     receipts = deepcopy(compiled["runtimeContract"]["finalWireReceipts"])
     pick = next(row for row in receipts if row.get("finalPath") == "gameplay.pickPower")
@@ -226,7 +226,7 @@ def test_tool_receipts_cannot_swap_equal_valued_outputs() -> None:
 def test_tool_projection_status_cannot_bypass_param_to_wire_mapping() -> None:
     authored = build_capability_witness("configure_tool")
     tool = next(row for row in authored["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
-    tool["params"].update({"pickPower": 20, "axePower": 25})
+    tool["params"].update({"pickPower": 20, "axePowerTooltipPercent": 125})
     compiled = compile_runtime_program(authored)
     receipts = deepcopy(compiled["runtimeContract"]["finalWireReceipts"])
     pick = next(row for row in receipts if row.get("finalPath") == "gameplay.pickPower")

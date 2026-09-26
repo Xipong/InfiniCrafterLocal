@@ -1,5 +1,7 @@
 # InfiniCrafterLocal 0.4.241 — отчёт тотального low-level runtime refactor
 
+> Исторический отчёт о первоначальном переходе на v5, **не текущий verdict о полной capability parity**. Числа тестов, параметров и описание доступного SDK ниже относятся к тому snapshot. Актуальные источники: `PROJECT_ARCHITECTURE_RU.md`, generated `docs/PRIMITIVE_PARITY_RU.md` и `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`; C# headless/build отдельно от игрового и сетевого acceptance.
+
 ## Итог
 
 Активная архитектура переведена с whole-weapon Author IR на конечный `runtimeProgram`:

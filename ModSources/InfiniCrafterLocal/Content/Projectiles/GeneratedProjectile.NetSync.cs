@@ -34,7 +34,7 @@ public sealed partial class GeneratedProjectile
         writer.Write(_generatedItemId ?? "");
         writer.Write(_entityId ?? "");
         writer.Write((byte)Math.Clamp(_childDepth, 0, 255));
-        writer.Write((byte)Math.Clamp(_remainingSpawnBudget, 0, 255));
+        writer.Write((byte)Math.Clamp(_activationSpawnBudget?.Remaining ?? _remainingSpawnBudget, 0, 255));
         writer.Write(_initialDirection.X);
         writer.Write(_initialDirection.Y);
         writer.Write(_age);

@@ -52,6 +52,8 @@ Bindings связывают конкретный input с одним атома�
 
 `stackCost=1` действительно расходует одну единицу generated item на активном use; возврат projectile не возвращает предмет. Для многоразового броска Author выбирает `0`. `place_item` всегда требует `1` в том же binding; возврат размещённого предмета при сломе обеспечен world ledger. Это контракт стоимости, а не выбор weapon archetype.
 
+Числовые параметры Author не принимают старые имена wire как alias: `configure_tool.axePowerTooltipPercent` — целое 0..500, кратное 5 (значение tooltip); compiler точно пишет `gameplay.axePower = value / 5` целым 0..100. `apply_generated_buff_on_use.lifeRegenHpPerSecond` — 0..60 с шагом 0.5 HP/s; compiler точно пишет целое `gameplay.generatedBuff.lifeRegen = value × 2` (старые half-HP/s engine units). Сохранённые DTO/рецепты не переименовываются. Для остальных engine-параметров без доказуемой биекции действуют именно названные единицы Terraria, без приблизительного пересчёта: движение/скорость projectile за *projectile update*, число которых равно `1 + extraUpdates` за world tick; длительности `*Ticks` задаются world ticks. `spawn_entity_on_event` и `pull_on_event` с `event=periodic` обязаны содержать `periodTicks` явно (6..3600): default 6 не подставляется, non-periodic события не требуют это поле.
+
 Event producer alternatives выводятся только из `EVENT_KIND_REGISTRY` и `ENTITY_KIND_REGISTRY.base_events`. Author или Repair выбирает один полный вариант и явно пишет необходимые call/binding; код не вставляет producer автоматически.
 
 Полный generated registry inventory: [`LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).

@@ -99,7 +99,22 @@ def report() -> dict[str, Any]:
     check("loaded_tile_wall_guards", "TileLoader.TileCount" in dto and "WallLoader.WallCount" in dto and "ClampInt(Gameplay.CreateTile" not in normalize and "ClampInt(Gameplay.CreateWall" not in normalize, "tile/wall IDs must be validated against loaded tModLoader content")
     tool = CAPABILITY_REGISTRY.get("configure_tool")
     stats = CAPABILITY_REGISTRY.get("configure_item_stats")
-    check("axe_internal_unit_parity", bool(tool and tool.params["axePower"].maximum == 100 and "Item.axe" in tool.params["axePower"].description and "multiplied by 5" in tool.params["axePower"].description and "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize), "axePower must use exact Item.axe internal units and match the C# bound")
+    axe = tool.params.get("axePowerTooltipPercent") if tool else None
+    check("axe_tooltip_percent_parity", bool(
+        tool and axe and "axePower" not in tool.params
+        and axe.minimum == 0 and axe.maximum == 500 and axe.multiple_of == 5
+        and axe.wire_name == "axePower" and axe.wire_divisor == 5
+        and axe.to_wire(45) == 9
+        and "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize
+    ), "Author axe tooltip percent must map exactly in steps of five to bounded Item.axe units")
+    buff = CAPABILITY_REGISTRY.get("apply_generated_buff_on_use")
+    regen = buff.params.get("lifeRegenHpPerSecond") if buff else None
+    check("generated_buff_regen_half_hp_parity", bool(
+        buff and regen and "lifeRegen" not in buff.params
+        and regen.minimum == 0 and regen.maximum == 60 and regen.multiple_of == 0.5
+        and regen.wire_name == "lifeRegen" and regen.wire_multiplier == 2
+        and regen.to_wire(0.5) == 1
+    ), "generated buff HP/s must map exactly by half-HP steps to Terraria lifeRegen units")
     check("item_value_semantics", bool(stats and "Item.value" in stats.params["valueCopper"].description and "resale" in stats.params["valueCopper"].description), "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value")
 
     collision = CAPABILITY_REGISTRY.get("set_projectile_collision")

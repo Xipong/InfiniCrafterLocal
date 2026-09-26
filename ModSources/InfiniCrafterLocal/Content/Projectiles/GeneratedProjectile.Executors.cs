@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Items;
@@ -175,8 +176,12 @@ public sealed partial class GeneratedProjectile
         _lastTarget = target.whoAmI;
         string shotId = _entity.Targeting.ShotEntityId;
         Vector2 direction = Projectile.DirectionTo(target.Center);
-        int spawned = SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, _childDepth + 1, _remainingSpawnBudget, requestedCount: 1);
-        _remainingSpawnBudget = Math.Max(0, _remainingSpawnBudget - spawned);
+        RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
+        int granted = budget.Reserve(1);
+        int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
+            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: 1,
+            activationBudget: budget) : 0;
+        budget.Return(granted - spawned);
         Projectile.netUpdate = true;
         return true;
     }
@@ -361,6 +366,7 @@ public sealed partial class GeneratedProjectile
         if (Projectile.Distance(target.Center) <= Math.Max(4f, p.ProximityRadiusPx))
         {
             RunRuntimeEvent(RuntimeEventKind.OnExpire, target, Projectile.damage);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
             _expireEventRan = true;
             Projectile.Kill();
         }
@@ -434,7 +440,7 @@ public sealed partial class GeneratedProjectile
         float extension = MathF.Sin(progress * MathHelper.Pi);
         Vector2 direction = _initialDirection.RotatedBy(MathHelper.Lerp(-0.75f, 0.75f, progress) * owner.direction);
         Vector2 normal = direction.RotatedBy(MathHelper.PiOver2);
-        float reach = Math.Max(32f, p.RangeTiles * 16f) * extension;
+        float reach = Math.Max(32f, p.RangeTiles * 16f) * owner.whipRangeMultiplier * extension;
         for (int i = 0; i <= segments; i++)
         {
             float t = i / (float)segments;

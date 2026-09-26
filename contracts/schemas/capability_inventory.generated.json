@@ -667,15 +667,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "lifeRegen": {
+        "lifeRegenHpPerSecond": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 120,
+          "kind": "number",
+          "maximum": 60,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "terraria_life_regen",
-          "units": ""
+          "semanticType": "unitless_scalar",
+          "units": "HP/s"
         },
         "lightColor": {
           "enum": [
@@ -799,15 +799,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "axePower": {
+        "axePowerTooltipPercent": {
           "enum": [],
           "kind": "integer",
-          "maximum": 100,
+          "maximum": 500,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "terraria_axe_power",
-          "units": "Item.axe units"
+          "semanticType": "unitless_scalar",
+          "units": "tooltip percent"
         },
         "hammerPower": {
           "enum": [],
@@ -2237,7 +2237,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick"
+          "units": "pixels/projectile update"
         },
         "spreadRadians": {
           "enum": [],
@@ -2541,7 +2541,7 @@
           "reference": null,
           "required": true,
           "semanticType": "ticks",
-          "units": "ticks"
+          "units": "engine cooldown units"
         },
         "npcImmunityMode": {
           "enum": [
@@ -2729,13 +2729,13 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick^2"
+          "units": "pixels/update per projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 2",
-      "purpose": "Apply downward acceleration each tick.",
+      "purpose": "Apply downward velocity acceleration per projectile update.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2899,7 +2899,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick"
+          "units": "pixels/projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -2952,13 +2952,13 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick^2"
+          "units": "pixels/update per projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 6",
-      "purpose": "Use gravity and authored tile bounces.",
+      "purpose": "Use per-update gravity and authored tile bounces.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3027,7 +3027,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels"
+          "units": "engine lateral velocity coefficient"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3144,7 +3144,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick"
+          "units": "pixels/projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3197,13 +3197,13 @@
           "reference": null,
           "required": true,
           "semanticType": "radians",
-          "units": "radians/tick"
+          "units": "radians/update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 10",
-      "purpose": "Rotate velocity by an authored angle each tick.",
+      "purpose": "Rotate velocity by an authored angle per projectile update.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3406,7 +3406,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 13",
-      "purpose": "Home and trigger the authored on-expire/on-hit actions near a target.",
+      "purpose": "Home; proximity inside proximityRadiusPx triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3464,7 +3464,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick"
+          "units": "pixels/projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3592,7 +3592,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick"
+          "units": "pixels/projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3651,7 +3651,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/tick"
+          "units": "pixels/projectile update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",

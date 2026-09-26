@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Content.Items;
+using InfiniCrafterLocal.Content.Projectiles;
 using Terraria.ModLoader;
 using System.Reflection;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
+using Terraria.DataStructures;
 
 internal static partial class EngineRuntimeChecks
 {
@@ -17,6 +19,443 @@ internal static partial class EngineRuntimeChecks
             new RuntimeEventActionSpec { DamageMultiplier = 0f }), "zero child damage multiplier");
         Equal(0.25f, RuntimeProgramExecutor.EventSpawnDamageMultiplier(
             new RuntimeEventActionSpec { DamageMultiplier = 0.25f }), "fractional child damage multiplier");
+        ConsumedItemKeepsDelayedUseSourceSnapshot();
+        ItemPeriodicDelayedActionRetainsDeclaredMiscSource();
+        UnsupportedDelayedSourceFailsClosed();
+        ProjectileGenerationRejectsSameIdentityReuse();
+        EventSpawnSiblingsShareActivationBudget();
+        DelayedEventSourceProvenance();
+    }
+
+    private static void ItemPeriodicDelayedActionRetainsDeclaredMiscSource()
+    {
+        Player oldOwner = Terraria.Main.player[0];
+        NPC oldTarget = Terraria.Main.npc[0];
+        int oldMode = Terraria.Main.netMode;
+        try
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+            owner.Center = Vector2.Zero;
+            var target = Terraria.Main.npc[0] = new NPC { whoAmI = 0, active = true, position = new Vector2(64f, 0f) };
+            var entity = new RuntimeEntitySpec { Id = "body_periodic", Kind = RuntimeEntityKind.ItemBody };
+            var action = new RuntimeEventActionSpec {
+                Event = RuntimeEventKind.Periodic, ActionCode = RuntimeEventActionCode.Pull,
+                DelayTicks = 2, PeriodTicks = 6, Mode = "owner_to_target",
+                Strength = 2f, RadiusTiles = 10f,
+            };
+            var generated = new GeneratedItem();
+            var item = owner.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1 };
+            typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+                .SetValue(generated, item);
+            typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, GeneratedItemData.Placeholder());
+            var source = owner.GetSource_Misc("InfiniRuntimePeriodic");
+            typeof(GeneratedItem).GetMethod("QueueOrExecuteItemAction", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(generated, new object?[] { owner, entity, action, target, target.Center,
+                    Vector2.UnitX, 0, new RuntimeSpawnBudget(0), source });
+            Equal(1, PendingActions(), "item periodic action with its real source is queued");
+            Equal(Vector2.Zero, owner.velocity, "periodic action not run before due tick");
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(true, owner.velocity.X > 0f, "item periodic action executes after delay");
+            Equal(0, PendingActions(), "periodic action retires");
+            var spawn = new RuntimeEventActionSpec {
+                Event = RuntimeEventKind.Periodic, ActionCode = RuntimeEventActionCode.SpawnEntity,
+                DelayTicks = 2, PeriodTicks = 6, Count = 1,
+            };
+            var budget = new RuntimeSpawnBudget(2);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(), entity,
+                spawn, owner, source, target.Center, Vector2.UnitX, null, 0, 0, budget),
+                "item periodic delayed spawn accepts its exact Misc source");
+            Equal(1, budget.Remaining, "item periodic delayed spawn reserves exactly one");
+            RuntimeDelayedActionScheduler.Clear();
+            Equal(2, budget.Remaining, "clearing periodic delayed spawn returns reservation");
+        }
+        finally
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.player[0] = oldOwner;
+            Terraria.Main.npc[0] = oldTarget;
+            Terraria.Main.netMode = oldMode;
+        }
+    }
+
+    private static void UnsupportedDelayedSourceFailsClosed()
+    {
+        Player oldOwner = Terraria.Main.player[0];
+        Projectile oldProjectile = Terraria.Main.projectile[0];
+        int oldMode = Terraria.Main.netMode;
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+            var projectile = Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, owner = 0, identity = 2, active = true };
+            var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2 };
+            var budget = new RuntimeSpawnBudget(3);
+            Equal(false, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
+                new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner,
+                owner.GetSource_Misc("unknown"), Vector2.Zero, Vector2.UnitX, null, 0, 0, budget),
+                "unsupported Misc source rejected without reservation");
+            Equal(false, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
+                new RuntimeEntitySpec { Kind = RuntimeEntityKind.FreeProjectile }, spawn, owner,
+                projectile.GetSource_FromThis(), Vector2.Zero, Vector2.UnitX, null, 0, 0, budget),
+                "projectile without generation cannot prove same-object reuse safety");
+            Equal(3, budget.Remaining, "unknown sources do not reserve slots");
+            Equal(0, PendingActions(), "unknown sources never enter queue");
+        }
+        finally
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.player[0] = oldOwner;
+            Terraria.Main.projectile[0] = oldProjectile;
+            Terraria.Main.netMode = oldMode;
+        }
+    }
+
+    private static void ProjectileGenerationRejectsSameIdentityReuse()
+    {
+        Player oldOwner = Terraria.Main.player[0];
+        Projectile oldProjectile = Terraria.Main.projectile[0];
+        NPC oldTarget = Terraria.Main.npc[0];
+        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            Terraria.Main.myPlayer = 0;
+            var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+            var target = Terraria.Main.npc[0] = new NPC { whoAmI = 0, active = true, position = new Vector2(100, 0) };
+            var projectile = Terraria.Main.projectile[0] = new Projectile {
+                whoAmI = 0, owner = 0, type = ProjectileID.WoodenArrowFriendly, identity = 93, active = true,
+                CritChance = 19, ArmorPenetration = 7,
+            };
+            var generation = Attach(projectile);
+            typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generation);
+            var source = projectile.GetSource_FromThis();
+            var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2 };
+            var budget = new RuntimeSpawnBudget(3);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
+                new RuntimeEntitySpec { Kind = RuntimeEntityKind.FreeProjectile }, spawn,
+                owner, source, Vector2.Zero, Vector2.UnitX, null, 0, 0, budget), "projectile generation queued");
+            Equal(1, budget.Remaining, "projectile generation reserves two");
+            var pull = new RuntimeEventActionSpec {
+                ActionCode = RuntimeEventActionCode.Pull, DelayTicks = 2,
+                Mode = "owner_to_target", Strength = 2f, RadiusTiles = 10f,
+            };
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
+                new RuntimeEntitySpec { Kind = RuntimeEntityKind.FreeProjectile }, pull,
+                owner, source, Vector2.Zero, Vector2.UnitX, target, 0, 0, budget), "projectile impulse queued");
+            // Installed Projectile.SetDefaults clears ModProjectile and instantiates a new one.
+            // Mirror that exact same-object generation transition without loading mod content/world.
+            var nextGeneration = Attach(projectile);
+            typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, nextGeneration);
+            Equal(93, projectile.identity, "same-slot reuse keeps identity");
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(3, budget.Remaining, "same-slot/type/identity new ModProjectile releases reservation");
+            Equal(0, PendingActions(), "old projectile generation retires");
+            Equal(Vector2.Zero, owner.velocity, "new generation cannot inherit old terminal impulse");
+            projectile.active = false; // on_kill/on_expire may enqueue after the parent retires
+            var terminalSource = projectile.GetSource_FromThis();
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
+                new RuntimeEntitySpec { Kind = RuntimeEntityKind.FreeProjectile }, pull,
+                owner, terminalSource, Vector2.Zero, Vector2.UnitX, target, 0, 0, budget), "retired original queues terminal action");
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(true, owner.velocity.X > 0, "inactive same-generation projectile dispatches terminal action");
+        }
+        finally
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.player[0] = oldOwner;
+            Terraria.Main.projectile[0] = oldProjectile;
+            Terraria.Main.npc[0] = oldTarget;
+            Terraria.Main.netMode = oldMode;
+            Terraria.Main.myPlayer = oldLocal;
+        }
+    }
+
+    private static void ConsumedItemKeepsDelayedUseSourceSnapshot()
+    {
+        Player oldOwner = Terraria.Main.player[0];
+        NPC oldTarget = Terraria.Main.npc[0];
+        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            Terraria.Main.myPlayer = 0;
+            var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+            var target = Terraria.Main.npc[0] = new NPC { whoAmI = 0, active = true, position = new Vector2(100, 0) };
+            var item = owner.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1,
+                damage = 37, crit = 13, ArmorPenetration = 8 };
+            int originalType = item.type;
+            var source = new EntitySource_ItemUse(owner, item, "original delayed use");
+            var immediateChild = new Projectile { damage = 5, DamageType = DamageClass.Generic };
+            immediateChild.ApplyStatsFromSource(source); // installed tML consumer before stack spend
+            var data = GeneratedItemData.Placeholder();
+            var entity = new RuntimeEntitySpec { Id = "source_item", Kind = RuntimeEntityKind.ItemBody };
+            var pull = new RuntimeEventActionSpec {
+                Event = "on_use", ActionCode = RuntimeEventActionCode.Pull, DelayTicks = 2,
+                Mode = "owner_to_target", Strength = 2f, RadiusTiles = 10f,
+            };
+            var budget = new RuntimeSpawnBudget(3);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, pull,
+                owner, source, Vector2.Zero, Vector2.UnitX, target, 0, 0, budget), "one-stack use queued");
+            item.stack = 0; // exact ConsumeItem result at stackCost=1
+            owner.inventory[0] = new Item { type = originalType, stack = 1 }; // inventory refill/reuse
+            var captured = FirstDelayedSource();
+            Equal(true, captured is EntitySource_ItemUse, "consumed source keeps tML subtype");
+            Equal(true, captured.Context == "original delayed use", "consumed source keeps context");
+            var saved = ((IEntitySource_WithStatsFromItem)captured).Item;
+            Equal(originalType, saved.type, "consumed source keeps type");
+            Equal(1, saved.stack, "consumed source keeps usable stack");
+            Equal(13, saved.crit, "consumed source keeps crit");
+            Equal(8, saved.ArmorPenetration, "consumed source keeps armor penetration");
+            var delayedChild = new Projectile { damage = 5, DamageType = DamageClass.Generic };
+            delayedChild.ApplyStatsFromSource(captured); // same installed tML consumer after stack spend
+            Equal(immediateChild.CritChance, delayedChild.CritChance, "tML child crit parity after consumption");
+            Equal(immediateChild.ArmorPenetration, delayedChild.ArmorPenetration, "tML child armor penetration parity");
+            Equal(immediateChild.OriginalCritChance, delayedChild.OriginalCritChance, "tML original crit parity");
+            Equal(immediateChild.OriginalArmorPenetration, delayedChild.OriginalArmorPenetration, "tML original armor penetration parity");
+            Equal(immediateChild.originalDamage, delayedChild.originalDamage, "tML original damage parity");
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(true, owner.velocity.X > 0, "consumed item action dispatches after slot replacement");
+            Equal(0, PendingActions(), "consumed item action retires");
+
+            owner.velocity = Vector2.Zero;
+            var reused = owner.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1,
+                damage = 58, crit = 17, ArmorPenetration = 11 };
+            var ammoSource = new EntitySource_ItemUse_WithAmmo(owner, reused, ItemID.MusketBall, "ammo context");
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, pull,
+                owner, ammoSource, Vector2.Zero, Vector2.UnitX, target, 0, 0, budget), "ammo item queued");
+            reused.SetDefaults(ItemID.TinShortsword);
+            captured = FirstDelayedSource();
+            Equal(true, captured is EntitySource_ItemUse_WithAmmo, "ammo subtype preserved");
+            Equal(ItemID.MusketBall, ((EntitySource_ItemUse_WithAmmo)captured).AmmoItemIdUsed, "ammo ID preserved");
+            Equal(true, captured.Context == "ammo context", "ammo context preserved");
+            saved = ((IEntitySource_WithStatsFromItem)captured).Item;
+            Equal(ItemID.CopperShortsword, saved.type, "SetDefaults does not change snapshot type");
+            Equal(17, saved.crit, "SetDefaults does not change snapshot crit");
+            Equal(11, saved.ArmorPenetration, "SetDefaults does not change snapshot armor penetration");
+            Equal(58, saved.damage, "SetDefaults does not change snapshot damage");
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(true, owner.velocity.X > 0, "same-object SetDefaults does not cancel queued use");
+        }
+        finally
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.player[0] = oldOwner;
+            Terraria.Main.npc[0] = oldTarget;
+            Terraria.Main.netMode = oldMode;
+            Terraria.Main.myPlayer = oldLocal;
+        }
+    }
+
+    // Exercise the canonical scheduler with real tML source objects. Spawning a
+    // projectile still requires registered content/world; no NewProjectileDirect here.
+    private static void DelayedEventSourceProvenance()
+    {
+        var oldOwner = Terraria.Main.player[0];
+        var oldProjectile = Terraria.Main.projectile[0];
+        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            Terraria.Main.myPlayer = 0;
+            var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+            var item = owner.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1 };
+            var data = GeneratedItemData.Placeholder();
+            var entity = new RuntimeEntitySpec { Id = "source_item", Kind = RuntimeEntityKind.ItemBody };
+            var spawn = new RuntimeEventActionSpec {
+                ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2,
+            };
+            var itemSource = owner.GetSource_ItemUse(item);
+            Equal(true, itemSource is IEntitySource_WithStatsFromItem, "item source carries stat lineage");
+            var budget = new RuntimeSpawnBudget(3);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
+                owner, itemSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, budget), "item spawn queued");
+            var queued = FirstDelayedSource();
+            Equal(false, ReferenceEquals(itemSource, queued), "queued item source is a defensive snapshot");
+            Equal(true, queued is EntitySource_ItemUse, "queued item source has actual tML type");
+            Equal(true, ReferenceEquals(owner, ((EntitySource_Parent)queued).Entity), "queued item parent is owner");
+            Equal(false, ReferenceEquals(item, ((IEntitySource_WithStatsFromItem)queued).Item), "queued item is a copy");
+            Equal(1, budget.Remaining, "item delayed spawn reserves two");
+            owner.inventory[0] = new Item { type = item.type, stack = 1 }; // same type, reused slot
+            Equal(item.type, ((IEntitySource_WithStatsFromItem)queued).Item.type, "slot reuse leaves item source intact");
+            RuntimeDelayedActionScheduler.Clear();
+            Equal(3, budget.Remaining, "clearing item snapshot returns reservation");
+            var mutatedItem = owner.inventory[0];
+            var mutatedSource = owner.GetSource_ItemUse(mutatedItem);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
+                owner, mutatedSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, budget), "item mutation snapshot queued");
+            mutatedItem.type = ItemID.TinShortsword; // same reference repurposed in place
+            Equal(ItemID.CopperShortsword, ((IEntitySource_WithStatsFromItem)FirstDelayedSource()).Item.type,
+                "repurposed item does not alter source snapshot");
+            RuntimeDelayedActionScheduler.Clear();
+            Equal(3, budget.Remaining, "repurposed item clear releases delayed reservation");
+
+            // The real item callsite must forward its already-created source,
+            // rather than letting the scheduler fabricate a new one.
+            var generatedItem = new GeneratedItem();
+            typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+                .SetValue(generatedItem, owner.inventory[0]);
+            typeof(GeneratedItem).GetProperty("Data")!.SetValue(generatedItem, data);
+            var itemEventSource = owner.GetSource_ItemUse(owner.inventory[0]);
+            var itemEventBudget = new RuntimeSpawnBudget(2);
+            typeof(GeneratedItem).GetMethod("QueueOrExecuteItemAction", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(generatedItem, new object?[] { owner, entity, spawn, null, Vector2.Zero, Vector2.UnitX, 0, itemEventBudget, itemEventSource });
+            Equal(false, ReferenceEquals(itemEventSource, FirstDelayedSource()), "real item event callsite snapshots source");
+            Equal(true, FirstDelayedSource() is EntitySource_ItemUse, "item callsite retains tML source type");
+            RuntimeDelayedActionScheduler.Clear();
+            Equal(2, itemEventBudget.Remaining, "item callsite clear releases reservation");
+
+            var projectile = Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, owner = 0, identity = 84, active = true };
+            var generatedProjectile = Attach(projectile);
+            typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generatedProjectile);
+            var projectileSource = projectile.GetSource_FromThis();
+            var projectileBudget = new RuntimeSpawnBudget(3);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
+                owner, projectileSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "projectile spawn queued");
+            queued = FirstDelayedSource();
+            Equal(true, ReferenceEquals(projectileSource, queued), "exact projectile source queued");
+            Equal(true, queued is EntitySource_Parent, "queued projectile is parent source");
+            Equal(true, ReferenceEquals(projectile, ((EntitySource_Parent)queued).Entity), "queued projectile parent is original");
+            projectile.active = false; // terminal event can outlive its parent
+            RuntimeDelayedActionScheduler.Update();
+            Equal(1, projectileBudget.Remaining, "dead original retains reservation before due tick");
+            projectile.identity = 85; // same object reused in slot (no active requirement)
+            RuntimeDelayedActionScheduler.Update();
+            Equal(3, projectileBudget.Remaining, "reused projectile identity returns reservation");
+            Equal(0, PendingActions(), "reused projectile source retired");
+            projectile.identity = 86;
+            var replacedSource = projectile.GetSource_FromThis();
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
+                owner, replacedSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "projectile slot guard queued");
+            Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, owner = 0, identity = 86, active = true };
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(3, projectileBudget.Remaining, "same-identity slot replacement releases reservation");
+            Equal(0, PendingActions(), "replaced projectile retired");
+            Terraria.Main.projectile[0] = projectile;
+            var projectileEventBudget = new RuntimeSpawnBudget(3);
+            var projectileEntity = Entity();
+            projectileEntity.Id = "source_projectile";
+            projectileEntity.Kind = RuntimeEntityKind.FreeProjectile;
+            projectileEntity.Events = new[] { new RuntimeEventActionSpec {
+                Event = "on_kill", ActionCode = RuntimeEventActionCode.SpawnEntity,
+                DelayTicks = 2, Count = 2,
+            } };
+            generatedProjectile.Configure(data, projectileEntity, 0, 3, Vector2.UnitX, activationBudget: projectileEventBudget);
+            typeof(GeneratedProjectile).GetMethod("RunRuntimeEvent", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(generatedProjectile, new object?[] { "on_kill", null, 0 });
+            queued = FirstDelayedSource();
+            Equal(true, queued is EntitySource_Parent, "projectile callsite source retains parent type");
+            Equal(true, ReferenceEquals(projectile, ((EntitySource_Parent)queued).Entity), "projectile callsite retains parent identity");
+            Equal(1, projectileEventBudget.Remaining, "projectile callsite reserves spawn slots");
+            RuntimeDelayedActionScheduler.Clear();
+            Equal(3, projectileEventBudget.Remaining, "projectile callsite clear returns reservation");
+            var terminal = new RuntimeEventActionSpec {
+                ActionCode = RuntimeEventActionCode.Pull, DelayTicks = 2,
+                Mode = "owner_to_target", Strength = 2f, RadiusTiles = 10f,
+            };
+            var terminalSource = projectile.GetSource_FromThis();
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, terminal,
+                owner, terminalSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "inactive original queues terminal event");
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(0, PendingActions(), "terminal source dispatches despite inactivity");
+            Equal(3, projectileBudget.Remaining, "nonspawn terminal preserves budget");
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
+                owner, terminalSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "remote authority probe queued");
+            Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            Terraria.Main.myPlayer = 1;
+            RuntimeDelayedActionScheduler.Update();
+            RuntimeDelayedActionScheduler.Update();
+            Equal(3, projectileBudget.Remaining, "nonlocal owner does not spend delayed reservation");
+            Equal(0, PendingActions(), "nonlocal action retired");
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            Terraria.Main.myPlayer = 0;
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
+                owner, terminalSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "clear probe reserved");
+            Equal(1, projectileBudget.Remaining, "clear probe spent reservation");
+            RuntimeDelayedActionScheduler.Clear();
+            Equal(3, projectileBudget.Remaining, "clear returns delayed reservation");
+        }
+        finally
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.player[0] = oldOwner;
+            Terraria.Main.projectile[0] = oldProjectile;
+            Terraria.Main.netMode = oldMode;
+            Terraria.Main.myPlayer = oldLocal;
+        }
+    }
+
+    private static IEntitySource FirstDelayedSource()
+    {
+        var pending = typeof(RuntimeDelayedActionScheduler).GetField("Pending", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var first = ((System.Collections.IList)pending)[0]!;
+        return (IEntitySource)first.GetType().GetProperty("Source")!.GetValue(first)!;
+    }
+
+    // CPU-only observer of the actual Configure seam; NewProjectileDirect requires
+    // registered mod content/world and is not available in this harness.
+    private static void EventSpawnSiblingsShareActivationBudget()
+    {
+        var data = GeneratedItemData.Placeholder();
+        var a = Entity();
+        a.Id = "budget_a";
+        var first = Attach(new Projectile { owner = 0, active = true });
+        var second = Attach(new Projectile { owner = 0, active = true });
+        var ledger = new RuntimeSpawnBudget(3);
+        first.Configure(data, a, 0, 3, Vector2.UnitX, activationBudget: ledger);
+        second.Configure(data, a, 0, 3, Vector2.UnitX, activationBudget: ledger);
+        var field = typeof(GeneratedProjectile).GetField("_activationSpawnBudget", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        Equal(true, ReferenceEquals(ledger, field.GetValue(first)), "first root carries activation ledger");
+        Equal(true, ReferenceEquals(field.GetValue(first), field.GetValue(second)), "two root A siblings share ledger");
+        Equal(3, ledger.Remaining, "root binding projectiles do not consume event budget");
+        int spawned = 0;
+        // Exercise the same Reserve operation used by the hooked event executor:
+        // A1 -> B1 -> B1 descendant, then A2 -> B2 -> denied descendant.
+        for (int attempt = 0; attempt < 4; attempt++) spawned += ledger.Reserve(1);
+        Equal(3, spawned, "two A with B+B allow only three event spawns");
+        Equal(0, ledger.Remaining, "shared ledger exhausted");
+        var anotherActivation = new RuntimeSpawnBudget(3);
+        Equal(3, anotherActivation.Reserve(3), "independent activation retains its own allowance");
+
+        Player previous = Terraria.Main.player[0];
+        int previousMode = Terraria.Main.netMode;
+        int previousLocal = Terraria.Main.myPlayer;
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+            var delayed = new RuntimeEventActionSpec {
+                ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2,
+            };
+            var delayedLedger = new RuntimeSpawnBudget(3);
+            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, a, delayed,
+                Terraria.Main.player[0], Terraria.Main.player[0].GetSource_ItemUse(new Item { type = ItemID.CopperShortsword, stack = 1 }),
+                Vector2.Zero, Vector2.UnitX, null, 0, 0, delayedLedger),
+                "real scheduler accepts delayed reservation");
+            Equal(1, delayedLedger.Remaining, "delayed B+B reserves two before due tick");
+            Equal(1, delayedLedger.Reserve(1), "unreserved descendant spends last shared slot");
+            Equal(0, delayedLedger.Reserve(1), "sibling and descendant cannot overdraw delayed reservation");
+            Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            Terraria.Main.myPlayer = 1;
+            var peer = Attach(new Projectile { owner = 0, active = true });
+            peer.Configure(data, a, 0, 3, Vector2.UnitX);
+            Equal(true, field.GetValue(peer) is null, "network peer does not mint an owner-local budget from AI snapshot");
+        }
+        finally
+        {
+            RuntimeDelayedActionScheduler.Clear();
+            Terraria.Main.player[0] = previous;
+            Terraria.Main.netMode = previousMode;
+            Terraria.Main.myPlayer = previousLocal;
+        }
     }
 
     private static void EventDamageUsesAuthoredSource()
@@ -122,8 +561,9 @@ internal static partial class EngineRuntimeChecks
                             },
                         } };
                         var generatedItem = new GeneratedItem();
+                        var hostItem = owner.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1, damage = 777 };
                         typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
-                            .SetValue(generatedItem, new Item { damage = 777 });
+                            .SetValue(generatedItem, hostItem);
                         typeof(GeneratedItem).GetProperty("Data")!.SetValue(generatedItem, data);
                         generatedItem.OnHitNPC(owner, direct, new NPC.HitInfo { Crit = crit }, 333);
                     }
@@ -204,6 +644,43 @@ internal static partial class EngineRuntimeChecks
                 }
                 catch (Exception error) { failures.Add(label + ": " + error); }
             }
+            // Proximity detonation did not directly strike the nearest NPC. It
+            // must not reuse the on_hit exclusion that prevents double damage.
+            foreach (int proximityDelay in new[] { 0, 2 })
+            {
+                RuntimeDelayedActionScheduler.Clear();
+                for (int i = 0; i < Terraria.Main.npc.Length; i++)
+                    Terraria.Main.npc[i] = new NPC { whoAmI = i, active = false };
+                NPC detonatedAt = Terraria.Main.npc[0] = Target(0, 1600f);
+                NPC splashNeighbor = Terraria.Main.npc[1] = Target(1, 1650f);
+                var proximityData = GeneratedItemData.Placeholder();
+                var proximityEntity = Entity();
+                proximityEntity.Id = "proximity_damage_source";
+                proximityEntity.Kind = RuntimeEntityKind.FreeProjectile;
+                proximityEntity.Movement.Name = "move_proximity_missile";
+                proximityEntity.Movement.Code = 13;
+                proximityEntity.Movement.Params.RangeTiles = 6f;
+                proximityEntity.Movement.Params.HomingStrength = .1f;
+                proximityEntity.Movement.Params.ProximityRadiusPx = 64f;
+                proximityEntity.Events = new[] { new RuntimeEventActionSpec {
+                    Id = "proximity_damage", Event = RuntimeEventKind.OnExpire,
+                    Action = "damage_area_on_event", ActionCode = RuntimeEventActionCode.DamageArea,
+                    RadiusPx = 120, DamageMultiplier = 1f, DelayTicks = proximityDelay,
+                } };
+                var proximityHost = new Projectile { owner = 0, active = true, damage = 100 };
+                proximityHost.Center = detonatedAt.Center;
+                var proximityGenerated = Attach(proximityHost);
+                proximityGenerated.Configure(proximityData, proximityEntity, 0, 8, Vector2.UnitX);
+                proximityGenerated.AI();
+                if (proximityDelay > 0)
+                {
+                    Equal(1000, detonatedAt.life, "delayed proximity AoE does not strike early");
+                    RuntimeDelayedActionScheduler.Update();
+                    RuntimeDelayedActionScheduler.Update();
+                }
+                Equal(true, splashNeighbor.life < 1000, "proximity AoE damages neighboring NPC");
+                Equal(true, detonatedAt.life < 1000, "proximity AoE damages its trigger NPC without a direct hit");
+            }
             Console.WriteLine($"DETAIL: event damage scenarios passed={checkedCases}");
         }
         finally
@@ -252,7 +729,7 @@ internal static partial class EngineRuntimeChecks
                     };
                     action.NormalizeAndValidate();
                     int budget = 8;
-                    Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
+                    Equal(true, ScheduleTestItemAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
                         owner, original.Center, Vector2.UnitX, state == "absent" ? null : original, 10, 0, ref budget), state + " queued");
                     RuntimeDelayedActionScheduler.Update();
                     Equal(false, original.HasBuff(BuffID.OnFire), state + " not early");
@@ -301,6 +778,20 @@ internal static partial class EngineRuntimeChecks
         if (failures.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
     }
 
+    private static bool ScheduleTestItemAction(GeneratedItemData data, RuntimeEntitySpec entity,
+        RuntimeEventActionSpec action, Player owner, Vector2 position, Vector2 direction,
+        NPC? target, int damageDone, int childDepth, ref int remainingBudget)
+    {
+        // The test's legacy ref-budget convenience must still provide a real
+        // item-use source; production scheduling never fabricates Misc lineage.
+        var budget = new RuntimeSpawnBudget(remainingBudget);
+        bool queued = RuntimeDelayedActionScheduler.TrySchedule(data, entity, action, owner,
+            owner.GetSource_ItemUse(new Item { type = ItemID.CopperShortsword, stack = 1 }),
+            position, direction, target, damageDone, childDepth, budget);
+        remainingBudget = budget.Remaining;
+        return queued;
+    }
+
     private static void DelayedQueueHonorsLimits()
     {
         var oldOwner = Terraria.Main.player[0];
@@ -327,13 +818,13 @@ internal static partial class EngineRuntimeChecks
             int capacity = InfiniCrafterLocal.Common.InfiniRuntimeLimits.MaxPendingRuntimeActions;
             int perTick = InfiniCrafterLocal.Common.InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick;
             for (int i = 0; i < capacity; i++)
-                Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, pull, owner, Vector2.Zero, Vector2.UnitX,
+                Equal(true, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, pull, owner, Vector2.Zero, Vector2.UnitX,
                     target, 0, 0, ref budget), "queue accepts entry " + i);
-            Equal(false, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, pull, owner, Vector2.Zero, Vector2.UnitX,
+            Equal(false, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, pull, owner, Vector2.Zero, Vector2.UnitX,
                 target, 0, 0, ref budget), "full queue rejects overflow");
             var spawn = new RuntimeEventActionSpec { DelayTicks = 2, ActionCode = RuntimeEventActionCode.SpawnEntity, Count = 3 };
             // Reservation-only probe. Do not dispatch this synthetic spawn or claim entity-spawn proof.
-            Equal(false, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
+            Equal(false, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
                 null, 0, 0, ref budget), "full queue rejects spawn before reserving budget");
             Equal(5, budget, "rejection and non-spawn actions leave budget unchanged");
             RuntimeDelayedActionScheduler.Update();
@@ -347,18 +838,18 @@ internal static partial class EngineRuntimeChecks
             }
             RuntimeDelayedActionScheduler.Update();
             Equal(new Vector2(-2f * capacity, 0f), target.velocity, "all accepted actions execute exactly once");
-            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
+            Equal(true, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
                 null, 0, 0, ref budget), "drained queue accepts reservation");
             Equal(2, budget, "first reservation consumes exact requested count");
-            Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
+            Equal(true, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
                 null, 0, 0, ref budget), "last partial budget can be reserved");
             Equal(0, budget, "second reservation cannot overdraw budget");
-            Equal(false, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
+            Equal(false, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
                 null, 0, 0, ref budget), "zero spawn budget rejects reservation");
             new RuntimeDelayedActionSystem().OnWorldUnload();
             // If unload left the reserved entries, the following full-capacity fill would fail.
             for (int i = 0; i < capacity; i++)
-                Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, pull, owner, Vector2.Zero, Vector2.UnitX,
+                Equal(true, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, pull, owner, Vector2.Zero, Vector2.UnitX,
                     target, 0, 0, ref budget), "unload restores full queue capacity");
         }
         finally
@@ -401,7 +892,7 @@ internal static partial class EngineRuntimeChecks
                     };
                     action.NormalizeAndValidate();
                     int budget = 8;
-                    Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
+                    Equal(true, ScheduleTestItemAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
                         owner, Vector2.Zero, Vector2.UnitX, target, 0, 0, ref budget), label + " queued");
                     Equal(8, budget, label + " non-spawn action preserves budget");
                     RuntimeDelayedActionScheduler.Update();

@@ -23,11 +23,11 @@
 
 ## Контекст модели
 
-Gameplay Repair dossier `infini.gameplay-repair-dossier.v1` содержит:
+Gameplay Repair handoff `infini.gameplay-repair-dossier.v1` содержит:
 
 - exact validation errors;
-- broken fragments и malformed rows по index;
-- valid dependency fragments, относящиеся к blocker graph;
+- `readOnlySourceFragments`: broken fragments, malformed rows по index и valid dependency fragments из blocker graph — это входные данные, не поля ответа;
+- output shape card — последнее поле `requiredJsonShape` того же JSON user-сообщения (system→user сохраняется): только перечисленные внутри него корневые patch-поля допустимы в ответе;
 - immutable ID/kind/function index без полных параметров независимых узлов;
 - direct blocker capability cards;
 - обязательные supporting capability cards;
@@ -42,12 +42,12 @@ Machine audit: `tools/audit_targeted_repair.py` и `contracts/targeted_repair_au
 
 | Сценарий | Repair dossier | Capability cards | Что получает модель |
 |---|---:|---:|---|
-| Missing обязательного `useStyle` | 10 654 символа | 1 | сломанный `configure_item_use`, exact missing leaf |
-| Полностью отсутствует `configure_item_use` | 9 401 | 1 | ровно `configure_item_use` как создаваемый blocker |
-| Нет position driver | 29 506 | 20 | только одношаговые совместимые movement alternatives |
-| `channel_beam`, но `channel=false` | 13 124 | 2 | beam как read-only/broken context и `configure_item_use.channel=true` как blocker |
+| Missing обязательного `useStyle` | 18 884 символа | 1 | сломанный `configure_item_use`, exact missing leaf |
+| Полностью отсутствует `configure_item_use` | 18 697 | 1 | ровно `configure_item_use` как создаваемый blocker |
+| Нет position driver | 30 080 | 20 | только одношаговые совместимые movement alternatives |
+| `channel_beam`, но `channel=false` | 20 787 | 2 | beam как read-only/broken context и `configure_item_use.channel=true` как blocker |
 
-Для сравнения полный Gameplay Author payload в том же audit — **70 484 символ** и all capabilities.
+Для сравнения полный Gameplay Author payload в том же audit — **80 260 символов** и all capabilities.
 
 В movement-case исключены `channel_beam` и `charge_then_release`: первый требует изменить отдельное frozen channel-состояние, второй сам не является завершённым position driver без дополнительной movement capability. Deterministic код не выбирает один из оставшихся 20 вариантов за модель.
 
@@ -78,9 +78,9 @@ Visual Repair получает broken item/entity/animation fragments, вали�
 
 ## Проверка
 
-- targeted three-stage/Repair suite: **19 passed**;
-- полный Python suite: **85 passed**;
-- machine blocker audit: passed;
+- targeted three-stage/Repair suite: `python -m pytest LocalGenerator/tests/test_low_level_three_stage_pipeline.py -q`;
+- полный Python suite: `python -m pytest LocalGenerator/tests toolbox/tests -q`;
+- machine blocker audit: `python tools/audit_targeted_repair.py --check`;
 - generated Repair scope schema: current;
 - stage accounting happy path: `1/0/1/0/1/0`.
 

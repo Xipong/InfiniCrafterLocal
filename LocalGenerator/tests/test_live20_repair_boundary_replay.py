@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from infini_local.core.runtime_authoring import (
     apply_repair_patch,
     build_runtime_repair_scope,
+    compile_runtime_program,
     filter_repair_patch_scope,
     validate_runtime_program,
 )
@@ -46,17 +48,35 @@ def test_captured_live20_repair_boundaries_close_offline() -> None:
     _assert_no_tooltip_field(fixture)
 
     for case, replay in fixture["gameplayApplyCases"].items():
-        initial = replay["initialAuthor"]
+        initial = copy.deepcopy(replay["initialAuthor"])
+        historical_patch = copy.deepcopy(replay["repairPatch"])
+        old_axe: int | None = None
+        if case == "obsidian_pickaxe":
+            # The archived model response used the earlier internal Item.axe
+            # unit. Replay only this frozen witness with the declared, exact
+            # inverse projection; this is not a production Author alias.
+            tool = next(row for row in initial["runtimeProgram"]["calls"]
+                        if row["fn"] == "configure_tool")
+            old_axe = tool["params"].pop("axePower")
+            assert type(old_axe) is int and 0 <= old_axe <= 100
+            tool["params"]["axePowerTooltipPercent"] = old_axe * 5
+            for row in historical_patch["callsUpsert"]:
+                if row["fn"] == "configure_tool":
+                    assert row["params"].pop("axePower") == old_axe
+                    row["params"]["axePowerTooltipPercent"] = old_axe * 5
         report = validate_runtime_program(initial)
         assert _codes(report) == set(replay["expectedInitialCodes"]), case
         scope = build_runtime_repair_scope(initial, report["errors"])
-        assert replay["repairPatch"]["realizationReplacement"] is not None, case
-        filtered, audit = filter_repair_patch_scope(initial, replay["repairPatch"], scope)
+        assert historical_patch["realizationReplacement"] is not None, case
+        filtered, audit = filter_repair_patch_scope(initial, historical_patch, scope)
         assert audit["ok"], {"case": case, "audit": audit}
         repaired = apply_repair_patch(initial, filtered)
-        assert repaired["realization"] == replay["repairPatch"]["realizationReplacement"], case
+        assert repaired["realization"] == historical_patch["realizationReplacement"], case
         final = validate_runtime_program(repaired)
         assert final["ok"], {"case": case, "errors": final["errors"]}
+        if case == "obsidian_pickaxe":
+            assert old_axe is not None
+            assert compile_runtime_program(repaired)["gameplay"]["axePower"] == old_axe
 
     for case, replay in fixture["gameplayDiagnosticCases"].items():
         initial = replay["initialAuthor"]

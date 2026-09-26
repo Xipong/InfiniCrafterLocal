@@ -638,7 +638,7 @@ def test_body_contact_and_projectile_are_independent_lanes_without_held_owner_in
         "target": "item",
         "params": {
             "pickPower": 35,
-            "axePower": 0,
+            "axePowerTooltipPercent": 0,
             "hammerPower": 20,
             "miningSpeedScale": 0.9,
         },
@@ -759,7 +759,8 @@ def test_delayed_item_events_have_a_bounded_runtime_consumer_and_keep_activation
     assert "RuntimeDelayedActionScheduler.TrySchedule" in projectile_source
     assert "RuntimeProgramExecutor.ExecuteAction" in scheduler_source
     assert "PostUpdateEverything" in scheduler_source
-    assert "remainingSpawnBudget -= reservedSpawnBudget" in scheduler_source
+    assert "reservedSpawnBudget = budget.Reserve(action.Count)" in scheduler_source
+    assert "pending.Budget.Return(pending.ReservedSpawnBudget)" in scheduler_source
     assert "new ItemEventBudgetState" not in run_item_event
     assert "MaxPendingRuntimeActions = 256" in limits_source
     assert "MaxRuntimeDelayedActionsPerTick = 64" in limits_source
@@ -808,7 +809,7 @@ def test_csharp_runtime_preserves_authored_tick_units_and_enforces_spawn_chokepo
     assert "foreach (RuntimeEventActionSpec action" in run_event
     assert "RuntimeProgramExecutor.ExecuteAction" in run_event
 
-    spawn = projectile.split("public static int SpawnRuntimeEntity", 1)[1].split(
+    spawn = projectile.split("internal static int SpawnRuntimeEntity", 1)[1].split(
         "private static int CountActiveGeneratedProjectiles", 1
     )[0]
     assert "remainingSpawnBudget <= 0" in spawn

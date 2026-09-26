@@ -2,6 +2,7 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Runtime;
+using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using Microsoft.Xna.Framework;
 using System;
@@ -25,17 +26,18 @@ public sealed partial class GeneratedProjectile
                     _entity,
                     action,
                     Owner(),
+                    Projectile.GetSource_FromThis(),
                     target?.Center ?? Projectile.Center,
                     direction,
                     target,
                     damageDone,
                     _childDepth,
-                    ref _remainingSpawnBudget)
+                    _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
                     && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                     Projectile.netUpdate = true;
                 continue;
             }
-            RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), target?.Center ?? Projectile.Center, direction, target, damageDone, _childDepth, ref _remainingSpawnBudget);
+            RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), target?.Center ?? Projectile.Center, direction, target, damageDone, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
         }
     }
 
@@ -69,17 +71,18 @@ public sealed partial class GeneratedProjectile
                     _entity,
                     action,
                     Owner(),
+                    Projectile.GetSource_FromThis(),
                     Projectile.Center,
                     direction,
                     null,
                     Projectile.damage,
                     _childDepth,
-                    ref _remainingSpawnBudget)
+                    _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
                     && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                     Projectile.netUpdate = true;
             }
             else
-                RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, ref _remainingSpawnBudget);
+                RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
             emitted = true;
         }
         if (emitted)
@@ -128,6 +131,10 @@ public sealed partial class GeneratedProjectile
     public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
     {
         if (_data is null || _entity is null) return;
+        if (IsGeneratedWhipTagSource && target.active && InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)
+            && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
+            && Main.player[Projectile.owner] is { active: true })
+            target.GetGlobalNPC<Common.Players.GeneratedWhipTagGlobalNPC>().Mark(Projectile.owner);
         RunRuntimeEvent(RuntimeEventKind.OnHit, target, damageDone);
         EmitAndSyncVfxEvent(RuntimeEventKind.OnHit, target.Center);
         if (hit.Crit)

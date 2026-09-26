@@ -33,13 +33,7 @@ public partial class GeneratedItem : ModItem
     private static int _warningCount;
     private int _lastHydrationTick = -9999;
     private int _lastBlockedNoticeTick = -9999;
-    private ItemEventBudgetState _itemEventBudget = new(0);
-
-    private sealed class ItemEventBudgetState
-    {
-        public int Remaining;
-        public ItemEventBudgetState(int remaining) => Remaining = Math.Max(0, remaining);
-    }
+    private RuntimeSpawnBudget _itemEventBudget = new(0);
 
 
     private static void Warn(string context, Exception ex)
@@ -54,7 +48,7 @@ public partial class GeneratedItem : ModItem
         var clone = (GeneratedItem)base.Clone(newEntity);
         try { clone.Data = GeneratedItemData.FromJson((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()) ?? GeneratedItemData.Placeholder(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
-        clone._itemEventBudget = new ItemEventBudgetState(0);
+        clone._itemEventBudget = new RuntimeSpawnBudget(0);
         return clone;
     }
 
@@ -62,7 +56,7 @@ public partial class GeneratedItem : ModItem
 
     private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal, bool notifyNetState = true)
     {
-        _itemEventBudget = new ItemEventBudgetState(0);
+        _itemEventBudget = new RuntimeSpawnBudget(0);
         Data = data ?? GeneratedItemData.Placeholder();
         try { Data.ApplyToItem(Item); }
         catch (Exception ex)
@@ -207,6 +201,13 @@ public partial class GeneratedItem : ModItem
         Item.shootSpeed = spawning
             ? Data.RuntimeProgram.TryGetEntity(action.TargetId)?.Spawn.SpeedPxPerTick ?? 0f
             : 0f;
+        // The same Item is used as direct-use input and as a vanilla ammo stack.
+        // Direct-use projection must not erase the independent authored ammo fields.
+        if (Item.ammo != AmmoID.None)
+        {
+            Item.shoot = Data.Gameplay.AmmoProjectileId;
+            Item.shootSpeed = Data.Gameplay.AmmoShootSpeedPxPerTick;
+        }
     }
 
     /// <summary>
@@ -266,8 +267,18 @@ public partial class GeneratedItem : ModItem
             if (placement is null || !GeneratedPlacementLedgerSystem.AuthorizePlacement(player, Data, placement))
                 return false;
         }
-        _itemEventBudget = new ItemEventBudgetState(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        _itemEventBudget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return true;
+    }
+
+    public override void PickAmmo(Item weapon, Player player, ref int type, ref float speed, ref StatModifier damage, ref float knockback)
+    {
+        // Installed Player.PickAmmo adds ammo.shoot to weapon.shoot for these two
+        // categories before calling the ammo ModItem hook. Restore the exact
+        // authored projectile here; keep vanilla speed/damage/knockback intact.
+        if (Item.ammo == weapon.useAmmo &&
+            (weapon.useAmmo == AmmoID.Rocket || weapon.useAmmo == AmmoID.Solution))
+            type = Data.Gameplay.AmmoProjectileId;
     }
 
     public override bool ConsumeItem(Player player)
@@ -321,6 +332,11 @@ public partial class GeneratedItem : ModItem
             player.GetModPlayer<InfiniCraftPlayer>().TryRunGeneratedMobility(gp);
     }
 
+    // Root binding shots are not event actions: their immediate capacity is the
+    // authored spawn count, while SpawnRuntimeEntity gives them a separate event ledger.
+    internal static int RootBindingSpawnCapacity(RuntimeEntitySpec entity)
+        => Math.Clamp(entity.Spawn.Count, 1, InfiniRuntimeLimits.MaxRuntimeSpawnCount);
+
     public override void HoldItem(Player player)
     {
         EnsureRuntimeHydration(player);
@@ -351,7 +367,7 @@ public partial class GeneratedItem : ModItem
                 }
             }
             if (!exists && entity is not null)
-                GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, player.GetSource_ItemUse(Item), player.Center, new Vector2(player.direction, 0f), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+                GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, player.GetSource_ItemUse(Item), player.Center, new Vector2(player.direction, 0f), 0, RootBindingSpawnCapacity(entity));
         }
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
         RunPeriodicItemEvents(player, itemEntity);
@@ -361,7 +377,7 @@ public partial class GeneratedItem : ModItem
 
     private void RunPeriodicItemEvents(Player player, RuntimeEntitySpec entity)
     {
-        var budget = new ItemEventBudgetState(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        var budget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.Periodic))
         {
             int period = Math.Max(6, action.PeriodTicks);
@@ -404,7 +420,7 @@ public partial class GeneratedItem : ModItem
         Vector2 position,
         Vector2 direction,
         int damageDone,
-        ItemEventBudgetState budget,
+        RuntimeSpawnBudget budget,
         IEntitySource source)
     {
         if (action.DelayTicks > 0)
@@ -414,12 +430,13 @@ public partial class GeneratedItem : ModItem
                 entity,
                 action,
                 player,
+                source,
                 position,
                 direction,
                 target,
                 damageDone,
                 0,
-                ref budget.Remaining);
+                budget);
             return;
         }
         RuntimeProgramExecutor.ExecuteAction(
@@ -433,7 +450,7 @@ public partial class GeneratedItem : ModItem
             target,
             damageDone,
             0,
-            ref budget.Remaining);
+            budget);
     }
 
 
@@ -442,7 +459,9 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.SpawnEntity) return false;
         if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)) return false;
-        GeneratedProjectile.SpawnRuntimeEntity(Data, binding.UsePolicy.Action.TargetId, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
+        if (entity is null) return false;
+        GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, RootBindingSpawnCapacity(entity), activationBudget: _itemEventBudget);
         return false;
     }
 
@@ -501,7 +520,7 @@ public partial class GeneratedItem : ModItem
         // Terraria already applies Item.defense in Player.GrantArmorBenefits.
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
         player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
-        player.moveSpeed += a.MovementSpeed; player.maxRunSpeed += a.MaxRunSpeed; player.jumpSpeedBoost += a.JumpSpeed;
+        player.moveSpeed += a.MovementSpeed; player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedMaxRunSpeedBonus(a.MaxRunSpeed); player.jumpSpeedBoost += a.JumpSpeed;
         player.GetDamage(DamageClass.Generic) += a.GenericDamage; player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.RangedDamage; player.GetDamage(DamageClass.Magic) += a.MagicDamage; player.GetDamage(DamageClass.Summon) += a.SummonDamage;
         player.GetCritChance(DamageClass.Generic) += a.GenericCrit; player.GetAttackSpeed(DamageClass.Generic) += a.AttackSpeed; player.GetKnockback(DamageClass.Generic) += a.Knockback;
@@ -519,7 +538,7 @@ public partial class GeneratedItem : ModItem
     {
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
         player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
-        player.moveSpeed += a.MovementSpeed; player.maxRunSpeed += a.MaxRunSpeed; player.jumpSpeedBoost += a.JumpSpeed;
+        player.moveSpeed += a.MovementSpeed; player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedMaxRunSpeedBonus(a.MaxRunSpeed); player.jumpSpeedBoost += a.JumpSpeed;
         player.GetDamage(DamageClass.Generic) += a.GenericDamage; player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.RangedDamage; player.GetDamage(DamageClass.Magic) += a.MagicDamage; player.GetDamage(DamageClass.Summon) += a.SummonDamage;
         player.GetCritChance(DamageClass.Generic) += a.GenericCrit; player.GetAttackSpeed(DamageClass.Generic) += a.AttackSpeed; player.GetKnockback(DamageClass.Generic) += a.Knockback;

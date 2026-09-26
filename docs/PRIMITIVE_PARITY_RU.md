@@ -30,7 +30,7 @@ Author schema ограничивает новые значения всех пр
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000 | accessory.maxMana | ModItem.UpdateAccessory |
 | lifeRegenHalfHpPerSecond | Add Terraria lifeRegen units (2 units = 1 HP/second before other effects) | half_hp_per_second | 0 | -100…200 | accessory.lifeRegen | ModItem.UpdateAccessory |
-| manaRegenBonusPoints | Add Player.manaRegenBonus points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | accessory.manaRegen | ModItem.UpdateAccessory |
+| manaRegenBonusPoints | Add Player.manaRegenBonus engine points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | accessory.manaRegen | ModItem.UpdateAccessory |
 | moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | accessory.movementSpeed /100 | ModItem.UpdateAccessory |
 | maxRunSpeedBonusPxPerTick | Add to Player.maxRunSpeed, subject to other Terraria movement limits | pixels_per_tick | 0 | -5…20 | accessory.maxRunSpeed | ModItem.UpdateAccessory |
 | jumpSpeedBonusPxPerTick | Add to Player.jumpSpeedBoost (positive raises jump speed) | pixels_per_tick | 0 | -5…20 | accessory.jumpSpeed | ModItem.UpdateAccessory |
@@ -41,12 +41,12 @@ Author schema ограничивает новые значения всех пр
 | sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20 | accessory.sentrySlots | ModItem.UpdateAccessory |
 | manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | accessory.manaCostReduction /100 | ModItem.UpdateAccessory |
 | ammoSaveChancePercent | Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | accessory.ammoSaveChance /100 | ModItem.UpdateAccessory |
-| aggroPoints | Add to Player.aggro (negative reduces targeting) | aggro_points | 0 | -1000…1000 | accessory.aggro | ModItem.UpdateAccessory |
+| aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | aggro_points | 0 | -1000…1000 | accessory.aggro | ModItem.UpdateAccessory |
 | damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75 | accessory.endurance /100 | ModItem.UpdateAccessory |
-| genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic | armor_points | 0 | 0…100 | accessory.armorPenetration | ModItem.UpdateAccessory |
+| genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | accessory.armorPenetration | ModItem.UpdateAccessory |
 | whipRangeBonusPercent | Add percent/100 to Player.whipRangeMultiplier | additive_percent | 0 | -90…300 | accessory.whipRange /100 | ModItem.UpdateAccessory |
 | taggedSummonSourceDamageBonusPercent | Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | accessory.summonTagDamage /100 | ModItem.UpdateAccessory |
-| lightStrength | Client-only equipped light; requires lightColor when positive | light_intensity | 0 | 0…1.5 | accessory.lightStrength | ModItem.UpdateAccessory |
+| lightStrength | Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive | light_intensity | 0 | 0…1.5 | accessory.lightStrength | ModItem.UpdateAccessory |
 | lightColor | Explicit equipped light color | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | accessory.lightColorName | ModItem.UpdateAccessory |
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
@@ -64,7 +64,7 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000 | armor.maxMana | ModItem.UpdateEquip |
 | lifeRegenHalfHpPerSecond | Add Terraria lifeRegen units (2 units = 1 HP/second before other effects) | half_hp_per_second | 0 | -100…200 | armor.lifeRegen | ModItem.UpdateEquip |
-| manaRegenBonusPoints | Add Player.manaRegenBonus points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
+| manaRegenBonusPoints | Add Player.manaRegenBonus engine points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
 | moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | armor.movementSpeed /100 | ModItem.UpdateEquip |
 | maxRunSpeedBonusPxPerTick | Add to Player.maxRunSpeed, subject to other Terraria movement limits | pixels_per_tick | 0 | -5…20 | armor.maxRunSpeed | ModItem.UpdateEquip |
 | jumpSpeedBonusPxPerTick | Add to Player.jumpSpeedBoost (positive raises jump speed) | pixels_per_tick | 0 | -5…20 | armor.jumpSpeed | ModItem.UpdateEquip |
@@ -75,12 +75,12 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20 | armor.sentrySlots | ModItem.UpdateEquip |
 | manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | armor.manaCostReduction /100 | ModItem.UpdateEquip |
 | ammoSaveChancePercent | Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | armor.ammoSaveChance /100 | ModItem.UpdateEquip |
-| aggroPoints | Add to Player.aggro (negative reduces targeting) | aggro_points | 0 | -1000…1000 | armor.aggro | ModItem.UpdateEquip |
+| aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | aggro_points | 0 | -1000…1000 | armor.aggro | ModItem.UpdateEquip |
 | damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75 | armor.endurance /100 | ModItem.UpdateEquip |
-| genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic | armor_points | 0 | 0…100 | armor.armorPenetration | ModItem.UpdateEquip |
+| genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | armor.armorPenetration | ModItem.UpdateEquip |
 | whipRangeBonusPercent | Add percent/100 to Player.whipRangeMultiplier | additive_percent | 0 | -90…300 | armor.whipRange /100 | ModItem.UpdateEquip |
 | taggedSummonSourceDamageBonusPercent | Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | armor.summonTagDamage /100 | ModItem.UpdateEquip |
-| lightStrength | Client-only equipped light; requires lightColor when positive | light_intensity | 0 | 0…1.5 | armor.lightStrength | ModItem.UpdateEquip |
+| lightStrength | Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive | light_intensity | 0 | 0…1.5 | armor.lightStrength | ModItem.UpdateEquip |
 | lightColor | Explicit equipped light color | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | armor.lightColorName | ModItem.UpdateEquip |
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | armor.fallDamageImmune | ModItem.UpdateEquip |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | armor.lavaImmune | ModItem.UpdateEquip |
@@ -88,14 +88,14 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | setBonusGenericCritChancePercentagePoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance | percentage_points | 0 | -100…100 | armor.setBonusGenericCrit | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusMoveSpeedBonusPercent | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | armor.setBonusMovementSpeed /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusLifeRegenHalfHpPerSecond | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Terraria lifeRegen units (2 units = 1 HP/second before other effects) | half_hp_per_second | 0 | -100…200 | armor.setBonusLifeRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusManaRegenBonusPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | armor.setBonusManaRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusManaRegenBonusPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus engine points; not directly mana/second | mana_regen_bonus_points | 0 | -100…200 | armor.setBonusManaRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusMinionSlotsBonus | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots | slots | 0 | 0…20 | armor.setBonusMinionSlots | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusSentrySlotsBonus | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots | slots | 0 | 0…20 | armor.setBonusSentrySlots | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusManaCostReductionPercentagePoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | armor.setBonusManaCostReduction /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusAmmoSaveChancePercent | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | armor.setBonusAmmoSaveChance /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusAggroPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add to Player.aggro (negative reduces targeting) | aggro_points | 0 | -1000…1000 | armor.setBonusAggro | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusAggroPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | aggro_points | 0 | -1000…1000 | armor.setBonusAggro | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusDamageReductionPercentagePoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75 | armor.setBonusEndurance /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusGenericArmorPenetrationPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic | armor_points | 0 | 0…100 | armor.setBonusArmorPenetration | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusGenericArmorPenetrationPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | armor.setBonusArmorPenetration | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 
 Authority: `owner_execute_sync`; техническая фаза/сетевая роль выбираются runtime, не LLM.
 
@@ -137,9 +137,9 @@ Legacy C# DTO/Normalize-поля и выборочные исторически�
 
 До v5 Author мог выбирать held generatedBuff, отдельные эффекты alternate use, вероятностное расходование стека, Item.useAmmo/PickAmmo, точный sound catalog и target-biased child spawn. `extractinator_output` раньше исполнялся отдельным `GeneratedExtractinatorMaterial` proxy с type-wide `ItemID.Sets.ExtractinatorMode`, но этот C# тип удалён: нынешний `GeneratedItem` не может честно восстановить его одним instance-полем. Исторический `Attack.ShotCount` исполнялся в первичном Shoot; отдельный прежний sentry per-volley executor не доказан, а нынешний `target_and_fire` всегда выпускает одну сущность за interval. Эти решения **не восстановлены** equipment-проекцией и не входят в утверждение об AST parity. Новая поддержка требует отдельных низкоуровневых vertical slices с engine semantics, а не возврата whole-weapon macros или угадывания из parent prose.
 
-## Известная рассинхронизация при extraUpdates > 0
+## Единицы при extraUpdates > 0
 
-`set_projectile_collision.extraUpdates` увеличивает число Projectile.AI/перемещений в одном мировом тике. В текущем C# `Spawn.SpeedPxPerTick`, `gravityPerTick`, некоторые turn/acceleration/return-speed поля применяются **за AI-подшаг**, хотя Author объявляет пиксели/тик и другие единицы мирового тика. Часть duration/event timers уже переводится через `AuthoredTicksToProjectileUpdates`; это не исправляет скорость и нелинейное движение. Существующие v5 рецепты с extraUpdates > 0 нельзя молча переинтерпретировать. До versioned технической нормализации новых рецептов с сохранением legacy поведения полную engine-semantic parity для этой комбинации заявлять нельзя.
+`set_projectile_collision.extraUpdates=n` даёт `n+1` AI/physics-обновлений снаряда за мировой тик. В Author-карточках исходная `Projectile.velocity`, гравитация, поворот, ускорение и скорость возврата обозначены **за projectile update**, а не как гарантированные пиксели за мировой тик. Длительности и event-периоды остаются в мировых тиках; C# переводит их через `AuthoredTicksToProjectileUpdates`. Это точное описание существующего wire/v5 поведения без смены старых рецептов и без приблизительного пересчёта нелинейного движения в px/сек.
 
 ## Границы проверки
 

@@ -56,8 +56,9 @@ def _case(name: str, mutate: Callable[[dict[str, Any]], None]) -> dict[str, Any]
         failure_report={"stage": "runtime_program_validation", "errors": validation["errors"]},
     )
     plan = dossier["repairScope"]["blockerPlan"]
-    broken = dossier["brokenFragments"]
-    dependency = dossier["validDependencyFragments"]
+    source_fragments = dossier["readOnlySourceFragments"]
+    broken = source_fragments["brokenFragments"]
+    dependency = source_fragments["validDependencyFragments"]
     card_names = {
         str(card.get("fn") or "")
         for key in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards")

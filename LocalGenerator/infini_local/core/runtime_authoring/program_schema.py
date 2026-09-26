@@ -456,6 +456,12 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
             add("minimum", path, schema["minimum"], value)
         if schema.get("maximum") is not None and value > schema["maximum"]:
             add("maximum", path, schema["maximum"], value)
+        step = schema.get("multipleOf")
+        if isinstance(step, (int, float)) and step > 0 and math.isfinite(float(value)):
+            # The only authored fractional step is an exact binary half; check
+            # the quotient without rounding or approximating engine quantities.
+            if value % step != 0:
+                add("multiple_of", path, step, value)
 
     if isinstance(value, list):
         if isinstance(schema.get("minItems"), int) and len(value) < schema["minItems"]:
@@ -470,6 +476,11 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                     break
 
     if isinstance(value, dict):
+        condition = schema.get("if")
+        if isinstance(condition, Mapping) and not strict_schema_errors(value, condition, path=path, root=root_schema, limit=limit):
+            consequent = schema.get("then")
+            if isinstance(consequent, Mapping):
+                errors.extend(strict_schema_errors(value, consequent, path=path, root=root_schema, limit=max(0, limit - len(errors))))
         raw_properties = schema.get("properties")
         properties: Mapping[str, Any] = raw_properties if isinstance(raw_properties, Mapping) else {}
         raw_required = schema.get("required")

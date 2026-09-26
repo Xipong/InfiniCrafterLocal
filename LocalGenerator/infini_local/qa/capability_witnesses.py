@@ -44,10 +44,10 @@ def _value(spec: ParamSpec, name: str) -> Any:
         return False
     if spec.kind == "integer":
         base = spec.minimum if spec.minimum is not None else 1
-        return int(max(1, base))
+        return int(max(spec.multiple_of or 1, base))
     if spec.kind == "number":
         base = spec.minimum if spec.minimum is not None else 0.5
-        return float(max(0.1, base))
+        return float(max(spec.multiple_of or 0.1, base))
     if spec.kind == "string":
         return "witness"
     raise ValueError(f"unsupported parameter kind {spec.kind!r}")
@@ -64,7 +64,7 @@ def _params(fn: str) -> dict[str, Any]:
         "apply_generated_buff_on_use": {
             "durationTicks": 60, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
             "lightColor": "white", "oreSenseEnabled": False, "movementSpeed": 0.0,
-            "jumpBoost": 0.0, "manaRegen": 0, "lifeRegen": 0,
+            "jumpBoost": 0.0, "manaRegen": 0, "lifeRegenHpPerSecond": 0,
         },
         "configure_placeable": {"tileId": 4, "wallId": -1, "placeStyle": 0},
         "require_use_condition": {"mode": "grounded"},

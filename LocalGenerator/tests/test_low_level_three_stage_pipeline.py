@@ -322,7 +322,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
         row for row in program["calls"] if row["id"] in {"item_stats", "item_use"}
     ] + [
         {"id": "place", "fn": "configure_placeable", "target": "item", "params": {"tileId": 1, "wallId": -1, "placeStyle": 0}},
-        {"id": "tool", "fn": "configure_tool", "target": "item", "params": {"pickPower": 100, "axePower": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
+        {"id": "tool", "fn": "configure_tool", "target": "item", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
     ]
     program["bindings"] = [{
         "id": "primary_place",
@@ -1838,7 +1838,7 @@ def test_tool_requires_primary_use_and_repair_exposes_all_executable_registry_ch
         "target": "item",
         "params": {
             "pickPower": 225,
-            "axePower": 0,
+            "axePowerTooltipPercent": 0,
             "hammerPower": 0,
             "miningSpeedScale": 0.75,
         },
@@ -3086,6 +3086,10 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     assert "Every upsert entry must be a complete schema-valid node" in repair_rules
     assert "id, fn, target, and the complete params object" in repair_rules
     required_shape = dossier["requiredJsonShape"]
+    assert not any(key in dossier for key in ("brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments"))
+    assert set(dossier["readOnlySourceFragments"]) == {
+        "brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments",
+    }
     assert "claimsUpsert" not in required_shape
     assert "claimIdsDelete" not in required_shape
     assert set(required_shape["callsUpsert"][0]) == {"id", "fn", "target", "params"}
@@ -3158,17 +3162,47 @@ def test_gameplay_repair_keeps_useful_fix_and_ignores_frozen_rewrite_end_to_end(
 
     monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
     monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(
-        gameplay_stage,
-        "llm_chat_json",
-        lambda *_args, **_kwargs: {"choices": [{"message": {"content": json.dumps(patch)}}]},
-    )
+    captured: dict[str, Any] = {}
+    def fake_repair_chat(request: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
+        captured["request"] = request
+        return {"choices": [{"message": {"content": json.dumps(patch)}}]}
+    monkeypatch.setattr(gameplay_stage, "llm_chat_json", fake_repair_chat)
     repaired = gameplay_stage.repair_author_item_after_failure(current, {}, {}, {}, {}, "key", failure_report=failure)
+    request = captured["request"]
+    messages = request["messages"]
+    assert len(messages) == 2
+    assert messages[-1]["name"] == "author_repair_context"
+    context = json.loads(messages[-1]["content"])
+    assert list(context)[-1] == "requiredJsonShape"
+    final_shape = context["requiredJsonShape"]
+    assert "callsUpsert" in final_shape
+    assert "brokenFragments" not in final_shape
+    assert "readOnlySourceFragments" in context
     assert validate_runtime_program(repaired)["ok"]
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "item_use")["params"]["useStyle"] == "shoot"
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "item_stats")["params"]["damage"] == original_damage
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
+
+
+def test_gameplay_repair_does_not_strip_echoed_read_only_dossier_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = build_runtime_fixture("workbench_blade")
+    item_use = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_use")
+    item_use["params"].pop("useStyle")
+    failure = {"stage": "strict_author_validation", "errors": validate_runtime_program(current)["errors"]}
+    fixed_use = copy.deepcopy(item_use)
+    fixed_use["params"]["useStyle"] = "shoot"
+    patch = _empty_gameplay_patch()
+    patch["callsUpsert"] = [fixed_use]
+    patch["realizationReplacement"] = copy.deepcopy(current["realization"])
+    patch["brokenFragments"] = {"calls": [fixed_use]}
+    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
+    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(gameplay_stage, "llm_chat_json", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": json.dumps(patch)}}],
+    })
+    with pytest.raises(PlannerUnavailable, match="additional_property"):
+        gameplay_stage.repair_author_item_after_failure(current, {}, {}, {}, {}, "key", failure_report=failure)
 
 
 def test_nonrepairable_registry_defect_never_calls_llm(monkeypatch: pytest.MonkeyPatch) -> None:

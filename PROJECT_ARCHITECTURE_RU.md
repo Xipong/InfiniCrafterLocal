@@ -82,6 +82,10 @@ C# не читает name/tooltip/tags/category для выбора gameplay. Н
 
 Visual Director выбирает `baked_sprite`, `reuse_item_icon`, `runtime_geometry` или `no_asset` только там, где режим разрешён entity-role. Отсутствующий обязательный PNG — validator failure/Visual Repair. Placeholder не считается игровым результатом.
 
+## Проверенные границы typed primitive runtime
+
+Текущие unit conversions, measured prompt size, C# lifecycle fixes и **известный MP hit-authority дефект** перечислены в [`docs/TYPED_PRIMITIVE_RUNTIME_AUDIT_RU.md`](docs/TYPED_PRIMITIVE_RUNTIME_AUDIT_RU.md). AST coverage и успешный no-image pipeline не означают полную игровую/сетевую semantic parity. Старые отчёты low-level v5 помечены историческими.
+
 ## Доказательства
 
 - 52 capability vertical witnesses;

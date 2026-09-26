@@ -55,7 +55,8 @@ Parent packets дополнительно содержат canonical `useStyleNa
 ### Неочевидные Terraria units
 
 - `valueCopper` — точное поле `Item.value` в copper. Это base/shop value, а не гарантированная сумма обратной продажи игроком.
-- `axePower` — внутреннее `Item.axe`; Terraria показывает в tooltip значение ×5. Author range 0..100 совпадает с C# и не обрезается.
+- Author `axePowerTooltipPercent` — точный tooltip percent (0..500, шаг 5); compiler делит на 5 до прежнего целого `gameplay.axePower`/`Item.axe` 0..100. Старый wire и C# не меняются; `axePower` как Author alias не принимается.
+- Author generated buff `lifeRegenHpPerSecond` — 0..60 HP/s с шагом 0.5; compiler умножает на 2 до прежнего целого `gameplay.generatedBuff.lifeRegen` 0..120 (2 engine units = 1 HP/s до иных эффектов). Старый wire/C# не меняется; `lifeRegen` как имя Author-параметра этого capability не принимается.
 
 ### Range parity
 

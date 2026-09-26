@@ -256,7 +256,7 @@ def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
         _numeric_param(params, "movementSpeed", 0) != 0,
         _numeric_param(params, "jumpBoost", 0) > 0,
         _numeric_param(params, "manaRegen", 0) > 0,
-        _numeric_param(params, "lifeRegen", 0) > 0,
+        _numeric_param(params, "lifeRegenHpPerSecond", 0) > 0,
     ))
 
 
@@ -661,6 +661,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             event = str(params.get("event") or "")
             if event not in cap.allowed_events:
                 issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.event", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
+
         if cap.activation_spawn_count_param:
             raw_spawn_count = params.get(cap.activation_spawn_count_param)
             if isinstance(raw_spawn_count, int) and not isinstance(raw_spawn_count, bool) and raw_spawn_count >= 0:

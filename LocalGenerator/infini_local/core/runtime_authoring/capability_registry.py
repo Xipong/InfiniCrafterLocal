@@ -290,6 +290,8 @@ class ParamSpec:
     default: Any = field(default=None, compare=False)
     wire_name: str = ""
     wire_divisor: int = 1
+    wire_multiplier: int = 1
+    multiple_of: float | int | None = None
     wire_boolean_true_value: int | None = None
     runtime_minimum: float | int | None = None
     runtime_maximum: float | int | None = None
@@ -300,7 +302,18 @@ class ParamSpec:
         # Declared unit conversion, not a choice of mechanic or a numeric clamp.
         if self.wire_boolean_true_value is not None:
             return self.wire_boolean_true_value if value else 0
-        return value / self.wire_divisor if self.wire_divisor != 1 else value
+        if self.wire_multiplier != 1:
+            result = value * self.wire_multiplier
+            if not isinstance(result, (int, float)) or not float(result).is_integer():
+                raise ValueError("non-integral wire projection")
+            return int(result)
+        if self.wire_divisor != 1:
+            if self.kind == "integer":
+                if value % self.wire_divisor:
+                    raise ValueError("non-integral wire projection")
+                return value // self.wire_divisor
+            return value / self.wire_divisor
+        return value
 
     def schema(self) -> dict[str, Any]:
         out: dict[str, Any] = {"type": self.kind}
@@ -308,6 +321,8 @@ class ParamSpec:
             out["minimum"] = self.minimum
         if self.maximum is not None:
             out["maximum"] = self.maximum
+        if self.multiple_of is not None:
+            out["multipleOf"] = self.multiple_of
         if self.enum:
             out["enum"] = list(self.enum)
         if self.pattern:
@@ -361,7 +376,7 @@ class CapabilitySpec:
     def provider_variant_schema(self) -> dict[str, Any]:
         properties = {name: spec.schema() for name, spec in self.params.items()}
         required = [name for name, spec in self.params.items() if spec.required]
-        return {
+        variant: dict[str, Any] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
@@ -391,6 +406,12 @@ class CapabilitySpec:
             },
             "required": ["id", "fn", "target", "params"],
         }
+        if self.name in {"spawn_entity_on_event", "pull_on_event"}:
+            variant["properties"]["params"]["if"] = {
+                "properties": {"event": {"const": "periodic"}}, "required": ["event"],
+            }
+            variant["properties"]["params"]["then"] = {"required": ["periodTicks"]}
+        return variant
 
     def prompt_card(self) -> dict[str, Any]:
         params: dict[str, dict[str, Any]] = {}
@@ -405,6 +426,8 @@ class CapabilitySpec:
                 row["min"] = spec.minimum
             if spec.maximum is not None:
                 row["max"] = spec.maximum
+            if spec.multiple_of is not None:
+                row["multipleOf"] = spec.multiple_of
             if spec.enum:
                 row["enum"] = list(spec.enum)
             if spec.pattern:
@@ -440,6 +463,42 @@ class CapabilitySpec:
             card["multiplicity"] = self.multiplicity
         if self.performance_budget != "bounded by runtime program limits":
             card["budget"] = self.performance_budget
+        return card
+
+    def author_prompt_card(self) -> dict[str, Any]:
+        """Compact only repeated presentation metadata, never the authored contract.
+
+        The complete prompt_card remains the machine/audit projection. Gemini's
+        json_object transport does not send the local provider schema, so bounds,
+        types, enums, patterns, references and dependencies stay in this card.
+        """
+        card = self.prompt_card()
+        for name, row in card["params"].items():
+            spec = self.params[name]
+            if self.name == "configure_armor":
+                if name.startswith("setBonus"):
+                    row["meaning"] = row["meaning"].removeprefix(
+                        "Matching armor set (head piece only; matching head, body and legs must actually be equipped): "
+                    )
+                elif (name in CAPABILITY_REGISTRY["configure_accessory"].params
+                      and spec.description == CAPABILITY_REGISTRY["configure_accessory"].params[name].description):
+                    row.pop("meaning", None)
+            # All required fields are the default; optionality is explicit.
+            row.pop("required", None)
+            if not spec.required:
+                row["optional"] = True
+            # semanticType labels repeat the parameter meaning/units and are
+            # often generic (including bounded_text for boolean parameters).
+            row.pop("semanticType", None)
+            # A zero neutral for an optional bounded parameter is not a new
+            # value or design decision; absence and the numeric bounds remain.
+            if not spec.required and spec.neutral == 0:
+                row.pop("neutral", None)
+            for suffix, units in (("Ticks", "ticks"), ("Tiles", "tiles"),
+                                  ("Px", "pixels"), ("Radians", "radians")):
+                if name.endswith(suffix) and spec.units == units:
+                    row.pop("units", None)
+                    break
         return card
 
     def audit_card(self) -> dict[str, Any]:
@@ -480,6 +539,8 @@ def _p(
     default: Any = None,
     wire_name: str = "",
     wire_divisor: int = 1,
+    wire_multiplier: int = 1,
+    multiple_of: float | int | None = None,
     wire_boolean_true_value: int | None = None,
     runtime_minimum: float | int | None = None,
     runtime_maximum: float | int | None = None,
@@ -500,6 +561,8 @@ def _p(
         default=default,
         wire_name=wire_name,
         wire_divisor=wire_divisor,
+        wire_multiplier=wire_multiplier,
+        multiple_of=multiple_of,
         wire_boolean_true_value=wire_boolean_true_value,
         runtime_minimum=runtime_minimum,
         runtime_maximum=runtime_maximum,
@@ -638,7 +701,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
         "lifeRegenHalfHpPerSecond": stat("lifeRegen", "Add Terraria lifeRegen units (2 units = 1 HP/second before other effects)", -100, 200, "half_hp_per_second", integer=True),
-        "manaRegenBonusPoints": stat("manaRegen", "Add Player.manaRegenBonus points; not directly mana/second", -100, 200, "mana_regen_bonus_points", integer=True),
+        "manaRegenBonusPoints": stat("manaRegen", "Add Player.manaRegenBonus engine points; not directly mana/second", -100, 200, "mana_regen_bonus_points", integer=True),
         "moveSpeedBonusPercent": stat("movementSpeed", "Add percent/100 to Player.moveSpeed", -90, 300, "additive_percent", percent=True),
         "maxRunSpeedBonusPxPerTick": stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"),
         "jumpSpeedBonusPxPerTick": stat("jumpSpeed", "Add to Player.jumpSpeedBoost (positive raises jump speed)", -5, 20, "pixels_per_tick"),
@@ -649,12 +712,12 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         "sentrySlotsBonus": stat("sentrySlots", "Add sentry slots", 0, 20, "slots", integer=True),
         "manaCostReductionPercentagePoints": stat("manaCostReduction", "Subtract percent/100 from Player.manaCost factor, floored at 0.1", 0, 90, "percentage_points", percent=True),
         "ammoSaveChancePercent": stat("ammoSaveChance", "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)", 0, 99, "probability_percent", percent=True),
-        "aggroPoints": stat("aggro", "Add to Player.aggro (negative reduces targeting)", -1000, 1000, "aggro_points", integer=True),
+        "aggroPoints": stat("aggro", "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius", -1000, 1000, "aggro_points", integer=True),
         "damageReductionPercentagePoints": stat("endurance", "Add percent/100 to Player.endurance damage reduction", 0, 75, "percentage_points", percent=True),
-        "genericArmorPenetrationPoints": stat("armorPenetration", "Add flat armor penetration points to DamageClass.Generic", 0, 100, "armor_points"),
+        "genericArmorPenetrationPoints": stat("armorPenetration", "Add flat armor penetration points to DamageClass.Generic; not damage percent", 0, 100, "armor_points"),
         "whipRangeBonusPercent": stat("whipRange", "Add percent/100 to Player.whipRangeMultiplier", -90, 300, "additive_percent", percent=True),
         "taggedSummonSourceDamageBonusPercent": stat("summonTagDamage", "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip", 0, 300, "source_damage_percent", percent=True),
-        "lightStrength": stat("lightStrength", "Client-only equipped light; requires lightColor when positive", 0, 1.5, "light_intensity"),
+        "lightStrength": stat("lightStrength", "Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive", 0, 1.5, "light_intensity"),
         "lightColor": _p("string", "Explicit equipped light color", required=False, enum=_COLOR,
                          wire_name="lightColorName", neutral="", execution_phase=phase),
     }
@@ -699,7 +762,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Base item damage", minimum=0, maximum=2000),
-            "knockback": _p("number", "Item knockback", minimum=0, maximum=20),
+            "knockback": _p("number", "Item.knockBack engine strength, not pixels or damage", minimum=0, maximum=20),
             "useTimeTicks": _p("integer", "Use time", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
             "useAnimationTicks": _p("integer", "Use animation", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
             "manaCost": _p("integer", "Mana consumed per use", minimum=0, maximum=500),
@@ -709,7 +772,7 @@ _CAPS: list[CapabilitySpec] = [
             "craftYield": _p("integer", "Items granted by one craft", minimum=1, maximum=9999),
             "widthPx": _p("integer", "Inventory/world hitbox width", minimum=8, maximum=256, units="pixels", wire_name="width"),
             "heightPx": _p("integer", "Inventory/world hitbox height", minimum=8, maximum=256, units="pixels", wire_name="height"),
-            "scale": _p("number", "Item draw scale", minimum=0.25, maximum=4, wire_name="itemScale"),
+            "scale": _p("number", "Item display scale multiplier (1 unchanged)", minimum=0.25, maximum=4, wire_name="itemScale"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -749,7 +812,7 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "hitboxScale": _p("number", "Contact hitbox scale", minimum=0.5, maximum=2),
-            "contactForgivenessPx": _p("integer", "Extra contact radius", minimum=0, maximum=64, units="pixels"),
+            "contactForgivenessPx": _p("integer", "Extend scaled contact hitbox by this many pixels on each side", minimum=0, maximum=64, units="pixels"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UseItemHitbox/OnHitNPC",
@@ -816,14 +879,14 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "durationTicks": _p("integer", "Duration", minimum=1, maximum=21600, units="ticks"),
-            "miningSpeedMultiplier": _p("number", "Mining-time multiplier", minimum=0.25, maximum=4),
-            "lightStrength": _p("number", "Emitted light", minimum=0, maximum=1.5, wire_name="emitLightStrength"),
+            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4),
+            "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable Terraria spelunker-style ore highlighting; not a radius", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False),
-            "movementSpeed": _p("number", "Additive movement speed", minimum=-0.5, maximum=2),
-            "jumpBoost": _p("number", "Jump speed bonus", minimum=0, maximum=8),
-            "manaRegen": _p("integer", "Mana regeneration bonus", minimum=0, maximum=120),
-            "lifeRegen": _p("integer", "Life regeneration bonus", minimum=0, maximum=120),
+            "movementSpeed": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2),
+            "jumpBoost": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8),
+            "manaRegen": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120),
+            "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UseItem/InfiniCraftPlayer",
@@ -838,10 +901,10 @@ _CAPS: list[CapabilitySpec] = [
         "item_tool",
         ("item_body",),
         {
-            "pickPower": _p("integer", "Pickaxe power", minimum=0, maximum=1000),
-            "axePower": _p("integer", "Exact Terraria Item.axe internal power; the in-game tooltip displays this value multiplied by 5", minimum=0, maximum=100, units="Item.axe units"),
-            "hammerPower": _p("integer", "Hammer power", minimum=0, maximum=1000),
-            "miningSpeedScale": _p("number", "Use-time multiplier while mining", minimum=0.1, maximum=4),
+            "pickPower": _p("integer", "Terraria Item.pick tooltip power percent", minimum=0, maximum=1000),
+            "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5),
+            "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent", minimum=0, maximum=1000),
+            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.1, maximum=4),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -858,7 +921,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "tileId": _p("integer", "Exact loaded TileID/ModContent.TileType; -1 disables", minimum=-1, maximum=65535, semantic_type="loaded_tile_id"),
             "wallId": _p("integer", "Exact loaded WallID/ModContent.WallType; -1 disables", minimum=-1, maximum=65535, semantic_type="loaded_wall_id"),
-            "placeStyle": _p("integer", "Placement style", minimum=0, maximum=255),
+            "placeStyle": _p("integer", "Exact Item.placeStyle style index for the loaded tile/wall, not a universal visual style", minimum=0, maximum=255),
         },
         py=_COMPILER_OWNER,
         cs="RuntimeProgramSpec.cs::RuntimeBindingActionSpec",
@@ -874,8 +937,8 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "mode": _p("string", "Use condition", enum=("grounded", "not_wet", "life_above", "mana_above"), wire_name="useConditionMode"),
-            "minLife": _p("integer", "Required life for life_above", required=False, minimum=0, maximum=1000, wire_name="useConditionMinLife"),
-            "minMana": _p("integer", "Required mana for mana_above", required=False, minimum=0, maximum=1000, wire_name="useConditionMinMana"),
+            "minLife": _p("integer", "Current HP (Player.statLife >= minLife) required for life_above; equality allowed", required=False, minimum=0, maximum=1000, wire_name="useConditionMinLife"),
+            "minMana": _p("integer", "Current mana points (Player.statMana >= minMana) required for mana_above; equality allowed", required=False, minimum=0, maximum=1000, wire_name="useConditionMinMana"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem",
@@ -890,7 +953,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "strength": _p("number", "Light strength", minimum=0.01, maximum=1.5, wire_name="holdLightStrength"),
+            "strength": _p("number", "Client light RGB coefficient multiplying selected color (not a tile radius)", minimum=0.01, maximum=1.5, wire_name="holdLightStrength"),
             "color": _p("string", "Canonical light color", enum=_COLOR, wire_name="holdLightColorName"),
         },
         py=_COMPILER_OWNER,
@@ -971,8 +1034,8 @@ _CAPS: list[CapabilitySpec] = [
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
         {
-            "speedPxPerTick": _p("number", "Initial speed", minimum=0, maximum=80, units="pixels/tick"),
-            "count": _p("integer", "Entities spawned per activation", minimum=1, maximum=12),
+            "speedPxPerTick": _p("number", "Initial Projectile.velocity pixels per projectile update; extraUpdates adds updates per world tick", minimum=0, maximum=80, units="pixels/projectile update"),
+            "count": _p("integer", "Default root binding spawn count per activation; event actions and target_and_fire select their own counts", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
             "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
@@ -992,7 +1055,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Projectile base damage", minimum=0, maximum=2000),
-            "knockback": _p("number", "Projectile knockback", minimum=0, maximum=20),
+            "knockback": _p("number", "Projectile.knockBack engine strength, not pixels or damage", minimum=0, maximum=20),
             "ownerHitCheck": _p("boolean", "Require owner line/held hit check"),
         },
         py=_COMPILER_OWNER,
@@ -1021,7 +1084,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "widthPx": _p("integer", "Hitbox width", minimum=4, maximum=192, units="pixels"),
             "heightPx": _p("integer", "Hitbox height", minimum=4, maximum=192, units="pixels"),
-            "drawScale": _p("number", "Sprite draw scale", minimum=0.25, maximum=4),
+            "drawScale": _p("number", "Projectile sprite draw multiplier before entity visual scale; 1 unchanged, not damage hitbox size", minimum=0.25, maximum=4),
             "hitboxScale": _p("number", "Runtime hitbox multiplier", minimum=0.25, maximum=3),
         },
         py=_COMPILER_OWNER,
@@ -1040,9 +1103,9 @@ _CAPS: list[CapabilitySpec] = [
             "ignoreWater": _p("boolean", "Ignore Terraria liquid drag; false keeps vanilla water interaction"),
             "bounceCount": _p("integer", "Maximum custom tile bounces", minimum=0, maximum=32),
             "pierce": _p("integer", "Terraria Projectile.penetrate count; -1 means infinite", minimum=-1, maximum=100),
-            "extraUpdates": _p("integer", "Terraria Projectile.extraUpdates", minimum=0, maximum=5),
+            "extraUpdates": _p("integer", "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)", minimum=0, maximum=5),
             "npcImmunityMode": _p("string", "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers", enum=("owner", "local")),
-            "localNpcHitCooldownTicks": _p("integer", "Used only in local mode; -1 means this projectile can hit each NPC once", minimum=-1, maximum=600, units="ticks"),
+            "localNpcHitCooldownTicks": _p("integer", "Raw Terraria Projectile.localNPCHitCooldown engine cooldown; only in local mode; -1 hits each NPC once (not converted to world ticks)", minimum=-1, maximum=600, units="engine cooldown units"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults/OnTileCollide",
@@ -1084,65 +1147,65 @@ _CAPS.extend([
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
     }, provenance="existing movement code 1"),
-    _movement("move_gravity_arc", "Apply downward acceleration each tick.", 2, {
-        "gravityPerTick": _p("number", "Vertical acceleration", minimum=0.001, maximum=2, units="pixels/tick^2"),
+    _movement("move_gravity_arc", "Apply downward velocity acceleration per projectile update.", 2, {
+        "gravityPerTick": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="pixels/update per projectile update"),
     }, provenance="existing movement code 2"),
     _movement("move_drift", "Multiply velocity by authored retention each tick.", 3, {
-        "velocityRetention": _p("number", "Velocity multiplier", minimum=0.8, maximum=1.05),
+        "velocityRetention": _p("number", "Multiply projectile velocity each projectile update", minimum=0.8, maximum=1.05),
     }, provenance="existing movement code 3"),
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
         "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 4"),
     _movement("move_boomerang", "Fly out, then return to the owner.", 5, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/tick"),
+        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 5"),
-    _movement("move_bounce", "Use gravity and authored tile bounces.", 6, {
-        "gravityPerTick": _p("number", "Vertical acceleration", minimum=0.001, maximum=2, units="pixels/tick^2"),
+    _movement("move_bounce", "Use per-update gravity and authored tile bounces.", 6, {
+        "gravityPerTick": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="pixels/update per projectile update"),
     }, provenance="existing movement code 6"),
     _movement("move_sine_homing", "Combine sinusoidal drift with bounded homing.", 7, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
-        "waveAmplitude": _p("number", "Lateral wave amplitude", minimum=0, maximum=64, units="pixels"),
+        "waveAmplitude": _p("number", "Raw lateral velocity coefficient: sin(age×0.18) × waveAmplitude × 0.03 before velocity direction normalization; not displacement pixels", minimum=0, maximum=64, units="engine lateral velocity coefficient"),
     }, provenance="existing movement code 7"),
     _movement("move_phase", "Phase-drift with explicit tile collision still controlled separately.", 8, {
-        "phaseStrength": _p("number", "Phase drift strength", minimum=0, maximum=1),
+        "phaseStrength": _p("number", "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians; not collision phasing", minimum=0, maximum=1),
     }, provenance="existing movement code 8"),
     _movement("move_accelerate", "Multiply speed up to an explicit cap.", 9, {
-        "acceleration": _p("number", "Per-tick speed multiplier", minimum=1.0, maximum=1.2),
-        "maxSpeed": _p("number", "Speed cap", minimum=1, maximum=80, units="pixels/tick"),
+        "acceleration": _p("number", "Velocity multiplier per projectile update until maxSpeed cap", minimum=1.0, maximum=1.2),
+        "maxSpeed": _p("number", "Speed cap", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 9"),
-    _movement("move_spiral", "Rotate velocity by an authored angle each tick.", 10, {
-        "turnRadiansPerTick": _p("number", "Angular turn", minimum=-0.5, maximum=0.5, units="radians/tick"),
+    _movement("move_spiral", "Rotate velocity by an authored angle per projectile update.", 10, {
+        "turnRadiansPerTick": _p("number", "Angular velocity turn per projectile update", minimum=-0.5, maximum=0.5, units="radians/update"),
     }, provenance="existing movement code 10"),
     _movement("move_vortex_orb", "Run the existing vortex-orb controller.", 11, {
-        "pullStrength": _p("number", "Nearby pull strength", minimum=0, maximum=4),
+        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 11"),
     _movement("move_blackhole_pull", "Run the existing black-hole pull controller.", 12, {
-        "pullStrength": _p("number", "Pull strength", minimum=0, maximum=4),
+        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 12"),
-    _movement("move_proximity_missile", "Home and trigger the authored on-expire/on-hit actions near a target.", 13, {
+    _movement("move_proximity_missile", "Home; proximity inside proximityRadiusPx triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.", 13, {
         "rangeTiles": _p("number", "Detection/search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
         "proximityRadiusPx": _p("integer", "Trigger radius", minimum=4, maximum=512, units="pixels"),
     }, provenance="existing movement code 13"),
     _movement("move_returning_glaive", "Fly, spin and return to the owner.", 14, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/tick"),
+        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 14"),
     _movement("move_expanding_wave", "Expand the entity while preserving authored collision/damage.", 15, {
-        "scalePerTick": _p("number", "Additive Projectile.scale delta per movement update, capped by maxScale", minimum=0.001, maximum=0.5),
+        "scalePerTick": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5),
         "maxScale": _p("number", "Scale cap", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
     _movement("move_flail_tether", "Tether to owner, fly out and return; only movement/owner controller.", 16, {
         "rangeTiles": _p("number", "Maximum tether length", minimum=2, maximum=60, units="tiles"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/tick"),
+        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, targets=("owner_attached_projectile",), provenance="flail movement extracted from the retired melee macro"),
     _movement("move_yoyo_hover", "Follow owner cursor inside a leash and return on release.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/tick"),
+        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro"),
     _movement("move_whip_lash", "Execute the bounded owner-attached lash curve.", 18, {
         "rangeTiles": _p("number", "Lash reach", minimum=2, maximum=60, units="tiles"),
@@ -1194,8 +1257,8 @@ _CAPS.extend([
         {
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
-            "rangeTiles": _p("number", "Target range", minimum=1, maximum=120, units="tiles"),
-            "sameTargetBias": _p("number", "Bias toward current target", minimum=0, maximum=1),
+            "rangeTiles": _p("number", "Soft target range: previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
+            "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1),
         },
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController",
@@ -1304,8 +1367,8 @@ _CAPS.extend([
         {
             "event": _p("string", "Source event", enum=("on_hit", "periodic", "on_expire")),
             "mode": _p("string", "Pull direction", enum=("target_to_owner", "target_to_entity", "owner_to_target")),
-            "strength": _p("number", "Velocity impulse", minimum=0.01, maximum=4),
-            "radiusTiles": _p("number", "Affected radius", minimum=1, maximum=60, units="tiles"),
+            "strength": _p("number", "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement", minimum=0.01, maximum=4),
+            "radiusTiles": _p("number", "NPC search radius only with no directTarget; ignored for owner_to_target", minimum=1, maximum=60, units="tiles"),
             "periodTicks": _p("integer", "Required for periodic event", required=False, minimum=6, maximum=3600, units="ticks"),
         },
         multiplicity="many_per_target",
@@ -1323,7 +1386,7 @@ _CAPS.extend([
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
             "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
-            "damageFraction": _p("number", "Fraction of damage healed", minimum=0.001, maximum=1),
+            "damageFraction": _p("number", "Fraction of damageDone healed (0.15 = 15%), capped by maxHeal; not a whole-number percent", minimum=0.001, maximum=1),
             "maxHeal": _p("integer", "Per-event heal cap", minimum=1, maximum=200),
         },
         multiplicity="many_per_target",
@@ -1359,7 +1422,7 @@ _CAPS.extend([
         "entity_utility",
         PROJECTILE_ENTITY_KINDS,
         {
-            "strength": _p("number", "Light strength", minimum=0.01, maximum=1.5),
+            "strength": _p("number", "Client light RGB coefficient multiplying selected color (not a tile radius)", minimum=0.01, maximum=1.5),
             "color": _p("string", "Canonical light color", enum=_COLOR),
         },
         py=_COMPILER_OWNER,
@@ -1522,7 +1585,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "on_expire": EventKindSpec(
         "on_expire", PROJECTILE_ENTITY_KIND_ORDER, ("set_projectile_lifetime",),
-        "Emitted immediately before normal lifetime expiration.",
+        "Emitted immediately before natural lifetime expiration, or when move_proximity_missile detonates on proximity; an early kill otherwise emits on_kill only.",
     ),
     "on_kill": EventKindSpec(
         "on_kill", PROJECTILE_ENTITY_KIND_ORDER, (),
@@ -2059,39 +2122,26 @@ def visible_capabilities() -> tuple[CapabilitySpec, ...]:
 
 
 def compact_capability_catalog() -> list[dict[str, Any]]:
-    return [cap.prompt_card() for cap in visible_capabilities()]
+    return [cap.author_prompt_card() for cap in visible_capabilities()]
 
 
 def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
     """Project shared low-level field semantics without duplicating capability rules."""
-
-    semantic_types: dict[str, dict[str, set[str]]] = {}
-    for capability in visible_capabilities():
-        for spec in capability.params.values():
-            if not spec.semantic_type:
-                continue
-            row = semantic_types.setdefault(
-                spec.semantic_type,
-                {"valueKinds": set(), "units": set()},
-            )
-            row["valueKinds"].add(spec.kind)
-            if spec.units:
-                row["units"].add(spec.units)
-
     return {
         "stableIdPattern": r"^[a-z][a-z0-9_]{0,47}$",
-        "stackCost": STACK_COST_RULE,
-        "semanticTypeRule": (
-            "semanticType is a low-level quantity/category label, not a gameplay classifier; "
-            "the owning parameter's meaning, type, enum/pattern, min/max and units remain authoritative"
+        "paramNotation": (
+            "Every listed param is required unless marked optional; optional params may be omitted. "
+            "A missing optional zero-neutral param makes no authored nonzero effect. "
+            "Suffix units: Ticks=ticks (60/s), Tiles=tiles (16 px), Px=pixels, Radians=radians. "
+            "Projectile movement/velocity is per projectile update; extraUpdates adds updates per world tick, "
+            "while authored durations and event intervals ending Ticks remain world ticks; "
+            "localNpcHitCooldownTicks is the explicitly labeled raw engine exception. "
+            "Other units and numeric bounds remain on each parameter card; percent and "
+            "percentage-point values are entered as whole numbers (15 for +15%, not 0.15)."
         ),
-        "semanticTypes": {
-            name: {
-                "valueKinds": sorted(values["valueKinds"]),
-                "units": sorted(values["units"]),
-            }
-            for name, values in sorted(semantic_types.items())
-        },
+        "stackCost": STACK_COST_RULE,
+        "armorParamInheritance": "configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.",
+        "setBonusParamPrefix": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): ",
         "exclusiveGroup": {
             "scope": "per exact target entity",
             "rule": "At most one call in the same non-empty exclusiveGroup may target one entity.",

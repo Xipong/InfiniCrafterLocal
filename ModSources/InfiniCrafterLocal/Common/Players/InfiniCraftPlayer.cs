@@ -86,6 +86,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _generatedMobilityCooldownTicks;
     private float _generatedAmmoSaveChance;
     private float _generatedSummonTagDamage;
+    private float _generatedMaxRunSpeedBonus;
     private string _lastGeneratedMobilityFailureMessage = "";
     private int _heldItemPresentationSyncTick;
     private string _heldItemPresentationSyncKey = "";
@@ -120,6 +121,19 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
         // converting it to one of Terraria's coarse 20%/25% flags.
         _generatedAmmoSaveChance = 0f;
         _generatedSummonTagDamage = 0f;
+        _generatedMaxRunSpeedBonus = 0f;
+    }
+
+    public void AddGeneratedMaxRunSpeedBonus(float pixelsPerTick)
+        => _generatedMaxRunSpeedBonus += pixelsPerTick;
+
+    public override void PostUpdateRunSpeeds()
+    {
+        // Player.Update applies moveSpeed, terrain and the mount's own speed
+        // after equipment hooks, then calls this hook before movement.
+        // Keep the vanilla mount override of equipment's flat run-speed bonus.
+        if (!Player.mount.Active)
+            Player.maxRunSpeed += _generatedMaxRunSpeedBonus;
     }
 
     public void AddGeneratedAmmoSaveChance(float chance)

@@ -545,7 +545,7 @@
               "fn": "configure_tool",
               "id": "mining_heads",
               "params": {
-                "axePower": 0,
+                "axePowerTooltipPercent": 0,
                 "hammerPower": 0,
                 "miningSpeedScale": 0.85,
                 "pickPower": 55
@@ -987,7 +987,7 @@
               "fn": "configure_tool",
               "id": "tool_heads",
               "params": {
-                "axePower": 0,
+                "axePowerTooltipPercent": 0,
                 "hammerPower": 20,
                 "miningSpeedScale": 0.9,
                 "pickPower": 35

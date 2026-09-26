@@ -378,7 +378,7 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return exactly the repair patch schema; never return the full item.",
-            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from brokenFragments, changing only permitted fields; never omit unchanged required fields.",
+            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from readOnlySourceFragments.brokenFragments, changing only permitted fields; never omit unchanged required fields.",
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
             "For each exact repairScope.deletable.callPropertyKeys entry that must be removed, emit the matching callPropertyKeysDelete {callId,key}; a note claiming removal does not mutate the program.",
@@ -410,14 +410,16 @@ def build_gameplay_repair_dossier(
         "failureStage": str(failure_report.get("stage") or "runtime_program_validation"),
         "repairScope": scope,
         "runtimeExecutionTruth": realization_execution_truth_for_llm(),
-        "requiredJsonShape": author_item_repair_prompt_shape_card(),
-        "brokenFragments": fragments["broken"],
-        "brokenFragmentsByIndex": fragments["brokenByIndex"],
-        "validDependencyFragments": fragments["dependencyContext"],
+        "readOnlySourceFragments": {
+            "brokenFragments": fragments["broken"],
+            "brokenFragmentsByIndex": fragments["brokenByIndex"],
+            "validDependencyFragments": fragments["dependencyContext"],
+        },
         "immutableProgramIndex": fragments["immutableIndex"],
         "blockerCapabilities": cards(blocker_plan.get("directCapabilityNames")),
         "supportingCapabilities": cards(blocker_plan.get("supportingCapabilityNames")),
         "existingBrokenCapabilityCards": cards(blocker_plan.get("existingBrokenCapabilityNames")),
+        "requiredJsonShape": author_item_repair_prompt_shape_card(),
     }
 
 
@@ -461,9 +463,9 @@ def repair_author_item_after_failure(
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
 
-        "Omit unchanged root patch fields: absent optional arrays/metadataPatch mean no change; note and realizationReplacement are required. Do not copy dossier keys into the patch. Every upsert row must be complete and schema-valid; copy every unchanged required field from brokenFragments and modify only permitted paths. "
+        "Omit unchanged root patch fields: absent optional arrays/metadataPatch mean no change; note and realizationReplacement are required. Do not copy dossier keys into the patch, especially readOnlySourceFragments or any of its diagnostic children. Every upsert row must be complete and schema-valid; copy every unchanged required field from readOnlySourceFragments.brokenFragments and modify only permitted paths. "
         "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
-        "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. Return strict patch JSON only."
+        "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. The final requiredJsonShape field of the user JSON is solely the output patch shape; emit only its listed root keys with your chosen values, never source-context keys or requiredJsonShape itself. Return strict patch JSON only."
     )
     messages = [
         stage_chat_message("system", "author_repair_contract", repair_system + llm_reasoning_system_suffix(model_name)),

@@ -18,6 +18,11 @@
     <Compile Include="EngineRuntimeChecks.Client.cs" />
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
+    <Compile Include="EngineRuntimeChecks.Ammo.cs" />
+    <Compile Include="EngineRuntimeChecks.Whip.cs" />
+    <Compile Include="EngineRuntimeChecks.Proximity.cs" />
+    <Compile Include="EngineRuntimeChecks.BudgetPeer.cs" />
+    <Compile Include="EngineRuntimeChecks.RootSpawn.cs" />
     <Compile Include="EngineRuntimeChecks.Assets.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />

@@ -200,8 +200,8 @@ def test_tool_and_value_units_match_exact_terraria_fields() -> None:
     tool = CAPABILITY_REGISTRY["configure_tool"]
     assert "Item.value" in item_stats.params["valueCopper"].description
     assert "resale" in item_stats.params["valueCopper"].description
-    assert tool.params["axePower"].maximum == 100
-    assert "Item.axe" in tool.params["axePower"].description
-    assert "multiplied by 5" in tool.params["axePower"].description
+    assert tool.params["axePowerTooltipPercent"].maximum == 500
+    assert tool.params["axePowerTooltipPercent"].multiple_of == 5
+    assert "Item.axe" in tool.params["axePowerTooltipPercent"].description
     normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
     assert "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize

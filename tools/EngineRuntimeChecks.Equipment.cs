@@ -93,6 +93,49 @@ internal static partial class EngineRuntimeChecks
         if (failures.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
     }
 
+    private static void RunSpeedEquipmentAppliesAfterVanillaMovement()
+    {
+        WithPlayer((player, modPlayer) =>
+        {
+            var accessoryData = GeneratedItemData.Placeholder();
+            accessoryData.Accessory = new AccessorySpec { Enabled = true, MaxRunSpeed = 4f, MovementSpeed = 0.5f };
+            accessoryData.RuntimeProgram.Bindings = new[] {
+                new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
+                    Role = RuntimeEntityRole.Primary, UsePolicy = new RuntimeBindingUsePolicySpec {
+                        Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.EquipPassive, TargetId = accessoryData.RuntimeProgram.ItemEntityId },
+                    } },
+            };
+            var armorData = GeneratedItemData.FromJson(accessoryData.ToNetworkJson())!;
+            armorData.Accessory.Enabled = false;
+            armorData.Armor = new ArmorSpec { Enabled = true, Slot = "head", MaxRunSpeed = -1f };
+            var accessory = new GeneratedItem();
+            var armor = new GeneratedItem();
+            foreach (var (generated, data) in new[] { (accessory, accessoryData), (armor, armorData) })
+            {
+                var item = new Item();
+                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
+                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+                data.ApplyToItem(item);
+            }
+            modPlayer.ResetEffects();
+            player.maxRunSpeed = 3f;
+            player.moveSpeed = 1f;
+            accessory.UpdateAccessory(player, false);
+            armor.UpdateEquip(player);
+            Equal(1.5f, player.moveSpeed, "movement-speed modifier remains in equip phase");
+            Equal(3f, player.maxRunSpeed, "equip phase must not modify run-speed before vanilla overwrites it");
+            // Installed Player.Update multiplies maxRunSpeed by moveSpeed and applies
+            // terrain/mount changes before calling PlayerLoader.PostUpdateRunSpeeds.
+            player.maxRunSpeed *= player.moveSpeed;
+            modPlayer.PostUpdateRunSpeeds();
+            Equal(7.5f, player.maxRunSpeed, "post-vanilla run speed receives accessory and armor flat bonuses");
+            modPlayer.ResetEffects();
+            player.maxRunSpeed = 3f;
+            modPlayer.PostUpdateRunSpeeds();
+            Equal(3f, player.maxRunSpeed, "unequipped bonuses expire next tick");
+        });
+    }
+
     private static void EquipmentAuthoredRangesReachPlayer()
     {
         // Endpoints from configure_accessory/configure_armor in capability_registry.py.

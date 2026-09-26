@@ -1,8 +1,8 @@
 {
   "schema": "infini.terraria-standardization-audit.v1",
   "ok": true,
-  "score": 87,
-  "scoreMax": 87,
+  "score": 88,
+  "scoreMax": 88,
   "metrics": {
     "capabilities": 52,
     "canonicalDamageClasses": 10,
@@ -312,9 +312,14 @@
       "detail": "tile/wall IDs must be validated against loaded tModLoader content"
     },
     {
-      "name": "axe_internal_unit_parity",
+      "name": "axe_tooltip_percent_parity",
       "ok": true,
-      "detail": "axePower must use exact Item.axe internal units and match the C# bound"
+      "detail": "Author axe tooltip percent must map exactly in steps of five to bounded Item.axe units"
+    },
+    {
+      "name": "generated_buff_regen_half_hp_parity",
+      "ok": true,
+      "detail": "generated buff HP/s must map exactly by half-HP steps to Terraria lifeRegen units"
     },
     {
       "name": "item_value_semantics",

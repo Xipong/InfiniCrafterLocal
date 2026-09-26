@@ -16,6 +16,21 @@ namespace InfiniCrafterLocal.Common.Runtime;
 /// It never infers an action from item prose/category/name and never substitutes
 /// a weapon-family macro. Callers remain responsible for exact lifecycle timing.
 /// </summary>
+// One owner-local ledger per activation, referenced by every root sibling and
+// descendant. Never stored in a process-wide map or reconstructed from peer AI.
+internal sealed class RuntimeSpawnBudget
+{
+    public int Remaining { get; private set; }
+    public RuntimeSpawnBudget(int remaining) => Remaining = Math.Max(0, remaining);
+    public int Reserve(int count)
+    {
+        int granted = Math.Min(Math.Max(0, count), Remaining);
+        Remaining -= granted;
+        return granted;
+    }
+    public void Return(int count) => Remaining += Math.Max(0, count);
+}
+
 internal static class RuntimeProgramExecutor
 {
     public static void ExecuteAction(
@@ -31,17 +46,41 @@ internal static class RuntimeProgramExecutor
         int childDepth,
         ref int remainingSpawnBudget)
     {
+        var budget = new RuntimeSpawnBudget(remainingSpawnBudget);
+        ExecuteAction(data, sourceEntity, action, owner, source, eventPosition, direction,
+            directTarget, damageDone, childDepth, budget);
+        remainingSpawnBudget = budget.Remaining;
+    }
+
+    public static void ExecuteAction(
+        GeneratedItemData data,
+        RuntimeEntitySpec sourceEntity,
+        RuntimeEventActionSpec action,
+        Player owner,
+        IEntitySource source,
+        Vector2 eventPosition,
+        Vector2 direction,
+        NPC? directTarget,
+        int damageDone,
+        int childDepth,
+        RuntimeSpawnBudget budget,
+        int reservedSpawnBudget = 0)
+    {
         switch (action.ActionCode)
         {
             case RuntimeEventActionCode.SpawnEntity:
-                SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, ref remainingSpawnBudget);
+                SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget);
                 break;
             case RuntimeEventActionCode.ApplyStatus:
                 if (InfiniRuntimeAuthority.ShouldRunNpcGameplay() && directTarget is { active: true })
                     directTarget.AddBuff(action.BuffId, action.DurationTicks);
                 break;
             case RuntimeEventActionCode.DamageArea:
-                DamageArea(data, sourceEntity, action, owner, eventPosition, directTarget);
+                // A real contact hit has already damaged this NPC. Proximity
+                // expiration merely selects a nearby target; its blast must
+                // include that target rather than treating it as a prior hit.
+                DamageArea(data, sourceEntity, action, owner, eventPosition,
+                    action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit ? directTarget : null);
                 break;
             case RuntimeEventActionCode.ChainDamage:
                 ChainDamage(data, sourceEntity, action, owner, eventPosition, directTarget);
@@ -71,17 +110,26 @@ internal static class RuntimeProgramExecutor
         Vector2 eventPosition,
         Vector2 direction,
         int childDepth,
-        ref int remainingSpawnBudget)
+        RuntimeSpawnBudget budget,
+        int reservedSpawnBudget)
     {
+        int available = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Remaining;
         if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
             || childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
-            || remainingSpawnBudget <= 0)
+            || available <= 0)
+        {
+            budget.Return(reservedSpawnBudget);
             return;
+        }
         RuntimeEntitySpec? target = data.RuntimeProgram.TryGetEntity(action.EntityId);
         if (target is null || !target.IsProjectileEntity)
+        {
+            budget.Return(reservedSpawnBudget);
             return;
-        int requested = Math.Min(action.Count, remainingSpawnBudget);
-        int spawned = GeneratedProjectile.SpawnRuntimeEntity(
+        }
+        int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.Count);
+        int requested = Math.Min(action.Count, granted);
+        int spawned = requested > 0 ? GeneratedProjectile.SpawnRuntimeEntity(
             data,
             target.Id,
             owner,
@@ -89,11 +137,12 @@ internal static class RuntimeProgramExecutor
             eventPosition,
             direction.SafeNormalize(new Vector2(owner.direction, 0f)),
             childDepth + 1,
-            remainingSpawnBudget,
+            granted,
             requestedCount: requested,
             spreadOverride: action.SpreadRadians,
-            damageMultiplier: EventSpawnDamageMultiplier(action));
-        remainingSpawnBudget = Math.Max(0, remainingSpawnBudget - spawned);
+            damageMultiplier: EventSpawnDamageMultiplier(action),
+            activationBudget: budget) : 0;
+        budget.Return(granted - spawned);
     }
 
     // Item stats are projected into Gameplay; projectile stats belong to the exact

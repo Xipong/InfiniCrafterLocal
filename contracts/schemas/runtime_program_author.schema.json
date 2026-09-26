@@ -815,7 +815,7 @@
                     "x-infini-units": "pixels"
                   },
                   "knockback": {
-                    "description": "Item knockback",
+                    "description": "Item.knockBack engine strength, not pixels or damage",
                     "maximum": 20,
                     "minimum": 0,
                     "type": "number",
@@ -843,7 +843,7 @@
                     "x-infini-semanticType": "loaded_rarity_id"
                   },
                   "scale": {
-                    "description": "Item draw scale",
+                    "description": "Item display scale multiplier (1 unchanged)",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
@@ -1069,7 +1069,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "contactForgivenessPx": {
-                    "description": "Extra contact radius",
+                    "description": "Extend scaled contact hitbox by this many pixels on each side",
                     "maximum": 64,
                     "minimum": 0,
                     "type": "integer",
@@ -1343,18 +1343,20 @@
                     "x-infini-units": "ticks"
                   },
                   "jumpBoost": {
-                    "description": "Jump speed bonus",
+                    "description": "Add to Player.jumpSpeedBoost in pixels/tick",
                     "maximum": 8,
                     "minimum": 0,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
-                  "lifeRegen": {
-                    "description": "Life regeneration bonus",
-                    "maximum": 120,
+                  "lifeRegenHpPerSecond": {
+                    "description": "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)",
+                    "maximum": 60,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "terraria_life_regen"
+                    "multipleOf": 0.5,
+                    "type": "number",
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "HP/s"
                   },
                   "lightColor": {
                     "description": "Canonical light color",
@@ -1375,28 +1377,28 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "lightStrength": {
-                    "description": "Emitted light",
+                    "description": "Client light RGB coefficient multiplying selected light color; not tile radius",
                     "maximum": 1.5,
                     "minimum": 0,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
                   "manaRegen": {
-                    "description": "Mana regeneration bonus",
+                    "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
                     "maximum": 120,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "terraria_mana_regen"
                   },
                   "miningSpeedMultiplier": {
-                    "description": "Mining-time multiplier",
+                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
                   "movementSpeed": {
-                    "description": "Additive movement speed",
+                    "description": "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers",
                     "maximum": 2,
                     "minimum": -0.5,
                     "type": "number",
@@ -1418,7 +1420,7 @@
                   "movementSpeed",
                   "jumpBoost",
                   "manaRegen",
-                  "lifeRegen"
+                  "lifeRegenHpPerSecond"
                 ],
                 "type": "object"
               },
@@ -1458,30 +1460,31 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "axePower": {
-                    "description": "Exact Terraria Item.axe internal power; the in-game tooltip displays this value multiplied by 5",
-                    "maximum": 100,
+                  "axePowerTooltipPercent": {
+                    "description": "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5",
+                    "maximum": 500,
                     "minimum": 0,
+                    "multipleOf": 5,
                     "type": "integer",
-                    "x-infini-semanticType": "terraria_axe_power",
-                    "x-infini-units": "Item.axe units"
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "tooltip percent"
                   },
                   "hammerPower": {
-                    "description": "Hammer power",
+                    "description": "Terraria Item.hammer tooltip power percent",
                     "maximum": 1000,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "terraria_hammer_power"
                   },
                   "miningSpeedScale": {
-                    "description": "Use-time multiplier while mining",
+                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster",
                     "maximum": 4,
                     "minimum": 0.1,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
                   "pickPower": {
-                    "description": "Pickaxe power",
+                    "description": "Terraria Item.pick tooltip power percent",
                     "maximum": 1000,
                     "minimum": 0,
                     "type": "integer",
@@ -1490,7 +1493,7 @@
                 },
                 "required": [
                   "pickPower",
-                  "axePower",
+                  "axePowerTooltipPercent",
                   "hammerPower",
                   "miningSpeedScale"
                 ],
@@ -1533,7 +1536,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "placeStyle": {
-                    "description": "Placement style",
+                    "description": "Exact Item.placeStyle style index for the loaded tile/wall, not a universal visual style",
                     "maximum": 255,
                     "minimum": 0,
                     "type": "integer",
@@ -1598,14 +1601,14 @@
                 "additionalProperties": false,
                 "properties": {
                   "minLife": {
-                    "description": "Required life for life_above",
+                    "description": "Current HP (Player.statLife >= minLife) required for life_above; equality allowed",
                     "maximum": 1000,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "life_points"
                   },
                   "minMana": {
-                    "description": "Required mana for mana_above",
+                    "description": "Current mana points (Player.statMana >= minMana) required for mana_above; equality allowed",
                     "maximum": 1000,
                     "minimum": 0,
                     "type": "integer",
@@ -1683,7 +1686,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "strength": {
-                    "description": "Light strength",
+                    "description": "Client light RGB coefficient multiplying selected color (not a tile radius)",
                     "maximum": 1.5,
                     "minimum": 0.01,
                     "type": "number",
@@ -1808,7 +1811,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "aggroPoints": {
-                    "description": "Add to Player.aggro (negative reduces targeting)",
+                    "description": "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
                     "maximum": 1000,
                     "minimum": -1000,
                     "type": "integer",
@@ -1850,7 +1853,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "genericArmorPenetrationPoints": {
-                    "description": "Add flat armor penetration points to DamageClass.Generic",
+                    "description": "Add flat armor penetration points to DamageClass.Generic; not damage percent",
                     "maximum": 100,
                     "minimum": 0,
                     "type": "number",
@@ -1929,7 +1932,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "lightStrength": {
-                    "description": "Client-only equipped light; requires lightColor when positive",
+                    "description": "Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive",
                     "maximum": 1.5,
                     "minimum": 0,
                     "type": "number",
@@ -1947,7 +1950,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "manaRegenBonusPoints": {
-                    "description": "Add Player.manaRegenBonus points; not directly mana/second",
+                    "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2074,7 +2077,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "aggroPoints": {
-                    "description": "Add to Player.aggro (negative reduces targeting)",
+                    "description": "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
                     "maximum": 1000,
                     "minimum": -1000,
                     "type": "integer",
@@ -2116,7 +2119,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "genericArmorPenetrationPoints": {
-                    "description": "Add flat armor penetration points to DamageClass.Generic",
+                    "description": "Add flat armor penetration points to DamageClass.Generic; not damage percent",
                     "maximum": 100,
                     "minimum": 0,
                     "type": "number",
@@ -2195,7 +2198,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "lightStrength": {
-                    "description": "Client-only equipped light; requires lightColor when positive",
+                    "description": "Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive",
                     "maximum": 1.5,
                     "minimum": 0,
                     "type": "number",
@@ -2213,7 +2216,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "manaRegenBonusPoints": {
-                    "description": "Add Player.manaRegenBonus points; not directly mana/second",
+                    "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2276,7 +2279,7 @@
                     "x-infini-units": "slots"
                   },
                   "setBonusAggroPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add to Player.aggro (negative reduces targeting)",
+                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
                     "maximum": 1000,
                     "minimum": -1000,
                     "type": "integer",
@@ -2303,7 +2306,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "setBonusGenericArmorPenetrationPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic",
+                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic; not damage percent",
                     "maximum": 100,
                     "minimum": 0,
                     "type": "number",
@@ -2339,7 +2342,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "setBonusManaRegenBonusPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus points; not directly mana/second",
+                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus engine points; not directly mana/second",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -2544,7 +2547,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "count": {
-                    "description": "Entities spawned per activation",
+                    "description": "Default root binding spawn count per activation; event actions and target_and_fire select their own counts",
                     "maximum": 12,
                     "minimum": 1,
                     "type": "integer",
@@ -2571,12 +2574,12 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "speedPxPerTick": {
-                    "description": "Initial speed",
+                    "description": "Initial Projectile.velocity pixels per projectile update; extraUpdates adds updates per world tick",
                     "maximum": 80,
                     "minimum": 0,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick"
+                    "x-infini-units": "pixels/projectile update"
                   },
                   "spreadRadians": {
                     "description": "Total angular spread",
@@ -2652,7 +2655,7 @@
                     "x-infini-semanticType": "terraria_damage_class"
                   },
                   "knockback": {
-                    "description": "Projectile knockback",
+                    "description": "Projectile.knockBack engine strength, not pixels or damage",
                     "maximum": 20,
                     "minimum": 0,
                     "type": "number",
@@ -2769,7 +2772,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "drawScale": {
-                    "description": "Sprite draw scale",
+                    "description": "Projectile sprite draw multiplier before entity visual scale; 1 unchanged, not damage hitbox size",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
@@ -2856,7 +2859,7 @@
                     "x-infini-semanticType": "bounce_count"
                   },
                   "extraUpdates": {
-                    "description": "Terraria Projectile.extraUpdates",
+                    "description": "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)",
                     "maximum": 5,
                     "minimum": 0,
                     "type": "integer",
@@ -2868,12 +2871,12 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "localNpcHitCooldownTicks": {
-                    "description": "Used only in local mode; -1 means this projectile can hit each NPC once",
+                    "description": "Raw Terraria Projectile.localNPCHitCooldown engine cooldown; only in local mode; -1 hits each NPC once (not converted to world ticks)",
                     "maximum": 600,
                     "minimum": -1,
                     "type": "integer",
                     "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "x-infini-units": "engine cooldown units"
                   },
                   "npcImmunityMode": {
                     "description": "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers",
@@ -3057,12 +3060,12 @@
                 "additionalProperties": false,
                 "properties": {
                   "gravityPerTick": {
-                    "description": "Vertical acceleration",
+                    "description": "Add to vertical velocity (pixels/update) per projectile update",
                     "maximum": 2,
                     "minimum": 0.001,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick^2"
+                    "x-infini-units": "pixels/update per projectile update"
                   }
                 },
                 "required": [
@@ -3112,7 +3115,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "velocityRetention": {
-                    "description": "Velocity multiplier",
+                    "description": "Multiply projectile velocity each projectile update",
                     "maximum": 1.05,
                     "minimum": 0.8,
                     "type": "number",
@@ -3234,7 +3237,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick"
+                    "x-infini-units": "pixels/projectile update"
                   }
                 },
                 "required": [
@@ -3285,12 +3288,12 @@
                 "additionalProperties": false,
                 "properties": {
                   "gravityPerTick": {
-                    "description": "Vertical acceleration",
+                    "description": "Add to vertical velocity (pixels/update) per projectile update",
                     "maximum": 2,
                     "minimum": 0.001,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick^2"
+                    "x-infini-units": "pixels/update per projectile update"
                   }
                 },
                 "required": [
@@ -3355,12 +3358,12 @@
                     "x-infini-units": "tiles"
                   },
                   "waveAmplitude": {
-                    "description": "Lateral wave amplitude",
+                    "description": "Raw lateral velocity coefficient: sin(age×0.18) × waveAmplitude × 0.03 before velocity direction normalization; not displacement pixels",
                     "maximum": 64,
                     "minimum": 0,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels"
+                    "x-infini-units": "engine lateral velocity coefficient"
                   }
                 },
                 "required": [
@@ -3412,7 +3415,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "phaseStrength": {
-                    "description": "Phase drift strength",
+                    "description": "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians; not collision phasing",
                     "maximum": 1,
                     "minimum": 0,
                     "type": "number",
@@ -3466,7 +3469,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "acceleration": {
-                    "description": "Per-tick speed multiplier",
+                    "description": "Velocity multiplier per projectile update until maxSpeed cap",
                     "maximum": 1.2,
                     "minimum": 1.0,
                     "type": "number",
@@ -3478,7 +3481,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick"
+                    "x-infini-units": "pixels/projectile update"
                   }
                 },
                 "required": [
@@ -3529,12 +3532,12 @@
                 "additionalProperties": false,
                 "properties": {
                   "turnRadiansPerTick": {
-                    "description": "Angular turn",
+                    "description": "Angular velocity turn per projectile update",
                     "maximum": 0.5,
                     "minimum": -0.5,
                     "type": "number",
                     "x-infini-semanticType": "radians",
-                    "x-infini-units": "radians/tick"
+                    "x-infini-units": "radians/update"
                   }
                 },
                 "required": [
@@ -3584,7 +3587,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "pullStrength": {
-                    "description": "Nearby pull strength",
+                    "description": "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update",
                     "maximum": 4,
                     "minimum": 0,
                     "type": "number",
@@ -3647,7 +3650,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "pullStrength": {
-                    "description": "Pull strength",
+                    "description": "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update",
                     "maximum": 4,
                     "minimum": 0,
                     "type": "number",
@@ -3795,7 +3798,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick"
+                    "x-infini-units": "pixels/projectile update"
                   }
                 },
                 "required": [
@@ -3853,7 +3856,7 @@
                     "x-infini-semanticType": "unitless_scalar"
                   },
                   "scalePerTick": {
-                    "description": "Additive Projectile.scale delta per movement update, capped by maxScale",
+                    "description": "Additive Projectile.scale delta per projectile update, capped by maxScale",
                     "maximum": 0.5,
                     "minimum": 0.001,
                     "type": "number",
@@ -3921,7 +3924,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick"
+                    "x-infini-units": "pixels/projectile update"
                   }
                 },
                 "required": [
@@ -3980,7 +3983,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/tick"
+                    "x-infini-units": "pixels/projectile update"
                   }
                 },
                 "required": [
@@ -4278,7 +4281,7 @@
                     "x-infini-units": "ticks"
                   },
                   "rangeTiles": {
-                    "description": "Target range",
+                    "description": "Soft target range: previous target may be chosen outside it after distance discount",
                     "maximum": 120,
                     "minimum": 1,
                     "type": "number",
@@ -4286,7 +4289,7 @@
                     "x-infini-units": "tiles"
                   },
                   "sameTargetBias": {
-                    "description": "Bias toward current target",
+                    "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
                     "maximum": 1,
                     "minimum": 0,
                     "type": "number",
@@ -4420,6 +4423,16 @@
               },
               "params": {
                 "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "event": {
+                      "const": "periodic"
+                    }
+                  },
+                  "required": [
+                    "event"
+                  ]
+                },
                 "properties": {
                   "count": {
                     "description": "Spawn count",
@@ -4504,6 +4517,11 @@
                   "damageMultiplier",
                   "delayTicks"
                 ],
+                "then": {
+                  "required": [
+                    "periodTicks"
+                  ]
+                },
                 "type": "object"
               },
               "target": {
@@ -4807,6 +4825,16 @@
               },
               "params": {
                 "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "event": {
+                      "const": "periodic"
+                    }
+                  },
+                  "required": [
+                    "event"
+                  ]
+                },
                 "properties": {
                   "delayTicks": {
                     "description": "Delay this exact action after the chosen event; 0 executes immediately",
@@ -4846,7 +4874,7 @@
                     "x-infini-units": "ticks"
                   },
                   "radiusTiles": {
-                    "description": "Affected radius",
+                    "description": "NPC search radius only with no directTarget; ignored for owner_to_target",
                     "maximum": 60,
                     "minimum": 1,
                     "type": "number",
@@ -4854,7 +4882,7 @@
                     "x-infini-units": "tiles"
                   },
                   "strength": {
-                    "description": "Velocity impulse",
+                    "description": "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement",
                     "maximum": 4,
                     "minimum": 0.01,
                     "type": "number",
@@ -4867,6 +4895,11 @@
                   "strength",
                   "radiusTiles"
                 ],
+                "then": {
+                  "required": [
+                    "periodTicks"
+                  ]
+                },
                 "type": "object"
               },
               "target": {
@@ -4911,7 +4944,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "damageFraction": {
-                    "description": "Fraction of damage healed",
+                    "description": "Fraction of damageDone healed (0.15 = 15%), capped by maxHeal; not a whole-number percent",
                     "maximum": 1,
                     "minimum": 0.001,
                     "type": "number",
@@ -5101,7 +5134,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "strength": {
-                    "description": "Light strength",
+                    "description": "Client light RGB coefficient multiplying selected color (not a tile radius)",
                     "maximum": 1.5,
                     "minimum": 0.01,
                     "type": "number",

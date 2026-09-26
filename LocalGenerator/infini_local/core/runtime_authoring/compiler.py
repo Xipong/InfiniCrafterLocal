@@ -187,13 +187,13 @@ def _compile_item_call(
             "movementSpeed": "movementSpeed",
             "jumpBoost": "jumpBoost",
             "manaRegen": "manaRegen",
-            "lifeRegen": "lifeRegen",
+            "lifeRegenHpPerSecond": "lifeRegen",
         })
         return
     if fn == "configure_tool":
         project(gameplay, "gameplay", {
             "pickPower": "pickPower",
-            "axePower": "axePower",
+            "axePowerTooltipPercent": "axePower",
             "hammerPower": "hammerPower",
             "miningSpeedScale": "miningSpeedScale",
         })

@@ -29,7 +29,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private string _entityId = "";
     private bool _configured;
     private int _childDepth;
-    private int _remainingSpawnBudget;
+    private int _remainingSpawnBudget; // peer-visible snapshot only; not owner authority
+    private RuntimeSpawnBudget? _activationSpawnBudget;
     private int _age;
     private int _remainingBounces;
     private int _activationDelayTicks;
@@ -103,7 +104,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int childDepth,
         int remainingSpawnBudget,
         Vector2 initialDirection,
-        bool preserveSyncedState = false)
+        bool preserveSyncedState = false,
+        RuntimeSpawnBudget? activationBudget = null)
     {
         int syncedTimeLeft = Projectile.timeLeft;
         int syncedBounces = _remainingBounces;
@@ -114,6 +116,16 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _entityId = entity.Id;
         _childDepth = Math.Clamp(childDepth, 0, data.RuntimeProgram.Limits.MaxChildDepth);
         _remainingSpawnBudget = Math.Clamp(remainingSpawnBudget, 0, data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        // Only the firing peer owns the mutable ledger. ExtraAI is an observation,
+        // never a grant of fresh event-spawn capacity on another network peer.
+        if (activationBudget is not null)
+            _activationSpawnBudget = activationBudget;
+        else if (!preserveSyncedState && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
+            && Main.player[Projectile.owner] is { active: true } owner
+            && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
+            _activationSpawnBudget = new RuntimeSpawnBudget(_remainingSpawnBudget);
+        else if (!preserveSyncedState)
+            _activationSpawnBudget = null;
         _initialDirection = initialDirection.SafeNormalize(Vector2.UnitX);
         _spawnCenter = Projectile.Center;
         _remainingBounces = entity.Collision.BounceCount;
@@ -170,7 +182,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Projectile.tileCollide = false;
     }
 
-    public static int SpawnRuntimeEntity(
+    internal static int SpawnRuntimeEntity(
         GeneratedItemData data,
         string entityId,
         Player owner,
@@ -181,11 +193,15 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int remainingSpawnBudget,
         int? requestedCount = null,
         float? spreadOverride = null,
-        float damageMultiplier = 1f)
+        float damageMultiplier = 1f,
+        RuntimeSpawnBudget? activationBudget = null)
     {
         if (data is null || owner is null || !owner.active || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
             return 0;
         RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(entityId);
+        // Root binding shots are exempt from the EVENT budget but all roots from
+        // that activation receive this same ledger for subsequent event actions.
+        activationBudget ??= new RuntimeSpawnBudget(data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         if (entity is null || !entity.IsProjectileEntity || !entity.Spawn.Enabled)
             return 0;
         if (childDepth > data.RuntimeProgram.Limits.MaxChildDepth)
@@ -244,7 +260,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 owner.whoAmI);
             if (projectile.ModProjectile is not GeneratedProjectile generated)
                 continue;
-            generated.Configure(data, entity, childDepth, Math.Max(0, remainingSpawnBudget - spawned), direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction);
+            generated.Configure(data, entity, childDepth, activationBudget.Remaining, direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction,
+                activationBudget: activationBudget);
             projectile.netUpdate = true;
             spawned++;
         }

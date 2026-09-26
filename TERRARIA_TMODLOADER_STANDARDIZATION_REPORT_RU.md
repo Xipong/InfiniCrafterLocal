@@ -1,5 +1,7 @@
 # InfiniCrafterLocal v0.4.241 — Terraria/tModLoader standardization report
 
+> Архивный отчёт ранней стандартизации; приведённые ниже размеры prompt, тестовые итоги и старое Author-имя `axePower` **не описывают текущий контракт**. Сейчас `configure_tool.axePowerTooltipPercent` (шаг 5) точно понижается в целое `gameplay.axePower`, а `apply_generated_buff_on_use.lifeRegenHpPerSecond` (шаг 0.5) — в прежнее целое `gameplay.generatedBuff.lifeRegen`. Для текущих units/parity см. generated `lowery.md`, `docs/PRIMITIVE_PARITY_RU.md` и `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`.
+
 ## Результат
 
 Runtime сохранён low-level и LLM-authored, но технические представления приведены ближе к stable tModLoader там, где это не сокращает пространство дизайна. Собственный proxy/component runtime оставлен только для динамических сущностей, per-instance assets и authored entity/event graph.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from infini_local.core.runtime_authoring import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
@@ -10,12 +12,15 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.qa.capability_library_audit import capability_library_audit
 from infini_local.core.runtime_authoring.capability_registry import (
+    compact_capability_catalog,
     runtime_authoring_prompt_field_guide,
 )
+from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines.llm_authoring_prompt import (
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     build_llm_author_payload,
     planner_prompt_usability_report,
+    realization_execution_truth_for_llm,
 )
 
 
@@ -50,21 +55,44 @@ def test_no_capability_hides_delivery_behind_broad_wildcard() -> None:
     ]
 
 
-def test_model_cards_losslessly_project_patterns_and_shared_field_vocabulary() -> None:
-    for capability in CAPABILITY_REGISTRY.values():
-        card_params = capability.prompt_card()["params"]
-        for name, spec in capability.params.items():
-            if spec.pattern:
-                assert card_params[name]["pattern"] == spec.pattern
-
+def test_model_cards_preserve_constraints_while_factoring_shared_notation() -> None:
     guide = runtime_authoring_prompt_field_guide()
-    expected_semantic_types = {
-        spec.semantic_type
-        for capability in CAPABILITY_REGISTRY.values()
-        for spec in capability.params.values()
-        if spec.semantic_type
-    }
-    assert set(guide["semanticTypes"]) == expected_semantic_types
+    notation = guide["paramNotation"]
+    assert "unless marked optional" in notation
+    for suffix, unit in (("Ticks", "ticks"), ("Tiles", "tiles"),
+                         ("Px", "pixels"), ("Radians", "radians")):
+        assert f"{suffix}={unit}" in notation
+    for capability in CAPABILITY_REGISTRY.values():
+        full = capability.prompt_card()
+        compact = capability.author_prompt_card()
+        assert {key: value for key, value in compact.items() if key != "params"} == {
+            key: value for key, value in full.items() if key != "params"
+        }
+        assert set(compact["params"]) == set(full["params"])
+        for name, spec in capability.params.items():
+            original = full["params"][name]
+            row = compact["params"][name]
+            assert row["type"] == original["type"]
+            meaning = row.get("meaning", "")
+            if capability.name == "configure_armor" and name.startswith("setBonus"):
+                meaning = guide["setBonusParamPrefix"] + meaning
+            elif capability.name == "configure_armor" and not meaning:
+                meaning = CAPABILITY_REGISTRY["configure_accessory"].params[name].description
+            assert meaning == original["meaning"]
+            assert row.get("optional", False) is not spec.required
+            for constraint in ("min", "max", "enum", "pattern", "reference"):
+                assert row.get(constraint) == original.get(constraint)
+            if "units" not in row and spec.units:
+                assert any(name.endswith(suffix) and spec.units == unit for suffix, unit in (
+                    ("Ticks", "ticks"), ("Tiles", "tiles"),
+                    ("Px", "pixels"), ("Radians", "radians"),
+                ))
+            else:
+                assert row.get("units") == original.get("units")
+            if "neutral" not in row and "neutral" in original:
+                assert not spec.required and spec.neutral == 0
+            else:
+                assert row.get("neutral") == original.get("neutral")
     assert guide["exclusiveGroup"]["scope"] == "per exact target entity"
     assert "authority" not in guide
     assert all(row["authority"] for row in runtime_authoring_registry_manifest()["capabilities"])
@@ -84,3 +112,35 @@ def test_author_packet_exposes_field_guide_with_configured_headroom() -> None:
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
     assert report["ok"], report
     assert report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS, report
+
+
+def test_json_object_request_serializes_every_author_capability_card(monkeypatch) -> None:
+    """The local response schema is not sent in this mode: the user JSON must carry the catalog."""
+    # Transport reads this configuration at import time, before pytest sets per-test env.
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    parent_a = {"name": "Workbench"}
+    parent_b = {"name": "Sword"}
+    request, user_content, system = build_initial_author_request(
+        parent_a, parent_b, parent_a, parent_b, "workbench+sword", model_name="gemini-2.5-flash"
+    )
+    catalog = json.loads(user_content)["runtimeCapabilityContract"]["catalog"]
+    assert request["response_format"] == {"type": "json_object"}
+    assert [row["role"] for row in request["messages"]] == ["system", "user"]
+    assert request["messages"][0]["content"] == system
+    assert request["messages"][1]["content"] == user_content
+    assert system and catalog["fieldGuide"] == runtime_authoring_prompt_field_guide()
+    assert catalog["capabilities"] == compact_capability_catalog()
+    assert {row["fn"] for row in catalog["capabilities"]} == set(CAPABILITY_REGISTRY)
+    assert sum(len(row["params"]) for row in catalog["capabilities"]) == sum(
+        len(cap.params) for cap in CAPABILITY_REGISTRY.values()
+    )
+
+
+def test_proximity_expiration_is_explicit_without_synthetic_hit() -> None:
+    movement = CAPABILITY_REGISTRY["move_proximity_missile"].prompt_card()["does"]
+    expiration = EVENT_KIND_REGISTRY["on_expire"].prompt_card()["does"]
+    author_rule = realization_execution_truth_for_llm()["terminationEvents"]
+    for description in (movement, expiration, author_rule):
+        assert "proximity" in description.lower()
+    assert "on_hit" in movement and "actual hit" in movement.lower()
+    assert "natural" in expiration.lower() and "natural" in author_rule.lower()
