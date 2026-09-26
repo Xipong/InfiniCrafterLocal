@@ -139,32 +139,33 @@ def test_registry_provider_prompt_and_vertical_wire_are_one_inventory() -> None:
     invariants = payload["runtimeProgramInvariants"]
     assert invariants["primaryEntityOwnership"]["authoredField"] == "runtimeProgram.primaryEntityId"
     assert invariants["primaryEntityOwnership"]["exactlyOnePrimaryEntity"] is True
-    assert "do not carry role" in invariants["primaryEntityOwnership"]["preEmissionCheck"]
-    assert invariants["exclusiveInputs"]["inputs"] == sorted(
+    assert "do not carry role" in invariants["primaryEntityOwnership"]["primaryRule"]
+    catalog = payload["runtimeCapabilityContract"]["catalog"]
+    guide = catalog["fieldGuide"]
+    assert {row["input"] for row in catalog["inputs"] if row["exclusive"]} == {
         name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
-    )
-    assert invariants["damageClass"]["builtInTokens"] == list(DAMAGE_CLASS_TOKENS)
-    assert invariants["damageClass"]["otherTokensAllowed"] is False
-    assert "does not require a use_item_body binding" in invariants["exclusiveInputs"]["configureItemUseRule"]
-    use_item_body_card = next(
-        row for row in payload["runtimeCapabilityContract"]["catalog"]["bindingActions"]
-        if row["action"] == "use_item_body"
-    )
+    }
+    inputs = {row["input"]: row for row in catalog["inputs"]}
+    assert "does not require use_item_body" in inputs["primary_use"]["constructionMeaning"]
+    assert guide["damageClass"]["builtInTokens"] == list(DAMAGE_CLASS_TOKENS)
+    assert "source-only" in guide["damageClass"]["scope"]
+    use_item_body_card = next(row for row in catalog["bindingActions"] if row["action"] == "use_item_body")
     assert "never pair it with spawn_entity" in use_item_body_card["does"]
-    self_check = " ".join(payload["selfCheck"])
-    assert "set runtimeProgram.primaryEntityId" in self_check
-    assert "never emit role in Author bindings or calls" in self_check
-    assert "parent sentinel none is forbidden" in self_check
-    assert "every damageClass" in self_check
-    truth = invariants["realizationExecutionTruth"]
-    assert "realization.selfEvaluation" in truth["authority"]
-    assert "runtimeContract.selfEvaluation" not in truth["authority"]
-    assert "does not emit item_body.on_use" in truth["placementUse"]
-    assert "natural lifetime expiry" in truth["terminationEvents"]
-    assert "whole generated item" in truth["stackCost"]
-    assert "returned" in truth["placementEscrow"]
-    assert "target_and_fire" in truth["entityTopology"]
-    assert "free_projectile" in truth["entityTopology"]
+    assert "configure_item_stats" in next(row for row in catalog["entityKinds"] if row["kind"] == "item_body")["requiredComponents"]
+    assert "no other tokens" in guide["damageClass"]["scope"]
+    assert "contactDamage=true" in guide["bindingTarget"]
+    assert "stackCost=1" in guide["stackCost"]
+    place = next(row for row in catalog["bindingActions"] if row["action"] == "place_item")["constructionMeaning"]
+    assert "item_body.on_use" in place
+    assert "returned" in place
+    assert "on_expire" in next(row for row in catalog["events"] if row["event"] == "on_expire")["constructionMeaning"]
+    assert "whole generated item" in guide["stackCost"]
+    entities = {row["kind"]: row for row in catalog["entityKinds"]}
+    assert "target_and_fire" in entities["stationary_projectile"]["constructionMeaning"]
+    assert "free_projectile" in entities
+    assert "selfCheck" not in payload
+    assert "structureCheck" not in invariants
+    assert "selfEvaluation" in payload["diagnosticReport"]
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
     assert report["ok"] is True
     assert PLANNER_PROMPT_LIMIT_CHARS == 96_000
@@ -255,7 +256,7 @@ def test_gameplay_author_stages_are_plain_and_one_pass() -> None:
     payload = build_llm_author_payload({}, {}, {}, {}, "one-pass-stage-guide")
     stages = payload["gameplayAuthoringStages"]
     assert [row["name"] for row in stages] == [
-        "initial_design_draft",
+        "initial_concept",
         "executable_gameplay_program",
         "final_gameplay_report",
         "same_pass_self_evaluation",
@@ -268,10 +269,10 @@ def test_gameplay_author_stages_are_plain_and_one_pass() -> None:
     ]
     encoded = json.dumps(stages, ensure_ascii=False).casefold()
     assert "non-binding" in encoded
-    assert "never rejects the craft" in encoded
+    assert "not a rejection" in encoded
     assert "only executable gameplay authority" in encoded
     assert "program_evidence_claims" not in encoded
-    assert "same model response" in encoded
+    assert "same immutable response" in encoded
 
 
 def test_concept_drift_and_report_mismatch_are_diagnostic_not_rejection() -> None:

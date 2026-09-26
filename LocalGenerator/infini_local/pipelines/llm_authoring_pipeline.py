@@ -17,7 +17,6 @@ from infini_local.core.llm_stage_messages import (
     stage_chat_message,
 )
 from infini_local.core.runtime_authoring import (
-    BINDING_ACTION_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     RUNTIME_WIRE_SCHEMA,
@@ -33,12 +32,10 @@ from infini_local.core.runtime_authoring import (
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
 )
-from infini_local.core.runtime_authoring.binding_use_policy import STACK_COST_RULE
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
 )
 from infini_local.pipelines.author_item_contract import (
-    PRIMARY_AUTHOR_SYSTEM_RULE,
     PRIMARY_REPAIR_SYSTEM_RULE,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
@@ -68,29 +65,20 @@ from infini_local.storage.trace_runtime import _trace_message_summary, trace_eve
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
     "priorityHeader", "gameplayAuthoringStages", "runtimeProgramInvariants",
-    "runtimeCapabilityContract", "requiredJsonShape", "selfCheck",
+    "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport",
 )
 _REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
 _FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "allowedCallParamsReadOnly", "requiredJsonShape")
 
 
 _AUTHOR_SYSTEM = (
-    "You are Gameplay Author for InfiniCrafterLocal. Compose one bounded executable item directly from "
-    "the supplied low-level capability catalog. Return exactly the required JSON object. The code validates, "
-    "bounds, compiles, and executes your explicit choices; it does not infer a weapon archetype or complete "
-    "missing movement, attachment, delivery, lifecycle, input, targeting, or child behaviour. Do not classify "
-    "the item as sword/bow/staff/sentry for runtime. Preserve literal parent objects when useful: a workbench "
-    "may remain a literal workbench attached to a blade. Do not add a mandatory weird twist. Treat concept as the "
-    "non-binding initial_design_draft: it anchors the attempt but never becomes runtime authority and later drift from it does not reject a craft. "
-    "runtimeProgram is the executable_gameplay_program and the only gameplay authority. After runtimeProgram, author realization as the final_gameplay_report of that executable program. "
-    "Write realization.selfEvaluation last as the same_pass_self_evaluation: independently compare concept.plannedPlayerActions with runtimeProgram in planVsProgram.actionChecks, then compare every executable runtime lane with description/playerExperience in programVsReport.behaviorChecks. Every check must cite exact runtime ids, including aligned checks. Never describe mechanics absent from the program. Use only catalog capabilities. Check every reference, "
-    "target kind, dependency, event, exclusive input, cycle, entity limit, and child budget before answering. "
-    f"{PRIMARY_AUTHOR_SYSTEM_RULE} Group bindings by input and reject the draft if an exclusive input has more than one row. Every binding is one complete usePolicy transaction; configure_item_use never chooses or requires a companion action binding. Catalog membership is not a recommendation. "
-    "Use exact catalog param names: configure_item_stats currency is params.valueCopper in copper coins; never use params.value. "
-    "Percent-valued params are whole percentage numbers: for +15% enter 15, not 0.15 (which means +0.15%). "
-    f"{STACK_COST_RULE} "
-    f"{', '.join(BINDING_ACTION_REGISTRY['apply_item_effects'].required_item_capabilities_any_of)} require item_body apply_item_effects: apply_item_effects is the only active binding that enables item resource/buff/mobility effects. A spawn_entity or use_item_body binding alone does not heal or apply those effects. To heal and spawn in one use, author an apply_item_effects binding plus an explicit item_body.on_use spawn_entity_on_event action. "
-    "Return a strict JSON object with double-quoted JSON object keys and string values; no trailing commas or JavaScript expressions. No markdown or reasoning."
+    "You are Gameplay Author for InfiniCrafterLocal. Construct a single immutable JSON object "
+    "matching requiredJsonShape, using the supplied capability catalog. "
+    "concept sets the initial design trajectory; runtimeProgram alone defines executable gameplay; "
+    "realization describes your interpretation of that program, with selfEvaluation last as a diagnostic "
+    "report for humans, not evidence of an observed run. Code does not invent missing mechanics. "
+    "Apply the construction contracts beside each JSON fragment. Return strict JSON only: "
+    "double-quoted keys and strings, no trailing commas, JavaScript expressions, markdown or external reasoning."
 )
 
 

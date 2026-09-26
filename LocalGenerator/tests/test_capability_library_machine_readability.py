@@ -106,9 +106,13 @@ def test_author_packet_exposes_field_guide_with_configured_headroom() -> None:
     parent_a = {"id": "a", "name": "A", "damage": 10, "useTime": 20}
     parent_b = {"id": "b", "name": "B", "damage": 20, "useTime": 30}
     payload = build_llm_author_payload(parent_a, parent_b, parent_a, parent_b, "a+b")
-    assert payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"] == (
-        runtime_authoring_prompt_field_guide()
-    )
+    guide = payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
+    canonical = runtime_authoring_prompt_field_guide()
+    assert {key: guide[key] for key in canonical if key not in {"stackCost", "bindingTarget"}} == {
+        key: value for key, value in canonical.items() if key not in {"stackCost", "bindingTarget"}
+    }
+    assert guide["bindingTarget"].startswith(canonical["bindingTarget"])
+    assert "whole generated item" in guide["stackCost"]
     report = planner_prompt_usability_report(parent_a, parent_b, parent_a, parent_b, "a+b")
     assert report["ok"], report
     assert report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS, report
@@ -128,8 +132,9 @@ def test_json_object_request_serializes_every_author_capability_card(monkeypatch
     assert [row["role"] for row in request["messages"]] == ["system", "user"]
     assert request["messages"][0]["content"] == system
     assert request["messages"][1]["content"] == user_content
-    assert system and catalog["fieldGuide"] == runtime_authoring_prompt_field_guide()
-    assert catalog["capabilities"] == compact_capability_catalog()
+    assert system and "paramNotation" in catalog["fieldGuide"]
+    assert {row["fn"]: {key: value for key, value in row.items() if key != "constructionMeaning"}
+            for row in catalog["capabilities"]} == {row["fn"]: row for row in compact_capability_catalog()}
     assert {row["fn"] for row in catalog["capabilities"]} == set(CAPABILITY_REGISTRY)
     assert sum(len(row["params"]) for row in catalog["capabilities"]) == sum(
         len(cap.params) for cap in CAPABILITY_REGISTRY.values()

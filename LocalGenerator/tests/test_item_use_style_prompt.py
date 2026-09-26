@@ -22,7 +22,7 @@ def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monk
     assert request["response_format"] == {"type": "json_object"}
     assert len(user_content) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     payload = json.loads(user_content)
-    guide = payload["runtimeProgramInvariants"]["itemUseStyle"]
+    guide = payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["itemUseStyle"]
     card = next(row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
                 if row["fn"] == "configure_item_use")
     assert guide["builtInTokens"] == list(ITEM_USE_STYLE_TOKENS)
@@ -37,7 +37,6 @@ def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monk
     assert "cursor" in meanings["shoot"] and "golf club" in meanings["golf_play"]
     assert all(term in guide["scope"] for term in (
         "configure_item_use.useStyle", "animation", "during active use only",
-        "does not independently guarantee a functional tool/use mechanic",
-        "input binding", "executable capabilities/effects separately", "not weapon presets",
+        "not a functional tool/use mechanic", "input binding", "executable effects separately", "not weapon presets",
     ))
-    assert "meaningByToken" in payload["runtimeProgramInvariants"]["damageClass"]
+    assert "meaningByToken" in payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["damageClass"]

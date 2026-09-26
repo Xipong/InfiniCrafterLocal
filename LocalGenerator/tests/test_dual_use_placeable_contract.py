@@ -371,7 +371,6 @@ def test_place_item_is_discoverable_but_not_recommended_by_high_salience_prompt(
     high_salience = json.dumps({
         "priorityHeader": payload["priorityHeader"],
         "runtimeProgramInvariants": payload["runtimeProgramInvariants"],
-        "selfCheck": payload["selfCheck"],
     }, sort_keys=True).lower()
     assert "place_item" not in high_salience
     assert "placeable" not in high_salience

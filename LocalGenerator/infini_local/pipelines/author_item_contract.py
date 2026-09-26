@@ -19,10 +19,6 @@ from infini_local.core.runtime_authoring.program_schema import (
 )
 
 
-PRIMARY_AUTHOR_SYSTEM_RULE = (
-    f"Before returning, require {PRIMARY_ENTITY_AUTHOR_PATH} to equal exactly one emitted entity id; "
-    "binding/call rows do not carry role because Lowery derives technical wire roles from exact target equality."
-)
 PRIMARY_REPAIR_SYSTEM_RULE = (
     f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
 )
@@ -33,27 +29,15 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "exactlyOnePrimaryEntity": True,
         "authoredField": PRIMARY_ENTITY_AUTHOR_PATH,
         "primaryRule": (
-            f"Choose exactly one id from runtimeProgram.entities and emit it once as {PRIMARY_ENTITY_AUTHOR_PATH}. "
-            "This selects lifecycle/held ownership, not the strongest or most important damage lane. Default to the unique item_body. "
-            "A spawned or high-damage projectile stays secondary while the item graphic or item-body contact represents the use. "
-            "When every active binding instead spawns the same entity, contactDamage is false, and configure_item_use hides the item "
-            "graphic, that exact spawn target must own lifecycle/held representation. Otherwise select another entity only when the "
-            "authored design explicitly moves lifecycle/held representation there."
-        ),
-        "preEmissionCheck": (
-            f"Reject your draft unless {PRIMARY_ENTITY_FIELD} exactly equals one emitted entity id. "
-            "Binding and call rows do not carry role; technical wire roles are losslessly lowered from exact target equality."
+            "Select one existing entity id for lifecycle/held representation, not by damage or mere spawning. "
+            "Use the item_body for item-graphic/body-contact representation. When all active bindings spawn "
+            "the same entity, contactDamage=false and configure_item_use hides the item graphic, that exact "
+            "spawn target owns lifecycle/held representation. Otherwise another entity requires explicitly "
+            "authored lifecycle/held ownership. Binding/call rows do not carry role; Lowery derives wire roles "
+            "by exact target equality with primaryEntityId."
         ),
     }
 
-
-def primary_entity_self_check() -> str:
-    return (
-        f"set {PRIMARY_ENTITY_AUTHOR_PATH} to the unique item_body by default; select the sole active-use spawn target instead when "
-        "contactDamage is false and configure_item_use hides the item graphic; otherwise choose another exact existing entity only "
-        "for explicitly authored lifecycle/held-representation ownership; never infer ownership from damage or mere spawning, never "
-        "emit role in Author bindings or calls, and let Lowery materialize wire roles by exact target equality"
-    )
 
 def author_item_response_schema() -> dict[str, Any]:
     return copy.deepcopy(_author_schema())
@@ -68,7 +52,7 @@ def _binding_prompt_shape_card() -> dict[str, Any]:
         "usePolicy": {
             "action": {
                 "kind": "catalog action",
-                "targetId": "exact existing entity id",
+                "targetId": "exact existing entity id compatible with the selected action.targets",
                 "placementCallId": "include only for place_item; otherwise omit",
             },
             "stackCost": "exact integer 0 or 1 allowed by the selected input/action",
@@ -105,15 +89,15 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
             "bindings": [_binding_prompt_shape_card()],
-            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "entity_id", "params": {"exactCapabilityParam": "typed value"}}],
+            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "existing compatible entity id from fn.targets", "params": {"all non-optional and conditional params": "exact card keys and typed values; optional fields only when selected"}}],
         },
         "realization": {
-            "description": "final result description derived after runtimeProgram",
+            "description": "final interpretation of the emitted runtimeProgram, not an observed execution",
             "playerExperience": "what the final executable program lets the player experience",
             "selfEvaluation": {
                 "planVsProgram": {
                     "verdict": "aligned|changed|uncertain",
-                    "summary": "independent comparison of the initial design draft with the executable program",
+                    "summary": "diagnostic comparison of concept with the emitted program",
                     "actionChecks": [{
                         "plannedIntent": "one exact plannedPlayerActions intent, or 'no corresponding initial action' for an added lane",
                         "implementedBehavior": "what runtimeProgram actually implements for it",
@@ -125,7 +109,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 },
                 "programVsReport": {
                     "verdict": "aligned|mismatch|uncertain",
-                    "summary": "independent comparison of runtimeProgram with description/playerExperience",
+                    "summary": "diagnostic comparison of the emitted program with description/playerExperience",
                     "behaviorChecks": [{
                         "runtimeRefs": ["existing entity, binding, or call id"],
                         "programBehavior": "one literal executable behavior lane",
@@ -280,7 +264,6 @@ def apply_author_item_repair_patch(current: Mapping[str, Any], patch: Mapping[st
 
 
 __all__ = [
-    "PRIMARY_AUTHOR_SYSTEM_RULE",
     "PRIMARY_REPAIR_SYSTEM_RULE",
     "apply_author_item_repair_patch",
     "author_item_prompt_shape_card",
@@ -295,7 +278,6 @@ __all__ = [
     "project_provider_author_item_to_local",
     "project_provider_nullable_optionals_to_local",
     "primary_entity_llm_invariant",
-    "primary_entity_self_check",
     "strict_author_item_repair_report",
     "strict_author_item_targeted_repair_delta_report",
     "strict_author_item_v3_report",

@@ -3097,8 +3097,11 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     )
     repair_payload = json.dumps(dossier, ensure_ascii=False, separators=(",", ":"))
     assert len(repair_payload) < len(author_payload) / 2
-    author_truth = json.loads(author_payload)["runtimeProgramInvariants"]["realizationExecutionTruth"]
-    assert dossier["runtimeExecutionTruth"] == author_truth
+    from infini_local.pipelines.llm_authoring_prompt import realization_execution_truth_for_llm
+    assert dossier["runtimeExecutionTruth"] == realization_execution_truth_for_llm()
+    author = json.loads(author_payload)
+    assert "selfEvaluation" in author["diagnosticReport"]
+    assert "on_expire" in next(row for row in author["runtimeCapabilityContract"]["catalog"]["events"] if row["event"] == "on_expire")["constructionMeaning"]
     assert "literal post-repair execution report" in repair_rules
     assert "rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport" in repair_rules
     assert set(dossier["acceptedItemContext"]) == {"name", "category", "realization"}

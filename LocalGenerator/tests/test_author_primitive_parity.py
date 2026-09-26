@@ -69,28 +69,31 @@ def test_initial_author_wire_explains_actual_stack_consumption() -> None:
         {"name": "Boomerang"}, {"name": "Hellstone Bar"},
         {"name": "Boomerang"}, {"name": "Hellstone Bar"}, "boomerang+hellstone", model_name="test-model",
     )
-    system_text = str(request["messages"][0]["content"])
-    guide = json.loads(user_text)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
-    assert "place_item requires stackCost=1" in system_text
-    assert "place_item requires stackCost=1" in guide["stackCost"]
-    assert "projectile return does not refund" in guide["stackCost"]
+    assert "single immutable JSON object" in str(request["messages"][0]["content"])
+    catalog = json.loads(user_text)["runtimeCapabilityContract"]["catalog"]
+    guide = catalog["fieldGuide"]
+    place = next(row for row in catalog["bindingActions"] if row["action"] == "place_item")
+    apply_effects = next(row for row in catalog["bindingActions"] if row["action"] == "apply_item_effects")
+    assert "stackCost=1" in place["constructionMeaning"]
+    assert "returned" in place["constructionMeaning"]
+    assert "Projectile return does not refund" in guide["stackCost"]
     assert "stackCost=0" in guide["stackCost"]
-    assert "remains in inventory for another activation" in guide["stackCost"]
-    assert "not a projectile or separate ammo" in system_text
-    assert "apply_item_effects is the only active binding" in system_text
-    assert "item_body.on_use" in system_text
-    assert "double-quoted JSON object keys" in system_text
+    assert "whole generated item" in guide["stackCost"]
+    assert "only active binding" in apply_effects["does"]
+    assert "spawned entity" in next(row for row in catalog["events"] if row["event"] == "on_use")["constructionMeaning"]
+    assert "double-quoted keys" in str(request["messages"][0]["content"])
 
 
 def test_initial_author_wire_explains_exact_copper_and_percent_units() -> None:
-    request, _, _ = build_initial_author_request(
+    _, user_text, _ = build_initial_author_request(
         {"name": "Hermes Boots"}, {"name": "Aglet"},
         {"name": "Hermes Boots"}, {"name": "Aglet"}, "boots+aglet", model_name="test-model",
     )
-    system_text = str(request["messages"][0]["content"])
-    assert "valueCopper" in system_text and "never use params.value" in system_text
-    assert "+15%" in system_text and "enter 15" in system_text and "not 0.15" in system_text
-
+    catalog = json.loads(user_text)["runtimeCapabilityContract"]["catalog"]
+    cards = {row["fn"]: row for row in catalog["capabilities"]}
+    assert cards["configure_item_stats"]["params"]["valueCopper"]["units"] == "copper"
+    assert "value" not in cards["configure_item_stats"]["params"]
+    assert "15 means 15%, not 0.15" in catalog["fieldGuide"]["paramNotation"]
 
 
 def test_item_stat_renaming_receipt_points_to_actual_authored_parameter() -> None:

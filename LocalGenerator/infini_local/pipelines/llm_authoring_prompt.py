@@ -22,7 +22,6 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 from infini_local.pipelines.author_item_contract import (
     author_item_prompt_shape_card,
     primary_entity_llm_invariant,
-    primary_entity_self_check,
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
@@ -56,7 +55,7 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
 
 def planner_priority_header_for_llm() -> list[str]:
     return [
-        "Return one complete bounded runtimeProgram in this single response; no tool loop and no second design pass.",
+        "Return one immutable response containing concept, executable runtimeProgram, and final realization with diagnostic selfEvaluation. There is no subsequent model or tool pass.",
         "Directly compose low-level entities, bindings, capabilities and event links. Never classify the item into sword/bow/staff/sentry for execution.",
         "category is UI/equipment metadata only. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; use source-backed parent facts only to author explicit runtimeProgram mechanics.",
         "Every movement, attachment/entity kind, damage path, input binding, lifecycle, targeting and child action must be explicit.",
@@ -66,27 +65,104 @@ def planner_priority_header_for_llm() -> list[str]:
         "Do not add a mandatory weird twist. Novelty comes from the authored composition itself, not an unrelated gimmick.",
         "Multiple independent actions are legal when they belong to the authored composition; do not add an unrelated action merely because the catalog exposes it.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
-        "Exactly one item_body is required. All other entities need explicit spawn, lifetime, hitbox, collision and, where moving, movement/controller calls.",
-        "Primary/alternate inputs are exclusive. Sequence extra behaviour through supported events rather than competing bindings.",
-
-        "Before answering, follow runtimeProgramInvariants.structureCheck for references, producers, budgets and required params; then check complete selfEvaluation coverage.",
     ]
 
 
 def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
+    # Registry cards retain their canonical fields; only missing execution facts
+    # are attached to the relevant presentation card.
+    field_guide = runtime_authoring_prompt_field_guide()
+    field_guide["stackCost"] = (
+        "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
+        "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item."
+    )
+    field_guide["bindingTarget"] += (
+        " Every binding owns one usePolicy with action, stackCost and contactDamage; no call/global shadows it. "
+        "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
+        "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
+        "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."
+    )
+    field_guide["referenceRules"] = (
+        "Reference fields use their own targetKinds/allowSelf/graphEdge cards: an existing compatible entity, "
+        "not a created-by-reference binding; graph edges cannot cycle. target_and_fire needs a source in its targets "
+        "and an explicitly referenced shot entity."
+    )
+    field_guide["eventSource"] = (
+        "Event call target is its emitting source, not necessarily the binding action target; "
+        "use event sources/producers and call acceptedEvents. Names or proximity alone do not produce events."
+    )
+    field_guide["sourceValues"] = (
+        "Neutral values are not defaults: choose meaningful params from design/source facts or omit unnecessary calls. "
+        "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0."
+    )
+    field_guide["damageClass"] = {
+        "builtInTokens": list(DAMAGE_CLASS_TOKENS), "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
+        "scope": "Damage/stat inheritance and class effects only; no movement, minions, ammo consumption or mana cost. Parent damageClass=none is source-only, not a runtime token. Modded token is exact parent-backed ModName/ClassName; no other tokens.",
+    }
+    field_guide["itemUseStyle"] = {
+        "builtInTokens": list(ITEM_USE_STYLE_TOKENS), "meaningByToken": dict(ITEM_USE_STYLE_MEANINGS),
+        "scope": "configure_item_use.useStyle selects held-item/player-arm animation during active use only, not a functional tool/use mechanic, projectile, damage, food, drink, golf, mowing or lamp effect. Author the input binding and executable effects separately; style names are not weapon presets.",
+    }
+    entities = [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()]
+    for entity in entities:
+        kind = entity["kind"]
+        if kind == "item_body":
+            entity["constructionMeaning"] = "Exactly one item_body; configure_item_stats is required by requiredComponents. Not a projectile spawn."
+        elif kind == "stationary_projectile":
+            entity["constructionMeaning"] = "Use requiredComponents for spawn/lifetime/hitbox/collision and positionRequirement for a controller. Without target_and_fire and an explicitly referenced shot entity, this is stationary contact, not a firing turret/sentry."
+        elif kind == "free_projectile":
+            entity["constructionMeaning"] = "Use requiredComponents for spawn/lifetime/hitbox/collision and positionRequirement for movement. Each use spawns an independent projectile; no singleton minion/companion, minion-slot behavior or per-owner cap is implied."
+        else:
+            entity["constructionMeaning"] = "Use requiredComponents and positionRequirement for explicit spawn, lifetime, hitbox, collision and movement/controller ownership."
+    inputs = [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()]
+    for row in inputs:
+        if row["input"] in ("primary_use", "alternate_use"):
+            row["constructionMeaning"] = "One action root for this exclusive input; additional effects use supported events, not a second binding. configure_item_use configures that root, and item_body does not require use_item_body."
+        elif row["input"] == "hold":
+            row["constructionMeaning"] = "While-selected HoldItem lane, not an extra primary_use or equipped/worn effect."
+        elif row["input"] == "equipped":
+            row["constructionMeaning"] = "Passive while worn, not active use or item_body periodic. At most one equipped binding: runtime uses the first. Matching armor-set effects run from the head only with matching head/body/legs equipped."
+    actions = [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()]
+    for action in actions:
+        if action["action"] == "place_item":
+            action["constructionMeaning"] = (
+                "Pure placeable uses primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. "
+                "placementCallId references one configure_placeable on the same item_body; stackCost=1 and contactDamage=false. "
+                "Only accepted placement spends the stack and escrows this same generated item, unavailable while placed and returned when its tile breaks. "
+                "No item_body.on_use or simultaneous attack on this placement binding. Parent tileId alone does not establish placeStyle or exact tile behavior."
+            )
+    events = [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()]
+    event_detail = {
+        "on_use": "Emitted for non-placement primary_use/alternate_use regardless of action target (body or spawned entity); placement emits none.",
+        "on_hit": "Requires actual NPC collision/contact; item_body also needs enabled body hitbox, not merely contactDamage=true. Proximity alone is insufficient.",
+        "on_crit": "Requires actual critical NPC contact; item_body needs enabled body hitbox.",
+        "on_expire": "Natural lifetime expiry and move_proximity_missile proximity detonation only; other early kills do not emit on_expire. A bouncing entity with only on_expire effects does not produce that effect at its final collision.",
+        "on_kill": "Terminal event for collision death, penetration exhaustion, proximity detonation and natural expiry.",
+        "on_tile_collision": "Emitted at each tile collision, including a bounce.",
+        "periodic": "periodTicks is required on periodic event calls. item_body periodic runs while held (HoldItem), not merely equipped.",
+    }
+    for event in events:
+        if event["event"] in event_detail:
+            event["constructionMeaning"] = event_detail[event["event"]]
+    capabilities = compact_capability_catalog()
+    for card in capabilities:
+        if card["fn"] == "charge_then_release":
+            card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. heldSpriteVisibilityHint is presentation, not release trigger."
+        elif card["fn"] == "configure_item_use":
+            card["constructionMeaning"] = "useTimeTicks is cadence, useAnimationTicks animation duration; autoReuse repeats active use while held, channel keeps that use active."
+        elif card["fn"] == "configure_item_stats":
+            card["constructionMeaning"] = "A hybrid with reusable spawn_entity/use_item_body use (stackCost=0) has maxStack=1: one durable unit moves between inventory and escrowed placed form. One-shot non-placement use (stackCost=1) is not subject to this maxStack rule."
     return {
         "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         "authoringSchema": RUNTIME_PROGRAM_SCHEMA,
-        "entityKinds": [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()],
-        "inputs": [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()],
-        "bindingActions": [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()],
-        "placementInputRoles": "If placement is selected: pure placeable uses place_item on primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. The placement action references one configure_placeable on the same item_body via placementCallId, with stackCost=1 and contactDamage=false. Only accepted placement escrows the generated item until its tile is broken. Parent tileId alone does not establish a source placeStyle or exact tile behavior.",
-        "events": [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()],
-        "fieldGuide": runtime_authoring_prompt_field_guide(),
+        "entityKinds": entities,
+        "inputs": inputs,
+        "bindingActions": actions,
+        "events": events,
+        "fieldGuide": field_guide,
         "limits": {"entities": 12, "bindings": 8, "calls": 48, "childDepth": 3, "eventSpawnsPerActivation": 32},
-        "capabilities": compact_capability_catalog(),
+        "capabilities": capabilities,
     }
-
 
 def engine_runtime_capability_contract_for_llm(
     a: dict[str, Any],
@@ -122,9 +198,9 @@ def gameplay_authoring_stages_for_llm() -> list[dict[str, str]]:
     """Plain names for the four causal sections of one Author response."""
     return [
         {
-            "name": "initial_design_draft",
+            "name": "initial_concept",
             "field": "concept",
-            "meaning": "A non-binding first sketch of intended player actions. It anchors design and enables diagnosis, but semantic drift from it never rejects the craft.",
+            "meaning": "First, state the intended player actions to establish the design trajectory. This is non-binding; divergence from executable gameplay is diagnostic, not a rejection.",
         },
         {
             "name": "executable_gameplay_program",
@@ -134,12 +210,12 @@ def gameplay_authoring_stages_for_llm() -> list[dict[str, str]]:
         {
             "name": "final_gameplay_report",
             "field": "realization.description + realization.playerExperience",
-            "meaning": "The same Author's plain-language report of what the executable program actually lets the player do, not a repetition of the initial draft.",
+            "meaning": "The same Author's plain-language account of what the executable program lets the player do, not a repetition of the initial concept.",
         },
         {
             "name": "same_pass_self_evaluation",
             "field": "realization.selfEvaluation",
-            "meaning": "The last block of the same model response: independently compare draft versus program, then program versus final report, using exact runtime references.",
+            "meaning": "Final diagnostic within the same immutable response: compare concept with the emitted program, and final report with the emitted program. This is interpretation, not execution evidence.",
         },
     ]
 
@@ -147,46 +223,8 @@ def gameplay_authoring_stages_for_llm() -> list[dict[str, str]]:
 def runtime_program_invariants_for_llm() -> dict[str, Any]:
     return {
         "primaryEntityOwnership": primary_entity_llm_invariant(),
-        "exclusiveInputs": {
-            "maxBindingsPerInput": 1,
-            "inputs": sorted(
-                name for name, spec in INPUT_KIND_REGISTRY.items() if spec.exclusive
-            ),
-            "authoringProcedure": "Choose one action root per exclusive input. Never author separate use_item_body and spawn_entity binding rows with the same input; sequence additional behavior through a supported event or another input.",
-            "configureItemUseRule": "configure_item_use supplies item-use parameters for whichever single action root you choose. It does not require a use_item_body binding. Presence of item_body also does not require use_item_body.",
-        },
-        "bindingUseTransactions": {
-            "singleOwner": "Every binding owns one complete usePolicy containing action, stackCost and contactDamage. No call or global field may shadow those decisions.",
-            "bodyDamageLane": "contactDamage=true requests item-body contact on an active use, even with spawn_entity (no second binding); it does not select primaryEntityId or held ownership. Actual melee contact needs configure_item_use.disableMeleeHitbox=false and no ammo category: either can set Item.noMelee and prevent item-body hits/on_hit/on_crit despite contactDamage=true. Projectile damage comes from set_projectile_damage on its entity; item-body contact uses configure_item_stats.damage. Placement and non-use inputs require contactDamage=false.",
-            "catalogNeutrality": "An available action is not a design suggestion. Omit actions that do not belong to the authored composition.",
-        },
-        "structureCheck": {
-            "order": "Choose exact input/action/target from catalog bindingActions.targets; add the item_body and any explicitly spawned or referenced entities with their required calls; then attach event calls to their source entity. Check each selected capability's targets, acceptedEvents, requires, exclusiveGroup and params before writing the report.",
-            "eventSources": "For item_body, non-placement primary_use/alternate_use emits on_use regardless of whether the binding action targets the body or a spawned entity; placement emits no on_use. item_body on_hit/on_crit need an actual enabled body hitbox and NPC contact, not just contactDamage=true. item_body periodic gameplay events run while held (HoldItem), not just while equipped. Projectile events belong to the projectile that emits them; on_expire is not every death. An event call's target is its event source, not necessarily the binding action's target. Event availability is checked by the validator; do not invent events from names or proximity alone.",
-            "referencesAndBudgets": "For spawn_entity_on_event.entity and target_and_fire.shotEntity, use each param card's reference.targetKinds (projectile kinds, not item_body); the referenced entity must exist, cannot be the source itself and must not form a cycle. target_and_fire needs a source allowed by its targets card and a referenced shot; references do not create a direct binding. Check graph depth <= catalog.limits.childDepth from binding spawn roots, each event spawn count <= 12, and the static sum of all spawn_entity_on_event counts <= catalog.limits.eventSpawnsPerActivation (32). Repeating periodic/controller spawns also consume the runtime activation budget; do not promise an unbounded or guaranteed shot count.",
-            "completeCalls": "For EVERY selected call, supply all keys in that capability's params except optional:true, including required fields with zero/false/empty values when those are deliberately chosen and allowed. Check each card's type, enum, bounds, references and requires; conditional required fields (for example periodTicks on periodic) still apply. A neutral value is not an automatic default: choose meaningful fields explicitly from the design/source facts, or omit the unnecessary call; never guess a missing tile/wall/buff ID.",
-            "useAndEquipment": "useTimeTicks is the use cadence; useAnimationTicks is the use animation duration. autoReuse repeats active use while input is held; channel keeps that use active for channelled entities. hold is a separate while-selected HoldItem lane, not an extra primary_use binding or worn equipment effect. charge_then_release requires channel=true and an explicit spawned charged entity: it stays non-damaging until release, scales with bounded chargeTicks, then uses authored release velocity/movement; heldSpriteVisibilityHint is a held-item presentation hint, not a gameplay release trigger. equipped executes passive effects while worn, not active use or item_body periodic; matching armor-set bonuses execute from the head only when a matching head/body/legs set is worn. Author at most one equipped binding: runtime looks up the first, so do not rely on multiple equipped bindings to compose bonuses.",
-        },
-        "damageClass": {
-            "builtInTokens": list(DAMAGE_CLASS_TOKENS),
-            "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
-            "scope": "Selects damage/stat inheritance and class effects; it does not create movement, minions, ammo consumption or mana costs. Author those separately.",
-            "moddedTokenShape": "ModName/ClassName copied from parent facts",
-            "otherTokensAllowed": False,
-            "sourceSentinelRule": "Parent fact damageClass=none is read-only source data and is never a valid runtime token; choose one exact built-in token or an exact parent-backed ModName/ClassName.",
-        },
-        "itemUseStyle": {
-            "builtInTokens": list(ITEM_USE_STYLE_TOKENS),
-            "meaningByToken": dict(ITEM_USE_STYLE_MEANINGS),
-            "scope": "configure_item_use.useStyle selects the held-item/player-arm animation during active use only. It does not independently guarantee a functional tool/use mechanic, projectile, damage, food, drink, golf, mowing or lamp effect. Author the input binding and executable capabilities/effects separately; style names are not weapon presets.",
-        },
-        "capabilityParams": {
-            "exactCardMatch": True,
-            "sourceSentinelRule": "Do not copy Terraria sentinel -1 into a runtime param whose capability card minimum is 0; use an allowed value or omit the unnecessary capability.",
-        },
-        "realizationExecutionTruth": realization_execution_truth_for_llm(),
+        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= catalog.limits.childDepth (3); each event spawn count <= 12, and the static sum of spawn_entity_on_event counts <= catalog.limits.eventSpawnsPerActivation (32). Periodic/controller repetitions also spend the runtime activation budget: no unbounded or guaranteed shot count.",
     }
-
 
 def realization_execution_truth_for_llm() -> dict[str, str]:
     return {
@@ -213,24 +251,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
         "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(a, b),
         "requiredJsonShape": author_item_prompt_shape_card(),
-        "selfCheck": [
-            primary_entity_self_check(),
-            "all refs exist and binding/call target kinds match their registry cards",
-            "one item_body and exactly one binding row at most owns each runtimeProgramInvariants.exclusiveInputs input; never pair use_item_body plus spawn_entity on one input",
-            "every damageClass is a listed built-in token or exact parent-backed ModName/ClassName; parent sentinel none is forbidden and the Author must choose the exact canonical token",
-            "every call params object exactly matches its capability card; no below-minimum source sentinel such as -1 is copied",
-            "for every selected call, every required param and every exact requires row is satisfied on the required target",
-            "every binding has one structurally complete usePolicy transaction; contactDamage is an independent item-body lane and may coexist with spawn_entity on the same active-use binding without changing primaryEntityId/held ownership",
-            "every spawned entity has explicit spawn/lifetime/hitbox/collision",
-            "moving entities have exactly one movement/controller",
-            "apply runtimeProgramInvariants.structureCheck to event sources, reference kinds and static/runtime spawn budgets",
-            "write realization as the literal final gameplay report, then write realization.selfEvaluation LAST using runtimeProgramInvariants.realizationExecutionTruth",
-            "selfEvaluation.planVsProgram.actionChecks must cover every concept.plannedPlayerActions row and every executable input/event lane with exact-id evidence, marking lanes absent from the draft as added; concept is non-binding and changed/uncertain drift never rejects the craft",
-            "selfEvaluation.programVsReport.behaviorChecks must independently cover every executable input/entity/event lane against description/playerExperience; never copy planVsProgram's verdict and never declare aligned from prose similarity alone",
-            "every actionCheck and behaviorCheck cites exact existing entity/binding/call ids, gives its own result and reason, and uses uncertain instead of pretending to understand an engine parameter",
-            "no family/archetype/semantic default is requested",
-            "no unsupported vanilla useAmmo/PickAmmo behaviour is claimed",
-        ],
+        "diagnosticReport": {"selfEvaluation": realization_execution_truth_for_llm()["selfEvaluation"]},
         # Recipe-specific values stay last. JSON object order is not semantic,
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.

@@ -29,7 +29,7 @@ def test_damage_class_prompt_explains_choices_without_engine_documentation() -> 
     from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
     payload = build_llm_author_payload({}, {}, {}, {}, "class_guide")
-    guide = payload["runtimeProgramInvariants"]["damageClass"]
+    guide = payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["damageClass"]
     meanings = guide["meaningByToken"]
     assert set(meanings) == set(DAMAGE_CLASS_TOKENS)
     assert "does not receive generic bonuses" in meanings["default"]
@@ -41,7 +41,7 @@ def test_damage_class_prompt_explains_choices_without_engine_documentation() -> 
     for token in ("summon", "summon_melee_speed"):
         assert "no standard critical-hit calculation" in meanings[token]
     assert "not used by vanilla items" in meanings["throwing"]
-    assert "does not create" in guide["scope"]
+    assert "no movement" in guide["scope"]
 
 
 def test_binding_use_policy_and_ammo_are_distinct_terraria_owners() -> None:
