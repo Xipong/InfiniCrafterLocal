@@ -254,9 +254,9 @@ def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
         _numeric_param(params, "miningSpeedMultiplier", 1) != 1,
         _numeric_param(params, "lightStrength", 0) > 0,
         params.get("oreSenseEnabled") is True,
-        _numeric_param(params, "movementSpeed", 0) != 0,
-        _numeric_param(params, "jumpBoost", 0) > 0,
-        _numeric_param(params, "manaRegen", 0) > 0,
+        _numeric_param(params, "moveSpeedBonusFactor", 0) != 0,
+        _numeric_param(params, "jumpSpeedBonusPxPerTick", 0) > 0,
+        _numeric_param(params, "manaRegenBonusPoints", 0) > 0,
         _numeric_param(params, "lifeRegenHpPerSecond", 0) > 0,
     ))
 

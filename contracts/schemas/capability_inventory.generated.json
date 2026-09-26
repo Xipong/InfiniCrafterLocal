@@ -77,7 +77,7 @@
           "reference": null,
           "required": true,
           "semanticType": "knockback_strength",
-          "units": ""
+          "units": "engine units: Item.knockBack"
         },
         "manaCost": {
           "enum": [],
@@ -251,6 +251,21 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "heldSpriteVisibilityHint": {
+          "enum": [
+            "",
+            "immediate",
+            "on_release",
+            "after_charge"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "hideUseGraphic": {
           "enum": [],
           "kind": "boolean",
@@ -280,21 +295,6 @@
           "required": true,
           "semanticType": "unitless_scalar",
           "units": "pixels"
-        },
-        "releaseTiming": {
-          "enum": [
-            "",
-            "immediate",
-            "on_release",
-            "after_charge"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "bounded_text",
-          "units": ""
         },
         "useStyle": {
           "enum": [
@@ -465,7 +465,7 @@
           "semanticType": "terraria_projectile_id",
           "units": ""
         },
-        "shootSpeedPxPerTick": {
+        "shootSpeedContributionPxPerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -473,7 +473,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels_per_tick"
+          "units": "pixels/projectile update contribution"
         }
       },
       "positionOwnership": "none",
@@ -528,7 +528,7 @@
           "semanticType": "mana_points",
           "units": ""
         },
-        "potionSickness": {
+        "usesPotionRules": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -657,7 +657,7 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "jumpBoost": {
+        "jumpSpeedBonusPxPerTick": {
           "enum": [],
           "kind": "number",
           "maximum": 8,
@@ -665,7 +665,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "pixels/world tick"
         },
         "lifeRegenHpPerSecond": {
           "enum": [],
@@ -707,17 +707,17 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: RGB coefficient"
         },
-        "manaRegen": {
+        "manaRegenBonusPoints": {
           "enum": [],
           "kind": "integer",
           "maximum": 120,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "terraria_mana_regen",
-          "units": ""
+          "semanticType": "unitless_scalar",
+          "units": "engine units: manaRegenBonus points"
         },
         "miningSpeedMultiplier": {
           "enum": [],
@@ -727,9 +727,9 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: pickSpeed divisor"
         },
-        "movementSpeed": {
+        "moveSpeedBonusFactor": {
           "enum": [],
           "kind": "number",
           "maximum": 2,
@@ -737,7 +737,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: additive moveSpeed factor"
         },
         "oreSenseEnabled": {
           "enum": [],
@@ -827,7 +827,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: pickSpeed divisor"
         },
         "pickPower": {
           "enum": [],
@@ -1076,7 +1076,7 @@
           "reference": null,
           "required": true,
           "semanticType": "effect_strength",
-          "units": ""
+          "units": "engine units: RGB coefficient"
         }
       },
       "positionOwnership": "none",
@@ -1227,8 +1227,8 @@
           "minimum": -1000,
           "reference": null,
           "required": false,
-          "semanticType": "aggro_points",
-          "units": "aggro_points"
+          "semanticType": "engine units: aggro points",
+          "units": "engine units: aggro points"
         },
         "ammoSaveChancePercent": {
           "enum": [],
@@ -1330,15 +1330,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegenHalfHpPerSecond": {
+        "lifeRegenHpPerSecond": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 200,
-          "minimum": -100,
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "half_hp_per_second",
-          "units": "half_hp_per_second"
+          "semanticType": "HP/s",
+          "units": "HP/s"
         },
         "lightColor": {
           "enum": [
@@ -1369,8 +1369,8 @@
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "light_intensity",
-          "units": "light_intensity"
+          "semanticType": "engine units: RGB coefficient",
+          "units": "engine units: RGB coefficient"
         },
         "manaCostReductionPercentagePoints": {
           "enum": [],
@@ -1389,8 +1389,8 @@
           "minimum": -100,
           "reference": null,
           "required": false,
-          "semanticType": "mana_regen_bonus_points",
-          "units": "mana_regen_bonus_points"
+          "semanticType": "engine units: manaRegenBonus points",
+          "units": "engine units: manaRegenBonus points"
         },
         "maxLifePoints": {
           "enum": [],
@@ -1499,7 +1499,7 @@
             "defensePoints",
             "maxLifePoints",
             "maxManaPoints",
-            "lifeRegenHalfHpPerSecond",
+            "lifeRegenHpPerSecond",
             "manaRegenBonusPoints",
             "moveSpeedBonusPercent",
             "maxRunSpeedBonusPxPerTick",
@@ -1605,8 +1605,8 @@
           "minimum": -1000,
           "reference": null,
           "required": false,
-          "semanticType": "aggro_points",
-          "units": "aggro_points"
+          "semanticType": "engine units: aggro points",
+          "units": "engine units: aggro points"
         },
         "ammoSaveChancePercent": {
           "enum": [],
@@ -1708,15 +1708,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegenHalfHpPerSecond": {
+        "lifeRegenHpPerSecond": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 200,
-          "minimum": -100,
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "half_hp_per_second",
-          "units": "half_hp_per_second"
+          "semanticType": "HP/s",
+          "units": "HP/s"
         },
         "lightColor": {
           "enum": [
@@ -1747,8 +1747,8 @@
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "light_intensity",
-          "units": "light_intensity"
+          "semanticType": "engine units: RGB coefficient",
+          "units": "engine units: RGB coefficient"
         },
         "manaCostReductionPercentagePoints": {
           "enum": [],
@@ -1767,8 +1767,8 @@
           "minimum": -100,
           "reference": null,
           "required": false,
-          "semanticType": "mana_regen_bonus_points",
-          "units": "mana_regen_bonus_points"
+          "semanticType": "engine units: manaRegenBonus points",
+          "units": "engine units: manaRegenBonus points"
         },
         "maxLifePoints": {
           "enum": [],
@@ -1837,8 +1837,8 @@
           "minimum": -1000,
           "reference": null,
           "required": false,
-          "semanticType": "aggro_points",
-          "units": "aggro_points"
+          "semanticType": "engine units: aggro points",
+          "units": "engine units: aggro points"
         },
         "setBonusAmmoSaveChancePercent": {
           "enum": [],
@@ -1880,15 +1880,15 @@
           "semanticType": "percentage_points",
           "units": "percentage_points"
         },
-        "setBonusLifeRegenHalfHpPerSecond": {
+        "setBonusLifeRegenHpPerSecond": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 200,
-          "minimum": -100,
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "half_hp_per_second",
-          "units": "half_hp_per_second"
+          "semanticType": "HP/s",
+          "units": "HP/s"
         },
         "setBonusManaCostReductionPercentagePoints": {
           "enum": [],
@@ -1907,8 +1907,8 @@
           "minimum": -100,
           "reference": null,
           "required": false,
-          "semanticType": "mana_regen_bonus_points",
-          "units": "mana_regen_bonus_points"
+          "semanticType": "engine units: manaRegenBonus points",
+          "units": "engine units: manaRegenBonus points"
         },
         "setBonusMinionSlotsBonus": {
           "enum": [],
@@ -2008,7 +2008,7 @@
           "nonzeroParams": [
             "setBonusGenericCritChancePercentagePoints",
             "setBonusMoveSpeedBonusPercent",
-            "setBonusLifeRegenHalfHpPerSecond",
+            "setBonusLifeRegenHpPerSecond",
             "setBonusManaRegenBonusPoints",
             "setBonusMinionSlotsBonus",
             "setBonusSentrySlotsBonus",
@@ -2028,7 +2028,7 @@
           "nonzeroParams": [
             "setBonusGenericCritChancePercentagePoints",
             "setBonusMoveSpeedBonusPercent",
-            "setBonusLifeRegenHalfHpPerSecond",
+            "setBonusLifeRegenHpPerSecond",
             "setBonusManaRegenBonusPoints",
             "setBonusMinionSlotsBonus",
             "setBonusSentrySlotsBonus",
@@ -2229,7 +2229,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "speedPxPerTick": {
+        "speedPxPerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -2322,7 +2322,7 @@
           "reference": null,
           "required": true,
           "semanticType": "knockback_strength",
-          "units": ""
+          "units": "engine units: Projectile.knockBack"
         },
         "ownerHitCheck": {
           "enum": [],
@@ -2533,15 +2533,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "localNpcHitCooldownTicks": {
+        "localNpcHitCooldownEngineUnits": {
           "enum": [],
           "kind": "integer",
           "maximum": 600,
           "minimum": -1,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "engine cooldown units"
+          "semanticType": "unitless_scalar",
+          "units": "engine units: local NPC cooldown counts"
         },
         "npcImmunityMode": {
           "enum": [
@@ -2666,7 +2666,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: velocity lerp fraction"
         },
         "rangeTiles": {
           "enum": [],
@@ -2721,7 +2721,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "gravityPerTick": {
+        "gravityVelocityPerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 2,
@@ -2729,7 +2729,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/update per projectile update"
+          "units": "engine units: vertical velocity increment per update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -2782,7 +2782,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: velocity multiplier per update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -2944,7 +2944,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "gravityPerTick": {
+        "gravityVelocityPerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 2,
@@ -2952,7 +2952,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "pixels/update per projectile update"
+          "units": "engine units: vertical velocity increment per update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3007,7 +3007,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: velocity lerp fraction"
         },
         "rangeTiles": {
           "enum": [],
@@ -3019,7 +3019,7 @@
           "semanticType": "tiles",
           "units": "tiles"
         },
-        "waveAmplitude": {
+        "waveVelocityCoefficient": {
           "enum": [],
           "kind": "number",
           "maximum": 64,
@@ -3027,7 +3027,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": "engine lateral velocity coefficient"
+          "units": "engine units: lateral velocity coefficient"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3080,7 +3080,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: coupled rotation/alpha coefficient"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3126,16 +3126,6 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "acceleration": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1.2,
-          "minimum": 1.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "pixels_per_tick_squared",
-          "units": ""
-        },
         "maxSpeed": {
           "enum": [],
           "kind": "number",
@@ -3145,6 +3135,16 @@
           "required": true,
           "semanticType": "unitless_scalar",
           "units": "pixels/projectile update"
+        },
+        "speedMultiplierPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.2,
+          "minimum": 1.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "engine units: velocity multiplier per update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -3189,14 +3189,14 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "turnRadiansPerTick": {
+        "turnRadiansPerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 0.5,
           "minimum": -0.5,
           "reference": null,
           "required": true,
-          "semanticType": "radians",
+          "semanticType": "unitless_scalar",
           "units": "radians/update"
         }
       },
@@ -3251,7 +3251,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: NPC velocity impulse coefficient"
         },
         "rangeTiles": {
           "enum": [],
@@ -3315,7 +3315,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: NPC velocity impulse coefficient"
         },
         "rangeTiles": {
           "enum": [],
@@ -3380,7 +3380,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: velocity lerp fraction"
         },
         "proximityRadiusPx": {
           "enum": [],
@@ -3520,7 +3520,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "scalePerTick": {
+        "scaleGrowthPerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 0.5,
@@ -3528,7 +3528,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: scale increment per update"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4022,7 +4022,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "engine units: distance-score discount"
         },
         "shotEntity": {
           "enum": [],
@@ -4695,7 +4695,7 @@
           "reference": null,
           "required": true,
           "semanticType": "effect_strength",
-          "units": ""
+          "units": "engine units: velocity impulse coefficient per event"
         }
       },
       "positionOwnership": "none",
@@ -4790,7 +4790,7 @@
           "reference": null,
           "required": true,
           "semanticType": "life_points",
-          "units": ""
+          "units": "HP"
         }
       },
       "positionOwnership": "none",
@@ -4977,7 +4977,7 @@
           "reference": null,
           "required": true,
           "semanticType": "effect_strength",
-          "units": ""
+          "units": "engine units: RGB coefficient"
         }
       },
       "positionOwnership": "none",

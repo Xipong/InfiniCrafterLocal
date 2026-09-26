@@ -26,7 +26,19 @@ def _contract_check_dev_fallback_resolves_its_package_owner() -> None:
         {},
         "fallback-owner-test",
     )
-    assert isinstance(result, dict)
+    from infini_local.core.runtime_authoring import (
+        compile_runtime_program, validate_runtime_program, validate_runtime_wire,
+    )
+    report = validate_runtime_program(result)
+    assert report["ok"], report["errors"]
+    wire = compile_runtime_program(result)
+    wire_report = validate_runtime_wire(wire)
+    assert wire_report["ok"], wire_report["errors"]
+    entities = {entity["id"]: entity for entity in wire["runtimeProgram"]["entities"]}
+    assert entities["held_body"]["spawn"]["speedPxPerTick"] == 1.0
+    assert entities["child_shard"]["spawn"]["speedPxPerTick"] == 9.0
+    assert entities["child_shard"]["collision"]["localNpcHitCooldownTicks"] == -1
+    assert entities["child_shard"]["movement"]["params"]["gravityPerTick"] == 0.12
 
 
 def _contract_check_combine_exception_carries_immutable_request_failure_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:

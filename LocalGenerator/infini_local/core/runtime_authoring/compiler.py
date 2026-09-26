@@ -73,6 +73,17 @@ def _dict(value: Any) -> dict[str, Any]:
 def _copy_params(call: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(_dict(call.get("params")))
 
+def _authored_param_for_wire(fn: str, wire_key: str) -> str:
+    """Resolve a fixed DTO slot through the registry, never through Author aliases."""
+    params = CAPABILITY_REGISTRY[fn].params
+    if wire_key in params:
+        return wire_key
+    matches = [name for name, spec in params.items()
+               if (spec.wire_name or name) == wire_key]
+    if len(matches) != 1:
+        raise RuntimeError(f"{fn}: wire slot {wire_key!r} has no unique Author parameter")
+    return matches[0]
+
 
 def _compile_item_call(
     ctx: _CompileContext,
@@ -90,7 +101,14 @@ def _compile_item_call(
     p = _copy_params(call)
 
     def project(target: dict[str, Any], path_prefix: str, mapping: Mapping[str, str]) -> None:
-        for source, destination in mapping.items():
+        for wire_key, destination in mapping.items():
+            # Prefer the actual DTO field, since older Author spellings need
+            # not equal that field (e.g. potionSickness -> potion).
+            wire_matches = [name for name, spec in CAPABILITY_REGISTRY[fn].params.items()
+                            if spec.wire_name == destination]
+            if len(wire_matches) > 1:
+                raise RuntimeError(f"{fn}: wire slot {destination!r} is ambiguous")
+            source = wire_matches[0] if wire_matches else _authored_param_for_wire(fn, wire_key)
             if source in p:
                 spec = CAPABILITY_REGISTRY[fn].params[source]
                 ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
@@ -258,8 +276,11 @@ def _compile_entity_call(
         return entity.setdefault(name, {})
 
     def project(target: dict[str, Any], prefix: str, values: Mapping[str, Any]) -> None:
-        for key, value in values.items():
-            ctx.write(call=call, path=f"{prefix}.{key}", value=value, target=target, key=key)
+        for source, value in values.items():
+            spec = CAPABILITY_REGISTRY[fn].params[source]
+            destination = spec.wire_name or source
+            ctx.write(call=call, path=f"{prefix}.{destination}", value=spec.to_wire(value),
+                      target=target, key=destination, authored_param=source)
 
     if fn == "configure_spawn":
         spawn = component("spawn")
@@ -288,8 +309,7 @@ def _compile_entity_call(
         ctx.write_derived(call=call, path=f"{base}.movement.name", value=fn, target=movement, key="name", source=source_fn)
         ctx.write_derived(call=call, path=f"{base}.movement.code", value=MOVEMENT_OPCODE[fn], target=movement, key="code", source=source_fn)
         movement_params = movement.setdefault("params", {})
-        for key, value in p.items():
-            ctx.write(call=call, path=f"{base}.movement.params.{key}", value=value, target=movement_params, key=key)
+        project(movement_params, f"{base}.movement.params", p)
         return
     if fn in {"channel_beam", "charge_then_release", "target_and_fire"}:
         controller = component("controller")

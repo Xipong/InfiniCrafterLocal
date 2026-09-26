@@ -128,7 +128,7 @@ Gameplay Author-visible semantic aliases: **нет**. У каждой механ
 | stake | AmmoID.Stake |
 | stynger_bolt | AmmoID.StyngerBolt |
 
-`configure_vanilla_ammo_item` отдельно принимает `projectileId` и `shootSpeedPxPerTick`, напрямую записывая `Item.shoot` и ammo-вклад `Item.shootSpeed`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом»; `Item.useAmmo` означал бы «это оружие расходует боеприпас» и данным adapter-ом не выставляется. Нельзя добавить `useAmmo` одним полем: стандартный `PickAmmo` также меняет projectile type, скорость, урон и knockback, поэтому нужен отдельный полный vertical slice.
+`configure_vanilla_ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionPxPerUpdate`, напрямую записывая `Item.shoot` и ammo-вклад `Item.shootSpeed`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом»; `Item.useAmmo` означал бы «это оружие расходует боеприпас» и данным adapter-ом не выставляется. Нельзя добавить `useAmmo` одним полем: стандартный `PickAmmo` также меняет projectile type, скорость, урон и knockback, поэтому нужен отдельный полный vertical slice.
 
 ### Loaded content IDs
 

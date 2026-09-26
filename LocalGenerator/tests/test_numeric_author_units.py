@@ -30,7 +30,7 @@ def _regen(value):
         "id": "regen_effect", "fn": "apply_generated_buff_on_use", "target": "item",
         "params": {"durationTicks": 120, "miningSpeedMultiplier": 1,
                    "lightStrength": 0.1, "lightColor": "white", "oreSenseEnabled": False,
-                   "movementSpeed": 0, "jumpBoost": 0, "manaRegen": 0,
+                   "moveSpeedBonusFactor": 0, "jumpSpeedBonusPxPerTick": 0, "manaRegenBonusPoints": 0,
                    "lifeRegenHpPerSecond": value},
     })
     return doc
@@ -67,6 +67,20 @@ def test_converted_author_bounds_and_steps_reject_invalid(factory, bad):
     assert not validate_runtime_program(doc)["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
+
+
+@pytest.mark.parametrize("key,value", [
+    ("moveSpeedBonusFactor", 0.1),
+    ("jumpSpeedBonusPxPerTick", 0.5),
+    ("manaRegenBonusPoints", 1),
+])
+def test_generated_buff_renamed_effect_alone_is_not_inert(key, value):
+    doc = _regen(0)
+    params = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "regen_effect")["params"]
+    params["lightStrength"] = 0
+    assert any(e["code"] == "inert_component" for e in validate_runtime_program(doc)["errors"])
+    params[key] = value
+    assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
 
 
 def test_legacy_names_are_not_author_aliases_and_schema_keeps_steps():
@@ -120,7 +134,7 @@ def test_model_cards_explain_ambiguous_engine_magnitudes_without_invented_units(
     expected = {
         "configure_item_stats": {"knockback": "Item.knockBack", "scale": "1 unchanged"},
         "configure_item_contact_hitbox": {"contactForgivenessPx": "each side"},
-        "apply_generated_buff_on_use": {"movementSpeed": "Player.moveSpeed", "jumpBoost": "pixels/tick", "manaRegen": "Player.manaRegen", "miningSpeedMultiplier": "pickSpeed", "lightStrength": "RGB"},
+        "apply_generated_buff_on_use": {"moveSpeedBonusFactor": "Player.moveSpeed", "jumpSpeedBonusPxPerTick": "pixels/tick", "manaRegenBonusPoints": "Player.manaRegen", "miningSpeedMultiplier": "pickSpeed", "lightStrength": "RGB"},
         "configure_tool": {"pickPower": "tooltip", "hammerPower": "tooltip", "miningSpeedScale": "pickSpeed"},
         "configure_placeable": {"placeStyle": "style index"},
         "require_use_condition": {"minLife": "statLife >=", "minMana": "statMana >="},
@@ -128,16 +142,16 @@ def test_model_cards_explain_ambiguous_engine_magnitudes_without_invented_units(
         "emit_light_while_active": {"strength": "RGB"},
         "configure_accessory": {"manaRegenBonusPoints": "Player.manaRegenBonus", "aggroPoints": "Player.aggro", "genericArmorPenetrationPoints": "armor", "lightStrength": "RGB"},
         "configure_armor": {"manaRegenBonusPoints": "Player.manaRegenBonus", "aggroPoints": "Player.aggro", "genericArmorPenetrationPoints": "armor", "lightStrength": "RGB"},
-        "configure_spawn": {"speedPxPerTick": "extraUpdates", "count": "root binding"},
+        "configure_spawn": {"speedPxPerUpdate": "extraUpdates", "count": "root binding"},
         "set_projectile_hitbox": {"drawScale": "visual scale"},
         "set_projectile_damage": {"knockback": "Projectile.knockBack"},
-        "set_projectile_collision": {"extraUpdates": "per world tick", "localNpcHitCooldownTicks": "engine"},
-        "move_gravity_arc": {"gravityPerTick": "per projectile update"},
-        "move_bounce": {"gravityPerTick": "per projectile update"},
-        "move_sine_homing": {"waveAmplitude": "0.03"},
-        "move_accelerate": {"acceleration": "per projectile update"},
-        "move_spiral": {"turnRadiansPerTick": "per projectile update"},
-        "move_expanding_wave": {"scalePerTick": "per projectile update"},
+        "set_projectile_collision": {"extraUpdates": "per world tick", "localNpcHitCooldownEngineUnits": "engine"},
+        "move_gravity_arc": {"gravityVelocityPerUpdate": "per projectile update"},
+        "move_bounce": {"gravityVelocityPerUpdate": "per projectile update"},
+        "move_sine_homing": {"waveVelocityCoefficient": "0.03"},
+        "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
+        "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
+        "move_expanding_wave": {"scaleGrowthPerUpdate": "per projectile update"},
         "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "Soft"},
         "pull_on_event": {"strength": "velocity", "radiusTiles": "no directTarget"},
         "heal_owner_on_event": {"damageFraction": "0.15 = 15%"},
@@ -149,7 +163,7 @@ def test_model_cards_explain_ambiguous_engine_magnitudes_without_invented_units(
             assert phrase in meaning, (capability, name, card)
     guide = runtime_authoring_prompt_field_guide()["paramNotation"]
     assert "per projectile update" in guide and "extraUpdates" in guide
-    for fn, name in (("configure_spawn", "speedPxPerTick"), ("move_boomerang", "returnSpeed"),
+    for fn, name in (("configure_spawn", "speedPxPerUpdate"), ("move_boomerang", "returnSpeed"),
                      ("move_returning_glaive", "returnSpeed"), ("move_accelerate", "maxSpeed"),
                      ("move_flail_tether", "returnSpeed"), ("move_yoyo_hover", "returnSpeed")):
         assert cards[fn][name]["units"] == "pixels/projectile update"
@@ -165,14 +179,14 @@ def test_numeric_prompt_distinguishes_authored_damage_update_rate_and_raw_cooldo
     drift = cards["move_drift"]
     assert "per projectile update" in drift["does"]
     assert "1 + extraUpdates" in drift["params"]["velocityRetention"]["meaning"]
-    assert "10" in cards["configure_spawn"]["params"]["speedPxPerTick"]["meaning"]
-    cooldown = cards["set_projectile_collision"]["params"]["localNpcHitCooldownTicks"]
+    assert "10" in cards["configure_spawn"]["params"]["speedPxPerUpdate"]["meaning"]
+    cooldown = cards["set_projectile_collision"]["params"]["localNpcHitCooldownEngineUnits"]
     assert cooldown["min"] == -1 and cooldown["max"] == 600
     for phrase in ("unscaled", "-1", "once", "0..600", "owner", "extraUpdates"):
         assert phrase in cooldown["meaning"]
     guide = runtime_authoring_prompt_field_guide()["paramNotation"]
     assert "world ticks" in guide and "1 + extraUpdates" in guide
-    assert "localNpcHitCooldownTicks" in guide
+    assert "localNpcHitCooldownEngineUnits" in guide
 
 
 def test_numeric_prompt_keeps_distinct_factors_percentages_and_sentinels():
@@ -185,12 +199,12 @@ def test_numeric_prompt_keeps_distinct_factors_percentages_and_sentinels():
                    "tileId/wallId=-1", "Default receives no Generic", "Summon crit is nonstandard"):
         assert phrase in guide
     for phrase in ("+2", "+1 HP/s", "-2", "-1 HP/s"):
-        assert phrase in cards["configure_accessory"]["lifeRegenHalfHpPerSecond"]["meaning"]
+        assert phrase in cards["configure_accessory"]["lifeRegenHpPerSecond"]["meaning"]
     assert "not mana/s" in cards["configure_accessory"]["manaRegenBonusPoints"]["meaning"]
     assert "independent" in cards["configure_item_stats"]["useAnimationTicks"]["meaning"]
     assert "interval" in cards["configure_item_stats"]["useTimeTicks"]["meaning"]
     assert "1 unchanged" in cards["set_projectile_hitbox"]["hitboxScale"]["meaning"]
-    assert "1 unchanged" in cards["move_accelerate"]["acceleration"]["meaning"]
+    assert "1 unchanged" in cards["move_accelerate"]["speedMultiplierPerUpdate"]["meaning"]
     assert "1 unchanged" in cards["charge_then_release"]["powerMultiplier"]["meaning"]
 
 

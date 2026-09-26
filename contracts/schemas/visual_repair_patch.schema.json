@@ -38,6 +38,7 @@
                 "type": "string"
               },
               "scale": {
+                "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
                 "maximum": 4.0,
                 "minimum": 0.25,
                 "type": "number"
@@ -86,6 +87,7 @@
                 "type": "string"
               },
               "scale": {
+                "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
                 "maximum": 4.0,
                 "minimum": 0.25,
                 "type": "number"
@@ -117,6 +119,7 @@
                 "type": "string"
               },
               "scale": {
+                "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
                 "maximum": 4.0,
                 "minimum": 0.25,
                 "type": "number"
@@ -148,6 +151,7 @@
                 "type": "string"
               },
               "scale": {
+                "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
                 "maximum": 4.0,
                 "minimum": 0.25,
                 "type": "number"
@@ -182,6 +186,7 @@
       "type": "array"
     },
     "entityIndicesDelete": {
+      "description": "Zero-based array index values into the previous entities array to delete; structural positions, not time or size.",
       "items": {
         "maximum": 6,
         "minimum": 0,
@@ -196,6 +201,7 @@
           "additionalProperties": false,
           "properties": {
             "preferredCanvasSize": {
+              "description": "Requested square equipment-overlay PNG target canvas, in pixels per side; not the on-player display size (the draw layer fits the texture separately).",
               "enum": [
                 32,
                 48,
@@ -240,6 +246,7 @@
           "minProperties": 1,
           "properties": {
             "inventoryScale": {
+              "description": "Engine-units multiplicative inventory sprite draw factor after the texture/frame fit; 1 is neutral, not a pixel size.",
               "maximum": 4.0,
               "minimum": 0.25,
               "type": "number"
@@ -259,6 +266,7 @@
               "type": "array"
             },
             "preferredCanvasSize": {
+              "description": "Requested square item PNG target canvas, in pixels per side; not the item's world size or a guaranteed on-screen display size.",
               "enum": [
                 24,
                 32,
@@ -285,6 +293,7 @@
               "type": "string"
             },
             "worldScale": {
+              "description": "Engine-units multiplicative dropped world-item sprite draw factor applied to the engine-provided draw scale; 1 is neutral, not a pixel size or inventory scale.",
               "maximum": 4.0,
               "minimum": 0.25,
               "type": "number"

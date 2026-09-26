@@ -119,7 +119,7 @@ def _resource_use_placeable() -> dict[str, Any]:
         "id": "restore_life",
         "fn": "restore_resources_on_use",
         "target": "item",
-        "params": {"healLife": 50, "healMana": 0, "potionSickness": True},
+        "params": {"healLife": 50, "healMana": 0, "usesPotionRules": True},
     })
     stats = next(row for row in program["calls"] if row["id"] == "item_stats")
     stats["params"].update({"damage": 0, "knockback": 0.0, "maxStack": 99})

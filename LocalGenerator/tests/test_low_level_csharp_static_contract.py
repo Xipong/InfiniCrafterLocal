@@ -63,9 +63,10 @@ def test_generated_parent_reference_is_hydrated_or_rejected_at_combine_wire_boun
 
 
 def test_release_timing_prompt_tokens_match_held_sprite_projection() -> None:
-    release = CAPABILITY_REGISTRY["configure_item_use"].params["releaseTiming"]
+    release = CAPABILITY_REGISTRY["configure_item_use"].params["heldSpriteVisibilityHint"]
     assert release.enum == ("", "immediate", "on_release", "after_charge")
-    assert "presentation" in release.description
+    assert "Held-sprite visibility" in release.description
+    assert "not gameplay release timing" in release.description
     draw = _read("Common/Players/GeneratedHeldItemDrawLayer.cs")
     assert 'releaseTiming != "immediate"' in draw
     assert 'releaseTiming == "instant"' not in draw

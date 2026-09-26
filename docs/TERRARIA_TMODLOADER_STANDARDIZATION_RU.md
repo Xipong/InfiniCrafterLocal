@@ -24,7 +24,7 @@
 
 - `Item.ammo` через canonical `AmmoID` category;
 - `Item.shoot` через authored vanilla `ProjectileID` в точном диапазоне stable `1..1021`;
-- ammo-вклад `Item.shootSpeed` через отдельный `shootSpeedPxPerTick`, не связанный со скоростью direct runtime entity;
+- ammo-вклад `Item.shootSpeed` через отдельный `shootSpeedContributionPxPerUpdate`, не связанный со скоростью direct runtime entity;
 - `Item.notAmmo` как отдельный authored флаг;
 - обязательный `consumable=true`.
 
@@ -32,7 +32,7 @@
 
 ### Healing/potion semantics
 
-`healLife` и `healMana` больше не означают автоматически potion sickness. `restore_resources_on_use.potionSickness` напрямую задаёт `Item.potion`: healing food, аксессуарный эффект или другая нестандартная лечилка могут восстанавливать ресурсы без скрытого potion-флага.
+`healLife` и `healMana` больше не означают автоматически potion sickness. `restore_resources_on_use.usesPotionRules` напрямую задаёт `Item.potion`: healing food, аксессуарный эффект или другая нестандартная лечилка могут восстанавливать ресурсы без скрытого potion-флага.
 
 ### Projectile semantics
 

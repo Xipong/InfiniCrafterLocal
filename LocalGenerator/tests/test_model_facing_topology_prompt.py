@@ -88,7 +88,7 @@ def test_serialized_use_hold_charge_and_equipment_are_distinct(monkeypatch) -> N
     guide = payload["runtimeProgramInvariants"]["structureCheck"]["useAndEquipment"]
     assert all(term in guide for term in (
         "useTimeTicks", "useAnimationTicks", "autoReuse", "channel", "hold",
-        "charge_then_release", "chargeTicks", "releaseTiming", "presentation hint",
+        "charge_then_release", "chargeTicks", "heldSpriteVisibilityHint", "presentation hint",
         "equipped", "matching head/body/legs", "head only",
     ))
     assert "no second binding" in payload["runtimeProgramInvariants"]["bindingUseTransactions"]["bodyDamageLane"]

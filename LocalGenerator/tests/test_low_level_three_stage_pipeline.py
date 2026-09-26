@@ -1512,7 +1512,7 @@ def test_gameplay_scope_freezes_old_values_and_accepts_missing_parameters_in_bro
     current = build_runtime_fixture("workbench_blade")
     item_use = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_use")
     old_hand_pose = item_use["params"]["handPose"]
-    old_release_timing = item_use["params"]["releaseTiming"]
+    old_release_timing = item_use["params"]["heldSpriteVisibilityHint"]
     old_target = item_use["target"]
     del item_use["params"]["useStyle"]
     del item_use["params"]["autoReuse"]
@@ -1540,7 +1540,7 @@ def test_gameplay_scope_freezes_old_values_and_accepts_missing_parameters_in_bro
     repaired_use = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "item_use")
     assert repaired_use["params"]["useStyle"] == "shoot"
     assert repaired_use["params"]["autoReuse"] is True
-    assert repaired_use["params"]["releaseTiming"] == "immediate"
+    assert repaired_use["params"]["heldSpriteVisibilityHint"] == "immediate"
     assert repaired_use["params"]["handPose"] == old_hand_pose
     assert repaired_use["target"] == old_target
     repaired_stats = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "item_stats")
@@ -1581,7 +1581,7 @@ def test_gameplay_repair_prompt_omits_full_valid_nodes_but_keeps_read_only_index
     failure = {"stage": "strict_author_validation", "errors": validate_runtime_program(current)["errors"]}
     fixed = copy.deepcopy(item_use)
     fixed["params"]["useStyle"] = "shoot"
-    fixed["params"]["releaseTiming"] = "on_release"
+    fixed["params"]["heldSpriteVisibilityHint"] = "on_release"
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [fixed]
     patch["realizationReplacement"] = copy.deepcopy(current["realization"])
@@ -1692,7 +1692,7 @@ def test_gameplay_scope_allows_only_exact_missing_dependency_creation() -> None:
             "useStyle": "shoot", "autoReuse": True, "useTurn": True,
             "hideUseGraphic": False, "disableMeleeHitbox": True, "channel": False,
             "holdoutOffsetX": 0, "holdoutOffsetY": 0,
-            "handPose": "one_handed", "releaseTiming": "immediate",
+            "handPose": "one_handed", "heldSpriteVisibilityHint": "immediate",
         },
     }]
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
@@ -2866,12 +2866,12 @@ def test_gameplay_scope_rejects_param_delete_for_new_call() -> None:
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
                 "handPose": "one_handed",
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
             },
         }
     ]
     patch["callParamKeysDelete"] = [
-        {"callId": "repair_item_use", "key": "releaseTiming"}
+        {"callId": "repair_item_use", "key": "heldSpriteVisibilityHint"}
     ]
 
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
@@ -2946,7 +2946,7 @@ def test_gameplay_required_scalar_does_not_open_entity_creation_or_whole_node_re
     item_use = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "item_use")
     old_hand_pose = item_use["params"]["handPose"]
     del item_use["params"]["useStyle"]
-    del item_use["params"]["releaseTiming"]
+    del item_use["params"]["heldSpriteVisibilityHint"]
     report = validate_runtime_program(current)
     scope = build_runtime_repair_scope(current, report["errors"])
     assert not scope["create"]["entities"]["allowed"]
@@ -2956,7 +2956,7 @@ def test_gameplay_required_scalar_does_not_open_entity_creation_or_whole_node_re
     candidate = copy.deepcopy(item_use)
     candidate["params"]["useStyle"] = "shoot"
     candidate["params"]["autoReuse"] = True  # existing valid required value stays unchanged
-    candidate["params"]["releaseTiming"] = "on_release"  # absent optional field is outside exact repair scope
+    candidate["params"]["heldSpriteVisibilityHint"] = "on_release"  # absent optional field is outside exact repair scope
     candidate["params"]["handPose"] = "two_handed"  # old valid value remains frozen
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [candidate]
@@ -2965,10 +2965,10 @@ def test_gameplay_required_scalar_does_not_open_entity_creation_or_whole_node_re
     repaired_use = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "item_use")
     assert validate_runtime_program(repaired)["ok"]
     assert repaired_use["params"]["autoReuse"] is True
-    assert "releaseTiming" not in repaired_use["params"]
+    assert "heldSpriteVisibilityHint" not in repaired_use["params"]
     assert repaired_use["params"]["handPose"] == old_hand_pose
     assert any(row["path"].endswith("params.handPose") for row in audit["ignoredChanges"])
-    assert any(row["path"].endswith("params.releaseTiming") and row["reason"] == "addition_not_permitted" for row in audit["ignoredChanges"])
+    assert any(row["path"].endswith("params.heldSpriteVisibilityHint") and row["reason"] == "addition_not_permitted" for row in audit["ignoredChanges"])
 
 
 def test_gameplay_dependency_blocker_prefers_existing_exact_parameter() -> None:

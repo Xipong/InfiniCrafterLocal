@@ -687,11 +687,13 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
     })
 
     def stat(wire: str, meaning: str, low: float, high: float, units: str, *,
-             percent: bool = False, integer: bool = False) -> ParamSpec:
+             percent: bool = False, integer: bool = False, wire_multiplier: int = 1,
+             multiple_of: float | None = None) -> ParamSpec:
         safety = legacy_safety.get(wire)
         return _p("integer" if integer else "number", meaning, required=False,
                   minimum=low, maximum=high, units=units, semantic_type=units,
                   wire_name=wire, wire_divisor=100 if percent else 1,
+                  wire_multiplier=wire_multiplier, multiple_of=multiple_of,
                   runtime_minimum=safety[0] if safety else None,
                   runtime_maximum=safety[1] if safety else None,
                   neutral=0, execution_phase=phase)
@@ -700,8 +702,8 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         "defensePoints": stat("defense", "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment", 0 if armor else -50, 200, "defense_points", integer=True),
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
-        "lifeRegenHalfHpPerSecond": stat("lifeRegen", "Add Terraria lifeRegen units: +2 contributes +1 HP/s, -2 contributes -1 HP/s before other effects; 0 adds nothing", -100, 200, "half_hp_per_second", integer=True),
-        "manaRegenBonusPoints": stat("manaRegen", "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s", -100, 200, "mana_regen_bonus_points", integer=True),
+        "lifeRegenHpPerSecond": stat("lifeRegen", "Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing", -50, 100, "HP/s", wire_multiplier=2, multiple_of=0.5),
+        "manaRegenBonusPoints": stat("manaRegen", "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s", -100, 200, "engine units: manaRegenBonus points", integer=True),
         "moveSpeedBonusPercent": stat("movementSpeed", "Add percent/100 to Player.moveSpeed", -90, 300, "additive_percent", percent=True),
         "maxRunSpeedBonusPxPerTick": stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"),
         "jumpSpeedBonusPxPerTick": stat("jumpSpeed", "Add to Player.jumpSpeedBoost (positive raises jump speed)", -5, 20, "pixels_per_tick"),
@@ -712,12 +714,12 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         "sentrySlotsBonus": stat("sentrySlots", "Add sentry slots", 0, 20, "slots", integer=True),
         "manaCostReductionPercentagePoints": stat("manaCostReduction", "Subtract percent/100 from Player.manaCost factor, floored at 0.1", 0, 90, "percentage_points", percent=True),
         "ammoSaveChancePercent": stat("ammoSaveChance", "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)", 0, 99, "probability_percent", percent=True),
-        "aggroPoints": stat("aggro", "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius", -1000, 1000, "aggro_points", integer=True),
+        "aggroPoints": stat("aggro", "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius", -1000, 1000, "engine units: aggro points", integer=True),
         "damageReductionPercentagePoints": stat("endurance", "Add percent/100 to Player.endurance damage reduction", 0, 75, "percentage_points", percent=True),
         "genericArmorPenetrationPoints": stat("armorPenetration", "Add flat armor penetration points to DamageClass.Generic; not damage percent", 0, 100, "armor_points"),
         "whipRangeBonusPercent": stat("whipRange", "Add percent/100 to Player.whipRangeMultiplier", -90, 300, "additive_percent", percent=True),
         "taggedSummonSourceDamageBonusPercent": stat("summonTagDamage", "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip", 0, 300, "source_damage_percent", percent=True),
-        "lightStrength": stat("lightStrength", "Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive", 0, 1.5, "light_intensity"),
+        "lightStrength": stat("lightStrength", "Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive", 0, 1.5, "engine units: RGB coefficient"),
         "lightColor": _p("string", "Explicit equipped light color", required=False, enum=_COLOR,
                          wire_name="lightColorName", neutral="", execution_phase=phase),
     }
@@ -732,7 +734,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         set_phase = "ModItem.UpdateArmorSet; exact setKey on head, body and legs"
         set_effects = (
             "genericCritChancePercentagePoints",
-            "moveSpeedBonusPercent", "lifeRegenHalfHpPerSecond", "manaRegenBonusPoints",
+            "moveSpeedBonusPercent", "lifeRegenHpPerSecond", "manaRegenBonusPoints",
             "minionSlotsBonus", "sentrySlotsBonus", "manaCostReductionPercentagePoints",
             "ammoSaveChancePercent", "aggroPoints", "damageReductionPercentagePoints",
             "genericArmorPenetrationPoints",
@@ -762,14 +764,14 @@ _CAPS: list[CapabilitySpec] = [
         {
             "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Base item damage", minimum=0, maximum=2000),
-            "knockback": _p("number", "Item.knockBack engine strength, not pixels or damage", minimum=0, maximum=20),
+            "knockback": _p("number", "Item.knockBack engine strength, not pixels or damage", minimum=0, maximum=20, units="engine units: Item.knockBack"),
             "useTimeTicks": _p("integer", "Terraria use/reuse interval (60 ticks/s), not the animation length", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
             "useAnimationTicks": _p("integer", "Duration of one use animation, independent of useTimeTicks; differing values can allow multiple uses during one animation, not necessarily one projectile per click", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
-            "manaCost": _p("integer", "Mana consumed per use", minimum=0, maximum=500),
-            "rarity": _p("integer", "Exact loaded Item.rare ID (built-in normal rarities are 0..11); copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
+            "manaCost": _p("integer", "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent", minimum=0, maximum=500),
+            "rarity": _p("integer", "Exact loaded Item.rare ID; copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
             "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper", wire_name="value"),
             "maxStack": _p("integer", "Maximum stack", minimum=1, maximum=9999),
-            "craftYield": _p("integer", "Items granted by one craft", minimum=1, maximum=9999),
+            "craftYield": _p("integer", "Requested items per craft; actual granted stack is capped by maxStack", minimum=1, maximum=9999),
             "widthPx": _p("integer", "Inventory/world hitbox width", minimum=8, maximum=256, units="pixels", wire_name="width"),
             "heightPx": _p("integer", "Inventory/world hitbox height", minimum=8, maximum=256, units="pixels", wire_name="height"),
             "scale": _p("number", "Item display scale multiplier (1 unchanged)", minimum=0.25, maximum=4, wire_name="itemScale"),
@@ -796,7 +798,7 @@ _CAPS: list[CapabilitySpec] = [
             "holdoutOffsetX": _p("integer", "Held draw offset X", minimum=-96, maximum=96, units="pixels"),
             "holdoutOffsetY": _p("integer", "Held draw offset Y", minimum=-96, maximum=96, units="pixels"),
             "handPose": _p("string", "Exact renderer hint", required=False, enum=("", "one_handed", "two_handed", "overhead", "forward")),
-            "releaseTiming": _p("string", "Held-item presentation lifetime hint; immediate hides the held sprite, on_release/after_charge keep it while use is active", required=False, enum=("", "immediate", "on_release", "after_charge")),
+            "heldSpriteVisibilityHint": _p("string", "Held-sprite visibility only, not gameplay release timing; immediate hides it, empty/on_release/after_charge keep it while use is active; latter tokens do not schedule different releases", required=False, enum=("", "immediate", "on_release", "after_charge"), wire_name="releaseTiming"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem/UseStyle",
@@ -828,7 +830,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "ammoCategory": _p("string", "Exact stable Terraria AmmoID category", enum=VANILLA_AMMO_CATEGORY_TOKENS),
             "projectileId": _p("integer", "Exact vanilla ProjectileID fired when this ammo is consumed; do not guess", minimum=1, maximum=VANILLA_PROJECTILE_TYPE_ID_MAX, wire_name="ammoProjectileId"),
-            "shootSpeedPxPerTick": _p("number", "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo", minimum=-20, maximum=80, units="pixels_per_tick", wire_name="ammoShootSpeedPxPerTick"),
+            "shootSpeedContributionPxPerUpdate": _p("number", "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo", minimum=-20, maximum=80, units="pixels/projectile update contribution", wire_name="ammoShootSpeedPxPerTick"),
             "notAmmo": _p("boolean", "Exact Item.notAmmo flag for special ammo-slot/tooltip behaviour"),
         },
         py=_COMPILER_OWNER,
@@ -846,7 +848,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "healLife": _p("integer", "Life restored", minimum=0, maximum=500),
             "healMana": _p("integer", "Mana restored", minimum=0, maximum=500),
-            "potionSickness": _p("boolean", "Set exact Terraria Item.potion flag; false allows non-potion healing items", wire_name="potion"),
+            "usesPotionRules": _p("boolean", "Set Terraria Item.potion rules including Quick Heal eligibility and potion-sickness use gating; not a duration; false allows non-potion healing", wire_name="potion"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -879,13 +881,13 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "durationTicks": _p("integer", "Duration", minimum=1, maximum=21600, units="ticks"),
-            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4),
-            "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength"),
+            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor"),
+            "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable Terraria spelunker-style ore highlighting; not a radius", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False),
-            "movementSpeed": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2),
-            "jumpBoost": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8),
-            "manaRegen": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120),
+            "moveSpeedBonusFactor": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor"),
+            "jumpSpeedBonusPxPerTick": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick"),
+            "manaRegenBonusPoints": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points"),
             "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2),
         },
         py=_COMPILER_OWNER,
@@ -904,7 +906,7 @@ _CAPS: list[CapabilitySpec] = [
             "pickPower": _p("integer", "Terraria Item.pick tooltip power percent", minimum=0, maximum=1000),
             "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5),
             "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent", minimum=0, maximum=1000),
-            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.1, maximum=4),
+            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -953,7 +955,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "strength": _p("number", "Client light RGB coefficient multiplying selected color (not a tile radius)", minimum=0.01, maximum=1.5, wire_name="holdLightStrength"),
+            "strength": _p("number", "Client light RGB coefficient multiplying selected color (not a tile radius)", minimum=0.01, maximum=1.5, wire_name="holdLightStrength", units="engine units: RGB coefficient"),
             "color": _p("string", "Canonical light color", enum=_COLOR, wire_name="holdLightColorName"),
         },
         py=_COMPILER_OWNER,
@@ -972,7 +974,7 @@ _CAPS: list[CapabilitySpec] = [
             "mode": _p("string", "Mobility executor", enum=("recall_home", "blink_to_cursor"), wire_name="mobilityMode"),
             "rangeTiles": _p("integer", "Maximum blink range", minimum=0, maximum=120, units="tiles", wire_name="mobilityRangeTiles"),
             "cooldownTicks": _p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks"),
-            "safeTileOnly": _p("boolean", "Require safe destination", wire_name="mobilitySafeTileOnly"),
+            "safeTileOnly": _p("boolean", "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; ignored for recall_home; not a general hazard check", wire_name="mobilitySafeTileOnly"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UseItem/InfiniCraftPlayer.Mobility.cs",
@@ -1034,7 +1036,7 @@ _CAPS: list[CapabilitySpec] = [
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
         {
-            "speedPxPerTick": _p("number", "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick", minimum=0, maximum=80, units="pixels/projectile update"),
+            "speedPxPerUpdate": _p("number", "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick", minimum=0, maximum=80, units="pixels/projectile update", wire_name="speedPxPerTick"),
             "count": _p("integer", "Default root binding spawn count per activation; event actions and target_and_fire select their own counts", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
@@ -1055,7 +1057,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Projectile base damage", minimum=0, maximum=2000),
-            "knockback": _p("number", "Projectile.knockBack engine strength, not pixels or damage", minimum=0, maximum=20),
+            "knockback": _p("number", "Projectile.knockBack engine strength, not pixels or damage", minimum=0, maximum=20, units="engine units: Projectile.knockBack"),
             "ownerHitCheck": _p("boolean", "Require owner line/held hit check"),
         },
         py=_COMPILER_OWNER,
@@ -1105,7 +1107,7 @@ _CAPS: list[CapabilitySpec] = [
             "pierce": _p("integer", "Terraria Projectile.penetrate count; -1 means infinite", minimum=-1, maximum=100),
             "extraUpdates": _p("integer", "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)", minimum=0, maximum=5),
             "npcImmunityMode": _p("string", "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers", enum=("owner", "local")),
-            "localNpcHitCooldownTicks": _p("integer", "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds", minimum=-1, maximum=600, units="engine cooldown units"),
+            "localNpcHitCooldownEngineUnits": _p("integer", "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds", minimum=-1, maximum=600, units="engine units: local NPC cooldown counts", wire_name="localNpcHitCooldownTicks"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults/OnTileCollide",
@@ -1145,13 +1147,13 @@ _CAPS.extend([
     _movement("move_straight", "Keep initial velocity.", 0, provenance="existing movement code 0"),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
-        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
+        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
     }, provenance="existing movement code 1"),
     _movement("move_gravity_arc", "Apply downward velocity acceleration per projectile update.", 2, {
-        "gravityPerTick": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="pixels/update per projectile update"),
+        "gravityVelocityPerUpdate": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick"),
     }, provenance="existing movement code 2"),
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
-        "velocityRetention": _p("number", "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05),
+        "velocityRetention": _p("number", "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
     }, provenance="existing movement code 3"),
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
         "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
@@ -1161,34 +1163,34 @@ _CAPS.extend([
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 5"),
     _movement("move_bounce", "Use per-update gravity and authored tile bounces.", 6, {
-        "gravityPerTick": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="pixels/update per projectile update"),
+        "gravityVelocityPerUpdate": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick"),
     }, provenance="existing movement code 6"),
     _movement("move_sine_homing", "Combine sinusoidal drift with bounded homing.", 7, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
-        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
-        "waveAmplitude": _p("number", "Raw lateral velocity coefficient: sin(age×0.18) × waveAmplitude × 0.03 before velocity direction normalization; not displacement pixels", minimum=0, maximum=64, units="engine lateral velocity coefficient"),
+        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
+        "waveVelocityCoefficient": _p("number", "Raw lateral velocity coefficient: sin(age×0.18) × waveVelocityCoefficient × 0.03 before velocity direction normalization; not displacement pixels", minimum=0, maximum=64, units="engine units: lateral velocity coefficient", wire_name="waveAmplitude"),
     }, provenance="existing movement code 7"),
     _movement("move_phase", "Phase-drift with explicit tile collision still controlled separately.", 8, {
-        "phaseStrength": _p("number", "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians; not collision phasing", minimum=0, maximum=1),
+        "phaseStrength": _p("number", "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians AND alpha = int(80×strength); not collision phasing", minimum=0, maximum=1, units="engine units: coupled rotation/alpha coefficient"),
     }, provenance="existing movement code 8"),
     _movement("move_accelerate", "Multiply speed up to an explicit cap.", 9, {
-        "acceleration": _p("number", "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged", minimum=1.0, maximum=1.2),
+        "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged", minimum=1.0, maximum=1.2, wire_name="acceleration", units="engine units: velocity multiplier per update"),
         "maxSpeed": _p("number", "Speed cap", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 9"),
     _movement("move_spiral", "Rotate velocity by an authored angle per projectile update.", 10, {
-        "turnRadiansPerTick": _p("number", "Angular velocity turn per projectile update", minimum=-0.5, maximum=0.5, units="radians/update"),
+        "turnRadiansPerUpdate": _p("number", "Angular velocity turn per projectile update", minimum=-0.5, maximum=0.5, units="radians/update", wire_name="turnRadiansPerTick"),
     }, provenance="existing movement code 10"),
     _movement("move_vortex_orb", "Run the existing vortex-orb controller.", 11, {
-        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4),
+        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 11"),
     _movement("move_blackhole_pull", "Run the existing black-hole pull controller.", 12, {
-        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4),
+        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 12"),
     _movement("move_proximity_missile", "Home; proximity inside proximityRadiusPx triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.", 13, {
         "rangeTiles": _p("number", "Detection/search radius", minimum=1, maximum=120, units="tiles"),
-        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1),
+        "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
         "proximityRadiusPx": _p("integer", "Trigger radius", minimum=4, maximum=512, units="pixels"),
     }, provenance="existing movement code 13"),
     _movement("move_returning_glaive", "Fly, spin and return to the owner.", 14, {
@@ -1196,7 +1198,7 @@ _CAPS.extend([
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 14"),
     _movement("move_expanding_wave", "Expand the entity while preserving authored collision/damage.", 15, {
-        "scalePerTick": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5),
+        "scaleGrowthPerUpdate": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5, wire_name="scalePerTick", units="engine units: scale increment per update"),
         "maxScale": _p("number", "Projectile.scale cap (not a pixel radius)", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
     _movement("move_flail_tether", "Tether to owner, fly out and return; only movement/owner controller.", 16, {
@@ -1241,7 +1243,7 @@ _CAPS.extend([
         ("owner_attached_projectile", "free_projectile"),
         {
             "chargeTicks": _p("integer", "Full charge duration", minimum=1, maximum=600, units="ticks"),
-            "powerMultiplier": _p("number", "Full-charge damage/knockback multiplier; 1 unchanged", minimum=1, maximum=4),
+            "powerMultiplier": _p("number", "Full-charge damage/knockback and release velocity multiplier; partial charge interpolates from 1; 1 unchanged", minimum=1, maximum=4),
         },
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController",
@@ -1258,7 +1260,7 @@ _CAPS.extend([
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
             "rangeTiles": _p("number", "Soft target range: previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
-            "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1),
+            "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1, units="engine units: distance-score discount"),
         },
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController",
@@ -1367,7 +1369,7 @@ _CAPS.extend([
         {
             "event": _p("string", "Source event", enum=("on_hit", "periodic", "on_expire")),
             "mode": _p("string", "Pull direction", enum=("target_to_owner", "target_to_entity", "owner_to_target")),
-            "strength": _p("number", "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement", minimum=0.01, maximum=4),
+            "strength": _p("number", "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement", minimum=0.01, maximum=4, units="engine units: velocity impulse coefficient per event"),
             "radiusTiles": _p("number", "NPC search radius only with no directTarget; ignored for owner_to_target", minimum=1, maximum=60, units="tiles"),
             "periodTicks": _p("integer", "Required for periodic event", required=False, minimum=6, maximum=3600, units="ticks"),
         },
@@ -1387,7 +1389,7 @@ _CAPS.extend([
         {
             "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
             "damageFraction": _p("number", "Fraction of damageDone healed (0.15 = 15%), capped by maxHeal; not a whole-number percent", minimum=0.001, maximum=1),
-            "maxHeal": _p("integer", "Per-event heal cap", minimum=1, maximum=200),
+            "maxHeal": _p("integer", "Per-event heal cap", minimum=1, maximum=200, units="HP"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1406,7 +1408,7 @@ _CAPS.extend([
             "event": _p("string", "Source event", enum=("on_hit", "on_tile_collision", "on_expire")),
             "rangeTiles": _p("integer", "Maximum movement range", minimum=1, maximum=120, units="tiles"),
             "cooldownTicks": _p("integer", "Shared owner mobility cooldown", minimum=0, maximum=3600, units="ticks"),
-            "safeTileOnly": _p("boolean", "Require safe destination"),
+            "safeTileOnly": _p("boolean", "Check destination bounds, solid-tile overlap and nearby lava; false skips these checks; not a general hazard check"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1422,7 +1424,7 @@ _CAPS.extend([
         "entity_utility",
         PROJECTILE_ENTITY_KINDS,
         {
-            "strength": _p("number", "Client light RGB coefficient multiplying selected color (not a tile radius)", minimum=0.01, maximum=1.5),
+            "strength": _p("number", "Client light RGB coefficient multiplying selected color (not a tile radius)", minimum=0.01, maximum=1.5, units="engine units: RGB coefficient"),
             "color": _p("string", "Canonical light color", enum=_COLOR),
         },
         py=_COMPILER_OWNER,
@@ -1753,7 +1755,7 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
             for damage_class in EQUIPMENT_DAMAGE_CLASSES
         )
     if cap.name == "configure_spawn":
-        return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{name}" for name in cap.params]])
+        return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items()]])
     if cap.name == "set_projectile_damage":
         return tuple(["runtimeProgram.entities[].damage.enabled", *[f"runtimeProgram.entities[].damage.{name}" for name in cap.params]])
     if cap.name == "set_projectile_lifetime":
@@ -1761,9 +1763,9 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
     if cap.name == "set_projectile_hitbox":
         return tuple(f"runtimeProgram.entities[].hitbox.{name}" for name in cap.params)
     if cap.name == "set_projectile_collision":
-        return tuple(f"runtimeProgram.entities[].collision.{name}" for name in cap.params)
+        return tuple(f"runtimeProgram.entities[].collision.{spec.wire_name or name}" for name, spec in cap.params.items())
     if cap.category == "movement":
-        return tuple(["runtimeProgram.entities[].movement.name", "runtimeProgram.entities[].movement.code", *[f"runtimeProgram.entities[].movement.params.{name}" for name in cap.params]])
+        return tuple(["runtimeProgram.entities[].movement.name", "runtimeProgram.entities[].movement.code", *[f"runtimeProgram.entities[].movement.params.{spec.wire_name or name}" for name, spec in cap.params.items()]])
     if cap.name in {"channel_beam", "charge_then_release"}:
         return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in cap.params]])
     if cap.name == "target_and_fire":
@@ -2142,7 +2144,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "Suffix units: Ticks=ticks (60/s), Tiles=tiles (16 px), Px=pixels, Radians=radians. "
             "Projectile movement/velocity is per projectile update (1 + extraUpdates updates per world tick); "
             "authored durations and event intervals "
-            "ending Ticks remain world ticks, except raw localNpcHitCooldownTicks (see card). "
+            "ending Ticks remain world ticks; localNpcHitCooldownEngineUnits is raw (see card). "
             "Percent/percentage-point/chance cards use percent-scale values (15 means 15%, not 0.15): "
             "bonusPercent=15 adds +0.15 to a damage modifier; CritChancePercentagePoints=15 adds "
             "15 raw crit-chance points; manaCostReductionPercentagePoints=15 subtracts 0.15 from "
@@ -2153,7 +2155,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "may override inheritance. By contrast damageMultiplier=1 multiplies authored base by 1 "
             "(AoE/chain floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
             "lerps velocity per update. Neutral examples (not inserted defaults): velocityRetention=1, "
-            "acceleration=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
+            "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
             "has no fan; pierce=-1 is infinite and tileId/wallId=-1 disables placement. "
             "Use each card's own bounds/units; no universal zero neutral."
         ),

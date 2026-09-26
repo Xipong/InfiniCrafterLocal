@@ -27,6 +27,24 @@ def _fixture() -> dict[str, Any]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def _project_historical_call_names(document: dict[str, Any]) -> dict[str, Any]:
+    # Test-only identity projection of this captured pre-rename panel. Preserve
+    # the archived provider bytes and all values; do not accept aliases in Author.
+    projected = copy.deepcopy(document)
+    renames = {
+        "configure_item_use": ("releaseTiming", "heldSpriteVisibilityHint"),
+        "configure_spawn": ("speedPxPerTick", "speedPxPerUpdate"),
+        "set_projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits"),
+    }
+    calls = projected.get("runtimeProgram", {}).get("calls", []) + projected.get("callsUpsert", [])
+    for call in calls:
+        pair = renames.get(call.get("fn"))
+        if pair and pair[0] in call.get("params", {}):
+            assert pair[1] not in call["params"]
+            call["params"][pair[1]] = call["params"].pop(pair[0])
+    return projected
+
+
 def _codes(report: dict[str, Any]) -> set[str]:
     return {str(row.get("code") or "") for row in report.get("errors") or []}
 
@@ -48,8 +66,8 @@ def test_captured_live20_repair_boundaries_close_offline() -> None:
     _assert_no_tooltip_field(fixture)
 
     for case, replay in fixture["gameplayApplyCases"].items():
-        initial = copy.deepcopy(replay["initialAuthor"])
-        historical_patch = copy.deepcopy(replay["repairPatch"])
+        initial = _project_historical_call_names(replay["initialAuthor"])
+        historical_patch = _project_historical_call_names(replay["repairPatch"])
         old_axe: int | None = None
         if case == "obsidian_pickaxe":
             # The archived model response used the earlier internal Item.axe
@@ -79,7 +97,7 @@ def test_captured_live20_repair_boundaries_close_offline() -> None:
             assert compile_runtime_program(repaired)["gameplay"]["axePower"] == old_axe
 
     for case, replay in fixture["gameplayDiagnosticCases"].items():
-        initial = replay["initialAuthor"]
+        initial = _project_historical_call_names(replay["initialAuthor"])
         report = validate_runtime_program(initial)
         assert _codes(report) == set(replay["expectedInitialCodes"]), case
         scope = build_runtime_repair_scope(initial, report["errors"])

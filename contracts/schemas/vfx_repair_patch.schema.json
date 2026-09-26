@@ -6,6 +6,7 @@
     "effectMagnitude": {
       "anyOf": [
         {
+          "description": "Engine units: Retained presentation metadata; currently no renderer consumer. Not a physical intensity or budget multiplier.",
           "maximum": 1.0,
           "minimum": 0.0,
           "type": "number"
@@ -21,6 +22,7 @@
           "additionalProperties": false,
           "properties": {
             "chaos": {
+              "description": "Engine units: Retained motif metadata; currently no renderer consumer. Not a probability.",
               "maximum": 1.0,
               "minimum": 0.0,
               "type": "number"
@@ -41,6 +43,7 @@
               "type": "string"
             },
             "rhythm": {
+              "description": "Engine units: Retained motif metadata; currently no renderer consumer. Not beats per minute or a time unit.",
               "maximum": 3.0,
               "minimum": 0.2,
               "type": "number"
@@ -97,6 +100,7 @@
         "additionalProperties": false,
         "properties": {
           "alpha": {
+            "description": "Engine units: Renderer-specific opacity/volume coefficient: projectile sprite/primitive draw color multiplied by alpha; impactSprite fades from alpha over its lifetime; sound volume clamp(alpha, 0.05, 1). Projectile and item dust color paths do not use slot alpha; not universal opacity.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
@@ -131,6 +135,7 @@
             "type": "string"
           },
           "budgetWeight": {
+            "description": "Engine units: Retained weighting metadata; currently no renderer consumer. Does not multiply an enforced particle/draw budget.",
             "maximum": 4.0,
             "minimum": 0.1,
             "type": "number"
@@ -149,11 +154,13 @@
             "type": "string"
           },
           "density": {
+            "description": "Engine units: Renderer-specific count/cadence coefficient, not particles per world tick: projectile periodic repeatEvery=0 uses clamp(14-round(8*density), 4, 18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density), 2, 10), item dust count clamp(1+round(7*density), 1, 8), subject to client scaling and budget.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
           },
           "duration": {
+            "description": "impactSprite lifetime in world ticks only; detached sprite fades linearly with elapsed world ticks and is removed at duration. Other renderer kinds do not consume duration.",
             "maximum": 120,
             "minimum": 3,
             "type": "integer"
@@ -193,11 +200,13 @@
             "type": "string"
           },
           "fadeIn": {
+            "description": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
             "maximum": 0.8,
             "minimum": 0.0,
             "type": "number"
           },
           "fadeOut": {
+            "description": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction; impactSprite has its own fixed linear fade.",
             "maximum": 0.8,
             "minimum": 0.0,
             "type": "number"
@@ -207,6 +216,7 @@
             "type": "string"
           },
           "jitter": {
+            "description": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
             "maximum": 1.5,
             "minimum": 0.0,
             "type": "number"
@@ -271,21 +281,25 @@
             "type": "string"
           },
           "repeatEvery": {
+            "description": "Periodic cadence in world ticks only; 0 means automatic, not zero ticks: projectile periodic uses clamp(14-round(8*density), 4, 18), item periodic uses 10. Positive values use projectile state ticks or item global update ticks with slot-seed phase; event paths ignore repeatEvery.",
             "maximum": 120,
             "minimum": 0,
             "type": "integer"
           },
           "scale": {
+            "description": "Engine units: Renderer-specific coefficient (1 is nominal): sprite trail draw scale = max(0.05, projectile.scale * scale); primitive thickness max(1, 2*scale), beam length max(20, 48*scale), cross radius max(4, 9*scale); light strength clamp(0.22*scale, 0.04, 1.2) on projectile or clamp(0.2*scale, 0.04, 1.2) on item, then client multiplier; dust size clamp(scale, 0.2, 3); impactSprite draw scale further clamped. Not a universal size in pixels.",
             "maximum": 5.0,
             "minimum": 0.15,
             "type": "number"
           },
           "signatureWeight": {
+            "description": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
           },
           "spread": {
+            "description": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
             "maximum": 2.0,
             "minimum": 0.0,
             "type": "number"
@@ -299,6 +313,7 @@
             "type": "string"
           },
           "startTick": {
+            "description": "Projectile periodic only: initial gate on per-projectile state world tick (one increment per distinct GameUpdateCount); 0 means no initial gate. Item periodic and event paths ignore startTick.",
             "maximum": 120,
             "minimum": 0,
             "type": "integer"
@@ -315,6 +330,7 @@
             "type": "string"
           },
           "visualCost": {
+            "description": "Engine units: Retained cost metadata; currently no renderer consumer. Not draw calls or an enforced budget fraction.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"

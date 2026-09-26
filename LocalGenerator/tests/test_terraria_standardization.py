@@ -47,10 +47,10 @@ def test_damage_class_prompt_explains_choices_without_engine_documentation() -> 
 def test_binding_use_policy_and_ammo_are_distinct_terraria_owners() -> None:
     ammo = CAPABILITY_REGISTRY["configure_vanilla_ammo_item"]
     assert "configure_consumption" not in CAPABILITY_REGISTRY
-    assert tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedPxPerTick", "notAmmo")
+    assert tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedContributionPxPerUpdate", "notAmmo")
     assert ammo.params["ammoCategory"].enum == VANILLA_AMMO_CATEGORY_TOKENS
-    assert ammo.params["shootSpeedPxPerTick"].minimum == -20
-    assert ammo.params["shootSpeedPxPerTick"].maximum == 80
+    assert ammo.params["shootSpeedContributionPxPerUpdate"].minimum == -20
+    assert ammo.params["shootSpeedContributionPxPerUpdate"].maximum == 80
     assert not ammo.requirements
 
 
@@ -63,10 +63,10 @@ def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -
         "pierce",
         "extraUpdates",
         "npcImmunityMode",
-        "localNpcHitCooldownTicks",
+        "localNpcHitCooldownEngineUnits",
     )
     assert collision.params["npcImmunityMode"].enum == ("owner", "local")
-    assert collision.params["localNpcHitCooldownTicks"].minimum == -1
+    assert collision.params["localNpcHitCooldownEngineUnits"].minimum == -1
 
 
 def test_lowery_is_generated_and_declares_custom_runtime_boundary() -> None:
@@ -80,7 +80,7 @@ def test_lowery_is_generated_and_declares_custom_runtime_boundary() -> None:
 
 def test_healing_does_not_infer_potion_sickness() -> None:
     restore = CAPABILITY_REGISTRY["restore_resources_on_use"]
-    assert tuple(restore.params) == ("healLife", "healMana", "potionSickness")
+    assert tuple(restore.params) == ("healLife", "healMana", "usesPotionRules")
     apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
     assert "item.potion = enabled && Gameplay.Potion;" in apply
     assert "item.potion = Gameplay.HealLife > 0" not in apply

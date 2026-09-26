@@ -45,9 +45,12 @@ def render() -> str:
             if low > spec.to_wire(spec.minimum) or high < spec.to_wire(spec.maximum):
                 raise ValueError(f"runtime envelope narrows Author: {capability}.{name}")
             member = wire[0].upper() + wire[1:]
+            # Author decimals can lower to an integer DTO (e.g. HP/s × 2).
+            # Select C# overloads from the declared wire projection, not Author kind.
+            wire_integer = spec.kind == "integer" or spec.wire_multiplier != 1
             rows.append(f"        a.{member} = Math.Clamp(a.{member}, "
-                        f"{_literal(low, integer=spec.kind == 'integer')}, "
-                        f"{_literal(high, integer=spec.kind == 'integer')});")
+                        f"{_literal(low, integer=wire_integer)}, "
+                        f"{_literal(high, integer=wire_integer)});")
         group = capability.removeprefix("configure_")
         class_bonus = CAPABILITY_REGISTRY["add_equipment_damage_bonus"]
         bonus = class_bonus.params["bonusPercent"]

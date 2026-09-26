@@ -29,12 +29,12 @@ _ITEM_BASE_USE = {
     "useStyle": "shoot", "autoReuse": False, "useTurn": True,
     "hideUseGraphic": False, "disableMeleeHitbox": True, "channel": False,
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
-    "handPose": "one_handed", "releaseTiming": "immediate",
+    "handPose": "one_handed", "heldSpriteVisibilityHint": "immediate",
 }
-_SPAWN = {"speedPxPerTick": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin"}
+_SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin"}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
 _HITBOX = {"widthPx": 16, "heightPx": 16, "drawScale": 1.0, "hitboxScale": 1.0}
-_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownTicks": 10}
+_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10}
 
 
 def _value(spec: ParamSpec, name: str) -> Any:
@@ -60,11 +60,11 @@ def _params(fn: str) -> dict[str, Any]:
         "configure_item_stats": deepcopy(_ITEM_BASE_STATS),
         "configure_item_use": deepcopy(_ITEM_BASE_USE),
         "configure_vanilla_ammo_item": {"ammoCategory": "arrow", "projectileId": 1, "notAmmo": False},
-        "restore_resources_on_use": {"healLife": 20, "healMana": 0, "potionSickness": False},
+        "restore_resources_on_use": {"healLife": 20, "healMana": 0, "usesPotionRules": False},
         "apply_generated_buff_on_use": {
             "durationTicks": 60, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
-            "lightColor": "white", "oreSenseEnabled": False, "movementSpeed": 0.0,
-            "jumpBoost": 0.0, "manaRegen": 0, "lifeRegenHpPerSecond": 0,
+            "lightColor": "white", "oreSenseEnabled": False, "moveSpeedBonusFactor": 0.0,
+            "jumpSpeedBonusPxPerTick": 0.0, "manaRegenBonusPoints": 0, "lifeRegenHpPerSecond": 0,
         },
         "configure_placeable": {"tileId": 4, "wallId": -1, "placeStyle": 0},
         "require_use_condition": {"mode": "grounded"},
@@ -169,7 +169,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             item_use = deepcopy(_ITEM_BASE_USE)
             if fn in {"channel_beam", "charge_then_release"}:
                 item_use["channel"] = True
-                item_use["releaseTiming"] = "on_release"
+                item_use["heldSpriteVisibilityHint"] = "on_release"
             calls.append(_call("item_use", "configure_item_use", "item", item_use))
         if fn == "target_and_fire":
             kind = "stationary_projectile"

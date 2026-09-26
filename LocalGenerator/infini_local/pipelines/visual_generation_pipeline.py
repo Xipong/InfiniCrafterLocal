@@ -43,6 +43,30 @@ VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v1
 _ALLOWED_ASSET_MODES = set(VISUAL_ASSET_MODES)
 _VISUAL_STATIC_PREFIX_KEYS = ("task", "assetModeCatalog", "rules")
 
+# Canonical model-facing units for the unchanged Visual wire. Repair reuses the
+# same item, overlay and entity schema builders as the ordinary Director.
+_ITEM_CANVAS_DESCRIPTION = (
+    "Requested square item PNG target canvas, in pixels per side; not the item's world size "
+    "or a guaranteed on-screen display size."
+)
+_OVERLAY_CANVAS_DESCRIPTION = (
+    "Requested square equipment-overlay PNG target canvas, in pixels per side; "
+    "not the on-player display size (the draw layer fits the texture separately)."
+)
+_INVENTORY_SCALE_DESCRIPTION = (
+    "Engine-units multiplicative inventory sprite draw factor after the texture/frame fit; "
+    "1 is neutral, not a pixel size."
+)
+_WORLD_SCALE_DESCRIPTION = (
+    "Engine-units multiplicative dropped world-item sprite draw factor applied to the "
+    "engine-provided draw scale; 1 is neutral, not a pixel size or inventory scale."
+)
+_ENTITY_SCALE_DESCRIPTION = (
+    "Engine-units multiplicative per-entity visual factor; 1 is neutral. "
+    "Not the collision hitbox size or item.worldScale: projectile draw scale multiplies "
+    "hitbox.drawScale separately. no_asset entities may have no visible sprite."
+)
+
 
 @dataclass(frozen=True)
 class MalformedVisualDirectorOutput:
@@ -96,9 +120,9 @@ def _visual_item_schema() -> dict[str, Any]:
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
             "palette": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 48}, "minItems": 1, "maxItems": 8},
-            "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128]},
-            "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0},
-            "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0},
+            "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION},
+            "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _INVENTORY_SCALE_DESCRIPTION},
+            "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _WORLD_SCALE_DESCRIPTION},
         },
         "required": ["prompt", "negativePrompt", "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "inventoryScale", "worldScale"],
     }
@@ -112,7 +136,7 @@ def _visual_equip_overlay_schema() -> dict[str, Any]:
             "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
-            "preferredCanvasSize": {"type": "integer", "enum": [32, 48, 64, 96]},
+            "preferredCanvasSize": {"type": "integer", "enum": [32, 48, 64, 96], "description": _OVERLAY_CANVAS_DESCRIPTION},
         },
         "required": ["prompt", "silhouette", "visualIdentity", "preferredCanvasSize"],
     }
@@ -120,7 +144,7 @@ def _visual_equip_overlay_schema() -> dict[str, Any]:
 
 def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
     entity_id = {"type": "string", "enum": entity_ids}
-    scale = {"type": "number", "minimum": 0.25, "maximum": 4.0}
+    scale = {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _ENTITY_SCALE_DESCRIPTION}
     authored = {
         "type": "object",
         "additionalProperties": False,
@@ -178,7 +202,7 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
         "itemPatch": {"anyOf": [partial_item, {"type": "null"}]},
         "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids), "maxItems": len(entity_ids)},
         "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
-        "entityIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
+        "entityIndicesDelete": {"type": "array", "description": "Zero-based array index values into the previous entities array to delete; structural positions, not time or size.", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
         "animationPlan": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 1200}, {"type": "null"}]},
         "note": {"type": "string", "minLength": 1, "maxLength": 500},
     }

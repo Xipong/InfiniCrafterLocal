@@ -45,13 +45,13 @@ def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False
         "holdoutOffsetX": 0,
         "holdoutOffsetY": 0,
         "handPose": "one_handed",
-        "releaseTiming": "on_release" if channel else "immediate",
+        "heldSpriteVisibilityHint": "on_release" if channel else "immediate",
     }
 
 
 def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "item_use_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
     return {
-        "speedPxPerTick": speed,
+        "speedPxPerUpdate": speed,
         "count": count,
         "spreadRadians": 0.0,
         "offsetPx": int(offset),
@@ -81,7 +81,7 @@ def _collision(*, tile: bool = True, bounce: int = 0, pierce: int = 1) -> dict[s
         "pierce": pierce,
         "extraUpdates": 0,
         "npcImmunityMode": "local",
-        "localNpcHitCooldownTicks": 10,
+        "localNpcHitCooldownEngineUnits": 10,
     }
 
 
@@ -251,7 +251,7 @@ def _workbench_blade() -> dict[str, Any]:
 def _umbrella_grenade() -> dict[str, Any]:
     b = _Builder("umbrella_grenade", name="Umbrella Grenadier", mechanic="Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.", damage=34)
     b.projectile("umbrella_guard", "owner_attached_projectile", speed=0, lifetime=32, damage=18, tile=False, pierce=-1, movement="move_yoyo_hover", movement_params={"rangeTiles": 2, "returnSpeed": 12}, width=54, height=28)
-    b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"gravityPerTick": 0.25}, width=18, height=18)
+    b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"gravityVelocityPerUpdate": 0.25}, width=18, height=18)
     b.bind("primary_guard", "primary_use", "spawn_entity", "umbrella_guard")
     b.bind("alternate_grenade", "alternate_use", "spawn_entity", "grenade_weight")
     b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"event": "on_expire", "radiusPx": 112, "damageMultiplier": 1.4})

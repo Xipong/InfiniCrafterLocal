@@ -85,14 +85,14 @@ def report() -> dict[str, Any]:
         and "public int StackCost { get; set; }" in dto,
         "stack cost must have one owner in binding.usePolicy and no capability/global shadow owner",
     )
-    check("ammo_item_is_explicit", ammo is not None and tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedPxPerTick", "notAmmo"), "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo")
+    check("ammo_item_is_explicit", ammo is not None and tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedContributionPxPerUpdate", "notAmmo"), "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo")
     check("ammo_item_consumption_independent", bool(ammo and not any(r.capability == "configure_consumption" for r in ammo.requirements)), "ammo stack handling must remain independent from direct-use input costs")
     check("ammo_projection_direct", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory" in apply and "item.shoot = Gameplay.AmmoProjectileId" in apply and "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick" in apply and "item.notAmmo = Gameplay.NotAmmo" in apply, "ammo fields must project directly without category-derived projectile or runtime-entity speed leakage")
-    check("ammo_shoot_speed_range_parity", ammo is not None and ammo.params["shootSpeedPxPerTick"].minimum == -20 and ammo.params["shootSpeedPxPerTick"].maximum == 80 and "Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);" in normalize, "ammo Item.shootSpeed contribution must preserve the exact Author range at the C# boundary")
+    check("ammo_shoot_speed_range_parity", ammo is not None and ammo.params["shootSpeedContributionPxPerUpdate"].minimum == -20 and ammo.params["shootSpeedContributionPxPerUpdate"].maximum == 80 and "Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);" in normalize, "ammo Item.shootSpeed contribution must preserve the exact Author range at the C# boundary")
     check("vanilla_projectile_id_guard", "Gameplay.AmmoProjectileId >= ProjectileID.Count" in normalize and VANILLA_PROJECTILE_TYPE_ID_MAX == 1021, "vanilla ammo projectile must be authored in stable 1..1021 and validated against ProjectileID.Count")
     check("no_plural_gameplay_ammo_alias", '"arrows"' not in apply + vocabulary and '"bullets"' not in apply + vocabulary, "plural ammo aliases are not canonical gameplay tokens")
     restore = CAPABILITY_REGISTRY.get("restore_resources_on_use")
-    check("potion_flag_is_authored", restore is not None and tuple(restore.params) == ("healLife", "healMana", "potionSickness") and "item.potion = enabled && Gameplay.Potion;" in apply and "item.potion = Gameplay.HealLife > 0" not in apply, "Item.potion must be authored, binding-scoped, and not inferred from healing")
+    check("potion_flag_is_authored", restore is not None and tuple(restore.params) == ("healLife", "healMana", "usesPotionRules") and "item.potion = enabled && Gameplay.Potion;" in apply and "item.potion = Gameplay.HealLife > 0" not in apply, "Item.potion must be authored, binding-scoped, and not inferred from healing")
     check("generated_parent_preserves_exact_item_semantics", all(x in parent_cards for x in ('"potion"', '"usePolicy"', '"ammoCategory"', '"ammoProjectileId"', '"ammoShootSpeedPxPerTick"', '"notAmmo"')) and 'row.get("action")' not in parent_cards and 'row.get("target")' not in parent_cards, "generated parents must preserve exact binding usePolicy/ammo/potion facts for the next Author")
     check("loaded_rarity_guard", "RarityLoader.RarityCount" in normalize and "ClampInt(Gameplay.Rarity" not in normalize, "rarity must be an actually loaded ID, not silently clamped")
     check("loaded_buff_guards", "BuffLoader.BuffCount" in normalize and "BuffLoader.BuffCount" in dto and "extra buff row cannot be null" in normalize and "requires positive duration" in normalize and "buff.BuffCode > 0" in generated_item, "buff IDs and durations must fail closed against the loaded content registry")
@@ -118,7 +118,7 @@ def report() -> dict[str, Any]:
     check("item_value_semantics", bool(stats and "Item.value" in stats.params["valueCopper"].description and "resale" in stats.params["valueCopper"].description), "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value")
 
     collision = CAPABILITY_REGISTRY.get("set_projectile_collision")
-    expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "pierce", "extraUpdates", "npcImmunityMode", "localNpcHitCooldownTicks")
+    expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "pierce", "extraUpdates", "npcImmunityMode", "localNpcHitCooldownEngineUnits")
     check("explicit_projectile_collision", collision is not None and tuple(collision.params) == expected_collision, "projectile liquid and immunity semantics must be explicit")
     check("vanilla_projectile_defaults", "Projectile.ignoreWater = false;" in projectile and "Projectile.netImportant = false;" in projectile, "proxy SetDefaults must retain Terraria defaults until authored entity configuration")
     check("explicit_liquid_projection", "Projectile.ignoreWater = entity.Collision.IgnoreWater;" in projectile, "ignoreWater must come from authored collision data")

@@ -61,6 +61,27 @@ _LAYERS = ("BeforeProjectiles", "AfterProjectiles")
 _PARTICLES = ("dust", "pl:glow", "pl:shard", "pl:smoke", "pl:spark", "none")
 _BUDGET_CLASSES = ("tiny", "small", "normal", "large", "signature")
 
+# These are annotations on the existing wire fields, not a conversion or an
+# alternative semantic contract. Repair reuses the ordinary field schemas.
+_VFX_NUMERIC_DESCRIPTIONS = {
+    "effectMagnitude": "Engine units: Retained presentation metadata; currently no renderer consumer. Not a physical intensity or budget multiplier.",
+    "rhythm": "Engine units: Retained motif metadata; currently no renderer consumer. Not beats per minute or a time unit.",
+    "chaos": "Engine units: Retained motif metadata; currently no renderer consumer. Not a probability.",
+    "scale": "Engine units: Renderer-specific coefficient (1 is nominal): sprite trail draw scale = max(0.05, projectile.scale * scale); primitive thickness max(1, 2*scale), beam length max(20, 48*scale), cross radius max(4, 9*scale); light strength clamp(0.22*scale, 0.04, 1.2) on projectile or clamp(0.2*scale, 0.04, 1.2) on item, then client multiplier; dust size clamp(scale, 0.2, 3); impactSprite draw scale further clamped. Not a universal size in pixels.",
+    "density": "Engine units: Renderer-specific count/cadence coefficient, not particles per world tick: projectile periodic repeatEvery=0 uses clamp(14-round(8*density), 4, 18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density), 2, 10), item dust count clamp(1+round(7*density), 1, 8), subject to client scaling and budget.",
+    "duration": "impactSprite lifetime in world ticks only; detached sprite fades linearly with elapsed world ticks and is removed at duration. Other renderer kinds do not consume duration.",
+    "alpha": "Engine units: Renderer-specific opacity/volume coefficient: projectile sprite/primitive draw color multiplied by alpha; impactSprite fades from alpha over its lifetime; sound volume clamp(alpha, 0.05, 1). Projectile and item dust color paths do not use slot alpha; not universal opacity.",
+    "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
+    "jitter": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
+    "fadeIn": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
+    "fadeOut": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction; impactSprite has its own fixed linear fade.",
+    "budgetWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Does not multiply an enforced particle/draw budget.",
+    "signatureWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
+    "visualCost": "Engine units: Retained cost metadata; currently no renderer consumer. Not draw calls or an enforced budget fraction.",
+    "startTick": "Projectile periodic only: initial gate on per-projectile state world tick (one increment per distinct GameUpdateCount); 0 means no initial gate. Item periodic and event paths ignore startTick.",
+    "repeatEvery": "Periodic cadence in world ticks only; 0 means automatic, not zero ticks: projectile periodic uses clamp(14-round(8*density), 4, 18), item periodic uses 10. Positive values use projectile state ticks or item global update ticks with slot-seed phase; event paths ignore repeatEvery.",
+}
+
 
 def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
     debug = data.setdefault("debug", {})
@@ -166,7 +187,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "visualCost", "startTick", "repeatEvery", "spritePrompt", "spriteNegativePrompt",
         ],
     }
-    return {
+    schema = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "schema": {"const": VFX_DIRECTOR_SCHEMA},
@@ -188,6 +209,14 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
         },
         "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slots"],
     }
+    properties = schema["properties"]
+    properties["effectMagnitude"]["description"] = _VFX_NUMERIC_DESCRIPTIONS["effectMagnitude"]
+    for field in ("rhythm", "chaos"):
+        properties["motif"]["properties"][field]["description"] = _VFX_NUMERIC_DESCRIPTIONS[field]
+    for field in slot["properties"]:
+        if field in _VFX_NUMERIC_DESCRIPTIONS:
+            slot["properties"][field]["description"] = _VFX_NUMERIC_DESCRIPTIONS[field]
+    return schema
 
 
 def _number(value: Any, low: float, high: float, path: str, errors: list[dict[str, Any]], *, integer: bool = False) -> float | int:

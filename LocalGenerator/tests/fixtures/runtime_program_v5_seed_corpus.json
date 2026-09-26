@@ -65,7 +65,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -79,7 +79,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 0,
+                "speedPxPerUpdate": 0,
                 "spreadRadians": 0.0
               },
               "target": "chained_door"
@@ -121,7 +121,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": -1,
                 "tileCollide": true
@@ -503,7 +503,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -968,7 +968,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -1345,7 +1345,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -1359,7 +1359,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 0,
+                "speedPxPerUpdate": 0,
                 "spreadRadians": 0.0
               },
               "target": "held_lantern_pike"
@@ -1401,7 +1401,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": -1,
                 "tileCollide": false
@@ -1434,7 +1434,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "ground_at_cursor",
-                "speedPxPerTick": 0,
+                "speedPxPerUpdate": 0,
                 "spreadRadians": 0.0
               },
               "target": "deployed_lantern"
@@ -1476,7 +1476,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": -1,
                 "tileCollide": true
@@ -1491,7 +1491,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 11,
+                "speedPxPerUpdate": 11,
                 "spreadRadians": 0.0
               },
               "target": "lantern_bolt"
@@ -1533,7 +1533,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": 1,
                 "tileCollide": true
@@ -2043,7 +2043,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -2057,7 +2057,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 12,
+                "speedPxPerUpdate": 12,
                 "spreadRadians": 0.0
               },
               "target": "tonic_flask"
@@ -2099,7 +2099,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": 2,
                 "tileCollide": true
@@ -2483,7 +2483,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -2497,7 +2497,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 0,
+                "speedPxPerUpdate": 0,
                 "spreadRadians": 0.0
               },
               "target": "shield_body"
@@ -2539,7 +2539,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": -1,
                 "tileCollide": false
@@ -2563,7 +2563,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 14,
+                "speedPxPerUpdate": 14,
                 "spreadRadians": 0.0
               },
               "target": "shield_disc"
@@ -2605,7 +2605,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": 3,
                 "tileCollide": true
@@ -3059,7 +3059,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -3073,7 +3073,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 0,
+                "speedPxPerUpdate": 0,
                 "spreadRadians": 0.0
               },
               "target": "umbrella_guard"
@@ -3115,7 +3115,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": -1,
                 "tileCollide": false
@@ -3139,7 +3139,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 9,
+                "speedPxPerUpdate": 9,
                 "spreadRadians": 0.0
               },
               "target": "grenade_weight"
@@ -3181,7 +3181,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": 1,
                 "tileCollide": true
@@ -3192,7 +3192,7 @@
               "fn": "move_gravity_arc",
               "id": "grenade_weight_motion",
               "params": {
-                "gravityPerTick": 0.25
+                "gravityVelocityPerUpdate": 0.25
               },
               "target": "grenade_weight"
             },
@@ -3637,7 +3637,7 @@
                 "hideUseGraphic": false,
                 "holdoutOffsetX": 0,
                 "holdoutOffsetY": 0,
-                "releaseTiming": "immediate",
+                "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
               },
@@ -3660,7 +3660,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 0,
+                "speedPxPerUpdate": 0,
                 "spreadRadians": 0.0
               },
               "target": "workbench_blade"
@@ -3702,7 +3702,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": -1,
                 "tileCollide": false
@@ -3726,7 +3726,7 @@
                 "count": 1,
                 "offsetPx": 0,
                 "placement": "item_use_origin",
-                "speedPxPerTick": 13,
+                "speedPxPerUpdate": 13,
                 "spreadRadians": 0.0
               },
               "target": "nail"
@@ -3768,7 +3768,7 @@
                 "bounceCount": 0,
                 "extraUpdates": 0,
                 "ignoreWater": false,
-                "localNpcHitCooldownTicks": 10,
+                "localNpcHitCooldownEngineUnits": 10,
                 "npcImmunityMode": "local",
                 "pierce": 1,
                 "tileCollide": true
