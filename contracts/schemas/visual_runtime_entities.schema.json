@@ -170,6 +170,17 @@
     "equipOverlay": {
       "additionalProperties": false,
       "properties": {
+        "accessoryMount": {
+          "description": "Optional accessory-only body-local badge anchor, using the existing overlay PNG, body pivot/rotation and 18px fit. chest=(0,-2), back=(-10,-4), waist=(0,10), shoulder=(8,-12) player pixels relative to center, X facing-mirrored and Y gravity-mirrored. orbit uses the existing accessory slot ring. Armor ignores this field. No atlas or gameplay change.",
+          "enum": [
+            "chest",
+            "back",
+            "waist",
+            "shoulder",
+            "orbit"
+          ],
+          "type": "string"
+        },
         "preferredCanvasSize": {
           "description": "Requested square equipment-overlay PNG target canvas, in pixels per side; not the on-player display size (the draw layer fits the texture separately).",
           "enum": [
@@ -207,6 +218,47 @@
     "item": {
       "additionalProperties": false,
       "properties": {
+        "effectColor": {
+          "description": "Optional exact runtime rendering color token shared by item, projectile and detached VFX. Independent of the rich descriptive palette used for sprite art; no hex or prose parsing. Omission preserves historical rendering behavior.",
+          "enum": [
+            "white",
+            "gray",
+            "brown",
+            "tan",
+            "red",
+            "orange",
+            "yellow",
+            "gold",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "black"
+          ],
+          "type": "string"
+        },
+        "grip": {
+          "additionalProperties": false,
+          "description": "Optional atomic hand pivot on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units. Replaces legacy grip and artistic forward offset, not authored HoldoutOffset.",
+          "properties": {
+            "normalizedX": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "normalizedY": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "normalizedX",
+            "normalizedY"
+          ],
+          "type": "object"
+        },
         "inventoryScale": {
           "description": "Engine-units multiplicative inventory sprite draw factor after the texture/frame fit; 1 is neutral, not a pixel size.",
           "maximum": 4.0,

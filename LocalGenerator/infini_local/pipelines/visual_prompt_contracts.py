@@ -6,18 +6,20 @@ This module knows visual roles and sprite constraints only. It never reads or
 infers a weapon family, attack shape, or gameplay topology from prose.
 """
 
+import json
 import re
 from typing import Any, Mapping
 
 from infini_local.pipelines import pipeline_visual_config as visual_config
-from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas
+from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha
 
 
 def asset_negative_prompt(role: str = "item") -> str:
-    role_name = str(role or "asset").replace("entity:", "runtime entity ")
+    role_name = str(role or "asset").removeprefix("runtime:").replace("entity:", "runtime entity ")
+    edge_negative = "" if sprite_uses_soft_alpha(role) else "blur, antialiasing, "
     return (
         f"scene, environment, character, enemy, UI, text, watermark, multiple unrelated objects, "
-        f"blur, antialiasing, photorealism; draw only the {role_name} sprite"
+        f"{edge_negative}photorealism; draw only the {role_name} sprite"
     )
 
 
@@ -71,21 +73,31 @@ def role_contract_prompt_clause(role: str, canvas: int) -> str:
         subject = "wearable equipment overlay"
         placement = "single centered wearable layer, isolated from any player body or inventory card"
     else:
-        subject = str(role).removeprefix("entity:").replace("_", " ")
+        subject = str(role).removeprefix("runtime:").removeprefix("entity:").replace("_", " ")
         placement = f"single centered {subject} sprite"
     canvas = final_sprite_canvas(canvas)
     background = f"solid {chroma_name()} key background" if uses_key_background() else "transparent background"
+    edges = "preserve authored soft effect edges" if sprite_uses_soft_alpha(role) else "crisp hard pixels"
     return (
-        f"{placement}, {canvas}x{canvas} pixel-art canvas, crisp hard pixels, "
+        f"{placement}, {canvas}x{canvas} pixel-art canvas, {edges}, "
         f"{background}, no scene, no text, no extra entities"
     )
 
 
 def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas: int) -> str:
-    del data
     authored = compact_visual_words(prompt, 1400)
     clause = role_contract_prompt_clause(role, canvas)
-    return compact_visual_words(f"{authored}. {clause}" if authored else clause, 1800)
+    text = compact_visual_words(f"{authored}. {clause}" if authored else clause, 1800)
+    visual = data.get("visual")
+    if role == "item" and isinstance(visual, Mapping) and "grip" in visual:
+        # The Visual stage validates this atomic object. Forward it literally;
+        # do not infer the contact point or truncate art to make room for metadata.
+        grip = json.dumps(visual["grip"], separators=(",", ":"), allow_nan=False)
+        text += (
+            f". Place the handle/hand-contact point at normalized final canvas coordinates {grip}; "
+            "upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips."
+        )
+    return text
 
 
 def effective_projectile_canvas(data: Mapping[str, Any]) -> int:

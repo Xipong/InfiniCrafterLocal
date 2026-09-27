@@ -90,6 +90,11 @@ def final_sprite_canvas(target_size: int) -> int:
     return size
 
 
+def sprite_uses_soft_alpha(role: str) -> bool:
+    """Exact processing roles only; entity identity never selects alpha policy."""
+    return str(role).strip().lower() in {"impact", "field", "effect", "runtime:field"}
+
+
 def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
     # Also used to measure high-resolution raw/master images. Final PNG bounds
     # belong to final_sprite_canvas, not to this dimension-relative geometry table.
@@ -163,7 +168,19 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptPoseWords": "single field effect only",
         },
     }
-    spec = dict(table.get(role, table["item"]))
+    # Runtime bodies retain their authored orientation. In particular do not route
+    # runtime:projectile through the legacy +X projectile contract/canonicalizer.
+    runtime_roles = {"held_body", "projectile", "deployed_entity", "helper", "child_projectile"}
+    if role.startswith("runtime:") and role.removeprefix("runtime:") in runtime_roles:
+        spec = dict(table["equip_overlay"])
+        spec.update(promptPoseWords="preserve the authored entity pose",
+                    promptFillWords="keep the complete entity inside the frame")
+    else:
+        table_role = "field" if role in {"runtime:field", "effect"} else role
+        spec = dict(table.get(table_role, table["item"]))
+    spec["alphaMode"] = "soft" if sprite_uses_soft_alpha(role) else "binary"
+    if sprite_uses_soft_alpha(role):
+        spec["coreAlphaThreshold"] = 1
     target_fill = max(0.40, min(0.98, float(spec["targetFill"])))
     margin = max(0, int(spec["marginPx"]))
     spec["role"] = role

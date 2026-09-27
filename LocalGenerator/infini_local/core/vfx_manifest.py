@@ -57,6 +57,25 @@ _RENDERER_REQUIREMENTS = {
     "soundCue": {"channel": "sound", "lane": "cue"},
     "impactSprite": {"textureRole": "impact"},
 }
+_RENDERER_SEMANTICS = {
+    "projectileAfterimage": "Periodic projectile: textured history samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
+    "spriteStampTrail": "Periodic projectile: spaced textured history stamps, same history consumer as projectileAfterimage. Projectile event: one captured body-pose snapshot; item emission: one directional texture stamp.",
+    "actorAfterimage": "Textured afterimages of the bound entity, not a copied player animation atlas. Periodic projectile uses history; projectile event freezes body pose; item emission is a directional texture stamp.",
+    "historyRibbon": "Connected center-history segments (20 world samples), fading toward the oldest point. Uses actual center history, not a relocated owner trajectory; on_spawn can start a live trail.",
+    "tipTrail": "Connected captured geometric tip history: center + forward * projectile.width * projectile.scale/2. Not an image-nose/PCA guess; on_spawn can start a live trail.",
+    "wavyStrip": "One animated sine wave: length 48*scale world px, amplitude 6*scale px, thickness max(1,2*scale); 8+round(16*density) segments.",
+    "beamLine": "Straight decorative segment, length max(20,48*scale) world px and thickness max(1,2*scale). It does not change beam collision range; runtime_geometry ChannelBeam body separately follows its exact collision segment.",
+    "fieldPulse": "Expanding fading ring: radius scale*(6+18*phase) world px, 12+round(20*density) segments, opacity multiplied by 1-phase.",
+    "orbitingMotes": "2+round(6*density) square motes, each 3*scale world px, orbiting radius 18*scale px. One revolution per procedural period.",
+    "ghostArc": "Rotating open 120-degree arc, radius 24*scale world px; 8+round(12*density) segments, fading from head to tail.",
+    "impactRing": "Expanding fading ring: radius scale*(4+28*phase) world px, 12+round(20*density) segments. Selected Terraria particles are independent and can accompany it.",
+    "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt and impact texture; no inventory/dust substitute.",
+    "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread rules. Does not spawn gameplay child entities.",
+    "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
+    "soundCue": "SoundID.Item1 at the resolved anchor; alpha controls volume. No sound-library/name classifier.",
+}
+
+
 _BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
 _TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
@@ -74,10 +93,10 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     "effectMagnitude": "Engine units: Retained presentation metadata; currently no renderer consumer. Not a physical intensity or budget multiplier.",
     "rhythm": "Engine units: Retained motif metadata; currently no renderer consumer. Not beats per minute or a time unit.",
     "chaos": "Engine units: Retained motif metadata; currently no renderer consumer. Not a probability.",
-    "scale": "Engine units: Renderer-specific coefficient (1 is nominal): sprite trail draw scale = max(0.05, projectile.scale * scale); primitive thickness max(1, 2*scale), beam length max(20, 48*scale), cross radius max(4, 9*scale); light strength clamp(0.22*scale, 0.04, 1.2) on projectile or clamp(0.2*scale, 0.04, 1.2) on item, then client multiplier; dust size clamp(scale, 0.2, 3); impactSprite draw scale further clamped. Not a universal size in pixels.",
-    "density": "Engine units: Renderer-specific count/cadence coefficient, not particles per world tick: projectile periodic repeatEvery=0 uses clamp(14-round(8*density), 4, 18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density), 2, 10), item dust count clamp(1+round(7*density), 1, 8), subject to client scaling and budget.",
-    "duration": "impactSprite lifetime in world ticks only; detached sprite fades linearly with elapsed world ticks and is removed at duration. Other renderer kinds do not consume duration.",
-    "alpha": "Engine units: Renderer-specific opacity/volume coefficient: projectile sprite/primitive draw color multiplied by alpha; impactSprite fades from alpha over its lifetime; sound volume clamp(alpha, 0.05, 1). Projectile and item dust color paths do not use slot alpha; not universal opacity.",
+    "scale": "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. Sprite trail scale=max(0.05, projectile.scale*scale); projectile event afterimage scale=clamp(projectile.scale,0.1,8)*scale; directional item/impact sprite scale clamps to 0.05..8. Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. Dust size clamp(scale,0.2,3). Not a universal pixel size.",
+    "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
+    "duration": "World ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade.",
+    "alpha": "Engine units: Draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity.",
     "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
     "jitter": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
     "fadeIn": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
@@ -85,8 +104,8 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     "budgetWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Does not multiply an enforced particle/draw budget.",
     "signatureWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
     "visualCost": "Engine units: Retained cost metadata; currently no renderer consumer. Not draw calls or an enforced budget fraction.",
-    "startTick": "Projectile periodic only: initial gate on per-projectile state world tick (one increment per distinct GameUpdateCount); 0 means no initial gate. Item periodic and event paths ignore startTick.",
-    "repeatEvery": "Periodic cadence in world ticks only; 0 means automatic, not zero ticks: projectile periodic uses clamp(14-round(8*density), 4, 18), item periodic uses 10. Positive values use projectile state ticks or item global update ticks with slot-seed phase; event paths ignore repeatEvery.",
+    "startTick": "Projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick.",
+    "repeatEvery": "World ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration.",
 }
 
 
@@ -125,6 +144,8 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "schema": VFX_DIRECTOR_SCHEMA,
         "rendererKind": list(_RENDERERS),
         "rendererRequirements": copy.deepcopy(_RENDERER_REQUIREMENTS),
+        "rendererSemantics": copy.deepcopy(_RENDERER_SEMANTICS),
+        "colorPolicy": "Explicit Visual effectColor is shared by item, projectile and detached VFX. Its absence preserves legacy color paths. Rich palette prose is not parsed into a color and motif does not override explicit effectColor.",
         "backend": list(_BACKENDS),
         "textureRole": list(_TEXTURE_ROLES),
         "particleRole": list(_TEXTURE_ROLES),
@@ -150,6 +171,16 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _impact_sprite_background_rule() -> str:
+    from infini_local.pipelines.sprite_contracts import sprite_background_positive_clause
+
+    return (
+        "The final impact PNG has a transparent background; describe the raw image "
+        + sprite_background_positive_clause()
+        + ". Local postprocess owns final alpha; do not confuse raw background with final transparency."
+    )
+
+
 def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     pairs = _allowed_pairs(data)
     entity_ids = sorted({row["entityId"] for row in pairs})
@@ -164,16 +195,16 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
                 "type": "string", "enum": list(_RENDERERS),
                 "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
             },
-            "backend": {"type": "string", "enum": list(_BACKENDS)},
+            "backend": {"type": "string", "enum": list(_BACKENDS), "description": "Retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient; this field does not select another runtime engine."},
             "textureRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
             "particleRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
-            "anchor": {"type": "string", "enum": list(_ANCHORS)},
+            "anchor": {"type": "string", "enum": list(_ANCHORS), "description": "Primitive/cue/event placement: self/field=bound entity center; owner=active owner center; tip/tipHistory=projectile geometric tip (item uses engine itemLocation); velocity=center with motion axis; hitPoint=captured event point, NPC center for item hit/crit. Item hitPoint without a captured point is silent. Projectile event anchors and sprite pose are frozen at emission and carried through the relay, including after source removal; unavailable owner is silent. History renderers use their named center/tip histories instead of relocating the path."},
             "channel": {"type": "string", "enum": list(_CHANNELS)},
             "lane": {"type": "string", "enum": list(_LANES)},
             "emissionMode": {"type": "string", "enum": list(_EMISSIONS)},
             "blend": {"type": "string", "enum": list(_BLENDS)},
             "layer": {"type": "string", "enum": list(_LAYERS)},
-            "particleSystemId": {"type": "string", "enum": list(_PARTICLES)},
+            "particleSystemId": {"type": "string", "enum": list(_PARTICLES), "description": "Exact Terraria dust selectors, not ParticleLibrary instances: dust=GemDiamond, pl:glow=TintableDustLighted, pl:shard=Glass, pl:smoke=Smoke, pl:spark=Electric. none suppresses particles, not independently selected primitive/sprite/light/sound rendering."},
             "scale": {"type": "number", "minimum": 0.15, "maximum": 5.0},
             "density": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "duration": {"type": "integer", "minimum": 3, "maximum": 120},
@@ -187,7 +218,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "visualCost": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "startTick": {"type": "integer", "minimum": 0, "maximum": 120},
             "repeatEvery": {"type": "integer", "minimum": 0, "maximum": 120},
-            "spritePrompt": {"type": "string", "maxLength": 1400},
+            "spritePrompt": {"type": "string", "maxLength": 1400, "description": _impact_sprite_background_rule()},
             "spriteNegativePrompt": {"type": "string", "maxLength": 700},
         },
         "required": [
@@ -423,10 +454,12 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         "rules": [
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
+            "Choose forms from runtimeSurface.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
             "Use only enum values and numeric ranges from runtimeSurface; each selected rendererKind also requires the exact companion fields in rendererRequirements (encoded in the slot schema).",
             "projectileAfterimage, spriteStampTrail, and actorAfterimage consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match. impactSprite instead consumes its dedicated impact texture.",
             "Sprite renderers require a non-none textureRole. Primitive and particle renderers do not consume a gameplay PNG.",
-            "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt must request one dedicated transparent impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
+            "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt describes one dedicated impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
+            _impact_sprite_background_rule(),
             "Slots may be empty when presentation should be restrained.",
             "Return only one JSON object matching outputSchema.",
         ],

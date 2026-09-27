@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.241
+# InfiniCrafterLocal v0.4.242
 
 InfiniCrafterLocal генерирует предмет Terraria из двух parent items. Gameplay Author за один LLM-вызов составляет bounded low-level `runtimeProgram`; Python проверяет и компилирует точные entities/components/events; C# tModLoader исполняет только typed v5 DTO.
 

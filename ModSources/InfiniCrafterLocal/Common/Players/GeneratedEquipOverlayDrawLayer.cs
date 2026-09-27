@@ -115,6 +115,17 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                     float angle = MathHelper.PiOver2 + accessoryOrdinal * MathHelper.TwoPi / Math.Max(1, accessoryCount);
                     offset = new Vector2(16f, 0f).RotatedBy(angle);
                     offset.Y *= grav;
+                    // One explicit token selects one body-local badge offset. No name,
+                    // category or image analysis chooses an anchor. Missing/orbit keeps
+                    // the historical ring placement and visibility/dye behavior.
+                    offset = entry.Data.Visual?.AccessoryMount switch
+                    {
+                        "chest" => new Vector2(0f, -2f * grav),
+                        "back" => new Vector2(-10f * player.direction, -4f * grav),
+                        "waist" => new Vector2(0f, 10f * grav),
+                        "shoulder" => new Vector2(8f * player.direction, -12f * grav),
+                        _ => offset,
+                    };
                     targetPixels = 18f;
                     int dyeIndex = entry.AccessoryIndex + 3;
                     shader = player.dye is not null && dyeIndex >= 0 && dyeIndex < player.dye.Length

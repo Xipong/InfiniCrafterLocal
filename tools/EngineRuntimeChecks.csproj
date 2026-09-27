@@ -20,11 +20,16 @@
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.ItemImpact.cs" />
     <Compile Include="EngineRuntimeChecks.HeldPresentation.cs" />
+    <Compile Include="EngineRuntimeChecks.PresentationMetadata.cs" />
     <Compile Include="EngineRuntimeChecks.ItemDraw.cs" />
     <Compile Include="EngineRuntimeChecks.SpriteAlpha.cs" />
     <Compile Include="EngineRuntimeChecks.EquipPresentation.cs" />
     <Compile Include="EngineRuntimeChecks.VfxEventConsistency.cs" />
     <Compile Include="EngineRuntimeChecks.VfxGeometry.cs" />
+    <Compile Include="EngineRuntimeChecks.VfxShapes.cs" />
+    <Compile Include="EngineRuntimeChecks.ItemVfxEvents.cs" />
+    <Compile Include="EngineRuntimeChecks.BodyGeometry.cs" />
+    <Compile Include="EngineRuntimeChecks.VfxPreview.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
     <Compile Include="EngineRuntimeChecks.Ammo.cs" />
     <Compile Include="EngineRuntimeChecks.Whip.cs" />

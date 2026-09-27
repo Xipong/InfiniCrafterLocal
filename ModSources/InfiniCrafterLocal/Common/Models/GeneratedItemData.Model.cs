@@ -396,8 +396,46 @@ public sealed class ArmorSpec
 // =============================================================================
 // NAV: ATTACK_SPEC_CONTRACT
 // =============================================================================
+public sealed class ItemGripSpec
+{
+    [JsonRequired]
+    public double NormalizedX { get; set; }
+    [JsonRequired]
+    public double NormalizedY { get; set; }
+
+    public void Validate()
+    {
+        if (!double.IsFinite(NormalizedX) || !double.IsFinite(NormalizedY)
+            || NormalizedX < 0 || NormalizedX > 1 || NormalizedY < 0 || NormalizedY > 1)
+            throw new System.IO.InvalidDataException("visual.grip requires finite normalizedX and normalizedY in [0,1]");
+    }
+}
+
 public sealed class VisualSpec
 {
+    private ItemGripSpec? grip;
+    private string? accessoryMount;
+    private string? effectColor;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EffectColor
+    {
+        get => effectColor;
+        set => effectColor = RuntimeColorPolicy.RequireRenderingToken(value);
+    }
+    // Omission keeps historical presentation; explicit null is not an authored choice.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ItemGripSpec? Grip
+    {
+        get => grip;
+        set => grip = value ?? throw new System.IO.InvalidDataException("visual.grip must be an object when present");
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AccessoryMount
+    {
+        get => accessoryMount;
+        set => accessoryMount = value is "chest" or "back" or "waist" or "shoulder" or "orbit"
+            ? value : throw new System.IO.InvalidDataException("visual.accessoryMount must be chest/back/waist/shoulder/orbit when present");
+    }
     public string ObjectType { get; set; } = "generic_item";
     public string Style { get; set; } = "terraria_item_sprite";
     public string[] RequiredAnchors { get; set; } = Array.Empty<string>();

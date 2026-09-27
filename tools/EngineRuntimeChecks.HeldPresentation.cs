@@ -140,6 +140,7 @@ internal static partial class EngineRuntimeChecks
                     data.RuntimeProgram.ItemUse.UseStyle = pose.Item1;
                     Check(pose.Item1 + " existing role", () => Equal(new Vector2(100 + pose.Item2, 200 + pose.Item3), Render(new Vector2(140, 260)).position, "role forward offset unchanged"));
                 }
+                ExplicitGripDraws(Render, data, player);
                 // Real vanilla Rapier use-style control supplies the itemRotation ->
                 // composite-arm conversion. Use its Full-stretch phase; no weapon art
                 // or animation style is chosen for generated items by this check.
@@ -211,6 +212,14 @@ internal static partial class EngineRuntimeChecks
                     Receive(new Vector2(invalid, 0));
                     Check("invalid remote location " + invalid, () => Equal(new Vector2(100, 200), Render(new Vector2(140, 260)).position, "invalid packet location uses valid drawInfo, not an invented grip"));
                 }
+                data.Visual.Grip = new ItemGripSpec { NormalizedX = 0.25, NormalizedY = 0.75 };
+                Receive(new Vector2(140, 260));
+                Equal(new Vector2(48, 10), Render(Vector2.Zero).origin, "decoded pose uses registry explicit grip");
+                var compact = GeneratedItemData.FromPlayerSaveJson(data.ToPlayerSaveJson())!;
+                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, compact);
+                player.inventory[0] = item;
+                Equal(new Vector2(48, 10), Render(Vector2.Zero).origin, "compact held save reference resolves registry grip");
+                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
                 Equal(true, ReferenceEquals(data, registry.TryGet(data.Id, out var resolved) ? resolved : null), "registry definition identity retained");
                 Equal(true, submitted > 0, "real FNA batches reached CPU/GPU boundary");
                 Console.WriteLine($"Held presentation geometry: {cases - failures.Count}/{cases} assertions; {submitted} real DrawData/FNA submissions");

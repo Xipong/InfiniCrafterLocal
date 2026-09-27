@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Terraria;
 using Terraria.ModLoader;
+using Terraria.GameContent;
 
 namespace InfiniCrafterLocal.Common.VFX;
 
@@ -25,9 +26,16 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
     {
         public string SourceKey { get; init; } = "";
         public string TexturePath { get; init; } = "";
+        public InfiniVfxRendererKind PrimitiveKind { get; init; }
+        public Vector2 Forward { get; init; }
+        public float Density { get; init; }
+        public float PhaseOffset { get; init; }
+        public int RepeatEvery { get; init; }
         public string Layer { get; init; } = "BeforeProjectiles";
         public Vector2 Center { get; init; }
         public float Rotation { get; init; }
+        public bool HasCapturedPose { get; init; }
+        public SpriteEffects Effects { get; init; }
         public float Scale { get; init; } = 1f;
         public float Alpha { get; init; } = 1f;
         public Color Color { get; init; } = Color.White;
@@ -79,7 +87,8 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
         float alpha,
         Color color,
         int duration,
-        int maxDrawCalls)
+        int maxDrawCalls,
+        InfiniVfxSpritePose? pose = null)
     {
         if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(texturePath))
             return;
@@ -93,11 +102,29 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
             Layer = layer == "AfterProjectiles" ? "AfterProjectiles" : "BeforeProjectiles",
             Center = center,
             Rotation = rotation,
-            Scale = Math.Clamp(scale, 0.05f, 8f),
+            // Captured body scale was clamped before the authored VFX multiplier.
+            Scale = pose.HasValue ? scale : Math.Clamp(scale, 0.05f, 8f),
+            HasCapturedPose = pose.HasValue,
+            Effects = pose?.Effects ?? SpriteEffects.None,
             Alpha = Math.Clamp(alpha, 0f, 1f),
             Color = color,
             StartUpdate = Main.GameUpdateCount,
             Duration = Math.Clamp(duration, 3, 120),
+            MaxDrawCalls = Math.Clamp(maxDrawCalls, 0, 512),
+        });
+    }
+
+    internal static void EnqueuePrimitive(string sourceKey, InfiniVfxRendererKind kind, string layer,
+        Vector2 center, Vector2 forward, float scale, float density, float phaseOffset,
+        int repeatEvery, int duration, Color color, int maxDrawCalls)
+    {
+        if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey)) return;
+        PruneExpired();
+        if (Emissions.Count >= MaxEmissions) Emissions.RemoveAt(0);
+        Emissions.Add(new DetachedEmission {
+            SourceKey = sourceKey, PrimitiveKind = kind, Layer = layer, Center = center, Forward = forward,
+            Scale = scale, Density = density, PhaseOffset = phaseOffset, RepeatEvery = repeatEvery,
+            Color = color, StartUpdate = Main.GameUpdateCount, Duration = Math.Clamp(duration, 3, 120),
             MaxDrawCalls = Math.Clamp(maxDrawCalls, 0, 512),
         });
     }
@@ -143,21 +170,37 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
         // layers therefore need separate batches with the same world transform.
         SpriteBatch batch = Main.spriteBatch;
         bool began = false;
+        void EnsureBegin()
+        {
+            if (began) return;
+            batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, Main.DefaultSamplerState,
+                DepthStencilState.None, Main.Rasterizer, null, Main.GameViewMatrix.TransformationMatrix);
+            began = true;
+        }
         try
         {
             foreach (DetachedEmission emission in Emissions)
             {
                 if (!string.Equals(emission.Layer, layer, StringComparison.Ordinal))
                     continue;
+                if (emission.PrimitiveKind != InfiniVfxRendererKind.None)
+                {
+                    float age = Main.GameUpdateCount - emission.StartUpdate;
+                    float turns = age / Math.Max(1, emission.RepeatEvery > 0 ? emission.RepeatEvery : emission.Duration) + emission.PhaseOffset;
+                    float phase = turns - MathF.Floor(turns);
+                    InfiniVfxRuntime.DrawPrimitive(TextureAssets.MagicPixel.Value, emission.PrimitiveKind,
+                        emission.Center - Main.screenPosition, emission.Forward, emission.Scale, emission.Density, phase,
+                        emission.Color * (1f - age / emission.Duration), () => {
+                            if (!SpendDraw(emission)) return false;
+                            EnsureBegin();
+                            return true;
+                        });
+                    continue;
+                }
                 Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(emission.TexturePath, out float localForwardRadians);
                 if (texture is null || !SpendDraw(emission))
                     continue;
-                if (!began)
-                {
-                    batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, Main.DefaultSamplerState,
-                        DepthStencilState.None, Main.Rasterizer, null, Main.GameViewMatrix.TransformationMatrix);
-                    began = true;
-                }
+                EnsureBegin();
                 float progress = Math.Clamp(
                     (Main.GameUpdateCount - emission.StartUpdate) / (float)Math.Max(1, emission.Duration),
                     0f,
@@ -167,10 +210,10 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
                     emission.Center - Main.screenPosition,
                     null,
                     emission.Color * (emission.Alpha * (1f - progress)),
-                    emission.Rotation - localForwardRadians,
+                    emission.Rotation - (emission.HasCapturedPose ? 0f : localForwardRadians),
                     new Vector2(texture.Width * 0.5f, texture.Height * 0.5f),
                     emission.Scale,
-                    SpriteEffects.None,
+                    emission.Effects,
                     0f);
             }
         }

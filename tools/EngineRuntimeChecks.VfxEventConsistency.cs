@@ -9,6 +9,132 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
+    // Actual packet encoder/receiver, registry lookup and detached consumer; no sockets/world loop.
+    private static byte[] EncodeProjectileVfxForCheck(GeneratedItemData data, Projectile projectile, string eventName, Vector2 eventPoint)
+    {
+        var type = typeof(InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile);
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
+        var payloadType = type.GetNestedType("VfxEventPayload", BindingFlags.NonPublic)!;
+        object payload = Activator.CreateInstance(payloadType, projectile.owner, projectile.identity, 123L,
+            data.Id, "probe", eventName, eventPoint, projectile.velocity,
+            InfiniVfxProjectileSnapshot.Capture(projectile, data, "probe"))!;
+        using var stream = new System.IO.MemoryStream();
+        using (var writer = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, true))
+            type.GetMethod("WriteVfxEventPayload", flags)!.Invoke(null, new[] { (object)writer, payload });
+        return stream.ToArray();
+    }
+
+    private static void ReceiveProjectileVfxForCheck(GeneratedItemData data, byte[] bytes)
+    {
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
+        var property = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
+        object? oldRegistry = property.GetValue(null);
+        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
+        using var registry = new InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService();
+        try
+        {
+            property.SetValue(null, registry);
+            ((System.Collections.IDictionary)registry.GetType().GetField("_byId", instance)!.GetValue(registry)!).Add(data.Id, data);
+            Terraria.Main.netMode = NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 0;
+            using var stream = new System.IO.MemoryStream(bytes);
+            using var reader = new System.IO.BinaryReader(stream);
+            InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile.HandleVfxEventSyncPacket(reader, 256);
+        }
+        finally { property.SetValue(null, oldRegistry); Terraria.Main.netMode = oldMode; Terraria.Main.myPlayer = oldLocal; }
+    }
+
+    private static void ProjectileEventSnapshotRelayPreservesAnchors()
+    {
+        WithLighting((config, lights) =>
+        {
+            var system = new InfiniDetachedVfxSystem();
+            var queue = (System.Collections.IList)typeof(InfiniDetachedVfxSystem).GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            var oldOwner = Terraria.Main.player[4];
+            var oldProjectiles = Terraria.Main.projectile;
+            try
+            {
+                var owner = Terraria.Main.player[4] = new Player { whoAmI = 4, active = true, Center = new Vector2(600, 700) };
+                var data = GeneratedItemData.Placeholder();
+                InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
+                var entity = new RuntimeEntitySpec { Id = "probe" }; entity.Movement.Code = 14;
+                data.RuntimeProgram.Entities = new[] { entity };
+                var slot = new VfxSlotSpec { Id = "relay", EntityId = "probe", Event = RuntimeEventKind.OnHit,
+                    RendererKind = "beamLine", ParticleSystemId = "none", Scale = 1f, Duration = 24 };
+                data.VfxManifest = new VfxManifestSpec { Slots = new[] { slot } };
+                foreach (string anchor in new[] { "self", "owner", "tip", "hitPoint", "field", "tipHistory", "velocity" })
+                {
+                    system.OnWorldUnload(); owner.active = true; owner.Center = new Vector2(600, 700); slot.Anchor = anchor;
+                    var projectile = new Projectile { owner = 4, identity = 11, width = 40, height = 20,
+                        Center = new Vector2(160, 140), velocity = Vector2.UnitX, rotation = 1.1f, scale = 1.7f, gfxOffY = 7f, spriteDirection = -1 };
+                    var state = new InfiniVfxState(); Vector2 hit = new(900, 1000);
+                    InfiniVfxRuntime.OnEvent(projectile, data, "probe", slot.Event, data.VfxManifest, ref state, hit);
+                    Equal(1, queue.Count, "local anchor witness");
+                    object local = queue[0]!;
+                    Vector2 expectedCenter = (Vector2)local.GetType().GetProperty("Center")!.GetValue(local)!;
+                    Vector2 expectedForward = (Vector2)local.GetType().GetProperty("Forward")!.GetValue(local)!;
+                    byte[] packet = EncodeProjectileVfxForCheck(data, projectile, slot.Event, hit);
+                    // The remote no longer has a projectile or active source owner.
+                    projectile.active = false; projectile.Center = Vector2.Zero; projectile.rotation = -2;
+                    owner.active = false; owner.Center = Vector2.Zero; Terraria.Main.projectile = Array.Empty<Projectile>();
+                    system.OnWorldUnload(); ReceiveProjectileVfxForCheck(data, packet);
+                    Equal(1, queue.Count, anchor + " relay survives removed projectile");
+                    object remote = queue[0]!;
+                    AssertVfxNear(expectedCenter, (Vector2)remote.GetType().GetProperty("Center")!.GetValue(remote)!, anchor + " relay uses captured anchor, not hit point");
+                    AssertVfxNear(expectedForward, (Vector2)remote.GetType().GetProperty("Forward")!.GetValue(remote)!, anchor + " relay uses captured body forward");
+                }
+                var source = new Projectile { owner = 4, Center = new Vector2(100, 200), velocity = Vector2.UnitX,
+                    width = 40, height = 20, scale = 1f, rotation = 0.8f, spriteDirection = -1, gfxOffY = 3f };
+                owner.active = true; owner.Center = new Vector2(600, 700);
+                slot.Anchor = "self";
+                byte[] valid = EncodeProjectileVfxForCheck(data, source, slot.Event, new Vector2(900, 1000));
+                Equal((byte)3, valid[0], "snapshot packet is version 3 without migration");
+                int start;
+                using (var stream = new System.IO.MemoryStream(valid))
+                using (var reader = new System.IO.BinaryReader(stream))
+                {
+                    reader.ReadByte(); reader.ReadInt32(); reader.ReadInt32(); reader.ReadInt64();
+                    reader.ReadString(); reader.ReadString(); reader.ReadString();
+                    start = (int)stream.Position; // event point + velocity, then fixed presentation fields
+                }
+                void Reject(byte[] bytes, string label)
+                {
+                    system.OnWorldUnload(); ReceiveProjectileVfxForCheck(data, bytes);
+                    Equal(0, queue.Count, label);
+                }
+                var oldVersion = (byte[])valid.Clone(); oldVersion[0] = 2; Reject(oldVersion, "old version rejected");
+                Reject(valid[..^1], "truncated pose rejected");
+                // Every coordinate/pose float in the wire must reject non-finite values.
+                int snapshotStart = start + 16, ownerFlag = snapshotStart + 24;
+                int rotationOffset = ownerFlag + 1 + 8, flipOffset = rotationOffset + 8;
+                foreach (int offset in new[] { start, start + 4, start + 8, start + 12,
+                    snapshotStart, snapshotStart + 4, snapshotStart + 8, snapshotStart + 12,
+                    snapshotStart + 16, snapshotStart + 20, ownerFlag + 1, ownerFlag + 5,
+                    rotationOffset, rotationOffset + 4, flipOffset + 1 })
+                foreach (float bad in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity })
+                {
+                    var bytes = (byte[])valid.Clone(); BitConverter.GetBytes(bad).CopyTo(bytes, offset);
+                    Reject(bytes, "nonfinite packet float rejected at " + offset);
+                }
+                foreach (int offset in new[] { ownerFlag, flipOffset })
+                { var bytes = (byte[])valid.Clone(); bytes[offset] = 2; Reject(bytes, "malformed pose discriminator rejected"); }
+                foreach (float scale in new[] { 0f, -1f, 9f })
+                {
+                    var bytes = (byte[])valid.Clone(); BitConverter.GetBytes(scale).CopyTo(bytes, rotationOffset + 4);
+                    Reject(bytes, "out-of-range captured scale rejected");
+                }
+                var zeroForward = (byte[])valid.Clone(); Array.Clear(zeroForward, snapshotStart + 16, 8);
+                Reject(zeroForward, "missing forward axis rejected instead of invented");
+                // Absence of an active owner is an exact optional fact, not center fallback.
+                owner.active = false; slot.Anchor = "owner";
+                byte[] noOwner = EncodeProjectileVfxForCheck(data, source, slot.Event, new Vector2(900, 1000));
+                Reject(noOwner, "owner anchor unavailable at capture stays silent");
+                slot.Anchor = "self"; ReceiveProjectileVfxForCheck(data, noOwner);
+                Equal(1, queue.Count, "missing owner does not suppress independent self anchor");
+            }
+            finally { system.OnWorldUnload(); Terraria.Main.player[4] = oldOwner; Terraria.Main.projectile = oldProjectiles; }
+        });
+    }
+
     private static void ItemVfxParticleSelectorsAndBudgets()
     {
         WithLighting((config, lights) =>
@@ -170,7 +296,7 @@ internal static partial class EngineRuntimeChecks
                 {
                     using var stream = new System.IO.MemoryStream();
                     using (var writer = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, true))
-                    { writer.Write((byte)2); writer.Write((byte)4); writer.Write(data.Id); writer.Write(entity); writer.Write(eventName); }
+                    { writer.Write((byte)3); writer.Write((byte)4); writer.Write(data.Id); writer.Write(entity); writer.Write(eventName); writer.Write(160f); writer.Write(160f); }
                     stream.Position = 0;
                     using var reader = new System.IO.BinaryReader(stream);
                     InfiniItemVfxRuntime.HandleUseEventPacket(reader, 4);

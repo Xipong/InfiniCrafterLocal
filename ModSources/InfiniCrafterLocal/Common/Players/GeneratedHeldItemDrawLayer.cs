@@ -157,13 +157,17 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         // cap the adjusted result: prefix/player/global hooks already own that scale.
         float payloadScale = heldHasGeneratedData ? 1f : Math.Clamp(registryScale, 0.25f, 4f);
         float drawScale = baseScale * payloadScale;
-        Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir);
+        Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir, data?.Visual?.Grip);
         Vector2 holdOffset = HeldOffset(data, drawGravDir);
         // ItemLocation is already the draw-set pose (not necessarily player.itemLocation).
         // World zero and screen zero are valid coordinates, never missing-pose sentinels.
         Vector2 itemLocation = PayloadItemLocation(payload) ?? drawInfo.ItemLocation;
         Vector2 position = itemLocation - Main.screenPosition + holdOffset;
-        position += RoleForwardOffset(role, drawDirection, drawGravDir, 0);
+        // An explicit final-canvas pivot is the hand contact point. Legacy artistic
+        // translations would move that point away from the hand; authored screen-space
+        // HoldoutOffset remains independent and unchanged.
+        if (data?.Visual?.Grip is null)
+            position += RoleForwardOffset(role, drawDirection, drawGravDir, 0);
         position = new Vector2((int)position.X, (int)position.Y);
 
         // Vanilla DrawPlayer_27_HeldItem consumes itemRotation verbatim; gravity
@@ -385,7 +389,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         lock (HeldAssetRequestTicks) HeldAssetRequestTicks.Clear();
     }
 
-    private static Vector2 HeldSpriteOrigin(Texture2D texture, GeneratedHeldRenderRole role, bool flip, float gravDir)
+    private static Vector2 HeldSpriteOrigin(Texture2D texture, GeneratedHeldRenderRole role, bool flip, float gravDir, ItemGripSpec? grip)
     {
         (float x, float y) = role switch
         {
@@ -396,6 +400,11 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             GeneratedHeldRenderRole.Swing => (0.20f, 0.78f),
             _ => (0.20f, 0.62f),
         };
+        if (grip is not null)
+        {
+            x = (float)grip.NormalizedX;
+            y = (float)grip.NormalizedY;
+        }
         if (flip)
             x = 1f - x;
         if (gravDir == -1f)

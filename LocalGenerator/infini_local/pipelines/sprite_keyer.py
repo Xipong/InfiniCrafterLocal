@@ -593,7 +593,7 @@ def close_tiny_background_cracks(mask: set[tuple[int, int]], w: int, h: int) -> 
     out.update(add)
     return out
 
-def remove_background_sprite_keyer(img: Any) -> Any:
+def remove_background_sprite_keyer(img: Any, *, preserve_alpha: bool = False) -> Any:
     """Final Photoshop-like sprite keyer for generated Terraria-like assets.
 
     Pipeline:
@@ -637,11 +637,11 @@ def remove_background_sprite_keyer(img: Any) -> Any:
             if spill:
                 repl = find_nearby_clean_foreground_color(px, w, h, x, y, bg, max(2, int(SPRITE_KEYER_SPILL_RADIUS) + 3), key_profile=profile)
                 if repl is not None:
-                    opx[x, y] = (repl[0], repl[1], repl[2], 255)
+                    opx[x, y] = (repl[0], repl[1], repl[2], a if preserve_alpha else 255)
                 else:
                     opx[x, y] = (0, 0, 0, 0)
             else:
-                opx[x, y] = (int(r), int(g), int(b), 255)
+                opx[x, y] = (int(r), int(g), int(b), a if preserve_alpha else 255)
     out = scrub_transparent_rgb(out)
     try:
         log_event("debug", "sprite_keyer profile", {"key": list(profile.get("key") or []), "tolerance": profile.get("tolerance"), "source": profile.get("source"), "samples": profile.get("samples"), "bgPixels": len(bg)})
@@ -649,7 +649,7 @@ def remove_background_sprite_keyer(img: Any) -> Any:
         pass
     return out
 
-def apply_background_removal(img: Any) -> Any:
+def apply_background_removal(img: Any, *, preserve_alpha: bool = False) -> Any:
     if Image is None:
         return img
     img = img.convert("RGBA")
@@ -664,7 +664,7 @@ def apply_background_removal(img: Any) -> Any:
             log_event("warn", "unsupported bg remove mode routed to sprite_keyer", {"requested": mode, "used": "sprite_keyer"})
         except Exception:
             pass
-    return remove_background_sprite_keyer(img)
+    return remove_background_sprite_keyer(img, preserve_alpha=preserve_alpha)
 
 def scrub_transparent_rgb(img: Any) -> Any:
     """Set RGB of fully transparent pixels to zero so resize filters cannot bleed key color."""

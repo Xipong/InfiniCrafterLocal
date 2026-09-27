@@ -29,6 +29,12 @@ from infini_local.pipelines.llm_transport import (
     visual_director_max_tokens,
     with_llm_stage,
 )
+from infini_local.pipelines.author_item_contract import (
+    _provider_strict_projection,
+    project_provider_nullable_optionals_to_local,
+    provider_nullable_transport_rule,
+)
+from infini_local.pipelines.llm_authoring_pipeline import _effective_response_format
 from infini_local.pipelines.pipeline_visual_config import VISUAL_DIRECTOR_LLM
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
@@ -124,6 +130,20 @@ def _visual_item_schema() -> dict[str, Any]:
             "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION},
             "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _INVENTORY_SCALE_DESCRIPTION},
             "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _WORLD_SCALE_DESCRIPTION},
+            "effectColor": {
+                "type": "string",
+                "enum": ["white", "gray", "brown", "tan", "red", "orange", "yellow", "gold", "green", "cyan", "blue", "purple", "pink", "black"],
+                "description": "Optional exact runtime rendering color token shared by item, projectile and detached VFX. Independent of the rich descriptive palette used for sprite art; no hex or prose parsing. Omission preserves historical rendering behavior.",
+            },
+            "grip": {
+                "type": "object", "additionalProperties": False,
+                "description": "Optional atomic hand pivot on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units. Replaces legacy grip and artistic forward offset, not authored HoldoutOffset.",
+                "properties": {
+                    "normalizedX": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    "normalizedY": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                },
+                "required": ["normalizedX", "normalizedY"],
+            },
         },
         "required": ["prompt", "negativePrompt", "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "inventoryScale", "worldScale"],
     }
@@ -138,6 +158,10 @@ def _visual_equip_overlay_schema() -> dict[str, Any]:
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
             "preferredCanvasSize": {"type": "integer", "enum": [32, 48, 64, 96], "description": _OVERLAY_CANVAS_DESCRIPTION},
+            "accessoryMount": {
+                "type": "string", "enum": ["chest", "back", "waist", "shoulder", "orbit"],
+                "description": "Optional accessory-only body-local badge anchor, using the existing overlay PNG, body pivot/rotation and 18px fit. chest=(0,-2), back=(-10,-4), waist=(0,10), shoulder=(8,-12) player pixels relative to center, X facing-mirrored and Y gravity-mirrored. orbit uses the existing accessory slot ring. Armor ignores this field. No atlas or gameplay change.",
+            },
         },
         "required": ["prompt", "silhouette", "visualIdentity", "preferredCanvasSize"],
     }
@@ -406,7 +430,7 @@ def _build_visual_repair_scope(
             # A permission on a mirrored item field deterministically extends to the
             # same field in those entity rows, otherwise Repair could not fix one
             # broken copy without re-emitting frozen context it must not touch.
-            if relative_item_path:
+            if relative_item_path in {"prompt", "silhouette", "visualIdentity"}:
                 for row_index, row in enumerate(rows):
                     if not isinstance(row, Mapping):
                         continue
@@ -552,6 +576,15 @@ def _drop_schema_forbidden_mutable_fields(
         if field in source and field in out:
             out.pop(field, None)
             accepted.append(f"{audit_path}.{field}")
+    # Nested strict objects (the atomic grip) still repair exact leaves: an extra
+    # child key must be removable without granting either valid coordinate.
+    for field, child_schema in (schema.get("properties") or {}).items():
+        child_paths = tuple(path[len(field) + 1:] for path in mutable_paths if path.startswith(field + "."))
+        if child_paths and isinstance(source.get(field), Mapping) and isinstance(out.get(field), Mapping):
+            out[field] = _drop_schema_forbidden_mutable_fields(
+                source[field], out[field], mutable_paths=child_paths, schema=child_schema,
+                audit_path=f"{audit_path}.{field}", accepted=accepted,
+            )
     return out
 
 
@@ -793,6 +826,11 @@ def _request_visual_kit(
         if repair
         else _response_schema(entity_ids, equipment_overlay_required)
     )
+    response_format = llm_json_response_format(
+        "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",
+        schema=lambda: _provider_strict_projection(schema), strict=True, auto_preference="json_schema",
+    )
+    sent_schema = response_format["json_schema"]["schema"] if response_format and response_format.get("type") == "json_schema" else schema
     if repair:
         system = (
             "You are the conditional Visual Repair. Return only a narrow patch for exact invalid visual fields/rows. "
@@ -836,7 +874,7 @@ def _request_visual_kit(
                 "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "when equipmentOverlayReadOnly.required is true, repair equipOverlayPatch as a separate wearable presentation asset",
             ],
-            "responseSchema": schema,
+            "responseSchema": sent_schema,
         }
     else:
         system = (
@@ -866,6 +904,9 @@ def _request_visual_kit(
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "appearance only; runtime program is immutable",
+                "When VFX color is relevant, choose item.effectColor explicitly from its finite rendering tokens; this is independent of the descriptive art palette. Never parse or translate palette prose in code, and never add it through unrelated Repair.",
+                "For a newly designed held item choose item.grip explicitly at its actual handle/contact point on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. Both normalized coordinates are required together. Describe that same contact point in item.prompt; do not infer coordinates from an entityId or request image analysis.",
+                "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission deliberately retains historical presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
                 "movement/controller names describe motion, not a weapon taxonomy",
                 "baked_sprite requires a real generated PNG; no placeholder",
@@ -877,7 +918,7 @@ def _request_visual_kit(
                 "runtime_geometry/no_asset carry only entityId, assetMode, visualProjectRef=none and scale",
                 "when equipmentOverlayReadOnly.required is true, author equipOverlay as a separate transparent wearable layer for that exact slot, without drawing a player body",
             ],
-            "responseSchema": schema,
+            "responseSchema": sent_schema,
         }
     # Ordering only: keep every field/value in the same complete JSON object.
     # Entity-specific responseSchema (including its exact ID enums) remains after
@@ -886,6 +927,7 @@ def _request_visual_kit(
         **{key: payload[key] for key in _VISUAL_STATIC_PREFIX_KEYS},
         **{key: value for key, value in payload.items() if key not in _VISUAL_STATIC_PREFIX_KEYS},
     }
+    system += provider_nullable_transport_rule(response_format)
     prefix_chars = json_prefix_chars(payload, _VISUAL_STATIC_PREFIX_KEYS)
     model = resolve_llm_model()
     request = {
@@ -900,19 +942,27 @@ def _request_visual_kit(
             else env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.45)
         ),
         "max_tokens": visual_director_max_tokens(),
-        "response_format": llm_json_response_format(
-            "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",
-            schema=schema,
-            strict=True,
-            auto_preference="json_schema",
-        ),
+        "response_format": response_format,
     }
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
     request = with_prompt_cache_prefix(request, message_index=1, prefix_chars=prefix_chars)
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
     content = raw["choices"][0]["message"]["content"]
     try:
-        return parse_first_valid_llm_json(content)
+        parsed = parse_first_valid_llm_json(content)
+        effective_format = _effective_response_format(request, raw)
+        # Repair's object-or-null blocks have no semantic discriminator. Select the
+        # object branch by container type, not by whether invalid authored leaves
+        # happen to validate; those leaves must still reach exact-scope Repair.
+        if repair and isinstance(parsed, dict) and effective_format and effective_format.get("type") == "json_schema":
+            provider_props = effective_format["json_schema"]["schema"]["properties"]
+            for key in ("itemPatch", "equipOverlayPatch"):
+                if isinstance(parsed.get(key), dict) and key in schema["properties"]:
+                    parsed[key] = project_provider_nullable_optionals_to_local(
+                        parsed[key], schema["properties"][key]["anyOf"][0],
+                        response_format={"type": "json_schema", "json_schema": {"schema": provider_props[key]["anyOf"][0]}},
+                    )
+        return project_provider_nullable_optionals_to_local(parsed, schema, response_format=effective_format)
     except (ValueError, TypeError) as exc:
         if repair:
             raise PlannerUnavailable(f"Visual Repair returned malformed JSON: {type(exc).__name__}: {exc}") from exc
@@ -933,7 +983,16 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
         "inventoryScale": float(item.get("inventoryScale") or 1.0),
         "worldScale": float(item.get("worldScale") or 1.0),
     })
+    for field in ("grip", "effectColor"):
+        if field in item:
+            visual[field] = copy.deepcopy(item[field])
+        else:
+            visual.pop(field, None)
     overlay = kit.get("equipOverlay")
+    if isinstance(overlay, Mapping) and "accessoryMount" in overlay:
+        visual["accessoryMount"] = overlay["accessoryMount"]
+    else:
+        visual.pop("accessoryMount", None)
     if isinstance(overlay, Mapping):
         visual.update({
             "equipOverlayPrompt": str(overlay.get("prompt") or "")[:1400],

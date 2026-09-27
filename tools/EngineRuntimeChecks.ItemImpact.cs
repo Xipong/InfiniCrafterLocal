@@ -206,7 +206,7 @@ internal static partial class EngineRuntimeChecks
                 using (var stream = new MemoryStream())
                 {
                     using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
-                    { writer.Write((byte)2); writer.Write((byte)0); writer.Write(data.Id); writer.Write(entity.Id); writer.Write(slot.Event); }
+                    { writer.Write((byte)3); writer.Write((byte)0); writer.Write(data.Id); writer.Write(entity.Id); writer.Write(slot.Event); writer.Write(player.Center.X); writer.Write(player.Center.Y); }
                     stream.Position = 0;
                     using var reader = new BinaryReader(stream);
                     InfiniItemVfxRuntime.HandleUseEventPacket(reader, 0);

@@ -94,16 +94,13 @@ public sealed partial class GeneratedProjectile
         if (!_configured || _entity is null || _activationDelayTicks > 0) return false;
         if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
         {
-            Player owner = Owner();
-            Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
-            Vector2 start = owner.MountedCenter + direction * 18f;
-            Vector2 end = start + direction * Math.Max(16f, _entity.Controller.Params.RangeTiles * 16f);
+            GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width);
             float collisionPoint = 0f;
-            return Collision.CheckAABBvLineCollision(targetHitbox.TopLeft(), targetHitbox.Size(), start, end, Math.Max(2f, _entity.Controller.Params.WidthPx), ref collisionPoint);
+            return Collision.CheckAABBvLineCollision(targetHitbox.TopLeft(), targetHitbox.Size(), start, end, width, ref collisionPoint);
         }
         if (_entity.Movement.Code == 18 && _whipPoints.Count > 1)
         {
-            float width = Math.Max(4f, _entity.Hitbox.WidthPx * _entity.Hitbox.HitboxScale * 0.5f);
+            float width = WhipCollisionWidth();
             for (int i = 1; i < _whipPoints.Count; i++)
             {
                 float collisionPoint = 0f;
@@ -114,6 +111,19 @@ public sealed partial class GeneratedProjectile
         }
         return null;
     }
+
+    // Shared by collision and runtime_geometry presentation; no sprite scale or pose offsets.
+    private void GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width)
+    {
+        Player owner = Owner();
+        Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
+        start = owner.MountedCenter + direction * 18f;
+        end = start + direction * Math.Max(16f, _entity!.Controller.Params.RangeTiles * 16f);
+        width = Math.Max(2f, _entity.Controller.Params.WidthPx);
+    }
+
+    private float WhipCollisionWidth()
+        => Math.Max(4f, _entity!.Hitbox.WidthPx * _entity.Hitbox.HitboxScale * 0.5f);
 
     public override void ModifyDamageHitbox(ref Rectangle hitbox)
     {

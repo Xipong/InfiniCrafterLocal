@@ -78,6 +78,8 @@ internal static partial class EngineRuntimeChecks
                 Vector2 centerInFrame = new Vector2(20, 56 - 4 - player.height * 0.5f + offsetY);
                 Vector2 expected = top + part + pivot + Vector2.Transform(centerInFrame - pivot, Matrix.CreateRotationZ(rotation));
                 NearEquip(expected, actual.position, "part anchor and local pivot");
+                if (slot == "accessory")
+                    ExplicitAccessoryMountDraws(info, ((GeneratedItem)item.ModItem!).Data);
                 PlayerDrawLayers.DrawPlayer_TransformDrawData(ref info);
                 actual = info.DrawDataCache[0];
                 Vector2 globalPivot = info.Position - Terraria.Main.screenPosition + info.rotationOrigin;

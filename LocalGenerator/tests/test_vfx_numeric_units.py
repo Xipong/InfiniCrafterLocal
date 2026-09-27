@@ -19,7 +19,7 @@ _MOTIF_DESCRIPTIONS = {
 _SLOT_DESCRIPTIONS = {
     "scale": ("renderer", "projectile.scale", "thickness", "light", "dust"),
     "density": ("projectile", "item", "count", "repeatevery"),
-    "duration": ("impactSprite", "world ticks", "only"),
+    "duration": ("sprite", "primitive", "world ticks", "fade", "history", "do not consume"),
     "alpha": ("draw", "sound", "dust", "clamp"),
     "spread": ("speed", "not angle", "projectile", "item"),
     "jitter": ("no renderer consumer",),

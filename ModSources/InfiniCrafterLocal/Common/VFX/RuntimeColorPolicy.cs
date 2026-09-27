@@ -30,6 +30,16 @@ public static class RuntimeColorPolicy
             : "";
     }
 
+    // Visual's optional effectColor uses the rendering vocabulary, not the narrower
+    // gameplay/light contract. Present values are exact tokens, never prose/hex or
+    // silently normalized strings; omission is represented by the DTO property.
+    public static string RequireRenderingToken(string? value)
+    {
+        if (!string.IsNullOrEmpty(value) && NormalizeForRendering(value) == value)
+            return value;
+        throw new InvalidDataException("visual.effectColor must be an exact supported runtime rendering token when present");
+    }
+
     public static Color Resolve(string? value, Color fallback)
         => NormalizeForRendering(value) switch
         {

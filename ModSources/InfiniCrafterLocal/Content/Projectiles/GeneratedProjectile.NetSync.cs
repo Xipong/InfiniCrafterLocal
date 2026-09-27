@@ -14,7 +14,7 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
     private const byte RuntimeNetVersion = 1;
-    private const byte VfxEventNetVersion = 2;
+    private const byte VfxEventNetVersion = 3;
     private static long _nextVfxSourceToken;
     private long _vfxSourceToken;
 
@@ -26,7 +26,8 @@ public sealed partial class GeneratedProjectile
         string EntityId,
         string EventName,
         Vector2 Center,
-        Vector2 Velocity);
+        Vector2 Velocity,
+        InfiniVfxProjectileSnapshot Snapshot);
 
     public override void SendExtraAI(BinaryWriter writer)
     {
@@ -111,7 +112,8 @@ public sealed partial class GeneratedProjectile
             _entity.Id,
             eventName,
             center,
-            Projectile.velocity));
+            Projectile.velocity,
+            InfiniVfxProjectileSnapshot.Capture(Projectile, _data, _entity.Id)));
         packet.Send(-1, Projectile.owner);
     }
 
@@ -128,6 +130,31 @@ public sealed partial class GeneratedProjectile
         writer.Write(payload.Center.Y);
         writer.Write(payload.Velocity.X);
         writer.Write(payload.Velocity.Y);
+        InfiniVfxProjectileSnapshot snapshot = payload.Snapshot;
+        writer.Write(snapshot.Center.X); writer.Write(snapshot.Center.Y);
+        writer.Write(snapshot.Tip.X); writer.Write(snapshot.Tip.Y);
+        writer.Write(snapshot.Forward.X); writer.Write(snapshot.Forward.Y);
+        writer.Write((byte)(snapshot.OwnerCenter.HasValue ? 1 : 0));
+        if (snapshot.OwnerCenter is { } owner) { writer.Write(owner.X); writer.Write(owner.Y); }
+        writer.Write(snapshot.Pose.Rotation); writer.Write(snapshot.Pose.Scale);
+        writer.Write((byte)(snapshot.Pose.Effects == Microsoft.Xna.Framework.Graphics.SpriteEffects.FlipHorizontally ? 1 : 0));
+        writer.Write(snapshot.Pose.GfxOffY);
+    }
+
+    private static InfiniVfxProjectileSnapshot ReadVfxPresentationSnapshot(BinaryReader reader)
+    {
+        Vector2 center = new(reader.ReadSingle(), reader.ReadSingle());
+        Vector2 tip = new(reader.ReadSingle(), reader.ReadSingle());
+        Vector2 forward = new(reader.ReadSingle(), reader.ReadSingle());
+        byte hasOwner = reader.ReadByte();
+        if (hasOwner > 1) throw new InvalidDataException("invalid VFX owner presence");
+        Vector2? owner = hasOwner == 1 ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null;
+        float rotation = reader.ReadSingle(), scale = reader.ReadSingle();
+        byte flip = reader.ReadByte();
+        if (flip > 1) throw new InvalidDataException("invalid VFX sprite flip");
+        float gfxOffY = reader.ReadSingle();
+        return new(center, tip, forward, owner, new(rotation, scale,
+            flip == 1 ? Microsoft.Xna.Framework.Graphics.SpriteEffects.FlipHorizontally : Microsoft.Xna.Framework.Graphics.SpriteEffects.None, gfxOffY));
     }
 
     private static VfxEventPayload ReadVfxEventPayload(BinaryReader reader)
@@ -142,7 +169,8 @@ public sealed partial class GeneratedProjectile
             (reader.ReadString() ?? "").Trim(),
             (reader.ReadString() ?? "").Trim().ToLowerInvariant(),
             new Vector2(reader.ReadSingle(), reader.ReadSingle()),
-            new Vector2(reader.ReadSingle(), reader.ReadSingle()));
+            new Vector2(reader.ReadSingle(), reader.ReadSingle()),
+            ReadVfxPresentationSnapshot(reader));
         if (payload.Owner < 0
             || payload.Owner >= Main.maxPlayers
             || payload.SourceToken == 0
@@ -153,7 +181,8 @@ public sealed partial class GeneratedProjectile
             || !float.IsFinite(payload.Center.X)
             || !float.IsFinite(payload.Center.Y)
             || !float.IsFinite(payload.Velocity.X)
-            || !float.IsFinite(payload.Velocity.Y))
+            || !float.IsFinite(payload.Velocity.Y)
+            || !payload.Snapshot.IsValid)
             throw new InvalidDataException("invalid generated projectile VFX event payload");
         return payload;
     }
@@ -184,7 +213,8 @@ public sealed partial class GeneratedProjectile
             data.VfxManifest,
             payload.Center,
             payload.Velocity,
-            sourceKey);
+            sourceKey,
+            payload.Snapshot);
     }
 
     private static bool HasExactVfxSlot(GeneratedItemData data, string entityId, string eventName)

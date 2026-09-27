@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.config_bootstrap import SPRITE_DIR
+from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
 from infini_local.core.image_dependencies import (
     Image,
     ImageDraw,
@@ -36,6 +37,7 @@ from infini_local.pipelines.image_backend_pipeline import (
 )
 from infini_local.pipelines.sprite_postprocess import (
     build_retry_prompt_from_validation,
+    cleanup_alpha,
     pick_best_sprite,
     postprocess_sprite,
     sprite_validation_fatal,
@@ -338,13 +340,14 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
         resized = crop.resize((new_w, new_h), resampling)
         out = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
         out.alpha_composite(resized, ((canvas - new_w) // 2, (canvas - new_h) // 2))
+        out = cleanup_alpha(out, role)
         out_path = SPRITE_DIR / f"{asset_id}_refit.png"
         out.save(out_path)
         return str(out_path)
     except (OSError, ValueError, TypeError, AttributeError):
         return ""
 
-def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative: str, asset_id: str, canvas: int) -> tuple[str, str, float, str]:
+def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "") -> tuple[str, str, float, str]:
     """Generate one role-separated visual asset with retry-on-technical-fail.
 
     v0.3.9: no fake best-of-N judging by default. We generate one image, run local
@@ -368,7 +371,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     last_raw_path = ""
     last_score = 0.0
     last_validation: dict[str, Any] | None = None
-    topology, part_count_min, part_count_max = _authored_sprite_topology(data, role)
+    topology, part_count_min, part_count_max = _authored_sprite_topology(data, "entity:" + entity_id if entity_id else role)
     for attempt in range(max_attempts):
         attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
         attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, contract_role, attempt, canvas)
@@ -565,7 +568,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             prompt = str(slot.get("prompt") or "")
             negative = str(slot.get("negativePrompt") or "")
             canvas = int(slot.get("canvas") or 32)
-            backend_role = "impact_" + entity_id
+            backend_role = "impact"
             path, url, score, status = generate_visual_asset(
                 data,
                 backend_role,
@@ -623,7 +626,15 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             continue
         prompt = str(slot.get("prompt") or entity_visual.get("prompt") or "")
         canvas = int(slot.get("canvas") or 32)
-        backend_role = "entity_" + entity_id
+        expected_role = VISUAL_ROLE_BY_ENTITY_KIND.get(str(slot.get("entityKind") or ""))
+        declared_role = str(slot.get("visualRole") or "")
+        if not expected_role or (declared_role and declared_role != expected_role):
+            entity_visual["spriteStatus"] = "invalid_runtime_visual_role"
+            slot.update(status="invalid_runtime_visual_role", path="", url="", technicalScore=0.0)
+            continue
+        # Exact registry projection, not a name/prose router. The namespace keeps
+        # runtime pose independent of the legacy +X projectile processing path.
+        backend_role = "runtime:" + expected_role
         path, url, score, status = generate_visual_asset(
             data,
             backend_role,
@@ -631,6 +642,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             director_negative,
             str(slot.get("assetId") or f"{data.get('id')}_{entity_id}"),
             canvas,
+            entity_id=entity_id,
         )
         final_prompt = str(data.get("debug", {}).get(f"{backend_role}FinalPrompt") or "")
         if final_prompt:

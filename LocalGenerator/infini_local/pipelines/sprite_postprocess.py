@@ -59,6 +59,7 @@ from infini_local.pipelines.sprite_contracts import (
     role_contract_prompt_clause,
     sprite_background_positive_clause,
     sprite_contract_for,
+    sprite_uses_soft_alpha,
 )
 
 # AGENT MAP: sprite selection, alpha cleanup, resize/bake, validation/retry notes,
@@ -86,9 +87,10 @@ def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> 
     for p in paths:
         try:
             img = Image.open(p).convert("RGBA")
-            img = apply_background_removal(img)
-            img = cleanup_alpha(img)
-            img = denoise_alpha_singletons(img)
+            img = apply_background_removal(img, preserve_alpha=sprite_uses_soft_alpha(role))
+            img = cleanup_alpha(img, role)
+            if not sprite_uses_soft_alpha(role):
+                img = denoise_alpha_singletons(img)
             s = sprite_bbox_stats(img, role, canvas)
             if not s.get("effect_bbox"):
                 score = -999.0
@@ -119,10 +121,12 @@ def save_stage(img: Any, sprite_id: str, stage: str) -> str:
     except Exception:
         return ""
 
-def cleanup_alpha(img: Any) -> Any:
+def cleanup_alpha(img: Any, role: str = "item") -> Any:
     if Image is None:
         return img
     img = img.convert("RGBA")
+    if sprite_uses_soft_alpha(role):
+        return scrub_transparent_rgb(img)
     thr = max(0, min(255, int(ALPHA_THRESHOLD)))
     px = img.load()
     w, h = img.size
@@ -397,16 +401,16 @@ def bake_sprite_from_master(master: Any, target_size: int, role: str = "item") -
         img = resize_rgba_premultiplied(master, (final_size, final_size), resample)
     else:
         img = master
-    # Final game PNG wants stable opaque/transparent pixels; do it after resizing, not before.
-    img = cleanup_alpha(img)
+    # Hard sprites snap alpha after resizing; effect sprites retain authored coverage.
+    img = cleanup_alpha(img, role)
     if role in {"item", "equip_overlay"}:
         img = denoise_alpha_singletons(img)
     img = palette_cleanup(img, role)
-    img = cleanup_alpha(img)
+    img = cleanup_alpha(img, role)
     # Safe final rescue pass: recolor or remove only true chroma leftovers touching
     # transparency. This is much less destructive than the old blanket magenta wipe.
     img = neutralize_chroma_edge_colors(img)
-    img = cleanup_alpha(img)
+    img = cleanup_alpha(img, role)
     img = restore_downscaled_sprite_color(img)
     return scrub_transparent_rgb(img)
 
@@ -561,7 +565,7 @@ def palette_cleanup(img: Any, role: str = "item") -> Any:
     if Image is None or not PIXEL_POSTERIZE:
         return img
     normalized_role = str(role or "item").strip().lower()
-    if normalized_role in {"impact", "field"}:
+    if sprite_uses_soft_alpha(normalized_role):
         return img
     img = img.convert("RGBA")
     alpha = img.getchannel("A")
@@ -704,9 +708,9 @@ def validate_processed_sprite(
                 "projectile_forward_axis_misaligned:"
                 f"{float(principal_axis.get('horizontalErrorDegrees') or 0.0):.1f}deg"
             )
-        if stats.get("partialPct", 0) > 0.25:
+        if not sprite_uses_soft_alpha(role) and stats.get("partialPct", 0) > 0.25:
             warnings.append("many_partial_alpha_pixels")
-        if stats.get("opaquePct", 0) < SPRITE_MIN_OPAQUE_PCT:
+        if not sprite_uses_soft_alpha(role) and stats.get("opaquePct", 0) < SPRITE_MIN_OPAQUE_PCT:
             reasons.append(f"too_few_opaque_pixels:{stats.get('opaquePct')}")
         if stats.get("opaquePct", 0) > SPRITE_MAX_OPAQUE_PCT and role != "impact":
             # A nearly solid final sprite usually means the model drew the item on a
@@ -844,19 +848,19 @@ def postprocess_sprite(
         # final downscale.  This does not change semantics; it only removes the
         # requested key background, normalizes the canvas and bakes a clean PNG.
         key_profile = estimate_sprite_key_profile(raw)
-        bg_removed = apply_background_removal(raw)
+        bg_removed = apply_background_removal(raw, preserve_alpha=sprite_uses_soft_alpha(role))
         # Single supported background-removal protocol: sprite_keyer.  The following
         # steps are technical cleanup only, not an alternate semantic/image mode.
         # Layer 2 removes key-colored pockets that are enclosed by the generated object
         # and therefore unreachable by contiguous border flood-fill.
         bg_removed = remove_key_colored_holes(bg_removed, key_profile)
         bg_removed = defringe_chroma_edges(bg_removed)
-        bg_removed = cleanup_alpha(bg_removed)
+        bg_removed = cleanup_alpha(bg_removed, role)
         # Layer 3 removes AI-drawn white/pink poster cards inside the requested key.
         # This keeps retry pressure low and prevents opaque square sprites from reaching the game.
         if role in {"item", "equip_overlay"}:
             bg_removed = remove_nested_poster_card_background(bg_removed, role)
-        bg_removed = cleanup_alpha(bg_removed)
+        bg_removed = cleanup_alpha(bg_removed, role)
         if role in {"item", "equip_overlay"}:
             bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)

@@ -219,6 +219,7 @@ public sealed partial class GeneratedItemData
 
     private void NormalizeVisual()
     {
+        Visual.Grip?.Validate();
         Visual.ObjectType = SafeText(Visual.ObjectType, 64);
         Visual.Style = SafeText(Visual.Style, 64);
         Visual.RequiredAnchors = SafeTextArray(Visual.RequiredAnchors, 16, 80);

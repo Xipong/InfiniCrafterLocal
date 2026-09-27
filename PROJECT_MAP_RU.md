@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.241 — карта проекта
+# InfiniCrafterLocal v0.4.242 — карта проекта
 
 ```text
 LocalGenerator/

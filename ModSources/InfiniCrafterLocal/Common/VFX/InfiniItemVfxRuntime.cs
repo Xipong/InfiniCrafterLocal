@@ -14,8 +14,32 @@ namespace InfiniCrafterLocal.Common.VFX;
 /// <summary>Exact item-body entity/event VFX with bounded multiplayer relay.</summary>
 public static class InfiniItemVfxRuntime
 {
-    private const byte PacketVersion = 2;
-    private static readonly ulong[] LastEventTick = new ulong[Main.maxPlayers];
+    // v3 adds captured event coordinates. v2 is rejected; no legacy migration.
+    private const byte PacketVersion = 3;
+    private const int MaxRecentEventsPerPlayer = 64;
+    private static readonly Dictionary<(string Item, string Entity, string Event), ulong>[] RecentEvents =
+        new Dictionary<(string, string, string), ulong>[Main.maxPlayers];
+
+    // Presentation-only throttle: exact events never suppress one another.
+    // A bounded per-peer table also limits identity churn; no activation IDs or gameplay authority.
+    private static bool AcceptRemoteEvent(Player player, string itemId, string entityId, string eventName)
+    {
+        int index = player.whoAmI;
+        if (index < 0 || index >= RecentEvents.Length) return false;
+        var recent = RecentEvents[index] ??= new();
+        ulong now = Main.GameUpdateCount;
+        var key = (itemId, entityId, eventName);
+        if (recent.TryGetValue(key, out ulong last) && now >= last &&
+            now - last < (ulong)Math.Clamp(player.HeldItem.useTime, 2, 60)) return false;
+        // All stored cooldowns expire within 60 ticks. Prune without evicting live guards.
+        foreach (var entry in new List<KeyValuePair<(string, string, string), ulong>>(recent))
+            if (now < entry.Value || now - entry.Value >= 60) recent.Remove(entry.Key);
+        if (!recent.ContainsKey(key) && recent.Count >= MaxRecentEventsPerPlayer) return false;
+        recent[key] = now;
+        return true;
+    }
+
+    private static bool Finite(Vector2 point) => float.IsFinite(point.X) && float.IsFinite(point.Y);
 
     // Item bodies have no canonical activation/lifetime boundary. Only keep
     // tick-local particle counts; a persistent total would silence held/equipped
@@ -25,7 +49,7 @@ public static class InfiniItemVfxRuntime
 
     public static void ClearUseEventCaches()
     {
-        Array.Clear(LastEventTick);
+        Array.Clear(RecentEvents);
         ParticlesThisTick.Clear();
         ParticleTick = 0;
     }
@@ -46,14 +70,20 @@ public static class InfiniItemVfxRuntime
         return true;
     }
 
-    public static void EmitAndSyncEvent(Player player, GeneratedItemData? data, string entityId, string eventName)
+    public static void EmitAndSyncEvent(Player player, GeneratedItemData? data, string entityId, string eventName, Vector2? eventPosition = null)
     {
         if (player is null || !player.active || data is null || !HasExactSlot(data, entityId, eventName)) return;
-        EmitLocal(player, data, entityId, eventName);
+        if (eventPosition.HasValue && !Finite(eventPosition.Value)) return;
+        EmitLocal(player, data, entityId, eventName, eventPosition: eventPosition);
         if (player.whoAmI != Main.myPlayer || Main.netMode != NetmodeID.MultiplayerClient || global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance is null) return;
+        // Hit producers must supply their captured point; never relay an invented owner-center hit.
+        if (eventName is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit && !eventPosition.HasValue) return;
+        Vector2 point = eventPosition ?? player.Center;
+        if (!Finite(point)) return;
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);
-        packet.Write(PacketVersion); packet.Write(data.Id ?? ""); packet.Write(entityId); packet.Write(eventName); packet.Send();
+        packet.Write(PacketVersion); packet.Write(data.Id ?? ""); packet.Write(entityId); packet.Write(eventName);
+        packet.Write(point.X); packet.Write(point.Y); packet.Send();
     }
 
     public static void OnPeriodic(Player player, GeneratedItemData? data, string entityId)
@@ -83,27 +113,31 @@ public static class InfiniItemVfxRuntime
                 string itemId = (reader.ReadString() ?? "").Trim();
                 string entityId = (reader.ReadString() ?? "").Trim();
                 string eventName = (reader.ReadString() ?? "").Trim();
-                if (whoAmI < 0 || whoAmI >= Main.maxPlayers) return;
+                Vector2 point = new(reader.ReadSingle(), reader.ReadSingle());
+                if (!Finite(point) || whoAmI < 0 || whoAmI >= Main.maxPlayers) return;
                 Player player = Main.player[whoAmI];
-                if (player?.HeldItem?.ModItem is not GeneratedItem item || !string.Equals(item.Data.Id, itemId, StringComparison.Ordinal) || !HasExactSlot(item.Data, entityId, eventName)) return;
-                ulong now = Main.GameUpdateCount;
-                if (now - LastEventTick[whoAmI] < (ulong)Math.Clamp(player.HeldItem.useTime, 2, 60)) return;
-                LastEventTick[whoAmI] = now;
+                if (player?.active != true || player.HeldItem?.ModItem is not GeneratedItem item || !string.Equals(item.Data.Id, itemId, StringComparison.Ordinal) || !HasExactSlot(item.Data, entityId, eventName)) return;
+                if (!AcceptRemoteEvent(player, itemId, entityId, eventName)) return;
                 var relay = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
                 if (relay is null) return;
                 relay.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);
-                relay.Write(PacketVersion); relay.Write((byte)whoAmI); relay.Write(itemId); relay.Write(entityId); relay.Write(eventName); relay.Send(-1, whoAmI);
+                relay.Write(PacketVersion); relay.Write((byte)whoAmI); relay.Write(itemId); relay.Write(entityId); relay.Write(eventName);
+                relay.Write(point.X); relay.Write(point.Y); relay.Send(-1, whoAmI);
                 return;
             }
             int playerId = reader.ReadByte();
             string remoteItemId = (reader.ReadString() ?? "").Trim();
             string remoteEntityId = (reader.ReadString() ?? "").Trim();
             string remoteEvent = (reader.ReadString() ?? "").Trim();
-            if (playerId < 0 || playerId >= Main.maxPlayers) return;
+            Vector2 remotePoint = new(reader.ReadSingle(), reader.ReadSingle());
+            if (!Finite(remotePoint) || playerId < 0 || playerId >= Main.maxPlayers) return;
             Player remote = Main.player[playerId];
             GeneratedItemData? data = remote?.HeldItem?.ModItem is GeneratedItem held && string.Equals(held.Data.Id, remoteItemId, StringComparison.Ordinal) ? held.Data : null;
             if (data is null && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.TryGet(remoteItemId, out GeneratedItemData registered) == true) data = registered;
-            if (remote?.active == true && data is not null) EmitLocal(remote, data, remoteEntityId, remoteEvent);
+            if (remote?.active == true && data is not null && HasExactSlot(data, remoteEntityId, remoteEvent) &&
+                AcceptRemoteEvent(remote, remoteItemId, remoteEntityId, remoteEvent))
+                EmitLocal(remote, data, remoteEntityId, remoteEvent,
+                    eventPosition: remoteEvent is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit ? remotePoint : null);
         }
         catch { }
     }
@@ -126,9 +160,12 @@ public static class InfiniItemVfxRuntime
         return false;
     }
 
-    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false)
+    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null)
     {
         if (Main.dedServ) return;
+        // One synchronous event call owns its total across matching slots. Periodic
+        // has only the shared tick ceiling; explicit zero remains silent for both.
+        int eventRemaining = data.VfxManifest.Budget.MaxParticlesTotal;
         foreach (VfxSlotSpec slot in data.VfxManifest.Slots)
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
@@ -136,7 +173,11 @@ public static class InfiniItemVfxRuntime
             // The wire contract defines StartTick for projectile age only.
             // Item periodic cadence uses the world clock, not an invented item age.
             if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
-            Color color = RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length > 0 ? data.Visual.Palette[0] : "white", Color.White);
+            if (slot.Anchor == "hitPoint" && !eventPosition.HasValue) continue;
+            Vector2 center = slot.Anchor == "hitPoint" ? eventPosition!.Value
+                : slot.Anchor is "tip" or "tipHistory" ? player.itemLocation : player.Center;
+            if (!Finite(center)) continue;
+            Color color = InfiniVfxRuntime.PresentationColor(data, RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length > 0 ? data.Visual.Palette[0] : "white", Color.White));
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
             // Share this tick's allowance across events, slots and periodic presentation.
             string sourceKey = $"item:{player.whoAmI}:{data.Id}:{entityId}";
@@ -144,7 +185,7 @@ public static class InfiniItemVfxRuntime
             {
                 // Concurrent events/slots from this owner's item share one draw
                 // allowance, including sprites that outlive the use/contact hook.
-                InfiniVfxRuntime.EmitImpactSprite(data, entityId, player.Center, player.velocity,
+                InfiniVfxRuntime.EmitImpactSprite(data, entityId, center, player.velocity,
                     slot, data.VfxManifest, sourceKey);
                 continue;
             }
@@ -152,17 +193,25 @@ public static class InfiniItemVfxRuntime
             {
                 float strength = Math.Clamp(slot.Scale * 0.2f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
                 if (strength > 0f)
-                    Lighting.AddLight(player.Center, color.ToVector3() * strength);
+                    Lighting.AddLight(center, color.ToVector3() * strength);
                 continue;
             }
-            if (kind == InfiniVfxRendererKind.SoundCue) { SoundEngine.PlaySound(SoundID.Item1 with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f), Pitch = Math.Clamp(slot.PhaseOffset * 0.25f, -0.5f, 0.5f) }, player.Center); continue; }
+            if (kind == InfiniVfxRendererKind.SoundCue) { SoundEngine.PlaySound(SoundID.Item1 with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f), Pitch = Math.Clamp(slot.PhaseOffset * 0.25f, -0.5f, 0.5f) }, center); continue; }
+            // Item-location effects follow the weapon-facing axis; velocity is an
+            // explicit alternate anchor, not an implicit replacement for that aim.
+            Vector2 forward = player.itemRotation.ToRotationVector2() * player.direction;
+            if (slot.Anchor == "velocity") forward = player.velocity.SafeNormalize(forward);
+            InfiniVfxRuntime.EmitPrimitive(data, center, forward, slot, data.VfxManifest, sourceKey, color);
+            InfiniVfxRuntime.EmitEventSprite(data, entityId, center, forward, slot, data.VfxManifest, sourceKey);
+            // Authored particles accompany the shape/snapshot; none disables only this lane.
             if (slot.ParticleSystemId is "none") continue;
             int count = InfiniVfxClientOptions.ScaleParticleCount(Math.Clamp(1 + (int)MathF.Round(slot.Density * 7f), 1, 8));
             for (int i = 0; i < count; i++)
             {
-                if (!TrySpendItemParticle(sourceKey, data.VfxManifest.Budget)) break;
+                if ((!cadence && eventRemaining <= 0) || !TrySpendItemParticle(sourceKey, data.VfxManifest.Budget)) break;
+                if (!cadence) eventRemaining--;
                 Vector2 velocity = Main.rand.NextVector2Circular(1f + slot.Spread, 1f + slot.Spread);
-                Dust dust = Dust.NewDustPerfect(player.Center, ItemDustId(slot), velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
+                Dust dust = Dust.NewDustPerfect(center, ItemDustId(slot), velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
                 dust.noGravity = slot.ParticleSystemId is not "pl:smoke";
             }
         }

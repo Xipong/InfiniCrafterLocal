@@ -52,6 +52,9 @@ def test_canvas_and_item_draw_factors_are_explained_on_wire(sent_packet, kind):
     props = packet["responseSchema"]["properties"]
     item = props["item"]["properties"] if kind == "director" else props["itemPatch"]["anyOf"][0]["properties"]
     overlay = props["equipOverlay"]["properties"] if kind == "director" else props["equipOverlayPatch"]["anyOf"][0]["properties"]
+    # Strict provider encodes optional Repair fields as required+nullable. Inspect
+    # the non-null authored branch; the serialized schema equality is tested above.
+    item = {key: value["anyOf"][0] if value.get("anyOf", [None])[-1] == {"type": "null"} else value for key, value in item.items()}
     assert item["preferredCanvasSize"]["enum"] == [24, 32, 48, 64, 96, 128]
     assert overlay["preferredCanvasSize"]["enum"] == [32, 48, 64, 96]
     for canvas in (item["preferredCanvasSize"], overlay["preferredCanvasSize"]):

@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.241 — целевая архитектура
+# InfiniCrafterLocal v0.4.242 — целевая архитектура
 
 ## Суть
 

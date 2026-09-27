@@ -178,7 +178,7 @@ internal static partial class EngineRuntimeChecks
             {
                 Terraria.GameContent.TextureAssets.MagicPixel = asset;
                 foreach (Vector2 direction in new[] { Vector2.UnitX, Vector2.UnitY, -Vector2.UnitX })
-                foreach (int movement in new[] { 0, 18, 14, 16, 17 })
+                foreach (int movement in new[] { 0, 14, 16, 17 })
                 {
                     var projectile = new Projectile { Center = new Vector2(100, 120), velocity = direction, rotation = direction.ToRotation() + MathHelper.PiOver2, scale = 1f };
                     var generated = Attach(projectile);
@@ -193,7 +193,8 @@ internal static partial class EngineRuntimeChecks
                     Vector3[] points = positions(index);
                     AssertVfxNear(projectile.Center - Terraria.Main.screenPosition, VfxVertexCenter(points), "runtime body is centered, independent of source dimensions");
                     Vector2 edge = new(points[1].X - points[0].X, points[1].Y - points[0].Y);
-                    // Whip sets a native-sprite quarter turn too (Executors.Whip).
+                    // Whip's real control-point body (including empty state) is
+                    // exercised by RuntimeWhipBodyMatchesLiveCollisionPoints.
                     // Only actual rotating motion 14/16/17 owns a distinct rotation.
                     Vector2 expected = movement is 14 or 16 or 17 ? projectile.rotation.ToRotationVector2() : direction;
                     AssertVfxNear(expected * 30f, edge, "primitive forward/spin axis for movement " + movement);

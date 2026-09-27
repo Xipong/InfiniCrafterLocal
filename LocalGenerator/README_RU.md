@@ -1,4 +1,4 @@
-# LocalGenerator v0.4.241 — low-level runtime authoring
+# LocalGenerator v0.4.242 — low-level runtime authoring
 
 Active Gameplay contract: `runtimeProgram` v5. Author receives the complete compact catalog once and directly composes entities, bindings, calls and event links. Deterministic code validates and compiles explicit choices only.
 

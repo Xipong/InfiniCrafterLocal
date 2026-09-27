@@ -51,14 +51,18 @@ def test_event_relay_is_server_authoritative_and_survives_remote_projectile_remo
 
 def test_draw_budget_is_spent_per_actual_draw_call() -> None:
     runtime = _read("Common/VFX/InfiniVfxRuntime.cs")
-    trail = runtime.split("private static void DrawTrail(")[1].split("private static void DrawCross")[0]
-    cross = runtime.split("private static void DrawCross(")[1].split("private static void DrawLine")[0]
-
+    trail = runtime.split("private static void DrawTrail(")[1].split("internal static void DrawPrimitive")[0]
     assert "VfxManifestSpec manifest" in trail
     assert "ref InfiniVfxState state" in trail
     assert "SpendDraw(manifest, ref state, 1)" in trail
-    assert "VfxManifestSpec manifest" in cross
-    assert cross.count("SpendDraw(manifest, ref state, 1)") >= 2
+    # Cross aliases were replaced with real geometry. Behavioral budget coverage
+    # lives in the registered FNA checks, including actual quad counts per source
+    # and under/over sharing; do not require the deleted cross helper.
+    runner = (ROOT / "tools/EngineRuntimeChecks.cs").read_text("utf-8")
+    project = (ROOT / "tools/EngineRuntimeChecks.csproj").read_text("utf-8")
+    assert "ActiveShapesRespectBudgetsLayersAndParameters" in runner
+    assert "EventShapesUseDetachedFnaQueue" in runner
+    assert "EngineRuntimeChecks.VfxShapes.cs" in project
 
 
 def test_remote_detached_events_share_per_source_particle_lifetime_budget() -> None:

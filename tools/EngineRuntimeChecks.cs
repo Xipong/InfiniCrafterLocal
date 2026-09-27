@@ -27,8 +27,13 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.dedServ = true;
             if (args.Length == 2 && args[0] == "--replay-contracts")
                 return ReplayGeneratedContracts(args[1]);
+            if (args.Length == 2 && args[0] == "--capture-vfx-preview")
+            {
+                CaptureVfxPreview(args[1]);
+                return 0;
+            }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --replay-contracts <jsonl-path>");
+                throw new ArgumentException("Expected --replay-contracts <jsonl-path> or --capture-vfx-preview <json-path>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -106,6 +111,7 @@ internal static partial class EngineRuntimeChecks
             ("neutral buff omissions reach real player effects", NeutralBuffOmissionsReachRealPlayerEffects),
             ("small generated buffs reach real item/player hooks", SmallGeneratedBuffsReachRealHooks),
             ("item impact sprite uses real detached sprite renderer", ItemImpactSpriteUsesDetachedRenderer),
+            ("presentation metadata round trips strictly", PresentationMetadataRoundTrips),
             ("held presentation matches engine geometry", HeldPresentationGeometryMatchesEngine),
             ("inventory/world draw preserves geometry and tint", GeneratedItemDrawPreservesEngineGeometryAndTint),
             ("runtime sprite cache premultiplies decoded pixels once", RuntimeSpriteCachePremultipliesDecodedPixelsOnce),
@@ -121,6 +127,22 @@ internal static partial class EngineRuntimeChecks
             ("runtime geometry uses world pixels and forward axis", RuntimeGeometryUsesWorldPixelsAndForwardAxis),
             ("active VFX none particle stays silent", ActiveVfxNoneParticleDoesNotEmitDust),
             ("active VFX history uses valid samples", ActiveVfxHistoryUsesValidSamples),
+            ("item VFX hit positions relay and event budgets", ItemVfxEventPositionsRelayAndBudgets),
+            ("item VFX shapes and sprites reach detached queue", ItemShapeAndSpriteEventsReachDetachedQueue),
+            ("item explicit effect color reaches light", ItemExplicitEffectColorReachesLight),
+            ("beam runtime body matches collision geometry", RuntimeBeamBodyMatchesCollisionGeometry),
+            ("ordinary runtime body preserves forward and spin", RuntimeOrdinaryBodyPreservesForwardAndSpinGeometry),
+            ("whip runtime body matches live collision points", RuntimeWhipBodyMatchesLiveCollisionPoints),
+            ("VFX anchors reach geometry and events", ProjectileVfxAnchorsReachGeometryAndEvents),
+            ("VFX shapes respect budgets layers and parameters", ActiveShapesRespectBudgetsLayersAndParameters),
+            ("event sprite renderers snapshot authored texture", EventSpriteRenderersSnapshotAuthoredTexture),
+            ("event shapes use detached FNA queue", EventShapesUseDetachedFnaQueue),
+            ("explicit VFX color overrides legacy presentation", VfxExplicitColorOverridesLegacyPresentation),
+            ("tip trail tracks forward tip history", TipTrailTracksForwardTipHistory),
+            ("ghost arc queues rotating open sweep", ActiveGhostArcQueuesRotatingOpenSweep),
+            ("orbiting motes queue moving points", ActiveOrbitingMotesQueueMovingPoints),
+            ("field pulse queues expanding ring", ActiveFieldPulseQueuesExpandingRing),
+            ("wavy strip queues animated curve", ActiveWavyStripQueuesAnimatedCurve),
         };
         int failed = 0;
         foreach (var (name, check) in checks)

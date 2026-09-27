@@ -30,7 +30,7 @@ def _equipment_data() -> dict:
                 },
                 {
                     "id": "shot",
-                    "kind": "projectile",
+                    "kind": "free_projectile",
                     "visualRole": "projectile",
                     "visual": {},
                     "hitbox": {"widthPx": 18, "heightPx": 10},
@@ -99,9 +99,8 @@ def _stub_image_generation(monkeypatch, tmp_path: Path) -> list[tuple[str, str, 
         })
         return candidate
 
-    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int):
-        del asset_id
-        path = write_no_image_fixture_png(tmp_path / f"{role}.png", size=canvas)
+    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = ""):
+        path = write_no_image_fixture_png(tmp_path / f"{asset_id}.png", size=canvas)
         calls.append((role, prompt, negative))
         return str(path), f"/sprite/{path.name}", 1.0, "generated"
 
@@ -152,13 +151,13 @@ def test_overlay_and_entity_generation_receive_exact_authored_negative_prompt(mo
 
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
     by_role = {role: (prompt, negative) for role, prompt, negative in calls}
-    assert by_role["entity_shot"][1] == "authored negative exact"
+    assert by_role["runtime:projectile"][1] == "authored negative exact"
     assert by_role["equip_overlay"] == (
         "separate wearable amber brooch overlay",
         "authored negative exact",
     )
     assert out["visual"]["equipOverlayStatus"] == "generated"
-    assert out["visual"]["equipOverlayPath"].endswith("equip_overlay.png")
+    assert out["visual"]["equipOverlayPath"].endswith("equipment_probe_equip_overlay.png")
     delivery = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
     assert delivery["ok"], delivery["problems"]
     assert {slot["role"] for slot in delivery["slots"] if slot["usable"]} == {
@@ -194,9 +193,9 @@ def test_impact_texture_is_vfx_authored_planned_generated_and_projected(monkeypa
     calls = _stub_image_generation(monkeypatch, tmp_path)
 
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
-    assert ("impact_shot", "authored amber shard impact burst", "text, watermark, opaque square") in calls
+    assert ("impact", "authored amber shard impact burst", "text, watermark, opaque square") in calls
     shot = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "shot")
-    assert shot["visual"]["impactSpritePath"].endswith("impact_shot.png")
+    assert shot["visual"]["impactSpritePath"].endswith("equipment_probe_shot_impact.png")
     assert shot["visual"]["impactSpriteStatus"] == "generated"
     report = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
     impact_slot = next(slot for slot in report["slots"] if slot["role"] == "impact:shot")

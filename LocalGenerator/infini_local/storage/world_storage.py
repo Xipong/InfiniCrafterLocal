@@ -27,7 +27,7 @@ VISUAL_DELIVERY_FIELDS = frozenset({
     "preservationScore", "requiredAnchors", "semanticReviewStatus", "spritePath", "spriteRawPath",
     "spriteStatus", "spriteTechnicalScore", "spriteUrl", "style", "visualSoulArchetype",
     "visualSoulCoverage", "visualSoulEdgeDensity", "visualSoulGlow", "visualSoulPulse",
-    "visualSoulSignature", "worldScale",
+    "visualSoulSignature", "worldScale", "grip", "accessoryMount", "effectColor",
 })
 
 GENERATED_PARENT_SUMMARY_DELIVERY_FIELDS = frozenset({

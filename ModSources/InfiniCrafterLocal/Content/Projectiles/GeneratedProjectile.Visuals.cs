@@ -48,11 +48,23 @@ public sealed partial class GeneratedProjectile
     {
         Texture2D pixel = TextureAssets.MagicPixel.Value;
         Color color = RuntimeColorPolicy.Resolve(_entity!.Light.Color, Projectile.GetAlpha(lightColor));
+        if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
+        {
+            GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float beamWidth);
+            InfiniVfxRuntime.DrawLine(pixel, start - Main.screenPosition, end - Main.screenPosition, color, beamWidth);
+            return;
+        }
+        if (_entity.Movement.Code == 18)
+        {
+            float whipWidth = WhipCollisionWidth();
+            for (int i = 1; i < _whipPoints.Count; i++)
+                InfiniVfxRuntime.DrawLine(pixel, _whipPoints[i - 1] - Main.screenPosition, _whipPoints[i] - Main.screenPosition, color, whipWidth);
+            return; // Before movement initializes points there is no authored segment to draw.
+        }
         Vector2 center = Projectile.Center - Main.screenPosition;
         // AI adds a quarter-turn for native vertical sprites. A horizontal
         // primitive uses the motion axis directly; retain explicit rotating
         // movement's pose rather than re-aiming a spinning body by velocity.
-        // Whip also adds the native-sprite quarter-turn; it is not spinning motion.
         Vector2 direction = _entity.Movement.Code is 14 or 16 or 17
             ? Projectile.rotation.ToRotationVector2()
             : Projectile.velocity.SafeNormalize(_initialDirection);

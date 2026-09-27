@@ -810,7 +810,9 @@ def test_csharp_runtime_preserves_authored_tick_units_and_enforces_spawn_chokepo
     )[0]
     assert "foreach (VfxSlotSpec slot in manifest.Slots)" in on_event
     assert "TryMarkSlotEmission(projectile, entityId, eventName, slot" in on_event
-    assert "EmitSlot(data, entityId, center, projectile.velocity, slot" in on_event
+    assert "InfiniVfxProjectileSnapshot.Capture(projectile, data, entityId)" in on_event
+    assert "snapshot.TryAnchor(slot.Anchor, center, out Vector2 anchor)" in on_event
+    assert "EmitSlot(data, entityId, anchor, projectile.velocity, slot" in on_event
     run_event = events.split("private void RunRuntimeEvent", 1)[1].split(
         "private void RunPeriodicActions", 1
     )[0]
